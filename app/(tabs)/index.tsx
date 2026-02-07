@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   Modal,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -26,7 +27,6 @@ export default function HomeScreen() {
   const displayName = user?.username || selfPlayer?.name || user?.email?.split('@')[0] || 'Joueur';
 
   const upcomingTournaments = tournaments.filter(t => t.status === 'À venir').slice(0, 3);
-  const recentMatches = matches.slice(0, 3);
 
 
   return (
@@ -39,8 +39,17 @@ export default function HomeScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
+        {/* Banner */}
+        <Animated.View entering={FadeInDown.duration(400)} style={styles.bannerContainer}>
+          <Image
+            source={require('@/assets/images/banner-ppss.png')}
+            style={styles.bannerImage}
+            contentFit="cover"
+          />
+        </Animated.View>
+
         {/* Compact Header with Profile */}
-        <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
+        <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.header}>
           <Pressable style={styles.profileCard} onPress={() => router.push('/player/me')}>
             <View style={styles.profileAvatar}>
               <Text style={styles.profileAvatarText}>
@@ -59,38 +68,38 @@ export default function HomeScreen() {
         </Animated.View>
 
         {/* Main Actions - Hero Section */}
-        <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.heroSection}>
+        <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.heroSection}>
           <Text style={styles.heroTitle}>Que voulez-vous faire ?</Text>
           
           <View style={styles.mainActionsRow}>
             <Pressable 
-              style={styles.mainActionCard}
+              style={({ pressed }) => [styles.mainActionCard, pressed && styles.mainActionCardPressed]}
               onPress={() => router.push('/match/new')}
             >
               <View style={[styles.mainActionIcon, { backgroundColor: theme.primary }]}>
-                <MaterialIcons name="sports" size={32} color="#FFF" />
+                <MaterialIcons name="sports" size={36} color="#FFF" />
               </View>
               <Text style={styles.mainActionTitle}>Match</Text>
               <Text style={styles.mainActionSubtitle}>Entraînement</Text>
             </Pressable>
 
             <Pressable 
-              style={styles.mainActionCard}
+              style={({ pressed }) => [styles.mainActionCard, pressed && styles.mainActionCardPressed]}
               onPress={() => router.push('/challenge/new')}
             >
               <View style={[styles.mainActionIcon, { backgroundColor: theme.accent }]}>
-                <MaterialIcons name="track-changes" size={32} color="#FFF" />
+                <MaterialIcons name="track-changes" size={36} color="#FFF" />
               </View>
               <Text style={styles.mainActionTitle}>Défi</Text>
               <Text style={styles.mainActionSubtitle}>Tirs / Points</Text>
             </Pressable>
 
             <Pressable 
-              style={styles.mainActionCard}
+              style={({ pressed }) => [styles.mainActionCard, pressed && styles.mainActionCardPressed]}
               onPress={() => setShowTournamentPicker(true)}
             >
               <View style={[styles.mainActionIcon, { backgroundColor: theme.carreauColor }]}>
-                <MaterialIcons name="emoji-events" size={32} color="#FFF" />
+                <MaterialIcons name="emoji-events" size={36} color="#FFF" />
               </View>
               <Text style={styles.mainActionTitle}>Tournoi</Text>
               <Text style={styles.mainActionSubtitle}>Mon parcours</Text>
@@ -99,92 +108,50 @@ export default function HomeScreen() {
         </Animated.View>
 
         {/* Quick Access Grid */}
-        <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.quickAccessSection}>
+        <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.quickAccessSection}>
+          <Text style={styles.quickAccessTitle}>Accès rapide</Text>
           <View style={styles.quickAccessGrid}>
-            <Pressable style={styles.quickAccessItem} onPress={() => router.push('/player/new')}>
-              <View style={[styles.quickAccessIcon, { backgroundColor: theme.primary + '12' }]}>
-                <MaterialIcons name="person-add" size={22} color={theme.primary} />
+            <Pressable 
+              style={({ pressed }) => [styles.quickAccessItem, pressed && styles.quickAccessItemPressed]} 
+              onPress={() => router.push('/player/new')}
+            >
+              <View style={[styles.quickAccessIcon, { backgroundColor: theme.primary }]}>
+                <MaterialIcons name="person-add" size={24} color="#FFF" />
               </View>
               <Text style={styles.quickAccessText}>Joueur</Text>
             </Pressable>
 
-            <Pressable style={styles.quickAccessItem} onPress={() => router.push('/tournament/new')}>
-              <View style={[styles.quickAccessIcon, { backgroundColor: theme.carreauColor + '12' }]}>
-                <MaterialIcons name="add-circle" size={22} color={theme.carreauColor} />
+            <Pressable 
+              style={({ pressed }) => [styles.quickAccessItem, pressed && styles.quickAccessItemPressed]} 
+              onPress={() => router.push('/tournament/new')}
+            >
+              <View style={[styles.quickAccessIcon, { backgroundColor: theme.carreauColor }]}>
+                <MaterialIcons name="add-circle" size={24} color="#FFF" />
               </View>
               <Text style={styles.quickAccessText}>Tournoi</Text>
             </Pressable>
 
-            <Pressable style={styles.quickAccessItem} onPress={() => router.push('/club/new')}>
-              <View style={[styles.quickAccessIcon, { backgroundColor: theme.accent + '12' }]}>
-                <MaterialIcons name="home-work" size={22} color={theme.accent} />
+            <Pressable 
+              style={({ pressed }) => [styles.quickAccessItem, pressed && styles.quickAccessItemPressed]} 
+              onPress={() => router.push('/club/new')}
+            >
+              <View style={[styles.quickAccessIcon, { backgroundColor: theme.accent }]}>
+                <MaterialIcons name="home-work" size={24} color="#FFF" />
               </View>
               <Text style={styles.quickAccessText}>Club</Text>
             </Pressable>
 
-            <Pressable style={styles.quickAccessItem} onPress={() => router.push('/history')}>
-              <View style={[styles.quickAccessIcon, { backgroundColor: theme.success + '12' }]}>
-                <MaterialIcons name="history" size={22} color={theme.success} />
+            <Pressable 
+              style={({ pressed }) => [styles.quickAccessItem, pressed && styles.quickAccessItemPressed]} 
+              onPress={() => router.push('/history')}
+            >
+              <View style={[styles.quickAccessIcon, { backgroundColor: theme.success }]}>
+                <MaterialIcons name="history" size={24} color="#FFF" />
               </View>
               <Text style={styles.quickAccessText}>Historique</Text>
             </Pressable>
           </View>
         </Animated.View>
-
-        {/* Recent Activity */}
-        {recentMatches.length > 0 && (
-          <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Derniers matchs</Text>
-              <Pressable onPress={() => router.push('/history')}>
-                <Text style={styles.seeAll}>Voir tout</Text>
-              </Pressable>
-            </View>
-            <View style={styles.recentMatchesContainer}>
-              {recentMatches.map((match, index) => {
-                const isWin = match.winner === 'A';
-                const matchDate = new Date(match.date);
-                return (
-                  <Pressable
-                    key={match.id}
-                    style={styles.recentMatchItem}
-                    onPress={() => router.push(`/match/${match.id}`)}
-                  >
-                    <View style={[
-                      styles.matchResultIndicator,
-                      { backgroundColor: isWin ? theme.success : theme.error }
-                    ]} />
-                    <View style={styles.matchInfo}>
-                      <View style={styles.matchScoreRow}>
-                        <Text style={[styles.matchScore, isWin && styles.matchScoreWin]}>
-                          {match.teamA.score}
-                        </Text>
-                        <Text style={styles.matchVs}>-</Text>
-                        <Text style={[styles.matchScore, !isWin && styles.matchScoreLoss]}>
-                          {match.teamB.score}
-                        </Text>
-                      </View>
-                      <Text style={styles.matchMeta}>
-                        {match.mode} • {matchDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
-                      </Text>
-                    </View>
-                    <View style={[
-                      styles.matchResultBadge,
-                      { backgroundColor: isWin ? theme.success + '15' : theme.error + '15' }
-                    ]}>
-                      <Text style={[
-                        styles.matchResultText,
-                        { color: isWin ? theme.success : theme.error }
-                      ]}>
-                        {isWin ? 'V' : 'D'}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </Animated.View>
-        )}
 
         {/* Upcoming Tournaments */}
         {upcomingTournaments.length > 0 && (
@@ -377,7 +344,20 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 0,
+  },
+  // Banner
+  bannerContainer: {
+    marginHorizontal: -16,
+    marginBottom: 16,
+    borderBottomLeftRadius: theme.borderRadius.xl,
+    borderBottomRightRadius: theme.borderRadius.xl,
+    overflow: 'hidden',
+    ...theme.shadows.card,
+  },
+  bannerImage: {
+    width: '100%',
+    height: 140,
   },
   // Header
   header: {
@@ -449,53 +429,77 @@ const styles = StyleSheet.create({
   mainActionCard: {
     flex: 1,
     backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
+    borderRadius: theme.borderRadius.xl,
+    padding: 18,
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
     ...theme.shadows.card,
   },
+  mainActionCardPressed: {
+    transform: [{ scale: 0.97 }],
+    opacity: 0.9,
+  },
   mainActionIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
+    width: 68,
+    height: 68,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
+    ...theme.shadows.card,
   },
   mainActionTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: theme.textPrimary,
-    marginBottom: 2,
+    marginBottom: 3,
   },
   mainActionSubtitle: {
-    fontSize: 11,
+    fontSize: 12,
     color: theme.textSecondary,
   },
   // Quick Access
   quickAccessSection: {
-    marginBottom: 24,
+    marginBottom: 28,
+  },
+  quickAccessTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: theme.textPrimary,
+    marginBottom: 14,
   },
   quickAccessGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: 10,
   },
   quickAccessItem: {
+    flex: 1,
     alignItems: 'center',
-    width: '23%',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    ...theme.shadows.card,
+  },
+  quickAccessItemPressed: {
+    transform: [{ scale: 0.96 }],
+    opacity: 0.85,
   },
   quickAccessIcon: {
-    width: 48,
-    height: 48,
+    width: 52,
+    height: 52,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    marginBottom: 10,
+    ...theme.shadows.card,
   },
   quickAccessText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
-    color: theme.textSecondary,
+    color: theme.textPrimary,
     textAlign: 'center',
   },
   // Section
@@ -509,7 +513,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
     color: theme.textPrimary,
   },
@@ -517,65 +521,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.primary,
     fontWeight: '600',
-  },
-  // Recent Matches
-  recentMatchesContainer: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    overflow: 'hidden',
-    ...theme.shadows.card,
-  },
-  recentMatchItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  matchResultIndicator: {
-    width: 4,
-    height: 36,
-    borderRadius: 2,
-    marginRight: 14,
-  },
-  matchInfo: {
-    flex: 1,
-  },
-  matchScoreRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  matchScore: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: theme.textPrimary,
-  },
-  matchScoreWin: {
-    color: theme.success,
-  },
-  matchScoreLoss: {
-    color: theme.error,
-  },
-  matchVs: {
-    fontSize: 14,
-    color: theme.textMuted,
-    marginHorizontal: 8,
-  },
-  matchMeta: {
-    fontSize: 12,
-    color: theme.textSecondary,
-  },
-  matchResultBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  matchResultText: {
-    fontSize: 14,
-    fontWeight: '700',
   },
   // Tournament Cards
   tournamentsScroll: {
