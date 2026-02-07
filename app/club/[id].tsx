@@ -6,7 +6,9 @@ import {
   Pressable,
   StyleSheet,
   Linking,
+  Alert,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -17,11 +19,32 @@ import { useApp } from '@/contexts/AppContext';
 export default function ClubDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getClubById, players, tournaments } = useApp();
+  const { getClubById, players, tournaments, deleteClub } = useApp();
 
   const club = getClubById(id!);
   const clubPlayers = players.filter(p => p.clubId === id);
   const clubTournaments = tournaments.filter(t => t.clubId === id);
+
+  const handleDelete = () => {
+    Alert.alert(
+      'Supprimer le club',
+      `Êtes-vous sûr de vouloir supprimer "${club?.name}" ? Les terrains associés perdront leur lien avec ce club. Cette action est irréversible.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            if (club) {
+              await deleteClub(club.id);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              router.back();
+            }
+          },
+        },
+      ]
+    );
+  };
 
   if (!club) {
     return (
@@ -39,12 +62,17 @@ export default function ClubDetailScreen() {
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Club</Text>
-        <Pressable 
-          style={styles.editButton} 
-          onPress={() => router.push(`/club/edit/${id}`)}
-        >
-          <MaterialIcons name="edit" size={22} color={theme.primary} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable 
+            style={styles.editButton} 
+            onPress={() => router.push(`/club/edit/${id}`)}
+          >
+            <MaterialIcons name="edit" size={22} color={theme.primary} />
+          </Pressable>
+          <Pressable style={styles.deleteButton} onPress={handleDelete}>
+            <MaterialIcons name="delete" size={22} color={theme.error} />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView
@@ -236,7 +264,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 4,
+  },
   editButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButton: {
     width: 40,
     height: 40,
     alignItems: 'center',

@@ -22,9 +22,18 @@ import { useApp } from '@/contexts/AppContext';
 export default function TerrainDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { getTerrainById, tournaments, deleteTerrain } = useApp();
+  const { getTerrainById, tournaments, deleteTerrain, isFavoriteTerrain, toggleFavoriteTerrain } = useApp();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  
+  const isFavorite = id ? isFavoriteTerrain(id) : false;
+
+  const handleToggleFavorite = () => {
+    if (id) {
+      toggleFavoriteTerrain(id);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  };
 
   const terrain = getTerrainById(id || '');
 
@@ -102,6 +111,16 @@ export default function TerrainDetailScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>Détails du terrain</Text>
         <View style={styles.headerActions}>
+          <Pressable 
+            style={[styles.favoriteButton, isFavorite && styles.favoriteButtonActive]} 
+            onPress={handleToggleFavorite}
+          >
+            <MaterialIcons 
+              name={isFavorite ? 'favorite' : 'favorite-border'} 
+              size={22} 
+              color={isFavorite ? theme.error : theme.textSecondary} 
+            />
+          </Pressable>
           <Pressable 
             style={styles.editButton} 
             onPress={() => router.push(`/terrain/edit/${terrain.id}`)}
@@ -393,6 +412,16 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     gap: 4,
+  },
+  favoriteButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  favoriteButtonActive: {
+    backgroundColor: theme.error + '15',
+    borderRadius: 20,
   },
   editButton: {
     width: 40,

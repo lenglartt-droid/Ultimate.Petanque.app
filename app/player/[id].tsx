@@ -5,7 +5,9 @@ import {
   ScrollView,
   Pressable,
   StyleSheet,
+  Alert,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -42,11 +44,39 @@ function StatRing({ value, color, size = 80 }: { value: number; color: string; s
 export default function PlayerDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getPlayerById, getMatchesByPlayer, getClubById } = useApp();
+  const { getPlayerById, getMatchesByPlayer, getClubById, getTerrainById, deletePlayer, selfPlayer } = useApp();
 
   const player = getPlayerById(id!);
   const playerMatches = getMatchesByPlayer(id!).slice(0, 5);
   const club = player?.clubId ? getClubById(player.clubId) : null;
+  const terrain = player?.terrainId ? getTerrainById(player.terrainId) : null;
+  const isSelf = selfPlayer && player?.id === selfPlayer.id;
+
+  const handleDelete = () => {
+    if (isSelf) {
+      Alert.alert('Impossible', 'Vous ne pouvez pas supprimer votre propre fiche joueur.');
+      return;
+    }
+    
+    Alert.alert(
+      'Supprimer le joueur',
+      `Êtes-vous sûr de vouloir supprimer "${player?.name}" ? Cette action est irréversible.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            if (player) {
+              await deletePlayer(player.id);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              router.back();
+            }
+          },
+        },
+      ]
+    );
+  };
 
   if (!player) {
     return (
@@ -71,9 +101,16 @@ export default function PlayerDetailScreen() {
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Profil joueur</Text>
-        <Pressable style={styles.editButton} onPress={() => router.push(`/player/edit/${id}`)}>
-          <MaterialIcons name="edit" size={22} color={theme.primary} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable style={styles.editButton} onPress={() => router.push(`/player/edit/${id}`)}>
+            <MaterialIcons name="edit" size={22} color={theme.primary} />
+          </Pressable>
+          {!isSelf && (
+            <Pressable style={styles.deleteButton} onPress={handleDelete}>
+              <MaterialIcons name="delete" size={22} color={theme.error} />
+            </Pressable>
+          )}
+        </View>
       </View>
 
       <ScrollView
@@ -104,6 +141,18 @@ export default function PlayerDetailScreen() {
             >
               <MaterialIcons name="home" size={16} color={theme.textSecondary} />
               <Text style={styles.clubName}>{club.name}</Text>
+              <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
+            </Pressable>
+          )}
+          
+          {/* Terrain de pratique */}
+          {terrain && (
+            <Pressable 
+              style={styles.terrainLink}
+              onPress={() => router.push(`/terrain/${terrain.id}`)}
+            >
+              <MaterialIcons name="sports-soccer" size={16} color={theme.accent} />
+              <Text style={styles.terrainName}>{terrain.name}</Text>
               <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
             </Pressable>
           )}
@@ -272,7 +321,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 4,
+  },
   editButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButton: {
     width: 40,
     height: 40,
     alignItems: 'center',
@@ -340,6 +399,16 @@ const styles = StyleSheet.create({
   clubName: {
     fontSize: 15,
     color: theme.textSecondary,
+  },
+  terrainLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+  },
+  terrainName: {
+    fontSize: 15,
+    color: theme.accent,
   },
   contactInfo: {
     flexDirection: 'row',

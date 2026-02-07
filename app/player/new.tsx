@@ -23,12 +23,13 @@ const levels = ['Débutant', 'Intermédiaire', 'Confirmé', 'Expert'] as const;
 
 export default function NewPlayerScreen() {
   const insets = useSafeAreaInsets();
-  const { addPlayer, clubs } = useApp();
+  const { addPlayer, clubs, terrains } = useApp();
 
   const [name, setName] = useState('');
   const [role, setRole] = useState<PlayerRole>('Milieu');
   const [level, setLevel] = useState<typeof levels[number]>('Intermédiaire');
   const [clubId, setClubId] = useState<string | undefined>();
+  const [terrainId, setTerrainId] = useState<string | undefined>();
   const [city, setCity] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -40,6 +41,7 @@ export default function NewPlayerScreen() {
     }
 
     const selectedClub = clubs.find(c => c.id === clubId);
+    const selectedTerrain = terrains.find(t => t.id === terrainId);
 
     addPlayer({
       name: name.trim(),
@@ -47,6 +49,8 @@ export default function NewPlayerScreen() {
       level,
       clubId,
       club: selectedClub?.name,
+      terrainId,
+      terrainName: selectedTerrain?.name,
       phone: phone.trim() || undefined,
       email: email.trim() || undefined,
       location: city ? {
@@ -218,6 +222,64 @@ export default function NewPlayerScreen() {
                   ]}>
                     {club.name}
                   </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </Animated.View>
+
+          {/* Terrain de pratique */}
+          <Animated.View entering={FadeInDown.duration(400).delay(275)} style={styles.section}>
+            <Text style={styles.sectionTitle}>TERRAIN DE PRATIQUE</Text>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.clubsScroll}
+            >
+              <Pressable
+                style={[
+                  styles.terrainChip,
+                  !terrainId && styles.terrainChipActive
+                ]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setTerrainId(undefined);
+                }}
+              >
+                <MaterialIcons name="not-listed-location" size={18} color={!terrainId ? '#FFF' : theme.textSecondary} />
+                <Text style={[
+                  styles.terrainChipText,
+                  !terrainId && styles.terrainChipTextActive
+                ]}>
+                  Non défini
+                </Text>
+              </Pressable>
+              {terrains.map(terrain => (
+                <Pressable
+                  key={terrain.id}
+                  style={[
+                    styles.terrainChip,
+                    terrainId === terrain.id && styles.terrainChipActive
+                  ]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setTerrainId(terrain.id);
+                  }}
+                >
+                  <MaterialIcons name="sports-soccer" size={18} color={terrainId === terrain.id ? '#FFF' : theme.textSecondary} />
+                  <View style={styles.terrainChipContent}>
+                    <Text style={[
+                      styles.terrainChipText,
+                      terrainId === terrain.id && styles.terrainChipTextActive
+                    ]} numberOfLines={1}>
+                      {terrain.name}
+                    </Text>
+                    <Text style={[
+                      styles.terrainChipSubtext,
+                      terrainId === terrain.id && styles.terrainChipSubtextActive
+                    ]} numberOfLines={1}>
+                      {terrain.city} • {terrain.type}
+                    </Text>
+                  </View>
                 </Pressable>
               ))}
             </ScrollView>
@@ -425,6 +487,41 @@ const styles = StyleSheet.create({
   },
   clubChipTextActive: {
     color: theme.accent,
+  },
+  terrainChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    ...theme.shadows.card,
+  },
+  terrainChipActive: {
+    borderColor: theme.primary,
+    backgroundColor: theme.primary,
+  },
+  terrainChipContent: {
+    maxWidth: 120,
+  },
+  terrainChipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  terrainChipTextActive: {
+    color: '#FFF',
+  },
+  terrainChipSubtext: {
+    fontSize: 11,
+    color: theme.textMuted,
+    marginTop: 2,
+  },
+  terrainChipSubtextActive: {
+    color: 'rgba(255,255,255,0.7)',
   },
   contactInputs: {
     gap: 12,

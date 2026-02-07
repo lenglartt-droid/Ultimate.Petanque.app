@@ -12,6 +12,8 @@ export interface Player {
   level: 'Débutant' | 'Intermédiaire' | 'Confirmé' | 'Expert';
   phone?: string;
   email?: string;
+  terrainId?: string;
+  terrainName?: string;
   location?: {
     latitude: number;
     longitude: number;

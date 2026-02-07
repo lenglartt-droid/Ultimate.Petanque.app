@@ -193,8 +193,8 @@ function filterByTime<T extends { date: string }>(items: T[], filter: TimeFilter
 
 export default function StatsScreen() {
   const insets = useSafeAreaInsets();
-  const { userStats, matches, challengeStats, challenges, tournaments } = useApp();
-  const [activeTab, setActiveTab] = useState<'global' | 'tournois' | 'entrainement' | 'tir' | 'point' | 'challenges' | 'matchups'>('global');
+  const { userStats, matches, challengeStats, challenges, tournaments, terrains } = useApp();
+  const [activeTab, setActiveTab] = useState<'global' | 'tournois' | 'entrainement' | 'tir' | 'point' | 'challenges' | 'matchups' | 'terrains'>('global');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
   const [includeChallengesInTirStats, setIncludeChallengesInTirStats] = useState(false);
 
@@ -384,10 +384,49 @@ export default function StatsScreen() {
     };
   }, [trainingMatches]);
 
+  // Calculate stats by terrain type
+  const terrainTypeStats = React.useMemo(() => {
+    const statsByType: Record<string, { matches: number; wins: number; losses: number; winRate: number; pointsFor: number; pointsAgainst: number }> = {};
+    
+    // Initialize all terrain types
+    ['Stabilisé', 'Graviers', 'Sable', 'Cailloux', 'Terre battue'].forEach(type => {
+      statsByType[type] = { matches: 0, wins: 0, losses: 0, winRate: 0, pointsFor: 0, pointsAgainst: 0 };
+    });
+    
+    // Calculate stats for each match based on tournament terrain
+    filteredMatches.forEach(match => {
+      if (match.tournamentId) {
+        const tournament = tournaments.find(t => t.id === match.tournamentId);
+        if (tournament?.terrainType) {
+          const type = tournament.terrainType;
+          if (statsByType[type]) {
+            statsByType[type].matches++;
+            statsByType[type].pointsFor += match.teamA.score;
+            statsByType[type].pointsAgainst += match.teamB.score;
+            if (match.winner === 'A') {
+              statsByType[type].wins++;
+            } else {
+              statsByType[type].losses++;
+            }
+          }
+        }
+      }
+    });
+    
+    // Calculate win rates
+    Object.keys(statsByType).forEach(type => {
+      const stats = statsByType[type];
+      stats.winRate = stats.matches > 0 ? Math.round((stats.wins / stats.matches) * 100) : 0;
+    });
+    
+    return statsByType;
+  }, [filteredMatches, tournaments]);
+
   const tabs = [
     { id: 'global', label: 'Global' },
     { id: 'tournois', label: 'Tournois' },
     { id: 'entrainement', label: 'Entraînement' },
+    { id: 'terrains', label: 'Terrains' },
     { id: 'tir', label: 'Tir' },
     { id: 'point', label: 'Point' },
     { id: 'challenges', label: 'Défis' },
@@ -1161,6 +1200,125 @@ export default function StatsScreen() {
           </>
         )}
 
+        {activeTab === 'terrains' && (
+          <>
+            {/* Terrain Stats Overview */}
+            <Animated.View 
+              entering={FadeInDown.duration(400).delay(200)}
+              style={styles.section}
+            >
+              <Text style={styles.sectionTitle}>RÉSULTATS PAR TYPE DE TERRAIN</Text>
+              <Text style={styles.terrainStatsSubtitle}>
+                Statistiques basées sur vos matchs de tournoi
+              </Text>
+            </Animated.View>
+
+            {/* Terrain Type Cards */}
+            <Animated.View 
+              entering={FadeInDown.duration(400).delay(300)}
+              style={styles.section}
+            >
+              {Object.entries(terrainTypeStats).map(([type, stats], index) => {
+                const typeColors: Record<string, { bg: string; icon: string }> = {
+                  'Stabilisé': { bg: theme.primary, icon: 'landscape' },
+                  'Graviers': { bg: theme.warning, icon: 'grain' },
+                  'Sable': { bg: '#F59E0B', icon: 'beach-access' },
+                  'Cailloux': { bg: theme.textSecondary, icon: 'terrain' },
+                  'Terre battue': { bg: theme.success, icon: 'grass' },
+                };
+                const color = typeColors[type] || typeColors['Stabilisé'];
+                
+                return (
+                  <Animated.View
+                    key={type}
+                    entering={FadeInDown.duration(400).delay(300 + index * 50)}
+                    style={styles.terrainTypeCard}
+                  >
+                    <View style={styles.terrainTypeHeader}>
+                      <View style={[styles.terrainTypeIcon, { backgroundColor: color.bg + '20' }]}>
+                        <MaterialIcons name={color.icon as any} size={28} color={color.bg} />
+                      </View>
+                      <View style={styles.terrainTypeInfo}>
+                        <Text style={styles.terrainTypeName}>{type}</Text>
+                        <Text style={styles.terrainTypeMatches}>
+                          {stats.matches} match{stats.matches !== 1 ? 's' : ''} joué{stats.matches !== 1 ? 's' : ''}
+                        </Text>
+                      </View>
+                      {stats.matches > 0 && (
+                        <View style={[
+                          styles.terrainWinRateBadge,
+                          { backgroundColor: stats.winRate >= 50 ? theme.success + '15' : theme.error + '15' }
+                        ]}>
+                          <Text style={[
+                            styles.terrainWinRateText,
+                            { color: stats.winRate >= 50 ? theme.success : theme.error }
+                          ]}>
+                            {stats.winRate}%
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    
+                    {stats.matches > 0 ? (
+                      <View style={styles.terrainTypeStats}>
+                        <View style={styles.terrainTypeStat}>
+                          <Text style={[styles.terrainTypeStatValue, { color: theme.success }]}>
+                            {stats.wins}
+                          </Text>
+                          <Text style={styles.terrainTypeStatLabel}>Victoires</Text>
+                        </View>
+                        <View style={styles.terrainTypeStatDivider} />
+                        <View style={styles.terrainTypeStat}>
+                          <Text style={[styles.terrainTypeStatValue, { color: theme.error }]}>
+                            {stats.losses}
+                          </Text>
+                          <Text style={styles.terrainTypeStatLabel}>Défaites</Text>
+                        </View>
+                        <View style={styles.terrainTypeStatDivider} />
+                        <View style={styles.terrainTypeStat}>
+                          <Text style={styles.terrainTypeStatValue}>
+                            {stats.pointsFor}
+                          </Text>
+                          <Text style={styles.terrainTypeStatLabel}>Pts marqués</Text>
+                        </View>
+                        <View style={styles.terrainTypeStatDivider} />
+                        <View style={styles.terrainTypeStat}>
+                          <Text style={styles.terrainTypeStatValue}>
+                            {stats.pointsAgainst}
+                          </Text>
+                          <Text style={styles.terrainTypeStatLabel}>Pts encaissés</Text>
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={styles.terrainNoMatchesContainer}>
+                        <Text style={styles.terrainNoMatchesText}>
+                          Aucun match sur ce type de terrain
+                        </Text>
+                      </View>
+                    )}
+                  </Animated.View>
+                );
+              })}
+            </Animated.View>
+
+            {/* Terrain Tips */}
+            <Animated.View 
+              entering={FadeInDown.duration(400).delay(600)}
+              style={styles.section}
+            >
+              <View style={styles.terrainTipsCard}>
+                <MaterialIcons name="lightbulb" size={24} color={theme.warning} />
+                <View style={styles.terrainTipsContent}>
+                  <Text style={styles.terrainTipsTitle}>Conseil</Text>
+                  <Text style={styles.terrainTipsText}>
+                    Analysez vos performances par type de terrain pour identifier vos points forts et adapter votre jeu.
+                  </Text>
+                </View>
+              </View>
+            </Animated.View>
+          </>
+        )}
+
         {activeTab === 'matchups' && (
           <Animated.View 
             entering={FadeInDown.duration(400).delay(200)}
@@ -1894,6 +2052,116 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: theme.textMuted,
     marginTop: 12,
+  },
+  // Terrain stats styles
+  terrainStatsSubtitle: {
+    fontSize: 13,
+    color: theme.textMuted,
+    marginTop: -8,
+    marginBottom: 8,
+  },
+  terrainTypeCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    marginBottom: 12,
+    ...theme.shadows.card,
+  },
+  terrainTypeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  terrainTypeIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  terrainTypeInfo: {
+    flex: 1,
+  },
+  terrainTypeName: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  terrainTypeMatches: {
+    fontSize: 13,
+    color: theme.textSecondary,
+    marginTop: 2,
+  },
+  terrainWinRateBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.full,
+  },
+  terrainWinRateText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  terrainTypeStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  terrainTypeStat: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  terrainTypeStatValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  terrainTypeStatLabel: {
+    fontSize: 11,
+    color: theme.textMuted,
+    marginTop: 2,
+  },
+  terrainTypeStatDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: theme.border,
+  },
+  terrainNoMatchesContainer: {
+    paddingVertical: 12,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+    alignItems: 'center',
+  },
+  terrainNoMatchesText: {
+    fontSize: 13,
+    color: theme.textMuted,
+    fontStyle: 'italic',
+  },
+  terrainTipsCard: {
+    flexDirection: 'row',
+    backgroundColor: theme.warning + '10',
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: theme.warning + '30',
+  },
+  terrainTipsContent: {
+    flex: 1,
+  },
+  terrainTipsTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.warning,
+    marginBottom: 4,
+  },
+  terrainTipsText: {
+    fontSize: 13,
+    color: theme.textSecondary,
+    lineHeight: 18,
   },
   // Include challenges toggle
   includeChallengesToggle: {

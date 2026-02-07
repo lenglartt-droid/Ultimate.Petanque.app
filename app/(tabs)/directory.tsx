@@ -20,13 +20,15 @@ import { Terrain } from '@/services/mockData';
 import { TerrainType } from '@/constants/config';
 
 type DirectoryTab = 'players' | 'clubs' | 'tournaments' | 'terrains';
+type TournamentStatus = 'all' | 'À venir' | 'En cours' | 'Terminé';
 
 export default function DirectoryScreen() {
   const insets = useSafeAreaInsets();
-  const { players, clubs, tournaments, terrains, selfPlayer } = useApp();
+  const { players, clubs, tournaments, terrains, selfPlayer, favoriteTerrainIds } = useApp();
   const [activeTab, setActiveTab] = useState<DirectoryTab>('players');
   const [searchQuery, setSearchQuery] = useState('');
   const [terrainTypeFilter, setTerrainTypeFilter] = useState<TerrainType | 'all'>('all');
+  const [tournamentStatusFilter, setTournamentStatusFilter] = useState<TournamentStatus>('all');
 
   const tabs = useMemo(() => [
     { id: 'players' as const, label: 'Joueurs', icon: 'person' as const, count: players.length },
@@ -59,10 +61,16 @@ export default function DirectoryScreen() {
     c.city.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredTournaments = tournaments.filter(t =>
-    t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.location.city.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredTournaments = useMemo(() => {
+    return tournaments.filter(t => {
+      const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.location.city.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesStatus = tournamentStatusFilter === 'all' || t.status === tournamentStatusFilter;
+      
+      return matchesSearch && matchesStatus;
+    });
+  }, [tournaments, searchQuery, tournamentStatusFilter]);
 
   const filteredTerrains = useMemo(() => {
     return terrains.filter(t => {
@@ -89,6 +97,14 @@ export default function DirectoryScreen() {
       label: t.label,
       icon: t.icon as keyof typeof MaterialIcons.glyphMap,
     })),
+  ];
+
+  // Tournament status filter options
+  const tournamentStatusFilters: { id: TournamentStatus; label: string; icon: keyof typeof MaterialIcons.glyphMap }[] = [
+    { id: 'all', label: 'Tous', icon: 'layers' },
+    { id: 'À venir', label: 'À venir', icon: 'event' },
+    { id: 'En cours', label: 'En cours', icon: 'play-circle' },
+    { id: 'Terminé', label: 'Terminé', icon: 'check-circle' },
   ];
 
   const renderPlayer = ({ item }: { item: typeof players[0] }) => {
@@ -218,6 +234,7 @@ export default function DirectoryScreen() {
 
   const renderTerrain = ({ item }: { item: Terrain }) => {
     const typeConfig = getTerrainTypeConfig(item.type);
+    const isFavorite = favoriteTerrainIds.includes(item.id);
     const typeColors: Record<string, { bg: string; text: string }> = {
       'Stabilisé': { bg: theme.primary + '20', text: theme.primary },
       'Graviers': { bg: theme.warning + '20', text: theme.warning },
@@ -229,11 +246,16 @@ export default function DirectoryScreen() {
 
     return (
       <Pressable
-        style={styles.card}
+        style={[styles.card, isFavorite && styles.favoriteCard]}
         onPress={() => router.push(`/terrain/${item.id}`)}
       >
         <View style={[styles.avatar, { backgroundColor: theme.accent }]}>
           <MaterialIcons name={typeConfig.icon as any} size={24} color="#FFF" />
+          {isFavorite && (
+            <View style={styles.favoriteAvatarBadge}>
+              <MaterialIcons name="favorite" size={12} color={theme.error} />
+            </View>
+          )}
         </View>
         <View style={styles.cardContent}>
           <Text style={styles.cardTitle}>{item.name}</Text>
@@ -345,6 +367,46 @@ export default function DirectoryScreen() {
           </Pressable>
         ))}
       </Animated.View>
+
+      {/* Tournament Status Filters */}
+      {activeTab === 'tournaments' && (
+        <Animated.View 
+          entering={FadeInDown.duration(400).delay(250)}
+          style={styles.terrainFiltersContainer}
+        >
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.terrainFiltersScroll}
+          >
+            {tournamentStatusFilters.map(filter => (
+              <Pressable
+                key={filter.id}
+                style={[
+                  styles.terrainFilterChip,
+                  tournamentStatusFilter === filter.id && styles.tournamentFilterChipActive
+                ]}
+                onPress={() => {
+                  setTournamentStatusFilter(filter.id);
+                  Haptics.selectionAsync();
+                }}
+              >
+                <MaterialIcons 
+                  name={filter.icon} 
+                  size={16} 
+                  color={tournamentStatusFilter === filter.id ? '#FFF' : theme.textSecondary} 
+                />
+                <Text style={[
+                  styles.terrainFilterText,
+                  tournamentStatusFilter === filter.id && styles.terrainFilterTextActive
+                ]}>
+                  {filter.label}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </Animated.View>
+      )}
 
       {/* Terrain Type Filters */}
       {activeTab === 'terrains' && (
@@ -550,6 +612,26 @@ const styles = StyleSheet.create({
   },
   terrainFilterTextActive: {
     color: '#FFF',
+  },
+  tournamentFilterChipActive: {
+    backgroundColor: theme.carreauColor,
+  },
+  // Favorite terrain styles
+  favoriteCard: {
+    borderWidth: 2,
+    borderColor: theme.error + '50',
+    backgroundColor: theme.error + '05',
+  },
+  favoriteAvatarBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#FFF',
+    borderRadius: 10,
+    width: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   listContainer: {
     flex: 1,

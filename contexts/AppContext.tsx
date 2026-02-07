@@ -57,6 +57,12 @@ interface AppContextType {
   deletePlayer: (id: string) => Promise<void>;
   deleteChallenge: (id: string) => Promise<void>;
   deleteTerrain: (id: string) => Promise<void>;
+  deleteClub: (id: string) => Promise<void>;
+  
+  // Favorites
+  favoriteTerrainIds: string[];
+  toggleFavoriteTerrain: (terrainId: string) => void;
+  isFavoriteTerrain: (terrainId: string) => boolean;
   
   // Getters
   getPlayerById: (id: string) => Player | undefined;
@@ -87,6 +93,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [matches, setMatches] = useState<Match[]>([]);
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [terrains, setTerrains] = useState<Terrain[]>([]);
+  const [favoriteTerrainIds, setFavoriteTerrainIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Self player (current user's player card)
@@ -944,8 +951,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const deleteClub = async (id: string) => {
+    setClubs(prev => prev.filter(club => club.id !== id));
+    // Also update terrains that reference this club
+    setTerrains(prev => prev.map(t => 
+      t.clubId === id ? { ...t, clubId: undefined, clubName: undefined } : t
+    ));
+
+    if (!user?.id) return;
+
+    try {
+      await supabase.from('clubs').delete().eq('id', id);
+    } catch (error) {
+      console.log('Error deleting club:', error);
+    }
+  };
+
   const deleteTerrain = async (id: string) => {
     setTerrains(prev => prev.filter(terrain => terrain.id !== id));
+    // Also remove from favorites
+    setFavoriteTerrainIds(prev => prev.filter(fid => fid !== id));
 
     if (!user?.id) return;
 
@@ -954,6 +979,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.log('Error deleting terrain:', error);
     }
+  };
+
+  // Favorites functions
+  const toggleFavoriteTerrain = (terrainId: string) => {
+    setFavoriteTerrainIds(prev => {
+      if (prev.includes(terrainId)) {
+        return prev.filter(id => id !== terrainId);
+      } else {
+        return [...prev, terrainId];
+      }
+    });
+    // TODO: Persist to user preferences in database
+  };
+
+  const isFavoriteTerrain = (terrainId: string) => {
+    return favoriteTerrainIds.includes(terrainId);
   };
 
   // Getters
@@ -1084,6 +1125,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deletePlayer,
         deleteChallenge,
         deleteTerrain,
+        deleteClub,
+        favoriteTerrainIds,
+        toggleFavoriteTerrain,
+        isFavoriteTerrain,
         getPlayerById,
         getClubById,
         getTournamentById,
