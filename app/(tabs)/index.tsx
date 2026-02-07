@@ -50,20 +50,20 @@ export default function HomeScreen() {
 
         {/* Compact Header with Profile */}
         <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.header}>
-          <Pressable style={styles.profileCard} onPress={() => router.push('/player/me')}>
-            <View style={styles.profileAvatar}>
+          <Pressable style={styles.profileCardEnhanced} onPress={() => router.push('/profile')}>
+            <View style={styles.profileAvatarEnhanced}>
               <Text style={styles.profileAvatarText}>
                 {displayName.charAt(0).toUpperCase()}
               </Text>
             </View>
-            <View style={styles.profileInfo}>
-              <Text style={styles.profileName} numberOfLines={1}>{displayName}</Text>
-              <Text style={styles.profileRole}>{selfPlayer?.role || 'Milieu'} • {selfPlayer?.level || 'Intermédiaire'}</Text>
+            <View style={styles.profileInfoEnhanced}>
+              <Text style={styles.profileNameEnhanced} numberOfLines={1}>{displayName}</Text>
+              <Text style={styles.profileRoleEnhanced}>{selfPlayer?.role || 'Milieu'} • {selfPlayer?.level || 'Intermédiaire'}</Text>
             </View>
-            <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-          </Pressable>
-          <Pressable style={styles.settingsBtn} onPress={() => router.push('/profile')}>
-            <MaterialIcons name="settings" size={22} color={theme.textSecondary} />
+            <View style={styles.profileArrowContainer}>
+              <MaterialIcons name="person" size={18} color={theme.primary} />
+              <MaterialIcons name="chevron-right" size={18} color={theme.primary} />
+            </View>
           </Pressable>
         </Animated.View>
 
@@ -331,50 +331,52 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 16,
   },
-  profileCard: {
+  profileCardEnhanced: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg,
-    padding: 12,
+    padding: 14,
+    borderWidth: 2,
+    borderColor: theme.primary + '20',
     ...theme.shadows.card,
   },
-  profileAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  profileAvatarEnhanced: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: theme.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 14,
   },
   profileAvatarText: {
     fontSize: 18,
     fontWeight: '700',
     color: '#FFF',
   },
-  profileInfo: {
+  profileInfoEnhanced: {
     flex: 1,
   },
-  profileName: {
-    fontSize: 16,
+  profileNameEnhanced: {
+    fontSize: 17,
     fontWeight: '700',
     color: theme.textPrimary,
-    marginBottom: 2,
+    marginBottom: 3,
   },
-  profileRole: {
-    fontSize: 12,
+  profileRoleEnhanced: {
+    fontSize: 13,
     color: theme.textSecondary,
   },
-  settingsBtn: {
-    width: 44,
-    height: 44,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
+  profileArrowContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    ...theme.shadows.card,
+    backgroundColor: theme.primary + '12',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: theme.borderRadius.md,
+    gap: 2,
   },
 
   // Hero Section

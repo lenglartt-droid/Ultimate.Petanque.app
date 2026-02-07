@@ -295,6 +295,36 @@ export default function TournamentDetailScreen() {
             </View>
           </View>
           
+          {/* Tournament Classification Badges */}
+          {(tournament.tournamentLevel || tournament.tournamentCategory || tournament.registrationType || tournament.tournamentScope) && (
+            <View style={styles.classificationBadgesContainer}>
+              {tournament.tournamentLevel && (
+                <View style={[styles.classificationBadge, { backgroundColor: theme.success + '15' }]}>
+                  <MaterialIcons name="signal-cellular-alt" size={12} color={theme.success} />
+                  <Text style={[styles.classificationBadgeText, { color: theme.success }]}>{tournament.tournamentLevel}</Text>
+                </View>
+              )}
+              {tournament.tournamentCategory && (
+                <View style={[styles.classificationBadge, { backgroundColor: theme.warning + '15' }]}>
+                  <MaterialIcons name="category" size={12} color={theme.warning} />
+                  <Text style={[styles.classificationBadgeText, { color: theme.warning }]}>{tournament.tournamentCategory}</Text>
+                </View>
+              )}
+              {tournament.registrationType && (
+                <View style={[styles.classificationBadge, { backgroundColor: theme.primary + '15' }]}>
+                  <MaterialIcons name="how-to-reg" size={12} color={theme.primary} />
+                  <Text style={[styles.classificationBadgeText, { color: theme.primary }]}>{tournament.registrationType}</Text>
+                </View>
+              )}
+              {tournament.tournamentScope && (
+                <View style={[styles.classificationBadge, { backgroundColor: theme.accent + '15' }]}>
+                  <MaterialIcons name="public" size={12} color={theme.accent} />
+                  <Text style={[styles.classificationBadgeText, { color: theme.accent }]}>{tournament.tournamentScope}</Text>
+                </View>
+              )}
+            </View>
+          )}
+          
           {/* Terrain Info */}
           {terrain && (
             <Pressable 
@@ -726,6 +756,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.textSecondary,
     marginLeft: 4,
+  },
+  classificationBadgesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  classificationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.full,
+  },
+  classificationBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   terrainInfoRow: {
     flexDirection: 'row',

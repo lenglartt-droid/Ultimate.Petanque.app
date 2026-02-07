@@ -1,5 +1,43 @@
 // PetanqueScore Configuration
 
+// Tournament Levels
+export const tournamentLevels = [
+  'Loisir / Amical',
+  'Promotion',
+  'Honneur',
+  'Élite',
+  'Vétérans',
+  'Jeunes (Minimes)',
+  'Jeunes (Cadets)',
+  'Jeunes (Juniors)',
+] as const;
+
+// Tournament Categories (Official types)
+export const tournamentCategories = [
+  'Officiel / FFPJP',
+  'Concours officiel',
+  'Concours amical',
+  'Concours à la mêlée',
+] as const;
+
+// Registration Types
+export const registrationTypes = [
+  'Inscription libre',
+  'Sur invitation',
+  'Réservé aux licenciés',
+  'Ouvert',
+] as const;
+
+// Tournament Scopes/Cadre
+export const tournamentScopes = [
+  'Championnat départemental',
+  'Championnat régional',
+  'Championnat national',
+  'Championnat international',
+  'Tournoi de club',
+  'Concours à la montée',
+] as const;
+
 export const config = {
   appName: 'PetanqueScore',
   version: '1.0.0',
@@ -62,6 +100,12 @@ export const config = {
     { id: 'point', label: 'Point' },
     { id: 'matchups', label: 'Face à Face' },
   ] as const,
+  
+  // Tournament configuration
+  tournamentLevels,
+  tournamentCategories,
+  registrationTypes,
+  tournamentScopes,
 };
 
 export type GameFormat = typeof config.game.formats[number];
@@ -70,5 +114,9 @@ export type TournamentType = typeof config.tournamentTypes[number];
 export type ShotType = typeof config.shotTypes[number]['id'];
 export type PlayerRole = typeof config.playerRoles[number];
 export type TerrainType = typeof config.terrainTypes[number]['id'];
+export type TournamentLevel = typeof tournamentLevels[number];
+export type TournamentCategory = typeof tournamentCategories[number];
+export type RegistrationType = typeof registrationTypes[number];
+export type TournamentScope = typeof tournamentScopes[number];
 
 export default config;

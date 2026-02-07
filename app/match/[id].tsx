@@ -267,37 +267,60 @@ export default function EditMatchScreen() {
             />
           </Animated.View>
 
-          {/* Mode Selection */}
-          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-            <Text style={styles.sectionTitle}>MODE</Text>
-            <View style={styles.modeContainer}>
-              {config.matchModes.map(m => (
-                <Pressable
-                  key={m}
-                  style={[
-                    styles.modeButton,
-                    mode === m && styles.modeButtonActive
-                  ]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setMode(m);
-                  }}
-                >
-                  <MaterialIcons 
-                    name={m === 'Entraînement' ? 'fitness-center' : 'emoji-events'} 
-                    size={20} 
-                    color={mode === m ? '#FFF' : theme.textSecondary} 
-                  />
-                  <Text style={[
-                    styles.modeText,
-                    mode === m && styles.modeTextActive
-                  ]}>
-                    {m}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </Animated.View>
+          {/* Mode Selection - Only show if not a tournament match */}
+          {!match.tournamentId && (
+            <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+              <Text style={styles.sectionTitle}>MODE</Text>
+              <View style={styles.modeContainer}>
+                {config.matchModes.map(m => (
+                  <Pressable
+                    key={m}
+                    style={[
+                      styles.modeButton,
+                      mode === m && styles.modeButtonActive
+                    ]}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setMode(m);
+                    }}
+                  >
+                    <MaterialIcons 
+                      name={m === 'Entraînement' ? 'fitness-center' : 'emoji-events'} 
+                      size={20} 
+                      color={mode === m ? '#FFF' : theme.textSecondary} 
+                    />
+                    <Text style={[
+                      styles.modeText,
+                      mode === m && styles.modeTextActive
+                    ]}>
+                      {m}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </Animated.View>
+          )}
+
+          {/* Tournament Badge - Show if it's a tournament match */}
+          {match.tournamentId && (
+            <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+              <Text style={styles.sectionTitle}>MODE</Text>
+              <View style={styles.tournamentBadgeContainer}>
+                <View style={styles.tournamentBadge}>
+                  <MaterialIcons name="emoji-events" size={20} color={theme.carreauColor} />
+                  <View style={styles.tournamentBadgeInfo}>
+                    <Text style={styles.tournamentBadgeLabel}>Match de tournoi</Text>
+                    <Text style={styles.tournamentBadgeName}>{match.tournamentName}</Text>
+                  </View>
+                </View>
+                {match.tournamentPhase && (
+                  <View style={styles.phaseBadge}>
+                    <Text style={styles.phaseBadgeText}>{match.tournamentPhase}</Text>
+                  </View>
+                )}
+              </View>
+            </Animated.View>
+          )}
 
           {/* Format Selection */}
           <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
@@ -875,6 +898,43 @@ const styles = StyleSheet.create({
   noMenesText: {
     fontSize: 14,
     color: theme.textMuted,
+  },
+  tournamentBadgeContainer: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: theme.carreauColor + '30',
+    ...theme.shadows.card,
+  },
+  tournamentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  tournamentBadgeInfo: {
+    flex: 1,
+  },
+  tournamentBadgeLabel: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginBottom: 2,
+  },
+  tournamentBadgeName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.carreauColor,
+  },
+  phaseBadge: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  phaseBadgeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textPrimary,
   },
   footer: {
     paddingHorizontal: 16,

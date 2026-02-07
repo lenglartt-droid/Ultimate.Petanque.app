@@ -239,12 +239,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dbPlayers = playersRes.data.map(p => ({
           id: p.id,
           name: p.name,
+          nickname: p.nickname,
           avatar: p.avatar,
           club: p.club,
           clubId: p.club_id,
           role: p.role,
           level: p.level,
           location: p.location,
+          phone: p.phone,
+          email: p.email,
+          country: p.country,
+          boules: p.boules,
           stats: p.stats || {
             matchesPlayed: 0, wins: 0, losses: 0, winRate: 0,
             tirRate: 0, pointRate: 0, carreauRate: 0,
@@ -357,6 +362,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           teams: t.teams,
           phases: t.phases,
           currentPhaseId: t.current_phase_id,
+          tournamentLevel: t.tournament_level,
+          tournamentCategory: t.tournament_category,
+          registrationType: t.registration_type,
+          tournamentScope: t.tournament_scope,
         }));
         setTournaments(dbTournaments.length > 0 ? dbTournaments : mockTournaments);
       }
@@ -497,12 +506,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.from('players').insert({
         user_id: user.id,
         name: player.name,
+        nickname: player.nickname,
         avatar: player.avatar,
         club: player.club,
         club_id: player.clubId,
         role: player.role,
         level: player.level,
         location: player.location,
+        phone: player.phone,
+        email: player.email,
+        country: player.country,
+        boules: player.boules,
         stats: player.stats,
       }).select().single();
 
@@ -512,13 +526,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const newPlayer: Player = {
           id: data.id,
           name: data.name,
+          nickname: data.nickname,
           avatar: data.avatar,
           club: data.club,
           clubId: data.club_id,
           role: data.role,
           level: data.level,
           location: data.location,
+          phone: data.phone,
+          email: data.email,
           country: data.country || 'France',
+          boules: data.boules,
           stats: data.stats,
           createdAt: data.created_at,
         };
@@ -615,6 +633,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         teams: tournament.teams,
         phases: tournament.phases,
         current_phase_id: tournament.currentPhaseId,
+        tournament_level: tournament.tournamentLevel,
+        tournament_category: tournament.tournamentCategory,
+        registration_type: tournament.registrationType,
+        tournament_scope: tournament.tournamentScope,
       }).select().single();
 
       if (error) throw error;
@@ -641,6 +663,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           teams: data.teams,
           phases: data.phases,
           currentPhaseId: data.current_phase_id,
+          tournamentLevel: data.tournament_level,
+          tournamentCategory: data.tournament_category,
+          registrationType: data.registration_type,
+          tournamentScope: data.tournament_scope,
         };
         setTournaments(prev => [...prev, newTournament]);
       }
@@ -806,12 +832,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const dbUpdates: any = {};
       if (updates.name !== undefined) dbUpdates.name = updates.name;
+      if (updates.nickname !== undefined) dbUpdates.nickname = updates.nickname;
       if (updates.avatar !== undefined) dbUpdates.avatar = updates.avatar;
       if (updates.club !== undefined) dbUpdates.club = updates.club;
       if (updates.clubId !== undefined) dbUpdates.club_id = updates.clubId;
       if (updates.role !== undefined) dbUpdates.role = updates.role;
       if (updates.level !== undefined) dbUpdates.level = updates.level;
       if (updates.location !== undefined) dbUpdates.location = updates.location;
+      if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
+      if (updates.email !== undefined) dbUpdates.email = updates.email;
+      if (updates.country !== undefined) dbUpdates.country = updates.country;
+      if (updates.boules !== undefined) dbUpdates.boules = updates.boules;
       if (updates.stats !== undefined) dbUpdates.stats = updates.stats;
       dbUpdates.updated_at = new Date().toISOString();
 
@@ -880,6 +911,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.teams !== undefined) dbUpdates.teams = updates.teams;
       if (updates.phases !== undefined) dbUpdates.phases = updates.phases;
       if (updates.currentPhaseId !== undefined) dbUpdates.current_phase_id = updates.currentPhaseId;
+      if (updates.tournamentLevel !== undefined) dbUpdates.tournament_level = updates.tournamentLevel;
+      if (updates.tournamentCategory !== undefined) dbUpdates.tournament_category = updates.tournamentCategory;
+      if (updates.registrationType !== undefined) dbUpdates.registration_type = updates.registrationType;
+      if (updates.tournamentScope !== undefined) dbUpdates.tournament_scope = updates.tournamentScope;
       dbUpdates.updated_at = new Date().toISOString();
 
       await supabase.from('tournaments').update(dbUpdates).eq('id', id);

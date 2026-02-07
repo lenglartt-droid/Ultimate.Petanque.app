@@ -1,10 +1,18 @@
 // PetanqueScore Mock Data
 
-import { GameFormat, PlayerRole, TournamentType, TerrainType } from '@/constants/config';
+import { GameFormat, PlayerRole, TournamentType, TerrainType, TournamentLevel, TournamentCategory, RegistrationType, TournamentScope } from '@/constants/config';
+
+// Boules info for player
+export interface BoulesInfo {
+  name?: string;
+  diameter?: number; // mm
+  weight?: number; // g
+}
 
 export interface Player {
   id: string;
   name: string;
+  nickname?: string; // Surnom
   avatar?: string;
   club?: string;
   clubId?: string;
@@ -15,6 +23,7 @@ export interface Player {
   terrainId?: string;
   terrainName?: string;
   country?: string;
+  boules?: BoulesInfo;
   location?: {
     latitude: number;
     longitude: number;
@@ -161,6 +170,11 @@ export interface Tournament {
   teams?: TournamentTeam[];
   phases?: TournamentPhase[];
   currentPhaseId?: string;
+  // New tournament classification fields
+  tournamentLevel?: TournamentLevel;
+  tournamentCategory?: TournamentCategory;
+  registrationType?: RegistrationType;
+  tournamentScope?: TournamentScope;
 }
 
 export interface Match {

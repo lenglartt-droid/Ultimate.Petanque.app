@@ -157,6 +157,11 @@ export default function PlayerDetailScreen() {
             </Pressable>
           )}
           
+          {/* Nickname */}
+          {player.nickname && (
+            <Text style={styles.playerNickname}>"{player.nickname}"</Text>
+          )}
+          
           {/* Contact Info */}
           {(player.phone || player.email) && (
             <View style={styles.contactInfo}>
@@ -197,6 +202,37 @@ export default function PlayerDetailScreen() {
             <Text style={styles.quickStatLabel}>Défaites</Text>
           </View>
         </Animated.View>
+
+        {/* Boules Section */}
+        {player.boules && (player.boules.name || player.boules.diameter || player.boules.weight) && (
+          <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
+            <Text style={styles.sectionTitle}>BOULES</Text>
+            <View style={styles.boulesCard}>
+              <View style={styles.boulesIconContainer}>
+                <MaterialIcons name="sports-baseball" size={32} color={theme.accent} />
+              </View>
+              <View style={styles.boulesInfo}>
+                {player.boules.name && (
+                  <Text style={styles.boulesName}>{player.boules.name}</Text>
+                )}
+                <View style={styles.boulesSpecs}>
+                  {player.boules.diameter && (
+                    <View style={styles.boulesSpecItem}>
+                      <Text style={styles.boulesSpecLabel}>Diamètre</Text>
+                      <Text style={styles.boulesSpecValue}>{player.boules.diameter} mm</Text>
+                    </View>
+                  )}
+                  {player.boules.weight && (
+                    <View style={styles.boulesSpecItem}>
+                      <Text style={styles.boulesSpecLabel}>Poids</Text>
+                      <Text style={styles.boulesSpecValue}>{player.boules.weight} g</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </View>
+          </Animated.View>
+        )}
 
         {/* Performance Rings */}
         <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
@@ -400,6 +436,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: theme.textSecondary,
   },
+  playerNickname: {
+    fontSize: 15,
+    fontStyle: 'italic',
+    color: theme.textSecondary,
+    marginBottom: 12,
+  },
   terrainLink: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -568,5 +610,51 @@ const styles = StyleSheet.create({
   matchScoreSeparator: {
     fontSize: 14,
     color: theme.textMuted,
+  },
+  // Boules styles
+  boulesCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    ...theme.shadows.card,
+  },
+  boulesIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 14,
+    backgroundColor: theme.accent + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  boulesInfo: {
+    flex: 1,
+  },
+  boulesName: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: theme.textPrimary,
+    marginBottom: 8,
+  },
+  boulesSpecs: {
+    flexDirection: 'row',
+    gap: 20,
+  },
+  boulesSpecItem: {
+    alignItems: 'flex-start',
+  },
+  boulesSpecLabel: {
+    fontSize: 11,
+    color: theme.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  boulesSpecValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.accent,
+    marginTop: 2,
   },
 });

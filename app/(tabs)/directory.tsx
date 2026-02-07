@@ -35,6 +35,8 @@ export default function DirectoryScreen() {
   const [playerClubFilter, setPlayerClubFilter] = useState<string>('all');
   const [playerCityFilter, setPlayerCityFilter] = useState<string>('all');
   const [playerCountryFilter, setPlayerCountryFilter] = useState<string>('all');
+  const [playerLevelFilter, setPlayerLevelFilter] = useState<string>('all');
+  const [playerRoleFilter, setPlayerRoleFilter] = useState<string>('all');
   const [showPlayerFilters, setShowPlayerFilters] = useState(false);
   
   // Club filters
@@ -76,6 +78,9 @@ export default function DirectoryScreen() {
     return ['all', ...Array.from(countrySet)] as string[];
   }, [players]);
 
+  const uniquePlayerLevels = ['all', 'Débutant', 'Intermédiaire', 'Confirmé', 'Expert'];
+  const uniquePlayerRoles = ['all', 'Pointeur', 'Tireur', 'Milieu'];
+
   const uniqueClubCities = useMemo(() => {
     const citySet = new Set(clubs.map(c => c.city).filter(Boolean));
     return ['all', ...Array.from(citySet)] as string[];
@@ -109,8 +114,10 @@ export default function DirectoryScreen() {
     if (playerClubFilter !== 'all') count++;
     if (playerCityFilter !== 'all') count++;
     if (playerCountryFilter !== 'all') count++;
+    if (playerLevelFilter !== 'all') count++;
+    if (playerRoleFilter !== 'all') count++;
     return count;
-  }, [playerClubFilter, playerCityFilter, playerCountryFilter]);
+  }, [playerClubFilter, playerCityFilter, playerCountryFilter, playerLevelFilter, playerRoleFilter]);
 
   // Count active club filters
   const activeClubFilterCount = useMemo(() => {
@@ -148,8 +155,10 @@ export default function DirectoryScreen() {
       const matchesClub = playerClubFilter === 'all' || p.club === playerClubFilter;
       const matchesCity = playerCityFilter === 'all' || p.location?.city === playerCityFilter;
       const matchesCountry = playerCountryFilter === 'all' || (p.country || 'France') === playerCountryFilter;
+      const matchesLevel = playerLevelFilter === 'all' || p.level === playerLevelFilter;
+      const matchesRole = playerRoleFilter === 'all' || p.role === playerRoleFilter;
       
-      return matchesSearch && matchesClub && matchesCity && matchesCountry;
+      return matchesSearch && matchesClub && matchesCity && matchesCountry && matchesLevel && matchesRole;
     });
     
     // If selfPlayer exists and matches filter, put it at the top
@@ -162,7 +171,7 @@ export default function DirectoryScreen() {
     }
     
     return filtered;
-  }, [players, searchQuery, selfPlayer, playerClubFilter, playerCityFilter, playerCountryFilter]);
+  }, [players, searchQuery, selfPlayer, playerClubFilter, playerCityFilter, playerCountryFilter, playerLevelFilter, playerRoleFilter]);
 
   const filteredClubs = useMemo(() => {
     return clubs.filter(c => {
@@ -233,6 +242,8 @@ export default function DirectoryScreen() {
     setPlayerClubFilter('all');
     setPlayerCityFilter('all');
     setPlayerCountryFilter('all');
+    setPlayerLevelFilter('all');
+    setPlayerRoleFilter('all');
   };
 
   const clearClubFilters = () => {
@@ -545,6 +556,66 @@ export default function DirectoryScreen() {
                     playerCountryFilter === country && styles.filterOptionTextActive
                   ]}>
                     {country === 'all' ? 'Tous les pays' : country}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          {/* Level Filter */}
+          <View style={styles.filterSection}>
+            <Text style={styles.filterSectionTitle}>NIVEAU</Text>
+            <View style={styles.filterOptions}>
+              {uniquePlayerLevels.map(level => (
+                <Pressable
+                  key={level}
+                  style={[
+                    styles.filterOption,
+                    playerLevelFilter === level && styles.filterOptionActive
+                  ]}
+                  onPress={() => {
+                    setPlayerLevelFilter(level);
+                    Haptics.selectionAsync();
+                  }}
+                >
+                  <Text style={[
+                    styles.filterOptionText,
+                    playerLevelFilter === level && styles.filterOptionTextActive
+                  ]}>
+                    {level === 'all' ? 'Tous les niveaux' : level}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          {/* Role Filter */}
+          <View style={styles.filterSection}>
+            <Text style={styles.filterSectionTitle}>RÔLE</Text>
+            <View style={styles.filterOptions}>
+              {uniquePlayerRoles.map(role => (
+                <Pressable
+                  key={role}
+                  style={[
+                    styles.filterOption,
+                    playerRoleFilter === role && styles.filterOptionActive
+                  ]}
+                  onPress={() => {
+                    setPlayerRoleFilter(role);
+                    Haptics.selectionAsync();
+                  }}
+                >
+                  <MaterialIcons 
+                    name={role === 'Tireur' ? 'gps-fixed' : role === 'Pointeur' ? 'radio-button-on' : role === 'Milieu' ? 'swap-horiz' : 'people'} 
+                    size={16} 
+                    color={playerRoleFilter === role ? theme.primary : theme.textSecondary} 
+                    style={{ marginRight: 6 }} 
+                  />
+                  <Text style={[
+                    styles.filterOptionText,
+                    playerRoleFilter === role && styles.filterOptionTextActive
+                  ]}>
+                    {role === 'all' ? 'Tous les rôles' : role}
                   </Text>
                 </Pressable>
               ))}
@@ -1077,6 +1148,25 @@ export default function DirectoryScreen() {
                   onPress={() => setPlayerCountryFilter('all')}
                 >
                   <Text style={styles.activeFilterText}>{playerCountryFilter}</Text>
+                  <MaterialIcons name="close" size={14} color={theme.primary} />
+                </Pressable>
+              )}
+              {playerLevelFilter !== 'all' && (
+                <Pressable 
+                  style={styles.activeFilterChip}
+                  onPress={() => setPlayerLevelFilter('all')}
+                >
+                  <Text style={styles.activeFilterText}>{playerLevelFilter}</Text>
+                  <MaterialIcons name="close" size={14} color={theme.primary} />
+                </Pressable>
+              )}
+              {playerRoleFilter !== 'all' && (
+                <Pressable 
+                  style={styles.activeFilterChip}
+                  onPress={() => setPlayerRoleFilter('all')}
+                >
+                  <MaterialIcons name={playerRoleFilter === 'Tireur' ? 'gps-fixed' : playerRoleFilter === 'Pointeur' ? 'radio-button-on' : 'swap-horiz'} size={12} color={theme.primary} />
+                  <Text style={styles.activeFilterText}>{playerRoleFilter}</Text>
                   <MaterialIcons name="close" size={14} color={theme.primary} />
                 </Pressable>
               )}

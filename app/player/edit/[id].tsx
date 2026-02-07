@@ -30,22 +30,32 @@ export default function EditPlayerScreen() {
   const player = getPlayerById(id!);
 
   const [name, setName] = useState('');
+  const [nickname, setNickname] = useState('');
   const [role, setRole] = useState<PlayerRole>('Milieu');
   const [level, setLevel] = useState<typeof levels[number]>('Intermédiaire');
   const [clubId, setClubId] = useState<string | undefined>();
   const [city, setCity] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  // Boules info
+  const [boulesName, setBoulesName] = useState('');
+  const [boulesDiameter, setBoulesDiameter] = useState('');
+  const [boulesWeight, setBoulesWeight] = useState('');
 
   useEffect(() => {
     if (player) {
       setName(player.name);
+      setNickname(player.nickname || '');
       setRole(player.role);
       setLevel(player.level);
       setClubId(player.clubId);
       setCity(player.location?.city || '');
       setPhone(player.phone || '');
       setEmail(player.email || '');
+      // Boules
+      setBoulesName(player.boules?.name || '');
+      setBoulesDiameter(player.boules?.diameter?.toString() || '');
+      setBoulesWeight(player.boules?.weight?.toString() || '');
     }
   }, [player]);
 
@@ -71,14 +81,23 @@ export default function EditPlayerScreen() {
 
     const selectedClub = clubs.find(c => c.id === clubId);
 
+    // Build boules object
+    const boules = (boulesName.trim() || boulesDiameter || boulesWeight) ? {
+      name: boulesName.trim() || undefined,
+      diameter: boulesDiameter ? parseInt(boulesDiameter) : undefined,
+      weight: boulesWeight ? parseInt(boulesWeight) : undefined,
+    } : undefined;
+
     updatePlayer(id!, {
       name: name.trim(),
+      nickname: nickname.trim() || undefined,
       role,
       level,
       clubId,
       club: selectedClub?.name,
       phone: phone.trim() || undefined,
       email: email.trim() || undefined,
+      boules,
       location: city ? {
         ...player.location,
         city,
@@ -152,6 +171,18 @@ export default function EditPlayerScreen() {
               placeholder="Nom complet du joueur"
               placeholderTextColor={theme.textMuted}
               autoCapitalize="words"
+            />
+          </Animated.View>
+
+          {/* Nickname */}
+          <Animated.View entering={FadeInDown.duration(400).delay(120)} style={styles.section}>
+            <Text style={styles.sectionTitle}>SURNOM</Text>
+            <TextInput
+              style={styles.textInput}
+              value={nickname}
+              onChangeText={setNickname}
+              placeholder="Ex: Le Tireur, La Flèche..."
+              placeholderTextColor={theme.textMuted}
             />
           </Animated.View>
 
@@ -304,8 +335,46 @@ export default function EditPlayerScreen() {
             </View>
           </Animated.View>
 
+          {/* Boules Section */}
+          <Animated.View entering={FadeInDown.duration(400).delay(370)} style={styles.section}>
+            <Text style={styles.sectionTitle}>BOULES</Text>
+            <View style={styles.boulesCard}>
+              <TextInput
+                style={[styles.textInput, { marginBottom: 12 }]}
+                value={boulesName}
+                onChangeText={setBoulesName}
+                placeholder="Marque et modèle (ex: Obut ATX)"
+                placeholderTextColor={theme.textMuted}
+              />
+              <View style={styles.boulesSpecsRow}>
+                <View style={styles.boulesSpecInput}>
+                  <Text style={styles.boulesSpecLabel}>Diamètre (mm)</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={boulesDiameter}
+                    onChangeText={setBoulesDiameter}
+                    placeholder="Ex: 74"
+                    placeholderTextColor={theme.textMuted}
+                    keyboardType="number-pad"
+                  />
+                </View>
+                <View style={styles.boulesSpecInput}>
+                  <Text style={styles.boulesSpecLabel}>Poids (g)</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={boulesWeight}
+                    onChangeText={setBoulesWeight}
+                    placeholder="Ex: 700"
+                    placeholderTextColor={theme.textMuted}
+                    keyboardType="number-pad"
+                  />
+                </View>
+              </View>
+            </View>
+          </Animated.View>
+
           {/* Stats Preview */}
-          <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
+          <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
             <Text style={styles.sectionTitle}>STATISTIQUES</Text>
             <View style={styles.statsCard}>
               <View style={styles.statRow}>
@@ -541,6 +610,27 @@ const styles = StyleSheet.create({
     color: theme.textMuted,
     marginTop: 8,
     textAlign: 'center',
+  },
+  boulesCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    padding: 16,
+    ...theme.shadows.card,
+  },
+  boulesSpecsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  boulesSpecInput: {
+    flex: 1,
+  },
+  boulesSpecLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textSecondary,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   footer: {
     paddingHorizontal: 16,
