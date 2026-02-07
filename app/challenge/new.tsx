@@ -702,69 +702,99 @@ export default function NewChallengeScreen() {
           <View style={{ width: 40 }} />
         </View>
 
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
-          showsVerticalScrollIndicator={false}
-        >
-          <Animated.View entering={FadeInDown.duration(400)} style={styles.introSection}>
-            <View style={[styles.challengeTypeIcon, { backgroundColor: config?.color + '20', width: 80, height: 80, borderRadius: 20 }]}>
-              <MaterialIcons name={config?.icon || 'sports'} size={40} color={config?.color} />
+        <View style={styles.modeSelectionContainer}>
+          {/* Challenge type badge */}
+          <Animated.View entering={FadeInDown.duration(400)} style={styles.modeHeaderBadge}>
+            <View style={[styles.modeHeaderIcon, { backgroundColor: config?.color + '20' }]}>
+              <MaterialIcons name={config?.icon || 'sports'} size={24} color={config?.color} />
             </View>
-            <Text style={styles.introTitle}>Mode de jeu</Text>
-            <Text style={styles.introText}>
-              Jouez seul ou défiez un adversaire
-            </Text>
+            <Text style={styles.modeHeaderText}>{config?.name}</Text>
           </Animated.View>
 
-          {/* Solo Mode */}
           <Animated.View entering={FadeInDown.duration(400).delay(100)}>
-            <Pressable
-              style={styles.modeCard}
-              onPress={() => {
-                Haptics.selectionAsync();
-                setChallengeMode('solo');
-              }}
-            >
-              <View style={[styles.modeIcon, { backgroundColor: theme.primary + '20' }]}>
-                <MaterialIcons name="person" size={32} color={theme.primary} />
-              </View>
-              <View style={styles.modeInfo}>
-                <Text style={styles.modeName}>Solo</Text>
-                <Text style={styles.modeDesc}>Entraînez-vous seul et battez vos records</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
-            </Pressable>
+            <Text style={styles.modeSelectionTitle}>Comment voulez-vous jouer ?</Text>
           </Animated.View>
 
-          {/* 1v1 Mode */}
-          <Animated.View entering={FadeInDown.duration(400).delay(200)}>
-            <Pressable
-              style={styles.modeCard}
-              onPress={() => {
-                Haptics.selectionAsync();
-                setChallengeMode('1v1');
-              }}
-            >
-              <View style={[styles.modeIcon, { backgroundColor: theme.accent + '20' }]}>
-                <MaterialIcons name="people" size={32} color={theme.accent} />
-              </View>
-              <View style={styles.modeInfo}>
-                <Text style={styles.modeName}>1 contre 1</Text>
-                <Text style={styles.modeDesc}>Affrontez un adversaire et comparez vos scores</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
-            </Pressable>
-          </Animated.View>
+          {/* Mode Cards - Large and prominent */}
+          <View style={styles.modeCardsGrid}>
+            {/* Solo Mode Card */}
+            <Animated.View entering={ZoomIn.duration(400).delay(200)} style={styles.modeCardWrapper}>
+              <Pressable
+                style={[styles.modeCardLarge, styles.modeCardSolo]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  setChallengeMode('solo');
+                }}
+              >
+                <View style={styles.modeCardLargeIconContainer}>
+                  <View style={[styles.modeCardLargeIcon, { backgroundColor: theme.primary }]}>
+                    <MaterialIcons name="person" size={48} color="#FFF" />
+                  </View>
+                </View>
+                <Text style={styles.modeCardLargeName}>Solo</Text>
+                <Text style={styles.modeCardLargeDesc}>Entraînement personnel</Text>
+                <View style={styles.modeCardLargeFeatures}>
+                  <View style={styles.modeCardFeature}>
+                    <MaterialIcons name="timer" size={14} color={theme.textSecondary} />
+                    <Text style={styles.modeCardFeatureText}>Chronométré</Text>
+                  </View>
+                  <View style={styles.modeCardFeature}>
+                    <MaterialIcons name="trending-up" size={14} color={theme.textSecondary} />
+                    <Text style={styles.modeCardFeatureText}>Battez vos records</Text>
+                  </View>
+                </View>
+                <View style={[styles.modeCardStartButton, { backgroundColor: theme.primary }]}>
+                  <Text style={styles.modeCardStartText}>Commencer</Text>
+                  <MaterialIcons name="arrow-forward" size={18} color="#FFF" />
+                </View>
+              </Pressable>
+            </Animated.View>
 
-          {/* Info card */}
-          <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.modeInfoCard}>
-            <MaterialIcons name="lightbulb" size={20} color={theme.warning} />
-            <Text style={styles.modeInfoText}>
-              En mode 1v1, chaque joueur effectue ses tirs à tour de rôle. Le gagnant est celui avec le meilleur score !
+            {/* 1v1 Mode Card */}
+            <Animated.View entering={ZoomIn.duration(400).delay(300)} style={styles.modeCardWrapper}>
+              <Pressable
+                style={[styles.modeCardLarge, styles.modeCard1v1]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  setChallengeMode('1v1');
+                }}
+              >
+                <View style={styles.modeCardLargeIconContainer}>
+                  <View style={[styles.modeCardLargeIcon, { backgroundColor: theme.accent }]}>
+                    <MaterialIcons name="people" size={48} color="#FFF" />
+                  </View>
+                  <View style={styles.vsIndicator}>
+                    <Text style={styles.vsText}>VS</Text>
+                  </View>
+                </View>
+                <Text style={styles.modeCardLargeName}>1 contre 1</Text>
+                <Text style={styles.modeCardLargeDesc}>Défiez un adversaire</Text>
+                <View style={styles.modeCardLargeFeatures}>
+                  <View style={styles.modeCardFeature}>
+                    <MaterialIcons name="swap-horiz" size={14} color={theme.textSecondary} />
+                    <Text style={styles.modeCardFeatureText}>Tour par tour</Text>
+                  </View>
+                  <View style={styles.modeCardFeature}>
+                    <MaterialIcons name="emoji-events" size={14} color={theme.textSecondary} />
+                    <Text style={styles.modeCardFeatureText}>Gagnant déclaré</Text>
+                  </View>
+                </View>
+                <View style={[styles.modeCardStartButton, { backgroundColor: theme.accent }]}>
+                  <Text style={styles.modeCardStartText}>Choisir adversaire</Text>
+                  <MaterialIcons name="arrow-forward" size={18} color="#FFF" />
+                </View>
+              </Pressable>
+            </Animated.View>
+          </View>
+
+          {/* Quick tip */}
+          <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.modeTipCard}>
+            <MaterialIcons name="lightbulb" size={18} color={theme.warning} />
+            <Text style={styles.modeTipText}>
+              Les scores sont enregistrés et comptabilisés dans vos statistiques
             </Text>
           </Animated.View>
-        </ScrollView>
+        </View>
       </SafeAreaView>
     );
   }
@@ -779,6 +809,24 @@ export default function NewChallengeScreen() {
           </Pressable>
           <Text style={styles.headerTitle}>Choisir adversaire</Text>
           <View style={{ width: 40 }} />
+        </View>
+
+        {/* 1v1 Header Banner */}
+        <View style={styles.opponent1v1Banner}>
+          <View style={styles.opponent1v1BannerContent}>
+            <View style={styles.opponent1v1Players}>
+              <View style={styles.opponent1v1PlayerBadge}>
+                <MaterialIcons name="person" size={20} color="#FFF" />
+              </View>
+              <View style={styles.opponent1v1VsBadge}>
+                <Text style={styles.opponent1v1VsText}>VS</Text>
+              </View>
+              <View style={[styles.opponent1v1PlayerBadge, styles.opponent1v1PlayerBadgeEmpty]}>
+                <MaterialIcons name="help-outline" size={20} color={theme.accent} />
+              </View>
+            </View>
+            <Text style={styles.opponent1v1BannerTitle}>Qui sera votre adversaire ?</Text>
+          </View>
         </View>
 
         <View style={styles.searchContainer}>
@@ -799,7 +847,7 @@ export default function NewChallengeScreen() {
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32, paddingTop: 8 }]}
           showsVerticalScrollIndicator={false}
         >
           {filteredPlayers.length > 0 ? (
@@ -809,24 +857,36 @@ export default function NewChallengeScreen() {
                 entering={FadeInDown.duration(300).delay(index * 50)}
               >
                 <Pressable
-                  style={styles.playerCard}
+                  style={styles.opponentPlayerCard}
                   onPress={() => {
-                    Haptics.selectionAsync();
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                     setSelectedOpponent(player);
                   }}
                 >
-                  <View style={styles.playerAvatar}>
-                    <Text style={styles.playerInitials}>
+                  <View style={styles.opponentPlayerAvatar}>
+                    <Text style={styles.opponentPlayerInitials}>
                       {player.name.split(' ').map(n => n[0]).join('')}
                     </Text>
                   </View>
-                  <View style={styles.playerInfo}>
-                    <Text style={styles.playerName}>{player.name}</Text>
-                    <Text style={styles.playerMeta}>
-                      {player.club || 'Sans club'} • {player.role}
-                    </Text>
+                  <View style={styles.opponentPlayerInfo}>
+                    <Text style={styles.opponentPlayerName}>{player.name}</Text>
+                    <View style={styles.opponentPlayerMeta}>
+                      <View style={styles.opponentPlayerMetaItem}>
+                        <MaterialIcons name="location-city" size={12} color={theme.textMuted} />
+                        <Text style={styles.opponentPlayerMetaText}>
+                          {player.club || 'Sans club'}
+                        </Text>
+                      </View>
+                      <View style={styles.opponentPlayerMetaDot} />
+                      <View style={styles.opponentPlayerMetaItem}>
+                        <MaterialIcons name="sports" size={12} color={theme.textMuted} />
+                        <Text style={styles.opponentPlayerMetaText}>{player.role}</Text>
+                      </View>
+                    </View>
                   </View>
-                  <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
+                  <View style={styles.opponentSelectButton}>
+                    <Text style={styles.opponentSelectText}>Défier</Text>
+                  </View>
                 </Pressable>
               </Animated.View>
             ))
@@ -836,6 +896,13 @@ export default function NewChallengeScreen() {
               <Text style={styles.emptyStateText}>
                 {opponentSearch ? 'Aucun joueur trouvé' : 'Aucun joueur disponible'}
               </Text>
+              <Pressable 
+                style={styles.createPlayerButton}
+                onPress={() => router.push('/player/new')}
+              >
+                <MaterialIcons name="person-add" size={18} color={theme.primary} />
+                <Text style={styles.createPlayerButtonText}>Créer un joueur</Text>
+              </Pressable>
             </View>
           )}
         </ScrollView>
@@ -1762,6 +1829,194 @@ const styles = StyleSheet.create({
   modeBadgeText1v1: {
     color: theme.accent,
   },
+  // Mode selection styles - Enhanced
+  modeSelectionContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+  },
+  modeHeaderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    gap: 10,
+    backgroundColor: theme.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: theme.borderRadius.full,
+    marginBottom: 20,
+    ...theme.shadows.card,
+  },
+  modeHeaderIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modeHeaderText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  modeSelectionTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: theme.textPrimary,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  modeCardsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modeCardWrapper: {
+    flex: 1,
+  },
+  modeCardLarge: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+    ...theme.shadows.cardElevated,
+  },
+  modeCardSolo: {
+    borderColor: theme.primary + '30',
+  },
+  modeCard1v1: {
+    borderColor: theme.accent + '30',
+  },
+  modeCardLargeIconContainer: {
+    position: 'relative',
+    marginBottom: 12,
+  },
+  modeCardLargeIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vsIndicator: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    backgroundColor: theme.warning,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: theme.surface,
+  },
+  vsText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFF',
+  },
+  modeCardLargeName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.textPrimary,
+    marginBottom: 4,
+  },
+  modeCardLargeDesc: {
+    fontSize: 13,
+    color: theme.textSecondary,
+    marginBottom: 12,
+  },
+  modeCardLargeFeatures: {
+    width: '100%',
+    gap: 6,
+    marginBottom: 14,
+  },
+  modeCardFeature: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  modeCardFeatureText: {
+    fontSize: 12,
+    color: theme.textSecondary,
+  },
+  modeCardStartButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    width: '100%',
+    paddingVertical: 12,
+    borderRadius: theme.borderRadius.md,
+  },
+  modeCardStartText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  modeTipCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: theme.warning + '15',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: theme.borderRadius.md,
+    marginTop: 20,
+  },
+  modeTipText: {
+    flex: 1,
+    fontSize: 13,
+    color: theme.textSecondary,
+    lineHeight: 18,
+  },
+  // Opponent selection - Enhanced
+  opponent1v1Banner: {
+    backgroundColor: theme.accent,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+  },
+  opponent1v1BannerContent: {
+    alignItems: 'center',
+  },
+  opponent1v1Players: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  opponent1v1PlayerBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  opponent1v1PlayerBadgeEmpty: {
+    backgroundColor: theme.surface,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: theme.accent,
+  },
+  opponent1v1VsBadge: {
+    backgroundColor: theme.warning,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: theme.borderRadius.sm,
+  },
+  opponent1v1VsText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFF',
+  },
+  opponent1v1BannerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFF',
+  },
   // Search and player selection
   searchContainer: {
     flexDirection: 'row',
@@ -1824,6 +2079,87 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: theme.textMuted,
     marginTop: 12,
+  },
+  // Opponent player card - Enhanced
+  opponentPlayerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: theme.border,
+    ...theme.shadows.card,
+  },
+  opponentPlayerAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: theme.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  opponentPlayerInitials: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  opponentPlayerInfo: {
+    flex: 1,
+  },
+  opponentPlayerName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.textPrimary,
+    marginBottom: 4,
+  },
+  opponentPlayerMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  opponentPlayerMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  opponentPlayerMetaText: {
+    fontSize: 12,
+    color: theme.textMuted,
+  },
+  opponentPlayerMetaDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: theme.textMuted,
+    marginHorizontal: 8,
+  },
+  opponentSelectButton: {
+    backgroundColor: theme.accent,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: theme.borderRadius.md,
+  },
+  opponentSelectText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  createPlayerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: theme.primary + '15',
+    borderRadius: theme.borderRadius.md,
+  },
+  createPlayerButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.primary,
   },
   // Turn indicator
   turnIndicator: {
