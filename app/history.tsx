@@ -6,11 +6,12 @@ import {
   ScrollView,
   Pressable,
   StyleSheet,
+  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Animated, { FadeInDown, FadeIn, FadeInRight } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
@@ -22,45 +23,56 @@ const CHALLENGE_CONFIG = {
   'precision': { name: 'Précision', icon: 'stars' as const, color: '#F59E0B' },
 };
 
-type TimeFilter = 'today' | 'week' | 'month' | 'year' | 'all';
-type HistoryTab = 'all' | 'matches' | 'challenges';
+type ContentFilter = 'all' | 'training' | 'tournament' | 'challenges';
+type PeriodOption = 'all' | 'today' | 'week' | 'month' | 'custom';
 
-const TIME_FILTERS: { id: TimeFilter; label: string; icon: string }[] = [
-  { id: 'all', label: 'Tout', icon: 'all-inclusive' },
+interface DateRange {
+  start: Date | null;
+  end: Date | null;
+}
+
+const PERIOD_OPTIONS: { id: PeriodOption; label: string; icon: keyof typeof MaterialIcons.glyphMap }[] = [
+  { id: 'all', label: 'Toutes les dates', icon: 'all-inclusive' },
   { id: 'today', label: "Aujourd'hui", icon: 'today' },
-  { id: 'week', label: 'Semaine', icon: 'date-range' },
-  { id: 'month', label: 'Mois', icon: 'calendar-today' },
-  { id: 'year', label: 'Année', icon: 'event' },
+  { id: 'week', label: 'Cette semaine', icon: 'date-range' },
+  { id: 'month', label: 'Ce mois', icon: 'calendar-today' },
 ];
 
-function filterByTime<T extends { date: string }>(items: T[], filter: TimeFilter): T[] {
-  if (filter === 'all') return items;
-  
+const CONTENT_FILTERS: { id: ContentFilter; label: string; icon: keyof typeof MaterialIcons.glyphMap }[] = [
+  { id: 'all', label: 'Tout', icon: 'layers' },
+  { id: 'training', label: 'Entraînements', icon: 'fitness-center' },
+  { id: 'tournament', label: 'Tournois', icon: 'emoji-events' },
+  { id: 'challenges', label: 'Défis', icon: 'track-changes' },
+];
+
+function getDateRange(period: PeriodOption): DateRange {
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   
-  let startDate: Date;
-  switch (filter) {
+  switch (period) {
     case 'today':
-      startDate = startOfDay;
-      break;
+      return { start: startOfDay, end: now };
     case 'week':
       const dayOfWeek = now.getDay();
       const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-      startDate = new Date(startOfDay);
-      startDate.setDate(startDate.getDate() - diff);
-      break;
+      const weekStart = new Date(startOfDay);
+      weekStart.setDate(weekStart.getDate() - diff);
+      return { start: weekStart, end: now };
     case 'month':
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      break;
-    case 'year':
-      startDate = new Date(now.getFullYear(), 0, 1);
-      break;
+      return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: now };
     default:
-      return items;
+      return { start: null, end: null };
   }
-  
-  return items.filter(item => new Date(item.date) >= startDate);
+}
+
+function filterByDateRange<T extends { date: string }>(items: T[], range: DateRange): T[] {
+  if (!range.start) return items;
+  return items.filter(item => {
+    const itemDate = new Date(item.date);
+    const afterStart = range.start ? itemDate >= range.start : true;
+    const beforeEnd = range.end ? itemDate <= range.end : true;
+    return afterStart && beforeEnd;
+  });
 }
 
 function groupByDate(items: { type: 'match' | 'challenge'; data: Match | Challenge; date: string }[]) {
@@ -78,7 +90,7 @@ function groupByDate(items: { type: 'match' | 'challenge'; data: Match | Challen
     } else if (date.toDateString() === yesterday.toDateString()) {
       key = "Hier";
     } else if (date.getFullYear() === today.getFullYear()) {
-      key = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+      key = date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
     } else {
       key = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     }
@@ -99,111 +111,152 @@ function groupByDate(items: { type: 'match' | 'challenge'; data: Match | Challen
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
   const { matches, challenges } = useApp();
-  const [activeTab, setActiveTab] = useState<HistoryTab>('all');
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
+  const [contentFilter, setContentFilter] = useState<ContentFilter>('all');
+  const [selectedPeriod, setSelectedPeriod] = useState<PeriodOption>('all');
+  const [showPeriodModal, setShowPeriodModal] = useState(false);
 
-  const filteredMatches = filterByTime(matches, timeFilter);
-  const filteredChallenges = filterByTime(challenges, timeFilter);
+  const dateRange = useMemo(() => getDateRange(selectedPeriod), [selectedPeriod]);
 
-  const groupedHistory = useMemo(() => {
-    const matchItems = filteredMatches.map(m => ({ type: 'match' as const, data: m, date: m.date }));
-    const challengeItems = filteredChallenges.map(c => ({ type: 'challenge' as const, data: c, date: c.date }));
-    
-    let items = [];
-    if (activeTab === 'all') {
-      items = [...matchItems, ...challengeItems];
-    } else if (activeTab === 'matches') {
-      items = matchItems;
-    } else {
-      items = challengeItems;
+  // Filter data based on selections
+  const filteredData = useMemo(() => {
+    // First filter by date
+    const dateFilteredMatches = filterByDateRange(matches, dateRange);
+    const dateFilteredChallenges = filterByDateRange(challenges, dateRange);
+
+    // Then filter by content type
+    let matchItems: { type: 'match'; data: Match; date: string }[] = [];
+    let challengeItems: { type: 'challenge'; data: Challenge; date: string }[] = [];
+
+    if (contentFilter === 'all' || contentFilter === 'training') {
+      matchItems = [
+        ...matchItems,
+        ...dateFilteredMatches
+          .filter(m => contentFilter === 'all' || m.mode === 'Entraînement')
+          .map(m => ({ type: 'match', data: m, date: m.date })),
+      ];
     }
-    
-    const sorted = items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    return groupByDate(sorted);
-  }, [filteredMatches, filteredChallenges, activeTab]);
 
-  const renderMatchCard = (match: Match, index: number) => {
+    if (contentFilter === 'all' || contentFilter === 'tournament') {
+      matchItems = [
+        ...matchItems,
+        ...dateFilteredMatches
+          .filter(m => contentFilter === 'all' || m.mode === 'Tournoi')
+          .map(m => ({ type: 'match', data: m, date: m.date })),
+      ];
+    }
+
+    // Remove duplicates if contentFilter is 'all'
+    if (contentFilter === 'all') {
+      const uniqueMatchIds = new Set<string>();
+      matchItems = matchItems.filter(item => {
+        if (uniqueMatchIds.has(item.data.id)) return false;
+        uniqueMatchIds.add(item.data.id);
+        return true;
+      });
+    }
+
+    if (contentFilter === 'all' || contentFilter === 'challenges') {
+      challengeItems = dateFilteredChallenges.map(c => ({ type: 'challenge', data: c, date: c.date }));
+    }
+
+    const allItems = [...matchItems, ...challengeItems];
+    const sorted = allItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return groupByDate(sorted);
+  }, [matches, challenges, contentFilter, dateRange]);
+
+  // Stats for current filter
+  const stats = useMemo(() => {
+    const dateFilteredMatches = filterByDateRange(matches, dateRange);
+    const dateFilteredChallenges = filterByDateRange(challenges, dateRange);
+    
+    const trainingCount = dateFilteredMatches.filter(m => m.mode === 'Entraînement').length;
+    const tournamentCount = dateFilteredMatches.filter(m => m.mode === 'Tournoi').length;
+    const challengeCount = dateFilteredChallenges.length;
+    
+    return { trainingCount, tournamentCount, challengeCount, total: trainingCount + tournamentCount + challengeCount };
+  }, [matches, challenges, dateRange]);
+
+  const selectedPeriodLabel = PERIOD_OPTIONS.find(p => p.id === selectedPeriod)?.label || 'Sélectionner';
+
+  const renderMatchCard = (match: Match) => {
     const isWin = match.winner === 'A';
+    const isTournament = match.mode === 'Tournoi';
     
     return (
       <Pressable 
-        style={styles.matchCard}
+        style={styles.card}
         onPress={() => {
           Haptics.selectionAsync();
           router.push(`/match/${match.id}`);
         }}
       >
-        {/* Left accent */}
-        <View style={[styles.matchAccent, { backgroundColor: isWin ? theme.success : theme.error }]} />
+        <View style={[styles.cardIndicator, { backgroundColor: isWin ? theme.success : theme.error }]} />
         
-        <View style={styles.matchBody}>
-          {/* Top row - Mode badge and time */}
-          <View style={styles.matchTopRow}>
+        <View style={styles.cardContent}>
+          {/* Header */}
+          <View style={styles.cardHeader}>
             <View style={[
-              styles.modeBadge,
-              { backgroundColor: match.mode === 'Tournoi' ? theme.carreauColor + '20' : theme.primary + '20' }
+              styles.typeBadge,
+              { backgroundColor: isTournament ? theme.carreauColor + '15' : theme.primary + '15' }
             ]}>
               <MaterialIcons 
-                name={match.mode === 'Tournoi' ? 'emoji-events' : 'fitness-center'} 
+                name={isTournament ? 'emoji-events' : 'fitness-center'} 
                 size={14} 
-                color={match.mode === 'Tournoi' ? theme.carreauColor : theme.primary} 
+                color={isTournament ? theme.carreauColor : theme.primary} 
               />
               <Text style={[
-                styles.modeBadgeText,
-                { color: match.mode === 'Tournoi' ? theme.carreauColor : theme.primary }
+                styles.typeBadgeText,
+                { color: isTournament ? theme.carreauColor : theme.primary }
               ]}>
-                {match.mode === 'Tournoi' ? match.tournamentName || 'Tournoi' : 'Entraînement'}
+                {isTournament ? 'Tournoi' : 'Entraînement'}
               </Text>
             </View>
-            <Text style={styles.matchTime}>
+            <Text style={styles.cardTime}>
               {new Date(match.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
             </Text>
           </View>
 
-          {/* Score section - Main visual element */}
-          <View style={styles.scoreSection}>
-            <View style={styles.teamBlock}>
-              <Text style={styles.teamName} numberOfLines={1}>Mon équipe</Text>
+          {/* Tournament name if applicable */}
+          {isTournament && match.tournamentName && (
+            <Text style={styles.tournamentName} numberOfLines={1}>{match.tournamentName}</Text>
+          )}
+
+          {/* Score display */}
+          <View style={styles.scoreContainer}>
+            <View style={styles.teamInfo}>
+              <Text style={styles.teamLabel}>Mon équipe</Text>
               <Text style={styles.teamPlayers} numberOfLines={1}>
-                {match.teamA.playerNames.slice(0, 2).join(', ')}
+                {match.teamA.playerNames.slice(0, 2).join(' • ')}
               </Text>
             </View>
             
-            <View style={styles.scoreBubble}>
-              <Text style={[styles.scoreNumber, isWin && styles.scoreWin]}>{match.teamA.score}</Text>
-              <View style={styles.scoreDivider} />
-              <Text style={[styles.scoreNumber, !isWin && styles.scoreLoss]}>{match.teamB.score}</Text>
+            <View style={styles.scoreBox}>
+              <Text style={[styles.score, isWin && styles.scoreWin]}>{match.teamA.score}</Text>
+              <Text style={styles.scoreSeparator}>-</Text>
+              <Text style={[styles.score, !isWin && styles.scoreLoss]}>{match.teamB.score}</Text>
             </View>
             
-            <View style={[styles.teamBlock, styles.teamBlockRight]}>
-              <Text style={styles.teamName} numberOfLines={1}>Adversaire</Text>
+            <View style={[styles.teamInfo, styles.teamInfoRight]}>
+              <Text style={styles.teamLabel}>Adversaire</Text>
               <Text style={styles.teamPlayers} numberOfLines={1}>
-                {match.teamB.playerNames.slice(0, 2).join(', ')}
+                {match.teamB.playerNames.slice(0, 2).join(' • ')}
               </Text>
             </View>
           </View>
 
-          {/* Bottom row - Result and format */}
-          <View style={styles.matchBottomRow}>
-            <View style={[styles.resultChip, { backgroundColor: isWin ? theme.success + '15' : theme.error + '15' }]}>
+          {/* Footer */}
+          <View style={styles.cardFooter}>
+            <View style={[styles.resultBadge, { backgroundColor: isWin ? theme.success + '15' : theme.error + '15' }]}>
               <MaterialIcons 
                 name={isWin ? 'check-circle' : 'cancel'} 
                 size={14} 
                 color={isWin ? theme.success : theme.error} 
               />
-              <Text style={[styles.resultChipText, { color: isWin ? theme.success : theme.error }]}>
+              <Text style={[styles.resultBadgeText, { color: isWin ? theme.success : theme.error }]}>
                 {isWin ? 'Victoire' : 'Défaite'}
               </Text>
             </View>
-            <View style={styles.matchMeta}>
-              <Text style={styles.matchMetaText}>{match.format}</Text>
-              {match.duration > 0 && (
-                <>
-                  <View style={styles.metaDot} />
-                  <Text style={styles.matchMetaText}>{match.duration} min</Text>
-                </>
-              )}
-            </View>
+            <Text style={styles.formatText}>{match.format}</Text>
           </View>
         </View>
       </Pressable>
@@ -217,62 +270,54 @@ export default function HistoryScreen() {
       : challenge.successRate || 0;
     const maxScore = challenge.type === 'precision' ? 100 : 100;
     const percentage = Math.min(100, (score / maxScore) * 100);
-    const carreaux = challenge.type === 'precision'
-      ? challenge.precisionShots?.filter(s => s.points === 5).length || 0
-      : challenge.carreauCount || 0;
     
     return (
-      <View style={styles.challengeCard}>
-        {/* Icon */}
-        <View style={[styles.challengeIcon, { backgroundColor: config.color + '15' }]}>
-          <MaterialIcons name={config.icon} size={22} color={config.color} />
-        </View>
+      <Pressable style={styles.card}>
+        <View style={[styles.cardIndicator, { backgroundColor: config.color }]} />
         
-        {/* Content */}
-        <View style={styles.challengeContent}>
-          <View style={styles.challengeTopRow}>
-            <Text style={styles.challengeName}>{config.name}</Text>
-            <Text style={styles.challengeTime}>
+        <View style={styles.cardContent}>
+          <View style={styles.cardHeader}>
+            <View style={[styles.typeBadge, { backgroundColor: config.color + '15' }]}>
+              <MaterialIcons name={config.icon} size={14} color={config.color} />
+              <Text style={[styles.typeBadgeText, { color: config.color }]}>Défi</Text>
+            </View>
+            <Text style={styles.cardTime}>
               {new Date(challenge.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
             </Text>
           </View>
-          
-          {/* Score bar */}
-          <View style={styles.challengeScoreRow}>
-            <View style={styles.challengeBarContainer}>
+
+          <View style={styles.challengeBody}>
+            <View style={styles.challengeInfo}>
+              <Text style={styles.challengeName}>{config.name}</Text>
+              {challenge.playerName && (
+                <Text style={styles.challengePlayer}>{challenge.playerName}</Text>
+              )}
+            </View>
+            
+            <View style={styles.challengeScore}>
+              <Text style={[styles.challengeScoreValue, { color: config.color }]}>
+                {score}{challenge.type === 'precision' ? '' : '%'}
+              </Text>
+              <Text style={styles.challengeScoreLabel}>
+                {challenge.type === 'precision' ? 'points' : 'réussite'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.progressContainer}>
+            <View style={styles.progressBar}>
               <View 
-                style={[
-                  styles.challengeBar, 
-                  { width: `${percentage}%`, backgroundColor: config.color }
-                ]} 
+                style={[styles.progressFill, { width: `${percentage}%`, backgroundColor: config.color }]} 
               />
             </View>
-            <Text style={[styles.challengeScore, { color: config.color }]}>
-              {score}{challenge.type === 'precision' ? 'pts' : '%'}
-            </Text>
-          </View>
-          
-          {/* Bottom stats */}
-          <View style={styles.challengeStatsRow}>
             {challenge.successCount !== undefined && (
-              <View style={styles.challengeStat}>
-                <MaterialIcons name="check" size={12} color={theme.success} />
-                <Text style={styles.challengeStatText}>
-                  {challenge.successCount}/{challenge.totalShots}
-                </Text>
-              </View>
-            )}
-            {carreaux > 0 && (
-              <View style={styles.challengeStat}>
-                <MaterialIcons name="stars" size={12} color={theme.carreauColor} />
-                <Text style={[styles.challengeStatText, { color: theme.carreauColor }]}>
-                  {carreaux} carreau{carreaux > 1 ? 'x' : ''}
-                </Text>
-              </View>
+              <Text style={styles.progressText}>
+                {challenge.successCount}/{challenge.totalShots} tirs
+              </Text>
             )}
           </View>
         </View>
-      </View>
+      </Pressable>
     );
   };
 
@@ -287,101 +332,62 @@ export default function HistoryScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      {/* Time Filter Pills */}
-      <Animated.View 
-        entering={FadeInDown.duration(300).delay(50)}
-        style={styles.filterSection}
-      >
+      {/* Filters Section */}
+      <View style={styles.filtersContainer}>
+        {/* Period Selector */}
+        <Pressable 
+          style={styles.periodSelector}
+          onPress={() => {
+            Haptics.selectionAsync();
+            setShowPeriodModal(true);
+          }}
+        >
+          <MaterialIcons name="event" size={20} color={theme.primary} />
+          <Text style={styles.periodSelectorText}>{selectedPeriodLabel}</Text>
+          <MaterialIcons name="keyboard-arrow-down" size={20} color={theme.textSecondary} />
+        </Pressable>
+
+        {/* Content Filter Chips */}
         <ScrollView 
           horizontal 
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScroll}
+          contentContainerStyle={styles.filterChipsContainer}
         >
-          {TIME_FILTERS.map((filter, index) => (
-            <Animated.View 
-              key={filter.id}
-              entering={FadeInRight.duration(200).delay(index * 40)}
-            >
+          {CONTENT_FILTERS.map((filter) => {
+            const isActive = contentFilter === filter.id;
+            let count = 0;
+            if (filter.id === 'all') count = stats.total;
+            else if (filter.id === 'training') count = stats.trainingCount;
+            else if (filter.id === 'tournament') count = stats.tournamentCount;
+            else if (filter.id === 'challenges') count = stats.challengeCount;
+
+            return (
               <Pressable
-                style={[
-                  styles.filterPill,
-                  timeFilter === filter.id && styles.filterPillActive
-                ]}
+                key={filter.id}
+                style={[styles.filterChip, isActive && styles.filterChipActive]}
                 onPress={() => {
                   Haptics.selectionAsync();
-                  setTimeFilter(filter.id);
+                  setContentFilter(filter.id);
                 }}
               >
-                <Text style={[
-                  styles.filterPillText,
-                  timeFilter === filter.id && styles.filterPillTextActive
-                ]}>
+                <MaterialIcons 
+                  name={filter.icon} 
+                  size={16} 
+                  color={isActive ? '#FFF' : theme.textSecondary} 
+                />
+                <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
                   {filter.label}
                 </Text>
+                <View style={[styles.filterChipCount, isActive && styles.filterChipCountActive]}>
+                  <Text style={[styles.filterChipCountText, isActive && styles.filterChipCountTextActive]}>
+                    {count}
+                  </Text>
+                </View>
               </Pressable>
-            </Animated.View>
-          ))}
+            );
+          })}
         </ScrollView>
-      </Animated.View>
-
-      {/* Segmented Tabs */}
-      <Animated.View 
-        entering={FadeInDown.duration(300).delay(100)}
-        style={styles.segmentedControl}
-      >
-        <Pressable
-          style={[styles.segment, activeTab === 'all' && styles.segmentActive]}
-          onPress={() => {
-            Haptics.selectionAsync();
-            setActiveTab('all');
-          }}
-        >
-          <Text style={[styles.segmentText, activeTab === 'all' && styles.segmentTextActive]}>
-            Tout
-          </Text>
-          {activeTab === 'all' && <View style={styles.segmentBadge}>
-            <Text style={styles.segmentBadgeText}>{filteredMatches.length + filteredChallenges.length}</Text>
-          </View>}
-        </Pressable>
-        <Pressable
-          style={[styles.segment, activeTab === 'matches' && styles.segmentActive]}
-          onPress={() => {
-            Haptics.selectionAsync();
-            setActiveTab('matches');
-          }}
-        >
-          <MaterialIcons 
-            name="sports" 
-            size={16} 
-            color={activeTab === 'matches' ? '#FFF' : theme.textSecondary} 
-          />
-          <Text style={[styles.segmentText, activeTab === 'matches' && styles.segmentTextActive]}>
-            Matchs
-          </Text>
-          {activeTab === 'matches' && <View style={styles.segmentBadge}>
-            <Text style={styles.segmentBadgeText}>{filteredMatches.length}</Text>
-          </View>}
-        </Pressable>
-        <Pressable
-          style={[styles.segment, activeTab === 'challenges' && styles.segmentActive]}
-          onPress={() => {
-            Haptics.selectionAsync();
-            setActiveTab('challenges');
-          }}
-        >
-          <MaterialIcons 
-            name="gps-fixed" 
-            size={16} 
-            color={activeTab === 'challenges' ? '#FFF' : theme.textSecondary} 
-          />
-          <Text style={[styles.segmentText, activeTab === 'challenges' && styles.segmentTextActive]}>
-            Défis
-          </Text>
-          {activeTab === 'challenges' && <View style={styles.segmentBadge}>
-            <Text style={styles.segmentBadgeText}>{filteredChallenges.length}</Text>
-          </View>}
-        </Pressable>
-      </Animated.View>
+      </View>
 
       {/* History List */}
       <ScrollView
@@ -389,16 +395,17 @@ export default function HistoryScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
       >
-        {groupedHistory.length > 0 ? (
-          groupedHistory.map((section, sectionIndex) => (
+        {filteredData.length > 0 ? (
+          filteredData.map((section, sectionIndex) => (
             <Animated.View 
               key={section.title}
-              entering={FadeInDown.duration(300).delay(150 + sectionIndex * 50)}
+              entering={FadeInDown.duration(300).delay(sectionIndex * 50)}
             >
-              {/* Date Header */}
-              <View style={styles.dateHeader}>
-                <Text style={styles.dateHeaderText}>{section.title}</Text>
-                <View style={styles.dateHeaderLine} />
+              {/* Date Section Header */}
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionDot} />
+                <Text style={styles.sectionTitle}>{section.title}</Text>
+                <View style={styles.sectionLine} />
               </View>
               
               {/* Items */}
@@ -408,7 +415,7 @@ export default function HistoryScreen() {
                   entering={FadeIn.duration(200).delay(index * 30)}
                 >
                   {item.type === 'match' 
-                    ? renderMatchCard(item.data as Match, index)
+                    ? renderMatchCard(item.data as Match)
                     : renderChallengeCard(item.data as Challenge)
                   }
                 </Animated.View>
@@ -418,26 +425,86 @@ export default function HistoryScreen() {
         ) : (
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
-              <MaterialIcons name="history" size={56} color={theme.textMuted} />
+              <MaterialIcons name="search-off" size={48} color={theme.textMuted} />
             </View>
-            <Text style={styles.emptyTitle}>Aucune activité</Text>
+            <Text style={styles.emptyTitle}>Aucun résultat</Text>
             <Text style={styles.emptyText}>
-              {timeFilter !== 'all' 
-                ? `Rien pour ${TIME_FILTERS.find(f => f.id === timeFilter)?.label.toLowerCase()}`
-                : 'Vos matchs et défis apparaîtront ici'
-              }
+              Aucune activité ne correspond à vos filtres
             </Text>
-            {timeFilter !== 'all' && (
-              <Pressable 
-                style={styles.emptyButton}
-                onPress={() => setTimeFilter('all')}
-              >
-                <Text style={styles.emptyButtonText}>Voir tout</Text>
-              </Pressable>
-            )}
+            <Pressable 
+              style={styles.resetButton}
+              onPress={() => {
+                Haptics.selectionAsync(); // Added Haptics feedback here
+                setContentFilter('all');
+                setSelectedPeriod('all');
+              }}
+            >
+              <MaterialIcons name="refresh" size={18} color="#FFF" />
+              <Text style={styles.resetButtonText}>Réinitialiser</Text>
+            </Pressable>
           </View>
         )}
       </ScrollView>
+
+      {/* Period Selection Modal */}
+      <Modal
+        visible={showPeriodModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowPeriodModal(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Sélectionner une période</Text>
+            <Pressable
+              style={styles.modalCloseBtn}
+              onPress={() => {
+                Haptics.selectionAsync(); // Added Haptics feedback here
+                setShowPeriodModal(false);
+              }}
+            >
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            {PERIOD_OPTIONS.map((option) => (
+              <Pressable
+                key={option.id}
+                style={[
+                  styles.periodOption,
+                  selectedPeriod === option.id && styles.periodOptionActive
+                ]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setSelectedPeriod(option.id);
+                  setShowPeriodModal(false);
+                }}
+              >
+                <View style={[
+                  styles.periodOptionIcon,
+                  selectedPeriod === option.id && styles.periodOptionIconActive
+                ]}>
+                  <MaterialIcons 
+                    name={option.icon} 
+                    size={22} 
+                    color={selectedPeriod === option.id ? '#FFF' : theme.textSecondary} 
+                  />
+                </View>
+                <Text style={[
+                  styles.periodOptionText,
+                  selectedPeriod === option.id && styles.periodOptionTextActive
+                ]}>
+                  {option.label}
+                </Text>
+                {selectedPeriod === option.id && (
+                  <MaterialIcons name="check-circle" size={22} color={theme.primary} />
+                )}
+              </Pressable>
+            ))}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -468,109 +535,113 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: theme.textPrimary,
   },
-  // Filter pills
-  filterSection: {
-    marginTop: 12,
-    paddingTop: 8,
-    borderTopWidth: 0,
-  },
-  filterScroll: {
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  filterPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: theme.borderRadius.full,
+  // Filters
+  filtersContainer: {
     backgroundColor: theme.surface,
-    borderWidth: 1,
-    borderColor: theme.border,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
   },
-  filterPillActive: {
-    backgroundColor: theme.primary,
-    borderColor: theme.primary,
-  },
-  filterPillText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  filterPillTextActive: {
-    color: '#FFF',
-  },
-  // Segmented control
-  segmentedControl: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
-    marginTop: 16,
-    padding: 4,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    ...theme.shadows.card,
-  },
-  segment: {
-    flex: 1,
+  periodSelector: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 14,
     paddingVertical: 12,
-    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: 20,
+    backgroundColor: theme.primary + '10',
+    borderRadius: theme.borderRadius.lg,
+    borderWidth: 1,
+    borderColor: theme.primary + '30',
   },
-  segmentActive: {
+  periodSelectorText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.primary,
+  },
+  filterChipsContainer: {
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  filterChipActive: {
     backgroundColor: theme.primary,
+    borderColor: theme.primary,
   },
-  segmentText: {
+  filterChipText: {
     fontSize: 13,
     fontWeight: '600',
     color: theme.textSecondary,
   },
-  segmentTextActive: {
+  filterChipTextActive: {
     color: '#FFF',
   },
-  segmentBadge: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
+  filterChipCount: {
     paddingHorizontal: 6,
     paddingVertical: 2,
+    backgroundColor: theme.surface,
     borderRadius: 10,
-    marginLeft: 2,
   },
-  segmentBadgeText: {
+  filterChipCountActive: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  filterChipCountText: {
     fontSize: 11,
     fontWeight: '700',
+    color: theme.textSecondary,
+  },
+  filterChipCountTextActive: {
     color: '#FFF',
   },
   // Scroll
   scrollView: {
     flex: 1,
-    marginTop: 8,
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 16,
   },
-  // Date header
-  dateHeader: {
+  // Section header
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 12,
+    marginTop: 8,
+    marginBottom: 14,
   },
-  dateHeaderText: {
-    fontSize: 13,
-    fontWeight: '700',
+  sectionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.primary,
+    marginRight: 10,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
     color: theme.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    textTransform: 'capitalize',
   },
-  dateHeaderLine: {
+  sectionLine: {
     flex: 1,
     height: 1,
     backgroundColor: theme.border,
     marginLeft: 12,
   },
-  // Match card - redesigned
-  matchCard: {
+  // Card base
+  card: {
     flexDirection: 'row',
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg,
@@ -578,20 +649,20 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...theme.shadows.card,
   },
-  matchAccent: {
-    width: 5,
+  cardIndicator: {
+    width: 4,
   },
-  matchBody: {
+  cardContent: {
     flex: 1,
     padding: 14,
   },
-  matchTopRow: {
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  modeBadge: {
+  typeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
@@ -599,54 +670,60 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: theme.borderRadius.full,
   },
-  modeBadgeText: {
+  typeBadgeText: {
     fontSize: 12,
     fontWeight: '600',
   },
-  matchTime: {
+  cardTime: {
     fontSize: 12,
     color: theme.textMuted,
     fontWeight: '500',
   },
-  // Score section
-  scoreSection: {
+  // Match specific
+  tournamentName: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: theme.textSecondary,
+    marginBottom: 10,
+  },
+  scoreContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
   },
-  teamBlock: {
+  teamInfo: {
     flex: 1,
   },
-  teamBlockRight: {
+  teamInfoRight: {
     alignItems: 'flex-end',
   },
-  teamName: {
-    fontSize: 11,
+  teamLabel: {
+    fontSize: 10,
     fontWeight: '600',
     color: theme.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
-    marginBottom: 2,
+    marginBottom: 3,
   },
   teamPlayers: {
     fontSize: 13,
     fontWeight: '500',
     color: theme.textPrimary,
   },
-  scoreBubble: {
+  scoreBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.backgroundSecondary,
-    borderRadius: 12,
+    borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    marginHorizontal: 12,
+    marginHorizontal: 10,
   },
-  scoreNumber: {
-    fontSize: 22,
+  score: {
+    fontSize: 20,
     fontWeight: '800',
     color: theme.textSecondary,
-    minWidth: 28,
+    minWidth: 24,
     textAlign: 'center',
   },
   scoreWin: {
@@ -655,20 +732,18 @@ const styles = StyleSheet.create({
   scoreLoss: {
     color: theme.error,
   },
-  scoreDivider: {
-    width: 2,
-    height: 20,
-    backgroundColor: theme.border,
-    marginHorizontal: 8,
-    borderRadius: 1,
+  scoreSeparator: {
+    fontSize: 18,
+    fontWeight: '300',
+    color: theme.textMuted,
+    marginHorizontal: 6,
   },
-  // Bottom row
-  matchBottomRow: {
+  cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  resultChip: {
+  resultBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -676,94 +751,64 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: theme.borderRadius.full,
   },
-  resultChipText: {
+  resultBadgeText: {
     fontSize: 12,
     fontWeight: '600',
+    // color: isWin ? theme.success : theme.error, // Removed as it causes a syntax error if `isWin` is not defined here
   },
-  matchMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  matchMetaText: {
+  formatText: {
     fontSize: 12,
     color: theme.textMuted,
   },
-  metaDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: theme.textMuted,
-    marginHorizontal: 6,
-  },
-  // Challenge card - compact
-  challengeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 14,
-    marginBottom: 12,
-    ...theme.shadows.card,
-  },
-  challengeIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  challengeContent: {
-    flex: 1,
-  },
-  challengeTopRow: {
+  // Challenge specific
+  challengeBody: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 12,
+  },
+  challengeInfo: {
+    flex: 1,
   },
   challengeName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
     color: theme.textPrimary,
+    marginBottom: 2,
   },
-  challengeTime: {
-    fontSize: 12,
+  challengePlayer: {
+    fontSize: 13,
+    color: theme.textSecondary,
+  },
+  challengeScore: {
+    alignItems: 'flex-end',
+  },
+  challengeScoreValue: {
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  challengeScoreLabel: {
+    fontSize: 11,
     color: theme.textMuted,
+    textTransform: 'uppercase',
   },
-  challengeScoreRow: {
+  progressContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginBottom: 6,
   },
-  challengeBarContainer: {
+  progressBar: {
     flex: 1,
     height: 6,
     backgroundColor: theme.backgroundSecondary,
     borderRadius: 3,
     overflow: 'hidden',
   },
-  challengeBar: {
+  progressFill: {
     height: '100%',
     borderRadius: 3,
   },
-  challengeScore: {
-    fontSize: 14,
-    fontWeight: '700',
-    minWidth: 50,
-    textAlign: 'right',
-  },
-  challengeStatsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  challengeStat: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  challengeStatText: {
+  progressText: {
     fontSize: 12,
     color: theme.textSecondary,
     fontWeight: '500',
@@ -794,17 +839,85 @@ const styles = StyleSheet.create({
     color: theme.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
+    marginBottom: 20,
   },
-  emptyButton: {
-    marginTop: 20,
+  resetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     paddingVertical: 12,
-    paddingHorizontal: 28,
+    paddingHorizontal: 24,
     backgroundColor: theme.primary,
     borderRadius: theme.borderRadius.full,
   },
-  emptyButtonText: {
+  resetButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#FFF',
+  },
+  // Modal
+  modalContainer: {
+    flex: 1,
+    backgroundColor: theme.backgroundSecondary,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: theme.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  modalCloseBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalContent: {
+    flex: 1,
+    padding: 16,
+  },
+  periodOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    marginBottom: 10,
+    ...theme.shadows.card,
+  },
+  periodOptionActive: {
+    borderWidth: 2,
+    borderColor: theme.primary,
+  },
+  periodOptionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  periodOptionIconActive: {
+    backgroundColor: theme.primary,
+  },
+  periodOptionText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.textPrimary,
+  },
+  periodOptionTextActive: {
+    fontWeight: '600',
+    color: theme.primary,
   },
 });
