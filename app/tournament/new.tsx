@@ -65,7 +65,6 @@ const CADRAGE_RULES: Record<TournamentType, { description: string; matches: stri
     specifics: ['Règles libres', 'Adaptable selon besoin'],
   },
 };
-import { useApp } from '@/contexts/AppContext';
 
 export default function NewTournamentScreen() {
   const insets = useSafeAreaInsets();
