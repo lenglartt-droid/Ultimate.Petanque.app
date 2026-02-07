@@ -13,6 +13,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import Svg, { Circle } from 'react-native-svg';
+import * as Linking from 'expo-linking';
 
 function StatRing({ value, color, size = 80 }: { value: number; color: string; size?: number }) {
   const strokeWidth = 6;
@@ -105,6 +106,30 @@ export default function PlayerDetailScreen() {
               <Text style={styles.clubName}>{club.name}</Text>
               <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
             </Pressable>
+          )}
+          
+          {/* Contact Info */}
+          {(player.phone || player.email) && (
+            <View style={styles.contactInfo}>
+              {player.phone && (
+                <Pressable 
+                  style={styles.contactItem}
+                  onPress={() => Linking.openURL(`tel:${player.phone}`)}
+                >
+                  <MaterialIcons name="phone" size={16} color={theme.primary} />
+                  <Text style={styles.contactText}>{player.phone}</Text>
+                </Pressable>
+              )}
+              {player.email && (
+                <Pressable 
+                  style={styles.contactItem}
+                  onPress={() => Linking.openURL(`mailto:${player.email}`)}
+                >
+                  <MaterialIcons name="email" size={16} color={theme.primary} />
+                  <Text style={styles.contactText}>{player.email}</Text>
+                </Pressable>
+              )}
+            </View>
           )}
         </Animated.View>
 
@@ -315,6 +340,30 @@ const styles = StyleSheet.create({
   clubName: {
     fontSize: 15,
     color: theme.textSecondary,
+  },
+  contactInfo: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 16,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  contactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: theme.primary + '10',
+    borderRadius: theme.borderRadius.full,
+  },
+  contactText: {
+    fontSize: 13,
+    color: theme.primary,
+    fontWeight: '500',
   },
   quickStats: {
     flexDirection: 'row',

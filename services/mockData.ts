@@ -10,6 +10,8 @@ export interface Player {
   clubId?: string;
   role: PlayerRole;
   level: 'Débutant' | 'Intermédiaire' | 'Confirmé' | 'Expert';
+  phone?: string;
+  email?: string;
   location?: {
     latitude: number;
     longitude: number;
@@ -366,6 +368,8 @@ export const mockPlayers: Player[] = [
     clubId: '1',
     role: 'Tireur',
     level: 'Expert',
+    phone: '06 12 34 56 78',
+    email: 'jp.martin@email.fr',
     location: { latitude: 45.764042, longitude: 4.835659, city: 'Lyon' },
     stats: {
       matchesPlayed: 156,
@@ -391,6 +395,8 @@ export const mockPlayers: Player[] = [
     clubId: '2',
     role: 'Pointeur',
     level: 'Confirmé',
+    phone: '06 98 76 54 32',
+    email: 'marie.dupont@email.fr',
     location: { latitude: 43.296482, longitude: 5.369780, city: 'Marseille' },
     stats: {
       matchesPlayed: 89,
@@ -416,6 +422,7 @@ export const mockPlayers: Player[] = [
     clubId: '3',
     role: 'Milieu',
     level: 'Expert',
+    email: 'p.dubois@petanque-nice.fr',
     location: { latitude: 43.710173, longitude: 7.261953, city: 'Nice' },
     stats: {
       matchesPlayed: 203,

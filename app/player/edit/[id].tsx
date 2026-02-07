@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -33,6 +34,8 @@ export default function EditPlayerScreen() {
   const [level, setLevel] = useState<typeof levels[number]>('Intermédiaire');
   const [clubId, setClubId] = useState<string | undefined>();
   const [city, setCity] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
 
   useEffect(() => {
     if (player) {
@@ -41,6 +44,8 @@ export default function EditPlayerScreen() {
       setLevel(player.level);
       setClubId(player.clubId);
       setCity(player.location?.city || '');
+      setPhone(player.phone || '');
+      setEmail(player.email || '');
     }
   }, [player]);
 
@@ -72,6 +77,8 @@ export default function EditPlayerScreen() {
       level,
       clubId,
       club: selectedClub?.name,
+      phone: phone.trim() || undefined,
+      email: email.trim() || undefined,
       location: city ? {
         ...player.location,
         city,
@@ -267,6 +274,36 @@ export default function EditPlayerScreen() {
             />
           </Animated.View>
 
+          {/* Contact Info */}
+          <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
+            <Text style={styles.sectionTitle}>CONTACT</Text>
+            <View style={styles.contactInputs}>
+              <View style={styles.contactInputContainer}>
+                <MaterialIcons name="phone" size={20} color={theme.textSecondary} style={styles.contactIcon} />
+                <TextInput
+                  style={styles.contactInput}
+                  value={phone}
+                  onChangeText={setPhone}
+                  placeholder="Téléphone"
+                  placeholderTextColor={theme.textMuted}
+                  keyboardType="phone-pad"
+                />
+              </View>
+              <View style={styles.contactInputContainer}>
+                <MaterialIcons name="email" size={20} color={theme.textSecondary} style={styles.contactIcon} />
+                <TextInput
+                  style={styles.contactInput}
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="Adresse email"
+                  placeholderTextColor={theme.textMuted}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+            </View>
+          </Animated.View>
+
           {/* Stats Preview */}
           <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
             <Text style={styles.sectionTitle}>STATISTIQUES</Text>
@@ -456,6 +493,26 @@ const styles = StyleSheet.create({
   },
   clubChipTextActive: {
     color: theme.accent,
+  },
+  contactInputs: {
+    gap: 12,
+  },
+  contactInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: 14,
+    ...theme.shadows.card,
+  },
+  contactIcon: {
+    marginRight: 10,
+  },
+  contactInput: {
+    flex: 1,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: theme.textPrimary,
   },
   statsCard: {
     backgroundColor: theme.surface,
