@@ -39,7 +39,12 @@ export default function ClubDetailScreen() {
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Club</Text>
-        <View style={{ width: 40 }} />
+        <Pressable 
+          style={styles.editButton} 
+          onPress={() => router.push(`/club/edit/${id}`)}
+        >
+          <MaterialIcons name="edit" size={22} color={theme.primary} />
+        </Pressable>
       </View>
 
       <ScrollView
@@ -226,6 +231,12 @@ const styles = StyleSheet.create({
     borderBottomColor: theme.border,
   },
   backButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editButton: {
     width: 40,
     height: 40,
     alignItems: 'center',

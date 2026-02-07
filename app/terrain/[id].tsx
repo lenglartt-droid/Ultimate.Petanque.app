@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,14 @@ import {
   StyleSheet,
   Linking,
   Platform,
+  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
+import { Image } from 'expo-image';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
@@ -19,9 +22,32 @@ import { useApp } from '@/contexts/AppContext';
 export default function TerrainDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { getTerrainById, tournaments } = useApp();
+  const { getTerrainById, tournaments, deleteTerrain } = useApp();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
 
   const terrain = getTerrainById(id || '');
+
+  const handleDelete = () => {
+    Alert.alert(
+      'Supprimer le terrain',
+      `Êtes-vous sûr de vouloir supprimer "${terrain?.name}" ? Cette action est irréversible.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            if (terrain) {
+              await deleteTerrain(terrain.id);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              router.back();
+            }
+          },
+        },
+      ]
+    );
+  };
 
   if (!terrain) {
     return (
@@ -53,6 +79,9 @@ export default function TerrainDetailScreen() {
   // Get tournaments at this terrain
   const terrainTournaments = tournaments.filter(t => t.terrainId === terrain.id);
 
+  // Check if terrain has photos
+  const hasPhotos = terrain.photos && terrain.photos.length > 0;
+
   const openMaps = () => {
     const { latitude, longitude } = terrain.location;
     const label = encodeURIComponent(terrain.name);
@@ -72,12 +101,20 @@ export default function TerrainDetailScreen() {
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Détails du terrain</Text>
-        <Pressable 
-          style={styles.editButton} 
-          onPress={() => router.push(`/terrain/edit/${terrain.id}`)}
-        >
-          <MaterialIcons name="edit" size={22} color={theme.primary} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable 
+            style={styles.editButton} 
+            onPress={() => router.push(`/terrain/edit/${terrain.id}`)}
+          >
+            <MaterialIcons name="edit" size={22} color={theme.primary} />
+          </Pressable>
+          <Pressable 
+            style={styles.deleteButton} 
+            onPress={handleDelete}
+          >
+            <MaterialIcons name="delete" size={22} color={theme.error} />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView
@@ -85,18 +122,79 @@ export default function TerrainDetailScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero Section */}
-        <Animated.View entering={FadeInDown.duration(400)} style={styles.heroSection}>
-          <View style={[styles.terrainIcon, { backgroundColor: colors.bg }]}>
-            <MaterialIcons name={typeConfig.icon as any} size={56} color="#FFF" />
-          </View>
-          <Text style={styles.terrainName}>{terrain.name}</Text>
-          <View style={[styles.typeBadge, { backgroundColor: colors.light }]}>
-            <MaterialIcons name={typeConfig.icon as any} size={16} color={colors.bg} />
-            <Text style={[styles.typeBadgeText, { color: colors.bg }]}>{terrain.type}</Text>
-          </View>
-          <Text style={styles.typeDescription}>{typeConfig.description}</Text>
-        </Animated.View>
+        {/* Photo Gallery */}
+        {hasPhotos ? (
+          <Animated.View entering={FadeInDown.duration(400)} style={styles.photoSection}>
+            <Image
+              source={{ uri: terrain.photos![currentPhotoIndex] }}
+              style={styles.mainPhoto}
+              contentFit="cover"
+              transition={200}
+            />
+            {terrain.photos!.length > 1 && (
+              <View style={styles.photoIndicators}>
+                {terrain.photos!.map((_, index) => (
+                  <Pressable
+                    key={index}
+                    style={[
+                      styles.photoIndicator,
+                      index === currentPhotoIndex && styles.photoIndicatorActive
+                    ]}
+                    onPress={() => setCurrentPhotoIndex(index)}
+                  />
+                ))}
+              </View>
+            )}
+            {terrain.photos!.length > 1 && (
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.photoThumbnails}
+              >
+                {terrain.photos!.map((photo, index) => (
+                  <Pressable
+                    key={index}
+                    style={[
+                      styles.thumbnail,
+                      index === currentPhotoIndex && styles.thumbnailActive
+                    ]}
+                    onPress={() => setCurrentPhotoIndex(index)}
+                  >
+                    <Image
+                      source={{ uri: photo }}
+                      style={styles.thumbnailImage}
+                      contentFit="cover"
+                    />
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+          </Animated.View>
+        ) : (
+          <Animated.View entering={FadeInDown.duration(400)} style={styles.heroSection}>
+            <View style={[styles.terrainIcon, { backgroundColor: colors.bg }]}>
+              <MaterialIcons name={typeConfig.icon as any} size={56} color="#FFF" />
+            </View>
+            <Text style={styles.terrainName}>{terrain.name}</Text>
+            <View style={[styles.typeBadge, { backgroundColor: colors.light }]}>
+              <MaterialIcons name={typeConfig.icon as any} size={16} color={colors.bg} />
+              <Text style={[styles.typeBadgeText, { color: colors.bg }]}>{terrain.type}</Text>
+            </View>
+            <Text style={styles.typeDescription}>{typeConfig.description}</Text>
+          </Animated.View>
+        )}
+
+        {/* Name and Type (when photos are shown) */}
+        {hasPhotos && (
+          <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.nameSection}>
+            <Text style={styles.terrainNameLarge}>{terrain.name}</Text>
+            <View style={[styles.typeBadge, { backgroundColor: colors.light }]}>
+              <MaterialIcons name={typeConfig.icon as any} size={16} color={colors.bg} />
+              <Text style={[styles.typeBadgeText, { color: colors.bg }]}>{terrain.type}</Text>
+            </View>
+            <Text style={styles.typeDescription}>{typeConfig.description}</Text>
+          </Animated.View>
+        )}
 
         {/* Quick Info */}
         <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.quickInfoGrid}>
@@ -292,7 +390,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 4,
+  },
   editButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButton: {
     width: 40,
     height: 40,
     alignItems: 'center',
@@ -308,7 +416,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 24,
+    paddingTop: 16,
   },
   emptyContainer: {
     flex: 1,
@@ -320,6 +428,65 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: theme.textMuted,
   },
+  // Photo Section
+  photoSection: {
+    marginBottom: 16,
+  },
+  mainPhoto: {
+    width: '100%',
+    height: 220,
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.backgroundSecondary,
+  },
+  photoIndicators: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 12,
+  },
+  photoIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.border,
+  },
+  photoIndicatorActive: {
+    backgroundColor: theme.primary,
+    width: 24,
+  },
+  photoThumbnails: {
+    gap: 8,
+    paddingTop: 12,
+  },
+  thumbnail: {
+    width: 60,
+    height: 60,
+    borderRadius: theme.borderRadius.sm,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  thumbnailActive: {
+    borderColor: theme.primary,
+  },
+  thumbnailImage: {
+    width: '100%',
+    height: '100%',
+  },
+  // Name Section (when photos are shown)
+  nameSection: {
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingTop: 8,
+  },
+  terrainNameLarge: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: theme.textPrimary,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  // Hero Section (when no photos)
   heroSection: {
     alignItems: 'center',
     marginBottom: 24,

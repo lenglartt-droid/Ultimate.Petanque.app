@@ -5,16 +5,19 @@ import {
   Pressable,
   StyleSheet,
   TextInput,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { router } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { Terrain } from '@/services/mockData';
+import { TerrainType } from '@/constants/config';
 
 type DirectoryTab = 'players' | 'clubs' | 'tournaments' | 'terrains';
 
@@ -23,6 +26,7 @@ export default function DirectoryScreen() {
   const { players, clubs, tournaments, terrains, selfPlayer } = useApp();
   const [activeTab, setActiveTab] = useState<DirectoryTab>('players');
   const [searchQuery, setSearchQuery] = useState('');
+  const [terrainTypeFilter, setTerrainTypeFilter] = useState<TerrainType | 'all'>('all');
 
   const tabs = useMemo(() => [
     { id: 'players' as const, label: 'Joueurs', icon: 'person' as const, count: players.length },
@@ -60,16 +64,32 @@ export default function DirectoryScreen() {
     t.location.city.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredTerrains = terrains.filter(t =>
-    t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.type.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredTerrains = useMemo(() => {
+    return terrains.filter(t => {
+      const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.type.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesType = terrainTypeFilter === 'all' || t.type === terrainTypeFilter;
+      
+      return matchesSearch && matchesType;
+    });
+  }, [terrains, searchQuery, terrainTypeFilter]);
 
   // Get terrain type config for display
   const getTerrainTypeConfig = (type: string) => {
     return config.terrainTypes.find(t => t.id === type) || config.terrainTypes[0];
   };
+
+  // Terrain type filter options
+  const terrainTypeFilters = [
+    { id: 'all' as const, label: 'Tous', icon: 'layers' as const },
+    ...config.terrainTypes.map(t => ({
+      id: t.id as TerrainType,
+      label: t.label,
+      icon: t.icon as keyof typeof MaterialIcons.glyphMap,
+    })),
+  ];
 
   const renderPlayer = ({ item }: { item: typeof players[0] }) => {
     const isSelf = selfPlayer && item.id === selfPlayer.id;
@@ -295,7 +315,10 @@ export default function DirectoryScreen() {
               styles.tab,
               activeTab === tab.id && styles.tabActive
             ]}
-            onPress={() => setActiveTab(tab.id)}
+            onPress={() => {
+              setActiveTab(tab.id);
+              Haptics.selectionAsync();
+            }}
           >
             <MaterialIcons 
               name={tab.icon} 
@@ -322,6 +345,46 @@ export default function DirectoryScreen() {
           </Pressable>
         ))}
       </Animated.View>
+
+      {/* Terrain Type Filters */}
+      {activeTab === 'terrains' && (
+        <Animated.View 
+          entering={FadeInDown.duration(400).delay(250)}
+          style={styles.terrainFiltersContainer}
+        >
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.terrainFiltersScroll}
+          >
+            {terrainTypeFilters.map(filter => (
+              <Pressable
+                key={filter.id}
+                style={[
+                  styles.terrainFilterChip,
+                  terrainTypeFilter === filter.id && styles.terrainFilterChipActive
+                ]}
+                onPress={() => {
+                  setTerrainTypeFilter(filter.id);
+                  Haptics.selectionAsync();
+                }}
+              >
+                <MaterialIcons 
+                  name={filter.icon} 
+                  size={16} 
+                  color={terrainTypeFilter === filter.id ? '#FFF' : theme.textSecondary} 
+                />
+                <Text style={[
+                  styles.terrainFilterText,
+                  terrainTypeFilter === filter.id && styles.terrainFilterTextActive
+                ]}>
+                  {filter.label}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </Animated.View>
+      )}
 
       {/* List */}
       <View style={styles.listContainer}>
@@ -459,6 +522,35 @@ const styles = StyleSheet.create({
   tabCountTextActive: {
     color: '#FFF',
   },
+  // Terrain Type Filters
+  terrainFiltersContainer: {
+    paddingBottom: 8,
+  },
+  terrainFiltersScroll: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  terrainFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.full,
+    ...theme.shadows.card,
+  },
+  terrainFilterChipActive: {
+    backgroundColor: theme.accent,
+  },
+  terrainFilterText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  terrainFilterTextActive: {
+    color: '#FFF',
+  },
   listContainer: {
     flex: 1,
   },
@@ -506,6 +598,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     marginTop: 8,
+    flexWrap: 'wrap',
   },
   badge: {
     paddingHorizontal: 8,

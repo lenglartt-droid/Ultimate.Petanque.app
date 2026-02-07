@@ -15,9 +15,11 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
+import { Image } from 'expo-image';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
+import * as ImagePicker from 'expo-image-picker';
 import theme from '@/constants/theme';
 import config, { TerrainType } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
@@ -41,6 +43,7 @@ export default function EditTerrainScreen() {
   const [covered, setCovered] = useState(false);
   const [latitude, setLatitude] = useState(0);
   const [longitude, setLongitude] = useState(0);
+  const [photos, setPhotos] = useState<string[]>([]);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [locationPermission, setLocationPermission] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -60,6 +63,7 @@ export default function EditTerrainScreen() {
       setCovered(terrain.covered);
       setLatitude(terrain.location.latitude);
       setLongitude(terrain.location.longitude);
+      setPhotos(terrain.photos || []);
     }
   }, [terrain]);
 
@@ -127,6 +131,52 @@ export default function EditTerrainScreen() {
     }
   };
 
+  // Photo picker
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission requise', "L'accès à la galerie est nécessaire pour ajouter des photos.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      quality: 0.8,
+      selectionLimit: 5 - photos.length,
+    });
+
+    if (!result.canceled && result.assets) {
+      const newPhotos = result.assets.map(asset => asset.uri);
+      setPhotos(prev => [...prev, ...newPhotos].slice(0, 5));
+      Haptics.selectionAsync();
+    }
+  };
+
+  // Take photo
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission requise', "L'accès à la caméra est nécessaire pour prendre des photos.");
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets && result.assets[0]) {
+      setPhotos(prev => [...prev, result.assets[0].uri].slice(0, 5));
+      Haptics.selectionAsync();
+    }
+  };
+
+  // Remove photo
+  const removePhoto = (index: number) => {
+    setPhotos(prev => prev.filter((_, i) => i !== index));
+    Haptics.selectionAsync();
+  };
+
   const handleSave = async () => {
     if (!terrain) return;
     
@@ -160,6 +210,7 @@ export default function EditTerrainScreen() {
         courtsCount: parseInt(courtsCount) || 1,
         lighting,
         covered,
+        photos,
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -208,19 +259,38 @@ export default function EditTerrainScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Icon Preview */}
-          <Animated.View entering={FadeInDown.duration(400)} style={styles.iconSection}>
-            <View style={styles.terrainIcon}>
-              <MaterialIcons 
-                name={config.terrainTypes.find(t => t.id === type)?.icon as any || 'landscape'} 
-                size={48} 
-                color="#FFF" 
-              />
+          {/* Photos Section */}
+          <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
+            <Text style={styles.sectionTitle}>PHOTOS ({photos.length}/5)</Text>
+            <View style={styles.photosContainer}>
+              {photos.map((photo, index) => (
+                <View key={index} style={styles.photoItem}>
+                  <Image source={{ uri: photo }} style={styles.photoImage} contentFit="cover" />
+                  <Pressable 
+                    style={styles.removePhotoButton}
+                    onPress={() => removePhoto(index)}
+                  >
+                    <MaterialIcons name="close" size={16} color="#FFF" />
+                  </Pressable>
+                </View>
+              ))}
+              {photos.length < 5 && (
+                <View style={styles.addPhotoButtons}>
+                  <Pressable style={styles.addPhotoButton} onPress={pickImage}>
+                    <MaterialIcons name="photo-library" size={24} color={theme.primary} />
+                    <Text style={styles.addPhotoText}>Galerie</Text>
+                  </Pressable>
+                  <Pressable style={styles.addPhotoButton} onPress={takePhoto}>
+                    <MaterialIcons name="camera-alt" size={24} color={theme.primary} />
+                    <Text style={styles.addPhotoText}>Photo</Text>
+                  </Pressable>
+                </View>
+              )}
             </View>
           </Animated.View>
 
           {/* Name */}
-          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+          <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
             <Text style={styles.sectionTitle}>NOM DU TERRAIN *</Text>
             <TextInput
               style={styles.textInput}
@@ -233,7 +303,7 @@ export default function EditTerrainScreen() {
           </Animated.View>
 
           {/* Type */}
-          <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
+          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
             <Text style={styles.sectionTitle}>TYPE DE TERRAIN *</Text>
             <View style={styles.typeContainer}>
               {config.terrainTypes.map((t) => (
@@ -273,7 +343,7 @@ export default function EditTerrainScreen() {
           </Animated.View>
 
           {/* Address */}
-          <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
+          <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>ADRESSE *</Text>
               <Pressable 
@@ -350,7 +420,7 @@ export default function EditTerrainScreen() {
           </Animated.View>
 
           {/* Club */}
-          <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
+          <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
             <Text style={styles.sectionTitle}>CLUB ASSOCIÉ</Text>
             <ScrollView 
               horizontal 
@@ -398,7 +468,7 @@ export default function EditTerrainScreen() {
           </Animated.View>
 
           {/* Courts Count */}
-          <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
+          <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
             <Text style={styles.sectionTitle}>NOMBRE DE TERRAINS</Text>
             <View style={styles.countsContainer}>
               {['1', '2', '4', '6', '8', '10', '12', '18'].map(num => (
@@ -425,7 +495,7 @@ export default function EditTerrainScreen() {
           </Animated.View>
 
           {/* Features */}
-          <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
+          <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
             <Text style={styles.sectionTitle}>CARACTÉRISTIQUES</Text>
             <View style={styles.featuresCard}>
               <View style={styles.featureRow}>
@@ -479,7 +549,7 @@ export default function EditTerrainScreen() {
           </Animated.View>
 
           {/* Description */}
-          <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
+          <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
             <Text style={styles.sectionTitle}>DESCRIPTION</Text>
             <TextInput
               style={[styles.textInput, styles.textArea]}
@@ -562,18 +632,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: theme.textMuted,
   },
-  iconSection: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  terrainIcon: {
-    width: 100,
-    height: 100,
-    borderRadius: 20,
-    backgroundColor: theme.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   section: {
     marginBottom: 24,
   },
@@ -583,6 +641,55 @@ const styles = StyleSheet.create({
     color: theme.textSecondary,
     letterSpacing: 1,
     marginBottom: 12,
+  },
+  // Photos Section
+  photosContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  photoItem: {
+    width: 100,
+    height: 100,
+    borderRadius: theme.borderRadius.md,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  photoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  removePhotoButton: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addPhotoButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  addPhotoButton: {
+    width: 100,
+    height: 100,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.surface,
+    borderWidth: 2,
+    borderColor: theme.border,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  addPhotoText: {
+    fontSize: 12,
+    color: theme.primary,
+    fontWeight: '500',
   },
   textInput: {
     backgroundColor: theme.surface,

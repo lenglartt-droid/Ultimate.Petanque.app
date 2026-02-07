@@ -12,18 +12,18 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 
-type MarkerFilter = 'all' | 'terrains' | 'clubs' | 'tournaments';
+type MarkerFilter = 'all' | 'terrains' | 'clubs' | 'tournaments' | 'players';
 
 // Conditionally import map components based on platform
 let MapViewComponent: React.ComponentType<any> | null = null;
 let MarkerComponent: React.ComponentType<any> | null = null;
 
 if (Platform.OS !== 'web') {
-  // Only import on native platforms
   const Maps = require('react-native-maps');
   MapViewComponent = Maps.default;
   MarkerComponent = Maps.Marker;
@@ -33,16 +33,19 @@ if (Platform.OS !== 'web') {
 function WebMapFallback({ 
   clubs, 
   tournaments,
-  terrains, 
+  terrains,
+  players,
   showClubs, 
   showTournaments,
   showTerrains,
+  showPlayers,
   onItemPress 
 }: any) {
   const allItems = [
     ...(showTerrains ? terrains.map((t: any) => ({ ...t, itemType: 'terrain' })) : []),
     ...(showClubs ? clubs.map((c: any) => ({ ...c, itemType: 'club' })) : []),
     ...(showTournaments ? tournaments.filter((t: any) => t.status === 'À venir').map((t: any) => ({ ...t, itemType: 'tournament' })) : []),
+    ...(showPlayers ? players.filter((p: any) => p.location).map((p: any) => ({ ...p, itemType: 'player' })) : []),
   ];
 
   const getTerrainTypeConfig = (type: string) => {
@@ -61,33 +64,35 @@ function WebMapFallback({
         La carte est disponible sur l'application mobile
       </Text>
       
-      {/* List view fallback */}
       <ScrollView 
         style={styles.webListContainer}
         contentContainerStyle={styles.webListContent}
         showsVerticalScrollIndicator={false}
       >
-        {allItems.slice(0, 15).map((item: any) => {
+        {allItems.slice(0, 20).map((item: any, index: number) => {
           const typeConfig = item.itemType === 'terrain' ? getTerrainTypeConfig(item.type) : null;
           return (
             <Pressable 
-              key={`${item.itemType}-${item.id}`}
+              key={`${item.itemType}-${item.id}-${index}`}
               style={styles.webListItem}
               onPress={() => onItemPress(item, item.itemType)}
             >
               <View style={[
                 styles.webListIcon,
-                { backgroundColor: item.itemType === 'terrain'
-                  ? theme.accent
-                  : item.itemType === 'club' 
-                    ? config.map.markerColors.club 
-                    : config.map.markerColors.tournament
+                { backgroundColor: 
+                  item.itemType === 'terrain' ? theme.accent :
+                  item.itemType === 'club' ? config.map.markerColors.club :
+                  item.itemType === 'player' ? theme.primary :
+                  config.map.markerColors.tournament
                 }
               ]}>
                 <MaterialIcons 
-                  name={item.itemType === 'terrain' 
-                    ? (typeConfig?.icon as any || 'sports-soccer')
-                    : item.itemType === 'club' ? 'home' : 'emoji-events'} 
+                  name={
+                    item.itemType === 'terrain' ? (typeConfig?.icon as any || 'sports-soccer') :
+                    item.itemType === 'club' ? 'home' :
+                    item.itemType === 'player' ? 'person' :
+                    'emoji-events'
+                  } 
                   size={16} 
                   color="#FFF" 
                 />
@@ -95,11 +100,10 @@ function WebMapFallback({
               <View style={styles.webListContentInner}>
                 <Text style={styles.webListName}>{item.name}</Text>
                 <Text style={styles.webListMeta}>
-                  {item.itemType === 'terrain' 
-                    ? `${item.city} • ${item.type}` 
-                    : item.itemType === 'club' 
-                      ? item.city 
-                      : item.location?.city}
+                  {item.itemType === 'terrain' ? `${item.city} • ${item.type}` :
+                   item.itemType === 'club' ? item.city :
+                   item.itemType === 'player' ? (item.location?.city || item.club || 'Sans lieu') :
+                   item.location?.city}
                 </Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
@@ -115,15 +119,17 @@ function WebMapFallback({
 function NativeMap({ 
   clubs, 
   tournaments,
-  terrains, 
+  terrains,
+  players,
   showClubs, 
   showTournaments,
   showTerrains,
+  showPlayers,
   onItemPress,
   onMapPress 
 }: any) {
   if (!MapViewComponent || !MarkerComponent) {
-    return <WebMapFallback {...{ clubs, tournaments, terrains, showClubs, showTournaments, showTerrains, onItemPress }} />;
+    return <WebMapFallback {...{ clubs, tournaments, terrains, players, showClubs, showTournaments, showTerrains, showPlayers, onItemPress }} />;
   }
 
   const getTerrainTypeConfig = (type: string) => {
@@ -179,26 +185,47 @@ function NativeMap({
           </View>
         </MarkerComponent>
       ))}
+
+      {/* Player Markers */}
+      {showPlayers && players.filter((p: any) => p.location).map((player: any) => (
+        <MarkerComponent
+          key={`player-${player.id}`}
+          coordinate={player.location}
+          onPress={() => onItemPress(player, 'player')}
+        >
+          <View style={[styles.marker, { backgroundColor: theme.primary }]}>
+            <MaterialIcons name="person" size={16} color="#FFF" />
+          </View>
+        </MarkerComponent>
+      ))}
     </MapViewComponent>
   );
 }
 
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
-  const { clubs, tournaments, terrains } = useApp();
+  const { clubs, tournaments, terrains, players } = useApp();
   const [activeFilter, setActiveFilter] = useState<MarkerFilter>('all');
   const [selectedItem, setSelectedItem] = useState<any>(null);
 
-  // Filter terrains with valid locations
+  // Filter items with valid locations
   const terrainsWithLocation = terrains.filter(t => 
     t.location && (t.location.latitude !== 0 || t.location.longitude !== 0)
   );
+  const clubsWithLocation = clubs.filter(c => 
+    c.location && (c.location.latitude !== 0 || c.location.longitude !== 0)
+  );
+  const playersWithLocation = players.filter(p => 
+    p.location && (p.location.latitude !== 0 || p.location.longitude !== 0)
+  );
+  const upcomingTournaments = tournaments.filter(t => t.status === 'À venir');
 
   const filters = [
     { id: 'all' as const, label: 'Tout', icon: 'layers' as const },
     { id: 'terrains' as const, label: 'Terrains', icon: 'sports-soccer' as const, color: theme.accent },
     { id: 'clubs' as const, label: 'Clubs', icon: 'home' as const, color: config.map.markerColors.club },
     { id: 'tournaments' as const, label: 'Tournois', icon: 'emoji-events' as const, color: config.map.markerColors.tournament },
+    { id: 'players' as const, label: 'Joueurs', icon: 'person' as const, color: theme.primary },
   ];
 
   const handleMarkerPress = (item: any, type: string) => {
@@ -218,6 +245,9 @@ export default function MapScreen() {
       case 'tournament':
         router.push(`/tournament/${selectedItem.id}`);
         break;
+      case 'player':
+        router.push(`/player/${selectedItem.id}`);
+        break;
     }
     setSelectedItem(null);
   };
@@ -225,6 +255,7 @@ export default function MapScreen() {
   const showClubs = activeFilter === 'all' || activeFilter === 'clubs';
   const showTournaments = activeFilter === 'all' || activeFilter === 'tournaments';
   const showTerrains = activeFilter === 'all' || activeFilter === 'terrains';
+  const showPlayers = activeFilter === 'all' || activeFilter === 'players';
 
   const getTerrainTypeConfig = (type: string) => {
     return config.terrainTypes.find(t => t.id === type) || config.terrainTypes[0];
@@ -235,22 +266,26 @@ export default function MapScreen() {
       {/* Map */}
       {Platform.OS === 'web' ? (
         <WebMapFallback
-          clubs={clubs}
-          tournaments={tournaments}
+          clubs={clubsWithLocation}
+          tournaments={upcomingTournaments}
           terrains={terrainsWithLocation}
+          players={playersWithLocation}
           showClubs={showClubs}
           showTournaments={showTournaments}
           showTerrains={showTerrains}
+          showPlayers={showPlayers}
           onItemPress={handleMarkerPress}
         />
       ) : (
         <NativeMap
-          clubs={clubs}
-          tournaments={tournaments}
+          clubs={clubsWithLocation}
+          tournaments={upcomingTournaments}
           terrains={terrainsWithLocation}
+          players={playersWithLocation}
           showClubs={showClubs}
           showTournaments={showTournaments}
           showTerrains={showTerrains}
+          showPlayers={showPlayers}
           onItemPress={handleMarkerPress}
           onMapPress={() => setSelectedItem(null)}
         />
@@ -270,11 +305,15 @@ export default function MapScreen() {
             </View>
             <View style={styles.statItem}>
               <View style={[styles.statDot, { backgroundColor: config.map.markerColors.club }]} />
-              <Text style={styles.statText}>{clubs.length} clubs</Text>
+              <Text style={styles.statText}>{clubsWithLocation.length} clubs</Text>
             </View>
             <View style={styles.statItem}>
               <View style={[styles.statDot, { backgroundColor: config.map.markerColors.tournament }]} />
-              <Text style={styles.statText}>{tournaments.filter(t => t.status === 'À venir').length} tournois</Text>
+              <Text style={styles.statText}>{upcomingTournaments.length} tournois</Text>
+            </View>
+            <View style={styles.statItem}>
+              <View style={[styles.statDot, { backgroundColor: theme.primary }]} />
+              <Text style={styles.statText}>{playersWithLocation.length} joueurs</Text>
             </View>
           </View>
         </Animated.View>
@@ -297,7 +336,10 @@ export default function MapScreen() {
                   activeFilter === filter.id && styles.filterButtonActive,
                   filter.color && activeFilter === filter.id && { backgroundColor: filter.color }
                 ]}
-                onPress={() => setActiveFilter(filter.id)}
+                onPress={() => {
+                  setActiveFilter(filter.id);
+                  Haptics.selectionAsync();
+                }}
               >
                 <MaterialIcons 
                   name={filter.icon} 
@@ -325,25 +367,26 @@ export default function MapScreen() {
           <Pressable style={styles.selectedCardInner} onPress={handleCardPress}>
             <View style={[
               styles.selectedAvatar,
-              { backgroundColor: selectedItem.itemType === 'terrain'
-                ? theme.accent
-                : selectedItem.itemType === 'club' 
-                  ? config.map.markerColors.club 
-                  : config.map.markerColors.tournament
+              { backgroundColor: 
+                selectedItem.itemType === 'terrain' ? theme.accent :
+                selectedItem.itemType === 'club' ? config.map.markerColors.club :
+                selectedItem.itemType === 'player' ? theme.primary :
+                config.map.markerColors.tournament
               }
             ]}>
               <MaterialIcons 
-                name={selectedItem.itemType === 'terrain' 
-                  ? (getTerrainTypeConfig(selectedItem.type)?.icon as any || 'sports-soccer')
-                  : selectedItem.itemType === 'club' ? 'home' : 'emoji-events'} 
+                name={
+                  selectedItem.itemType === 'terrain' ? (getTerrainTypeConfig(selectedItem.type)?.icon as any || 'sports-soccer') :
+                  selectedItem.itemType === 'club' ? 'home' :
+                  selectedItem.itemType === 'player' ? 'person' :
+                  'emoji-events'
+                } 
                 size={24} 
                 color="#FFF" 
               />
             </View>
             <View style={styles.selectedContent}>
-              <Text style={styles.selectedTitle}>
-                {selectedItem.name}
-              </Text>
+              <Text style={styles.selectedTitle}>{selectedItem.name}</Text>
               {selectedItem.itemType === 'terrain' && (
                 <>
                   <Text style={styles.selectedMeta}>{selectedItem.city} • {selectedItem.type}</Text>
@@ -366,6 +409,12 @@ export default function MapScreen() {
                     {new Date(selectedItem.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
                   </Text>
                   <Text style={styles.selectedMeta}>{selectedItem.format} • {selectedItem.location?.city}</Text>
+                </>
+              )}
+              {selectedItem.itemType === 'player' && (
+                <>
+                  <Text style={styles.selectedMeta}>{selectedItem.location?.city || selectedItem.club || 'Sans lieu'}</Text>
+                  <Text style={styles.selectedMeta}>{selectedItem.role} • {selectedItem.level}</Text>
                 </>
               )}
             </View>
@@ -407,21 +456,21 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
     flexWrap: 'wrap',
   },
   statItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
   },
   statDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   statText: {
-    fontSize: 12,
+    fontSize: 11,
     color: theme.textSecondary,
   },
   filtersContainer: {
@@ -497,7 +546,6 @@ const styles = StyleSheet.create({
     color: theme.textSecondary,
     lineHeight: 18,
   },
-  // Web fallback styles
   webMapContainer: {
     flex: 1,
     alignItems: 'center',

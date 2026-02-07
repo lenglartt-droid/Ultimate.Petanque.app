@@ -85,6 +85,13 @@ export default function RootLayout() {
           }} 
         />
         <Stack.Screen 
+          name="club/edit/[id]" 
+          options={{ 
+            presentation: 'modal',
+            animation: 'slide_from_bottom',
+          }} 
+        />
+        <Stack.Screen 
           name="tournament/new" 
           options={{ 
             presentation: 'modal',
