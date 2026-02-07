@@ -204,6 +204,44 @@ export default function StatsScreen() {
   const filteredMatches = filterByTime(matches, timeFilter);
   const filteredChallenges = filterByTime(challenges, timeFilter);
 
+  // Calculate 1v1 challenge stats by opponent
+  const opponent1v1Stats = React.useMemo(() => {
+    const statsByOpponent: Record<string, {
+      opponentId: string;
+      opponentName: string;
+      wins: number;
+      losses: number;
+      draws: number;
+      total: number;
+    }> = {};
+
+    filteredChallenges
+      .filter(c => c.mode === '1v1' && c.opponentId && c.opponentName)
+      .forEach(challenge => {
+        const oppId = challenge.opponentId!;
+        if (!statsByOpponent[oppId]) {
+          statsByOpponent[oppId] = {
+            opponentId: oppId,
+            opponentName: challenge.opponentName!,
+            wins: 0,
+            losses: 0,
+            draws: 0,
+            total: 0,
+          };
+        }
+        statsByOpponent[oppId].total++;
+        if (challenge.winner === 'player') {
+          statsByOpponent[oppId].wins++;
+        } else if (challenge.winner === 'opponent') {
+          statsByOpponent[oppId].losses++;
+        } else {
+          statsByOpponent[oppId].draws++;
+        }
+      });
+
+    return Object.values(statsByOpponent).sort((a, b) => b.total - a.total);
+  }, [filteredChallenges]);
+
   // Calculate filtered stats
   const filteredStats = React.useMemo(() => {
     const wins = filteredMatches.filter(m => m.winner === 'A').length;
@@ -922,6 +960,81 @@ export default function StatsScreen() {
                     </View>
                   );
                 })}
+              </Animated.View>
+            )}
+
+            {/* 1v1 Stats by Opponent */}
+            {opponent1v1Stats.length > 0 && (
+              <Animated.View 
+                entering={FadeInDown.duration(400).delay(500)}
+                style={styles.section}
+              >
+                <Text style={styles.sectionTitle}>BILAN 1V1 PAR ADVERSAIRE</Text>
+                <View style={styles.opponent1v1Card}>
+                  {opponent1v1Stats.map((opponent, index) => {
+                    const winRate = opponent.total > 0 
+                      ? Math.round((opponent.wins / opponent.total) * 100) 
+                      : 0;
+                    return (
+                      <View 
+                        key={opponent.opponentId} 
+                        style={[
+                          styles.opponent1v1Row,
+                          index < opponent1v1Stats.length - 1 && styles.opponent1v1RowBorder
+                        ]}
+                      >
+                        <View style={styles.opponent1v1Info}>
+                          <View style={styles.opponent1v1Avatar}>
+                            <Text style={styles.opponent1v1Initials}>
+                              {opponent.opponentName.split(' ').map(n => n[0]).join('')}
+                            </Text>
+                          </View>
+                          <View style={styles.opponent1v1Details}>
+                            <Text style={styles.opponent1v1Name}>{opponent.opponentName}</Text>
+                            <Text style={styles.opponent1v1Total}>
+                              {opponent.total} défi{opponent.total > 1 ? 's' : ''}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={styles.opponent1v1Stats}>
+                          <View style={styles.opponent1v1Record}>
+                            <View style={styles.opponent1v1RecordItem}>
+                              <Text style={[styles.opponent1v1RecordValue, { color: theme.success }]}>
+                                {opponent.wins}
+                              </Text>
+                              <Text style={styles.opponent1v1RecordLabel}>V</Text>
+                            </View>
+                            <Text style={styles.opponent1v1RecordSeparator}>-</Text>
+                            <View style={styles.opponent1v1RecordItem}>
+                              <Text style={[styles.opponent1v1RecordValue, { color: theme.textMuted }]}>
+                                {opponent.draws}
+                              </Text>
+                              <Text style={styles.opponent1v1RecordLabel}>N</Text>
+                            </View>
+                            <Text style={styles.opponent1v1RecordSeparator}>-</Text>
+                            <View style={styles.opponent1v1RecordItem}>
+                              <Text style={[styles.opponent1v1RecordValue, { color: theme.error }]}>
+                                {opponent.losses}
+                              </Text>
+                              <Text style={styles.opponent1v1RecordLabel}>D</Text>
+                            </View>
+                          </View>
+                          <View style={[
+                            styles.opponent1v1WinRateBadge,
+                            { backgroundColor: winRate >= 50 ? theme.success + '15' : winRate > 0 ? theme.error + '15' : theme.textMuted + '15' }
+                          ]}>
+                            <Text style={[
+                              styles.opponent1v1WinRateText,
+                              { color: winRate >= 50 ? theme.success : winRate > 0 ? theme.error : theme.textMuted }
+                            ]}>
+                              {winRate}%
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
               </Animated.View>
             )}
 
@@ -2138,6 +2251,91 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: theme.textMuted,
     marginTop: 12,
+  },
+  // 1v1 opponent stats styles
+  opponent1v1Card: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    overflow: 'hidden',
+    ...theme.shadows.card,
+  },
+  opponent1v1Row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+  },
+  opponent1v1RowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  opponent1v1Info: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  opponent1v1Avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: theme.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  opponent1v1Initials: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  opponent1v1Details: {
+    flex: 1,
+  },
+  opponent1v1Name: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  opponent1v1Total: {
+    fontSize: 12,
+    color: theme.textMuted,
+    marginTop: 2,
+  },
+  opponent1v1Stats: {
+    alignItems: 'flex-end',
+  },
+  opponent1v1Record: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  opponent1v1RecordItem: {
+    alignItems: 'center',
+    minWidth: 24,
+  },
+  opponent1v1RecordValue: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  opponent1v1RecordLabel: {
+    fontSize: 9,
+    color: theme.textMuted,
+    fontWeight: '600',
+  },
+  opponent1v1RecordSeparator: {
+    fontSize: 14,
+    color: theme.textMuted,
+    marginHorizontal: 2,
+  },
+  opponent1v1WinRateBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: theme.borderRadius.sm,
+    marginTop: 6,
+  },
+  opponent1v1WinRateText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   // Terrain stats styles
   terrainStatsSubtitle: {
