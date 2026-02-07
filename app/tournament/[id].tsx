@@ -14,6 +14,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
+import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { TournamentType } from '@/constants/config';
 
@@ -80,10 +81,11 @@ const BRACKETS = ['A', 'B', 'C', 'D'] as const;
 export default function TournamentDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getTournamentById, getClubById, getMatchesByTournament, addMatch, players } = useApp();
+  const { getTournamentById, getClubById, getTerrainById, getMatchesByTournament, addMatch, players } = useApp();
 
   const tournament = getTournamentById(id!);
   const club = tournament?.clubId ? getClubById(tournament.clubId) : null;
+  const terrain = tournament?.terrainId ? getTerrainById(tournament.terrainId) : null;
   const tournamentMatches = getMatchesByTournament(id!);
   
   // Get phases based on tournament cadrage
@@ -267,6 +269,27 @@ export default function TournamentDetailScreen() {
               </View>
             </View>
           </View>
+          
+          {/* Terrain Info */}
+          {terrain && (
+            <Pressable 
+              style={styles.terrainInfoRow}
+              onPress={() => router.push(`/terrain/${terrain.id}`)}
+            >
+              <View style={styles.terrainInfoIcon}>
+                <MaterialIcons 
+                  name={config.terrainTypes.find(t => t.id === terrain.type)?.icon as any || 'landscape'} 
+                  size={18} 
+                  color={theme.accent} 
+                />
+              </View>
+              <View style={styles.terrainInfoContent}>
+                <Text style={styles.terrainInfoName}>{terrain.name}</Text>
+                <Text style={styles.terrainInfoType}>{terrain.type} • {terrain.address}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+            </Pressable>
+          )}
         </Animated.View>
 
         {/* Status Card */}
@@ -663,6 +686,35 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.textSecondary,
     marginLeft: 4,
+  },
+  terrainInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+    gap: 10,
+  },
+  terrainInfoIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: theme.accent + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  terrainInfoContent: {
+    flex: 1,
+  },
+  terrainInfoName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  terrainInfoType: {
+    fontSize: 12,
+    color: theme.textSecondary,
   },
   dot: {
     width: 3,

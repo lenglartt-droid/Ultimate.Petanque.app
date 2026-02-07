@@ -1,6 +1,6 @@
 // PetanqueScore Mock Data
 
-import { GameFormat, PlayerRole, TournamentType } from '@/constants/config';
+import { GameFormat, PlayerRole, TournamentType, TerrainType } from '@/constants/config';
 
 export interface Player {
   id: string;
@@ -51,6 +51,29 @@ export interface Club {
   facilities: string[];
   contactEmail?: string;
   contactPhone?: string;
+}
+
+// Terrain types
+export interface Terrain {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  location: {
+    latitude: number;
+    longitude: number;
+  };
+  type: TerrainType;
+  description?: string;
+  facilities?: string[];
+  photos?: string[];
+  clubId?: string;
+  clubName?: string;
+  isPublic: boolean;
+  courtsCount: number;
+  lighting: boolean;
+  covered: boolean;
+  createdAt?: string;
 }
 
 // Tournament bracket types
@@ -110,6 +133,9 @@ export interface Tournament {
     latitude: number;
     longitude: number;
   };
+  terrainId?: string;
+  terrainName?: string;
+  terrainType?: TerrainType;
   clubId?: string;
   clubName?: string;
   status: 'À venir' | 'En cours' | 'Terminé';
@@ -711,6 +737,144 @@ export const mockClubs: Club[] = [
     foundedYear: 1989,
     description: 'La pétanque alsacienne',
     facilities: ['5 terrains', 'Club house'],
+  },
+];
+
+// Mock Terrains Data
+export const mockTerrains: Terrain[] = [
+  {
+    id: 't1',
+    name: 'Boulodrome Municipal Lyon',
+    address: '15 Rue du Parc, 69006 Lyon',
+    city: 'Lyon',
+    location: { latitude: 45.764042, longitude: 4.835659 },
+    type: 'Stabilisé',
+    description: 'Boulodrome officiel de la ville de Lyon avec 12 terrains de compétition.',
+    facilities: ['Vestiaires', 'Bar', 'Parking', 'Éclairage'],
+    clubId: '1',
+    clubName: 'La Boule Lyonnaise',
+    isPublic: true,
+    courtsCount: 12,
+    lighting: true,
+    covered: false,
+    createdAt: '2022-01-15',
+  },
+  {
+    id: 't2',
+    name: 'Terrain du Prado',
+    address: '42 Avenue du Prado, 13008 Marseille',
+    city: 'Marseille',
+    location: { latitude: 43.296482, longitude: 5.369780 },
+    type: 'Graviers',
+    description: 'Terrain gravillonné historique de Marseille, idéal pour le jeu porté.',
+    facilities: ['Restaurant', 'Vestiaires', 'Tribune'],
+    clubId: '2',
+    clubName: 'Pétanque Club Marseillais',
+    isPublic: true,
+    courtsCount: 18,
+    lighting: true,
+    covered: true,
+    createdAt: '2021-06-20',
+  },
+  {
+    id: 't3',
+    name: 'Plage Pétanque Nice',
+    address: 'Promenade des Anglais, 06000 Nice',
+    city: 'Nice',
+    location: { latitude: 43.694852, longitude: 7.265722 },
+    type: 'Sable',
+    description: 'Terrain de plage unique avec vue sur la Méditerranée. Parfait pour le point plombé.',
+    facilities: ['Bar de plage', 'Douches'],
+    isPublic: true,
+    courtsCount: 6,
+    lighting: false,
+    covered: false,
+    createdAt: '2023-04-10',
+  },
+  {
+    id: 't4',
+    name: 'Terrain des Chartrons',
+    address: '23 Quai des Chartrons, 33000 Bordeaux',
+    city: 'Bordeaux',
+    location: { latitude: 44.860000, longitude: -0.570000 },
+    type: 'Terre battue',
+    description: 'Terrain naturel au bord de la Garonne, ambiance conviviale.',
+    facilities: ['Bar', 'Terrasse'],
+    clubId: '4',
+    clubName: 'La Boule Bordelaise',
+    isPublic: true,
+    courtsCount: 6,
+    lighting: true,
+    covered: false,
+    createdAt: '2022-09-01',
+  },
+  {
+    id: 't5',
+    name: 'Boulodrome Toulouse',
+    address: '5 Place du Capitole, 31000 Toulouse',
+    city: 'Toulouse',
+    location: { latitude: 43.604652, longitude: 1.444209 },
+    type: 'Stabilisé',
+    description: 'Centre de formation officiel avec terrains aux normes fédérales.',
+    facilities: ['Salle de réunion', 'Vestiaires', 'Parking', 'Éclairage'],
+    clubId: '5',
+    clubName: 'Pétanque Club Toulousain',
+    isPublic: true,
+    courtsCount: 10,
+    lighting: true,
+    covered: false,
+    createdAt: '2021-03-15',
+  },
+  {
+    id: 't6',
+    name: 'Jardin des Tuileries',
+    address: '18 Jardin des Tuileries, 75001 Paris',
+    city: 'Paris',
+    location: { latitude: 48.863300, longitude: 2.327500 },
+    type: 'Cailloux',
+    description: 'Terrain caillouteux technique au cœur de Paris. Réservé aux joueurs expérimentés.',
+    facilities: ['Club house'],
+    clubId: '6',
+    clubName: 'Boulistes Parisiens',
+    isPublic: true,
+    courtsCount: 4,
+    lighting: false,
+    covered: false,
+    createdAt: '2023-01-20',
+  },
+  {
+    id: 't7',
+    name: 'Terrain de la Loire',
+    address: '12 Rue de la Loire, 44000 Nantes',
+    city: 'Nantes',
+    location: { latitude: 47.218371, longitude: -1.553621 },
+    type: 'Stabilisé',
+    description: 'Terrain éclairé pour les parties nocturnes, idéal pour les soirées d\'été.',
+    facilities: ['Bar', 'Éclairage nocturne'],
+    clubId: '7',
+    clubName: 'Pétanque Club Nantais',
+    isPublic: true,
+    courtsCount: 8,
+    lighting: true,
+    covered: false,
+    createdAt: '2022-07-05',
+  },
+  {
+    id: 't8',
+    name: 'Boulodrome Alsacien',
+    address: '3 Place Kléber, 67000 Strasbourg',
+    city: 'Strasbourg',
+    location: { latitude: 48.573405, longitude: 7.752111 },
+    type: 'Graviers',
+    description: 'Terrain couvert permettant de jouer toute l\'année.',
+    facilities: ['Club house', 'Chauffage'],
+    clubId: '8',
+    clubName: 'La Boule Strasbourgeoise',
+    isPublic: true,
+    courtsCount: 5,
+    lighting: true,
+    covered: true,
+    createdAt: '2023-02-28',
   },
 ];
 

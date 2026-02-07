@@ -46,6 +46,15 @@ export const config = {
     },
   },
   
+  // Terrain Types
+  terrainTypes: [
+    { id: 'Stabilisé', label: 'Stabilisé', icon: 'landscape', description: 'Sol dur et compact, bon roulement' },
+    { id: 'Graviers', label: 'Graviers', icon: 'grain', description: 'Mélange de graviers, rebonds possibles' },
+    { id: 'Sable', label: 'Sable', icon: 'beach-access', description: 'Sol meuble, boules qui s\'arrêtent vite' },
+    { id: 'Cailloux', label: 'Cailloux', icon: 'scatter-plot', description: 'Gros cailloux, rebonds imprévisibles' },
+    { id: 'Terre battue', label: 'Terre battue', icon: 'grass', description: 'Terre nue, évolue selon la météo' },
+  ] as const,
+  
   // Statistics Categories
   statsCategories: [
     { id: 'global', label: 'Global' },
@@ -60,5 +69,6 @@ export type MatchMode = typeof config.matchModes[number];
 export type TournamentType = typeof config.tournamentTypes[number];
 export type ShotType = typeof config.shotTypes[number]['id'];
 export type PlayerRole = typeof config.playerRoles[number];
+export type TerrainType = typeof config.terrainTypes[number]['id'];
 
 export default config;

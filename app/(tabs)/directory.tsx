@@ -12,21 +12,24 @@ import { FlashList } from '@shopify/flash-list';
 import { router } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import theme from '@/constants/theme';
+import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
+import { Terrain } from '@/services/mockData';
 
-type DirectoryTab = 'players' | 'clubs' | 'tournaments';
+type DirectoryTab = 'players' | 'clubs' | 'tournaments' | 'terrains';
 
 export default function DirectoryScreen() {
   const insets = useSafeAreaInsets();
-  const { players, clubs, tournaments, selfPlayer } = useApp();
+  const { players, clubs, tournaments, terrains, selfPlayer } = useApp();
   const [activeTab, setActiveTab] = useState<DirectoryTab>('players');
   const [searchQuery, setSearchQuery] = useState('');
 
   const tabs = useMemo(() => [
     { id: 'players' as const, label: 'Joueurs', icon: 'person' as const, count: players.length },
     { id: 'clubs' as const, label: 'Clubs', icon: 'home' as const, count: clubs.length },
+    { id: 'terrains' as const, label: 'Terrains', icon: 'sports-soccer' as const, count: terrains.length },
     { id: 'tournaments' as const, label: 'Tournois', icon: 'emoji-events' as const, count: tournaments.length },
-  ], [players.length, clubs.length, tournaments.length]);
+  ], [players.length, clubs.length, terrains.length, tournaments.length]);
 
   // Filter players and put selfPlayer at the top
   const filteredPlayers = useMemo(() => {
@@ -56,6 +59,17 @@ export default function DirectoryScreen() {
     t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     t.location.city.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const filteredTerrains = terrains.filter(t =>
+    t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.type.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Get terrain type config for display
+  const getTerrainTypeConfig = (type: string) => {
+    return config.terrainTypes.find(t => t.id === type) || config.terrainTypes[0];
+  };
 
   const renderPlayer = ({ item }: { item: typeof players[0] }) => {
     const isSelf = selfPlayer && item.id === selfPlayer.id;
@@ -157,10 +171,17 @@ export default function DirectoryScreen() {
               {new Date(item.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
             </Text>
           </View>
-          <View style={styles.cardMeta}>
-            <MaterialIcons name="place" size={14} color={theme.textSecondary} />
-            <Text style={styles.cardMetaText}>{item.location.city}</Text>
-          </View>
+          {item.terrainName ? (
+            <View style={styles.cardMeta}>
+              <MaterialIcons name="sports-soccer" size={14} color={theme.textSecondary} />
+              <Text style={styles.cardMetaText}>{item.terrainName}</Text>
+            </View>
+          ) : (
+            <View style={styles.cardMeta}>
+              <MaterialIcons name="place" size={14} color={theme.textSecondary} />
+              <Text style={styles.cardMetaText}>{item.location.city}</Text>
+            </View>
+          )}
           <View style={styles.cardBadges}>
             <View style={[styles.badge, { backgroundColor: colors.bg }]}>
               <Text style={[styles.badgeText, { color: colors.text }]}>{item.status}</Text>
@@ -168,6 +189,63 @@ export default function DirectoryScreen() {
             <View style={[styles.badge, { backgroundColor: theme.backgroundSecondary }]}>
               <Text style={[styles.badgeText, { color: theme.textSecondary }]}>{item.format}</Text>
             </View>
+          </View>
+        </View>
+        <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
+      </Pressable>
+    );
+  };
+
+  const renderTerrain = ({ item }: { item: Terrain }) => {
+    const typeConfig = getTerrainTypeConfig(item.type);
+    const typeColors: Record<string, { bg: string; text: string }> = {
+      'Stabilisé': { bg: theme.primary + '20', text: theme.primary },
+      'Graviers': { bg: theme.warning + '20', text: theme.warning },
+      'Sable': { bg: '#F59E0B20', text: '#D97706' },
+      'Cailloux': { bg: theme.textSecondary + '20', text: theme.textSecondary },
+      'Terre battue': { bg: theme.success + '20', text: theme.success },
+    };
+    const colors = typeColors[item.type] || typeColors['Stabilisé'];
+
+    return (
+      <Pressable
+        style={styles.card}
+        onPress={() => router.push(`/terrain/${item.id}`)}
+      >
+        <View style={[styles.avatar, { backgroundColor: theme.accent }]}>
+          <MaterialIcons name={typeConfig.icon as any} size={24} color="#FFF" />
+        </View>
+        <View style={styles.cardContent}>
+          <Text style={styles.cardTitle}>{item.name}</Text>
+          <View style={styles.cardMeta}>
+            <MaterialIcons name="place" size={14} color={theme.textSecondary} />
+            <Text style={styles.cardMetaText}>{item.city}</Text>
+          </View>
+          {item.clubName && (
+            <View style={styles.cardMeta}>
+              <MaterialIcons name="home" size={14} color={theme.textSecondary} />
+              <Text style={styles.cardMetaText}>{item.clubName}</Text>
+            </View>
+          )}
+          <View style={styles.cardBadges}>
+            <View style={[styles.badge, { backgroundColor: colors.bg }]}>
+              <Text style={[styles.badgeText, { color: colors.text }]}>{item.type}</Text>
+            </View>
+            <View style={[styles.badge, { backgroundColor: theme.backgroundSecondary }]}>
+              <Text style={[styles.badgeText, { color: theme.textSecondary }]}>
+                {item.courtsCount} terrain{item.courtsCount > 1 ? 's' : ''}
+              </Text>
+            </View>
+            {item.lighting && (
+              <View style={[styles.badge, { backgroundColor: theme.warningLight }]}>
+                <MaterialIcons name="lightbulb" size={12} color={theme.warning} />
+              </View>
+            )}
+            {item.covered && (
+              <View style={[styles.badge, { backgroundColor: theme.primaryLight + '30' }]}>
+                <MaterialIcons name="roofing" size={12} color={theme.primary} />
+              </View>
+            )}
           </View>
         </View>
         <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
@@ -183,6 +261,38 @@ export default function DirectoryScreen() {
         style={styles.header}
       >
         <Text style={styles.title}>Annuaire</Text>
+        {activeTab === 'terrains' && (
+          <Pressable 
+            style={styles.addButton}
+            onPress={() => router.push('/terrain/new')}
+          >
+            <MaterialIcons name="add" size={20} color="#FFF" />
+          </Pressable>
+        )}
+        {activeTab === 'clubs' && (
+          <Pressable 
+            style={styles.addButton}
+            onPress={() => router.push('/club/new')}
+          >
+            <MaterialIcons name="add" size={20} color="#FFF" />
+          </Pressable>
+        )}
+        {activeTab === 'tournaments' && (
+          <Pressable 
+            style={styles.addButton}
+            onPress={() => router.push('/tournament/new')}
+          >
+            <MaterialIcons name="add" size={20} color="#FFF" />
+          </Pressable>
+        )}
+        {activeTab === 'players' && (
+          <Pressable 
+            style={styles.addButton}
+            onPress={() => router.push('/player/new')}
+          >
+            <MaterialIcons name="add" size={20} color="#FFF" />
+          </Pressable>
+        )}
       </Animated.View>
 
       {/* Search */}
@@ -283,6 +393,18 @@ export default function DirectoryScreen() {
             showsVerticalScrollIndicator={false}
           />
         )}
+        {activeTab === 'terrains' && (
+          <FlashList
+            data={filteredTerrains}
+            renderItem={renderTerrain}
+            estimatedItemSize={100}
+            contentContainerStyle={{ 
+              paddingHorizontal: 16,
+              paddingBottom: insets.bottom + 100,
+            }}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
       </View>
     </SafeAreaView>
   );
@@ -304,6 +426,15 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     color: theme.textPrimary,
+  },
+  addButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...theme.shadows.card,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -329,22 +460,24 @@ const styles = StyleSheet.create({
   },
   tab: {
     flex: 1,
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
     borderRadius: theme.borderRadius.md,
     backgroundColor: theme.surface,
-    gap: 6,
+    gap: 4,
+    minHeight: 60,
   },
   tabActive: {
     backgroundColor: theme.primary,
   },
   tabText: {
-    fontSize: 13,
+    fontSize: 10,
     fontWeight: '600',
     color: theme.textSecondary,
+    textAlign: 'center',
   },
   tabTextActive: {
     color: '#FFF',

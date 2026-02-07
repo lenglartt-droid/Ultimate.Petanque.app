@@ -7,6 +7,7 @@ import {
   mockTournaments,
   mockMatches,
   mockChallenges,
+  mockTerrains,
   currentUserStats,
   Player,
   Club,
@@ -17,6 +18,7 @@ import {
   Challenge,
   ChallengeType,
   ChallengeStats,
+  Terrain,
 } from '@/services/mockData';
 
 interface AppContextType {
@@ -26,6 +28,7 @@ interface AppContextType {
   tournaments: Tournament[];
   matches: Match[];
   challenges: Challenge[];
+  terrains: Terrain[];
   userStats: typeof currentUserStats;
   challengeStats: ChallengeStats;
   loading: boolean;
@@ -39,24 +42,28 @@ interface AppContextType {
   addClub: (club: Omit<Club, 'id'>) => Promise<void>;
   addTournament: (tournament: Omit<Tournament, 'id'>) => Promise<void>;
   addChallenge: (challenge: Omit<Challenge, 'id'>) => Promise<void>;
+  addTerrain: (terrain: Omit<Terrain, 'id'>) => Promise<void>;
   
   // Update Actions
   updateMatch: (id: string, updates: Partial<Match>) => Promise<void>;
   updatePlayer: (id: string, updates: Partial<Player>) => Promise<void>;
   updateClub: (id: string, updates: Partial<Club>) => Promise<void>;
   updateTournament: (id: string, updates: Partial<Tournament>) => Promise<void>;
+  updateTerrain: (id: string, updates: Partial<Terrain>) => Promise<void>;
   updateBracketMatch: (tournamentId: string, bracketMatchId: string, updates: Partial<BracketMatch>) => void;
   
   // Delete Actions
   deleteMatch: (id: string) => Promise<void>;
   deletePlayer: (id: string) => Promise<void>;
   deleteChallenge: (id: string) => Promise<void>;
+  deleteTerrain: (id: string) => Promise<void>;
   
   // Getters
   getPlayerById: (id: string) => Player | undefined;
   getClubById: (id: string) => Club | undefined;
   getTournamentById: (id: string) => Tournament | undefined;
   getMatchById: (id: string) => Match | undefined;
+  getTerrainById: (id: string) => Terrain | undefined;
   getMatchesByPlayer: (playerId: string) => Match[];
   getMatchesByTournament: (tournamentId: string) => Match[];
   
@@ -79,6 +86,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [challenges, setChallenges] = useState<Challenge[]>([]);
+  const [terrains, setTerrains] = useState<Terrain[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Self player (current user's player card)
@@ -193,6 +201,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setTournaments(mockTournaments);
       setMatches(mockMatches);
       setChallenges(mockChallenges);
+      setTerrains(mockTerrains);
       setLoading(false);
       return;
     }
@@ -200,12 +209,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
       // Fetch all user data in parallel
-      const [playersRes, clubsRes, tournamentsRes, matchesRes, challengesRes, profileRes] = await Promise.all([
+      const [playersRes, clubsRes, tournamentsRes, matchesRes, challengesRes, terrainsRes, profileRes] = await Promise.all([
         supabase.from('players').select('*').order('created_at', { ascending: false }),
         supabase.from('clubs').select('*').order('created_at', { ascending: false }),
         supabase.from('tournaments').select('*').order('date', { ascending: false }),
         supabase.from('matches').select('*').order('date', { ascending: false }),
         supabase.from('challenges').select('*').order('date', { ascending: false }),
+        supabase.from('terrains').select('*').order('created_at', { ascending: false }),
         supabase.from('user_profiles').select('*').eq('id', user.id).single(),
       ]);
 
@@ -286,6 +296,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setClubs(dbClubs.length > 0 ? dbClubs : mockClubs);
       }
 
+      if (terrainsRes.data) {
+        const dbTerrains: Terrain[] = terrainsRes.data.map(t => ({
+          id: t.id,
+          name: t.name,
+          address: t.address,
+          city: t.city,
+          location: t.location || { latitude: 0, longitude: 0 },
+          type: t.type,
+          description: t.description,
+          facilities: t.facilities || [],
+          photos: t.photos || [],
+          clubId: t.club_id,
+          clubName: t.club_name,
+          isPublic: t.is_public ?? true,
+          courtsCount: t.courts_count || 1,
+          lighting: t.lighting ?? false,
+          covered: t.covered ?? false,
+          createdAt: t.created_at,
+        }));
+        setTerrains(dbTerrains.length > 0 ? dbTerrains : mockTerrains);
+      }
+
       if (tournamentsRes.data) {
         const dbTournaments: Tournament[] = tournamentsRes.data.map(t => ({
           id: t.id,
@@ -295,6 +327,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           type: t.type,
           format: t.format,
           location: t.location,
+          terrainId: t.terrain_id,
+          terrainName: t.terrain_name,
+          terrainType: t.terrain_type,
           clubId: t.club_id,
           clubName: t.club_name,
           status: t.status,
@@ -360,6 +395,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setTournaments(mockTournaments);
       setMatches(mockMatches);
       setChallenges(mockChallenges);
+      setTerrains(mockTerrains);
     } finally {
       setLoading(false);
     }
@@ -542,6 +578,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         type: tournament.type,
         format: tournament.format,
         location: tournament.location,
+        terrain_id: tournament.terrainId,
+        terrain_name: tournament.terrainName,
+        terrain_type: tournament.terrainType,
         club_id: tournament.clubId,
         club_name: tournament.clubName,
         status: tournament.status,
@@ -565,6 +604,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           type: data.type,
           format: data.format,
           location: data.location,
+          terrainId: data.terrain_id,
+          terrainName: data.terrain_name,
+          terrainType: data.terrain_type,
           clubId: data.club_id,
           clubName: data.club_name,
           status: data.status,
@@ -582,6 +624,62 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.log('Error adding tournament:', error);
       const newTournament: Tournament = { ...tournament, id: Date.now().toString() };
       setTournaments(prev => [...prev, newTournament]);
+    }
+  };
+
+  const addTerrain = async (terrain: Omit<Terrain, 'id'>) => {
+    if (!user?.id) {
+      const newTerrain: Terrain = { ...terrain, id: Date.now().toString() };
+      setTerrains(prev => [...prev, newTerrain]);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.from('terrains').insert({
+        user_id: user.id,
+        name: terrain.name,
+        address: terrain.address,
+        city: terrain.city,
+        location: terrain.location,
+        type: terrain.type,
+        description: terrain.description,
+        facilities: terrain.facilities,
+        photos: terrain.photos,
+        club_id: terrain.clubId,
+        club_name: terrain.clubName,
+        is_public: terrain.isPublic,
+        courts_count: terrain.courtsCount,
+        lighting: terrain.lighting,
+        covered: terrain.covered,
+      }).select().single();
+
+      if (error) throw error;
+
+      if (data) {
+        const newTerrain: Terrain = {
+          id: data.id,
+          name: data.name,
+          address: data.address,
+          city: data.city,
+          location: data.location,
+          type: data.type,
+          description: data.description,
+          facilities: data.facilities,
+          photos: data.photos,
+          clubId: data.club_id,
+          clubName: data.club_name,
+          isPublic: data.is_public,
+          courtsCount: data.courts_count,
+          lighting: data.lighting,
+          covered: data.covered,
+          createdAt: data.created_at,
+        };
+        setTerrains(prev => [...prev, newTerrain]);
+      }
+    } catch (error) {
+      console.log('Error adding terrain:', error);
+      const newTerrain: Terrain = { ...terrain, id: Date.now().toString() };
+      setTerrains(prev => [...prev, newTerrain]);
     }
   };
 
@@ -742,6 +840,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.type !== undefined) dbUpdates.type = updates.type;
       if (updates.format !== undefined) dbUpdates.format = updates.format;
       if (updates.location !== undefined) dbUpdates.location = updates.location;
+      if (updates.terrainId !== undefined) dbUpdates.terrain_id = updates.terrainId;
+      if (updates.terrainName !== undefined) dbUpdates.terrain_name = updates.terrainName;
+      if (updates.terrainType !== undefined) dbUpdates.terrain_type = updates.terrainType;
       if (updates.clubId !== undefined) dbUpdates.club_id = updates.clubId;
       if (updates.clubName !== undefined) dbUpdates.club_name = updates.clubName;
       if (updates.status !== undefined) dbUpdates.status = updates.status;
@@ -757,6 +858,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await supabase.from('tournaments').update(dbUpdates).eq('id', id);
     } catch (error) {
       console.log('Error updating tournament:', error);
+    }
+  };
+
+  const updateTerrain = async (id: string, updates: Partial<Terrain>) => {
+    setTerrains(prev => prev.map(terrain => 
+      terrain.id === id ? { ...terrain, ...updates } : terrain
+    ));
+
+    if (!user?.id) return;
+
+    try {
+      const dbUpdates: any = {};
+      if (updates.name !== undefined) dbUpdates.name = updates.name;
+      if (updates.address !== undefined) dbUpdates.address = updates.address;
+      if (updates.city !== undefined) dbUpdates.city = updates.city;
+      if (updates.location !== undefined) dbUpdates.location = updates.location;
+      if (updates.type !== undefined) dbUpdates.type = updates.type;
+      if (updates.description !== undefined) dbUpdates.description = updates.description;
+      if (updates.facilities !== undefined) dbUpdates.facilities = updates.facilities;
+      if (updates.photos !== undefined) dbUpdates.photos = updates.photos;
+      if (updates.clubId !== undefined) dbUpdates.club_id = updates.clubId;
+      if (updates.clubName !== undefined) dbUpdates.club_name = updates.clubName;
+      if (updates.isPublic !== undefined) dbUpdates.is_public = updates.isPublic;
+      if (updates.courtsCount !== undefined) dbUpdates.courts_count = updates.courtsCount;
+      if (updates.lighting !== undefined) dbUpdates.lighting = updates.lighting;
+      if (updates.covered !== undefined) dbUpdates.covered = updates.covered;
+      dbUpdates.updated_at = new Date().toISOString();
+
+      await supabase.from('terrains').update(dbUpdates).eq('id', id);
+    } catch (error) {
+      console.log('Error updating terrain:', error);
     }
   };
 
@@ -812,11 +944,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const deleteTerrain = async (id: string) => {
+    setTerrains(prev => prev.filter(terrain => terrain.id !== id));
+
+    if (!user?.id) return;
+
+    try {
+      await supabase.from('terrains').delete().eq('id', id);
+    } catch (error) {
+      console.log('Error deleting terrain:', error);
+    }
+  };
+
   // Getters
   const getPlayerById = (id: string) => players.find(p => p.id === id);
   const getClubById = (id: string) => clubs.find(c => c.id === id);
   const getTournamentById = (id: string) => tournaments.find(t => t.id === id);
   const getMatchById = (id: string) => matches.find(m => m.id === id);
+  const getTerrainById = (id: string) => terrains.find(t => t.id === id);
   
   const getMatchesByPlayer = (playerId: string) => 
     matches.filter(m => 
@@ -919,6 +1064,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         tournaments,
         matches,
         challenges,
+        terrains,
         userStats,
         challengeStats,
         loading,
@@ -927,18 +1073,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addClub,
         addTournament,
         addChallenge,
+        addTerrain,
         updateMatch,
         updatePlayer,
         updateClub,
         updateTournament,
+        updateTerrain,
         updateBracketMatch,
         deleteMatch,
         deletePlayer,
         deleteChallenge,
+        deleteTerrain,
         getPlayerById,
         getClubById,
         getTournamentById,
         getMatchById,
+        getTerrainById,
         getMatchesByPlayer,
         getMatchesByTournament,
         getHeadToHead,
