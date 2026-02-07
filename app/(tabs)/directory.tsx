@@ -41,6 +41,17 @@ export default function DirectoryScreen() {
   const [clubCityFilter, setClubCityFilter] = useState<string>('all');
   const [clubCountryFilter, setClubCountryFilter] = useState<string>('all');
   const [showClubFilters, setShowClubFilters] = useState(false);
+  
+  // Terrain filters
+  const [terrainCityFilter, setTerrainCityFilter] = useState<string>('all');
+  const [terrainLightingFilter, setTerrainLightingFilter] = useState<'all' | 'yes' | 'no'>('all');
+  const [terrainCoveredFilter, setTerrainCoveredFilter] = useState<'all' | 'yes' | 'no'>('all');
+  const [showTerrainFilters, setShowTerrainFilters] = useState(false);
+  
+  // Tournament filters
+  const [tournamentFormatFilter, setTournamentFormatFilter] = useState<string>('all');
+  const [tournamentCadrageFilter, setTournamentCadrageFilter] = useState<string>('all');
+  const [showTournamentFilters, setShowTournamentFilters] = useState(false);
 
   const tabs = useMemo(() => [
     { id: 'players' as const, label: 'Joueurs', icon: 'person' as const, count: players.length },
@@ -75,6 +86,23 @@ export default function DirectoryScreen() {
     return ['all', ...Array.from(countrySet)] as string[];
   }, [clubs]);
 
+  // Terrain filter unique values
+  const uniqueTerrainCities = useMemo(() => {
+    const citySet = new Set(terrains.map(t => t.city).filter(Boolean));
+    return ['all', ...Array.from(citySet)] as string[];
+  }, [terrains]);
+
+  // Tournament filter unique values
+  const uniqueTournamentFormats = useMemo(() => {
+    const formatSet = new Set(tournaments.map(t => t.format).filter(Boolean));
+    return ['all', ...Array.from(formatSet)] as string[];
+  }, [tournaments]);
+
+  const uniqueTournamentCadrages = useMemo(() => {
+    const cadrageSet = new Set(tournaments.map(t => t.type).filter(Boolean));
+    return ['all', ...Array.from(cadrageSet)] as string[];
+  }, [tournaments]);
+
   // Count active player filters
   const activePlayerFilterCount = useMemo(() => {
     let count = 0;
@@ -91,6 +119,25 @@ export default function DirectoryScreen() {
     if (clubCountryFilter !== 'all') count++;
     return count;
   }, [clubCityFilter, clubCountryFilter]);
+
+  // Count active terrain filters
+  const activeTerrainFilterCount = useMemo(() => {
+    let count = 0;
+    if (terrainTypeFilter !== 'all') count++;
+    if (terrainCityFilter !== 'all') count++;
+    if (terrainLightingFilter !== 'all') count++;
+    if (terrainCoveredFilter !== 'all') count++;
+    return count;
+  }, [terrainTypeFilter, terrainCityFilter, terrainLightingFilter, terrainCoveredFilter]);
+
+  // Count active tournament filters
+  const activeTournamentFilterCount = useMemo(() => {
+    let count = 0;
+    if (tournamentStatusFilter !== 'all') count++;
+    if (tournamentFormatFilter !== 'all') count++;
+    if (tournamentCadrageFilter !== 'all') count++;
+    return count;
+  }, [tournamentStatusFilter, tournamentFormatFilter, tournamentCadrageFilter]);
 
   // Filter players and put selfPlayer at the top
   const filteredPlayers = useMemo(() => {
@@ -135,10 +182,12 @@ export default function DirectoryScreen() {
         t.location.city.toLowerCase().includes(searchQuery.toLowerCase());
       
       const matchesStatus = tournamentStatusFilter === 'all' || t.status === tournamentStatusFilter;
+      const matchesFormat = tournamentFormatFilter === 'all' || t.format === tournamentFormatFilter;
+      const matchesCadrage = tournamentCadrageFilter === 'all' || t.type === tournamentCadrageFilter;
       
-      return matchesSearch && matchesStatus;
+      return matchesSearch && matchesStatus && matchesFormat && matchesCadrage;
     });
-  }, [tournaments, searchQuery, tournamentStatusFilter]);
+  }, [tournaments, searchQuery, tournamentStatusFilter, tournamentFormatFilter, tournamentCadrageFilter]);
 
   const filteredTerrains = useMemo(() => {
     return terrains.filter(t => {
@@ -147,10 +196,15 @@ export default function DirectoryScreen() {
         t.type.toLowerCase().includes(searchQuery.toLowerCase());
       
       const matchesType = terrainTypeFilter === 'all' || t.type === terrainTypeFilter;
+      const matchesCity = terrainCityFilter === 'all' || t.city === terrainCityFilter;
+      const matchesLighting = terrainLightingFilter === 'all' || 
+        (terrainLightingFilter === 'yes' ? t.lighting : !t.lighting);
+      const matchesCovered = terrainCoveredFilter === 'all' || 
+        (terrainCoveredFilter === 'yes' ? t.covered : !t.covered);
       
-      return matchesSearch && matchesType;
+      return matchesSearch && matchesType && matchesCity && matchesLighting && matchesCovered;
     });
-  }, [terrains, searchQuery, terrainTypeFilter]);
+  }, [terrains, searchQuery, terrainTypeFilter, terrainCityFilter, terrainLightingFilter, terrainCoveredFilter]);
 
   // Get terrain type config for display
   const getTerrainTypeConfig = (type: string) => {
@@ -184,6 +238,19 @@ export default function DirectoryScreen() {
   const clearClubFilters = () => {
     setClubCityFilter('all');
     setClubCountryFilter('all');
+  };
+
+  const clearTerrainFilters = () => {
+    setTerrainTypeFilter('all');
+    setTerrainCityFilter('all');
+    setTerrainLightingFilter('all');
+    setTerrainCoveredFilter('all');
+  };
+
+  const clearTournamentFilters = () => {
+    setTournamentStatusFilter('all');
+    setTournamentFormatFilter('all');
+    setTournamentCadrageFilter('all');
   };
 
   const renderPlayer = ({ item }: { item: typeof players[0] }) => {
@@ -587,10 +654,292 @@ export default function DirectoryScreen() {
     </Modal>
   );
 
+  // Filter Modal for Terrains
+  const TerrainFiltersModal = () => (
+    <Modal
+      visible={showTerrainFilters}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowTerrainFilters(false)}
+    >
+      <SafeAreaView style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Filtrer les terrains</Text>
+          <Pressable onPress={() => setShowTerrainFilters(false)}>
+            <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+          </Pressable>
+        </View>
+        
+        <ScrollView style={styles.modalContent}>
+          {/* Type Filter */}
+          <View style={styles.filterSection}>
+            <Text style={styles.filterSectionTitle}>TYPE DE SURFACE</Text>
+            <View style={styles.filterOptions}>
+              <Pressable
+                style={[
+                  styles.filterOption,
+                  terrainTypeFilter === 'all' && styles.filterOptionActive
+                ]}
+                onPress={() => {
+                  setTerrainTypeFilter('all');
+                  Haptics.selectionAsync();
+                }}
+              >
+                <Text style={[
+                  styles.filterOptionText,
+                  terrainTypeFilter === 'all' && styles.filterOptionTextActive
+                ]}>
+                  Tous les types
+                </Text>
+              </Pressable>
+              {config.terrainTypes.map(type => (
+                <Pressable
+                  key={type.id}
+                  style={[
+                    styles.filterOption,
+                    terrainTypeFilter === type.id && styles.filterOptionActive
+                  ]}
+                  onPress={() => {
+                    setTerrainTypeFilter(type.id as TerrainType);
+                    Haptics.selectionAsync();
+                  }}
+                >
+                  <MaterialIcons name={type.icon as any} size={16} color={terrainTypeFilter === type.id ? theme.primary : theme.textSecondary} style={{ marginRight: 6 }} />
+                  <Text style={[
+                    styles.filterOptionText,
+                    terrainTypeFilter === type.id && styles.filterOptionTextActive
+                  ]}>
+                    {type.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          {/* City Filter */}
+          <View style={styles.filterSection}>
+            <Text style={styles.filterSectionTitle}>VILLE</Text>
+            <View style={styles.filterOptions}>
+              {uniqueTerrainCities.map(city => (
+                <Pressable
+                  key={city}
+                  style={[
+                    styles.filterOption,
+                    terrainCityFilter === city && styles.filterOptionActive
+                  ]}
+                  onPress={() => {
+                    setTerrainCityFilter(city);
+                    Haptics.selectionAsync();
+                  }}
+                >
+                  <Text style={[
+                    styles.filterOptionText,
+                    terrainCityFilter === city && styles.filterOptionTextActive
+                  ]}>
+                    {city === 'all' ? 'Toutes les villes' : city}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          {/* Lighting Filter */}
+          <View style={styles.filterSection}>
+            <Text style={styles.filterSectionTitle}>ÉCLAIRAGE</Text>
+            <View style={styles.filterOptions}>
+              {[{ id: 'all', label: 'Tous' }, { id: 'yes', label: 'Avec éclairage' }, { id: 'no', label: 'Sans éclairage' }].map(option => (
+                <Pressable
+                  key={option.id}
+                  style={[
+                    styles.filterOption,
+                    terrainLightingFilter === option.id && styles.filterOptionActive
+                  ]}
+                  onPress={() => {
+                    setTerrainLightingFilter(option.id as 'all' | 'yes' | 'no');
+                    Haptics.selectionAsync();
+                  }}
+                >
+                  {option.id !== 'all' && (
+                    <MaterialIcons name="lightbulb" size={16} color={terrainLightingFilter === option.id ? theme.primary : theme.textSecondary} style={{ marginRight: 6 }} />
+                  )}
+                  <Text style={[
+                    styles.filterOptionText,
+                    terrainLightingFilter === option.id && styles.filterOptionTextActive
+                  ]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          {/* Covered Filter */}
+          <View style={styles.filterSection}>
+            <Text style={styles.filterSectionTitle}>COUVERTURE</Text>
+            <View style={styles.filterOptions}>
+              {[{ id: 'all', label: 'Tous' }, { id: 'yes', label: 'Couvert' }, { id: 'no', label: 'Extérieur' }].map(option => (
+                <Pressable
+                  key={option.id}
+                  style={[
+                    styles.filterOption,
+                    terrainCoveredFilter === option.id && styles.filterOptionActive
+                  ]}
+                  onPress={() => {
+                    setTerrainCoveredFilter(option.id as 'all' | 'yes' | 'no');
+                    Haptics.selectionAsync();
+                  }}
+                >
+                  {option.id !== 'all' && (
+                    <MaterialIcons name="roofing" size={16} color={terrainCoveredFilter === option.id ? theme.primary : theme.textSecondary} style={{ marginRight: 6 }} />
+                  )}
+                  <Text style={[
+                    styles.filterOptionText,
+                    terrainCoveredFilter === option.id && styles.filterOptionTextActive
+                  ]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </ScrollView>
+
+        <View style={styles.modalFooter}>
+          <Pressable style={styles.clearButton} onPress={clearTerrainFilters}>
+            <Text style={styles.clearButtonText}>Effacer les filtres</Text>
+          </Pressable>
+          <Pressable 
+            style={styles.applyButton} 
+            onPress={() => setShowTerrainFilters(false)}
+          >
+            <Text style={styles.applyButtonText}>Appliquer</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    </Modal>
+  );
+
+  // Filter Modal for Tournaments
+  const TournamentFiltersModal = () => (
+    <Modal
+      visible={showTournamentFilters}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowTournamentFilters(false)}
+    >
+      <SafeAreaView style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Filtrer les tournois</Text>
+          <Pressable onPress={() => setShowTournamentFilters(false)}>
+            <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+          </Pressable>
+        </View>
+        
+        <ScrollView style={styles.modalContent}>
+          {/* Status Filter */}
+          <View style={styles.filterSection}>
+            <Text style={styles.filterSectionTitle}>STATUT</Text>
+            <View style={styles.filterOptions}>
+              {[{ id: 'all', label: 'Tous les statuts', icon: 'layers' }, { id: 'À venir', label: 'À venir', icon: 'event' }, { id: 'En cours', label: 'En cours', icon: 'play-circle' }, { id: 'Terminé', label: 'Terminé', icon: 'check-circle' }].map(status => (
+                <Pressable
+                  key={status.id}
+                  style={[
+                    styles.filterOption,
+                    tournamentStatusFilter === status.id && styles.filterOptionActive
+                  ]}
+                  onPress={() => {
+                    setTournamentStatusFilter(status.id as TournamentStatus);
+                    Haptics.selectionAsync();
+                  }}
+                >
+                  <MaterialIcons name={status.icon as any} size={16} color={tournamentStatusFilter === status.id ? theme.primary : theme.textSecondary} style={{ marginRight: 6 }} />
+                  <Text style={[
+                    styles.filterOptionText,
+                    tournamentStatusFilter === status.id && styles.filterOptionTextActive
+                  ]}>
+                    {status.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          {/* Format Filter */}
+          <View style={styles.filterSection}>
+            <Text style={styles.filterSectionTitle}>FORMAT</Text>
+            <View style={styles.filterOptions}>
+              {uniqueTournamentFormats.map(format => (
+                <Pressable
+                  key={format}
+                  style={[
+                    styles.filterOption,
+                    tournamentFormatFilter === format && styles.filterOptionActive
+                  ]}
+                  onPress={() => {
+                    setTournamentFormatFilter(format);
+                    Haptics.selectionAsync();
+                  }}
+                >
+                  <Text style={[
+                    styles.filterOptionText,
+                    tournamentFormatFilter === format && styles.filterOptionTextActive
+                  ]}>
+                    {format === 'all' ? 'Tous les formats' : format}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          {/* Cadrage Filter */}
+          <View style={styles.filterSection}>
+            <Text style={styles.filterSectionTitle}>CADRAGE</Text>
+            <View style={styles.filterOptions}>
+              {uniqueTournamentCadrages.map(cadrage => (
+                <Pressable
+                  key={cadrage}
+                  style={[
+                    styles.filterOption,
+                    tournamentCadrageFilter === cadrage && styles.filterOptionActive
+                  ]}
+                  onPress={() => {
+                    setTournamentCadrageFilter(cadrage);
+                    Haptics.selectionAsync();
+                  }}
+                >
+                  <Text style={[
+                    styles.filterOptionText,
+                    tournamentCadrageFilter === cadrage && styles.filterOptionTextActive
+                  ]}>
+                    {cadrage === 'all' ? 'Tous les cadrages' : cadrage}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </ScrollView>
+
+        <View style={styles.modalFooter}>
+          <Pressable style={styles.clearButton} onPress={clearTournamentFilters}>
+            <Text style={styles.clearButtonText}>Effacer les filtres</Text>
+          </Pressable>
+          <Pressable 
+            style={styles.applyButton} 
+            onPress={() => setShowTournamentFilters(false)}
+          >
+            <Text style={styles.applyButtonText}>Appliquer</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    </Modal>
+  );
+
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
       <PlayerFiltersModal />
       <ClubFiltersModal />
+      <TerrainFiltersModal />
+      <TournamentFiltersModal />
 
       {/* Header */}
       <Animated.View 
@@ -800,83 +1149,160 @@ export default function DirectoryScreen() {
         </Animated.View>
       )}
 
-      {/* Tournament Status Filters */}
+      {/* Tournament Filters Button */}
       {activeTab === 'tournaments' && (
         <Animated.View 
           entering={FadeInDown.duration(400).delay(250)}
-          style={styles.terrainFiltersContainer}
+          style={styles.filterButtonContainer}
         >
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.terrainFiltersScroll}
+          <Pressable
+            style={[
+              styles.filterButton,
+              activeTournamentFilterCount > 0 && styles.filterButtonActive
+            ]}
+            onPress={() => {
+              setShowTournamentFilters(true);
+              Haptics.selectionAsync();
+            }}
           >
-            {tournamentStatusFilters.map(filter => (
-              <Pressable
-                key={filter.id}
-                style={[
-                  styles.terrainFilterChip,
-                  tournamentStatusFilter === filter.id && styles.tournamentFilterChipActive
-                ]}
-                onPress={() => {
-                  setTournamentStatusFilter(filter.id);
-                  Haptics.selectionAsync();
-                }}
-              >
-                <MaterialIcons 
-                  name={filter.icon} 
-                  size={16} 
-                  color={tournamentStatusFilter === filter.id ? '#FFF' : theme.textSecondary} 
-                />
-                <Text style={[
-                  styles.terrainFilterText,
-                  tournamentStatusFilter === filter.id && styles.terrainFilterTextActive
-                ]}>
-                  {filter.label}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
+            <MaterialIcons 
+              name="filter-list" 
+              size={20} 
+              color={activeTournamentFilterCount > 0 ? '#FFF' : theme.textSecondary} 
+            />
+            <Text style={[
+              styles.filterButtonText,
+              activeTournamentFilterCount > 0 && styles.filterButtonTextActive
+            ]}>
+              Filtres
+            </Text>
+            {activeTournamentFilterCount > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{activeTournamentFilterCount}</Text>
+              </View>
+            )}
+          </Pressable>
+          
+          {/* Quick filter chips */}
+          {activeTournamentFilterCount > 0 && (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.activeFiltersScroll}
+            >
+              {tournamentStatusFilter !== 'all' && (
+                <Pressable 
+                  style={styles.activeFilterChip}
+                  onPress={() => setTournamentStatusFilter('all')}
+                >
+                  <Text style={styles.activeFilterText}>{tournamentStatusFilter}</Text>
+                  <MaterialIcons name="close" size={14} color={theme.primary} />
+                </Pressable>
+              )}
+              {tournamentFormatFilter !== 'all' && (
+                <Pressable 
+                  style={styles.activeFilterChip}
+                  onPress={() => setTournamentFormatFilter('all')}
+                >
+                  <Text style={styles.activeFilterText}>{tournamentFormatFilter}</Text>
+                  <MaterialIcons name="close" size={14} color={theme.primary} />
+                </Pressable>
+              )}
+              {tournamentCadrageFilter !== 'all' && (
+                <Pressable 
+                  style={styles.activeFilterChip}
+                  onPress={() => setTournamentCadrageFilter('all')}
+                >
+                  <Text style={styles.activeFilterText}>{tournamentCadrageFilter}</Text>
+                  <MaterialIcons name="close" size={14} color={theme.primary} />
+                </Pressable>
+              )}
+            </ScrollView>
+          )}
         </Animated.View>
       )}
 
-      {/* Terrain Type Filters */}
+      {/* Terrain Filters Button */}
       {activeTab === 'terrains' && (
         <Animated.View 
           entering={FadeInDown.duration(400).delay(250)}
-          style={styles.terrainFiltersContainer}
+          style={styles.filterButtonContainer}
         >
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.terrainFiltersScroll}
+          <Pressable
+            style={[
+              styles.filterButton,
+              activeTerrainFilterCount > 0 && styles.filterButtonActive
+            ]}
+            onPress={() => {
+              setShowTerrainFilters(true);
+              Haptics.selectionAsync();
+            }}
           >
-            {terrainTypeFilters.map(filter => (
-              <Pressable
-                key={filter.id}
-                style={[
-                  styles.terrainFilterChip,
-                  terrainTypeFilter === filter.id && styles.terrainFilterChipActive
-                ]}
-                onPress={() => {
-                  setTerrainTypeFilter(filter.id);
-                  Haptics.selectionAsync();
-                }}
-              >
-                <MaterialIcons 
-                  name={filter.icon} 
-                  size={16} 
-                  color={terrainTypeFilter === filter.id ? '#FFF' : theme.textSecondary} 
-                />
-                <Text style={[
-                  styles.terrainFilterText,
-                  terrainTypeFilter === filter.id && styles.terrainFilterTextActive
-                ]}>
-                  {filter.label}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
+            <MaterialIcons 
+              name="filter-list" 
+              size={20} 
+              color={activeTerrainFilterCount > 0 ? '#FFF' : theme.textSecondary} 
+            />
+            <Text style={[
+              styles.filterButtonText,
+              activeTerrainFilterCount > 0 && styles.filterButtonTextActive
+            ]}>
+              Filtres
+            </Text>
+            {activeTerrainFilterCount > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{activeTerrainFilterCount}</Text>
+              </View>
+            )}
+          </Pressable>
+          
+          {/* Quick filter chips */}
+          {activeTerrainFilterCount > 0 && (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.activeFiltersScroll}
+            >
+              {terrainTypeFilter !== 'all' && (
+                <Pressable 
+                  style={styles.activeFilterChip}
+                  onPress={() => setTerrainTypeFilter('all')}
+                >
+                  <Text style={styles.activeFilterText}>{terrainTypeFilter}</Text>
+                  <MaterialIcons name="close" size={14} color={theme.primary} />
+                </Pressable>
+              )}
+              {terrainCityFilter !== 'all' && (
+                <Pressable 
+                  style={styles.activeFilterChip}
+                  onPress={() => setTerrainCityFilter('all')}
+                >
+                  <Text style={styles.activeFilterText}>{terrainCityFilter}</Text>
+                  <MaterialIcons name="close" size={14} color={theme.primary} />
+                </Pressable>
+              )}
+              {terrainLightingFilter !== 'all' && (
+                <Pressable 
+                  style={styles.activeFilterChip}
+                  onPress={() => setTerrainLightingFilter('all')}
+                >
+                  <MaterialIcons name="lightbulb" size={12} color={theme.primary} />
+                  <Text style={styles.activeFilterText}>{terrainLightingFilter === 'yes' ? 'Éclairé' : 'Non éclairé'}</Text>
+                  <MaterialIcons name="close" size={14} color={theme.primary} />
+                </Pressable>
+              )}
+              {terrainCoveredFilter !== 'all' && (
+                <Pressable 
+                  style={styles.activeFilterChip}
+                  onPress={() => setTerrainCoveredFilter('all')}
+                >
+                  <MaterialIcons name="roofing" size={12} color={theme.primary} />
+                  <Text style={styles.activeFilterText}>{terrainCoveredFilter === 'yes' ? 'Couvert' : 'Extérieur'}</Text>
+                  <MaterialIcons name="close" size={14} color={theme.primary} />
+                </Pressable>
+              )}
+            </ScrollView>
+          )}
         </Animated.View>
       )}
 
