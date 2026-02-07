@@ -34,7 +34,7 @@ const facilities = [
 export default function EditClubScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { getClubById, updateClub } = useApp();
+  const { getClubById, updateClub, terrains } = useApp();
 
   const club = getClubById(id || '');
 
@@ -48,6 +48,8 @@ export default function EditClubScreen() {
   const [selectedFacilities, setSelectedFacilities] = useState<string[]>([]);
   const [latitude, setLatitude] = useState(0);
   const [longitude, setLongitude] = useState(0);
+  const [selectedTerrainId, setSelectedTerrainId] = useState<string | undefined>();
+  const [country, setCountry] = useState('France');
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [locationPermission, setLocationPermission] = useState(false);
@@ -70,6 +72,8 @@ export default function EditClubScreen() {
         .filter(f => club.facilities?.includes(f.label))
         .map(f => f.id);
       setSelectedFacilities(facilityIds);
+      setSelectedTerrainId(club.terrainId);
+      setCountry(club.country || 'France');
     }
   }, [club]);
 
@@ -161,16 +165,21 @@ export default function EditClubScreen() {
         id => facilities.find(f => f.id === id)?.label || ''
       ).filter(Boolean);
 
+      const selectedTerrain = terrains.find(t => t.id === selectedTerrainId);
+
       await updateClub(club.id, {
         name: name.trim(),
         address: address.trim(),
         city: city.trim(),
+        country: country.trim() || 'France',
         location: { latitude, longitude },
         foundedYear: parseInt(foundedYear) || undefined,
         description: description.trim() || undefined,
         facilities: facilityLabels,
         contactEmail: contactEmail.trim() || undefined,
         contactPhone: contactPhone.trim() || undefined,
+        terrainId: selectedTerrainId,
+        terrainName: selectedTerrain?.name,
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -362,6 +371,84 @@ export default function EditClubScreen() {
                 </Pressable>
               ))}
             </View>
+          </Animated.View>
+
+          {/* Country */}
+          <Animated.View entering={FadeInDown.duration(400).delay(275)} style={styles.section}>
+            <Text style={styles.sectionTitle}>PAYS</Text>
+            <TextInput
+              style={styles.textInput}
+              value={country}
+              onChangeText={setCountry}
+              placeholder="Ex: France, Belgique, Suisse..."
+              placeholderTextColor={theme.textMuted}
+            />
+          </Animated.View>
+
+          {/* Terrain Association */}
+          <Animated.View entering={FadeInDown.duration(400).delay(290)} style={styles.section}>
+            <Text style={styles.sectionTitle}>TERRAIN PRINCIPAL</Text>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.terrainsScroll}
+            >
+              <Pressable
+                style={[
+                  styles.terrainChip,
+                  !selectedTerrainId && styles.terrainChipActive
+                ]}
+                onPress={() => {
+                  setSelectedTerrainId(undefined);
+                  Haptics.selectionAsync();
+                }}
+              >
+                <MaterialIcons 
+                  name="not-listed-location" 
+                  size={18} 
+                  color={!selectedTerrainId ? '#FFF' : theme.textSecondary} 
+                />
+                <Text style={[
+                  styles.terrainChipText,
+                  !selectedTerrainId && styles.terrainChipTextActive
+                ]}>
+                  Aucun
+                </Text>
+              </Pressable>
+              {terrains.map(terrain => (
+                <Pressable
+                  key={terrain.id}
+                  style={[
+                    styles.terrainChip,
+                    selectedTerrainId === terrain.id && styles.terrainChipActive
+                  ]}
+                  onPress={() => {
+                    setSelectedTerrainId(terrain.id);
+                    Haptics.selectionAsync();
+                  }}
+                >
+                  <MaterialIcons 
+                    name="sports-soccer" 
+                    size={18} 
+                    color={selectedTerrainId === terrain.id ? '#FFF' : theme.textSecondary} 
+                  />
+                  <View>
+                    <Text style={[
+                      styles.terrainChipText,
+                      selectedTerrainId === terrain.id && styles.terrainChipTextActive
+                    ]} numberOfLines={1}>
+                      {terrain.name}
+                    </Text>
+                    <Text style={[
+                      styles.terrainChipSubtext,
+                      selectedTerrainId === terrain.id && styles.terrainChipSubtextActive
+                    ]}>
+                      {terrain.city} • {terrain.type}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
           </Animated.View>
 
           {/* Contact */}
@@ -626,5 +713,40 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     color: '#FFF',
+  },
+  terrainsScroll: {
+    gap: 10,
+  },
+  terrainChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    ...theme.shadows.card,
+  },
+  terrainChipActive: {
+    borderColor: theme.primary,
+    backgroundColor: theme.primary,
+  },
+  terrainChipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  terrainChipTextActive: {
+    color: '#FFF',
+  },
+  terrainChipSubtext: {
+    fontSize: 11,
+    color: theme.textMuted,
+    marginTop: 2,
+  },
+  terrainChipSubtextActive: {
+    color: 'rgba(255,255,255,0.7)',
   },
 });

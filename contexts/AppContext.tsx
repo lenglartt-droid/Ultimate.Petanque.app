@@ -19,6 +19,7 @@ import {
   ChallengeType,
   ChallengeStats,
   Terrain,
+  TournamentNotification,
 } from '@/services/mockData';
 
 interface AppContextType {
@@ -64,6 +65,11 @@ interface AppContextType {
   toggleFavoriteTerrain: (terrainId: string) => void;
   isFavoriteTerrain: (terrainId: string) => boolean;
   
+  // Tournament Notifications
+  tournamentNotifications: string[];
+  toggleTournamentNotification: (tournamentId: string) => void;
+  isTournamentNotificationEnabled: (tournamentId: string) => boolean;
+  
   // Getters
   getPlayerById: (id: string) => Player | undefined;
   getClubById: (id: string) => Club | undefined;
@@ -94,6 +100,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [terrains, setTerrains] = useState<Terrain[]>([]);
   const [favoriteTerrainIds, setFavoriteTerrainIds] = useState<string[]>([]);
+  const [tournamentNotifications, setTournamentNotifications] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Self player (current user's player card)
@@ -292,6 +299,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           logo: c.logo,
           address: c.address,
           city: c.city,
+          country: c.country || 'France',
           location: c.location || { latitude: 0, longitude: 0 },
           membersCount: c.members_count || 0,
           foundedYear: c.founded_year,
@@ -299,6 +307,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           facilities: c.facilities || [],
           contactEmail: c.contact_email,
           contactPhone: c.contact_phone,
+          terrainId: c.terrain_id,
+          terrainName: c.terrain_name,
         }));
         setClubs(dbClubs.length > 0 ? dbClubs : mockClubs);
       }
@@ -508,6 +518,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           role: data.role,
           level: data.level,
           location: data.location,
+          country: data.country || 'France',
           stats: data.stats,
           createdAt: data.created_at,
         };
@@ -534,6 +545,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         logo: club.logo,
         address: club.address,
         city: club.city,
+        country: club.country || 'France',
         location: club.location,
         members_count: club.membersCount,
         founded_year: club.foundedYear,
@@ -541,6 +553,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         facilities: club.facilities,
         contact_email: club.contactEmail,
         contact_phone: club.contactPhone,
+        terrain_id: club.terrainId,
+        terrain_name: club.terrainName,
       }).select().single();
 
       if (error) throw error;
@@ -552,6 +566,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           logo: data.logo,
           address: data.address,
           city: data.city,
+          country: data.country || 'France',
           location: data.location,
           membersCount: data.members_count,
           foundedYear: data.founded_year,
@@ -559,6 +574,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           facilities: data.facilities,
           contactEmail: data.contact_email,
           contactPhone: data.contact_phone,
+          terrainId: data.terrain_id,
+          terrainName: data.terrain_name,
         };
         setClubs(prev => [...prev, newClub]);
       }
@@ -817,6 +834,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.logo !== undefined) dbUpdates.logo = updates.logo;
       if (updates.address !== undefined) dbUpdates.address = updates.address;
       if (updates.city !== undefined) dbUpdates.city = updates.city;
+      if (updates.country !== undefined) dbUpdates.country = updates.country;
       if (updates.location !== undefined) dbUpdates.location = updates.location;
       if (updates.membersCount !== undefined) dbUpdates.members_count = updates.membersCount;
       if (updates.foundedYear !== undefined) dbUpdates.founded_year = updates.foundedYear;
@@ -824,6 +842,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.facilities !== undefined) dbUpdates.facilities = updates.facilities;
       if (updates.contactEmail !== undefined) dbUpdates.contact_email = updates.contactEmail;
       if (updates.contactPhone !== undefined) dbUpdates.contact_phone = updates.contactPhone;
+      if (updates.terrainId !== undefined) dbUpdates.terrain_id = updates.terrainId;
+      if (updates.terrainName !== undefined) dbUpdates.terrain_name = updates.terrainName;
       dbUpdates.updated_at = new Date().toISOString();
 
       await supabase.from('clubs').update(dbUpdates).eq('id', id);
@@ -997,6 +1017,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return favoriteTerrainIds.includes(terrainId);
   };
 
+  // Tournament notification functions
+  const toggleTournamentNotification = (tournamentId: string) => {
+    setTournamentNotifications(prev => {
+      if (prev.includes(tournamentId)) {
+        return prev.filter(id => id !== tournamentId);
+      } else {
+        return [...prev, tournamentId];
+      }
+    });
+    // TODO: Persist to user preferences in database and schedule notifications
+  };
+
+  const isTournamentNotificationEnabled = (tournamentId: string) => {
+    return tournamentNotifications.includes(tournamentId);
+  };
+
   // Getters
   const getPlayerById = (id: string) => players.find(p => p.id === id);
   const getClubById = (id: string) => clubs.find(c => c.id === id);
@@ -1129,6 +1165,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         favoriteTerrainIds,
         toggleFavoriteTerrain,
         isFavoriteTerrain,
+        tournamentNotifications,
+        toggleTournamentNotification,
+        isTournamentNotificationEnabled,
         getPlayerById,
         getClubById,
         getTournamentById,

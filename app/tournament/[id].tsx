@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Modal,
   TextInput,
+  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -81,7 +82,7 @@ const BRACKETS = ['A', 'B', 'C', 'D'] as const;
 export default function TournamentDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getTournamentById, getClubById, getTerrainById, getMatchesByTournament, addMatch, players } = useApp();
+  const { getTournamentById, getClubById, getTerrainById, getMatchesByTournament, addMatch, players, tournamentNotifications, toggleTournamentNotification, isTournamentNotificationEnabled } = useApp();
 
   const tournament = getTournamentById(id!);
   const club = tournament?.clubId ? getClubById(tournament.clubId) : null;
@@ -96,6 +97,9 @@ export default function TournamentDetailScreen() {
 
   // End tournament modal state
   const [showEndTournament, setShowEndTournament] = useState(false);
+  
+  // Notification state
+  const isNotificationEnabled = tournament ? isTournamentNotificationEnabled(tournament.id) : false;
 
   // Filter and sort matches
   const myMatches = useMemo(() => {
@@ -236,12 +240,33 @@ export default function TournamentDetailScreen() {
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Mon Parcours</Text>
-        <Pressable 
-          style={styles.editButton}
-          onPress={() => router.push(`/tournament/edit/${tournament.id}`)}
-        >
-          <MaterialIcons name="edit" size={20} color={theme.textSecondary} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable 
+            style={[styles.notificationButton, isNotificationEnabled && styles.notificationButtonActive]}
+            onPress={() => {
+              toggleTournamentNotification(tournament.id);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert(
+                isNotificationEnabled ? 'Notification désactivée' : 'Notification activée',
+                isNotificationEnabled 
+                  ? 'Vous ne recevrez plus de rappel pour ce tournoi.'
+                  : 'Vous recevrez un rappel avant ce tournoi.'
+              );
+            }}
+          >
+            <MaterialIcons 
+              name={isNotificationEnabled ? 'notifications-active' : 'notifications-none'} 
+              size={20} 
+              color={isNotificationEnabled ? theme.warning : theme.textSecondary} 
+            />
+          </Pressable>
+          <Pressable 
+            style={styles.editButton}
+            onPress={() => router.push(`/tournament/edit/${tournament.id}`)}
+          >
+            <MaterialIcons name="edit" size={20} color={theme.textSecondary} />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView
@@ -623,6 +648,21 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     color: theme.textPrimary,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  notificationButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
+  },
+  notificationButtonActive: {
+    backgroundColor: theme.warning + '20',
   },
   editButton: {
     width: 40,

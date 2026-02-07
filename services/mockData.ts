@@ -14,6 +14,7 @@ export interface Player {
   email?: string;
   terrainId?: string;
   terrainName?: string;
+  country?: string;
   location?: {
     latitude: number;
     longitude: number;
@@ -43,6 +44,7 @@ export interface Club {
   logo?: string;
   address: string;
   city: string;
+  country?: string;
   location: {
     latitude: number;
     longitude: number;
@@ -53,6 +55,16 @@ export interface Club {
   facilities: string[];
   contactEmail?: string;
   contactPhone?: string;
+  terrainId?: string;
+  terrainName?: string;
+}
+
+// Tournament notification
+export interface TournamentNotification {
+  id: string;
+  tournamentId: string;
+  enabled: boolean;
+  remindDaysBefore: number;
 }
 
 // Terrain types
@@ -398,6 +410,7 @@ export const mockPlayers: Player[] = [
     level: 'Expert',
     phone: '06 12 34 56 78',
     email: 'jp.martin@email.fr',
+    country: 'France',
     location: { latitude: 45.764042, longitude: 4.835659, city: 'Lyon' },
     stats: {
       matchesPlayed: 156,
@@ -425,6 +438,7 @@ export const mockPlayers: Player[] = [
     level: 'Confirmé',
     phone: '06 98 76 54 32',
     email: 'marie.dupont@email.fr',
+    country: 'France',
     location: { latitude: 43.296482, longitude: 5.369780, city: 'Marseille' },
     stats: {
       matchesPlayed: 89,
@@ -451,6 +465,7 @@ export const mockPlayers: Player[] = [
     role: 'Milieu',
     level: 'Expert',
     email: 'p.dubois@petanque-nice.fr',
+    country: 'France',
     location: { latitude: 43.710173, longitude: 7.261953, city: 'Nice' },
     stats: {
       matchesPlayed: 203,
@@ -476,6 +491,7 @@ export const mockPlayers: Player[] = [
     clubId: '4',
     role: 'Pointeur',
     level: 'Intermédiaire',
+    country: 'France',
     location: { latitude: 44.837789, longitude: -0.579180, city: 'Bordeaux' },
     stats: {
       matchesPlayed: 45,
@@ -501,6 +517,7 @@ export const mockPlayers: Player[] = [
     clubId: '5',
     role: 'Tireur',
     level: 'Confirmé',
+    country: 'France',
     location: { latitude: 43.604652, longitude: 1.444209, city: 'Toulouse' },
     stats: {
       matchesPlayed: 112,
@@ -526,6 +543,7 @@ export const mockPlayers: Player[] = [
     clubId: '1',
     role: 'Milieu',
     level: 'Confirmé',
+    country: 'France',
     location: { latitude: 45.764042, longitude: 4.835659, city: 'Lyon' },
     stats: {
       matchesPlayed: 78,
@@ -551,6 +569,7 @@ export const mockPlayers: Player[] = [
     clubId: '2',
     role: 'Tireur',
     level: 'Expert',
+    country: 'France',
     location: { latitude: 43.296482, longitude: 5.369780, city: 'Marseille' },
     stats: {
       matchesPlayed: 189,
@@ -576,6 +595,7 @@ export const mockPlayers: Player[] = [
     clubId: '3',
     role: 'Pointeur',
     level: 'Débutant',
+    country: 'France',
     location: { latitude: 43.710173, longitude: 7.261953, city: 'Nice' },
     stats: {
       matchesPlayed: 18,
@@ -601,6 +621,7 @@ export const mockPlayers: Player[] = [
     clubId: '6',
     role: 'Milieu',
     level: 'Intermédiaire',
+    country: 'France',
     location: { latitude: 48.856614, longitude: 2.352222, city: 'Paris' },
     stats: {
       matchesPlayed: 56,
@@ -626,6 +647,7 @@ export const mockPlayers: Player[] = [
     clubId: '7',
     role: 'Pointeur',
     level: 'Confirmé',
+    country: 'France',
     location: { latitude: 47.218371, longitude: -1.553621, city: 'Nantes' },
     stats: {
       matchesPlayed: 92,
@@ -653,6 +675,7 @@ export const mockClubs: Club[] = [
     name: 'La Boule Lyonnaise',
     address: '15 Rue du Parc',
     city: 'Lyon',
+    country: 'France',
     location: { latitude: 45.764042, longitude: 4.835659 },
     membersCount: 156,
     foundedYear: 1952,
@@ -660,85 +683,108 @@ export const mockClubs: Club[] = [
     facilities: ['12 terrains', 'Club house', 'Parking', 'Bar'],
     contactEmail: 'contact@boule-lyonnaise.fr',
     contactPhone: '04 72 00 00 00',
+    terrainId: 't1',
+    terrainName: 'Boulodrome Municipal Lyon',
   },
   {
     id: '2',
     name: 'Pétanque Club Marseillais',
     address: '42 Avenue du Prado',
     city: 'Marseille',
+    country: 'France',
     location: { latitude: 43.296482, longitude: 5.369780 },
     membersCount: 203,
     foundedYear: 1948,
     description: 'Le plus grand club de la région PACA',
     facilities: ['18 terrains', 'Terrain couvert', 'Restaurant', 'Vestiaires'],
     contactEmail: 'pcm@petanque-marseille.fr',
+    terrainId: 't2',
+    terrainName: 'Terrain du Prado',
   },
   {
     id: '3',
     name: 'AS Pétanque Nice',
     address: '8 Boulevard Gambetta',
     city: 'Nice',
+    country: 'France',
     location: { latitude: 43.710173, longitude: 7.261953 },
     membersCount: 89,
     foundedYear: 1965,
     description: 'Club familial au cœur de Nice',
     facilities: ['8 terrains', 'École de pétanque', 'Parking'],
+    terrainId: 't3',
+    terrainName: 'Plage Pétanque Nice',
   },
   {
     id: '4',
     name: 'La Boule Bordelaise',
     address: '23 Quai des Chartrons',
     city: 'Bordeaux',
+    country: 'France',
     location: { latitude: 44.837789, longitude: -0.579180 },
     membersCount: 67,
     foundedYear: 1978,
     description: 'Ambiance conviviale au bord de la Garonne',
     facilities: ['6 terrains', 'Bar', 'Terrasse'],
     contactPhone: '05 56 00 00 00',
+    terrainId: 't4',
+    terrainName: 'Terrain des Chartrons',
   },
   {
     id: '5',
     name: 'Pétanque Club Toulousain',
     address: '5 Place du Capitole',
     city: 'Toulouse',
+    country: 'France',
     location: { latitude: 43.604652, longitude: 1.444209 },
     membersCount: 134,
     foundedYear: 1955,
     description: 'Club compétitif avec école de formation',
     facilities: ['10 terrains', 'Salle de réunion', 'Vestiaires', 'Parking'],
+    terrainId: 't5',
+    terrainName: 'Boulodrome Toulouse',
   },
   {
     id: '6',
     name: 'Boulistes Parisiens',
     address: '18 Jardin des Tuileries',
     city: 'Paris',
+    country: 'France',
     location: { latitude: 48.856614, longitude: 2.352222 },
     membersCount: 78,
     foundedYear: 1982,
     description: 'La pétanque au cœur de Paris',
     facilities: ['4 terrains', 'Club house'],
+    terrainId: 't6',
+    terrainName: 'Jardin des Tuileries',
   },
   {
     id: '7',
     name: 'Pétanque Club Nantais',
     address: '12 Rue de la Loire',
     city: 'Nantes',
+    country: 'France',
     location: { latitude: 47.218371, longitude: -1.553621 },
     membersCount: 92,
     foundedYear: 1971,
     description: 'Club dynamique de l\'Ouest',
     facilities: ['8 terrains', 'Bar', 'Terrain éclairé'],
+    terrainId: 't7',
+    terrainName: 'Terrain de la Loire',
   },
   {
     id: '8',
     name: 'La Boule Strasbourgeoise',
     address: '3 Place Kléber',
     city: 'Strasbourg',
+    country: 'France',
     location: { latitude: 48.573405, longitude: 7.752111 },
     membersCount: 45,
     foundedYear: 1989,
     description: 'La pétanque alsacienne',
     facilities: ['5 terrains', 'Club house'],
+    terrainId: 't8',
+    terrainName: 'Boulodrome Alsacien',
   },
 ];
 

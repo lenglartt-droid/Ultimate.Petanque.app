@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TextInput,
   ScrollView,
+  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -29,6 +30,17 @@ export default function DirectoryScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [terrainTypeFilter, setTerrainTypeFilter] = useState<TerrainType | 'all'>('all');
   const [tournamentStatusFilter, setTournamentStatusFilter] = useState<TournamentStatus>('all');
+  
+  // Player filters
+  const [playerClubFilter, setPlayerClubFilter] = useState<string>('all');
+  const [playerCityFilter, setPlayerCityFilter] = useState<string>('all');
+  const [playerCountryFilter, setPlayerCountryFilter] = useState<string>('all');
+  const [showPlayerFilters, setShowPlayerFilters] = useState(false);
+  
+  // Club filters
+  const [clubCityFilter, setClubCityFilter] = useState<string>('all');
+  const [clubCountryFilter, setClubCountryFilter] = useState<string>('all');
+  const [showClubFilters, setShowClubFilters] = useState(false);
 
   const tabs = useMemo(() => [
     { id: 'players' as const, label: 'Joueurs', icon: 'person' as const, count: players.length },
@@ -37,12 +49,61 @@ export default function DirectoryScreen() {
     { id: 'tournaments' as const, label: 'Tournois', icon: 'emoji-events' as const, count: tournaments.length },
   ], [players.length, clubs.length, terrains.length, tournaments.length]);
 
+  // Get unique values for filters
+  const uniquePlayerClubs = useMemo(() => {
+    const clubSet = new Set(players.map(p => p.club).filter(Boolean));
+    return ['all', ...Array.from(clubSet)] as string[];
+  }, [players]);
+
+  const uniquePlayerCities = useMemo(() => {
+    const citySet = new Set(players.map(p => p.location?.city).filter(Boolean));
+    return ['all', ...Array.from(citySet)] as string[];
+  }, [players]);
+
+  const uniquePlayerCountries = useMemo(() => {
+    const countrySet = new Set(players.map(p => p.country || 'France').filter(Boolean));
+    return ['all', ...Array.from(countrySet)] as string[];
+  }, [players]);
+
+  const uniqueClubCities = useMemo(() => {
+    const citySet = new Set(clubs.map(c => c.city).filter(Boolean));
+    return ['all', ...Array.from(citySet)] as string[];
+  }, [clubs]);
+
+  const uniqueClubCountries = useMemo(() => {
+    const countrySet = new Set(clubs.map(c => c.country || 'France').filter(Boolean));
+    return ['all', ...Array.from(countrySet)] as string[];
+  }, [clubs]);
+
+  // Count active player filters
+  const activePlayerFilterCount = useMemo(() => {
+    let count = 0;
+    if (playerClubFilter !== 'all') count++;
+    if (playerCityFilter !== 'all') count++;
+    if (playerCountryFilter !== 'all') count++;
+    return count;
+  }, [playerClubFilter, playerCityFilter, playerCountryFilter]);
+
+  // Count active club filters
+  const activeClubFilterCount = useMemo(() => {
+    let count = 0;
+    if (clubCityFilter !== 'all') count++;
+    if (clubCountryFilter !== 'all') count++;
+    return count;
+  }, [clubCityFilter, clubCountryFilter]);
+
   // Filter players and put selfPlayer at the top
   const filteredPlayers = useMemo(() => {
-    const filtered = players.filter(p =>
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.club?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    let filtered = players.filter(p => {
+      const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.club?.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesClub = playerClubFilter === 'all' || p.club === playerClubFilter;
+      const matchesCity = playerCityFilter === 'all' || p.location?.city === playerCityFilter;
+      const matchesCountry = playerCountryFilter === 'all' || (p.country || 'France') === playerCountryFilter;
+      
+      return matchesSearch && matchesClub && matchesCity && matchesCountry;
+    });
     
     // If selfPlayer exists and matches filter, put it at the top
     if (selfPlayer) {
@@ -54,12 +115,19 @@ export default function DirectoryScreen() {
     }
     
     return filtered;
-  }, [players, searchQuery, selfPlayer]);
+  }, [players, searchQuery, selfPlayer, playerClubFilter, playerCityFilter, playerCountryFilter]);
 
-  const filteredClubs = clubs.filter(c =>
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.city.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredClubs = useMemo(() => {
+    return clubs.filter(c => {
+      const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.city.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesCity = clubCityFilter === 'all' || c.city === clubCityFilter;
+      const matchesCountry = clubCountryFilter === 'all' || (c.country || 'France') === clubCountryFilter;
+      
+      return matchesSearch && matchesCity && matchesCountry;
+    });
+  }, [clubs, searchQuery, clubCityFilter, clubCountryFilter]);
 
   const filteredTournaments = useMemo(() => {
     return tournaments.filter(t => {
@@ -107,6 +175,17 @@ export default function DirectoryScreen() {
     { id: 'Terminé', label: 'Terminé', icon: 'check-circle' },
   ];
 
+  const clearPlayerFilters = () => {
+    setPlayerClubFilter('all');
+    setPlayerCityFilter('all');
+    setPlayerCountryFilter('all');
+  };
+
+  const clearClubFilters = () => {
+    setClubCityFilter('all');
+    setClubCountryFilter('all');
+  };
+
   const renderPlayer = ({ item }: { item: typeof players[0] }) => {
     const isSelf = selfPlayer && item.id === selfPlayer.id;
     
@@ -138,6 +217,12 @@ export default function DirectoryScreen() {
             <MaterialIcons name="home" size={14} color={theme.textSecondary} />
             <Text style={styles.cardMetaText}>{item.club || 'Sans club'}</Text>
           </View>
+          {item.location?.city && (
+            <View style={styles.cardMeta}>
+              <MaterialIcons name="place" size={14} color={theme.textSecondary} />
+              <Text style={styles.cardMetaText}>{item.location.city}, {item.country || 'France'}</Text>
+            </View>
+          )}
           <View style={styles.cardBadges}>
             <View style={[styles.badge, { backgroundColor: theme.primaryLight + '30' }]}>
               <Text style={[styles.badgeText, { color: theme.primary }]}>{item.role}</Text>
@@ -164,8 +249,14 @@ export default function DirectoryScreen() {
         <Text style={styles.cardTitle}>{item.name}</Text>
         <View style={styles.cardMeta}>
           <MaterialIcons name="place" size={14} color={theme.textSecondary} />
-          <Text style={styles.cardMetaText}>{item.city}</Text>
+          <Text style={styles.cardMetaText}>{item.city}, {item.country || 'France'}</Text>
         </View>
+        {item.terrainName && (
+          <View style={styles.cardMeta}>
+            <MaterialIcons name="sports-soccer" size={14} color={theme.primary} />
+            <Text style={[styles.cardMetaText, { color: theme.primary }]}>{item.terrainName}</Text>
+          </View>
+        )}
         <View style={styles.cardBadges}>
           <View style={[styles.badge, { backgroundColor: theme.backgroundSecondary }]}>
             <Text style={[styles.badgeText, { color: theme.textSecondary }]}>
@@ -295,8 +386,212 @@ export default function DirectoryScreen() {
     );
   };
 
+  // Filter Modal for Players
+  const PlayerFiltersModal = () => (
+    <Modal
+      visible={showPlayerFilters}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowPlayerFilters(false)}
+    >
+      <SafeAreaView style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Filtrer les joueurs</Text>
+          <Pressable onPress={() => setShowPlayerFilters(false)}>
+            <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+          </Pressable>
+        </View>
+        
+        <ScrollView style={styles.modalContent}>
+          {/* Club Filter */}
+          <View style={styles.filterSection}>
+            <Text style={styles.filterSectionTitle}>CLUB</Text>
+            <View style={styles.filterOptions}>
+              {uniquePlayerClubs.map(club => (
+                <Pressable
+                  key={club}
+                  style={[
+                    styles.filterOption,
+                    playerClubFilter === club && styles.filterOptionActive
+                  ]}
+                  onPress={() => {
+                    setPlayerClubFilter(club);
+                    Haptics.selectionAsync();
+                  }}
+                >
+                  <Text style={[
+                    styles.filterOptionText,
+                    playerClubFilter === club && styles.filterOptionTextActive
+                  ]}>
+                    {club === 'all' ? 'Tous les clubs' : club}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          {/* City Filter */}
+          <View style={styles.filterSection}>
+            <Text style={styles.filterSectionTitle}>VILLE</Text>
+            <View style={styles.filterOptions}>
+              {uniquePlayerCities.map(city => (
+                <Pressable
+                  key={city}
+                  style={[
+                    styles.filterOption,
+                    playerCityFilter === city && styles.filterOptionActive
+                  ]}
+                  onPress={() => {
+                    setPlayerCityFilter(city);
+                    Haptics.selectionAsync();
+                  }}
+                >
+                  <Text style={[
+                    styles.filterOptionText,
+                    playerCityFilter === city && styles.filterOptionTextActive
+                  ]}>
+                    {city === 'all' ? 'Toutes les villes' : city}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          {/* Country Filter */}
+          <View style={styles.filterSection}>
+            <Text style={styles.filterSectionTitle}>PAYS</Text>
+            <View style={styles.filterOptions}>
+              {uniquePlayerCountries.map(country => (
+                <Pressable
+                  key={country}
+                  style={[
+                    styles.filterOption,
+                    playerCountryFilter === country && styles.filterOptionActive
+                  ]}
+                  onPress={() => {
+                    setPlayerCountryFilter(country);
+                    Haptics.selectionAsync();
+                  }}
+                >
+                  <Text style={[
+                    styles.filterOptionText,
+                    playerCountryFilter === country && styles.filterOptionTextActive
+                  ]}>
+                    {country === 'all' ? 'Tous les pays' : country}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </ScrollView>
+
+        <View style={styles.modalFooter}>
+          <Pressable style={styles.clearButton} onPress={clearPlayerFilters}>
+            <Text style={styles.clearButtonText}>Effacer les filtres</Text>
+          </Pressable>
+          <Pressable 
+            style={styles.applyButton} 
+            onPress={() => setShowPlayerFilters(false)}
+          >
+            <Text style={styles.applyButtonText}>Appliquer</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    </Modal>
+  );
+
+  // Filter Modal for Clubs
+  const ClubFiltersModal = () => (
+    <Modal
+      visible={showClubFilters}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowClubFilters(false)}
+    >
+      <SafeAreaView style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Filtrer les clubs</Text>
+          <Pressable onPress={() => setShowClubFilters(false)}>
+            <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+          </Pressable>
+        </View>
+        
+        <ScrollView style={styles.modalContent}>
+          {/* City Filter */}
+          <View style={styles.filterSection}>
+            <Text style={styles.filterSectionTitle}>VILLE</Text>
+            <View style={styles.filterOptions}>
+              {uniqueClubCities.map(city => (
+                <Pressable
+                  key={city}
+                  style={[
+                    styles.filterOption,
+                    clubCityFilter === city && styles.filterOptionActive
+                  ]}
+                  onPress={() => {
+                    setClubCityFilter(city);
+                    Haptics.selectionAsync();
+                  }}
+                >
+                  <Text style={[
+                    styles.filterOptionText,
+                    clubCityFilter === city && styles.filterOptionTextActive
+                  ]}>
+                    {city === 'all' ? 'Toutes les villes' : city}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          {/* Country Filter */}
+          <View style={styles.filterSection}>
+            <Text style={styles.filterSectionTitle}>PAYS</Text>
+            <View style={styles.filterOptions}>
+              {uniqueClubCountries.map(country => (
+                <Pressable
+                  key={country}
+                  style={[
+                    styles.filterOption,
+                    clubCountryFilter === country && styles.filterOptionActive
+                  ]}
+                  onPress={() => {
+                    setClubCountryFilter(country);
+                    Haptics.selectionAsync();
+                  }}
+                >
+                  <Text style={[
+                    styles.filterOptionText,
+                    clubCountryFilter === country && styles.filterOptionTextActive
+                  ]}>
+                    {country === 'all' ? 'Tous les pays' : country}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </ScrollView>
+
+        <View style={styles.modalFooter}>
+          <Pressable style={styles.clearButton} onPress={clearClubFilters}>
+            <Text style={styles.clearButtonText}>Effacer les filtres</Text>
+          </Pressable>
+          <Pressable 
+            style={styles.applyButton} 
+            onPress={() => setShowClubFilters(false)}
+          >
+            <Text style={styles.applyButtonText}>Appliquer</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    </Modal>
+  );
+
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
+      <PlayerFiltersModal />
+      <ClubFiltersModal />
+
       {/* Header */}
       <Animated.View 
         entering={FadeInDown.duration(400)}
@@ -367,6 +662,143 @@ export default function DirectoryScreen() {
           </Pressable>
         ))}
       </Animated.View>
+
+      {/* Player Filters Button */}
+      {activeTab === 'players' && (
+        <Animated.View 
+          entering={FadeInDown.duration(400).delay(250)}
+          style={styles.filterButtonContainer}
+        >
+          <Pressable
+            style={[
+              styles.filterButton,
+              activePlayerFilterCount > 0 && styles.filterButtonActive
+            ]}
+            onPress={() => {
+              setShowPlayerFilters(true);
+              Haptics.selectionAsync();
+            }}
+          >
+            <MaterialIcons 
+              name="filter-list" 
+              size={20} 
+              color={activePlayerFilterCount > 0 ? '#FFF' : theme.textSecondary} 
+            />
+            <Text style={[
+              styles.filterButtonText,
+              activePlayerFilterCount > 0 && styles.filterButtonTextActive
+            ]}>
+              Filtres
+            </Text>
+            {activePlayerFilterCount > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{activePlayerFilterCount}</Text>
+              </View>
+            )}
+          </Pressable>
+          
+          {/* Quick filter chips */}
+          {activePlayerFilterCount > 0 && (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.activeFiltersScroll}
+            >
+              {playerClubFilter !== 'all' && (
+                <Pressable 
+                  style={styles.activeFilterChip}
+                  onPress={() => setPlayerClubFilter('all')}
+                >
+                  <Text style={styles.activeFilterText}>{playerClubFilter}</Text>
+                  <MaterialIcons name="close" size={14} color={theme.primary} />
+                </Pressable>
+              )}
+              {playerCityFilter !== 'all' && (
+                <Pressable 
+                  style={styles.activeFilterChip}
+                  onPress={() => setPlayerCityFilter('all')}
+                >
+                  <Text style={styles.activeFilterText}>{playerCityFilter}</Text>
+                  <MaterialIcons name="close" size={14} color={theme.primary} />
+                </Pressable>
+              )}
+              {playerCountryFilter !== 'all' && (
+                <Pressable 
+                  style={styles.activeFilterChip}
+                  onPress={() => setPlayerCountryFilter('all')}
+                >
+                  <Text style={styles.activeFilterText}>{playerCountryFilter}</Text>
+                  <MaterialIcons name="close" size={14} color={theme.primary} />
+                </Pressable>
+              )}
+            </ScrollView>
+          )}
+        </Animated.View>
+      )}
+
+      {/* Club Filters Button */}
+      {activeTab === 'clubs' && (
+        <Animated.View 
+          entering={FadeInDown.duration(400).delay(250)}
+          style={styles.filterButtonContainer}
+        >
+          <Pressable
+            style={[
+              styles.filterButton,
+              activeClubFilterCount > 0 && styles.filterButtonActive
+            ]}
+            onPress={() => {
+              setShowClubFilters(true);
+              Haptics.selectionAsync();
+            }}
+          >
+            <MaterialIcons 
+              name="filter-list" 
+              size={20} 
+              color={activeClubFilterCount > 0 ? '#FFF' : theme.textSecondary} 
+            />
+            <Text style={[
+              styles.filterButtonText,
+              activeClubFilterCount > 0 && styles.filterButtonTextActive
+            ]}>
+              Filtres
+            </Text>
+            {activeClubFilterCount > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{activeClubFilterCount}</Text>
+              </View>
+            )}
+          </Pressable>
+          
+          {/* Quick filter chips */}
+          {activeClubFilterCount > 0 && (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.activeFiltersScroll}
+            >
+              {clubCityFilter !== 'all' && (
+                <Pressable 
+                  style={styles.activeFilterChip}
+                  onPress={() => setClubCityFilter('all')}
+                >
+                  <Text style={styles.activeFilterText}>{clubCityFilter}</Text>
+                  <MaterialIcons name="close" size={14} color={theme.primary} />
+                </Pressable>
+              )}
+              {clubCountryFilter !== 'all' && (
+                <Pressable 
+                  style={styles.activeFilterChip}
+                  onPress={() => setClubCountryFilter('all')}
+                >
+                  <Text style={styles.activeFilterText}>{clubCountryFilter}</Text>
+                  <MaterialIcons name="close" size={14} color={theme.primary} />
+                </Pressable>
+              )}
+            </ScrollView>
+          )}
+        </Animated.View>
+      )}
 
       {/* Tournament Status Filters */}
       {activeTab === 'tournaments' && (
@@ -584,6 +1016,64 @@ const styles = StyleSheet.create({
   tabCountTextActive: {
     color: '#FFF',
   },
+  // Filter Button
+  filterButtonContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.full,
+    alignSelf: 'flex-start',
+    ...theme.shadows.card,
+  },
+  filterButtonActive: {
+    backgroundColor: theme.primary,
+  },
+  filterButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  filterButtonTextActive: {
+    color: '#FFF',
+  },
+  filterBadge: {
+    backgroundColor: '#FFF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: theme.borderRadius.full,
+  },
+  filterBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.primary,
+  },
+  activeFiltersScroll: {
+    paddingTop: 12,
+    gap: 8,
+  },
+  activeFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: theme.primary + '15',
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: theme.primary + '30',
+  },
+  activeFilterText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: theme.primary,
+  },
   // Terrain Type Filters
   terrainFiltersContainer: {
     paddingBottom: 8,
@@ -728,5 +1218,96 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#FFF',
     letterSpacing: 0.5,
+  },
+  // Modal styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: theme.backgroundSecondary,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+    backgroundColor: theme.surface,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  modalContent: {
+    flex: 1,
+    padding: 16,
+  },
+  filterSection: {
+    marginBottom: 24,
+  },
+  filterSectionTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.textSecondary,
+    letterSpacing: 1,
+    marginBottom: 12,
+  },
+  filterOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  filterOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  filterOptionActive: {
+    borderColor: theme.primary,
+    backgroundColor: theme.primary + '10',
+  },
+  filterOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.textSecondary,
+  },
+  filterOptionTextActive: {
+    color: theme.primary,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    gap: 12,
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+    backgroundColor: theme.surface,
+  },
+  clearButton: {
+    flex: 1,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.backgroundSecondary,
+  },
+  clearButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  applyButton: {
+    flex: 1,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.primary,
+  },
+  applyButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFF',
   },
 });
