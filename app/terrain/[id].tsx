@@ -72,7 +72,12 @@ export default function TerrainDetailScreen() {
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Détails du terrain</Text>
-        <View style={{ width: 40 }} />
+        <Pressable 
+          style={styles.editButton} 
+          onPress={() => router.push(`/terrain/edit/${terrain.id}`)}
+        >
+          <MaterialIcons name="edit" size={22} color={theme.primary} />
+        </Pressable>
       </View>
 
       <ScrollView
@@ -282,6 +287,12 @@ const styles = StyleSheet.create({
     borderBottomColor: theme.border,
   },
   backButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editButton: {
     width: 40,
     height: 40,
     alignItems: 'center',

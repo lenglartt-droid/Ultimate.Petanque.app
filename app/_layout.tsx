@@ -120,6 +120,13 @@ export default function RootLayout() {
           }} 
         />
         <Stack.Screen 
+          name="terrain/edit/[id]" 
+          options={{ 
+            presentation: 'modal',
+            animation: 'slide_from_bottom',
+          }} 
+        />
+        <Stack.Screen 
           name="history" 
           options={{ 
             presentation: 'card',
