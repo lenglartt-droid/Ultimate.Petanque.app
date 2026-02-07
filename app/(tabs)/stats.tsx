@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   Dimensions,
+  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -196,6 +197,7 @@ export default function StatsScreen() {
   const { userStats, matches, challengeStats, challenges, tournaments, terrains } = useApp();
   const [activeTab, setActiveTab] = useState<'global' | 'tournois' | 'entrainement' | 'tir' | 'point' | 'challenges' | 'matchups' | 'terrains'>('global');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
+  const [showTimeFilterModal, setShowTimeFilterModal] = useState(false);
   const [includeChallengesInTirStats, setIncludeChallengesInTirStats] = useState(false);
 
   // Filter data by time
@@ -470,29 +472,70 @@ export default function StatsScreen() {
           </View>
         </Animated.View>
 
-        {/* Time Filter */}
+        {/* Time Filter Button */}
         <Animated.View 
           entering={FadeInDown.duration(400).delay(50)}
-          style={styles.timeFilterContainer}
+          style={styles.timeFilterWrapper}
         >
-          {TIME_FILTERS.map(filter => (
-            <Pressable
-              key={filter.id}
-              style={[
-                styles.timeFilterButton,
-                timeFilter === filter.id && styles.timeFilterButtonActive
-              ]}
-              onPress={() => setTimeFilter(filter.id)}
-            >
-              <Text style={[
-                styles.timeFilterText,
-                timeFilter === filter.id && styles.timeFilterTextActive
-              ]}>
-                {filter.label}
-              </Text>
-            </Pressable>
-          ))}
+          <Pressable
+            style={styles.timeFilterButtonSingle}
+            onPress={() => setShowTimeFilterModal(true)}
+          >
+            <MaterialIcons name="date-range" size={20} color={theme.primary} />
+            <Text style={styles.timeFilterButtonText}>
+              {TIME_FILTERS.find(f => f.id === timeFilter)?.label || 'Tout'}
+            </Text>
+            <MaterialIcons name="expand-more" size={20} color={theme.textSecondary} />
+          </Pressable>
         </Animated.View>
+
+        {/* Time Filter Modal */}
+        <Modal
+          visible={showTimeFilterModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowTimeFilterModal(false)}
+        >
+          <Pressable 
+            style={styles.modalOverlay}
+            onPress={() => setShowTimeFilterModal(false)}
+          >
+            <Pressable style={styles.timeFilterModalContent} onPress={() => {}}>
+              <View style={styles.timeFilterModalHeader}>
+                <Text style={styles.timeFilterModalTitle}>Période</Text>
+                <Pressable onPress={() => setShowTimeFilterModal(false)}>
+                  <MaterialIcons name="close" size={24} color={theme.textSecondary} />
+                </Pressable>
+              </View>
+              <View style={styles.timeFilterModalOptions}>
+                {TIME_FILTERS.map(filter => (
+                  <Pressable
+                    key={filter.id}
+                    style={[
+                      styles.timeFilterModalOption,
+                      timeFilter === filter.id && styles.timeFilterModalOptionActive
+                    ]}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setTimeFilter(filter.id);
+                      setShowTimeFilterModal(false);
+                    }}
+                  >
+                    <Text style={[
+                      styles.timeFilterModalOptionText,
+                      timeFilter === filter.id && styles.timeFilterModalOptionTextActive
+                    ]}>
+                      {filter.label}
+                    </Text>
+                    {timeFilter === filter.id && (
+                      <MaterialIcons name="check" size={20} color={theme.primary} />
+                    )}
+                  </Pressable>
+                ))}
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
 
         {/* Tabs */}
         <Animated.View 
@@ -1448,31 +1491,74 @@ const styles = StyleSheet.create({
     color: '#FFF',
   },
   // Time filter styles
-  timeFilterContainer: {
-    flexDirection: 'row',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: 4,
+  timeFilterWrapper: {
     marginBottom: 16,
+  },
+  timeFilterButtonSingle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: theme.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: theme.borderRadius.md,
+    alignSelf: 'flex-start',
     ...theme.shadows.card,
   },
-  timeFilterButton: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    borderRadius: theme.borderRadius.sm,
-    alignItems: 'center',
-  },
-  timeFilterButtonActive: {
-    backgroundColor: theme.primary,
-  },
-  timeFilterText: {
-    fontSize: 12,
+  timeFilterButtonText: {
+    fontSize: 15,
     fontWeight: '600',
-    color: theme.textSecondary,
+    color: theme.primary,
   },
-  timeFilterTextActive: {
-    color: '#FFF',
+  // Time Filter Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  timeFilterModalContent: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    width: '100%',
+    maxWidth: 340,
+    overflow: 'hidden',
+  },
+  timeFilterModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  timeFilterModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  timeFilterModalOptions: {
+    padding: 8,
+  },
+  timeFilterModalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: theme.borderRadius.md,
+  },
+  timeFilterModalOptionActive: {
+    backgroundColor: theme.primary + '15',
+  },
+  timeFilterModalOptionText: {
+    fontSize: 16,
+    color: theme.textPrimary,
+  },
+  timeFilterModalOptionTextActive: {
+    fontWeight: '600',
+    color: theme.primary,
   },
   section: {
     marginBottom: 24,
