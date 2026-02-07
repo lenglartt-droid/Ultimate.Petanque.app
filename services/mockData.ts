@@ -353,12 +353,36 @@ export interface ChallengeShot {
   timestamp: string;
 }
 
+// Challenge mode: solo or 1v1
+export type ChallengeMode = 'solo' | '1v1';
+
+// Player result in 1v1 challenge
+export interface ChallengePlayerResult {
+  playerId: string;
+  playerName: string;
+  shots?: ChallengeShot[];
+  precisionShots?: PrecisionShot[];
+  successCount?: number;
+  totalShots?: number;
+  carreauCount?: number;
+  successRate?: number;
+  totalPoints?: number;
+  atelierScores?: { [key in PrecisionAtelier]?: number };
+}
+
 export interface Challenge {
   id: string;
   type: ChallengeType;
+  mode: ChallengeMode; // solo or 1v1
   date: string;
   playerId?: string;
   playerName?: string;
+  // Opponent for 1v1 mode
+  opponentId?: string;
+  opponentName?: string;
+  opponentResult?: ChallengePlayerResult;
+  // Winner for 1v1 mode ('player' | 'opponent' | 'draw')
+  winner?: 'player' | 'opponent' | 'draw';
   // For 10_tirs and 10_tirs_sautee
   shots?: ChallengeShot[];
   successCount?: number;
@@ -1404,6 +1428,7 @@ export const mockChallenges: Challenge[] = [
   {
     id: 'c1',
     type: '10_tirs',
+    mode: 'solo',
     date: '2026-02-06T10:30:00',
     playerId: '1',
     playerName: 'Jean-Pierre Martin',
@@ -1428,6 +1453,7 @@ export const mockChallenges: Challenge[] = [
   {
     id: 'c2',
     type: '10_tirs_sautee',
+    mode: 'solo',
     date: '2026-02-05T15:00:00',
     playerId: '1',
     playerName: 'Jean-Pierre Martin',
@@ -1452,6 +1478,7 @@ export const mockChallenges: Challenge[] = [
   {
     id: 'c3',
     type: 'precision',
+    mode: 'solo',
     date: '2026-02-04T11:00:00',
     playerId: '1',
     playerName: 'Jean-Pierre Martin',
@@ -1491,9 +1518,33 @@ export const mockChallenges: Challenge[] = [
   {
     id: 'c4',
     type: '10_tirs',
+    mode: '1v1',
     date: '2026-02-03T09:00:00',
     playerId: '1',
     playerName: 'Jean-Pierre Martin',
+    opponentId: '5',
+    opponentName: 'Lucas Moreau',
+    opponentResult: {
+      playerId: '5',
+      playerName: 'Lucas Moreau',
+      shots: [
+        { number: 1, success: true, timestamp: '2026-02-03T09:00:05' },
+        { number: 2, success: false, timestamp: '2026-02-03T09:00:25' },
+        { number: 3, success: true, timestamp: '2026-02-03T09:00:45' },
+        { number: 4, success: true, timestamp: '2026-02-03T09:01:05' },
+        { number: 5, success: false, timestamp: '2026-02-03T09:01:25' },
+        { number: 6, success: true, timestamp: '2026-02-03T09:01:45' },
+        { number: 7, success: false, timestamp: '2026-02-03T09:02:05' },
+        { number: 8, success: true, timestamp: '2026-02-03T09:02:25' },
+        { number: 9, success: false, timestamp: '2026-02-03T09:02:45' },
+        { number: 10, success: true, timestamp: '2026-02-03T09:03:05' },
+      ],
+      successCount: 6,
+      totalShots: 10,
+      carreauCount: 0,
+      successRate: 60,
+    },
+    winner: 'player',
     shots: [
       { number: 1, success: true, timestamp: '2026-02-03T09:00:05' },
       { number: 2, success: true, timestamp: '2026-02-03T09:00:25' },

@@ -7,6 +7,8 @@ import {
   StyleSheet,
   Alert,
   Dimensions,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -18,12 +20,14 @@ import { useApp } from '@/contexts/AppContext';
 import { 
   ChallengeType, 
   ChallengeShot,
+  ChallengeMode,
+  ChallengePlayerResult,
   PrecisionAtelier,
   PrecisionDistance,
   PrecisionShot,
   PRECISION_ATELIERS,
   PRECISION_DISTANCES,
-  PrecisionAtelierConfig,
+  Player,
 } from '@/services/mockData';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -71,12 +75,10 @@ function CountdownTimer({
   const progress = useSharedValue(1);
   const pulseScale = useSharedValue(1);
 
-  // Keep callback ref updated
   useEffect(() => {
     onTimeUpRef.current = onTimeUp;
   }, [onTimeUp]);
 
-  // Reset timer when not running (after recording a shot)
   useEffect(() => {
     if (!isRunning) {
       setTimeLeft(seconds);
@@ -98,7 +100,6 @@ function CountdownTimer({
           if (prev <= 1) {
             if (timerRef.current) clearInterval(timerRef.current);
             timerRef.current = null;
-            // Use ref to avoid stale closure
             onTimeUpRef.current();
             return 0;
           }
@@ -163,19 +164,32 @@ function CountdownTimer({
 export default function NewChallengeScreen() {
   const insets = useSafeAreaInsets();
   const { type: initialType } = useLocalSearchParams<{ type?: ChallengeType }>();
-  const { addChallenge, userStats, selfPlayer } = useApp();
+  const { addChallenge, userStats, selfPlayer, players } = useApp();
 
   const [selectedType, setSelectedType] = useState<ChallengeType | null>(initialType || null);
+  const [challengeMode, setChallengeMode] = useState<ChallengeMode | null>(null);
+  const [selectedOpponent, setSelectedOpponent] = useState<Player | null>(null);
+  const [showOpponentModal, setShowOpponentModal] = useState(false);
+  const [opponentSearch, setOpponentSearch] = useState('');
+  
   const [isStarted, setIsStarted] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
 
-  // Standard challenge state (10 tirs)
+  // Current turn in 1v1 mode ('player' or 'opponent')
+  const [currentTurn, setCurrentTurn] = useState<'player' | 'opponent'>('player');
+
+  // Standard challenge state (10 tirs) - Player
   const [shots, setShots] = useState<ChallengeShot[]>([]);
   const [currentShot, setCurrentShot] = useState(1);
   const [editingShotIndex, setEditingShotIndex] = useState<number | null>(null);
 
-  // Precision challenge state
+  // Standard challenge state (10 tirs) - Opponent (1v1)
+  const [opponentShots, setOpponentShots] = useState<ChallengeShot[]>([]);
+  const [opponentCurrentShot, setOpponentCurrentShot] = useState(1);
+  const [editingOpponentShotIndex, setEditingOpponentShotIndex] = useState<number | null>(null);
+
+  // Precision challenge state - Player
   const [precisionShots, setPrecisionShots] = useState<PrecisionShot[]>([]);
   const [currentAtelierIndex, setCurrentAtelierIndex] = useState(0);
   const [currentDistanceIndex, setCurrentDistanceIndex] = useState(0);
@@ -183,20 +197,34 @@ export default function NewChallengeScreen() {
   const [shotStartTime, setShotStartTime] = useState(0);
   const [editingPrecisionIndex, setEditingPrecisionIndex] = useState<number | null>(null);
 
+  // Precision challenge state - Opponent (1v1)
+  const [opponentPrecisionShots, setOpponentPrecisionShots] = useState<PrecisionShot[]>([]);
+  const [opponentAtelierIndex, setOpponentAtelierIndex] = useState(0);
+  const [opponentDistanceIndex, setOpponentDistanceIndex] = useState(0);
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const config = selectedType ? CHALLENGE_CONFIG[selectedType] : null;
   
-  // Standard challenge stats
+  // Player stats
   const successCount = shots.filter(s => s.success).length;
   const carreauCount = shots.filter(s => s.carreau).length;
   const successRate = shots.length > 0 ? Math.round((successCount / shots.length) * 100) : 0;
-
-  // Precision challenge stats
   const totalPrecisionPoints = precisionShots.reduce((sum, s) => sum + s.points, 0);
+
+  // Opponent stats (1v1)
+  const opponentSuccessCount = opponentShots.filter(s => s.success).length;
+  const opponentCarreauCount = opponentShots.filter(s => s.carreau).length;
+  const opponentSuccessRate = opponentShots.length > 0 ? Math.round((opponentSuccessCount / opponentShots.length) * 100) : 0;
+  const opponentTotalPrecisionPoints = opponentPrecisionShots.reduce((sum, s) => sum + s.points, 0);
+
   const currentAtelier = PRECISION_ATELIERS[currentAtelierIndex];
   const currentDistance = PRECISION_DISTANCES[currentDistanceIndex];
   const currentPrecisionShotNumber = currentAtelierIndex * 4 + currentDistanceIndex + 1;
+
+  const opponentAtelier = PRECISION_ATELIERS[opponentAtelierIndex];
+  const opponentDistance = PRECISION_DISTANCES[opponentDistanceIndex];
+  const opponentPrecisionShotNumber = opponentAtelierIndex * 4 + opponentDistanceIndex + 1;
 
   // Calculate atelier scores
   const atelierScores = PRECISION_ATELIERS.reduce((acc, atelier) => {
@@ -205,7 +233,20 @@ export default function NewChallengeScreen() {
     return acc;
   }, {} as { [key in PrecisionAtelier]: number });
 
-  // Timer effect for total duration
+  const opponentAtelierScores = PRECISION_ATELIERS.reduce((acc, atelier) => {
+    const atelierShots = opponentPrecisionShots.filter(s => s.atelier === atelier.id);
+    acc[atelier.id] = atelierShots.reduce((sum, s) => sum + s.points, 0);
+    return acc;
+  }, {} as { [key in PrecisionAtelier]: number });
+
+  // Filter players for opponent selection
+  const filteredPlayers = players.filter(p => {
+    if (selfPlayer && p.id === selfPlayer.id) return false;
+    if (!opponentSearch) return true;
+    return p.name.toLowerCase().includes(opponentSearch.toLowerCase());
+  });
+
+  // Timer effect
   useEffect(() => {
     if (isStarted && !isFinished) {
       timerRef.current = setInterval(() => {
@@ -226,138 +267,290 @@ export default function NewChallengeScreen() {
   };
 
   const startChallenge = () => {
-    if (!selectedType) return;
+    if (!selectedType || !challengeMode) return;
+    if (challengeMode === '1v1' && !selectedOpponent) {
+      Alert.alert('Erreur', 'Sélectionnez un adversaire pour le mode 1v1');
+      return;
+    }
+    
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsStarted(true);
     setShots([]);
+    setOpponentShots([]);
     setPrecisionShots([]);
+    setOpponentPrecisionShots([]);
     setCurrentShot(1);
+    setOpponentCurrentShot(1);
     setCurrentAtelierIndex(0);
     setCurrentDistanceIndex(0);
+    setOpponentAtelierIndex(0);
+    setOpponentDistanceIndex(0);
     setElapsedTime(0);
     setIsFinished(false);
+    setCurrentTurn('player');
     
     if (selectedType === 'precision') {
-      // Don't auto-start timer - user will start manually
       setShotTimerRunning(false);
       setShotStartTime(0);
     }
   };
 
-  // Manual start of shot timer for precision challenge
   const startShotTimer = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setShotTimerRunning(true);
     setShotStartTime(Date.now());
   }, []);
 
+  // Check if challenge is complete
+  const checkChallengeComplete = useCallback(() => {
+    if (!config) return false;
+    
+    if (challengeMode === 'solo') {
+      if (selectedType === 'precision') {
+        return precisionShots.length >= 20;
+      }
+      return shots.length >= config.totalShots;
+    } else {
+      // 1v1 mode - both players must complete
+      if (selectedType === 'precision') {
+        return precisionShots.length >= 20 && opponentPrecisionShots.length >= 20;
+      }
+      return shots.length >= config.totalShots && opponentShots.length >= config.totalShots;
+    }
+  }, [challengeMode, config, selectedType, shots, opponentShots, precisionShots, opponentPrecisionShots]);
+
   // Standard challenge shot recording
-  const recordShot = useCallback((success: boolean, carreau: boolean = false) => {
+  const recordShot = useCallback((success: boolean, carreau: boolean = false, isOpponent: boolean = false) => {
     if (!config || selectedType === 'precision') return;
 
     Haptics.impactAsync(success ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light);
 
-    // If editing an existing shot
-    if (editingShotIndex !== null) {
-      setShots(prev => prev.map((shot, idx) => 
-        idx === editingShotIndex 
-          ? { ...shot, success, carreau: success && carreau ? true : undefined }
-          : shot
-      ));
-      setEditingShotIndex(null);
-      return;
-    }
-
-    if (isFinished) return;
-
-    const newShot: ChallengeShot = {
-      number: currentShot,
-      success,
-      carreau: success && carreau ? true : undefined,
-      timestamp: new Date().toISOString(),
-    };
-
-    setShots(prev => [...prev, newShot]);
-
-    if (currentShot >= config.totalShots) {
-      setIsFinished(true);
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
+    if (isOpponent) {
+      // Opponent shot
+      if (editingOpponentShotIndex !== null) {
+        setOpponentShots(prev => prev.map((shot, idx) => 
+          idx === editingOpponentShotIndex 
+            ? { ...shot, success, carreau: success && carreau ? true : undefined }
+            : shot
+        ));
+        setEditingOpponentShotIndex(null);
+        return;
       }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      if (opponentShots.length >= config.totalShots) return;
+
+      const newShot: ChallengeShot = {
+        number: opponentCurrentShot,
+        success,
+        carreau: success && carreau ? true : undefined,
+        timestamp: new Date().toISOString(),
+      };
+
+      setOpponentShots(prev => [...prev, newShot]);
+
+      if (opponentCurrentShot >= config.totalShots) {
+        // Opponent finished
+        if (shots.length >= config.totalShots) {
+          // Both finished
+          setIsFinished(true);
+          if (timerRef.current) clearInterval(timerRef.current);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } else {
+          setCurrentTurn('player');
+        }
+      } else {
+        setOpponentCurrentShot(prev => prev + 1);
+      }
     } else {
-      setCurrentShot(prev => prev + 1);
+      // Player shot
+      if (editingShotIndex !== null) {
+        setShots(prev => prev.map((shot, idx) => 
+          idx === editingShotIndex 
+            ? { ...shot, success, carreau: success && carreau ? true : undefined }
+            : shot
+        ));
+        setEditingShotIndex(null);
+        return;
+      }
+
+      if (shots.length >= config.totalShots) return;
+
+      const newShot: ChallengeShot = {
+        number: currentShot,
+        success,
+        carreau: success && carreau ? true : undefined,
+        timestamp: new Date().toISOString(),
+      };
+
+      setShots(prev => [...prev, newShot]);
+
+      if (currentShot >= config.totalShots) {
+        if (challengeMode === 'solo') {
+          setIsFinished(true);
+          if (timerRef.current) clearInterval(timerRef.current);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } else {
+          // 1v1: check if opponent is done
+          if (opponentShots.length >= config.totalShots) {
+            setIsFinished(true);
+            if (timerRef.current) clearInterval(timerRef.current);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          } else {
+            setCurrentTurn('opponent');
+          }
+        }
+      } else {
+        setCurrentShot(prev => prev + 1);
+      }
     }
-  }, [config, currentShot, isFinished, selectedType, editingShotIndex]);
+  }, [config, currentShot, opponentCurrentShot, selectedType, editingShotIndex, editingOpponentShotIndex, challengeMode, shots, opponentShots]);
 
   // Precision challenge shot recording
-  const recordPrecisionShot = useCallback((points: 0 | 1 | 3 | 5) => {
+  const recordPrecisionShot = useCallback((points: 0 | 1 | 3 | 5, isOpponent: boolean = false) => {
     if (!isStarted || selectedType !== 'precision') return;
 
     Haptics.impactAsync(points >= 3 ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light);
 
-    // If editing an existing shot
-    if (editingPrecisionIndex !== null) {
-      setPrecisionShots(prev => prev.map((shot, idx) => 
-        idx === editingPrecisionIndex 
-          ? { ...shot, points }
-          : shot
-      ));
-      setEditingPrecisionIndex(null);
-      return;
-    }
+    if (isOpponent) {
+      if (editingPrecisionIndex !== null) {
+        setOpponentPrecisionShots(prev => prev.map((shot, idx) => 
+          idx === editingPrecisionIndex ? { ...shot, points } : shot
+        ));
+        setEditingPrecisionIndex(null);
+        return;
+      }
 
-    if (isFinished) return;
+      if (opponentPrecisionShots.length >= 20) return;
 
-    setShotTimerRunning(false);
-    const timeUsed = Math.round((Date.now() - shotStartTime) / 1000);
-
-    const newShot: PrecisionShot = {
-      atelier: currentAtelier.id,
-      distance: currentDistance,
-      points,
-      timeUsed: Math.min(timeUsed, 30),
-      timestamp: new Date().toISOString(),
-    };
-
-    setPrecisionShots(prev => [...prev, newShot]);
-
-    // Move to next shot - don't auto-start timer, user will start manually
-    if (currentDistanceIndex < 3) {
-      // Next distance in same atelier
-      setCurrentDistanceIndex(prev => prev + 1);
       setShotTimerRunning(false);
-      setShotStartTime(0);
-    } else if (currentAtelierIndex < 4) {
-      // Next atelier
-      setCurrentAtelierIndex(prev => prev + 1);
-      setCurrentDistanceIndex(0);
+      const timeUsed = Math.round((Date.now() - shotStartTime) / 1000);
+
+      const newShot: PrecisionShot = {
+        atelier: opponentAtelier.id,
+        distance: opponentDistance,
+        points,
+        timeUsed: Math.min(timeUsed, 30),
+        timestamp: new Date().toISOString(),
+      };
+
+      setOpponentPrecisionShots(prev => [...prev, newShot]);
+
+      if (opponentDistanceIndex < 3) {
+        setOpponentDistanceIndex(prev => prev + 1);
+      } else if (opponentAtelierIndex < 4) {
+        setOpponentAtelierIndex(prev => prev + 1);
+        setOpponentDistanceIndex(0);
+      } else {
+        // Opponent finished
+        if (precisionShots.length >= 20) {
+          setIsFinished(true);
+          if (timerRef.current) clearInterval(timerRef.current);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } else {
+          setCurrentTurn('player');
+        }
+      }
       setShotTimerRunning(false);
       setShotStartTime(0);
     } else {
-      // Challenge finished
-      setIsFinished(true);
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
+      if (editingPrecisionIndex !== null) {
+        setPrecisionShots(prev => prev.map((shot, idx) => 
+          idx === editingPrecisionIndex ? { ...shot, points } : shot
+        ));
+        setEditingPrecisionIndex(null);
+        return;
       }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      if (precisionShots.length >= 20) return;
+
+      setShotTimerRunning(false);
+      const timeUsed = Math.round((Date.now() - shotStartTime) / 1000);
+
+      const newShot: PrecisionShot = {
+        atelier: currentAtelier.id,
+        distance: currentDistance,
+        points,
+        timeUsed: Math.min(timeUsed, 30),
+        timestamp: new Date().toISOString(),
+      };
+
+      setPrecisionShots(prev => [...prev, newShot]);
+
+      if (currentDistanceIndex < 3) {
+        setCurrentDistanceIndex(prev => prev + 1);
+      } else if (currentAtelierIndex < 4) {
+        setCurrentAtelierIndex(prev => prev + 1);
+        setCurrentDistanceIndex(0);
+      } else {
+        // Player finished
+        if (challengeMode === 'solo') {
+          setIsFinished(true);
+          if (timerRef.current) clearInterval(timerRef.current);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } else {
+          if (opponentPrecisionShots.length >= 20) {
+            setIsFinished(true);
+            if (timerRef.current) clearInterval(timerRef.current);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          } else {
+            setCurrentTurn('opponent');
+          }
+        }
+      }
+      setShotTimerRunning(false);
+      setShotStartTime(0);
     }
-  }, [isStarted, isFinished, selectedType, currentAtelier, currentDistance, currentAtelierIndex, currentDistanceIndex, shotStartTime, editingPrecisionIndex]);
+  }, [isStarted, selectedType, currentAtelier, currentDistance, currentAtelierIndex, currentDistanceIndex, 
+      opponentAtelier, opponentDistance, opponentAtelierIndex, opponentDistanceIndex, shotStartTime, 
+      editingPrecisionIndex, challengeMode, precisionShots, opponentPrecisionShots]);
 
   const handleTimeUp = useCallback(() => {
-    // Auto-record 0 points when time runs out
-    recordPrecisionShot(0);
-  }, [recordPrecisionShot]);
+    recordPrecisionShot(0, currentTurn === 'opponent');
+  }, [recordPrecisionShot, currentTurn]);
+
+  // Determine winner for 1v1
+  const getWinner = (): 'player' | 'opponent' | 'draw' => {
+    if (selectedType === 'precision') {
+      if (totalPrecisionPoints > opponentTotalPrecisionPoints) return 'player';
+      if (opponentTotalPrecisionPoints > totalPrecisionPoints) return 'opponent';
+      return 'draw';
+    } else {
+      if (successRate > opponentSuccessRate) return 'player';
+      if (opponentSuccessRate > successRate) return 'opponent';
+      // Tiebreaker: carreaux
+      if (carreauCount > opponentCarreauCount) return 'player';
+      if (opponentCarreauCount > carreauCount) return 'opponent';
+      return 'draw';
+    }
+  };
 
   const saveChallenge = () => {
-    if (!selectedType) return;
+    if (!selectedType || !challengeMode) return;
+
+    const opponentResult: ChallengePlayerResult | undefined = challengeMode === '1v1' && selectedOpponent ? {
+      playerId: selectedOpponent.id,
+      playerName: selectedOpponent.name,
+      shots: selectedType !== 'precision' ? opponentShots : undefined,
+      precisionShots: selectedType === 'precision' ? opponentPrecisionShots : undefined,
+      successCount: opponentSuccessCount,
+      totalShots: opponentShots.length,
+      carreauCount: opponentCarreauCount,
+      successRate: opponentSuccessRate,
+      totalPoints: selectedType === 'precision' ? opponentTotalPrecisionPoints : undefined,
+      atelierScores: selectedType === 'precision' ? opponentAtelierScores : undefined,
+    } : undefined;
 
     if (selectedType === 'precision') {
       addChallenge({
         type: selectedType,
+        mode: challengeMode,
         date: new Date().toISOString(),
         playerId: selfPlayer?.id || userStats.playerId,
         playerName: selfPlayer?.name || userStats.playerName,
+        opponentId: selectedOpponent?.id,
+        opponentName: selectedOpponent?.name,
+        opponentResult,
+        winner: challengeMode === '1v1' ? getWinner() : undefined,
         precisionShots,
         totalPoints: totalPrecisionPoints,
         maxPoints: 100,
@@ -367,9 +560,14 @@ export default function NewChallengeScreen() {
     } else {
       addChallenge({
         type: selectedType,
+        mode: challengeMode,
         date: new Date().toISOString(),
         playerId: selfPlayer?.id || userStats.playerId,
         playerName: selfPlayer?.name || userStats.playerName,
+        opponentId: selectedOpponent?.id,
+        opponentName: selectedOpponent?.name,
+        opponentResult,
+        winner: challengeMode === '1v1' ? getWinner() : undefined,
         shots,
         successCount,
         totalShots: shots.length,
@@ -394,15 +592,22 @@ export default function NewChallengeScreen() {
           onPress: () => {
             setIsStarted(false);
             setShots([]);
+            setOpponentShots([]);
             setPrecisionShots([]);
+            setOpponentPrecisionShots([]);
             setCurrentShot(1);
+            setOpponentCurrentShot(1);
             setCurrentAtelierIndex(0);
             setCurrentDistanceIndex(0);
+            setOpponentAtelierIndex(0);
+            setOpponentDistanceIndex(0);
             setElapsedTime(0);
             setIsFinished(false);
             setShotTimerRunning(false);
             setEditingShotIndex(null);
+            setEditingOpponentShotIndex(null);
             setEditingPrecisionIndex(null);
+            setCurrentTurn('player');
           },
         },
       ]
@@ -464,7 +669,6 @@ export default function NewChallengeScreen() {
             </Animated.View>
           ))}
 
-          {/* Precision rules info */}
           <Animated.View 
             entering={FadeInDown.duration(400).delay(400)}
             style={styles.rulesCard}
@@ -486,12 +690,168 @@ export default function NewChallengeScreen() {
     );
   }
 
+  // Mode Selection Screen (Solo / 1v1)
+  if (!challengeMode) {
+    return (
+      <SafeAreaView edges={['top']} style={styles.container}>
+        <View style={styles.header}>
+          <Pressable style={styles.closeButton} onPress={() => setSelectedType(null)}>
+            <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
+          </Pressable>
+          <Text style={styles.headerTitle}>{config?.name}</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <Animated.View entering={FadeInDown.duration(400)} style={styles.introSection}>
+            <View style={[styles.challengeTypeIcon, { backgroundColor: config?.color + '20', width: 80, height: 80, borderRadius: 20 }]}>
+              <MaterialIcons name={config?.icon || 'sports'} size={40} color={config?.color} />
+            </View>
+            <Text style={styles.introTitle}>Mode de jeu</Text>
+            <Text style={styles.introText}>
+              Jouez seul ou défiez un adversaire
+            </Text>
+          </Animated.View>
+
+          {/* Solo Mode */}
+          <Animated.View entering={FadeInDown.duration(400).delay(100)}>
+            <Pressable
+              style={styles.modeCard}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setChallengeMode('solo');
+              }}
+            >
+              <View style={[styles.modeIcon, { backgroundColor: theme.primary + '20' }]}>
+                <MaterialIcons name="person" size={32} color={theme.primary} />
+              </View>
+              <View style={styles.modeInfo}>
+                <Text style={styles.modeName}>Solo</Text>
+                <Text style={styles.modeDesc}>Entraînez-vous seul et battez vos records</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
+            </Pressable>
+          </Animated.View>
+
+          {/* 1v1 Mode */}
+          <Animated.View entering={FadeInDown.duration(400).delay(200)}>
+            <Pressable
+              style={styles.modeCard}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setChallengeMode('1v1');
+              }}
+            >
+              <View style={[styles.modeIcon, { backgroundColor: theme.accent + '20' }]}>
+                <MaterialIcons name="people" size={32} color={theme.accent} />
+              </View>
+              <View style={styles.modeInfo}>
+                <Text style={styles.modeName}>1 contre 1</Text>
+                <Text style={styles.modeDesc}>Affrontez un adversaire et comparez vos scores</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
+            </Pressable>
+          </Animated.View>
+
+          {/* Info card */}
+          <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.modeInfoCard}>
+            <MaterialIcons name="lightbulb" size={20} color={theme.warning} />
+            <Text style={styles.modeInfoText}>
+              En mode 1v1, chaque joueur effectue ses tirs à tour de rôle. Le gagnant est celui avec le meilleur score !
+            </Text>
+          </Animated.View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // Opponent Selection for 1v1
+  if (challengeMode === '1v1' && !selectedOpponent && !isStarted) {
+    return (
+      <SafeAreaView edges={['top']} style={styles.container}>
+        <View style={styles.header}>
+          <Pressable style={styles.closeButton} onPress={() => setChallengeMode(null)}>
+            <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Choisir adversaire</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <View style={styles.searchContainer}>
+          <MaterialIcons name="search" size={20} color={theme.textMuted} />
+          <TextInput
+            style={styles.searchInput}
+            value={opponentSearch}
+            onChangeText={setOpponentSearch}
+            placeholder="Rechercher un joueur..."
+            placeholderTextColor={theme.textMuted}
+          />
+          {opponentSearch.length > 0 && (
+            <Pressable onPress={() => setOpponentSearch('')}>
+              <MaterialIcons name="close" size={20} color={theme.textMuted} />
+            </Pressable>
+          )}
+        </View>
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {filteredPlayers.length > 0 ? (
+            filteredPlayers.map((player, index) => (
+              <Animated.View
+                key={player.id}
+                entering={FadeInDown.duration(300).delay(index * 50)}
+              >
+                <Pressable
+                  style={styles.playerCard}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setSelectedOpponent(player);
+                  }}
+                >
+                  <View style={styles.playerAvatar}>
+                    <Text style={styles.playerInitials}>
+                      {player.name.split(' ').map(n => n[0]).join('')}
+                    </Text>
+                  </View>
+                  <View style={styles.playerInfo}>
+                    <Text style={styles.playerName}>{player.name}</Text>
+                    <Text style={styles.playerMeta}>
+                      {player.club || 'Sans club'} • {player.role}
+                    </Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
+                </Pressable>
+              </Animated.View>
+            ))
+          ) : (
+            <View style={styles.emptyState}>
+              <MaterialIcons name="person-search" size={48} color={theme.textMuted} />
+              <Text style={styles.emptyStateText}>
+                {opponentSearch ? 'Aucun joueur trouvé' : 'Aucun joueur disponible'}
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   // Precision Challenge Ready Screen
   if (selectedType === 'precision' && !isStarted) {
     return (
       <SafeAreaView edges={['top']} style={styles.container}>
         <View style={styles.header}>
-          <Pressable style={styles.closeButton} onPress={() => setSelectedType(null)}>
+          <Pressable style={styles.closeButton} onPress={() => {
+            if (challengeMode === '1v1') setSelectedOpponent(null);
+            else setChallengeMode(null);
+          }}>
             <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
           <Text style={styles.headerTitle}>Tir de Précision</Text>
@@ -511,9 +871,20 @@ export default function NewChallengeScreen() {
             <Text style={styles.readyDescription}>
               Épreuve officielle FFPJP{'\n'}20 tirs • 5 ateliers • Max 100 points
             </Text>
+            
+            {/* Mode badge */}
+            <View style={[styles.modeBadge, challengeMode === '1v1' && styles.modeBadge1v1]}>
+              <MaterialIcons 
+                name={challengeMode === 'solo' ? 'person' : 'people'} 
+                size={16} 
+                color={challengeMode === 'solo' ? theme.primary : theme.accent} 
+              />
+              <Text style={[styles.modeBadgeText, challengeMode === '1v1' && styles.modeBadgeText1v1]}>
+                {challengeMode === 'solo' ? 'Solo' : `vs ${selectedOpponent?.name}`}
+              </Text>
+            </View>
           </Animated.View>
 
-          {/* Ateliers list */}
           <Text style={styles.sectionTitle}>LES 5 ATELIERS</Text>
           {PRECISION_ATELIERS.map((atelier, index) => (
             <Animated.View 
@@ -535,7 +906,6 @@ export default function NewChallengeScreen() {
             </Animated.View>
           ))}
 
-          {/* Scoring info */}
           <Animated.View 
             entering={FadeInDown.duration(400).delay(500)}
             style={styles.scoringCard}
@@ -588,7 +958,10 @@ export default function NewChallengeScreen() {
     return (
       <SafeAreaView edges={['top']} style={styles.container}>
         <View style={styles.header}>
-          <Pressable style={styles.closeButton} onPress={() => setSelectedType(null)}>
+          <Pressable style={styles.closeButton} onPress={() => {
+            if (challengeMode === '1v1') setSelectedOpponent(null);
+            else setChallengeMode(null);
+          }}>
             <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
           <Text style={styles.headerTitle}>{config?.name}</Text>
@@ -602,11 +975,30 @@ export default function NewChallengeScreen() {
             </View>
             <Text style={styles.readyTitle}>{config?.name}</Text>
             <Text style={styles.readyDescription}>{config?.description}</Text>
+            
+            {/* Mode badge */}
+            <View style={[styles.modeBadge, challengeMode === '1v1' && styles.modeBadge1v1]}>
+              <MaterialIcons 
+                name={challengeMode === 'solo' ? 'person' : 'people'} 
+                size={16} 
+                color={challengeMode === 'solo' ? theme.primary : theme.accent} 
+              />
+              <Text style={[styles.modeBadgeText, challengeMode === '1v1' && styles.modeBadgeText1v1]}>
+                {challengeMode === 'solo' ? 'Solo' : `vs ${selectedOpponent?.name}`}
+              </Text>
+            </View>
+            
             <View style={styles.readyStats}>
               <View style={styles.readyStatItem}>
                 <Text style={styles.readyStatValue}>{config?.totalShots}</Text>
                 <Text style={styles.readyStatLabel}>Tirs</Text>
               </View>
+              {challengeMode === '1v1' && (
+                <View style={styles.readyStatItem}>
+                  <Text style={styles.readyStatValue}>2</Text>
+                  <Text style={styles.readyStatLabel}>Joueurs</Text>
+                </View>
+              )}
             </View>
           </Animated.View>
 
@@ -619,9 +1011,9 @@ export default function NewChallengeScreen() {
     );
   }
 
-  // Precision Challenge Results Screen
-  if (selectedType === 'precision' && isFinished) {
-    const percentage = Math.round((totalPrecisionPoints / 100) * 100);
+  // Results Screen - Standard Challenge
+  if (selectedType !== 'precision' && isFinished) {
+    const winner = challengeMode === '1v1' ? getWinner() : null;
     
     return (
       <SafeAreaView edges={['top']} style={styles.container}>
@@ -638,121 +1030,35 @@ export default function NewChallengeScreen() {
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
           showsVerticalScrollIndicator={false}
         >
-          <Animated.View entering={FadeInDown.duration(400)} style={styles.resultsCard}>
-            <View style={[
-              styles.resultsBadge, 
-              { backgroundColor: percentage >= 70 ? theme.success : percentage >= 50 ? theme.warning : theme.error }
+          {/* 1v1 Winner Banner */}
+          {challengeMode === '1v1' && (
+            <Animated.View entering={FadeInDown.duration(400)} style={[
+              styles.winnerBanner,
+              winner === 'player' && styles.winnerBannerWin,
+              winner === 'opponent' && styles.winnerBannerLose,
+              winner === 'draw' && styles.winnerBannerDraw,
             ]}>
-              <Text style={styles.resultsBadgeText}>
-                {percentage >= 70 ? 'Excellent !' : percentage >= 50 ? 'Bien !' : 'À améliorer'}
+              <MaterialIcons 
+                name={winner === 'draw' ? 'handshake' : winner === 'player' ? 'emoji-events' : 'sentiment-dissatisfied'} 
+                size={32} 
+                color="#FFF" 
+              />
+              <Text style={styles.winnerBannerText}>
+                {winner === 'draw' ? 'Égalité !' : winner === 'player' ? 'Victoire !' : `${selectedOpponent?.name} gagne !`}
               </Text>
-            </View>
+            </Animated.View>
+          )}
 
-            <Text style={styles.resultsScore}>{totalPrecisionPoints}</Text>
-            <Text style={styles.resultsScoreMax}>/ 100 points</Text>
-
-            <View style={styles.resultsGrid}>
-              <View style={styles.resultsGridItem}>
-                <MaterialIcons name="timer" size={24} color={theme.primary} />
-                <Text style={styles.resultsGridValue}>{formatTime(elapsedTime)}</Text>
-                <Text style={styles.resultsGridLabel}>Durée totale</Text>
+          {/* Player Results */}
+          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.resultsCard}>
+            {challengeMode === '1v1' && (
+              <View style={styles.resultsPlayerHeader}>
+                <MaterialIcons name="person" size={20} color={theme.primary} />
+                <Text style={styles.resultsPlayerName}>{selfPlayer?.name || userStats.playerName}</Text>
+                {winner === 'player' && <MaterialIcons name="emoji-events" size={20} color={theme.carreauColor} />}
               </View>
-              <View style={styles.resultsGridItem}>
-                <MaterialIcons name="stars" size={24} color={theme.carreauColor} />
-                <Text style={styles.resultsGridValue}>
-                  {precisionShots.filter(s => s.points === 5).length}
-                </Text>
-                <Text style={styles.resultsGridLabel}>Carreaux</Text>
-              </View>
-            </View>
-          </Animated.View>
-
-          {/* Atelier scores breakdown */}
-          <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-            <Text style={styles.sectionTitle}>DÉTAIL PAR ATELIER</Text>
-            {PRECISION_ATELIERS.map((atelier, index) => {
-              const score = atelierScores[atelier.id] || 0;
-              const maxScore = 20;
-              const atelierShotsList = precisionShots.filter(s => s.atelier === atelier.id);
-              
-              return (
-                <Animated.View 
-                  key={atelier.id}
-                  entering={FadeInDown.duration(300).delay(250 + index * 50)}
-                >
-                  <View style={styles.atelierResultCard}>
-                    <View style={styles.atelierResultHeader}>
-                      <View style={[styles.atelierResultIcon, { backgroundColor: theme.primary + '15' }]}>
-                        <MaterialIcons name={atelier.icon as any} size={20} color={theme.primary} />
-                      </View>
-                      <Text style={styles.atelierResultName}>{atelier.name}</Text>
-                      <Text style={styles.atelierResultScore}>
-                        <Text style={{ fontWeight: '700', color: theme.primary }}>{score}</Text>
-                        <Text style={{ color: theme.textMuted }}>/20</Text>
-                      </Text>
-                    </View>
-                    <View style={styles.atelierShotsRow}>
-                      {atelierShotsList.map((shot, i) => (
-                        <View 
-                          key={i}
-                          style={[
-                            styles.atelierShotDot,
-                            { backgroundColor: 
-                              shot.points === 5 ? theme.carreauColor :
-                              shot.points === 3 ? theme.success :
-                              shot.points === 1 ? theme.warning : theme.error
-                            }
-                          ]}
-                        >
-                          <Text style={styles.atelierShotPoints}>{shot.points}</Text>
-                        </View>
-                      ))}
-                    </View>
-                    <View style={styles.atelierDistanceLabels}>
-                      {PRECISION_DISTANCES.map(d => (
-                        <Text key={d} style={styles.atelierDistanceLabel}>{d}m</Text>
-                      ))}
-                    </View>
-                  </View>
-                </Animated.View>
-              );
-            })}
-          </Animated.View>
-
-          {/* Actions */}
-          <View style={styles.resultsActions}>
-            <Pressable style={styles.retryButton} onPress={resetChallenge}>
-              <MaterialIcons name="refresh" size={20} color={theme.primary} />
-              <Text style={styles.retryButtonText}>Recommencer</Text>
-            </Pressable>
-            <Pressable style={styles.saveButton} onPress={saveChallenge}>
-              <MaterialIcons name="save" size={20} color="#FFF" />
-              <Text style={styles.saveButtonText}>Enregistrer</Text>
-            </Pressable>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
-  // Standard Challenge Results Screen (10 tirs)
-  if (selectedType !== 'precision' && isFinished) {
-    return (
-      <SafeAreaView edges={['top']} style={styles.container}>
-        <View style={styles.header}>
-          <Pressable style={styles.closeButton} onPress={() => router.back()}>
-            <MaterialIcons name="close" size={24} color={theme.textPrimary} />
-          </Pressable>
-          <Text style={styles.headerTitle}>Résultats</Text>
-          <View style={{ width: 40 }} />
-        </View>
-
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
-          showsVerticalScrollIndicator={false}
-        >
-          <Animated.View entering={FadeInDown.duration(400)} style={styles.resultsCard}>
+            )}
+            
             <View style={[
               styles.resultsBadge, 
               { backgroundColor: successRate >= 70 ? theme.success : successRate >= 50 ? theme.warning : theme.error }
@@ -781,36 +1087,64 @@ export default function NewChallengeScreen() {
                 <Text style={styles.resultsGridValue}>{carreauCount}</Text>
                 <Text style={styles.resultsGridLabel}>Carreaux</Text>
               </View>
-              <View style={styles.resultsGridItem}>
-                <MaterialIcons name="timer" size={24} color={theme.primary} />
-                <Text style={styles.resultsGridValue}>{formatTime(elapsedTime)}</Text>
-                <Text style={styles.resultsGridLabel}>Durée</Text>
-              </View>
+              {challengeMode === 'solo' && (
+                <View style={styles.resultsGridItem}>
+                  <MaterialIcons name="timer" size={24} color={theme.primary} />
+                  <Text style={styles.resultsGridValue}>{formatTime(elapsedTime)}</Text>
+                  <Text style={styles.resultsGridLabel}>Durée</Text>
+                </View>
+              )}
             </View>
           </Animated.View>
 
-          {/* Shot history */}
-          <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-            <Text style={styles.sectionTitle}>DÉTAIL DES TIRS</Text>
-            <View style={styles.shotsHistoryCard}>
-              <View style={styles.shotsGrid}>
-                {shots.map((shot, index) => (
-                  <Animated.View
-                    key={index}
-                    entering={FadeIn.duration(200).delay(index * 50)}
-                    style={[
-                      styles.shotDot,
-                      { backgroundColor: shot.success ? (shot.carreau ? theme.carreauColor : theme.success) : theme.error }
-                    ]}
-                  >
-                    {shot.carreau && (
-                      <MaterialIcons name="star" size={12} color="#FFF" />
-                    )}
-                  </Animated.View>
-                ))}
+          {/* Opponent Results (1v1) */}
+          {challengeMode === '1v1' && selectedOpponent && (
+            <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.resultsCard}>
+              <View style={styles.resultsPlayerHeader}>
+                <MaterialIcons name="person" size={20} color={theme.accent} />
+                <Text style={[styles.resultsPlayerName, { color: theme.accent }]}>{selectedOpponent.name}</Text>
+                {winner === 'opponent' && <MaterialIcons name="emoji-events" size={20} color={theme.carreauColor} />}
               </View>
-            </View>
-          </Animated.View>
+              
+              <View style={[
+                styles.resultsBadge, 
+                { backgroundColor: opponentSuccessRate >= 70 ? theme.success : opponentSuccessRate >= 50 ? theme.warning : theme.error }
+              ]}>
+                <Text style={styles.resultsBadgeText}>
+                  {opponentSuccessRate >= 70 ? 'Excellent !' : opponentSuccessRate >= 50 ? 'Bien !' : 'À améliorer'}
+                </Text>
+              </View>
+
+              <Text style={styles.resultsScore}>{opponentSuccessRate}%</Text>
+              <Text style={styles.resultsLabel}>Taux de réussite</Text>
+
+              <View style={styles.resultsGrid}>
+                <View style={styles.resultsGridItem}>
+                  <MaterialIcons name="check-circle" size={24} color={theme.success} />
+                  <Text style={styles.resultsGridValue}>{opponentSuccessCount}</Text>
+                  <Text style={styles.resultsGridLabel}>Réussis</Text>
+                </View>
+                <View style={styles.resultsGridItem}>
+                  <MaterialIcons name="cancel" size={24} color={theme.error} />
+                  <Text style={styles.resultsGridValue}>{opponentShots.length - opponentSuccessCount}</Text>
+                  <Text style={styles.resultsGridLabel}>Ratés</Text>
+                </View>
+                <View style={styles.resultsGridItem}>
+                  <MaterialIcons name="stars" size={24} color={theme.carreauColor} />
+                  <Text style={styles.resultsGridValue}>{opponentCarreauCount}</Text>
+                  <Text style={styles.resultsGridLabel}>Carreaux</Text>
+                </View>
+              </View>
+            </Animated.View>
+          )}
+
+          {/* Duration (1v1) */}
+          {challengeMode === '1v1' && (
+            <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.durationCard}>
+              <MaterialIcons name="timer" size={20} color={theme.primary} />
+              <Text style={styles.durationText}>Durée totale : {formatTime(elapsedTime)}</Text>
+            </Animated.View>
+          )}
 
           {/* Actions */}
           <View style={styles.resultsActions}>
@@ -828,8 +1162,151 @@ export default function NewChallengeScreen() {
     );
   }
 
-  // Precision Challenge In Progress
+  // Results Screen - Precision Challenge
+  if (selectedType === 'precision' && isFinished) {
+    const winner = challengeMode === '1v1' ? getWinner() : null;
+    const percentage = Math.round((totalPrecisionPoints / 100) * 100);
+    const opponentPercentage = Math.round((opponentTotalPrecisionPoints / 100) * 100);
+    
+    return (
+      <SafeAreaView edges={['top']} style={styles.container}>
+        <View style={styles.header}>
+          <Pressable style={styles.closeButton} onPress={() => router.back()}>
+            <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Résultats</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* 1v1 Winner Banner */}
+          {challengeMode === '1v1' && (
+            <Animated.View entering={FadeInDown.duration(400)} style={[
+              styles.winnerBanner,
+              winner === 'player' && styles.winnerBannerWin,
+              winner === 'opponent' && styles.winnerBannerLose,
+              winner === 'draw' && styles.winnerBannerDraw,
+            ]}>
+              <MaterialIcons 
+                name={winner === 'draw' ? 'handshake' : winner === 'player' ? 'emoji-events' : 'sentiment-dissatisfied'} 
+                size={32} 
+                color="#FFF" 
+              />
+              <Text style={styles.winnerBannerText}>
+                {winner === 'draw' ? 'Égalité !' : winner === 'player' ? 'Victoire !' : `${selectedOpponent?.name} gagne !`}
+              </Text>
+            </Animated.View>
+          )}
+
+          {/* Player Results */}
+          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.resultsCard}>
+            {challengeMode === '1v1' && (
+              <View style={styles.resultsPlayerHeader}>
+                <MaterialIcons name="person" size={20} color={theme.primary} />
+                <Text style={styles.resultsPlayerName}>{selfPlayer?.name || userStats.playerName}</Text>
+                {winner === 'player' && <MaterialIcons name="emoji-events" size={20} color={theme.carreauColor} />}
+              </View>
+            )}
+            
+            <View style={[
+              styles.resultsBadge, 
+              { backgroundColor: percentage >= 70 ? theme.success : percentage >= 50 ? theme.warning : theme.error }
+            ]}>
+              <Text style={styles.resultsBadgeText}>
+                {percentage >= 70 ? 'Excellent !' : percentage >= 50 ? 'Bien !' : 'À améliorer'}
+              </Text>
+            </View>
+
+            <Text style={styles.resultsScore}>{totalPrecisionPoints}</Text>
+            <Text style={styles.resultsScoreMax}>/ 100 points</Text>
+
+            <View style={styles.resultsGrid}>
+              {challengeMode === 'solo' && (
+                <View style={styles.resultsGridItem}>
+                  <MaterialIcons name="timer" size={24} color={theme.primary} />
+                  <Text style={styles.resultsGridValue}>{formatTime(elapsedTime)}</Text>
+                  <Text style={styles.resultsGridLabel}>Durée totale</Text>
+                </View>
+              )}
+              <View style={styles.resultsGridItem}>
+                <MaterialIcons name="stars" size={24} color={theme.carreauColor} />
+                <Text style={styles.resultsGridValue}>
+                  {precisionShots.filter(s => s.points === 5).length}
+                </Text>
+                <Text style={styles.resultsGridLabel}>Carreaux</Text>
+              </View>
+            </View>
+          </Animated.View>
+
+          {/* Opponent Results (1v1) */}
+          {challengeMode === '1v1' && selectedOpponent && (
+            <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.resultsCard}>
+              <View style={styles.resultsPlayerHeader}>
+                <MaterialIcons name="person" size={20} color={theme.accent} />
+                <Text style={[styles.resultsPlayerName, { color: theme.accent }]}>{selectedOpponent.name}</Text>
+                {winner === 'opponent' && <MaterialIcons name="emoji-events" size={20} color={theme.carreauColor} />}
+              </View>
+              
+              <View style={[
+                styles.resultsBadge, 
+                { backgroundColor: opponentPercentage >= 70 ? theme.success : opponentPercentage >= 50 ? theme.warning : theme.error }
+              ]}>
+                <Text style={styles.resultsBadgeText}>
+                  {opponentPercentage >= 70 ? 'Excellent !' : opponentPercentage >= 50 ? 'Bien !' : 'À améliorer'}
+                </Text>
+              </View>
+
+              <Text style={styles.resultsScore}>{opponentTotalPrecisionPoints}</Text>
+              <Text style={styles.resultsScoreMax}>/ 100 points</Text>
+
+              <View style={styles.resultsGrid}>
+                <View style={styles.resultsGridItem}>
+                  <MaterialIcons name="stars" size={24} color={theme.carreauColor} />
+                  <Text style={styles.resultsGridValue}>
+                    {opponentPrecisionShots.filter(s => s.points === 5).length}
+                  </Text>
+                  <Text style={styles.resultsGridLabel}>Carreaux</Text>
+                </View>
+              </View>
+            </Animated.View>
+          )}
+
+          {/* Duration (1v1) */}
+          {challengeMode === '1v1' && (
+            <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.durationCard}>
+              <MaterialIcons name="timer" size={20} color={theme.primary} />
+              <Text style={styles.durationText}>Durée totale : {formatTime(elapsedTime)}</Text>
+            </Animated.View>
+          )}
+
+          {/* Actions */}
+          <View style={styles.resultsActions}>
+            <Pressable style={styles.retryButton} onPress={resetChallenge}>
+              <MaterialIcons name="refresh" size={20} color={theme.primary} />
+              <Text style={styles.retryButtonText}>Recommencer</Text>
+            </Pressable>
+            <Pressable style={styles.saveButton} onPress={saveChallenge}>
+              <MaterialIcons name="save" size={20} color="#FFF" />
+              <Text style={styles.saveButtonText}>Enregistrer</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // In Progress - Precision Challenge
   if (selectedType === 'precision' && isStarted && !isFinished) {
+    const isOpponentTurn = currentTurn === 'opponent';
+    const displayAtelier = isOpponentTurn ? opponentAtelier : currentAtelier;
+    const displayDistance = isOpponentTurn ? opponentDistance : currentDistance;
+    const displayShotNumber = isOpponentTurn ? opponentPrecisionShotNumber : currentPrecisionShotNumber;
+    const displayTotalPoints = isOpponentTurn ? opponentTotalPrecisionPoints : totalPrecisionPoints;
+    
     return (
       <SafeAreaView edges={['top']} style={styles.container}>
         <View style={styles.header}>
@@ -843,43 +1320,50 @@ export default function NewChallengeScreen() {
           </View>
         </View>
 
+        {/* Turn indicator for 1v1 */}
+        {challengeMode === '1v1' && (
+          <View style={[styles.turnIndicator, isOpponentTurn && styles.turnIndicatorOpponent]}>
+            <MaterialIcons name="person" size={18} color="#FFF" />
+            <Text style={styles.turnIndicatorText}>
+              {isOpponentTurn ? `Tour de ${selectedOpponent?.name}` : 'Votre tour'}
+            </Text>
+          </View>
+        )}
+
         <ScrollView 
           style={styles.scrollView}
           contentContainerStyle={styles.precisionGameContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Current atelier info */}
           <Animated.View entering={FadeInDown.duration(300)} style={styles.currentAtelierCard}>
             <View style={styles.currentAtelierHeader}>
               <View style={[styles.currentAtelierIcon, { backgroundColor: theme.primary + '20' }]}>
-                <MaterialIcons name={currentAtelier.icon as any} size={28} color={theme.primary} />
+                <MaterialIcons name={displayAtelier.icon as any} size={28} color={theme.primary} />
               </View>
               <View style={styles.currentAtelierInfo}>
-                <Text style={styles.currentAtelierName}>{currentAtelier.name}</Text>
-                <Text style={styles.currentAtelierDesc}>{currentAtelier.description}</Text>
+                <Text style={styles.currentAtelierName}>{displayAtelier.name}</Text>
+                <Text style={styles.currentAtelierDesc}>{displayAtelier.description}</Text>
               </View>
             </View>
             <View style={styles.currentDistanceBadge}>
-              <Text style={styles.currentDistanceText}>{currentDistance}m</Text>
+              <Text style={styles.currentDistanceText}>{displayDistance}m</Text>
             </View>
           </Animated.View>
 
-          {/* Progress indicator */}
           <View style={styles.precisionProgress}>
             <Text style={styles.precisionProgressText}>
-              Tir {currentPrecisionShotNumber} / 20
+              Tir {displayShotNumber} / 20
             </Text>
             <View style={styles.precisionProgressBar}>
               <View 
                 style={[
                   styles.precisionProgressFill, 
-                  { width: `${((currentPrecisionShotNumber - 1) / 20) * 100}%` }
+                  { width: `${((displayShotNumber - 1) / 20) * 100}%` }
                 ]} 
               />
             </View>
           </View>
 
-          {/* Shot timer countdown */}
           <CountdownTimer 
             seconds={30} 
             isRunning={shotTimerRunning}
@@ -887,96 +1371,38 @@ export default function NewChallengeScreen() {
             onTimeUp={handleTimeUp}
           />
 
-          {/* Current score */}
           <View style={styles.currentScoreCard}>
-            <Text style={styles.currentScoreLabel}>Score actuel</Text>
-            <Text style={styles.currentScoreValue}>{totalPrecisionPoints}</Text>
+            <Text style={styles.currentScoreLabel}>
+              {challengeMode === '1v1' ? (isOpponentTurn ? `Score ${selectedOpponent?.name}` : 'Votre score') : 'Score actuel'}
+            </Text>
+            <Text style={styles.currentScoreValue}>{displayTotalPoints}</Text>
             <Text style={styles.currentScoreMax}>/ 100 pts</Text>
           </View>
 
-          {/* Atelier progress dots - tap to edit */}
-          <View style={styles.atelierProgressContainer}>
-            {PRECISION_ATELIERS.map((atelier, aIndex) => (
-              <View key={atelier.id} style={styles.atelierProgressItem}>
-                <View style={[
-                  styles.atelierProgressIcon,
-                  aIndex === currentAtelierIndex && editingPrecisionIndex === null && styles.atelierProgressIconActive,
-                  aIndex < currentAtelierIndex && styles.atelierProgressIconDone
-                ]}>
-                  {aIndex < currentAtelierIndex ? (
-                    <MaterialIcons name="check" size={12} color="#FFF" />
-                  ) : (
-                    <Text style={[
-                      styles.atelierProgressNumber,
-                      aIndex === currentAtelierIndex && editingPrecisionIndex === null && styles.atelierProgressNumberActive
-                    ]}>
-                      {aIndex + 1}
-                    </Text>
-                  )}
-                </View>
-                <View style={styles.atelierProgressDots}>
-                  {PRECISION_DISTANCES.map((dist, dIndex) => {
-                    const shotIndex = aIndex * 4 + dIndex;
-                    const shot = precisionShots[shotIndex];
-                    const isCurrent = aIndex === currentAtelierIndex && dIndex === currentDistanceIndex && editingPrecisionIndex === null;
-                    const isEditing = editingPrecisionIndex === shotIndex;
-                    const canEdit = shotIndex < precisionShots.length;
-                    
-                    return (
-                      <Pressable 
-                        key={dist}
-                        onPress={() => {
-                          if (canEdit) {
-                            Haptics.selectionAsync();
-                            setEditingPrecisionIndex(isEditing ? null : shotIndex);
-                          }
-                        }}
-                        style={[
-                          styles.atelierProgressDot,
-                          isCurrent && styles.atelierProgressDotCurrent,
-                          isEditing && styles.atelierProgressDotEditing,
-                          shot && { 
-                            backgroundColor: 
-                              shot.points === 5 ? theme.carreauColor :
-                              shot.points === 3 ? theme.success :
-                              shot.points === 1 ? theme.warning : theme.error
-                          }
-                        ]}
-                      />
-                    );
-                  })}
-                </View>
+          {/* Scores comparison for 1v1 */}
+          {challengeMode === '1v1' && (
+            <View style={styles.scoresComparison}>
+              <View style={styles.scoreCompareItem}>
+                <Text style={styles.scoreCompareName}>Vous</Text>
+                <Text style={[styles.scoreCompareValue, !isOpponentTurn && styles.scoreCompareValueActive]}>
+                  {totalPrecisionPoints}
+                </Text>
               </View>
-            ))}
-          </View>
-
-          {/* Editing indicator for precision */}
-          {editingPrecisionIndex !== null && (
-            <View style={styles.editingBanner}>
-              <MaterialIcons name="edit" size={16} color={theme.warning} />
-              <Text style={styles.editingBannerText}>
-                Modification : {PRECISION_ATELIERS[Math.floor(editingPrecisionIndex / 4)].name} - {PRECISION_DISTANCES[editingPrecisionIndex % 4]}m
-              </Text>
-              <Pressable onPress={() => setEditingPrecisionIndex(null)}>
-                <MaterialIcons name="close" size={20} color={theme.textSecondary} />
-              </Pressable>
+              <Text style={styles.scoreCompareSeparator}>-</Text>
+              <View style={styles.scoreCompareItem}>
+                <Text style={styles.scoreCompareName}>{selectedOpponent?.name?.split(' ')[0]}</Text>
+                <Text style={[styles.scoreCompareValue, isOpponentTurn && styles.scoreCompareValueActive]}>
+                  {opponentTotalPrecisionPoints}
+                </Text>
+              </View>
             </View>
           )}
         </ScrollView>
 
-        {/* Scoring buttons - Dynamic based on atelier */}
         <View style={[styles.precisionButtonsContainer, { paddingBottom: insets.bottom + 16 }]}>
-          <Text style={styles.scoringButtonsTitle}>
-            {editingPrecisionIndex !== null 
-              ? `Modifier : ${PRECISION_ATELIERS[Math.floor(editingPrecisionIndex / 4)].name} - ${PRECISION_DISTANCES[editingPrecisionIndex % 4]}m`
-              : 'Résultat du tir'
-            }
-          </Text>
+          <Text style={styles.scoringButtonsTitle}>Résultat du tir</Text>
           <View style={styles.scoringButtonsGrid}>
-            {(editingPrecisionIndex !== null 
-              ? PRECISION_ATELIERS[Math.floor(editingPrecisionIndex / 4)].scoringOptions
-              : currentAtelier.scoringOptions
-            ).map((option, index) => {
+            {displayAtelier.scoringOptions.map((option, index) => {
               const bgColors: { [key: number]: string } = {
                 0: theme.error,
                 1: theme.warning,
@@ -987,7 +1413,7 @@ export default function NewChallengeScreen() {
                 <Pressable 
                   key={index}
                   style={[styles.scoringButtonLarge, { backgroundColor: bgColors[option.points] }]}
-                  onPress={() => recordPrecisionShot(option.points)}
+                  onPress={() => recordPrecisionShot(option.points, isOpponentTurn)}
                 >
                   <Text style={styles.scoringButtonPointsLarge}>{option.points}</Text>
                   <Text style={styles.scoringButtonLabelLarge}>{option.label}</Text>
@@ -1001,7 +1427,13 @@ export default function NewChallengeScreen() {
     );
   }
 
-  // Standard Challenge In Progress (10 tirs)
+  // In Progress - Standard Challenge (10 tirs)
+  const isOpponentTurn = currentTurn === 'opponent';
+  const displayCurrentShot = isOpponentTurn ? opponentCurrentShot : currentShot;
+  const displayShots = isOpponentTurn ? opponentShots : shots;
+  const displaySuccessCount = isOpponentTurn ? opponentSuccessCount : successCount;
+  const displayCarreauCount = isOpponentTurn ? opponentCarreauCount : carreauCount;
+  
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
       <View style={styles.header}>
@@ -1015,91 +1447,99 @@ export default function NewChallengeScreen() {
         </View>
       </View>
 
+      {/* Turn indicator for 1v1 */}
+      {challengeMode === '1v1' && (
+        <View style={[styles.turnIndicator, isOpponentTurn && styles.turnIndicatorOpponent]}>
+          <MaterialIcons name="person" size={18} color="#FFF" />
+          <Text style={styles.turnIndicatorText}>
+            {isOpponentTurn ? `Tour de ${selectedOpponent?.name}` : 'Votre tour'}
+          </Text>
+        </View>
+      )}
+
       <View style={styles.progressContainer}>
-        {/* Progress bar */}
         <View style={styles.progressBar}>
           <Animated.View
             style={[
               styles.progressFill,
-              { width: `${(currentShot / (config?.totalShots || 10)) * 100}%`, backgroundColor: config?.color }
+              { width: `${(displayCurrentShot / (config?.totalShots || 10)) * 100}%`, backgroundColor: config?.color }
             ]}
           />
         </View>
         <Text style={styles.progressText}>
-          Tir {currentShot} / {config?.totalShots}
+          Tir {displayCurrentShot} / {config?.totalShots}
         </Text>
       </View>
 
-      {/* Shot indicators - tap to edit */}
+      {/* Shot indicators */}
       <View style={styles.shotsIndicator}>
         {Array.from({ length: config?.totalShots || 10 }).map((_, index) => {
-          const shot = shots[index];
-          const isEditing = editingShotIndex === index;
-          const canEdit = index < shots.length;
+          const shot = displayShots[index];
           return (
-            <Pressable
+            <View
               key={index}
-              onPress={() => {
-                if (canEdit) {
-                  Haptics.selectionAsync();
-                  setEditingShotIndex(isEditing ? null : index);
-                }
-              }}
               style={[
                 styles.shotIndicatorDot,
-                index < currentShot - 1 && shot?.success && { backgroundColor: shot.carreau ? theme.carreauColor : theme.success },
-                index < currentShot - 1 && !shot?.success && { backgroundColor: theme.error },
-                index === currentShot - 1 && !isFinished && { backgroundColor: config?.color, transform: [{ scale: 1.2 }] },
-                isEditing && styles.shotIndicatorEditing,
+                index < displayShots.length && shot?.success && { backgroundColor: shot.carreau ? theme.carreauColor : theme.success },
+                index < displayShots.length && !shot?.success && { backgroundColor: theme.error },
+                index === displayCurrentShot - 1 && displayShots.length < (config?.totalShots || 10) && { backgroundColor: config?.color, transform: [{ scale: 1.2 }] },
               ]}
             >
               {shot?.carreau && (
                 <MaterialIcons name="star" size={8} color="#FFF" />
               )}
-            </Pressable>
+            </View>
           );
         })}
       </View>
 
-      {/* Editing indicator */}
-      {editingShotIndex !== null && (
-        <View style={styles.editingBanner}>
-          <MaterialIcons name="edit" size={16} color={theme.warning} />
-          <Text style={styles.editingBannerText}>Modification du tir #{editingShotIndex + 1}</Text>
-          <Pressable onPress={() => setEditingShotIndex(null)}>
-            <MaterialIcons name="close" size={20} color={theme.textSecondary} />
-          </Pressable>
-        </View>
-      )}
-
       {/* Current stats */}
       <View style={styles.currentStats}>
         <View style={styles.currentStatItem}>
-          <Text style={[styles.currentStatValue, { color: theme.success }]}>{successCount}</Text>
+          <Text style={[styles.currentStatValue, { color: theme.success }]}>{displaySuccessCount}</Text>
           <Text style={styles.currentStatLabel}>Réussis</Text>
         </View>
         <View style={styles.currentStatDivider} />
         <View style={styles.currentStatItem}>
-          <Text style={[styles.currentStatValue, { color: theme.error }]}>{shots.length - successCount}</Text>
+          <Text style={[styles.currentStatValue, { color: theme.error }]}>{displayShots.length - displaySuccessCount}</Text>
           <Text style={styles.currentStatLabel}>Ratés</Text>
         </View>
         <View style={styles.currentStatDivider} />
         <View style={styles.currentStatItem}>
-          <Text style={[styles.currentStatValue, { color: theme.carreauColor }]}>{carreauCount}</Text>
+          <Text style={[styles.currentStatValue, { color: theme.carreauColor }]}>{displayCarreauCount}</Text>
           <Text style={styles.currentStatLabel}>Carreaux</Text>
         </View>
       </View>
 
+      {/* Scores comparison for 1v1 */}
+      {challengeMode === '1v1' && (
+        <View style={styles.scoresComparison}>
+          <View style={styles.scoreCompareItem}>
+            <Text style={styles.scoreCompareName}>Vous</Text>
+            <Text style={[styles.scoreCompareValue, !isOpponentTurn && styles.scoreCompareValueActive]}>
+              {successCount}/{shots.length}
+            </Text>
+          </View>
+          <Text style={styles.scoreCompareSeparator}>vs</Text>
+          <View style={styles.scoreCompareItem}>
+            <Text style={styles.scoreCompareName}>{selectedOpponent?.name?.split(' ')[0]}</Text>
+            <Text style={[styles.scoreCompareValue, isOpponentTurn && styles.scoreCompareValueActive]}>
+              {opponentSuccessCount}/{opponentShots.length}
+            </Text>
+          </View>
+        </View>
+      )}
+
       {/* Shot buttons */}
       <View style={styles.shotButtonsContainer}>
         <Text style={styles.shotButtonsTitle}>
-          {editingShotIndex !== null ? `Modifier le tir #${editingShotIndex + 1}` : 'Ce tir est...'}
+          {challengeMode === '1v1' ? (isOpponentTurn ? `Tir de ${selectedOpponent?.name}` : 'Votre tir') : 'Ce tir est...'}
         </Text>
         
         <View style={styles.shotButtonsRow}>
           <Pressable
             style={[styles.shotButton, styles.shotButtonFail]}
-            onPress={() => recordShot(false)}
+            onPress={() => recordShot(false, false, isOpponentTurn)}
           >
             <MaterialIcons name="close" size={48} color="#FFF" />
             <Text style={styles.shotButtonText}>Raté</Text>
@@ -1107,7 +1547,7 @@ export default function NewChallengeScreen() {
 
           <Pressable
             style={[styles.shotButton, styles.shotButtonSuccess]}
-            onPress={() => recordShot(true)}
+            onPress={() => recordShot(true, false, isOpponentTurn)}
           >
             <MaterialIcons name="check" size={48} color="#FFF" />
             <Text style={styles.shotButtonText}>Réussi</Text>
@@ -1116,7 +1556,7 @@ export default function NewChallengeScreen() {
 
         <Pressable
           style={[styles.carreauButton]}
-          onPress={() => recordShot(true, true)}
+          onPress={() => recordShot(true, true, isOpponentTurn)}
         >
           <MaterialIcons name="stars" size={24} color={theme.carreauColor} />
           <Text style={styles.carreauButtonText}>Carreau !</Text>
@@ -1174,7 +1614,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 24,
   },
-  // Type selection
   introSection: {
     alignItems: 'center',
     paddingVertical: 32,
@@ -1255,6 +1694,245 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.textSecondary,
     lineHeight: 22,
+  },
+  // Mode selection styles
+  modeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    marginBottom: 12,
+    ...theme.shadows.card,
+  },
+  modeIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  modeInfo: {
+    flex: 1,
+  },
+  modeName: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: theme.textPrimary,
+    marginBottom: 4,
+  },
+  modeDesc: {
+    fontSize: 13,
+    color: theme.textSecondary,
+  },
+  modeInfoCard: {
+    flexDirection: 'row',
+    backgroundColor: theme.warning + '15',
+    borderRadius: theme.borderRadius.md,
+    padding: 14,
+    marginTop: 12,
+    gap: 10,
+    alignItems: 'flex-start',
+  },
+  modeInfoText: {
+    flex: 1,
+    fontSize: 13,
+    color: theme.textSecondary,
+    lineHeight: 18,
+  },
+  modeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: theme.primary + '15',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: theme.borderRadius.full,
+    marginTop: 16,
+  },
+  modeBadge1v1: {
+    backgroundColor: theme.accent + '15',
+  },
+  modeBadgeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.primary,
+  },
+  modeBadgeText1v1: {
+    color: theme.accent,
+  },
+  // Search and player selection
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surface,
+    marginHorizontal: 16,
+    marginTop: 16,
+    paddingHorizontal: 14,
+    borderRadius: theme.borderRadius.md,
+    gap: 10,
+    ...theme.shadows.card,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: theme.textPrimary,
+  },
+  playerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    padding: 14,
+    marginBottom: 10,
+    ...theme.shadows.card,
+  },
+  playerAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: theme.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  playerInitials: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  playerInfo: {
+    flex: 1,
+  },
+  playerName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  playerMeta: {
+    fontSize: 13,
+    color: theme.textSecondary,
+    marginTop: 2,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 48,
+  },
+  emptyStateText: {
+    fontSize: 15,
+    color: theme.textMuted,
+    marginTop: 12,
+  },
+  // Turn indicator
+  turnIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: theme.primary,
+    paddingVertical: 10,
+  },
+  turnIndicatorOpponent: {
+    backgroundColor: theme.accent,
+  },
+  turnIndicatorText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  // Winner banner
+  winnerBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingVertical: 16,
+    borderRadius: theme.borderRadius.lg,
+    marginBottom: 16,
+  },
+  winnerBannerWin: {
+    backgroundColor: theme.success,
+  },
+  winnerBannerLose: {
+    backgroundColor: theme.error,
+  },
+  winnerBannerDraw: {
+    backgroundColor: theme.warning,
+  },
+  winnerBannerText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  // Results player header
+  resultsPlayerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  resultsPlayerName: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.primary,
+  },
+  // Scores comparison
+  scoresComparison: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.surface,
+    marginHorizontal: 16,
+    marginVertical: 12,
+    paddingVertical: 16,
+    borderRadius: theme.borderRadius.lg,
+    ...theme.shadows.card,
+  },
+  scoreCompareItem: {
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  scoreCompareName: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginBottom: 4,
+  },
+  scoreCompareValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: theme.textMuted,
+  },
+  scoreCompareValueActive: {
+    color: theme.primary,
+  },
+  scoreCompareSeparator: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.textMuted,
+    paddingHorizontal: 8,
+  },
+  // Duration card
+  durationCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: theme.surface,
+    paddingVertical: 14,
+    borderRadius: theme.borderRadius.md,
+    marginTop: 8,
+    ...theme.shadows.card,
+  },
+  durationText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.textSecondary,
   },
   // Precision ready screen
   precisionReadyHeader: {
@@ -1363,7 +2041,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: theme.border,
   },
-  // Ready screen
   readyContainer: {
     flex: 1,
     justifyContent: 'space-between',
@@ -1393,7 +2070,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: theme.textSecondary,
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 16,
     lineHeight: 24,
   },
   readyStats: {
@@ -1427,7 +2104,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFF',
   },
-  // Progress
   progressContainer: {
     paddingHorizontal: 16,
     paddingVertical: 16,
@@ -1449,7 +2125,6 @@ const styles = StyleSheet.create({
     color: theme.textSecondary,
     textAlign: 'center',
   },
-  // Shot indicators
   shotsIndicator: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -1465,32 +2140,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  shotIndicatorEditing: {
-    borderWidth: 3,
-    borderColor: theme.warning,
-    transform: [{ scale: 1.3 }],
-  },
-  editingBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: theme.warning + '20',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    marginHorizontal: 16,
-    borderRadius: theme.borderRadius.md,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: theme.warning,
-  },
-  editingBannerText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.warning,
-  },
-  // Current stats
   currentStats: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -1519,7 +2168,6 @@ const styles = StyleSheet.create({
     height: 40,
     backgroundColor: theme.border,
   },
-  // Shot buttons
   shotButtonsContainer: {
     flex: 1,
     paddingHorizontal: 16,
@@ -1574,7 +2222,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.carreauColor,
   },
-  // Precision game
   precisionGameContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
@@ -1646,7 +2293,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.primary,
     borderRadius: 3,
   },
-  // Countdown timer
   countdownContainer: {
     alignItems: 'center',
     marginBottom: 20,
@@ -1697,7 +2343,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFF',
   },
-  // Current score
   currentScoreCard: {
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg,
@@ -1720,63 +2365,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: theme.textMuted,
   },
-  // Atelier progress
-  atelierProgressContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 12,
-    marginBottom: 20,
-    ...theme.shadows.card,
-  },
-  atelierProgressItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  atelierProgressIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: theme.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  atelierProgressIconActive: {
-    backgroundColor: theme.primary,
-  },
-  atelierProgressIconDone: {
-    backgroundColor: theme.success,
-  },
-  atelierProgressNumber: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: theme.textMuted,
-  },
-  atelierProgressNumberActive: {
-    color: '#FFF',
-  },
-  atelierProgressDots: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  atelierProgressDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: theme.border,
-  },
-  atelierProgressDotCurrent: {
-    backgroundColor: theme.primary,
-    transform: [{ scale: 1.2 }],
-  },
-  atelierProgressDotEditing: {
-    borderWidth: 2,
-    borderColor: theme.warning,
-    transform: [{ scale: 1.4 }],
-  },
-  // Precision buttons
   precisionButtonsContainer: {
     paddingHorizontal: 16,
     paddingTop: 12,
@@ -1791,22 +2379,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 12,
   },
-  scoringButtonsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
   scoringButtonsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
-  },
-  scoringButton: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: theme.borderRadius.md,
-    ...theme.shadows.card,
   },
   scoringButtonLarge: {
     width: '48%',
@@ -1818,21 +2394,10 @@ const styles = StyleSheet.create({
     minHeight: 100,
     ...theme.shadows.card,
   },
-  scoringButtonPoints: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFF',
-  },
   scoringButtonPointsLarge: {
     fontSize: 28,
     fontWeight: '700',
     color: '#FFF',
-  },
-  scoringButtonLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#FFF',
-    marginTop: 2,
   },
   scoringButtonLabelLarge: {
     fontSize: 13,
@@ -1847,12 +2412,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
     lineHeight: 13,
   },
-  // Results
   resultsCard: {
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg,
     padding: 24,
     alignItems: 'center',
+    marginBottom: 12,
     ...theme.shadows.cardElevated,
   },
   resultsBadge: {
@@ -1901,86 +2466,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.textSecondary,
     marginTop: 4,
-  },
-  section: {
-    marginTop: 24,
-  },
-  // Atelier results
-  atelierResultCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: 14,
-    marginBottom: 8,
-    ...theme.shadows.card,
-  },
-  atelierResultHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  atelierResultIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  atelierResultName: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  atelierResultScore: {
-    fontSize: 16,
-  },
-  atelierShotsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 4,
-  },
-  atelierShotDot: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  atelierShotPoints: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  atelierDistanceLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  atelierDistanceLabel: {
-    fontSize: 10,
-    color: theme.textMuted,
-    width: 36,
-    textAlign: 'center',
-  },
-  // Shot history
-  shotsHistoryCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    ...theme.shadows.card,
-  },
-  shotsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    justifyContent: 'center',
-  },
-  shotDot: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   resultsActions: {
     flexDirection: 'row',
