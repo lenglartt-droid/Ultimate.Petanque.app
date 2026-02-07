@@ -122,11 +122,11 @@ export default function LoginScreen() {
           {/* Header */}
           <Animated.View entering={FadeInDown.duration(500)} style={styles.header}>
             <Image
-              source={require('@/assets/images/petanque-hero.png')}
+              source={require('@/assets/images/app-logo.png')}
               style={styles.logo}
               contentFit="contain"
             />
-            <Text style={styles.appName}>PPSS</Text>
+            <Text style={styles.appName}>Personal Petanque Scorer and Stats</Text>
             <Text style={styles.tagline}>
               {mode === 'login' ? 'Content de vous revoir !' : 'Créez votre compte'}
             </Text>
@@ -366,15 +366,17 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   logo: {
-    width: 100,
-    height: 100,
+    width: 120,
+    height: 120,
     marginBottom: 16,
+    borderRadius: 24,
   },
   appName: {
-    fontSize: 32,
+    fontSize: 18,
     fontWeight: '700',
     color: theme.textPrimary,
     marginBottom: 8,
+    textAlign: 'center',
   },
   tagline: {
     fontSize: 16,
