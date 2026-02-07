@@ -17,7 +17,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import theme from '@/constants/theme';
-import config, { GameFormat, TournamentType } from '@/constants/config';
+import config, { GameFormat, TournamentType, TournamentLevel, TournamentCategory, RegistrationType, TournamentScope } from '@/constants/config';
 
 // Cadrage rules configuration
 const CADRAGE_RULES: Record<TournamentType, { description: string; matches: string; points: string; specifics: string[] }> = {
@@ -87,6 +87,13 @@ export default function EditTournamentScreen() {
   const [maxParticipants, setMaxParticipants] = useState('32');
   const [prize, setPrize] = useState('');
   const [description, setDescription] = useState('');
+  // Tournament classification fields
+  const [tournamentLevel, setTournamentLevel] = useState<TournamentLevel | string | undefined>();
+  const [customLevel, setCustomLevel] = useState('');
+  const [showCustomLevelInput, setShowCustomLevelInput] = useState(false);
+  const [tournamentCategory, setTournamentCategory] = useState<TournamentCategory | undefined>();
+  const [registrationType, setRegistrationType] = useState<RegistrationType | undefined>();
+  const [tournamentScope, setTournamentScope] = useState<TournamentScope | undefined>();
 
   // Load tournament data
   useEffect(() => {
@@ -102,6 +109,18 @@ export default function EditTournamentScreen() {
       setMaxParticipants(tournament.maxParticipants?.toString() || '32');
       setPrize(tournament.prize || '');
       setDescription(tournament.description || '');
+      // Load classification fields
+      if (tournament.tournamentLevel) {
+        const isCustom = !config.tournamentLevels.includes(tournament.tournamentLevel as TournamentLevel);
+        if (isCustom) {
+          setShowCustomLevelInput(true);
+          setCustomLevel(tournament.tournamentLevel);
+        }
+        setTournamentLevel(tournament.tournamentLevel);
+      }
+      setTournamentCategory(tournament.tournamentCategory);
+      setRegistrationType(tournament.registrationType);
+      setTournamentScope(tournament.tournamentScope);
     }
   }, [tournament]);
 
@@ -141,6 +160,10 @@ export default function EditTournamentScreen() {
       maxParticipants: parseInt(maxParticipants) || 32,
       prize: prize.trim() || undefined,
       description: description.trim() || undefined,
+      tournamentLevel,
+      tournamentCategory,
+      registrationType,
+      tournamentScope,
     });
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -326,6 +349,165 @@ export default function EditTournamentScreen() {
                 </View>
               </Animated.View>
             )}
+          </Animated.View>
+
+          {/* Tournament Level */}
+          <Animated.View entering={FadeInDown.duration(400).delay(225)} style={styles.section}>
+            <Text style={styles.sectionTitle}>NIVEAU DU TOURNOI</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
+              {config.tournamentLevels.map(level => (
+                <Pressable
+                  key={level}
+                  style={[
+                    styles.levelChip,
+                    tournamentLevel === level && !showCustomLevelInput && styles.levelChipActive
+                  ]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setShowCustomLevelInput(false);
+                    setCustomLevel('');
+                    setTournamentLevel(tournamentLevel === level ? undefined : level);
+                  }}
+                >
+                  <Text style={[
+                    styles.levelChipText,
+                    tournamentLevel === level && !showCustomLevelInput && styles.levelChipTextActive
+                  ]}>
+                    {level}
+                  </Text>
+                </Pressable>
+              ))}
+              {/* Custom Level Option */}
+              <Pressable
+                style={[
+                  styles.levelChip,
+                  styles.customLevelChip,
+                  showCustomLevelInput && styles.levelChipActive
+                ]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setShowCustomLevelInput(!showCustomLevelInput);
+                  if (!showCustomLevelInput) {
+                    setTournamentLevel(undefined);
+                  }
+                }}
+              >
+                <MaterialIcons 
+                  name="add" 
+                  size={16} 
+                  color={showCustomLevelInput ? theme.success : theme.textSecondary} 
+                />
+                <Text style={[
+                  styles.levelChipText,
+                  showCustomLevelInput && styles.levelChipTextActive
+                ]}>
+                  Autre
+                </Text>
+              </Pressable>
+            </ScrollView>
+            
+            {/* Custom Level Input */}
+            {showCustomLevelInput && (
+              <Animated.View entering={FadeInDown.duration(300)} style={styles.customLevelInputContainer}>
+                <TextInput
+                  style={styles.customLevelInput}
+                  value={customLevel}
+                  onChangeText={(text) => {
+                    setCustomLevel(text);
+                    setTournamentLevel(text.trim() || undefined);
+                  }}
+                  placeholder="Saisir un niveau personnalisé..."
+                  placeholderTextColor={theme.textMuted}
+                  autoFocus
+                />
+                {customLevel.trim() && (
+                  <View style={styles.customLevelBadge}>
+                    <MaterialIcons name="check" size={14} color={theme.success} />
+                  </View>
+                )}
+              </Animated.View>
+            )}
+          </Animated.View>
+
+          {/* Tournament Category */}
+          <Animated.View entering={FadeInDown.duration(400).delay(235)} style={styles.section}>
+            <Text style={styles.sectionTitle}>TYPE DE TOURNOI</Text>
+            <View style={styles.categoryContainer}>
+              {config.tournamentCategories.map(cat => (
+                <Pressable
+                  key={cat}
+                  style={[
+                    styles.categoryChip,
+                    tournamentCategory === cat && styles.categoryChipActive
+                  ]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setTournamentCategory(tournamentCategory === cat ? undefined : cat);
+                  }}
+                >
+                  <Text style={[
+                    styles.categoryChipText,
+                    tournamentCategory === cat && styles.categoryChipTextActive
+                  ]}>
+                    {cat}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </Animated.View>
+
+          {/* Registration Type */}
+          <Animated.View entering={FadeInDown.duration(400).delay(245)} style={styles.section}>
+            <Text style={styles.sectionTitle}>TYPE D'INSCRIPTION</Text>
+            <View style={styles.registrationContainer}>
+              {config.registrationTypes.map(reg => (
+                <Pressable
+                  key={reg}
+                  style={[
+                    styles.registrationChip,
+                    registrationType === reg && styles.registrationChipActive
+                  ]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setRegistrationType(registrationType === reg ? undefined : reg);
+                  }}
+                >
+                  <Text style={[
+                    styles.registrationChipText,
+                    registrationType === reg && styles.registrationChipTextActive
+                  ]}>
+                    {reg}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </Animated.View>
+
+          {/* Tournament Scope */}
+          <Animated.View entering={FadeInDown.duration(400).delay(248)} style={styles.section}>
+            <Text style={styles.sectionTitle}>CADRE</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
+              {config.tournamentScopes.map(scope => (
+                <Pressable
+                  key={scope}
+                  style={[
+                    styles.scopeChip,
+                    tournamentScope === scope && styles.scopeChipActive
+                  ]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setTournamentScope(tournamentScope === scope ? undefined : scope);
+                  }}
+                >
+                  <Text style={[
+                    styles.scopeChipText,
+                    tournamentScope === scope && styles.scopeChipTextActive
+                  ]}>
+                    {scope}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
           </Animated.View>
 
           {/* Format */}
@@ -795,5 +977,135 @@ const styles = StyleSheet.create({
   cadrageRulesSpecificText: {
     fontSize: 13,
     color: theme.textSecondary,
+  },
+  // Tournament classification styles
+  horizontalScroll: {
+    gap: 10,
+    paddingRight: 16,
+  },
+  levelChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    ...theme.shadows.card,
+  },
+  levelChipActive: {
+    borderColor: theme.success,
+    backgroundColor: theme.success + '10',
+  },
+  levelChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  levelChipTextActive: {
+    color: theme.success,
+  },
+  customLevelChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  customLevelInputContainer: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 2,
+    borderColor: theme.success,
+    ...theme.shadows.card,
+  },
+  customLevelInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: theme.textPrimary,
+  },
+  customLevelBadge: {
+    marginRight: 12,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: theme.success + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  categoryChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    ...theme.shadows.card,
+  },
+  categoryChipActive: {
+    borderColor: theme.warning,
+    backgroundColor: theme.warning + '10',
+  },
+  categoryChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  categoryChipTextActive: {
+    color: theme.warning,
+  },
+  registrationContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  registrationChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    ...theme.shadows.card,
+  },
+  registrationChipActive: {
+    borderColor: theme.primary,
+    backgroundColor: theme.primary + '10',
+  },
+  registrationChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  registrationChipTextActive: {
+    color: theme.primary,
+  },
+  scopeChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    ...theme.shadows.card,
+  },
+  scopeChipActive: {
+    borderColor: theme.accent,
+    backgroundColor: theme.accent + '10',
+  },
+  scopeChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  scopeChipTextActive: {
+    color: theme.accent,
   },
 });

@@ -83,7 +83,9 @@ export default function NewTournamentScreen() {
   const [prize, setPrize] = useState('');
   const [description, setDescription] = useState('');
   // New tournament classification fields
-  const [tournamentLevel, setTournamentLevel] = useState<TournamentLevel | undefined>();
+  const [tournamentLevel, setTournamentLevel] = useState<TournamentLevel | string | undefined>();
+  const [customLevel, setCustomLevel] = useState('');
+  const [showCustomLevelInput, setShowCustomLevelInput] = useState(false);
   const [tournamentCategory, setTournamentCategory] = useState<TournamentCategory | undefined>();
   const [registrationType, setRegistrationType] = useState<RegistrationType | undefined>();
   const [tournamentScope, setTournamentScope] = useState<TournamentScope | undefined>();
@@ -276,22 +278,73 @@ export default function NewTournamentScreen() {
                   key={level}
                   style={[
                     styles.levelChip,
-                    tournamentLevel === level && styles.levelChipActive
+                    tournamentLevel === level && !showCustomLevelInput && styles.levelChipActive
                   ]}
                   onPress={() => {
                     Haptics.selectionAsync();
+                    setShowCustomLevelInput(false);
+                    setCustomLevel('');
                     setTournamentLevel(tournamentLevel === level ? undefined : level);
                   }}
                 >
                   <Text style={[
                     styles.levelChipText,
-                    tournamentLevel === level && styles.levelChipTextActive
+                    tournamentLevel === level && !showCustomLevelInput && styles.levelChipTextActive
                   ]}>
                     {level}
                   </Text>
                 </Pressable>
               ))}
+              {/* Custom Level Option */}
+              <Pressable
+                style={[
+                  styles.levelChip,
+                  styles.customLevelChip,
+                  showCustomLevelInput && styles.levelChipActive
+                ]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setShowCustomLevelInput(!showCustomLevelInput);
+                  if (!showCustomLevelInput) {
+                    setTournamentLevel(undefined);
+                  }
+                }}
+              >
+                <MaterialIcons 
+                  name="add" 
+                  size={16} 
+                  color={showCustomLevelInput ? theme.success : theme.textSecondary} 
+                />
+                <Text style={[
+                  styles.levelChipText,
+                  showCustomLevelInput && styles.levelChipTextActive
+                ]}>
+                  Autre
+                </Text>
+              </Pressable>
             </ScrollView>
+            
+            {/* Custom Level Input */}
+            {showCustomLevelInput && (
+              <Animated.View entering={FadeInDown.duration(300)} style={styles.customLevelInputContainer}>
+                <TextInput
+                  style={styles.customLevelInput}
+                  value={customLevel}
+                  onChangeText={(text) => {
+                    setCustomLevel(text);
+                    setTournamentLevel(text.trim() || undefined);
+                  }}
+                  placeholder="Saisir un niveau personnalisé..."
+                  placeholderTextColor={theme.textMuted}
+                  autoFocus
+                />
+                {customLevel.trim() && (
+                  <View style={styles.customLevelBadge}>
+                    <MaterialIcons name="check" size={14} color={theme.success} />
+                  </View>
+                )}
+              </Animated.View>
+            )}
           </Animated.View>
 
           {/* Tournament Category */}
@@ -1083,6 +1136,37 @@ const styles = StyleSheet.create({
   },
   levelChipTextActive: {
     color: theme.success,
+  },
+  customLevelChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  customLevelInputContainer: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 2,
+    borderColor: theme.success,
+    ...theme.shadows.card,
+  },
+  customLevelInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: theme.textPrimary,
+  },
+  customLevelBadge: {
+    marginRight: 12,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: theme.success + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   categoryContainer: {
     flexDirection: 'row',
