@@ -26,7 +26,7 @@ export default function HomeScreen() {
   // Get display name
   const displayName = user?.username || selfPlayer?.name || user?.email?.split('@')[0] || 'Joueur';
 
-  const upcomingTournaments = tournaments.filter(t => t.status === 'À venir').slice(0, 3);
+
 
 
   return (
@@ -143,62 +143,15 @@ export default function HomeScreen() {
 
             <Pressable 
               style={({ pressed }) => [styles.quickAccessItem, pressed && styles.quickAccessItemPressed]} 
-              onPress={() => router.push('/history')}
+              onPress={() => router.push('/club/new')}
             >
               <View style={[styles.quickAccessIcon, { backgroundColor: theme.success }]}>
-                <MaterialIcons name="history" size={24} color="#FFF" />
+                <MaterialIcons name="add-home" size={24} color="#FFF" />
               </View>
-              <Text style={styles.quickAccessText}>Historique</Text>
+              <Text style={styles.quickAccessText}>Club</Text>
             </Pressable>
           </View>
         </Animated.View>
-
-        {/* Upcoming Tournaments */}
-        {upcomingTournaments.length > 0 && (
-          <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Tournois à venir</Text>
-              <Pressable onPress={() => router.push('/(tabs)/directory')}>
-                <Text style={styles.seeAll}>Voir tout</Text>
-              </Pressable>
-            </View>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.tournamentsScroll}
-            >
-              {upcomingTournaments.map((tournament) => (
-                <Pressable 
-                  key={tournament.id}
-                  style={styles.tournamentCard}
-                  onPress={() => router.push(`/tournament/${tournament.id}`)}
-                >
-                  <View style={styles.tournamentCardHeader}>
-                    <View style={styles.tournamentCardIcon}>
-                      <MaterialIcons name="emoji-events" size={20} color={theme.carreauColor} />
-                    </View>
-                    <View style={styles.tournamentCardBadge}>
-                      <Text style={styles.tournamentCardBadgeText}>{tournament.format}</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.tournamentCardName} numberOfLines={2}>
-                    {tournament.name}
-                  </Text>
-                  <View style={styles.tournamentCardMeta}>
-                    <MaterialIcons name="event" size={14} color={theme.textMuted} />
-                    <Text style={styles.tournamentCardDate}>
-                      {new Date(tournament.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
-                    </Text>
-                  </View>
-                  <View style={styles.tournamentCardMeta}>
-                    <MaterialIcons name="place" size={14} color={theme.textMuted} />
-                    <Text style={styles.tournamentCardLocation}>{tournament.location.city}</Text>
-                  </View>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </Animated.View>
-        )}
 
         {/* Empty State - First Time User */}
         {matches.length === 0 && challenges.length === 0 && (
@@ -219,6 +172,18 @@ export default function HomeScreen() {
             </Pressable>
           </Animated.View>
         )}
+
+        {/* History Button */}
+        <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.historySection}>
+          <Pressable 
+            style={({ pressed }) => [styles.historyButton, pressed && styles.historyButtonPressed]}
+            onPress={() => router.push('/history')}
+          >
+            <MaterialIcons name="history" size={22} color={theme.primary} />
+            <Text style={styles.historyButtonText}>Voir mon historique</Text>
+            <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+          </Pressable>
+        </Animated.View>
       </ScrollView>
 
       {/* Tournament Picker Modal */}
@@ -522,62 +487,32 @@ const styles = StyleSheet.create({
     color: theme.primary,
     fontWeight: '600',
   },
-  // Tournament Cards
-  tournamentsScroll: {
-    gap: 12,
+  // History Button
+  historySection: {
+    marginTop: 8,
+    marginBottom: 24,
   },
-  tournamentCard: {
-    width: 160,
+  historyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg,
-    padding: 14,
+    padding: 16,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: theme.primary + '30',
     ...theme.shadows.card,
   },
-  tournamentCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
+  historyButtonPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
+    backgroundColor: theme.primary + '08',
   },
-  tournamentCardIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: theme.carreauColor + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tournamentCardBadge: {
-    backgroundColor: theme.primary + '15',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: theme.borderRadius.sm,
-  },
-  tournamentCardBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: theme.primary,
-  },
-  tournamentCardName: {
-    fontSize: 14,
+  historyButtonText: {
+    flex: 1,
+    fontSize: 15,
     fontWeight: '600',
     color: theme.textPrimary,
-    marginBottom: 10,
-    minHeight: 36,
-  },
-  tournamentCardMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 4,
-  },
-  tournamentCardDate: {
-    fontSize: 11,
-    color: theme.textMuted,
-  },
-  tournamentCardLocation: {
-    fontSize: 11,
-    color: theme.textMuted,
   },
   // Empty State
   emptyStateCard: {
