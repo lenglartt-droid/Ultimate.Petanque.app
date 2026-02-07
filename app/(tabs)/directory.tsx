@@ -261,38 +261,6 @@ export default function DirectoryScreen() {
         style={styles.header}
       >
         <Text style={styles.title}>Annuaire</Text>
-        {activeTab === 'terrains' && (
-          <Pressable 
-            style={styles.addButton}
-            onPress={() => router.push('/terrain/new')}
-          >
-            <MaterialIcons name="add" size={20} color="#FFF" />
-          </Pressable>
-        )}
-        {activeTab === 'clubs' && (
-          <Pressable 
-            style={styles.addButton}
-            onPress={() => router.push('/club/new')}
-          >
-            <MaterialIcons name="add" size={20} color="#FFF" />
-          </Pressable>
-        )}
-        {activeTab === 'tournaments' && (
-          <Pressable 
-            style={styles.addButton}
-            onPress={() => router.push('/tournament/new')}
-          >
-            <MaterialIcons name="add" size={20} color="#FFF" />
-          </Pressable>
-        )}
-        {activeTab === 'players' && (
-          <Pressable 
-            style={styles.addButton}
-            onPress={() => router.push('/player/new')}
-          >
-            <MaterialIcons name="add" size={20} color="#FFF" />
-          </Pressable>
-        )}
       </Animated.View>
 
       {/* Search */}
@@ -427,15 +395,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: theme.textPrimary,
   },
-  addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: theme.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...theme.shadows.card,
-  },
+
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',

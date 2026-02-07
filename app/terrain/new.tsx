@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,14 @@ import {
   Platform,
   Alert,
   Switch,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import * as Location from 'expo-location';
 import theme from '@/constants/theme';
 import config, { TerrainType } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
@@ -34,6 +36,74 @@ export default function NewTerrainScreen() {
   const [isPublic, setIsPublic] = useState(true);
   const [lighting, setLighting] = useState(false);
   const [covered, setCovered] = useState(false);
+  const [latitude, setLatitude] = useState(0);
+  const [longitude, setLongitude] = useState(0);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [locationPermission, setLocationPermission] = useState(false);
+
+  // Request location permission on mount
+  useEffect(() => {
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      setLocationPermission(status === 'granted');
+    })();
+  }, []);
+
+  // Geocode address when city and address change
+  const geocodeAddress = async () => {
+    if (!address.trim() || !city.trim()) return;
+    
+    setIsGeocoding(true);
+    try {
+      const fullAddress = `${address.trim()}, ${city.trim()}, France`;
+      const results = await Location.geocodeAsync(fullAddress);
+      
+      if (results && results.length > 0) {
+        setLatitude(results[0].latitude);
+        setLongitude(results[0].longitude);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Alert.alert('Adresse non trouvée', 'Impossible de géolocaliser cette adresse. Vérifiez les informations saisies.');
+      }
+    } catch (error) {
+      console.error('Geocoding error:', error);
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
+
+  // Get current location
+  const getCurrentLocation = async () => {
+    if (!locationPermission) {
+      Alert.alert('Permission requise', 'Autorisez l\'accès à la localisation pour utiliser cette fonctionnalité.');
+      return;
+    }
+
+    setIsGeocoding(true);
+    try {
+      const location = await Location.getCurrentPositionAsync({});
+      setLatitude(location.coords.latitude);
+      setLongitude(location.coords.longitude);
+
+      // Reverse geocode to get address
+      const reverseResults = await Location.reverseGeocodeAsync({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      });
+
+      if (reverseResults && reverseResults.length > 0) {
+        const result = reverseResults[0];
+        if (result.street) setAddress(`${result.streetNumber || ''} ${result.street}`.trim());
+        if (result.city) setCity(result.city);
+      }
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      Alert.alert('Erreur', 'Impossible de récupérer votre position actuelle.');
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -55,7 +125,7 @@ export default function NewTerrainScreen() {
       name: name.trim(),
       address: address.trim(),
       city: city.trim(),
-      location: { latitude: 0, longitude: 0 },
+      location: { latitude, longitude },
       type,
       description: description.trim() || undefined,
       facilities: [],
@@ -159,7 +229,23 @@ export default function NewTerrainScreen() {
 
           {/* Address */}
           <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-            <Text style={styles.sectionTitle}>ADRESSE *</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>ADRESSE *</Text>
+              <Pressable 
+                style={styles.locationButton}
+                onPress={getCurrentLocation}
+                disabled={isGeocoding}
+              >
+                {isGeocoding ? (
+                  <ActivityIndicator size="small" color={theme.primary} />
+                ) : (
+                  <>
+                    <MaterialIcons name="my-location" size={16} color={theme.primary} />
+                    <Text style={styles.locationButtonText}>Ma position</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
             <TextInput
               style={[styles.textInput, { marginBottom: 12 }]}
               value={address}
@@ -168,12 +254,44 @@ export default function NewTerrainScreen() {
               placeholderTextColor={theme.textMuted}
             />
             <TextInput
-              style={styles.textInput}
+              style={[styles.textInput, { marginBottom: 12 }]}
               value={city}
               onChangeText={setCity}
               placeholder="Ville *"
               placeholderTextColor={theme.textMuted}
             />
+            
+            {/* Geocode Button */}
+            <Pressable 
+              style={[
+                styles.geocodeButton, 
+                (!address.trim() || !city.trim()) && styles.geocodeButtonDisabled
+              ]}
+              onPress={geocodeAddress}
+              disabled={!address.trim() || !city.trim() || isGeocoding}
+            >
+              {isGeocoding ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <>
+                  <MaterialIcons name="place" size={18} color="#FFF" />
+                  <Text style={styles.geocodeButtonText}>Géolocaliser cette adresse</Text>
+                </>
+              )}
+            </Pressable>
+
+            {/* Location Preview */}
+            {(latitude !== 0 || longitude !== 0) && (
+              <Animated.View entering={FadeInDown.duration(300)} style={styles.locationPreview}>
+                <MaterialIcons name="check-circle" size={20} color={theme.success} />
+                <View style={styles.locationPreviewInfo}>
+                  <Text style={styles.locationPreviewTitle}>Position enregistrée</Text>
+                  <Text style={styles.locationPreviewCoords}>
+                    {latitude.toFixed(6)}, {longitude.toFixed(6)}
+                  </Text>
+                </View>
+              </Animated.View>
+            )}
           </Animated.View>
 
           {/* Club */}
@@ -558,5 +676,68 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     color: '#FFF',
+  },
+  // Section header styles
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  locationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: theme.primary + '15',
+    borderRadius: theme.borderRadius.sm,
+  },
+  locationButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.primary,
+  },
+  geocodeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: theme.primary,
+    paddingVertical: 14,
+    borderRadius: theme.borderRadius.md,
+  },
+  geocodeButtonDisabled: {
+    backgroundColor: theme.textMuted,
+  },
+  geocodeButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  locationPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: theme.success + '10',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: theme.borderRadius.md,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: theme.success + '30',
+  },
+  locationPreviewInfo: {
+    flex: 1,
+  },
+  locationPreviewTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.success,
+  },
+  locationPreviewCoords: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 2,
   },
 });

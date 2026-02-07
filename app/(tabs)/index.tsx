@@ -133,12 +133,12 @@ export default function HomeScreen() {
 
             <Pressable 
               style={({ pressed }) => [styles.quickAccessItem, pressed && styles.quickAccessItemPressed]} 
-              onPress={() => router.push('/club/new')}
+              onPress={() => router.push('/terrain/new')}
             >
               <View style={[styles.quickAccessIcon, { backgroundColor: theme.accent }]}>
-                <MaterialIcons name="home-work" size={24} color="#FFF" />
+                <MaterialIcons name="sports-soccer" size={24} color="#FFF" />
               </View>
-              <Text style={styles.quickAccessText}>Club</Text>
+              <Text style={styles.quickAccessText}>Terrain</Text>
             </Pressable>
 
             <Pressable 
