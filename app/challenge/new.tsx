@@ -614,6 +614,31 @@ export default function NewChallengeScreen() {
     );
   };
 
+  // Revanche - restart same challenge with same opponent immediately
+  const handleRevanche = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // Reset all state but keep type, mode, and opponent
+    setShots([]);
+    setOpponentShots([]);
+    setPrecisionShots([]);
+    setOpponentPrecisionShots([]);
+    setCurrentShot(1);
+    setOpponentCurrentShot(1);
+    setCurrentAtelierIndex(0);
+    setCurrentDistanceIndex(0);
+    setOpponentAtelierIndex(0);
+    setOpponentDistanceIndex(0);
+    setElapsedTime(0);
+    setIsFinished(false);
+    setShotTimerRunning(false);
+    setEditingShotIndex(null);
+    setEditingOpponentShotIndex(null);
+    setEditingPrecisionIndex(null);
+    setCurrentTurn('player');
+    // Start immediately
+    setIsStarted(true);
+  };
+
   // Challenge Type Selection Screen
   if (!selectedType) {
     return (
@@ -1224,6 +1249,20 @@ export default function NewChallengeScreen() {
               <Text style={styles.saveButtonText}>Enregistrer</Text>
             </Pressable>
           </View>
+
+          {/* Revanche button for 1v1 */}
+          {challengeMode === '1v1' && selectedOpponent && (
+            <Animated.View entering={FadeInDown.duration(400).delay(400)}>
+              <Pressable style={styles.revancheButton} onPress={handleRevanche}>
+                <MaterialIcons name="sports-mma" size={22} color="#FFF" />
+                <View style={styles.revancheButtonContent}>
+                  <Text style={styles.revancheButtonText}>Revanche !</Text>
+                  <Text style={styles.revancheButtonSubtext}>Même défi, même adversaire</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.7)" />
+              </Pressable>
+            </Animated.View>
+          )}
         </ScrollView>
       </SafeAreaView>
     );
@@ -1361,6 +1400,20 @@ export default function NewChallengeScreen() {
               <Text style={styles.saveButtonText}>Enregistrer</Text>
             </Pressable>
           </View>
+
+          {/* Revanche button for 1v1 */}
+          {challengeMode === '1v1' && selectedOpponent && (
+            <Animated.View entering={FadeInDown.duration(400).delay(400)}>
+              <Pressable style={styles.revancheButton} onPress={handleRevanche}>
+                <MaterialIcons name="sports-mma" size={22} color="#FFF" />
+                <View style={styles.revancheButtonContent}>
+                  <Text style={styles.revancheButtonText}>Revanche !</Text>
+                  <Text style={styles.revancheButtonSubtext}>Même défi, même adversaire</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.7)" />
+              </Pressable>
+            </Animated.View>
+          )}
         </ScrollView>
       </SafeAreaView>
     );
@@ -2839,5 +2892,30 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFF',
+  },
+  // Revanche button styles
+  revancheButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.accent,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: theme.borderRadius.lg,
+    marginTop: 16,
+    gap: 14,
+    ...theme.shadows.cardElevated,
+  },
+  revancheButtonContent: {
+    flex: 1,
+  },
+  revancheButtonText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  revancheButtonSubtext: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
   },
 });

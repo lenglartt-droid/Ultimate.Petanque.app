@@ -107,8 +107,17 @@ type ActionType = 'tir' | 'point' | 'carreau';
 
 export default function NewMatchScreen() {
   const insets = useSafeAreaInsets();
-  const { tournamentId } = useLocalSearchParams<{ tournamentId?: string }>();
+  const { tournamentId, revanche, format: revancheFormat, teamA: revancheTeamA, teamB: revancheTeamB } = useLocalSearchParams<{ 
+    tournamentId?: string;
+    revanche?: string;
+    format?: string;
+    teamA?: string;
+    teamB?: string;
+  }>();
   const { addMatch, players, tournaments, matches, selfPlayer } = useApp();
+  
+  // Check if this is a revanche match
+  const isRevanche = revanche === 'true';
   
   // Auto-detect tournament mode from params
   const linkedTournament = tournamentId ? tournaments.find(t => t.id === tournamentId) : null;
@@ -150,8 +159,9 @@ export default function NewMatchScreen() {
     return { lastPhase: suggestedPhase, lastBracket: last.tournamentBracket || null, lastTeamAPlayers };
   }, [linkedTournament, matches, players, tournamentPhases, selfPlayer]);
   
-  // Auto-include self player in team A for all modes
+  // Auto-include self player in team A for all modes (only if not revanche with pre-filled teams)
   useEffect(() => {
+    if (isRevanche) return; // Skip for revanche - teams come from params
     if (!selfPlayer || teamAPlayers.length > 0) return;
     
     if (isTournamentMode) {
@@ -167,7 +177,7 @@ export default function NewMatchScreen() {
     }
   }, [selfPlayer, isTournamentMode, tournamentHistory.lastTeamAPlayers]);
   
-  const [format, setFormat] = useState<GameFormat>(linkedTournament?.format || 'Doublette');
+  const [format, setFormat] = useState<GameFormat>(linkedTournament?.format || (isRevanche && revancheFormat ? revancheFormat as GameFormat : 'Doublette'));
   const [teamAScore, setTeamAScore] = useState(0);
   const [teamBScore, setTeamBScore] = useState(0);
   const [teamAPlayers, setTeamAPlayers] = useState<string[]>([]);
@@ -176,6 +186,33 @@ export default function NewMatchScreen() {
   const [playerSearch, setPlayerSearch] = useState('');
   const [selectedPhase, setSelectedPhase] = useState<string | null>(tournamentHistory.lastPhase);
   const [selectedBracket, setSelectedBracket] = useState<TournamentBracket | null>(tournamentHistory.lastBracket as TournamentBracket | null);
+
+  // Pre-populate teams from revanche params
+  useEffect(() => {
+    if (isRevanche) {
+      if (revancheTeamA) {
+        const teamANames = decodeURIComponent(revancheTeamA).split(',').map(n => n.trim());
+        const teamAIds = teamANames.map(name => {
+          // Try to find player by name
+          const player = players.find(p => p.name.toLowerCase() === name.toLowerCase());
+          return player?.id;
+        }).filter((id): id is string => id !== undefined);
+        if (teamAIds.length > 0) {
+          setTeamAPlayers(teamAIds);
+        }
+      }
+      if (revancheTeamB) {
+        const teamBNames = decodeURIComponent(revancheTeamB).split(',').map(n => n.trim());
+        const teamBIds = teamBNames.map(name => {
+          const player = players.find(p => p.name.toLowerCase() === name.toLowerCase());
+          return player?.id;
+        }).filter((id): id is string => id !== undefined);
+        if (teamBIds.length > 0) {
+          setTeamBPlayers(teamBIds);
+        }
+      }
+    }
+  }, [isRevanche, revancheTeamA, revancheTeamB, players]);
   
   // Scoring mode: 'detailed' (mènes) or 'actions' (tirs/points)
   const [scoringMode, setScoringMode] = useState<'detailed' | 'actions'>('detailed');
@@ -648,11 +685,18 @@ export default function NewMatchScreen() {
 
           {/* Training Mode Label (shown when NOT in tournament mode) */}
           {!isTournamentMode && (
-            <Animated.View entering={FadeInDown.duration(300)} style={styles.trainingModeCard}>
-              <MaterialIcons name="fitness-center" size={24} color={theme.primary} />
+            <Animated.View entering={FadeInDown.duration(300)} style={isRevanche ? styles.revancheModeCard : styles.trainingModeCard}>
+              <MaterialIcons name={isRevanche ? 'sports-mma' : 'fitness-center'} size={24} color={isRevanche ? theme.accent : theme.primary} />
               <View style={styles.trainingModeContent}>
-                <Text style={styles.trainingModeTitle}>Match d'entraînement</Text>
-                <Text style={styles.trainingModeSubtitle}>Pour un match de tournoi, passez par "Mon Parcours"</Text>
+                <Text style={[styles.trainingModeTitle, isRevanche && { color: theme.accent }]}>
+                  {isRevanche ? 'Match Revanche !' : "Match d'entraînement"}
+                </Text>
+                <Text style={styles.trainingModeSubtitle}>
+                  {isRevanche 
+                    ? 'Même équipes, nouvelle partie' 
+                    : 'Pour un match de tournoi, passez par "Mon Parcours"'
+                  }
+                </Text>
               </View>
             </Animated.View>
           )}
@@ -2001,6 +2045,17 @@ const styles = StyleSheet.create({
   trainingModeSubtitle: {
     fontSize: 12,
     color: theme.textSecondary,
+  },
+  // Revanche mode card
+  revancheModeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.accent + '10',
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: theme.accent + '30',
   },
   sectionTitle: {
     fontSize: 12,

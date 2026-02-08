@@ -45,6 +45,11 @@ const CONTENT_FILTERS: { id: ContentFilter; label: string; icon: keyof typeof Ma
   { id: 'challenges', label: 'Défis', icon: 'track-changes' },
 ];
 
+// Helper to encode match data for rematch
+function encodeTeamForRevanche(playerNames: string[]): string {
+  return encodeURIComponent(playerNames.join(','));
+}
+
 function getDateRange(period: PeriodOption): DateRange {
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -258,6 +263,29 @@ export default function HistoryScreen() {
             </View>
             <Text style={styles.formatText}>{match.format}</Text>
           </View>
+
+          {/* Revanche button for training matches */}
+          {!isTournament && (
+            <Pressable 
+              style={styles.revancheCardButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                router.push({
+                  pathname: '/match/new',
+                  params: {
+                    revanche: 'true',
+                    format: match.format,
+                    teamA: encodeTeamForRevanche(match.teamA.playerNames),
+                    teamB: encodeTeamForRevanche(match.teamB.playerNames),
+                  }
+                });
+              }}
+            >
+              <MaterialIcons name="sports-mma" size={16} color={theme.accent} />
+              <Text style={styles.revancheCardButtonText}>Revanche</Text>
+            </Pressable>
+          )}
         </View>
       </Pressable>
     );
@@ -791,6 +819,24 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: theme.textMuted,
     textTransform: 'uppercase',
+  },
+  // Revanche card button
+  revancheCardButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 12,
+    paddingVertical: 10,
+    backgroundColor: theme.accent + '10',
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.accent + '30',
+  },
+  revancheCardButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.accent,
   },
   progressContainer: {
     flexDirection: 'row',
