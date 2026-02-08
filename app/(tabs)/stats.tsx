@@ -376,6 +376,10 @@ export default function StatsScreen() {
     const tournamentWins = tournamentMatches.filter(m => m.winner === 'A').length;
     const trainingWins = trainingMatches.filter(m => m.winner === 'A').length;
     
+    // Fanny stats (13-0)
+    const fannyWins = filteredMatches.filter(m => m.winner === 'A' && m.teamA.score === 13 && m.teamB.score === 0).length;
+    const fannyLosses = filteredMatches.filter(m => m.winner === 'B' && m.teamB.score === 13 && m.teamA.score === 0).length;
+    
     // Points
     let totalPointsFor = 0, totalPointsAgainst = 0;
     filteredMatches.forEach(match => {
@@ -458,6 +462,8 @@ export default function StatsScreen() {
       finalesPlayed: finales.length,
       finalesWon,
       finaleWinRate: finales.length > 0 ? Math.round((finalesWon / finales.length) * 100) : 0,
+      fannyWins,
+      fannyLosses,
     };
   }, [filteredMatches]);
 
@@ -470,6 +476,9 @@ export default function StatsScreen() {
     };
     const typeTotal: Record<ChallengeType, number> = { '10_tirs': 0, '10_tirs_sautee': 0, 'precision': 0 };
 
+    // Aggregate challenge technical stats
+    let challengeTirs = 0, challengeTirsSuccess = 0, challengeCarreaux = 0;
+    
     filteredChallenges.forEach(c => {
       byType[c.type].count++;
       if (c.type === 'precision') {
@@ -478,6 +487,10 @@ export default function StatsScreen() {
       } else {
         typeTotal[c.type] += c.successRate || 0;
         byType[c.type].bestScore = Math.max(byType[c.type].bestScore, c.successRate || 0);
+        // Aggregate tir stats from challenges (10_tirs and 10_tirs_sautee are shooting challenges)
+        challengeTirs += c.totalShots || 0;
+        challengeTirsSuccess += c.successCount || 0;
+        challengeCarreaux += c.carreauCount || 0;
       }
     });
 
@@ -496,6 +509,11 @@ export default function StatsScreen() {
       challenges1v1: challenges1v1.length,
       won1v1,
       winRate1v1: challenges1v1.length > 0 ? Math.round((won1v1 / challenges1v1.length) * 100) : 0,
+      challengeTirs,
+      challengeTirsSuccess,
+      challengeCarreaux,
+      challengeTirRate: challengeTirs > 0 ? Math.round((challengeTirsSuccess / challengeTirs) * 100) : 0,
+      challengeCarreauRate: challengeTirs > 0 ? Math.round((challengeCarreaux / challengeTirs) * 100) : 0,
     };
   }, [filteredChallenges]);
 
@@ -642,6 +660,34 @@ export default function StatsScreen() {
                   </View>
                 </View>
               </View>
+              
+              {/* Fanny Stats */}
+              {(stats.fannyWins > 0 || stats.fannyLosses > 0) && (
+                <View style={styles.fannySection}>
+                  <View style={styles.fannySeparator} />
+                  <View style={styles.fannyRow}>
+                    <View style={styles.fannyIconContainer}>
+                      <Svg width={24} height={24} viewBox="0 0 24 24">
+                        <Circle cx="9" cy="14" r="5" fill={theme.carreauColor} opacity={0.9} />
+                        <Circle cx="15" cy="14" r="5" fill={theme.carreauColor} opacity={0.9} />
+                        <Path d="M12 10 Q12 16 12 19" stroke={theme.textMuted} strokeWidth="1" fill="none" />
+                      </Svg>
+                    </View>
+                    <Text style={styles.fannyLabel}>Fanny (13-0)</Text>
+                    <View style={styles.fannyStats}>
+                      <View style={styles.fannyStat}>
+                        <Text style={[styles.fannyValue, { color: theme.success }]}>{stats.fannyWins}</Text>
+                        <Text style={styles.fannyStatLabel}>infligées</Text>
+                      </View>
+                      <Text style={styles.fannySeparatorText}>•</Text>
+                      <View style={styles.fannyStat}>
+                        <Text style={[styles.fannyValue, { color: theme.error }]}>{stats.fannyLosses}</Text>
+                        <Text style={styles.fannyStatLabel}>subies</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              )}
             </Animated.View>
 
             {/* Quick Stats Grid */}
@@ -711,13 +757,25 @@ export default function StatsScreen() {
 
             {/* Skills Summary */}
             <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-              <Text style={styles.sectionTitle}>Performance technique</Text>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Performance technique</Text>
+                {challengeData.challengeTirs > 0 && (
+                  <View style={styles.includeChallengesBadge}>
+                    <MaterialIcons name="add-circle" size={12} color={theme.primary} />
+                    <Text style={styles.includeChallengesText}>Défis inclus</Text>
+                  </View>
+                )}
+              </View>
               <View style={styles.skillsCard}>
                 <SkillBar 
                   label="Tir" 
-                  value={stats.tirRate} 
+                  value={challengeData.challengeTirs > 0 
+                    ? Math.round(((stats.matchTirsSuccess + challengeData.challengeTirsSuccess) / (stats.matchTirs + challengeData.challengeTirs)) * 100) || 0
+                    : stats.tirRate} 
                   color={theme.tirColor}
-                  detail={`${stats.matchTirsSuccess}/${stats.matchTirs}`}
+                  detail={challengeData.challengeTirs > 0 
+                    ? `${stats.matchTirsSuccess + challengeData.challengeTirsSuccess}/${stats.matchTirs + challengeData.challengeTirs}`
+                    : `${stats.matchTirsSuccess}/${stats.matchTirs}`}
                 />
                 <SkillBar 
                   label="Point" 
@@ -727,9 +785,13 @@ export default function StatsScreen() {
                 />
                 <SkillBar 
                   label="Carreau" 
-                  value={stats.carreauRate} 
+                  value={challengeData.challengeTirs > 0 
+                    ? Math.round(((stats.matchCarreaux + challengeData.challengeCarreaux) / (stats.matchTirs + challengeData.challengeTirs)) * 100) || 0
+                    : stats.carreauRate} 
                   color={theme.carreauColor}
-                  detail={`${stats.matchCarreaux} réussis`}
+                  detail={challengeData.challengeTirs > 0 
+                    ? `${stats.matchCarreaux + challengeData.challengeCarreaux} réussis`
+                    : `${stats.matchCarreaux} réussis`}
                 />
               </View>
             </Animated.View>
@@ -1158,6 +1220,18 @@ const styles = StyleSheet.create({
   heroDot: { width: 10, height: 10, borderRadius: 5 },
   heroStatText: { fontSize: 15, color: theme.textPrimary, fontWeight: '500' },
   
+  // Fanny
+  fannySection: { marginTop: 16 },
+  fannySeparator: { height: 1, backgroundColor: theme.border, marginBottom: 16 },
+  fannyRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  fannyIconContainer: { width: 36, height: 36, borderRadius: 10, backgroundColor: theme.carreauColor + '15', alignItems: 'center', justifyContent: 'center' },
+  fannyLabel: { fontSize: 14, fontWeight: '600', color: theme.textPrimary, flex: 1 },
+  fannyStats: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  fannyStat: { alignItems: 'center' },
+  fannyValue: { fontSize: 18, fontWeight: '700' },
+  fannyStatLabel: { fontSize: 10, color: theme.textMuted },
+  fannySeparatorText: { fontSize: 14, color: theme.textMuted },
+  
   // Quick Stats
   quickStatsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   quickStat: { width: (screenWidth - 42) / 2, flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 12, ...theme.shadows.card },
@@ -1178,6 +1252,8 @@ const styles = StyleSheet.create({
   
   // Skills Card
   skillsCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, gap: 16, ...theme.shadows.card },
+  includeChallengesBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.primary + '10', paddingHorizontal: 8, paddingVertical: 4, borderRadius: theme.borderRadius.full },
+  includeChallengesText: { fontSize: 10, fontWeight: '600', color: theme.primary },
   skillBar: {},
   skillBarHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   skillBarLabel: { fontSize: 14, fontWeight: '600', color: theme.textPrimary },
