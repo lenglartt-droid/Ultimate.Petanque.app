@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -41,6 +42,7 @@ export default function EditTerrainScreen() {
   const [isPublic, setIsPublic] = useState(true);
   const [lighting, setLighting] = useState(false);
   const [covered, setCovered] = useState(false);
+  const [environment, setEnvironment] = useState<'indoor' | 'outdoor'>('outdoor');
   const [latitude, setLatitude] = useState(0);
   const [longitude, setLongitude] = useState(0);
   const [photos, setPhotos] = useState<string[]>([]);
@@ -64,6 +66,7 @@ export default function EditTerrainScreen() {
       setLatitude(terrain.location.latitude);
       setLongitude(terrain.location.longitude);
       setPhotos(terrain.photos || []);
+      setEnvironment(terrain.environment || 'outdoor');
     }
   }, [terrain]);
 
@@ -210,6 +213,7 @@ export default function EditTerrainScreen() {
         courtsCount: parseInt(courtsCount) || 1,
         lighting,
         covered,
+        environment,
         photos,
       });
 
@@ -545,6 +549,46 @@ export default function EditTerrainScreen() {
                   thumbColor={covered ? theme.accent : theme.textMuted}
                 />
               </View>
+            </View>
+          </Animated.View>
+
+          {/* Environment */}
+          <Animated.View entering={FadeInDown.duration(400).delay(325)} style={styles.section}>
+            <Text style={styles.sectionTitle}>ENVIRONNEMENT</Text>
+            <View style={styles.environmentContainer}>
+              {config.terrainEnvironments.map((env) => (
+                <Pressable
+                  key={env.id}
+                  style={[
+                    styles.environmentCard,
+                    environment === env.id && styles.environmentCardActive
+                  ]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setEnvironment(env.id as 'indoor' | 'outdoor');
+                  }}
+                >
+                  <View style={[
+                    styles.environmentIconContainer,
+                    environment === env.id && styles.environmentIconContainerActive
+                  ]}>
+                    <MaterialIcons 
+                      name={env.icon as any} 
+                      size={28} 
+                      color={environment === env.id ? '#FFF' : theme.textSecondary} 
+                    />
+                  </View>
+                  <Text style={[
+                    styles.environmentName,
+                    environment === env.id && styles.environmentNameActive
+                  ]}>
+                    {env.label}
+                  </Text>
+                  <Text style={styles.environmentDescription}>
+                    {env.description}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
           </Animated.View>
 
@@ -929,5 +973,52 @@ const styles = StyleSheet.create({
     backgroundColor: theme.error + '15',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Environment styles
+  environmentContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  environmentCard: {
+    flex: 1,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    alignItems: 'center',
+    ...theme.shadows.card,
+  },
+  environmentCardActive: {
+    borderColor: theme.primary,
+    backgroundColor: theme.primary + '08',
+  },
+  environmentIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  environmentIconContainerActive: {
+    backgroundColor: theme.primary,
+  },
+  environmentName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textPrimary,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  environmentNameActive: {
+    color: theme.primary,
+  },
+  environmentDescription: {
+    fontSize: 11,
+    color: theme.textSecondary,
+    textAlign: 'center',
+    lineHeight: 14,
   },
 });

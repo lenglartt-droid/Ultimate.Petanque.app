@@ -16,6 +16,7 @@ import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { ChallengeType } from '@/services/mockData';
+import { GameFormat } from '@/constants/config';
 import Svg, { Circle, Line, Rect, Path, G, Text as SvgText } from 'react-native-svg';
 import { router } from 'expo-router';
 
@@ -185,7 +186,7 @@ const CHALLENGE_CONFIG = {
 
 // Time filter types
 type TimeFilter = 'today' | 'week' | 'month' | 'year' | 'all';
-type TabType = 'overview' | 'matches' | 'skills' | 'challenges' | 'financial';
+type TabType = 'overview' | 'matches' | 'skills' | 'duration' | 'challenges' | 'financial';
 
 const TIME_FILTERS: { id: TimeFilter; label: string; icon: string }[] = [
   { id: 'today', label: "Aujourd'hui", icon: 'today' },
@@ -199,6 +200,7 @@ const TABS: { id: TabType; label: string; icon: string }[] = [
   { id: 'overview', label: 'Aperçu', icon: 'dashboard' },
   { id: 'matches', label: 'Matchs', icon: 'sports' },
   { id: 'skills', label: 'Technique', icon: 'gps-fixed' },
+  { id: 'duration', label: 'Durée', icon: 'timer' },
   { id: 'challenges', label: 'Défis', icon: 'emoji-events' },
   { id: 'financial', label: 'Finance', icon: 'account-balance-wallet' },
 ];
@@ -669,6 +671,93 @@ export default function StatsScreen() {
       recent: [...filteredChallenges].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5),
     };
   }, [filteredChallenges]);
+
+  // Duration stats
+  const durationStats = useMemo(() => {
+    // Match duration stats
+    const matchesWithDuration = filteredMatches.filter(m => m.duration && m.duration > 0);
+    const totalMatchDuration = matchesWithDuration.reduce((sum, m) => sum + m.duration, 0);
+    const avgMatchDuration = matchesWithDuration.length > 0 ? Math.round(totalMatchDuration / matchesWithDuration.length) : 0;
+    
+    // Find longest and shortest matches
+    let longestMatch = { duration: 0, id: '', format: '' as GameFormat };
+    let shortestMatch = { duration: Infinity, id: '', format: '' as GameFormat };
+    matchesWithDuration.forEach(m => {
+      if (m.duration > longestMatch.duration) {
+        longestMatch = { duration: m.duration, id: m.id, format: m.format };
+      }
+      if (m.duration < shortestMatch.duration) {
+        shortestMatch = { duration: m.duration, id: m.id, format: m.format };
+      }
+    });
+    if (shortestMatch.duration === Infinity) shortestMatch.duration = 0;
+    
+    // Duration by format
+    const durationByFormat: Record<string, { count: number; total: number; avg: number }> = {
+      'Tête-à-tête': { count: 0, total: 0, avg: 0 },
+      'Doublette': { count: 0, total: 0, avg: 0 },
+      'Triplette': { count: 0, total: 0, avg: 0 },
+    };
+    matchesWithDuration.forEach(m => {
+      if (durationByFormat[m.format]) {
+        durationByFormat[m.format].count++;
+        durationByFormat[m.format].total += m.duration;
+      }
+    });
+    Object.keys(durationByFormat).forEach(format => {
+      const data = durationByFormat[format];
+      data.avg = data.count > 0 ? Math.round(data.total / data.count) : 0;
+    });
+    
+    // Duration by mode
+    const trainingWithDuration = matchesWithDuration.filter(m => m.mode === 'Entraînement');
+    const tournamentWithDuration = matchesWithDuration.filter(m => m.mode === 'Tournoi');
+    const avgTrainingDuration = trainingWithDuration.length > 0 
+      ? Math.round(trainingWithDuration.reduce((sum, m) => sum + m.duration, 0) / trainingWithDuration.length) : 0;
+    const avgTournamentDuration = tournamentWithDuration.length > 0 
+      ? Math.round(tournamentWithDuration.reduce((sum, m) => sum + m.duration, 0) / tournamentWithDuration.length) : 0;
+    
+    // Mène duration stats
+    const allMenes: { duration: number; matchId: string; meneNum: number }[] = [];
+    filteredMatches.forEach(m => {
+      if (m.menes) {
+        m.menes.forEach((mene, idx) => {
+          if (mene.duration && mene.duration > 0) {
+            allMenes.push({ duration: mene.duration, matchId: m.id, meneNum: idx + 1 });
+          }
+        });
+      }
+    });
+    const totalMeneDuration = allMenes.reduce((sum, m) => sum + m.duration, 0);
+    const avgMeneDuration = allMenes.length > 0 ? Math.round(totalMeneDuration / allMenes.length) : 0;
+    const longestMene = allMenes.length > 0 
+      ? allMenes.reduce((a, b) => a.duration > b.duration ? a : b) 
+      : { duration: 0, matchId: '', meneNum: 0 };
+    const shortestMene = allMenes.length > 0 
+      ? allMenes.reduce((a, b) => a.duration < b.duration ? a : b) 
+      : { duration: 0, matchId: '', meneNum: 0 };
+    
+    // Mènes over 1 minute count
+    const menesOver1Min = allMenes.filter(m => m.duration > 60).length;
+    const menesOver1MinPercent = allMenes.length > 0 ? Math.round((menesOver1Min / allMenes.length) * 100) : 0;
+    
+    return {
+      totalMatches: matchesWithDuration.length,
+      avgMatchDuration,
+      totalMatchDuration,
+      longestMatch,
+      shortestMatch,
+      durationByFormat,
+      avgTrainingDuration,
+      avgTournamentDuration,
+      totalMenes: allMenes.length,
+      avgMeneDuration,
+      longestMene,
+      shortestMene,
+      menesOver1Min,
+      menesOver1MinPercent,
+    };
+  }, [filteredMatches]);
 
   // Financial stats
   const financialData = useMemo(() => {
@@ -1450,6 +1539,196 @@ export default function StatsScreen() {
                 </View>
               </View>
             </Animated.View>
+          </>
+        )}
+
+        {/* DURATION TAB */}
+        {activeTab === 'duration' && (
+          <>
+            {/* Overview Card */}
+            <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
+              <View style={styles.durationOverviewCard}>
+                <View style={styles.durationOverviewMain}>
+                  <MaterialIcons name="timer" size={32} color={theme.primary} />
+                  <View style={styles.durationOverviewInfo}>
+                    <Text style={styles.durationOverviewValue}>{durationStats.avgMatchDuration} min</Text>
+                    <Text style={styles.durationOverviewLabel}>Durée moyenne par match</Text>
+                  </View>
+                </View>
+                <View style={styles.durationOverviewStats}>
+                  <View style={styles.durationOverviewStat}>
+                    <Text style={styles.durationOverviewStatValue}>{durationStats.totalMatches}</Text>
+                    <Text style={styles.durationOverviewStatLabel}>Matchs analysés</Text>
+                  </View>
+                  <View style={styles.durationOverviewStatDivider} />
+                  <View style={styles.durationOverviewStat}>
+                    <Text style={styles.durationOverviewStatValue}>
+                      {Math.floor(durationStats.totalMatchDuration / 60)}h{durationStats.totalMatchDuration % 60}m
+                    </Text>
+                    <Text style={styles.durationOverviewStatLabel}>Temps total</Text>
+                  </View>
+                </View>
+              </View>
+            </Animated.View>
+
+            {/* Match Duration by Format */}
+            <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+              <Text style={styles.sectionTitle}>Durée par format</Text>
+              <View style={styles.durationByFormatCard}>
+                {Object.entries(durationStats.durationByFormat).map(([format, data], index) => {
+                  const formatIcons: Record<string, { icon: string; color: string }> = {
+                    'Tête-à-tête': { icon: 'person', color: theme.primary },
+                    'Doublette': { icon: 'people', color: theme.accent },
+                    'Triplette': { icon: 'groups', color: theme.carreauColor },
+                  };
+                  const config = formatIcons[format] || { icon: 'sports', color: theme.textSecondary };
+                  const maxAvg = Math.max(...Object.values(durationStats.durationByFormat).map(d => d.avg), 1);
+                  const barWidth = (data.avg / maxAvg) * 100;
+                  
+                  return (
+                    <View key={format} style={styles.durationFormatRow}>
+                      <View style={styles.durationFormatInfo}>
+                        <View style={[styles.durationFormatIcon, { backgroundColor: config.color + '15' }]}>
+                          <MaterialIcons name={config.icon as any} size={18} color={config.color} />
+                        </View>
+                        <View>
+                          <Text style={styles.durationFormatName}>{format}</Text>
+                          <Text style={styles.durationFormatCount}>{data.count} match{data.count !== 1 ? 's' : ''}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.durationFormatBarContainer}>
+                        <View style={[styles.durationFormatBar, { width: `${barWidth}%`, backgroundColor: config.color }]} />
+                      </View>
+                      <Text style={[styles.durationFormatValue, { color: config.color }]}>
+                        {data.avg > 0 ? `${data.avg} min` : '—'}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </Animated.View>
+
+            {/* Duration by Mode */}
+            <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
+              <Text style={styles.sectionTitle}>Durée par mode</Text>
+              <View style={styles.durationModeGrid}>
+                <View style={styles.durationModeCard}>
+                  <View style={[styles.durationModeIcon, { backgroundColor: theme.primary + '15' }]}>
+                    <MaterialIcons name="fitness-center" size={24} color={theme.primary} />
+                  </View>
+                  <Text style={styles.durationModeLabel}>Entraînement</Text>
+                  <Text style={[styles.durationModeValue, { color: theme.primary }]}>
+                    {durationStats.avgTrainingDuration > 0 ? `${durationStats.avgTrainingDuration} min` : '—'}
+                  </Text>
+                  <Text style={styles.durationModeSubtext}>moyenne</Text>
+                </View>
+                <View style={styles.durationModeCard}>
+                  <View style={[styles.durationModeIcon, { backgroundColor: theme.carreauColor + '15' }]}>
+                    <MaterialIcons name="emoji-events" size={24} color={theme.carreauColor} />
+                  </View>
+                  <Text style={styles.durationModeLabel}>Tournoi</Text>
+                  <Text style={[styles.durationModeValue, { color: theme.carreauColor }]}>
+                    {durationStats.avgTournamentDuration > 0 ? `${durationStats.avgTournamentDuration} min` : '—'}
+                  </Text>
+                  <Text style={styles.durationModeSubtext}>moyenne</Text>
+                </View>
+              </View>
+            </Animated.View>
+
+            {/* Extremes */}
+            <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
+              <Text style={styles.sectionTitle}>Extrêmes</Text>
+              <View style={styles.durationExtremesCard}>
+                <View style={styles.durationExtremeRow}>
+                  <View style={[styles.durationExtremeIcon, { backgroundColor: theme.error + '15' }]}>
+                    <MaterialIcons name="arrow-upward" size={20} color={theme.error} />
+                  </View>
+                  <View style={styles.durationExtremeInfo}>
+                    <Text style={styles.durationExtremeLabel}>Match le plus long</Text>
+                    <Text style={styles.durationExtremeFormat}>
+                      {durationStats.longestMatch.format || '—'}
+                    </Text>
+                  </View>
+                  <Text style={[styles.durationExtremeValue, { color: theme.error }]}>
+                    {durationStats.longestMatch.duration > 0 ? `${durationStats.longestMatch.duration} min` : '—'}
+                  </Text>
+                </View>
+                <View style={styles.durationExtremeDivider} />
+                <View style={styles.durationExtremeRow}>
+                  <View style={[styles.durationExtremeIcon, { backgroundColor: theme.success + '15' }]}>
+                    <MaterialIcons name="arrow-downward" size={20} color={theme.success} />
+                  </View>
+                  <View style={styles.durationExtremeInfo}>
+                    <Text style={styles.durationExtremeLabel}>Match le plus court</Text>
+                    <Text style={styles.durationExtremeFormat}>
+                      {durationStats.shortestMatch.format || '—'}
+                    </Text>
+                  </View>
+                  <Text style={[styles.durationExtremeValue, { color: theme.success }]}>
+                    {durationStats.shortestMatch.duration > 0 ? `${durationStats.shortestMatch.duration} min` : '—'}
+                  </Text>
+                </View>
+              </View>
+            </Animated.View>
+
+            {/* Mène Duration Stats */}
+            <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
+              <Text style={styles.sectionTitle}>Durée des mènes</Text>
+              <View style={styles.meneDurationCard}>
+                <View style={styles.meneDurationMain}>
+                  <View style={styles.meneDurationMainItem}>
+                    <MaterialIcons name="sports" size={28} color={theme.primary} />
+                    <Text style={styles.meneDurationMainValue}>{durationStats.avgMeneDuration}s</Text>
+                    <Text style={styles.meneDurationMainLabel}>Durée moyenne</Text>
+                  </View>
+                  <View style={styles.meneDurationMainDivider} />
+                  <View style={styles.meneDurationMainItem}>
+                    <MaterialIcons name="numbers" size={28} color={theme.accent} />
+                    <Text style={styles.meneDurationMainValue}>{durationStats.totalMenes}</Text>
+                    <Text style={styles.meneDurationMainLabel}>Mènes analysées</Text>
+                  </View>
+                </View>
+                
+                {durationStats.totalMenes > 0 && (
+                  <View style={styles.meneDurationDetails}>
+                    <View style={styles.meneDurationDetailRow}>
+                      <Text style={styles.meneDurationDetailLabel}>Mène la plus longue</Text>
+                      <Text style={styles.meneDurationDetailValue}>
+                        {durationStats.longestMene.duration}s
+                      </Text>
+                    </View>
+                    <View style={styles.meneDurationDetailRow}>
+                      <Text style={styles.meneDurationDetailLabel}>Mène la plus courte</Text>
+                      <Text style={styles.meneDurationDetailValue}>
+                        {durationStats.shortestMene.duration}s
+                      </Text>
+                    </View>
+                    <View style={styles.meneDurationDetailRow}>
+                      <Text style={styles.meneDurationDetailLabel}>Mènes &gt; 1 minute</Text>
+                      <View style={styles.meneDurationOver1Min}>
+                        <Text style={[styles.meneDurationDetailValue, { color: theme.warning }]}>
+                          {durationStats.menesOver1Min}
+                        </Text>
+                        <Text style={styles.meneDurationOver1MinPercent}>({durationStats.menesOver1MinPercent}%)</Text>
+                      </View>
+                    </View>
+                  </View>
+                )}
+              </View>
+            </Animated.View>
+
+            {/* Empty State */}
+            {durationStats.totalMatches === 0 && (
+              <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+                <View style={styles.emptyStateCard}>
+                  <MaterialIcons name="timer-off" size={60} color={theme.textMuted} />
+                  <Text style={styles.emptyStateTitle}>Pas de données de durée</Text>
+                  <Text style={styles.emptyStateText}>
+                    Jouez des matchs avec le chrono activé pour voir vos statistiques de durée
+                  </Text>
+                </View>
+              </Animated.View>
+            )}
           </>
         )}
 
@@ -2752,6 +3031,245 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.textSecondary,
     lineHeight: 18,
+  },
+  // Duration Tab Styles
+  durationOverviewCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 20,
+    ...theme.shadows.card,
+  },
+  durationOverviewMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 20,
+  },
+  durationOverviewInfo: {
+    flex: 1,
+  },
+  durationOverviewValue: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  durationOverviewLabel: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    marginTop: 2,
+  },
+  durationOverviewStats: {
+    flexDirection: 'row',
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.md,
+    padding: 16,
+  },
+  durationOverviewStat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  durationOverviewStatValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  durationOverviewStatLabel: {
+    fontSize: 11,
+    color: theme.textMuted,
+    marginTop: 2,
+  },
+  durationOverviewStatDivider: {
+    width: 1,
+    backgroundColor: theme.border,
+    marginHorizontal: 16,
+  },
+  durationByFormatCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    ...theme.shadows.card,
+  },
+  durationFormatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  durationFormatInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    width: 130,
+  },
+  durationFormatIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  durationFormatName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  durationFormatCount: {
+    fontSize: 11,
+    color: theme.textMuted,
+  },
+  durationFormatBarContainer: {
+    flex: 1,
+    height: 8,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: 4,
+    marginHorizontal: 12,
+    overflow: 'hidden',
+  },
+  durationFormatBar: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  durationFormatValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    width: 60,
+    textAlign: 'right',
+  },
+  durationModeGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  durationModeCard: {
+    flex: 1,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 20,
+    alignItems: 'center',
+    ...theme.shadows.card,
+  },
+  durationModeIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  durationModeLabel: {
+    fontSize: 13,
+    color: theme.textSecondary,
+    marginBottom: 8,
+  },
+  durationModeValue: {
+    fontSize: 24,
+    fontWeight: '700',
+  },
+  durationModeSubtext: {
+    fontSize: 11,
+    color: theme.textMuted,
+    marginTop: 2,
+  },
+  durationExtremesCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    ...theme.shadows.card,
+  },
+  durationExtremeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  durationExtremeIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  durationExtremeInfo: {
+    flex: 1,
+  },
+  durationExtremeLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.textPrimary,
+  },
+  durationExtremeFormat: {
+    fontSize: 12,
+    color: theme.textMuted,
+    marginTop: 2,
+  },
+  durationExtremeValue: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  durationExtremeDivider: {
+    height: 1,
+    backgroundColor: theme.border,
+  },
+  meneDurationCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 20,
+    ...theme.shadows.card,
+  },
+  meneDurationMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  meneDurationMainItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  meneDurationMainValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: theme.textPrimary,
+    marginTop: 8,
+  },
+  meneDurationMainLabel: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 4,
+  },
+  meneDurationMainDivider: {
+    width: 1,
+    height: 60,
+    backgroundColor: theme.border,
+    marginHorizontal: 16,
+  },
+  meneDurationDetails: {
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+    paddingTop: 16,
+  },
+  meneDurationDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  meneDurationDetailLabel: {
+    fontSize: 14,
+    color: theme.textSecondary,
+  },
+  meneDurationDetailValue: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  meneDurationOver1Min: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  meneDurationOver1MinPercent: {
+    fontSize: 13,
+    color: theme.textMuted,
   },
   // Mini Bar Chart
   miniBarChart: {

@@ -96,6 +96,7 @@ export interface Terrain {
   courtsCount: number;
   lighting: boolean;
   covered: boolean;
+  environment?: 'indoor' | 'outdoor'; // Intérieur (Boulodrome) ou Extérieur
   createdAt?: string;
 }
 

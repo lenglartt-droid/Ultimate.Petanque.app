@@ -84,13 +84,19 @@ export const config = {
     },
   },
   
-  // Terrain Types
+  // Terrain Types (Surface)
   terrainTypes: [
     { id: 'Stabilisé', label: 'Stabilisé', icon: 'landscape', description: 'Sol dur et compact, bon roulement' },
     { id: 'Graviers', label: 'Graviers', icon: 'grain', description: 'Mélange de graviers, rebonds possibles' },
     { id: 'Sable', label: 'Sable', icon: 'beach-access', description: 'Sol meuble, boules qui s\'arrêtent vite' },
     { id: 'Cailloux', label: 'Cailloux', icon: 'scatter-plot', description: 'Gros cailloux, rebonds imprévisibles' },
     { id: 'Terre battue', label: 'Terre battue', icon: 'grass', description: 'Terre nue, évolue selon la météo' },
+  ] as const,
+  
+  // Terrain Environment Types
+  terrainEnvironments: [
+    { id: 'indoor', label: 'Intérieur (Boulodrome)', icon: 'home', description: 'Terrain couvert, conditions contrôlées' },
+    { id: 'outdoor', label: 'Extérieur', icon: 'wb-sunny', description: 'Terrain en plein air, conditions variables' },
   ] as const,
   
   // Statistics Categories
