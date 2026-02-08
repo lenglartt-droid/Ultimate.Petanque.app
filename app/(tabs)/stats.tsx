@@ -202,7 +202,6 @@ const TABS: { id: TabType; label: string; icon: string }[] = [
   { id: 'skills', label: 'Technique', icon: 'gps-fixed' },
   { id: 'duration', label: 'Durée', icon: 'timer' },
   { id: 'challenges', label: 'Défis', icon: 'emoji-events' },
-  { id: 'series', label: 'Séries', icon: 'format-list-numbered' },
   { id: 'financial', label: 'Finance', icon: 'account-balance-wallet' },
 ];
 
@@ -1368,6 +1367,99 @@ export default function StatsScreen() {
               </View>
             </Animated.View>
 
+            {/* Series Stats - Integrated in Training Section */}
+            {seriesStats.matchSeries.total > 0 && (
+              <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
+                <Text style={styles.sectionTitle}>Séries d'entraînement (Best of 3)</Text>
+                <View style={styles.trainingSeriesCard}>
+                  {/* Series Overview */}
+                  <View style={styles.trainingSeriesHeader}>
+                    <View style={styles.trainingSeriesMainStats}>
+                      <View style={styles.trainingSeriesRing}>
+                        <ProgressRing 
+                          value={seriesStats.matchSeries.completed > 0 
+                            ? Math.round((seriesStats.matchSeries.won / seriesStats.matchSeries.completed) * 100) 
+                            : 0} 
+                          size={80} 
+                          strokeWidth={7} 
+                          color={theme.accent} 
+                        />
+                        <View style={styles.trainingSeriesRingCenter}>
+                          <Text style={styles.trainingSeriesRingValue}>
+                            {seriesStats.matchSeries.completed > 0 
+                              ? Math.round((seriesStats.matchSeries.won / seriesStats.matchSeries.completed) * 100) 
+                              : 0}%
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.trainingSeriesInfo}>
+                        <Text style={styles.trainingSeriesCount}>{seriesStats.matchSeries.completed}</Text>
+                        <Text style={styles.trainingSeriesLabel}>séries terminées</Text>
+                        <View style={styles.trainingSeriesRecord}>
+                          <View style={styles.trainingSeriesRecordItem}>
+                            <MaterialIcons name="check-circle" size={16} color={theme.success} />
+                            <Text style={[styles.trainingSeriesRecordValue, { color: theme.success }]}>{seriesStats.matchSeries.won}</Text>
+                          </View>
+                          <Text style={styles.trainingSeriesRecordSep}>-</Text>
+                          <View style={styles.trainingSeriesRecordItem}>
+                            <MaterialIcons name="cancel" size={16} color={theme.error} />
+                            <Text style={[styles.trainingSeriesRecordValue, { color: theme.error }]}>{seriesStats.matchSeries.lost}</Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Finale Stats */}
+                  {seriesStats.finales.played > 0 && (
+                    <View style={styles.trainingSeriesFinale}>
+                      <View style={styles.trainingSeriesFinaleIcon}>
+                        <MaterialIcons name="emoji-events" size={24} color={theme.carreauColor} />
+                      </View>
+                      <View style={styles.trainingSeriesFinaleInfo}>
+                        <Text style={styles.trainingSeriesFinaleTitle}>Finales décisives</Text>
+                        <Text style={styles.trainingSeriesFinaleSubtitle}>
+                          {seriesStats.finales.won}/{seriesStats.finales.played} gagnées
+                        </Text>
+                      </View>
+                      <View style={[
+                        styles.trainingSeriesFinaleRate,
+                        { backgroundColor: seriesStats.finales.winRate >= 50 ? theme.success + '15' : theme.error + '15' }
+                      ]}>
+                        <Text style={[
+                          styles.trainingSeriesFinaleRateText,
+                          { color: seriesStats.finales.winRate >= 50 ? theme.success : theme.error }
+                        ]}>{seriesStats.finales.winRate}%</Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Recent Series */}
+                  {seriesStats.recentCompletedSeries.filter(s => s.type === 'match').length > 0 && (
+                    <View style={styles.trainingSeriesRecent}>
+                      <Text style={styles.trainingSeriesRecentTitle}>Dernières séries</Text>
+                      {seriesStats.recentCompletedSeries.filter(s => s.type === 'match').slice(0, 3).map((series, index) => (
+                        <View key={series.id} style={styles.trainingSeriesRecentItem}>
+                          <View style={[
+                            styles.trainingSeriesRecentResult,
+                            { backgroundColor: series.won ? theme.success : theme.error }
+                          ]}>
+                            <MaterialIcons name={series.won ? 'check' : 'close'} size={14} color="#FFF" />
+                          </View>
+                          <Text style={styles.trainingSeriesRecentOpponent} numberOfLines={1}>
+                            vs {series.opponent}
+                          </Text>
+                          <Text style={styles.trainingSeriesRecentDate}>
+                            {new Date(series.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              </Animated.View>
+            )}
+
             {/* Terrain Performance */}
             <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
               <Text style={styles.sectionTitle}>Performance par terrain</Text>
@@ -2069,212 +2161,6 @@ export default function StatsScreen() {
                     <MaterialIcons name="add" size={20} color="#FFF" />
                     <Text style={styles.emptyStateButtonText}>Nouveau défi</Text>
                   </Pressable>
-                </View>
-              </Animated.View>
-            )}
-          </>
-        )}
-
-        {/* SERIES TAB */}
-        {activeTab === 'series' && (
-          <>
-            {/* Series Overview */}
-            <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
-              <View style={styles.seriesOverviewCard}>
-                <View style={styles.seriesOverviewMain}>
-                  <View style={styles.seriesOverviewRing}>
-                    <ProgressRing value={seriesStats.winRate} size={90} strokeWidth={8} color={theme.primary} />
-                    <View style={styles.seriesOverviewRingCenter}>
-                      <Text style={styles.seriesOverviewRingValue}>{seriesStats.winRate}%</Text>
-                      <Text style={styles.seriesOverviewRingLabel}>victoire</Text>
-                    </View>
-                  </View>
-                  <View style={styles.seriesOverviewStats}>
-                    <View style={styles.seriesOverviewStatRow}>
-                      <View style={[styles.seriesOverviewDot, { backgroundColor: theme.success }]} />
-                      <Text style={styles.seriesOverviewStatText}>{seriesStats.totalWon} séries gagnées</Text>
-                    </View>
-                    <View style={styles.seriesOverviewStatRow}>
-                      <View style={[styles.seriesOverviewDot, { backgroundColor: theme.error }]} />
-                      <Text style={styles.seriesOverviewStatText}>{seriesStats.totalLost} séries perdues</Text>
-                    </View>
-                    <View style={styles.seriesOverviewStatRow}>
-                      <View style={[styles.seriesOverviewDot, { backgroundColor: theme.textMuted }]} />
-                      <Text style={styles.seriesOverviewStatText}>{seriesStats.totalSeries - seriesStats.totalCompleted} en cours</Text>
-                    </View>
-                  </View>
-                </View>
-                <View style={styles.seriesOverviewFooter}>
-                  <Text style={styles.seriesOverviewFooterText}>
-                    {seriesStats.totalSeries} série{seriesStats.totalSeries > 1 ? 's' : ''} jouée{seriesStats.totalSeries > 1 ? 's' : ''}
-                  </Text>
-                </View>
-              </View>
-            </Animated.View>
-
-            {/* Finale Stats */}
-            <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-              <Text style={styles.sectionTitle}>Performance en finales</Text>
-              <View style={styles.finaleStatsCard}>
-                <View style={styles.finaleStatsMain}>
-                  <MaterialIcons name="emoji-events" size={40} color={theme.carreauColor} />
-                  <View style={styles.finaleStatsInfo}>
-                    <Text style={styles.finaleStatsValue}>{seriesStats.finales.won}/{seriesStats.finales.played}</Text>
-                    <Text style={styles.finaleStatsLabel}>finales gagnées</Text>
-                  </View>
-                </View>
-                <View style={[
-                  styles.finaleWinRateBadge,
-                  { backgroundColor: seriesStats.finales.winRate >= 50 ? theme.success + '15' : theme.error + '15' }
-                ]}>
-                  <Text style={[
-                    styles.finaleWinRateText,
-                    { color: seriesStats.finales.winRate >= 50 ? theme.success : theme.error }
-                  ]}>{seriesStats.finales.winRate}%</Text>
-                </View>
-              </View>
-              {seriesStats.finales.played === 0 && (
-                <View style={styles.noFinalesHint}>
-                  <MaterialIcons name="info-outline" size={16} color={theme.textMuted} />
-                  <Text style={styles.noFinalesText}>Jouez une série complète (best of 3) pour voir vos stats en finale</Text>
-                </View>
-              )}
-            </Animated.View>
-
-            {/* Series by Type */}
-            <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-              <Text style={styles.sectionTitle}>Séries par type</Text>
-              <View style={styles.seriesByTypeGrid}>
-                {/* Match Series */}
-                <View style={styles.seriesByTypeCard}>
-                  <View style={[styles.seriesByTypeHeader, { backgroundColor: theme.primary + '10' }]}>
-                    <MaterialIcons name="sports" size={24} color={theme.primary} />
-                    <Text style={styles.seriesByTypeTitle}>Matchs</Text>
-                  </View>
-                  <View style={styles.seriesByTypeBody}>
-                    <Text style={styles.seriesByTypeCount}>{seriesStats.matchSeries.completed}</Text>
-                    <Text style={styles.seriesByTypeLabel}>séries</Text>
-                    {seriesStats.matchSeries.completed > 0 && (
-                      <View style={styles.seriesByTypeRecord}>
-                        <Text style={[styles.seriesByTypeRecordValue, { color: theme.success }]}>{seriesStats.matchSeries.won}</Text>
-                        <Text style={styles.seriesByTypeRecordSep}>-</Text>
-                        <Text style={[styles.seriesByTypeRecordValue, { color: theme.error }]}>{seriesStats.matchSeries.lost}</Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-
-                {/* Challenge Series */}
-                <View style={styles.seriesByTypeCard}>
-                  <View style={[styles.seriesByTypeHeader, { backgroundColor: theme.accent + '10' }]}>
-                    <MaterialIcons name="gps-fixed" size={24} color={theme.accent} />
-                    <Text style={styles.seriesByTypeTitle}>Défis 1v1</Text>
-                  </View>
-                  <View style={styles.seriesByTypeBody}>
-                    <Text style={styles.seriesByTypeCount}>{seriesStats.challengeSeries.completed}</Text>
-                    <Text style={styles.seriesByTypeLabel}>séries</Text>
-                    {seriesStats.challengeSeries.completed > 0 && (
-                      <View style={styles.seriesByTypeRecord}>
-                        <Text style={[styles.seriesByTypeRecordValue, { color: theme.success }]}>{seriesStats.challengeSeries.won}</Text>
-                        <Text style={styles.seriesByTypeRecordSep}>-</Text>
-                        <Text style={[styles.seriesByTypeRecordValue, { color: theme.error }]}>{seriesStats.challengeSeries.lost}</Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              </View>
-            </Animated.View>
-
-            {/* Opponent Confrontations */}
-            {seriesStats.opponentsList.length > 0 && (
-              <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-                <Text style={styles.sectionTitle}>Confrontations par adversaire</Text>
-                <View style={styles.opponentSeriesList}>
-                  {seriesStats.opponentsList.slice(0, 8).map((opponent, index) => {
-                    const winRate = opponent.totalSeries > 0 
-                      ? Math.round((opponent.seriesWon / (opponent.seriesWon + opponent.seriesLost)) * 100) 
-                      : 0;
-                    return (
-                      <View key={opponent.name + index} style={styles.opponentSeriesItem}>
-                        <View style={styles.opponentSeriesAvatar}>
-                          <Text style={styles.opponentSeriesInitials}>
-                            {opponent.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                          </Text>
-                        </View>
-                        <View style={styles.opponentSeriesInfo}>
-                          <Text style={styles.opponentSeriesName} numberOfLines={1}>{opponent.name}</Text>
-                          <Text style={styles.opponentSeriesDetail}>
-                            {opponent.totalSeries} série{opponent.totalSeries > 1 ? 's' : ''} • {opponent.totalMatches} match{opponent.totalMatches > 1 ? 's' : ''}
-                          </Text>
-                        </View>
-                        <View style={styles.opponentSeriesStats}>
-                          <View style={styles.opponentSeriesRecord}>
-                            <Text style={[styles.opponentSeriesRecordValue, { color: theme.success }]}>{opponent.seriesWon}</Text>
-                            <Text style={styles.opponentSeriesRecordSep}>-</Text>
-                            <Text style={[styles.opponentSeriesRecordValue, { color: theme.error }]}>{opponent.seriesLost}</Text>
-                          </View>
-                          {(opponent.seriesWon + opponent.seriesLost) > 0 && (
-                            <View style={[
-                              styles.opponentSeriesWinRate,
-                              { backgroundColor: winRate >= 50 ? theme.success + '15' : theme.error + '15' }
-                            ]}>
-                              <Text style={[
-                                styles.opponentSeriesWinRateText,
-                                { color: winRate >= 50 ? theme.success : theme.error }
-                              ]}>{winRate}%</Text>
-                            </View>
-                          )}
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              </Animated.View>
-            )}
-
-            {/* Recent Series */}
-            {seriesStats.recentCompletedSeries.length > 0 && (
-              <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
-                <Text style={styles.sectionTitle}>Séries récentes</Text>
-                <View style={styles.recentSeriesList}>
-                  {seriesStats.recentCompletedSeries.map((series, index) => (
-                    <View key={series.id} style={styles.recentSeriesItem}>
-                      <View style={[
-                        styles.recentSeriesResult,
-                        { backgroundColor: series.won ? theme.success : theme.error }
-                      ]}>
-                        <MaterialIcons 
-                          name={series.won ? 'check' : 'close'} 
-                          size={16} 
-                          color="#FFF" 
-                        />
-                      </View>
-                      <View style={styles.recentSeriesInfo}>
-                        <Text style={styles.recentSeriesOpponent} numberOfLines={1}>vs {series.opponent}</Text>
-                        <Text style={styles.recentSeriesMeta}>
-                          {series.type === 'match' ? 'Match' : 'Défi'} • {series.matchCount} partie{series.matchCount > 1 ? 's' : ''}
-                        </Text>
-                      </View>
-                      <View style={styles.recentSeriesDate}>
-                        <Text style={styles.recentSeriesDateText}>
-                          {new Date(series.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              </Animated.View>
-            )}
-
-            {/* Empty State */}
-            {seriesStats.totalSeries === 0 && (
-              <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-                <View style={styles.emptyStateCard}>
-                  <MaterialIcons name="format-list-numbered" size={60} color={theme.textMuted} />
-                  <Text style={styles.emptyStateTitle}>Aucune série jouée</Text>
-                  <Text style={styles.emptyStateText}>
-                    Jouez des matchs d'entraînement ou des défis 1v1 avec la fonction "Revanche" pour suivre vos séries
-                  </Text>
                 </View>
               </Animated.View>
             )}
@@ -3971,6 +3857,144 @@ const styles = StyleSheet.create({
   opponentSeriesWinRateText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  // Training Series Styles
+  trainingSeriesCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: theme.accent + '30',
+    ...theme.shadows.card,
+  },
+  trainingSeriesHeader: {
+    padding: 20,
+    backgroundColor: theme.accent + '08',
+  },
+  trainingSeriesMainStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 20,
+  },
+  trainingSeriesRing: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trainingSeriesRingCenter: {
+    position: 'absolute',
+    alignItems: 'center',
+  },
+  trainingSeriesRingValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.accent,
+  },
+  trainingSeriesInfo: {
+    flex: 1,
+  },
+  trainingSeriesCount: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: theme.textPrimary,
+  },
+  trainingSeriesLabel: {
+    fontSize: 13,
+    color: theme.textSecondary,
+    marginBottom: 8,
+  },
+  trainingSeriesRecord: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  trainingSeriesRecordItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  trainingSeriesRecordValue: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  trainingSeriesRecordSep: {
+    fontSize: 16,
+    color: theme.textMuted,
+  },
+  trainingSeriesFinale: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+    backgroundColor: theme.carreauColor + '05',
+  },
+  trainingSeriesFinaleIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: theme.carreauColor + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  trainingSeriesFinaleInfo: {
+    flex: 1,
+  },
+  trainingSeriesFinaleTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  trainingSeriesFinaleSubtitle: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 2,
+  },
+  trainingSeriesFinaleRate: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.full,
+  },
+  trainingSeriesFinaleRateText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  trainingSeriesRecent: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  trainingSeriesRecentTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.textMuted,
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  trainingSeriesRecentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  trainingSeriesRecentResult: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  trainingSeriesRecentOpponent: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.textPrimary,
+  },
+  trainingSeriesRecentDate: {
+    fontSize: 12,
+    color: theme.textMuted,
   },
   recentSeriesList: {
     backgroundColor: theme.surface,

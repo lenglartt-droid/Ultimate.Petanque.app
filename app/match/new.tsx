@@ -163,7 +163,9 @@ export default function NewMatchScreen() {
   const isFinale = seriesWinsA === 1 && seriesWinsB === 1;
   // Use existing seriesId from params or generate a new one for new series
   const [seriesId] = useState(() => initialSeriesId || (isRevanche ? `series-${Date.now()}` : undefined));
-  const currentMatchNumber = seriesWinsA + seriesWinsB + 1;
+  // If this is a revanche, it means the previous match was the Nth match, so this is N+1
+  // If seriesWinsA + seriesWinsB > 0, we're continuing a series
+  const currentMatchNumber = isRevanche ? (seriesWinsA + seriesWinsB + 1) : 1;
   const linkedTournament = tournamentId ? tournaments.find(t => t.id === tournamentId) : null;
   const isTournamentMode = !!linkedTournament;
   
@@ -700,15 +702,20 @@ export default function NewMatchScreen() {
       role: p.role,
     }));
     
-    // Calculate series info if this is a revanche/finale match
+    // Calculate series info - ALWAYS include for training matches to enable series tracking
     const newWinsA = seriesWinsA + (winner === 'A' ? 1 : 0);
     const newWinsB = seriesWinsB + (winner === 'A' ? 0 : 1);
     const isSeriesComplete = newWinsA >= 2 || newWinsB >= 2;
     
     // Generate a consistent seriesId for new series starting from this match
+    // For training matches, always create a seriesId so the first match can be included in a series later
     const currentSeriesId = seriesId || `series-${Date.now()}`;
     
-    const seriesInfo = (isRevanche || seriesWinsA > 0 || seriesWinsB > 0 || currentMatchNumber > 1) ? {
+    // For training matches, always include seriesInfo to enable revanche functionality
+    // The first match of a potential series should also have seriesInfo
+    const shouldIncludeSeriesInfo = !isTournamentMode && (isRevanche || seriesWinsA > 0 || seriesWinsB > 0 || currentMatchNumber >= 1);
+    
+    const seriesInfo = shouldIncludeSeriesInfo ? {
       seriesId: currentSeriesId,
       matchNumber: currentMatchNumber,
       winsBeforeThisMatch: { teamA: seriesWinsA, teamB: seriesWinsB },
