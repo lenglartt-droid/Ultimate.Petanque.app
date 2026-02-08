@@ -60,7 +60,11 @@ export default function DirectoryScreen() {
     // Tournament filters
     tournamentStatus: 'all' as TournamentStatus,
     tournamentFormat: 'all',
-    tournamentCadrage: 'all',
+    tournamentLevel: 'all',
+    tournamentCategory: 'all',
+    tournamentRegistration: 'all',
+    tournamentScope: 'all',
+    tournamentCity: 'all',
   });
 
   // Counts for tabs
@@ -82,7 +86,11 @@ export default function DirectoryScreen() {
     clubCountries: ['all', ...new Set(clubs.map(c => c.country || 'France'))] as string[],
     terrainCities: ['all', ...new Set(terrains.map(t => t.city).filter(Boolean))] as string[],
     tournamentFormats: ['all', ...new Set(tournaments.map(t => t.format).filter(Boolean))] as string[],
-    tournamentCadrages: ['all', ...new Set(tournaments.map(t => t.type).filter(Boolean))] as string[],
+    tournamentLevels: ['all', ...new Set(tournaments.map(t => t.tournamentLevel).filter(Boolean))] as string[],
+    tournamentCategories: ['all', ...new Set(tournaments.map(t => t.tournamentCategory).filter(Boolean))] as string[],
+    tournamentRegistrations: ['all', ...new Set(tournaments.map(t => t.registrationType).filter(Boolean))] as string[],
+    tournamentScopes: ['all', ...new Set(tournaments.map(t => t.tournamentScope).filter(Boolean))] as string[],
+    tournamentCities: ['all', ...new Set(tournaments.map(t => t.location?.city || t.terrainName).filter(Boolean))] as string[],
   }), [players, clubs, terrains, tournaments]);
 
   // Active filter counts
@@ -90,7 +98,7 @@ export default function DirectoryScreen() {
     players: [filters.playerClub, filters.playerCity, filters.playerCountry, filters.playerLevel, filters.playerRole].filter(f => f !== 'all').length,
     clubs: [filters.clubCity, filters.clubCountry].filter(f => f !== 'all').length,
     terrains: [filters.terrainType, filters.terrainCity, filters.terrainLighting, filters.terrainCovered].filter(f => f !== 'all').length,
-    tournaments: [filters.tournamentStatus, filters.tournamentFormat, filters.tournamentCadrage].filter(f => f !== 'all').length,
+    tournaments: [filters.tournamentStatus, filters.tournamentFormat, filters.tournamentLevel, filters.tournamentCategory, filters.tournamentRegistration, filters.tournamentScope, filters.tournamentCity].filter(f => f !== 'all').length,
   }), [filters]);
 
   const currentFilterCount = activeFilterCounts[activeTab];
@@ -149,8 +157,12 @@ export default function DirectoryScreen() {
         t.location.city.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus = filters.tournamentStatus === 'all' || t.status === filters.tournamentStatus;
       const matchesFormat = filters.tournamentFormat === 'all' || t.format === filters.tournamentFormat;
-      const matchesCadrage = filters.tournamentCadrage === 'all' || t.type === filters.tournamentCadrage;
-      return matchesSearch && matchesStatus && matchesFormat && matchesCadrage;
+      const matchesLevel = filters.tournamentLevel === 'all' || t.tournamentLevel === filters.tournamentLevel;
+      const matchesCategory = filters.tournamentCategory === 'all' || t.tournamentCategory === filters.tournamentCategory;
+      const matchesRegistration = filters.tournamentRegistration === 'all' || t.registrationType === filters.tournamentRegistration;
+      const matchesScope = filters.tournamentScope === 'all' || t.tournamentScope === filters.tournamentScope;
+      const matchesCity = filters.tournamentCity === 'all' || (t.location?.city || t.terrainName) === filters.tournamentCity;
+      return matchesSearch && matchesStatus && matchesFormat && matchesLevel && matchesCategory && matchesRegistration && matchesScope && matchesCity;
     });
   }, [tournaments, searchQuery, filters]);
 
@@ -162,7 +174,7 @@ export default function DirectoryScreen() {
     } else if (activeTab === 'terrains') {
       setFilters(f => ({ ...f, terrainType: 'all', terrainCity: 'all', terrainLighting: 'all', terrainCovered: 'all' }));
     } else if (activeTab === 'tournaments') {
-      setFilters(f => ({ ...f, tournamentStatus: 'all', tournamentFormat: 'all', tournamentCadrage: 'all' }));
+      setFilters(f => ({ ...f, tournamentStatus: 'all', tournamentFormat: 'all', tournamentLevel: 'all', tournamentCategory: 'all', tournamentRegistration: 'all', tournamentScope: 'all', tournamentCity: 'all' }));
     }
   }, [activeTab]);
 
@@ -493,17 +505,52 @@ export default function DirectoryScreen() {
               icons={{ 'À venir': 'event', 'En cours': 'play-circle', 'Terminé': 'check-circle' }}
             />
             <FilterSection
+              title="Lieu"
+              options={uniqueValues.tournamentCities}
+              value={filters.tournamentCity}
+              onChange={(v) => setFilters(f => ({ ...f, tournamentCity: v }))}
+            />
+            <FilterSection
               title="Format"
               options={uniqueValues.tournamentFormats}
               value={filters.tournamentFormat}
               onChange={(v) => setFilters(f => ({ ...f, tournamentFormat: v }))}
             />
-            <FilterSection
-              title="Cadrage"
-              options={uniqueValues.tournamentCadrages}
-              value={filters.tournamentCadrage}
-              onChange={(v) => setFilters(f => ({ ...f, tournamentCadrage: v }))}
-            />
+            {uniqueValues.tournamentLevels.length > 1 && (
+              <FilterSection
+                title="Niveau"
+                options={uniqueValues.tournamentLevels}
+                value={filters.tournamentLevel}
+                onChange={(v) => setFilters(f => ({ ...f, tournamentLevel: v }))}
+                icons={{ 'Loisir / Amical': 'mood', 'Promotion': 'trending-up', 'Honneur': 'star', 'Élite': 'emoji-events' }}
+              />
+            )}
+            {uniqueValues.tournamentCategories.length > 1 && (
+              <FilterSection
+                title="Type de tournoi"
+                options={uniqueValues.tournamentCategories}
+                value={filters.tournamentCategory}
+                onChange={(v) => setFilters(f => ({ ...f, tournamentCategory: v }))}
+              />
+            )}
+            {uniqueValues.tournamentRegistrations.length > 1 && (
+              <FilterSection
+                title="Type d'inscription"
+                options={uniqueValues.tournamentRegistrations}
+                value={filters.tournamentRegistration}
+                onChange={(v) => setFilters(f => ({ ...f, tournamentRegistration: v }))}
+                icons={{ 'Inscription libre': 'lock-open', 'Sur invitation': 'mail', 'Réservé aux licenciés': 'verified', 'Ouvert': 'public' }}
+              />
+            )}
+            {uniqueValues.tournamentScopes.length > 1 && (
+              <FilterSection
+                title="Cadre"
+                options={uniqueValues.tournamentScopes}
+                value={filters.tournamentScope}
+                onChange={(v) => setFilters(f => ({ ...f, tournamentScope: v }))}
+                icons={{ 'Tournoi de club': 'home', 'Championnat départemental': 'place', 'Championnat régional': 'map', 'Championnat national': 'flag', 'Championnat international': 'public' }}
+              />
+            )}
           </>
         );
     }
@@ -637,9 +684,13 @@ export default function DirectoryScreen() {
             )}
             {activeTab === 'tournaments' && (
               <>
-                {filters.tournamentStatus !== 'all' && <ActiveFilterChip label={filters.tournamentStatus} onRemove={() => setFilters(f => ({ ...f, tournamentStatus: 'all' }))} />}
+                {filters.tournamentStatus !== 'all' && <ActiveFilterChip label={filters.tournamentStatus} onRemove={() => setFilters(f => ({ ...f, tournamentStatus: 'all' }))} icon="event" />}
+                {filters.tournamentCity !== 'all' && <ActiveFilterChip label={filters.tournamentCity} onRemove={() => setFilters(f => ({ ...f, tournamentCity: 'all' }))} icon="place" />}
                 {filters.tournamentFormat !== 'all' && <ActiveFilterChip label={filters.tournamentFormat} onRemove={() => setFilters(f => ({ ...f, tournamentFormat: 'all' }))} />}
-                {filters.tournamentCadrage !== 'all' && <ActiveFilterChip label={filters.tournamentCadrage} onRemove={() => setFilters(f => ({ ...f, tournamentCadrage: 'all' }))} />}
+                {filters.tournamentLevel !== 'all' && <ActiveFilterChip label={filters.tournamentLevel} onRemove={() => setFilters(f => ({ ...f, tournamentLevel: 'all' }))} icon="star" />}
+                {filters.tournamentCategory !== 'all' && <ActiveFilterChip label={filters.tournamentCategory} onRemove={() => setFilters(f => ({ ...f, tournamentCategory: 'all' }))} />}
+                {filters.tournamentRegistration !== 'all' && <ActiveFilterChip label={filters.tournamentRegistration} onRemove={() => setFilters(f => ({ ...f, tournamentRegistration: 'all' }))} />}
+                {filters.tournamentScope !== 'all' && <ActiveFilterChip label={filters.tournamentScope} onRemove={() => setFilters(f => ({ ...f, tournamentScope: 'all' }))} icon="flag" />}
               </>
             )}
           </ScrollView>
