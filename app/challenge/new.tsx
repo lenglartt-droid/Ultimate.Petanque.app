@@ -570,6 +570,9 @@ export default function NewChallengeScreen() {
   const saveChallenge = () => {
     if (!selectedType || !challengeMode) return;
 
+    // Flag to check if this is a revanche/series match
+    const isRevanche = seriesWinsPlayer > 0 || seriesWinsOpponent > 0 || isFinale;
+    
     const opponentResult: ChallengePlayerResult | undefined = challengeMode === '1v1' && selectedOpponent ? {
       playerId: selectedOpponent.id,
       playerName: selectedOpponent.name,
@@ -589,7 +592,7 @@ export default function NewChallengeScreen() {
     const newOpponentWins = seriesWinsOpponent + (winner === 'opponent' ? 1 : 0);
     const isSeriesComplete = newPlayerWins >= 2 || newOpponentWins >= 2;
     
-    const seriesInfo = (challengeMode === '1v1' && selectedOpponent && (isRevanche || seriesId || seriesWinsPlayer > 0 || seriesWinsOpponent > 0)) ? {
+    const challengeSeriesInfo = (challengeMode === '1v1' && selectedOpponent && (isRevanche || seriesId || seriesWinsPlayer > 0 || seriesWinsOpponent > 0)) ? {
       seriesId: seriesId || `challenge-series-${Date.now()}`,
       matchNumber: currentMatchNumber,
       winsBeforeThisMatch: { player: seriesWinsPlayer, opponent: seriesWinsOpponent },
@@ -597,9 +600,6 @@ export default function NewChallengeScreen() {
       seriesComplete: isSeriesComplete,
       seriesWinner: isSeriesComplete ? (newPlayerWins >= 2 ? 'player' : 'opponent') as 'player' | 'opponent' : undefined,
     } : undefined;
-    
-    // Flag to check if this is a revanche/series match
-    const isRevanche = seriesWinsPlayer > 0 || seriesWinsOpponent > 0 || isFinale;
 
     if (selectedType === 'precision') {
       addChallenge({
@@ -617,7 +617,7 @@ export default function NewChallengeScreen() {
         maxPoints: 100,
         atelierScores,
         duration: elapsedTime,
-        seriesInfo,
+        seriesInfo: challengeSeriesInfo,
       });
     } else {
       addChallenge({
@@ -636,7 +636,7 @@ export default function NewChallengeScreen() {
         carreauCount,
         successRate,
         duration: elapsedTime,
-        seriesInfo,
+        seriesInfo: challengeSeriesInfo,
       });
     }
 

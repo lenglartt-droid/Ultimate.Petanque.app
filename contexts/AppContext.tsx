@@ -387,6 +387,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           duration: m.duration || 0,
           menes: m.menes || [],
           playerActions: m.player_actions,
+          seriesInfo: m.series_info,
         }));
         setMatches(dbMatches.length > 0 ? dbMatches : mockMatches);
       }
@@ -395,9 +396,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const dbChallenges: Challenge[] = challengesRes.data.map(c => ({
           id: c.id,
           type: c.type,
+          mode: c.mode || 'solo',
           date: c.date,
           playerId: c.player_id,
           playerName: c.player_name,
+          opponentId: c.opponent_id,
+          opponentName: c.opponent_name,
+          opponentResult: c.opponent_result,
+          winner: c.winner,
+          seriesInfo: c.series_info,
           shots: c.shots,
           successCount: c.success_count,
           totalShots: c.total_shots,
@@ -463,6 +470,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         duration: match.duration,
         menes: match.menes,
         player_actions: match.playerActions,
+        series_info: match.seriesInfo,
       }).select().single();
 
       if (error) throw error;
@@ -484,6 +492,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           duration: data.duration || 0,
           menes: data.menes || [],
           playerActions: data.player_actions,
+          seriesInfo: data.series_info,
         };
         setMatches(prev => [newMatch, ...prev]);
       }
@@ -746,9 +755,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.from('challenges').insert({
         user_id: user.id,
         type: challenge.type,
+        mode: challenge.mode,
         date: challenge.date,
         player_id: challenge.playerId,
         player_name: challenge.playerName,
+        opponent_id: challenge.opponentId,
+        opponent_name: challenge.opponentName,
+        opponent_result: challenge.opponentResult,
+        winner: challenge.winner,
+        series_info: challenge.seriesInfo,
         shots: challenge.shots,
         success_count: challenge.successCount,
         total_shots: challenge.totalShots,
@@ -762,23 +777,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
         notes: challenge.notes,
       }).select().single();
 
-      // Note: For 1v1 challenges, mode/opponent data is stored in local state only
-      // until database schema is updated to include these fields
-
       if (error) throw error;
 
       if (data) {
         const newChallenge: Challenge = {
           id: data.id,
           type: data.type,
-          mode: challenge.mode, // Preserve mode from input
+          mode: data.mode || challenge.mode,
           date: data.date,
           playerId: data.player_id,
           playerName: data.player_name,
-          opponentId: challenge.opponentId, // Preserve opponent data from input
-          opponentName: challenge.opponentName,
-          opponentResult: challenge.opponentResult,
-          winner: challenge.winner,
+          opponentId: data.opponent_id || challenge.opponentId,
+          opponentName: data.opponent_name || challenge.opponentName,
+          opponentResult: data.opponent_result || challenge.opponentResult,
+          winner: data.winner || challenge.winner,
+          seriesInfo: data.series_info || challenge.seriesInfo,
           shots: data.shots,
           successCount: data.success_count,
           totalShots: data.total_shots,

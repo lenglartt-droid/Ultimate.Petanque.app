@@ -142,15 +142,17 @@ function groupBySeries(
       if (item.type === 'match') {
         const match = item.data as Match;
         if (match.winner === 'A') winsA++;
-        else winsB++;
+        else if (match.winner === 'B') winsB++;
       } else {
         const challenge = item.data as Challenge;
         if (challenge.winner === 'player') winsA++;
         else if (challenge.winner === 'opponent') winsB++;
+        // Note: 'draw' doesn't count as a win for either side
       }
     });
     group.winsA = winsA;
     group.winsB = winsB;
+    group.totalMatches = group.items.length;
     
     // Update series complete status based on actual results
     if (winsA >= 2 || winsB >= 2) {
