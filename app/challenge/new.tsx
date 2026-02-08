@@ -17,6 +17,7 @@ import Animated, { FadeInDown, FadeIn, ZoomIn, useAnimatedStyle, useSharedValue,
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
+import { AdvancedShotNotation, AdvancedShotRecord, SHOT_TYPES, SHOT_QUALITIES } from '@/components';
 import { 
   ChallengeType, 
   ChallengeShot,
@@ -200,6 +201,10 @@ export default function NewChallengeScreen() {
   const [opponentPrecisionShots, setOpponentPrecisionShots] = useState<PrecisionShot[]>([]);
   const [opponentAtelierIndex, setOpponentAtelierIndex] = useState(0);
   const [opponentDistanceIndex, setOpponentDistanceIndex] = useState(0);
+
+  // Advanced notation state
+  const [showAdvancedNotation, setShowAdvancedNotation] = useState(false);
+  const [advancedShotRecords, setAdvancedShotRecords] = useState<AdvancedShotRecord[]>([]);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -523,6 +528,17 @@ export default function NewChallengeScreen() {
   const handleTimeUp = useCallback(() => {
     recordPrecisionShot(0, currentTurn === 'opponent');
   }, [recordPrecisionShot, currentTurn]);
+
+  // Handle advanced notation for 10 tirs challenge
+  const handleAdvancedShotSubmit = useCallback((record: AdvancedShotRecord) => {
+    setAdvancedShotRecords(prev => [...prev, record]);
+    
+    // Record the shot in the normal flow
+    const isOpponent = currentTurn === 'opponent';
+    recordShot(record.success, record.carreau || false, isOpponent);
+    
+    setShowAdvancedNotation(false);
+  }, [currentTurn, recordShot]);
 
   // Determine winner for 1v1
   const getWinner = (): 'player' | 'opponent' | 'draw' => {
@@ -1613,6 +1629,10 @@ export default function NewChallengeScreen() {
           <Pressable
             style={[styles.shotButton, styles.shotButtonSuccess]}
             onPress={() => recordShot(true, false, isOpponentTurn)}
+            onLongPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+              setShowAdvancedNotation(true);
+            }}
           >
             <MaterialIcons name="check" size={48} color="#FFF" />
             <Text style={styles.shotButtonText}>Réussi</Text>
@@ -1626,7 +1646,21 @@ export default function NewChallengeScreen() {
           <MaterialIcons name="stars" size={24} color={theme.carreauColor} />
           <Text style={styles.carreauButtonText}>Carreau !</Text>
         </Pressable>
+
+        {/* Hint for advanced notation */}
+        <Text style={styles.advancedHintText}>Appui long sur "Réussi" = notation détaillée</Text>
       </View>
+
+      {/* Advanced Shot Notation Modal */}
+      <AdvancedShotNotation
+        visible={showAdvancedNotation}
+        onClose={() => setShowAdvancedNotation(false)}
+        actionType="tir"
+        playerId={isOpponentTurn ? (selectedOpponent?.id || '') : (selfPlayer?.id || userStats.playerId)}
+        playerName={isOpponentTurn ? (selectedOpponent?.name || 'Adversaire') : (selfPlayer?.name || userStats.playerName)}
+        team={isOpponentTurn ? 'B' : 'A'}
+        onSubmit={handleAdvancedShotSubmit}
+      />
     </SafeAreaView>
   );
 }
@@ -1773,6 +1807,7 @@ const styles = StyleSheet.create({
   shotButtonText: { fontSize: 18, fontWeight: '600', color: '#FFF', marginTop: 8 },
   carreauButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.carreauColor + '15', paddingVertical: 16, borderRadius: theme.borderRadius.md, borderWidth: 2, borderColor: theme.carreauColor },
   carreauButtonText: { fontSize: 16, fontWeight: '600', color: theme.carreauColor },
+  advancedHintText: { fontSize: 11, color: theme.textMuted, textAlign: 'center', marginTop: 16, fontStyle: 'italic' },
   precisionGameContent: { paddingHorizontal: 16, paddingTop: 16 },
   currentAtelierCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 16, ...theme.shadows.card },
   currentAtelierHeader: { flexDirection: 'row', alignItems: 'center' },

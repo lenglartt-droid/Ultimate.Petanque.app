@@ -19,6 +19,7 @@ import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import config, { GameFormat, TournamentType } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
+import { AdvancedShotNotation, AdvancedShotRecord } from '@/components';
 
 // Tournament phases configuration
 const BASE_PHASES = [
@@ -224,6 +225,11 @@ export default function NewMatchScreen() {
   const [manualActionMode, setManualActionMode] = useState(false);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [fullscreenMode, setFullscreenMode] = useState(false);
+  // Advanced notation state
+  const [showAdvancedNotation, setShowAdvancedNotation] = useState(false);
+  const [advancedNotationPlayer, setAdvancedNotationPlayer] = useState<{ id: string; name: string; team: 'A' | 'B' } | null>(null);
+  const [advancedNotationType, setAdvancedNotationType] = useState<'tir' | 'point'>('tir');
+  const [advancedShotRecords, setAdvancedShotRecords] = useState<AdvancedShotRecord[]>([]);
   const [selectedTerrainId, setSelectedTerrainId] = useState<string | null>(null);
   const [showTerrainPicker, setShowTerrainPicker] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -455,6 +461,37 @@ export default function NewMatchScreen() {
       }
       return { ...p, actions: newActions };
     }));
+  }, []);
+
+  // Handle advanced shot notation
+  const openAdvancedNotation = useCallback((playerId: string, playerName: string, team: 'A' | 'B', actionType: 'tir' | 'point') => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    setAdvancedNotationPlayer({ id: playerId, name: playerName, team });
+    setAdvancedNotationType(actionType);
+    setShowAdvancedNotation(true);
+  }, []);
+
+  const handleAdvancedShotSubmit = useCallback((record: AdvancedShotRecord) => {
+    // Store the advanced record
+    setAdvancedShotRecords(prev => [...prev, record]);
+    
+    // Update basic stats
+    setPlayerActions(prev => prev.map(p => {
+      if (p.playerId !== record.playerId) return p;
+      const newActions = { ...p.actions };
+      if (record.actionType === 'tir') {
+        newActions.tirs++;
+        if (record.success) newActions.tirsSuccess++;
+        if (record.carreau) newActions.carreaux++;
+      } else if (record.actionType === 'point') {
+        newActions.points++;
+        if (record.success) newActions.pointsSuccess++;
+      }
+      return { ...p, actions: newActions };
+    }));
+    
+    setShowAdvancedNotation(false);
+    setAdvancedNotationPlayer(null);
   }, []);
 
   const updatePlayerAction = useCallback((playerId: string, field: keyof PlayerActionState['actions'], value: number) => {
@@ -1204,7 +1241,7 @@ export default function NewMatchScreen() {
                               <Pressable
                                 style={[styles.fsPlayerActionBtn, { backgroundColor: theme.tirColor }]}
                                 onPress={() => recordAction(p.playerId, 'tir', true)}
-                                onLongPress={() => recordAction(p.playerId, 'tir', false)}
+                                onLongPress={() => openAdvancedNotation(p.playerId, getPlayerName(p.playerId), isTeamA ? 'A' : 'B', 'tir')}
                               >
                                 <MaterialIcons name="gps-fixed" size={22} color="#FFF" />
                                 <Text style={styles.fsPlayerActionBtnLabel}>TIR</Text>
@@ -1212,7 +1249,7 @@ export default function NewMatchScreen() {
                               <Pressable
                                 style={[styles.fsPlayerActionBtn, { backgroundColor: theme.pointColor }]}
                                 onPress={() => recordAction(p.playerId, 'point', true)}
-                                onLongPress={() => recordAction(p.playerId, 'point', false)}
+                                onLongPress={() => openAdvancedNotation(p.playerId, getPlayerName(p.playerId), isTeamA ? 'A' : 'B', 'point')}
                               >
                                 <MaterialIcons name="adjust" size={22} color="#FFF" />
                                 <Text style={styles.fsPlayerActionBtnLabel}>POINT</Text>
@@ -1235,7 +1272,7 @@ export default function NewMatchScreen() {
                         );
                       })}
                     </ScrollView>
-                    <Text style={styles.fsActionsHint}>Appui long = coup raté</Text>
+                    <Text style={styles.fsActionsHint}>Appui long = notation détaillée (type + qualité)</Text>
                   </Animated.View>
                 )}
               </View>
@@ -1254,6 +1291,22 @@ export default function NewMatchScreen() {
                   </View>
                 </Animated.View>
               </Animated.View>
+            )}
+
+            {/* Advanced Notation Modal */}
+            {advancedNotationPlayer && (
+              <AdvancedShotNotation
+                visible={showAdvancedNotation}
+                onClose={() => {
+                  setShowAdvancedNotation(false);
+                  setAdvancedNotationPlayer(null);
+                }}
+                actionType={advancedNotationType}
+                playerId={advancedNotationPlayer.id}
+                playerName={advancedNotationPlayer.name}
+                team={advancedNotationPlayer.team}
+                onSubmit={handleAdvancedShotSubmit}
+              />
             )}
 
             {/* Winner Overlay */}
