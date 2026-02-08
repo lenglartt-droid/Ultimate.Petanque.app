@@ -237,57 +237,76 @@ export default function NewMatchScreen() {
     loadAlarmPreference();
   }, []);
 
-  // Lock to portrait on component mount and ensure cleanup on unmount
+  // Lock orientation to portrait on component mount - runs once
   useEffect(() => {
-    // Initial lock to portrait
-    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+    const lockPortrait = async () => {
+      try {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+      } catch (error) {
+        console.log('Error locking to portrait on mount:', error);
+      }
+    };
+    lockPortrait();
     
+    // Cleanup on unmount - ensure portrait
     return () => {
-      // Ensure portrait on unmount
-      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
     };
   }, []);
 
-  // Consolidated orientation management - ONLY fullscreen mode can rotate
+  // Manage orientation based on fullscreen mode - isolated from navigation
   useEffect(() => {
     let orientationSubscription: ScreenOrientation.Subscription | null = null;
+    let isMounted = true;
     
     const manageOrientation = async () => {
-      if (fullscreenMode) {
-        // ONLY in fullscreen: unlock orientation to allow rotation
-        await ScreenOrientation.unlockAsync();
-        
-        // Check current orientation immediately
-        const currentOrientation = await ScreenOrientation.getOrientationAsync();
-        setIsLandscape(
-          currentOrientation === ScreenOrientation.Orientation.LANDSCAPE_LEFT ||
-          currentOrientation === ScreenOrientation.Orientation.LANDSCAPE_RIGHT
-        );
-        
-        // Listen for orientation changes only in fullscreen
-        orientationSubscription = ScreenOrientation.addOrientationChangeListener((event) => {
-          const orientation = event.orientationInfo.orientation;
-          setIsLandscape(
-            orientation === ScreenOrientation.Orientation.LANDSCAPE_LEFT ||
-            orientation === ScreenOrientation.Orientation.LANDSCAPE_RIGHT
-          );
-        });
-      } else {
-        // NOT in fullscreen: always lock to portrait
-        setIsLandscape(false);
-        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+      try {
+        if (fullscreenMode) {
+          // Unlock orientation to allow rotation in fullscreen only
+          await ScreenOrientation.unlockAsync();
+          
+          if (!isMounted) return;
+          
+          // Check current orientation immediately
+          const currentOrientation = await ScreenOrientation.getOrientationAsync();
+          if (isMounted) {
+            setIsLandscape(
+              currentOrientation === ScreenOrientation.Orientation.LANDSCAPE_LEFT ||
+              currentOrientation === ScreenOrientation.Orientation.LANDSCAPE_RIGHT
+            );
+          }
+          
+          // Listen for orientation changes only while in fullscreen
+          orientationSubscription = ScreenOrientation.addOrientationChangeListener((event) => {
+            if (isMounted && fullscreenMode) {
+              const orientation = event.orientationInfo.orientation;
+              setIsLandscape(
+                orientation === ScreenOrientation.Orientation.LANDSCAPE_LEFT ||
+                orientation === ScreenOrientation.Orientation.LANDSCAPE_RIGHT
+              );
+            }
+          });
+        } else {
+          // Not in fullscreen: reset landscape state and lock to portrait
+          if (isMounted) {
+            setIsLandscape(false);
+          }
+          await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+        }
+      } catch (error) {
+        console.log('Error managing orientation:', error);
       }
     };
     
     manageOrientation();
     
-    // Cleanup: remove listener and lock to portrait
+    // Cleanup: only remove listener, don't lock (handled by else branch or unmount effect)
     return () => {
+      isMounted = false;
       if (orientationSubscription) {
         ScreenOrientation.removeOrientationChangeListener(orientationSubscription);
+        orientationSubscription = null;
       }
-      // Always revert to portrait when effect cleans up
-      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
     };
   }, [fullscreenMode]);
 
@@ -971,7 +990,13 @@ export default function NewMatchScreen() {
           visible={fullscreenMode}
           animationType="fade"
           statusBarTranslucent
-          onRequestClose={() => setFullscreenMode(false)}
+          supportedOrientations={['portrait', 'landscape-left', 'landscape-right']}
+          onRequestClose={async () => {
+            try {
+              await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+            } catch (e) {}
+            setFullscreenMode(false);
+          }}
         >
           <View style={styles.fullscreenContainer}>
             <SafeAreaView style={styles.fullscreenSafeArea}>
@@ -1016,8 +1041,11 @@ export default function NewMatchScreen() {
                   <View style={styles.fsLandscapeTopBar}>
                     <Pressable 
                       style={styles.fsLandscapeExitBtn}
-                      onPress={() => {
+                      onPress={async () => {
                         Haptics.selectionAsync();
+                        try {
+                          await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+                        } catch (e) {}
                         setFullscreenMode(false);
                       }}
                     >
@@ -1336,7 +1364,12 @@ export default function NewMatchScreen() {
                     </View>
                     <Pressable 
                       style={styles.fsLandscapeWinnerBtn}
-                      onPress={() => setFullscreenMode(false)}
+                      onPress={async () => {
+                        try {
+                          await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+                        } catch (e) {}
+                        setFullscreenMode(false);
+                      }}
                     >
                       <Text style={styles.fsLandscapeWinnerBtnText}>Terminer</Text>
                     </Pressable>
@@ -1365,7 +1398,13 @@ export default function NewMatchScreen() {
         visible={fullscreenMode}
         animationType="fade"
         statusBarTranslucent
-        onRequestClose={() => setFullscreenMode(false)}
+        supportedOrientations={['portrait', 'landscape-left', 'landscape-right']}
+        onRequestClose={async () => {
+          try {
+            await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+          } catch (e) {}
+          setFullscreenMode(false);
+        }}
       >
         <View style={styles.fullscreenContainer}>
           <SafeAreaView style={styles.fullscreenSafeArea}>
@@ -1373,8 +1412,11 @@ export default function NewMatchScreen() {
             <View style={styles.fsTopBar}>
               <Pressable 
                 style={styles.fsExitBtn}
-                onPress={() => {
+                onPress={async () => {
                   Haptics.selectionAsync();
+                  try {
+                    await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+                  } catch (e) {}
                   setFullscreenMode(false);
                 }}
               >
@@ -1786,7 +1828,12 @@ export default function NewMatchScreen() {
                   <Text style={styles.fsWinnerMenes}>{menes.length} mène{menes.length > 1 ? 's' : ''} • {formatTime(matchTime)}</Text>
                   <Pressable 
                     style={styles.fsWinnerBtn}
-                    onPress={() => setFullscreenMode(false)}
+                    onPress={async () => {
+                      try {
+                        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+                      } catch (e) {}
+                      setFullscreenMode(false);
+                    }}
                   >
                     <Text style={styles.fsWinnerBtnText}>Terminer le match</Text>
                   </Pressable>
