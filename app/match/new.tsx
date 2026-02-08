@@ -202,6 +202,7 @@ export default function NewMatchScreen() {
   const [playerActions, setPlayerActions] = useState<PlayerActionState[]>([]);
   const [manualActionMode, setManualActionMode] = useState(false);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+  const [fullscreenMode, setFullscreenMode] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const maxScore = config.game.maxScore;
@@ -635,8 +636,158 @@ export default function NewMatchScreen() {
 
   const isMatchReady = teamAScore > 0 || teamBScore > 0;
 
+  // Fullscreen Score View
+  const renderFullscreenScore = () => (
+    <Modal
+      visible={fullscreenMode}
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => setFullscreenMode(false)}
+    >
+      <View style={styles.fullscreenContainer}>
+        <SafeAreaView style={styles.fullscreenSafeArea}>
+          {/* Exit Button */}
+          <Pressable 
+            style={styles.fullscreenExitBtn}
+            onPress={() => {
+              Haptics.selectionAsync();
+              setFullscreenMode(false);
+            }}
+          >
+            <MaterialIcons name="fullscreen-exit" size={32} color="#FFF" />
+          </Pressable>
+
+          {/* Timer if running */}
+          {isTimerRunning && (
+            <View style={styles.fullscreenTimer}>
+              <MaterialIcons name="timer" size={28} color="rgba(255,255,255,0.7)" />
+              <Text style={styles.fullscreenTimerText}>{formatTime(matchTime)}</Text>
+            </View>
+          )}
+
+          {/* Main Score Display */}
+          <View style={styles.fullscreenScoreContainer}>
+            {/* Team A */}
+            <View style={styles.fullscreenTeam}>
+              <Text style={styles.fullscreenTeamLabel}>Mon équipe</Text>
+              <View style={styles.fullscreenTeamPlayers}>
+                {teamAPlayers.slice(0, 3).map(p => (
+                  <Text key={p.playerId} style={styles.fullscreenPlayerName} numberOfLines={1}>
+                    {getPlayerName(p.playerId).split(' ')[0]}
+                  </Text>
+                ))}
+              </View>
+              
+              <View style={styles.fullscreenScoreBox}>
+                <Pressable 
+                  style={styles.fullscreenScoreBtn}
+                  onPress={() => handleScoreChange('A', -1)}
+                >
+                  <MaterialIcons name="remove" size={48} color="rgba(255,255,255,0.8)" />
+                </Pressable>
+                
+                <Text style={[
+                  styles.fullscreenScore,
+                  teamAScore >= teamBScore && teamAScore > 0 && styles.fullscreenScoreWinning
+                ]}>
+                  {teamAScore}
+                </Text>
+                
+                <Pressable 
+                  style={[styles.fullscreenScoreBtn, styles.fullscreenScoreBtnPlus]}
+                  onPress={() => handleScoreChange('A', 1)}
+                >
+                  <MaterialIcons name="add" size={48} color="#FFF" />
+                </Pressable>
+              </View>
+            </View>
+
+            {/* VS Separator */}
+            <View style={styles.fullscreenVS}>
+              <View style={styles.fullscreenVSLine} />
+              <Text style={styles.fullscreenVSText}>VS</Text>
+              <View style={styles.fullscreenVSLine} />
+            </View>
+
+            {/* Team B */}
+            <View style={styles.fullscreenTeam}>
+              <Text style={[styles.fullscreenTeamLabel, styles.fullscreenTeamLabelB]}>Adversaire</Text>
+              <View style={styles.fullscreenTeamPlayers}>
+                {teamBPlayers.slice(0, 3).map(p => (
+                  <Text key={p.playerId} style={styles.fullscreenPlayerName} numberOfLines={1}>
+                    {getPlayerName(p.playerId).split(' ')[0]}
+                  </Text>
+                ))}
+              </View>
+              
+              <View style={styles.fullscreenScoreBox}>
+                <Pressable 
+                  style={styles.fullscreenScoreBtn}
+                  onPress={() => handleScoreChange('B', -1)}
+                >
+                  <MaterialIcons name="remove" size={48} color="rgba(255,255,255,0.8)" />
+                </Pressable>
+                
+                <Text style={[
+                  styles.fullscreenScore,
+                  teamBScore > teamAScore && styles.fullscreenScoreLosing
+                ]}>
+                  {teamBScore}
+                </Text>
+                
+                <Pressable 
+                  style={[styles.fullscreenScoreBtn, styles.fullscreenScoreBtnPlusB]}
+                  onPress={() => handleScoreChange('B', 1)}
+                >
+                  <MaterialIcons name="add" size={48} color="#FFF" />
+                </Pressable>
+              </View>
+            </View>
+          </View>
+
+          {/* Winner Banner */}
+          {(teamAScore > 0 || teamBScore > 0) && (teamAScore >= maxScore || teamBScore >= maxScore) && (
+            <Animated.View entering={FadeInUp.duration(500)} style={styles.fullscreenWinnerBanner}>
+              <MaterialIcons 
+                name={teamAScore > teamBScore ? 'emoji-events' : 'sentiment-dissatisfied'} 
+                size={40} 
+                color={teamAScore > teamBScore ? '#FFD700' : '#FF6B6B'} 
+              />
+              <Text style={styles.fullscreenWinnerText}>
+                {teamAScore > teamBScore ? 'VICTOIRE !' : 'DÉFAITE'}
+              </Text>
+            </Animated.View>
+          )}
+
+          {/* Mène Counter */}
+          {menes.length > 0 && (
+            <View style={styles.fullscreenMeneCounter}>
+              <Text style={styles.fullscreenMeneText}>Mène {menes.length}</Text>
+            </View>
+          )}
+
+          {/* Timer Controls */}
+          <View style={styles.fullscreenTimerControls}>
+            {!isTimerRunning ? (
+              <Pressable style={styles.fullscreenTimerBtn} onPress={startTimer}>
+                <MaterialIcons name="play-arrow" size={36} color="#FFF" />
+              </Pressable>
+            ) : (
+              <Pressable style={[styles.fullscreenTimerBtn, styles.fullscreenTimerBtnPause]} onPress={pauseTimer}>
+                <MaterialIcons name="pause" size={36} color="#FFF" />
+              </Pressable>
+            )}
+          </View>
+        </SafeAreaView>
+      </View>
+    </Modal>
+  );
+
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
+      {/* Fullscreen Score Modal */}
+      {renderFullscreenScore()}
+
       {/* Header */}
       <View style={styles.header}>
         <Pressable style={styles.closeButton} onPress={() => router.back()}>
@@ -650,7 +801,15 @@ export default function NewMatchScreen() {
             <Text style={styles.headerSubtitle} numberOfLines={1}>{linkedTournament.name}</Text>
           )}
         </View>
-        <View style={{ width: 40 }} />
+        <Pressable 
+          style={styles.fullscreenToggleBtn}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            setFullscreenMode(true);
+          }}
+        >
+          <MaterialIcons name="fullscreen" size={24} color={theme.textSecondary} />
+        </Pressable>
       </View>
 
       {/* Step Indicator */}
@@ -2429,5 +2588,184 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: theme.textMuted,
     marginTop: 10,
+  },
+  // Fullscreen Mode Styles
+  fullscreenToggleBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fullscreenContainer: {
+    flex: 1,
+    backgroundColor: '#1A1A2E',
+  },
+  fullscreenSafeArea: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fullscreenExitBtn: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 20,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  fullscreenTimer: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 20,
+    left: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  fullscreenTimerText: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFF',
+    fontVariant: ['tabular-nums'],
+  },
+  fullscreenScoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    width: '100%',
+    paddingHorizontal: 20,
+  },
+  fullscreenTeam: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  fullscreenTeamLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+    marginBottom: 8,
+  },
+  fullscreenTeamLabelB: {
+    color: theme.accent,
+  },
+  fullscreenTeamPlayers: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 20,
+    minHeight: 24,
+  },
+  fullscreenPlayerName: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.6)',
+    fontWeight: '500',
+  },
+  fullscreenScoreBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  fullscreenScoreBtn: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fullscreenScoreBtnPlus: {
+    backgroundColor: theme.primary,
+  },
+  fullscreenScoreBtnPlusB: {
+    backgroundColor: theme.accent,
+  },
+  fullscreenScore: {
+    fontSize: 120,
+    fontWeight: '900',
+    color: '#FFF',
+    minWidth: 100,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 4 },
+    textShadowRadius: 8,
+  },
+  fullscreenScoreWinning: {
+    color: '#4ADE80',
+  },
+  fullscreenScoreLosing: {
+    color: '#F87171',
+  },
+  fullscreenVS: {
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  fullscreenVSLine: {
+    width: 2,
+    height: 60,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  fullscreenVSText: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.4)',
+    marginVertical: 16,
+  },
+  fullscreenWinnerBanner: {
+    position: 'absolute',
+    bottom: 140,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 40,
+  },
+  fullscreenWinnerText: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#FFF',
+    letterSpacing: 2,
+  },
+  fullscreenMeneCounter: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 120 : 90,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+  fullscreenMeneText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.7)',
+  },
+  fullscreenTimerControls: {
+    position: 'absolute',
+    bottom: 50,
+    flexDirection: 'row',
+    gap: 20,
+  },
+  fullscreenTimerBtn: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: theme.success,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...theme.shadows.card,
+  },
+  fullscreenTimerBtnPause: {
+    backgroundColor: theme.warning,
   },
 });
