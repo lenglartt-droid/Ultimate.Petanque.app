@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import theme from '@/constants/theme';
@@ -29,9 +29,44 @@ interface MeneEdit {
 export default function EditMatchScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getMatchById, updateMatch, deleteMatch, players } = useApp();
+  const { getMatchById, updateMatch, deleteMatch, players, matches } = useApp();
 
   const match = getMatchById(id!);
+  
+  // Get all matches in the same series
+  const seriesMatches = useMemo(() => {
+    if (!match?.seriesInfo?.seriesId) return [];
+    return matches
+      .filter(m => m.seriesInfo?.seriesId === match.seriesInfo?.seriesId)
+      .sort((a, b) => {
+        const aNum = a.seriesInfo?.matchNumber || 1;
+        const bNum = b.seriesInfo?.matchNumber || 1;
+        return aNum - bNum;
+      });
+  }, [match, matches]);
+  
+  // Calculate series stats
+  const seriesStats = useMemo(() => {
+    if (seriesMatches.length === 0) return null;
+    
+    let winsA = 0;
+    let winsB = 0;
+    seriesMatches.forEach(m => {
+      if (m.winner === 'A') winsA++;
+      else if (m.winner === 'B') winsB++;
+    });
+    
+    const isComplete = winsA >= 2 || winsB >= 2;
+    const seriesWinner = isComplete ? (winsA >= 2 ? 'A' : 'B') : null;
+    
+    return {
+      totalMatches: seriesMatches.length,
+      winsA,
+      winsB,
+      isComplete,
+      seriesWinner,
+    };
+  }, [seriesMatches]);
 
   const [mode, setMode] = useState<'Entraînement' | 'Tournoi'>('Entraînement');
   const [format, setFormat] = useState<GameFormat>('Doublette');
@@ -73,6 +108,9 @@ export default function EditMatchScreen() {
       setLocation(match.tournamentName || '');
     }
   }, [match]);
+
+  // State to show series panel
+  const [showSeriesPanel, setShowSeriesPanel] = useState(true);
 
   if (!match) {
     return (
@@ -220,8 +258,137 @@ export default function EditMatchScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Series Panel - Show all matches in the series */}
+          {seriesMatches.length > 1 && seriesStats && (
+            <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
+              <Pressable 
+                style={styles.seriesPanelHeader}
+                onPress={() => setShowSeriesPanel(!showSeriesPanel)}
+              >
+                <View style={styles.seriesPanelHeaderLeft}>
+                  <View style={[styles.seriesIcon, seriesStats.seriesWinner === 'A' && styles.seriesIconWin, seriesStats.seriesWinner === 'B' && styles.seriesIconLoss]}>
+                    <MaterialIcons 
+                      name={seriesStats.isComplete ? 'emoji-events' : 'repeat'} 
+                      size={20} 
+                      color="#FFF" 
+                    />
+                  </View>
+                  <View>
+                    <Text style={styles.seriesPanelTitle}>
+                      Série ({seriesMatches.length} matchs)
+                    </Text>
+                    <Text style={styles.seriesPanelSubtitle}>
+                      {seriesStats.isComplete 
+                        ? (seriesStats.seriesWinner === 'A' ? 'Série gagnée' : 'Série perdue')
+                        : 'En cours'
+                      } • {seriesStats.winsA} - {seriesStats.winsB}
+                    </Text>
+                  </View>
+                </View>
+                <MaterialIcons 
+                  name={showSeriesPanel ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} 
+                  size={24} 
+                  color={theme.textSecondary} 
+                />
+              </Pressable>
+
+              {showSeriesPanel && (
+                <Animated.View entering={FadeIn.duration(200)} style={styles.seriesMatchesList}>
+                  {seriesMatches.map((seriesMatch, idx) => {
+                    const isCurrentMatch = seriesMatch.id === match.id;
+                    const isWin = seriesMatch.winner === 'A';
+                    const isFinale = seriesMatch.seriesInfo?.isFinale;
+                    
+                    return (
+                      <Pressable 
+                        key={seriesMatch.id}
+                        style={[
+                          styles.seriesMatchCard,
+                          isCurrentMatch && styles.seriesMatchCardCurrent,
+                          isFinale && styles.seriesMatchCardFinale,
+                        ]}
+                        onPress={() => {
+                          if (!isCurrentMatch) {
+                            Haptics.selectionAsync();
+                            router.replace(`/match/${seriesMatch.id}`);
+                          }
+                        }}
+                      >
+                        <View style={styles.seriesMatchCardLeft}>
+                          <View style={[
+                            styles.seriesMatchIndicator,
+                            isWin ? styles.seriesMatchIndicatorWin : styles.seriesMatchIndicatorLoss,
+                            isFinale && styles.seriesMatchIndicatorFinale,
+                          ]}>
+                            <Text style={styles.seriesMatchIndicatorText}>
+                              {isFinale ? 'F' : idx + 1}
+                            </Text>
+                          </View>
+                          <View>
+                            <Text style={styles.seriesMatchLabel}>
+                              {isFinale ? 'Finale' : `Match ${idx + 1}`}
+                              {isCurrentMatch && ' (actuel)'}
+                            </Text>
+                            <Text style={styles.seriesMatchDate}>
+                              {new Date(seriesMatch.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={styles.seriesMatchCardRight}>
+                          <Text style={[
+                            styles.seriesMatchScore,
+                            isWin && styles.seriesMatchScoreWin,
+                            !isWin && styles.seriesMatchScoreLoss,
+                          ]}>
+                            {seriesMatch.teamA.score} - {seriesMatch.teamB.score}
+                          </Text>
+                          <View style={[styles.seriesMatchBadge, isWin ? styles.seriesMatchBadgeWin : styles.seriesMatchBadgeLoss]}>
+                            <Text style={[styles.seriesMatchBadgeText, { color: isWin ? theme.success : theme.error }]}>
+                              {isWin ? 'V' : 'D'}
+                            </Text>
+                          </View>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                  
+                  {/* Series Summary */}
+                  <View style={styles.seriesSummary}>
+                    <View style={styles.seriesSummaryScore}>
+                      <Text style={[styles.seriesSummaryValue, seriesStats.winsA > seriesStats.winsB && styles.seriesSummaryValueWin]}>
+                        {seriesStats.winsA}
+                      </Text>
+                      <Text style={styles.seriesSummarySep}>victoires</Text>
+                      <Text style={[styles.seriesSummaryValue, seriesStats.winsB > seriesStats.winsA && styles.seriesSummaryValueLoss]}>
+                        {seriesStats.winsB}
+                      </Text>
+                    </View>
+                    {seriesStats.isComplete && (
+                      <View style={[
+                        styles.seriesFinalBadge,
+                        seriesStats.seriesWinner === 'A' ? styles.seriesFinalBadgeWin : styles.seriesFinalBadgeLoss
+                      ]}>
+                        <MaterialIcons 
+                          name={seriesStats.seriesWinner === 'A' ? 'check-circle' : 'cancel'} 
+                          size={16} 
+                          color={seriesStats.seriesWinner === 'A' ? theme.success : theme.error} 
+                        />
+                        <Text style={[
+                          styles.seriesFinalBadgeText,
+                          { color: seriesStats.seriesWinner === 'A' ? theme.success : theme.error }
+                        ]}>
+                          {seriesStats.seriesWinner === 'A' ? 'Série gagnée' : 'Série perdue'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </Animated.View>
+              )}
+            </Animated.View>
+          )}
+
           {/* Date & Time */}
-          <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
+          <Animated.View entering={FadeInDown.duration(400).delay(seriesMatches.length > 1 ? 50 : 0)} style={styles.section}>
             <Text style={styles.sectionTitle}>DATE ET HEURE</Text>
             <View style={styles.dateTimeContainer}>
               <Pressable 
@@ -956,6 +1123,191 @@ const styles = StyleSheet.create({
   noMenesText: {
     fontSize: 14,
     color: theme.textMuted,
+  },
+  // Series Panel Styles
+  seriesPanelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    marginBottom: 12,
+    ...theme.shadows.card,
+  },
+  seriesPanelHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  seriesIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: theme.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  seriesIconWin: {
+    backgroundColor: theme.success,
+  },
+  seriesIconLoss: {
+    backgroundColor: theme.error,
+  },
+  seriesPanelTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  seriesPanelSubtitle: {
+    fontSize: 13,
+    color: theme.textSecondary,
+    marginTop: 2,
+  },
+  seriesMatchesList: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 12,
+    marginBottom: 12,
+    ...theme.shadows.card,
+  },
+  seriesMatchCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: 8,
+  },
+  seriesMatchCardCurrent: {
+    borderWidth: 2,
+    borderColor: theme.primary,
+    backgroundColor: theme.primary + '10',
+  },
+  seriesMatchCardFinale: {
+    borderWidth: 2,
+    borderColor: theme.carreauColor + '50',
+  },
+  seriesMatchCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  seriesMatchIndicator: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: theme.textMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  seriesMatchIndicatorWin: {
+    backgroundColor: theme.success,
+  },
+  seriesMatchIndicatorLoss: {
+    backgroundColor: theme.error,
+  },
+  seriesMatchIndicatorFinale: {
+    backgroundColor: theme.carreauColor,
+  },
+  seriesMatchIndicatorText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  seriesMatchLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  seriesMatchDate: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 2,
+  },
+  seriesMatchCardRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  seriesMatchScore: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.textSecondary,
+  },
+  seriesMatchScoreWin: {
+    color: theme.success,
+  },
+  seriesMatchScoreLoss: {
+    color: theme.error,
+  },
+  seriesMatchBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  seriesMatchBadgeWin: {
+    backgroundColor: theme.success + '20',
+  },
+  seriesMatchBadgeLoss: {
+    backgroundColor: theme.error + '20',
+  },
+  seriesMatchBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  seriesSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  seriesSummaryScore: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  seriesSummaryValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: theme.textMuted,
+  },
+  seriesSummaryValueWin: {
+    color: theme.success,
+  },
+  seriesSummaryValueLoss: {
+    color: theme.error,
+  },
+  seriesSummarySep: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.textMuted,
+    textTransform: 'uppercase',
+  },
+  seriesFinalBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: theme.borderRadius.full,
+  },
+  seriesFinalBadgeWin: {
+    backgroundColor: theme.success + '15',
+  },
+  seriesFinalBadgeLoss: {
+    backgroundColor: theme.error + '15',
+  },
+  seriesFinalBadgeText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   tournamentBadgeContainer: {
     backgroundColor: theme.surface,

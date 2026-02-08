@@ -308,9 +308,9 @@ export default function HistoryScreen() {
     const winsA = seriesGroup.winsA;
     const winsB = seriesGroup.winsB;
     
-    // isSeriesWon = true when user's team (A/player) has more wins
-    // A series is won when winsA >= 2 (best of 3)
+    // isSeriesWon = true when user's team (A/player) has won the series (2 wins)
     const isSeriesWon = winsA >= 2;
+    const isSeriesLost = winsB >= 2;
     const isComplete = seriesGroup.seriesComplete || winsA >= 2 || winsB >= 2;
     const hasFinale = seriesGroup.items.some(item => {
       const info = item.type === 'match' 
@@ -355,7 +355,7 @@ export default function HistoryScreen() {
                 color={isSeriesWon ? theme.success : theme.error} 
               />
               <Text style={[styles.seriesResultText, { color: isSeriesWon ? theme.success : theme.error }]}>
-                {isSeriesWon ? 'Gagnée' : 'Perdue'}
+                {isSeriesWon ? 'Gagnée' : 'Perdue'} ({winsA}-{winsB})
               </Text>
             </View>
           )}
@@ -384,7 +384,7 @@ export default function HistoryScreen() {
         <View style={styles.seriesScoreRow}>
           <Text style={[
             styles.seriesFinalScore,
-            winsA >= 2 ? styles.seriesFinalScoreWin : (winsA > winsB ? styles.seriesFinalScoreWin : styles.seriesFinalScoreLoss)
+            isSeriesWon ? styles.seriesFinalScoreWin : (winsA > winsB && !isSeriesLost ? styles.seriesFinalScoreWin : styles.seriesFinalScoreNeutral)
           ]}>
             {winsA}
           </Text>
@@ -429,7 +429,7 @@ export default function HistoryScreen() {
           </View>
           <Text style={[
             styles.seriesFinalScore,
-            winsB >= 2 ? styles.seriesFinalScoreWin : (winsB > winsA ? styles.seriesFinalScoreWin : styles.seriesFinalScoreLoss)
+            isSeriesLost ? styles.seriesFinalScoreLoss : (winsB > winsA && !isSeriesWon ? styles.seriesFinalScoreLoss : styles.seriesFinalScoreNeutral)
           ]}>
             {winsB}
           </Text>
@@ -1159,6 +1159,9 @@ const styles = StyleSheet.create({
   },
   seriesFinalScoreLoss: {
     color: theme.error,
+  },
+  seriesFinalScoreNeutral: {
+    color: theme.textMuted,
   },
   seriesTimelineContainer: {
     flexDirection: 'row',
