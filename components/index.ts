@@ -7,6 +7,8 @@ export {
   AdvancedShotNotation,
   QuickNotationButton,
   InlineNotationBar,
+  ShotHistoryPanel,
+  FloatingHistoryButton,
   SHOT_TYPES,
   SHOT_QUALITIES,
   POINT_TYPES,
