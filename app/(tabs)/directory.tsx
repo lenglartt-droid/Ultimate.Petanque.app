@@ -107,6 +107,7 @@ export default function DirectoryScreen() {
   const filteredPlayers = useMemo(() => {
     let result = players.filter(p => {
       const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.nickname?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.club?.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesClub = filters.playerClub === 'all' || p.club === filters.playerClub;
       const matchesCity = filters.playerCity === 'all' || p.location?.city === filters.playerCity;
