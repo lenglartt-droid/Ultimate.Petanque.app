@@ -16,10 +16,102 @@ import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { ChallengeType } from '@/services/mockData';
-import Svg, { Circle, Line, Rect } from 'react-native-svg';
+import Svg, { Circle, Line, Rect, Path, G, Text as SvgText } from 'react-native-svg';
 import { router } from 'expo-router';
 
 const { width: screenWidth } = Dimensions.get('window');
+
+// Evolution chart helper
+function getEvolutionData(matches: any[], timeFilter: TimeFilter): { label: string; winRate: number; matches: number }[] {
+  if (matches.length === 0) return [];
+  
+  const now = new Date();
+  let periods: { start: Date; end: Date; label: string }[] = [];
+  
+  switch (timeFilter) {
+    case 'today':
+      // Show by hour for today
+      for (let i = 5; i >= 0; i--) {
+        const start = new Date(now);
+        start.setHours(now.getHours() - i * 4, 0, 0, 0);
+        const end = new Date(start);
+        end.setHours(start.getHours() + 4);
+        periods.push({
+          start,
+          end,
+          label: `${start.getHours()}h`,
+        });
+      }
+      break;
+    case 'week':
+      // Show by day for week
+      for (let i = 6; i >= 0; i--) {
+        const start = new Date(now);
+        start.setDate(now.getDate() - i);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start);
+        end.setDate(start.getDate() + 1);
+        periods.push({
+          start,
+          end,
+          label: start.toLocaleDateString('fr-FR', { weekday: 'short' }).slice(0, 3),
+        });
+      }
+      break;
+    case 'month':
+      // Show by week for month
+      for (let i = 3; i >= 0; i--) {
+        const start = new Date(now);
+        start.setDate(now.getDate() - i * 7);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start);
+        end.setDate(start.getDate() + 7);
+        periods.push({
+          start,
+          end,
+          label: `S${4 - i}`,
+        });
+      }
+      break;
+    case 'year':
+      // Show by month for year
+      for (let i = 5; i >= 0; i--) {
+        const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+        periods.push({
+          start,
+          end,
+          label: start.toLocaleDateString('fr-FR', { month: 'short' }).slice(0, 3),
+        });
+      }
+      break;
+    default: // all
+      // Show by month for all time (last 6 months)
+      for (let i = 5; i >= 0; i--) {
+        const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+        periods.push({
+          start,
+          end,
+          label: start.toLocaleDateString('fr-FR', { month: 'short' }).slice(0, 3),
+        });
+      }
+  }
+  
+  return periods.map(period => {
+    const periodMatches = matches.filter(m => {
+      const matchDate = new Date(m.date);
+      return matchDate >= period.start && matchDate < period.end;
+    });
+    const wins = periodMatches.filter(m => m.winner === 'A').length;
+    const winRate = periodMatches.length > 0 ? Math.round((wins / periodMatches.length) * 100) : 0;
+    return {
+      label: period.label,
+      winRate,
+      matches: periodMatches.length,
+    };
+  });
+}
 
 // Challenge configuration
 const CHALLENGE_CONFIG = {
@@ -183,6 +275,173 @@ function MiniBarChart({ data, color }: { data: number[]; color: string }) {
   );
 }
 
+// Evolution Line Chart
+function EvolutionChart({ 
+  data, 
+  width = screenWidth - 64, 
+  height = 180 
+}: { 
+  data: { label: string; winRate: number; matches: number }[];
+  width?: number;
+  height?: number;
+}) {
+  if (data.length === 0 || data.every(d => d.matches === 0)) {
+    return (
+      <View style={[styles.evolutionChartEmpty, { height }]}>
+        <MaterialIcons name="show-chart" size={40} color={theme.textMuted} />
+        <Text style={styles.evolutionChartEmptyText}>Pas assez de données</Text>
+      </View>
+    );
+  }
+
+  const padding = { top: 20, right: 16, bottom: 30, left: 36 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  
+  const maxValue = 100;
+  const minValue = 0;
+  
+  // Calculate points
+  const points = data.map((d, i) => ({
+    x: padding.left + (i / (data.length - 1 || 1)) * chartWidth,
+    y: padding.top + chartHeight - ((d.winRate - minValue) / (maxValue - minValue)) * chartHeight,
+    value: d.winRate,
+    matches: d.matches,
+    label: d.label,
+  }));
+  
+  // Create smooth path
+  const createSmoothPath = () => {
+    if (points.length < 2) {
+      const p = points[0];
+      return `M ${p.x} ${p.y}`;
+    }
+    
+    let path = `M ${points[0].x} ${points[0].y}`;
+    
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[Math.max(0, i - 1)];
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const p3 = points[Math.min(points.length - 1, i + 2)];
+      
+      const cp1x = p1.x + (p2.x - p0.x) / 6;
+      const cp1y = p1.y + (p2.y - p0.y) / 6;
+      const cp2x = p2.x - (p3.x - p1.x) / 6;
+      const cp2y = p2.y - (p3.y - p1.y) / 6;
+      
+      path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+    }
+    
+    return path;
+  };
+  
+  // Create area path
+  const createAreaPath = () => {
+    const linePath = createSmoothPath();
+    const lastPoint = points[points.length - 1];
+    const firstPoint = points[0];
+    return `${linePath} L ${lastPoint.x} ${padding.top + chartHeight} L ${firstPoint.x} ${padding.top + chartHeight} Z`;
+  };
+  
+  // Y-axis labels
+  const yLabels = [0, 25, 50, 75, 100];
+  
+  return (
+    <View style={styles.evolutionChart}>
+      <Svg width={width} height={height}>
+        {/* Grid lines */}
+        {yLabels.map((val, i) => {
+          const y = padding.top + chartHeight - (val / 100) * chartHeight;
+          return (
+            <G key={i}>
+              <Line
+                x1={padding.left}
+                y1={y}
+                x2={width - padding.right}
+                y2={y}
+                stroke={theme.border}
+                strokeWidth={1}
+                strokeDasharray={val === 50 ? "0" : "4,4"}
+                opacity={val === 50 ? 0.8 : 0.4}
+              />
+              <SvgText
+                x={padding.left - 8}
+                y={y + 4}
+                fontSize={10}
+                fill={theme.textMuted}
+                textAnchor="end"
+              >
+                {val}%
+              </SvgText>
+            </G>
+          );
+        })}
+        
+        {/* Area fill */}
+        <Path
+          d={createAreaPath()}
+          fill={theme.primary}
+          opacity={0.1}
+        />
+        
+        {/* Line */}
+        <Path
+          d={createSmoothPath()}
+          stroke={theme.primary}
+          strokeWidth={2.5}
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        
+        {/* Data points */}
+        {points.map((point, i) => (
+          <G key={i}>
+            {/* Outer circle */}
+            <Circle
+              cx={point.x}
+              cy={point.y}
+              r={point.matches > 0 ? 6 : 4}
+              fill={theme.surface}
+              stroke={point.matches > 0 ? theme.primary : theme.textMuted}
+              strokeWidth={2}
+            />
+            {/* Inner circle for active points */}
+            {point.matches > 0 && (
+              <Circle
+                cx={point.x}
+                cy={point.y}
+                r={3}
+                fill={theme.primary}
+              />
+            )}
+            {/* X-axis labels */}
+            <SvgText
+              x={point.x}
+              y={height - 8}
+              fontSize={10}
+              fill={theme.textSecondary}
+              textAnchor="middle"
+              fontWeight="500"
+            >
+              {point.label}
+            </SvgText>
+          </G>
+        ))}
+      </Svg>
+      
+      {/* Legend */}
+      <View style={styles.evolutionLegend}>
+        <View style={styles.evolutionLegendItem}>
+          <View style={[styles.evolutionLegendDot, { backgroundColor: theme.primary }]} />
+          <Text style={styles.evolutionLegendText}>Taux de victoire</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 export default function StatsScreen() {
   const insets = useSafeAreaInsets();
   const { userStats, matches, challengeStats, challenges, tournaments } = useApp();
@@ -193,6 +452,11 @@ export default function StatsScreen() {
 
   // Filter data by time
   const filteredMatches = filterByTime(matches, timeFilter);
+  
+  // Evolution data
+  const evolutionData = useMemo(() => {
+    return getEvolutionData(matches, timeFilter);
+  }, [matches, timeFilter]);
   const filteredChallenges = filterByTime(challenges, timeFilter);
   const tournamentMatches = filteredMatches.filter(m => m.mode === 'Tournoi');
   const trainingMatches = filteredMatches.filter(m => m.mode === 'Entraînement');
@@ -545,8 +809,69 @@ export default function StatsScreen() {
               </View>
             </Animated.View>
 
-            {/* Points Balance */}
+            {/* Evolution Chart */}
             <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
+              <Text style={styles.sectionTitle}>Évolution des performances</Text>
+              <View style={styles.evolutionChartCard}>
+                <EvolutionChart data={evolutionData} />
+                {/* Stats summary under chart */}
+                {evolutionData.some(d => d.matches > 0) && (
+                  <View style={styles.evolutionSummary}>
+                    {evolutionData.filter(d => d.matches > 0).length > 1 && (
+                      <>
+                        <View style={styles.evolutionSummaryStat}>
+                          <Text style={styles.evolutionSummaryLabel}>Tendance</Text>
+                          {(() => {
+                            const validData = evolutionData.filter(d => d.matches > 0);
+                            if (validData.length < 2) return <Text style={styles.evolutionSummaryValue}>—</Text>;
+                            const first = validData[0].winRate;
+                            const last = validData[validData.length - 1].winRate;
+                            const diff = last - first;
+                            return (
+                              <View style={styles.evolutionTrend}>
+                                <MaterialIcons 
+                                  name={diff > 0 ? 'trending-up' : diff < 0 ? 'trending-down' : 'trending-flat'} 
+                                  size={18} 
+                                  color={diff > 0 ? theme.success : diff < 0 ? theme.error : theme.textMuted} 
+                                />
+                                <Text style={[
+                                  styles.evolutionSummaryValue,
+                                  { color: diff > 0 ? theme.success : diff < 0 ? theme.error : theme.textMuted }
+                                ]}>
+                                  {diff > 0 ? '+' : ''}{diff}%
+                                </Text>
+                              </View>
+                            );
+                          })()}
+                        </View>
+                        <View style={styles.evolutionSummaryDivider} />
+                      </>
+                    )}
+                    <View style={styles.evolutionSummaryStat}>
+                      <Text style={styles.evolutionSummaryLabel}>Meilleure période</Text>
+                      <Text style={styles.evolutionSummaryValue}>
+                        {(() => {
+                          const validData = evolutionData.filter(d => d.matches > 0);
+                          if (validData.length === 0) return '—';
+                          const best = validData.reduce((a, b) => a.winRate > b.winRate ? a : b);
+                          return `${best.label} (${best.winRate}%)`;
+                        })()}
+                      </Text>
+                    </View>
+                    <View style={styles.evolutionSummaryDivider} />
+                    <View style={styles.evolutionSummaryStat}>
+                      <Text style={styles.evolutionSummaryLabel}>Matchs joués</Text>
+                      <Text style={styles.evolutionSummaryValue}>
+                        {evolutionData.reduce((sum, d) => sum + d.matches, 0)}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+            </Animated.View>
+
+            {/* Points Balance */}
+            <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
               <Text style={styles.sectionTitle}>Balance des points</Text>
               <View style={styles.pointsBalanceCard}>
                 <View style={styles.pointsBalanceItem}>
@@ -577,7 +902,7 @@ export default function StatsScreen() {
 
             {/* Challenges Preview */}
             {challengeData.total > 0 && (
-              <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
+              <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Défis récents</Text>
                   <Pressable onPress={() => setActiveTab('challenges')}>
@@ -2139,5 +2464,75 @@ const styles = StyleSheet.create({
   miniBar: {
     width: 6,
     borderRadius: 3,
+  },
+  // Evolution Chart
+  evolutionChart: {
+    alignItems: 'center',
+  },
+  evolutionChartCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    ...theme.shadows.card,
+  },
+  evolutionChartEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  evolutionChartEmptyText: {
+    fontSize: 13,
+    color: theme.textMuted,
+  },
+  evolutionLegend: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 12,
+    gap: 20,
+  },
+  evolutionLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  evolutionLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  evolutionLegendText: {
+    fontSize: 12,
+    color: theme.textSecondary,
+  },
+  evolutionSummary: {
+    flexDirection: 'row',
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  evolutionSummaryStat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  evolutionSummaryLabel: {
+    fontSize: 11,
+    color: theme.textMuted,
+    marginBottom: 4,
+  },
+  evolutionSummaryValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  evolutionSummaryDivider: {
+    width: 1,
+    backgroundColor: theme.border,
+    marginHorizontal: 8,
+  },
+  evolutionTrend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
 });
