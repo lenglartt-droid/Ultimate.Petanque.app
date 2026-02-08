@@ -1367,11 +1367,22 @@ export default function StatsScreen() {
               </View>
             </Animated.View>
 
-            {/* Series Stats - Integrated in Training Section */}
+            {/* Series Stats - Sub-layer of Training Matches */}
             {seriesStats.matchSeries.total > 0 && (
               <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
-                <Text style={styles.sectionTitle}>Séries d'entraînement (Best of 3)</Text>
+                <View style={styles.seriesSectionHeader}>
+                  <MaterialIcons name="repeat" size={18} color={theme.accent} />
+                  <Text style={styles.seriesSectionTitle}>Séries d'entraînement</Text>
+                  <Text style={styles.seriesSectionSubtitle}>Best of 3</Text>
+                </View>
                 <View style={styles.trainingSeriesCard}>
+                  {/* Info banner explaining series */}
+                  <View style={styles.seriesInfoBanner}>
+                    <MaterialIcons name="info-outline" size={16} color={theme.textMuted} />
+                    <Text style={styles.seriesInfoText}>
+                      Après un match d'entraînement, proposez une revanche. Celui qui gagne 2 matchs sur 3 remporte la série.
+                    </Text>
+                  </View>
                   {/* Series Overview */}
                   <View style={styles.trainingSeriesHeader}>
                     <View style={styles.trainingSeriesMainStats}>
@@ -3995,6 +4006,44 @@ const styles = StyleSheet.create({
   trainingSeriesRecentDate: {
     fontSize: 12,
     color: theme.textMuted,
+  },
+  // Series Section Header
+  seriesSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  seriesSectionTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textSecondary,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  seriesSectionSubtitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: theme.accent,
+    backgroundColor: theme.accent + '15',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  seriesInfoBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: 12,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: 16,
+  },
+  seriesInfoText: {
+    flex: 1,
+    fontSize: 12,
+    color: theme.textMuted,
+    lineHeight: 18,
   },
   recentSeriesList: {
     backgroundColor: theme.surface,

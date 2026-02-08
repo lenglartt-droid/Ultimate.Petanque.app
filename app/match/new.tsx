@@ -160,12 +160,15 @@ export default function NewMatchScreen() {
   const isRevanche = revanche === 'true';
   const seriesWinsA = parseInt(initialWinsA || '0');
   const seriesWinsB = parseInt(initialWinsB || '0');
+  // Finale is when both teams have 1 win each (match 3 of the series)
   const isFinale = seriesWinsA === 1 && seriesWinsB === 1;
-  // Use existing seriesId from params or generate a new one for new series
+  // Use existing seriesId from params or generate a new one only when starting a revanche
   const [seriesId] = useState(() => initialSeriesId || (isRevanche ? `series-${Date.now()}` : undefined));
-  // If this is a revanche, it means the previous match was the Nth match, so this is N+1
-  // If seriesWinsA + seriesWinsB > 0, we're continuing a series
-  const currentMatchNumber = isRevanche ? (seriesWinsA + seriesWinsB + 1) : 1;
+  // Calculate current match number in the series
+  // Match 1: no series yet (seriesWinsA + seriesWinsB = 0)
+  // Match 2: one team has 1 win (seriesWinsA + seriesWinsB = 1)
+  // Match 3 (Finale): both have 1 win (seriesWinsA + seriesWinsB = 2)
+  const currentMatchNumber = seriesWinsA + seriesWinsB + 1;
   const linkedTournament = tournamentId ? tournaments.find(t => t.id === tournamentId) : null;
   const isTournamentMode = !!linkedTournament;
   
@@ -702,21 +705,22 @@ export default function NewMatchScreen() {
       role: p.role,
     }));
     
-    // Calculate series info - ALWAYS include for training matches to enable series tracking
+    // Calculate series info for training matches
+    // Series logic:
+    // - First match: no seriesInfo initially, but generates seriesId if user clicks "Revanche"
+    // - Second match: if revanche, has seriesInfo with matchNumber=2
+    // - Third match (Finale): if tied 1-1, has seriesInfo with matchNumber=3 and isFinale=true
     const newWinsA = seriesWinsA + (winner === 'A' ? 1 : 0);
     const newWinsB = seriesWinsB + (winner === 'A' ? 0 : 1);
     const isSeriesComplete = newWinsA >= 2 || newWinsB >= 2;
     
-    // Generate a consistent seriesId for new series starting from this match
-    // For training matches, always create a seriesId so the first match can be included in a series later
-    const currentSeriesId = seriesId || `series-${Date.now()}`;
+    // Only include seriesInfo if this match is part of a series (has seriesId)
+    // The first match doesn't have seriesInfo - it only becomes part of a series 
+    // when the user clicks "Revanche" after the match
+    const shouldIncludeSeriesInfo = !isTournamentMode && seriesId;
     
-    // For training matches, always include seriesInfo to enable revanche functionality
-    // The first match of a potential series should also have seriesInfo
-    const shouldIncludeSeriesInfo = !isTournamentMode && (isRevanche || seriesWinsA > 0 || seriesWinsB > 0 || currentMatchNumber >= 1);
-    
-    const seriesInfo = shouldIncludeSeriesInfo ? {
-      seriesId: currentSeriesId,
+    const seriesInfoData = shouldIncludeSeriesInfo ? {
+      seriesId: seriesId,
       matchNumber: currentMatchNumber,
       winsBeforeThisMatch: { teamA: seriesWinsA, teamB: seriesWinsB },
       isFinale: isFinale,
@@ -752,7 +756,7 @@ export default function NewMatchScreen() {
         duration: m.duration,
       })),
       playerActions: playerActions.length > 0 ? playerActions : undefined,
-      seriesInfo,
+      seriesInfo: seriesInfoData,
     });
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -1245,19 +1249,22 @@ export default function NewMatchScreen() {
                     <Text style={styles.fsWinnerBtnText}>Terminer le match</Text>
                   </Pressable>
                   
-                  {/* Series score & Revanche / Finale button for training matches */}
+                  {/* Series tracking & Revanche/Finale buttons for training matches */}
                   {!isTournamentMode && (() => {
-                    const newWinsA = seriesWinsA + (teamAScore > teamBScore ? 1 : 0);
-                    const newWinsB = seriesWinsB + (teamAScore > teamBScore ? 0 : 1);
+                    // Calculate new series state after this match
+                    const matchWinner = teamAScore > teamBScore ? 'A' : 'B';
+                    const newWinsA = seriesWinsA + (matchWinner === 'A' ? 1 : 0);
+                    const newWinsB = seriesWinsB + (matchWinner === 'A' ? 0 : 1);
                     const isSeriesComplete = newWinsA >= 2 || newWinsB >= 2;
                     const willBeFinale = newWinsA === 1 && newWinsB === 1;
+                    const isInSeries = seriesId || seriesWinsA > 0 || seriesWinsB > 0;
                     
                     return (
                       <>
-                        {/* Series score display */}
-                        {(seriesWinsA > 0 || seriesWinsB > 0 || isSeriesComplete) && (
+                        {/* Series score display - only show if in a series */}
+                        {isInSeries && (
                           <View style={styles.fsSeriesScoreCard}>
-                            <Text style={styles.fsSeriesScoreTitle}>Score de la série</Text>
+                            <Text style={styles.fsSeriesScoreTitle}>Score de la série (Best of 3)</Text>
                             <View style={styles.fsSeriesScoreDisplay}>
                               <Text style={[styles.fsSeriesScoreValue, newWinsA > newWinsB && styles.fsSeriesScoreWin]}>
                                 {newWinsA}
@@ -1270,8 +1277,8 @@ export default function NewMatchScreen() {
                           </View>
                         )}
                         
-                        {/* Series complete message - Finale terminée */}
-                        {isSeriesComplete ? (
+                        {/* Series complete - someone won 2 matches */}
+                        {isSeriesComplete && isInSeries ? (
                           <>
                             <View style={styles.fsSeriesCompleteCard}>
                               <MaterialIcons 
@@ -1280,27 +1287,53 @@ export default function NewMatchScreen() {
                                 color={newWinsA >= 2 ? '#FFD700' : '#F87171'} 
                               />
                               <Text style={[styles.fsSeriesCompleteText, { color: newWinsA >= 2 ? '#4ADE80' : '#F87171' }]}>
-                                {newWinsA >= 2 ? 'Série gagnée !' : 'Série perdue'}
+                                {newWinsA >= 2 ? 'Série gagnée (2-' + newWinsB + ')' : 'Série perdue (' + newWinsA + '-2)'}
                               </Text>
                             </View>
-                            {/* Terminer et retourner à l'accueil après la finale */}
+                            {/* Option to start a new series with same teams */}
+                            <Pressable 
+                              style={styles.fsNewSeriesBtn}
+                              onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                setFullscreenMode(false);
+                                handleSaveMatch();
+                                // Start a completely new series
+                                setTimeout(() => {
+                                  router.replace({
+                                    pathname: '/match/new',
+                                    params: {
+                                      revanche: 'true',
+                                      format: format,
+                                      teamA: teamAPlayers.map(p => getPlayerName(p.playerId)).join(','),
+                                      teamB: teamBPlayers.map(p => getPlayerName(p.playerId)).join(','),
+                                      seriesWinsA: '0',
+                                      seriesWinsB: '0',
+                                      seriesId: `series-${Date.now()}`, // New series ID
+                                    }
+                                  });
+                                }, 100);
+                              }}
+                            >
+                              <MaterialIcons name="replay" size={20} color="#FFF" />
+                              <Text style={styles.fsNewSeriesBtnText}>Nouvelle série</Text>
+                            </Pressable>
                             <Pressable 
                               style={styles.fsFinaleTerminerBtn}
                               onPress={() => {
                                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                                 setFullscreenMode(false);
                                 handleSaveMatch();
-                                // Rediriger vers l'accueil après la finale
                                 setTimeout(() => {
                                   router.replace('/(tabs)');
                                 }, 100);
                               }}
                             >
                               <MaterialIcons name="home" size={20} color="#FFF" />
-                              <Text style={styles.fsFinaleTerminerBtnText}>Terminer et retourner à l'accueil</Text>
+                              <Text style={styles.fsFinaleTerminerBtnText}>Retour à l'accueil</Text>
                             </Pressable>
                           </>
                         ) : (
+                          /* Revanche or Finale button */
                           <Pressable 
                             style={[
                               styles.fsRevancheBtn,
@@ -1310,12 +1343,13 @@ export default function NewMatchScreen() {
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                               setFullscreenMode(false);
                               
-                              // Save current match first (automatic save)
+                              // Save current match first
                               handleSaveMatch();
                               
-                              // Navigate to new match with series context
-                              // Use the same seriesId throughout the series
-                              const currentSeriesIdForNav = seriesId || `series-${Date.now()}`;
+                              // Generate or reuse seriesId for the series
+                              // If this is the first match and no seriesId exists, create one now
+                              const seriesIdForNav = seriesId || `series-${Date.now()}`;
+                              
                               setTimeout(() => {
                                 router.replace({
                                   pathname: '/match/new',
@@ -1326,7 +1360,7 @@ export default function NewMatchScreen() {
                                     teamB: teamBPlayers.map(p => getPlayerName(p.playerId)).join(','),
                                     seriesWinsA: String(newWinsA),
                                     seriesWinsB: String(newWinsB),
-                                    seriesId: currentSeriesIdForNav,
+                                    seriesId: seriesIdForNav,
                                   }
                                 });
                               }, 100);
@@ -1339,10 +1373,14 @@ export default function NewMatchScreen() {
                             />
                             <View style={styles.fsRevancheBtnContent}>
                               <Text style={styles.fsRevancheBtnText}>
-                                {willBeFinale ? 'FINALE ! (1-1)' : 'Revanche'}
+                                {willBeFinale ? 'JOUER LA FINALE !' : 'Revanche ?'}
                               </Text>
                               <Text style={styles.fsRevancheBtnSubtext}>
-                                {willBeFinale ? 'Match décisif' : 'Même équipes, même format'}
+                                {willBeFinale 
+                                  ? 'Égalité 1-1, match décisif' 
+                                  : isInSeries 
+                                    ? `Match ${currentMatchNumber + 1}/3` 
+                                    : 'Démarrer une série (Best of 3)'}
                               </Text>
                             </View>
                           </Pressable>
@@ -4191,13 +4229,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
+    marginTop: 12,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  fsFinaleTerminerBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.9)',
+  },
+  fsNewSeriesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
     marginTop: 16,
     paddingHorizontal: 32,
     paddingVertical: 16,
-    backgroundColor: theme.success,
+    backgroundColor: theme.accent,
     borderRadius: 28,
   },
-  fsFinaleTerminerBtnText: {
+  fsNewSeriesBtnText: {
     fontSize: 16,
     fontWeight: '700',
     color: '#FFF',

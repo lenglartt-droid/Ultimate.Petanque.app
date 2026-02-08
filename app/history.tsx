@@ -299,7 +299,7 @@ export default function HistoryScreen() {
 
   const selectedPeriodLabel = PERIOD_OPTIONS.find(p => p.id === selectedPeriod)?.label || 'Sélectionner';
 
-  // Render a series group card
+  // Render a series group card (sub-layer of training matches)
   const renderSeriesCard = (seriesGroup: SeriesGroup) => {
     const firstItem = seriesGroup.items[0];
     const isMatch = firstItem.type === 'match';
@@ -318,6 +318,7 @@ export default function HistoryScreen() {
         : (item.data as Challenge).seriesInfo;
       return info?.isFinale;
     });
+    const matchCount = seriesGroup.items.length;
     
     // Get team names from first match
     const firstMatch = isMatch ? firstItem.data as Match : null;
@@ -326,10 +327,15 @@ export default function HistoryScreen() {
     
     return (
       <View style={styles.seriesCard}>
-        {/* Series Header */}
-        <View style={[styles.seriesCardHeader, isSeriesWon ? styles.seriesCardHeaderWin : styles.seriesCardHeaderLoss]}>
+        {/* Series Header - Styled as sub-section of training */}
+        <View style={[styles.seriesCardHeader, isComplete ? (isSeriesWon ? styles.seriesCardHeaderWin : styles.seriesCardHeaderLoss) : styles.seriesCardHeaderInProgress]}>
           <View style={styles.seriesCardHeaderLeft}>
-            <View style={[styles.seriesCardIcon, isSeriesWon && styles.seriesCardIconWin]}>
+            <View style={[
+              styles.seriesCardIcon, 
+              isComplete && isSeriesWon && styles.seriesCardIconWin,
+              isComplete && isSeriesLost && styles.seriesCardIconLoss,
+              !isComplete && styles.seriesCardIconInProgress
+            ]}>
               <MaterialIcons 
                 name={hasFinale ? 'emoji-events' : 'repeat'} 
                 size={20} 
@@ -337,17 +343,21 @@ export default function HistoryScreen() {
               />
             </View>
             <View>
-              <Text style={styles.seriesCardTitle}>
-                {hasFinale ? 'Série avec Finale' : 'Série (Best of 3)'}
-              </Text>
+              <View style={styles.seriesCardTitleRow}>
+                <Text style={styles.seriesCardTitle}>Série d'entraînement</Text>
+                <View style={styles.seriesBadge}>
+                  <Text style={styles.seriesBadgeText}>{matchCount}/3</Text>
+                </View>
+              </View>
               <Text style={styles.seriesCardDate}>
                 {new Date(firstItem.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                {hasFinale && ' • Avec finale'}
               </Text>
             </View>
           </View>
           
-          {/* Series Result */}
-          {isComplete && (
+          {/* Series Result or Status */}
+          {isComplete ? (
             <View style={[styles.seriesResultBadge, isSeriesWon ? styles.seriesResultBadgeWin : styles.seriesResultBadgeLoss]}>
               <MaterialIcons 
                 name={isSeriesWon ? 'check-circle' : 'cancel'} 
@@ -357,6 +367,11 @@ export default function HistoryScreen() {
               <Text style={[styles.seriesResultText, { color: isSeriesWon ? theme.success : theme.error }]}>
                 {isSeriesWon ? 'Gagnée' : 'Perdue'} ({winsA}-{winsB})
               </Text>
+            </View>
+          ) : (
+            <View style={styles.seriesInProgressBadge}>
+              <MaterialIcons name="schedule" size={14} color={theme.warning} />
+              <Text style={styles.seriesInProgressText}>En cours ({winsA}-{winsB})</Text>
             </View>
           )}
         </View>
@@ -448,33 +463,65 @@ export default function HistoryScreen() {
             }}
           >
             <MaterialIcons name="visibility" size={16} color={theme.primary} />
-            <Text style={styles.seriesExpandText}>Détails</Text>
+            <Text style={styles.seriesExpandText}>Voir les matchs</Text>
           </Pressable>
           
-          {/* New Series button - only show if series is complete */}
-          {isComplete && firstMatch && (
-            <Pressable 
-              style={styles.seriesNewBtn}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                // Start a completely new series with same teams
-                router.push({
-                  pathname: '/match/new',
-                  params: {
-                    revanche: 'true',
-                    format: firstMatch.format,
-                    teamA: encodeTeamForRevanche(teamANames),
-                    teamB: encodeTeamForRevanche(teamBNames),
-                    seriesWinsA: '0',
-                    seriesWinsB: '0',
-                    seriesId: `series-${Date.now()}`,
-                  }
-                });
-              }}
-            >
-              <MaterialIcons name="replay" size={16} color={theme.accent} />
-              <Text style={styles.seriesNewBtnText}>Nouvelle série</Text>
-            </Pressable>
+          {/* Continue series if not complete, or new series if complete */}
+          {firstMatch && (
+            isComplete ? (
+              <Pressable 
+                style={styles.seriesNewBtn}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  // Start a completely new series with same teams
+                  router.push({
+                    pathname: '/match/new',
+                    params: {
+                      revanche: 'true',
+                      format: firstMatch.format,
+                      teamA: encodeTeamForRevanche(teamANames),
+                      teamB: encodeTeamForRevanche(teamBNames),
+                      seriesWinsA: '0',
+                      seriesWinsB: '0',
+                      seriesId: `series-${Date.now()}`,
+                    }
+                  });
+                }}
+              >
+                <MaterialIcons name="replay" size={16} color={theme.accent} />
+                <Text style={styles.seriesNewBtnText}>Rejouer</Text>
+              </Pressable>
+            ) : (
+              <Pressable 
+                style={styles.seriesContinueBtn}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  // Continue the series
+                  const willBeFinale = winsA === 1 && winsB === 1;
+                  router.push({
+                    pathname: '/match/new',
+                    params: {
+                      revanche: 'true',
+                      format: firstMatch.format,
+                      teamA: encodeTeamForRevanche(teamANames),
+                      teamB: encodeTeamForRevanche(teamBNames),
+                      seriesWinsA: String(winsA),
+                      seriesWinsB: String(winsB),
+                      seriesId: seriesGroup.seriesId,
+                    }
+                  });
+                }}
+              >
+                <MaterialIcons 
+                  name={winsA === 1 && winsB === 1 ? 'emoji-events' : 'sports-mma'} 
+                  size={16} 
+                  color={theme.carreauColor} 
+                />
+                <Text style={styles.seriesContinueBtnText}>
+                  {winsA === 1 && winsB === 1 ? 'Jouer la finale' : 'Continuer'}
+                </Text>
+              </Pressable>
+            )
           )}
         </View>
       </View>
@@ -1062,6 +1109,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: theme.error + '20',
   },
+  seriesCardHeaderInProgress: {
+    backgroundColor: theme.warning + '08',
+    borderBottomWidth: 1,
+    borderBottomColor: theme.warning + '20',
+  },
   seriesCardHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1078,10 +1130,32 @@ const styles = StyleSheet.create({
   seriesCardIconWin: {
     backgroundColor: theme.success,
   },
+  seriesCardIconLoss: {
+    backgroundColor: theme.error,
+  },
+  seriesCardIconInProgress: {
+    backgroundColor: theme.warning,
+  },
+  seriesCardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   seriesCardTitle: {
     fontSize: 15,
     fontWeight: '700',
     color: theme.textPrimary,
+  },
+  seriesBadge: {
+    backgroundColor: theme.primary + '20',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  seriesBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.primary,
   },
   seriesCardDate: {
     fontSize: 12,
@@ -1105,6 +1179,20 @@ const styles = StyleSheet.create({
   seriesResultText: {
     fontSize: 13,
     fontWeight: '700',
+  },
+  seriesInProgressBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: theme.warning + '15',
+    borderRadius: theme.borderRadius.full,
+  },
+  seriesInProgressText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.warning,
   },
   seriesTeamsRow: {
     flexDirection: 'row',
@@ -1242,6 +1330,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: theme.accent,
+  },
+  seriesContinueBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    backgroundColor: theme.carreauColor + '10',
+    borderLeftWidth: 1,
+    borderLeftColor: theme.border,
+  },
+  seriesContinueBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.carreauColor,
   },
   // Card base
   card: {
