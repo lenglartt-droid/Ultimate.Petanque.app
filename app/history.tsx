@@ -135,29 +135,34 @@ function groupBySeries(
       return aNum - bNum;
     });
     
-    // Calculate actual wins from match results
+    // Calculate actual wins from match results progressively
+    // This ensures we correctly track who won each match in the series
     let winsA = 0;
     let winsB = 0;
     group.items.forEach(item => {
       if (item.type === 'match') {
         const match = item.data as Match;
+        // A match is won by 'Mon équipe' (team A) if winner === 'A'
         if (match.winner === 'A') winsA++;
         else if (match.winner === 'B') winsB++;
       } else {
         const challenge = item.data as Challenge;
+        // A challenge is won by 'Moi' (player) if winner === 'player'
         if (challenge.winner === 'player') winsA++;
         else if (challenge.winner === 'opponent') winsB++;
-        // Note: 'draw' doesn't count as a win for either side
       }
     });
     group.winsA = winsA;
     group.winsB = winsB;
     group.totalMatches = group.items.length;
     
-    // Update series complete status based on actual results
+    // Determine series completion: first to 2 wins
     if (winsA >= 2 || winsB >= 2) {
       group.seriesComplete = true;
       group.seriesWinner = winsA >= 2 ? 'A' : 'B';
+    } else {
+      group.seriesComplete = false;
+      group.seriesWinner = undefined;
     }
   });
   
@@ -311,7 +316,7 @@ export default function HistoryScreen() {
     // isSeriesWon = true when user's team (A/player) has won the series (2 wins)
     const isSeriesWon = winsA >= 2;
     const isSeriesLost = winsB >= 2;
-    const isComplete = seriesGroup.seriesComplete || winsA >= 2 || winsB >= 2;
+    const isComplete = isSeriesWon || isSeriesLost;
     const hasFinale = seriesGroup.items.some(item => {
       const info = item.type === 'match' 
         ? (item.data as Match).seriesInfo 
@@ -344,14 +349,16 @@ export default function HistoryScreen() {
             </View>
             <View>
               <View style={styles.seriesCardTitleRow}>
-                <Text style={styles.seriesCardTitle}>Série d'entraînement</Text>
-                <View style={styles.seriesBadge}>
-                  <Text style={styles.seriesBadgeText}>{matchCount}/3</Text>
+                <Text style={styles.seriesCardTitle}>Série Best of 3</Text>
+                <View style={[styles.seriesBadge, isComplete && (isSeriesWon ? styles.seriesBadgeWin : styles.seriesBadgeLoss)]}>
+                  <Text style={[styles.seriesBadgeText, isComplete && styles.seriesBadgeTextComplete]}>
+                    {matchCount} match{matchCount > 1 ? 's' : ''}
+                  </Text>
                 </View>
               </View>
               <Text style={styles.seriesCardDate}>
                 {new Date(firstItem.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
-                {hasFinale && ' • Avec finale'}
+                {hasFinale && ' • Finale jouée'}
               </Text>
             </View>
           </View>
@@ -365,13 +372,13 @@ export default function HistoryScreen() {
                 color={isSeriesWon ? theme.success : theme.error} 
               />
               <Text style={[styles.seriesResultText, { color: isSeriesWon ? theme.success : theme.error }]}>
-                {isSeriesWon ? 'Gagnée' : 'Perdue'} ({winsA}-{winsB})
+                {isSeriesWon ? 'Gagnée' : 'Perdue'}
               </Text>
             </View>
           ) : (
             <View style={styles.seriesInProgressBadge}>
               <MaterialIcons name="schedule" size={14} color={theme.warning} />
-              <Text style={styles.seriesInProgressText}>En cours ({winsA}-{winsB})</Text>
+              <Text style={styles.seriesInProgressText}>En cours</Text>
             </View>
           )}
         </View>
@@ -395,59 +402,103 @@ export default function HistoryScreen() {
           </View>
         </View>
         
-        {/* Series Score & Timeline */}
-        <View style={styles.seriesScoreRow}>
-          <Text style={[
-            styles.seriesFinalScore,
-            isSeriesWon ? styles.seriesFinalScoreWin : (winsA > winsB && !isSeriesLost ? styles.seriesFinalScoreWin : styles.seriesFinalScoreNeutral)
-          ]}>
-            {winsA}
-          </Text>
-          <View style={styles.seriesTimelineContainer}>
-            {seriesGroup.items.map((item, idx) => {
-              // Handle both matches and challenges
-              const isMatchItem = item.type === 'match';
-              const match = isMatchItem ? item.data as Match : null;
-              const challenge = !isMatchItem ? item.data as Challenge : null;
-              
-              // Determine if this game was won by the user
-              const isWin = isMatchItem 
-                ? match?.winner === 'A' 
-                : challenge?.winner === 'player';
-              
-              const seriesInfo = isMatchItem 
-                ? match?.seriesInfo 
-                : challenge?.seriesInfo;
-              const isFinaleMatch = seriesInfo?.isFinale;
-              
-              // Get scores for display
-              const scoreA = match?.teamA.score ?? (challenge?.successRate ?? 0);
-              const scoreB = match?.teamB.score ?? (challenge?.opponentResult?.successRate ?? 0);
-              
-              return (
-                <View key={match?.id || challenge?.id || idx} style={styles.seriesTimelineItem}>
-                  <View style={[
-                    styles.seriesTimelineDot,
-                    isWin ? styles.seriesTimelineDotWin : styles.seriesTimelineDotLoss,
-                    isFinaleMatch && styles.seriesTimelineDotFinale,
-                  ]}>
-                    <Text style={styles.seriesTimelineDotText}>
-                      {isFinaleMatch ? 'F' : idx + 1}
-                    </Text>
-                  </View>
-                  <Text style={styles.seriesTimelineScore}>
-                    {match ? `${scoreA}-${scoreB}` : `${scoreA}%`}
+        {/* Series Score Display - Big and Clear */}
+        <View style={styles.seriesScoreContainer}>
+          <View style={styles.seriesScoreSide}>
+            <Text style={[
+              styles.seriesScoreBigNumber,
+              isSeriesWon && styles.seriesScoreBigNumberWin,
+              !isComplete && winsA > winsB && styles.seriesScoreBigNumberLeading
+            ]}>
+              {winsA}
+            </Text>
+            <Text style={styles.seriesScoreLabel}>victoire{winsA !== 1 ? 's' : ''}</Text>
+          </View>
+          
+          <View style={styles.seriesScoreDivider}>
+            <Text style={styles.seriesScoreDividerText}>-</Text>
+          </View>
+          
+          <View style={styles.seriesScoreSide}>
+            <Text style={[
+              styles.seriesScoreBigNumber,
+              isSeriesLost && styles.seriesScoreBigNumberLoss,
+              !isComplete && winsB > winsA && styles.seriesScoreBigNumberLeading
+            ]}>
+              {winsB}
+            </Text>
+            <Text style={styles.seriesScoreLabel}>victoire{winsB !== 1 ? 's' : ''}</Text>
+          </View>
+        </View>
+        
+        {/* Match-by-Match Timeline - Clear results */}
+        <View style={styles.seriesMatchesTimeline}>
+          <Text style={styles.seriesMatchesTitle}>Détail des matchs</Text>
+          {seriesGroup.items.map((item, idx) => {
+            const isMatchItem = item.type === 'match';
+            const match = isMatchItem ? item.data as Match : null;
+            const challenge = !isMatchItem ? item.data as Challenge : null;
+            
+            // Determine if this game was won by the user (team A / player)
+            const isWin = isMatchItem 
+              ? match?.winner === 'A' 
+              : challenge?.winner === 'player';
+            
+            const seriesInfo = isMatchItem 
+              ? match?.seriesInfo 
+              : challenge?.seriesInfo;
+            const isFinaleMatch = seriesInfo?.isFinale;
+            
+            // Get scores for display
+            const scoreA = match?.teamA.score ?? 0;
+            const scoreB = match?.teamB.score ?? 0;
+            
+            return (
+              <View key={match?.id || challenge?.id || idx} style={styles.seriesMatchRow}>
+                {/* Match number indicator */}
+                <View style={[
+                  styles.seriesMatchNumber,
+                  isFinaleMatch && styles.seriesMatchNumberFinale
+                ]}>
+                  <Text style={styles.seriesMatchNumberText}>
+                    {isFinaleMatch ? 'F' : `M${idx + 1}`}
                   </Text>
                 </View>
-              );
-            })}
-          </View>
-          <Text style={[
-            styles.seriesFinalScore,
-            isSeriesLost ? styles.seriesFinalScoreLoss : (winsB > winsA && !isSeriesWon ? styles.seriesFinalScoreLoss : styles.seriesFinalScoreNeutral)
-          ]}>
-            {winsB}
-          </Text>
+                
+                {/* Score display */}
+                <View style={styles.seriesMatchScoreContainer}>
+                  <Text style={[
+                    styles.seriesMatchScoreValue,
+                    isWin && styles.seriesMatchScoreWin
+                  ]}>
+                    {scoreA}
+                  </Text>
+                  <Text style={styles.seriesMatchScoreSep}>-</Text>
+                  <Text style={[
+                    styles.seriesMatchScoreValue,
+                    !isWin && styles.seriesMatchScoreLoss
+                  ]}>
+                    {scoreB}
+                  </Text>
+                </View>
+                
+                {/* Result badge */}
+                <View style={[
+                  styles.seriesMatchResultBadge,
+                  isWin ? styles.seriesMatchResultWin : styles.seriesMatchResultLoss
+                ]}>
+                  <MaterialIcons 
+                    name={isWin ? 'check' : 'close'} 
+                    size={14} 
+                    color="#FFF" 
+                  />
+                  <Text style={styles.seriesMatchResultText}>
+                    {isWin ? 'Gagné' : 'Perdu'}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
         </View>
         
         {/* Action buttons */}
@@ -463,7 +514,7 @@ export default function HistoryScreen() {
             }}
           >
             <MaterialIcons name="visibility" size={16} color={theme.primary} />
-            <Text style={styles.seriesExpandText}>Voir les matchs</Text>
+            <Text style={styles.seriesExpandText}>Détails</Text>
           </Pressable>
           
           {/* Continue series if not complete, or new series if complete */}
@@ -489,7 +540,7 @@ export default function HistoryScreen() {
                 }}
               >
                 <MaterialIcons name="replay" size={16} color={theme.accent} />
-                <Text style={styles.seriesNewBtnText}>Rejouer</Text>
+                <Text style={styles.seriesNewBtnText}>Nouvelle série</Text>
               </Pressable>
             ) : (
               <Pressable 
@@ -518,7 +569,7 @@ export default function HistoryScreen() {
                   color={theme.carreauColor} 
                 />
                 <Text style={styles.seriesContinueBtnText}>
-                  {winsA === 1 && winsB === 1 ? 'Jouer la finale' : 'Continuer'}
+                  {winsA === 1 && winsB === 1 ? 'Jouer la finale !' : 'Continuer'}
                 </Text>
               </Pressable>
             )
@@ -1152,10 +1203,19 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 10,
   },
+  seriesBadgeWin: {
+    backgroundColor: theme.success + '20',
+  },
+  seriesBadgeLoss: {
+    backgroundColor: theme.error + '20',
+  },
   seriesBadgeText: {
     fontSize: 11,
     fontWeight: '700',
     color: theme.primary,
+  },
+  seriesBadgeTextComplete: {
+    color: theme.textSecondary,
   },
   seriesCardDate: {
     fontSize: 12,
@@ -1228,73 +1288,134 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: theme.textMuted,
   },
-  seriesScoreRow: {
+  // Series Score Container
+  seriesScoreContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 14,
-    paddingBottom: 14,
-    gap: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    backgroundColor: theme.backgroundSecondary,
+    marginHorizontal: 14,
+    marginBottom: 12,
+    borderRadius: theme.borderRadius.lg,
   },
-  seriesFinalScore: {
-    fontSize: 36,
+  seriesScoreSide: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  seriesScoreBigNumber: {
+    fontSize: 48,
     fontWeight: '900',
     color: theme.textMuted,
-    width: 44,
-    textAlign: 'center',
   },
-  seriesFinalScoreWin: {
+  seriesScoreBigNumberWin: {
     color: theme.success,
   },
-  seriesFinalScoreLoss: {
+  seriesScoreBigNumberLoss: {
     color: theme.error,
   },
-  seriesFinalScoreNeutral: {
+  seriesScoreBigNumberLeading: {
+    color: theme.primary,
+  },
+  seriesScoreLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: theme.textSecondary,
+    marginTop: 2,
+  },
+  seriesScoreDivider: {
+    paddingHorizontal: 16,
+  },
+  seriesScoreDividerText: {
+    fontSize: 32,
+    fontWeight: '300',
     color: theme.textMuted,
   },
-  seriesTimelineContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  // Match-by-Match Timeline
+  seriesMatchesTimeline: {
+    paddingHorizontal: 14,
+    paddingBottom: 14,
   },
-  seriesTimelineItem: {
-    alignItems: 'center',
-  },
-  seriesTimelineDot: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: theme.backgroundSecondary,
-    borderWidth: 2,
-    borderColor: theme.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  seriesTimelineDotWin: {
-    backgroundColor: theme.success,
-    borderColor: theme.success,
-  },
-  seriesTimelineDotLoss: {
-    backgroundColor: theme.error,
-    borderColor: theme.error,
-  },
-  seriesTimelineDotFinale: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: theme.carreauColor,
-    borderColor: theme.carreauColor,
-  },
-  seriesTimelineDotText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  seriesTimelineScore: {
+  seriesMatchesTitle: {
     fontSize: 11,
     fontWeight: '600',
+    color: theme.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 10,
+  },
+  seriesMatchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: 6,
+  },
+  seriesMatchNumber: {
+    width: 36,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: theme.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  seriesMatchNumberFinale: {
+    backgroundColor: theme.carreauColor + '20',
+    borderColor: theme.carreauColor,
+  },
+  seriesMatchNumberText: {
+    fontSize: 11,
+    fontWeight: '700',
     color: theme.textSecondary,
+  },
+  seriesMatchScoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  seriesMatchScoreValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.textSecondary,
+    minWidth: 24,
+    textAlign: 'center',
+  },
+  seriesMatchScoreWin: {
+    color: theme.success,
+  },
+  seriesMatchScoreLoss: {
+    color: theme.error,
+  },
+  seriesMatchScoreSep: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: theme.textMuted,
+    marginHorizontal: 6,
+  },
+  seriesMatchResultBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: theme.borderRadius.full,
+  },
+  seriesMatchResultWin: {
+    backgroundColor: theme.success,
+  },
+  seriesMatchResultLoss: {
+    backgroundColor: theme.error,
+  },
+  seriesMatchResultText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#FFF',
   },
   seriesActionsRow: {
     flexDirection: 'row',
