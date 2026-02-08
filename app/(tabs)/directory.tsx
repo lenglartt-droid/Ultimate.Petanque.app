@@ -57,6 +57,7 @@ export default function DirectoryScreen() {
     terrainCity: 'all',
     terrainLighting: 'all' as 'all' | 'yes' | 'no',
     terrainCovered: 'all' as 'all' | 'yes' | 'no',
+    terrainEnvironment: 'all' as 'all' | 'indoor' | 'outdoor',
     // Tournament filters
     tournamentStatus: 'all' as TournamentStatus,
     tournamentFormat: 'all',
@@ -97,7 +98,7 @@ export default function DirectoryScreen() {
   const activeFilterCounts = useMemo(() => ({
     players: [filters.playerClub, filters.playerCity, filters.playerCountry, filters.playerLevel, filters.playerRole].filter(f => f !== 'all').length,
     clubs: [filters.clubCity, filters.clubCountry].filter(f => f !== 'all').length,
-    terrains: [filters.terrainType, filters.terrainCity, filters.terrainLighting, filters.terrainCovered].filter(f => f !== 'all').length,
+    terrains: [filters.terrainType, filters.terrainCity, filters.terrainLighting, filters.terrainCovered, filters.terrainEnvironment].filter(f => f !== 'all').length,
     tournaments: [filters.tournamentStatus, filters.tournamentFormat, filters.tournamentLevel, filters.tournamentCategory, filters.tournamentRegistration, filters.tournamentScope, filters.tournamentCity].filter(f => f !== 'all').length,
   }), [filters]);
 
@@ -148,7 +149,9 @@ export default function DirectoryScreen() {
         (filters.terrainLighting === 'yes' ? t.lighting : !t.lighting);
       const matchesCovered = filters.terrainCovered === 'all' || 
         (filters.terrainCovered === 'yes' ? t.covered : !t.covered);
-      return matchesSearch && matchesType && matchesCity && matchesLighting && matchesCovered;
+      const matchesEnvironment = filters.terrainEnvironment === 'all' || 
+        (t.environment || 'outdoor') === filters.terrainEnvironment;
+      return matchesSearch && matchesType && matchesCity && matchesLighting && matchesCovered && matchesEnvironment;
     });
   }, [terrains, searchQuery, filters]);
 
@@ -173,7 +176,7 @@ export default function DirectoryScreen() {
     } else if (activeTab === 'clubs') {
       setFilters(f => ({ ...f, clubCity: 'all', clubCountry: 'all' }));
     } else if (activeTab === 'terrains') {
-      setFilters(f => ({ ...f, terrainType: 'all', terrainCity: 'all', terrainLighting: 'all', terrainCovered: 'all' }));
+      setFilters(f => ({ ...f, terrainType: 'all', terrainCity: 'all', terrainLighting: 'all', terrainCovered: 'all', terrainEnvironment: 'all' }));
     } else if (activeTab === 'tournaments') {
       setFilters(f => ({ ...f, tournamentStatus: 'all', tournamentFormat: 'all', tournamentLevel: 'all', tournamentCategory: 'all', tournamentRegistration: 'all', tournamentScope: 'all', tournamentCity: 'all' }));
     }
@@ -463,6 +466,14 @@ export default function DirectoryScreen() {
         return (
           <>
             <FilterSection
+              title="Environnement"
+              options={['all', 'indoor', 'outdoor']}
+              labels={{ all: 'Tous', indoor: 'Intérieur (Boulodrome)', outdoor: 'Extérieur' }}
+              value={filters.terrainEnvironment}
+              onChange={(v) => setFilters(f => ({ ...f, terrainEnvironment: v as 'all' | 'indoor' | 'outdoor' }))}
+              icons={{ indoor: 'domain', outdoor: 'park' }}
+            />
+            <FilterSection
               title="Type de surface"
               options={['all', ...config.terrainTypes.map(t => t.id)]}
               labels={{ all: 'Tous', ...Object.fromEntries(config.terrainTypes.map(t => [t.id, t.label])) }}
@@ -677,6 +688,7 @@ export default function DirectoryScreen() {
             )}
             {activeTab === 'terrains' && (
               <>
+                {filters.terrainEnvironment !== 'all' && <ActiveFilterChip label={filters.terrainEnvironment === 'indoor' ? 'Intérieur' : 'Extérieur'} onRemove={() => setFilters(f => ({ ...f, terrainEnvironment: 'all' }))} icon={filters.terrainEnvironment === 'indoor' ? 'domain' : 'park'} />}
                 {filters.terrainType !== 'all' && <ActiveFilterChip label={config.terrainTypes.find(t => t.id === filters.terrainType)?.label || filters.terrainType} onRemove={() => setFilters(f => ({ ...f, terrainType: 'all' }))} />}
                 {filters.terrainCity !== 'all' && <ActiveFilterChip label={filters.terrainCity} onRemove={() => setFilters(f => ({ ...f, terrainCity: 'all' }))} />}
                 {filters.terrainLighting !== 'all' && <ActiveFilterChip label={filters.terrainLighting === 'yes' ? 'Éclairé' : 'Non éclairé'} onRemove={() => setFilters(f => ({ ...f, terrainLighting: 'all' }))} icon="lightbulb" />}
