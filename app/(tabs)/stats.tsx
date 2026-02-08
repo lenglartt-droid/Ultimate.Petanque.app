@@ -14,8 +14,8 @@ import Animated, { FadeInDown, FadeIn, ZoomIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
-import { ChallengeType, SeriesInfo } from '@/services/mockData';
-import Svg, { Circle, Line, Path, G, Text as SvgText } from 'react-native-svg';
+import { ChallengeType, SeriesInfo, GameFormat } from '@/services/mockData';
+import Svg, { Circle, Line, Path, G, Text as SvgText, Rect } from 'react-native-svg';
 import { router } from 'expo-router';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -25,6 +25,12 @@ const { width: screenWidth } = Dimensions.get('window');
 // ============================================
 type TimeFilter = 'week' | 'month' | 'year' | 'all';
 type StatsMode = 'simple' | 'advanced';
+type AdvancedTab = 'performance' | 'evolution' | 'custom';
+
+// Filters for custom stats
+type ModeFilter = 'all' | 'Entraînement' | 'Tournoi';
+type FormatFilter = 'all' | 'Tête-à-tête' | 'Doublette' | 'Triplette';
+type ResultFilter = 'all' | 'wins' | 'losses';
 
 const TIME_FILTERS: { id: TimeFilter; label: string; shortLabel: string }[] = [
   { id: 'week', label: 'Cette semaine', shortLabel: '7j' },
@@ -38,6 +44,12 @@ const CHALLENGE_CONFIG = {
   '10_tirs_sautee': { name: 'Sautée', icon: 'sports' as const, color: '#3B82F6' },
   'precision': { name: 'Précision', icon: 'stars' as const, color: '#F59E0B' },
 };
+
+const ADVANCED_TABS: { id: AdvancedTab; label: string; icon: string }[] = [
+  { id: 'performance', label: 'Performance', icon: 'emoji-events' },
+  { id: 'evolution', label: 'Évolution', icon: 'trending-up' },
+  { id: 'custom', label: 'Croisées', icon: 'tune' },
+];
 
 // ============================================
 // HELPER FUNCTIONS
@@ -116,10 +128,36 @@ function getEvolutionData(matches: any[], timeFilter: TimeFilter) {
       return itemDate >= period.start && itemDate < period.end;
     });
     const wins = periodMatches.filter(m => m.winner === 'A').length;
+    
+    // Calculate technical stats for this period
+    let tirs = 0, tirsSuccess = 0, points = 0, pointsSuccess = 0, carreaux = 0;
+    let totalPointsFor = 0, totalPointsAgainst = 0;
+    
+    periodMatches.forEach(match => {
+      totalPointsFor += match.teamA?.score || 0;
+      totalPointsAgainst += match.teamB?.score || 0;
+      if (match.playerActions) {
+        match.playerActions.filter((pa: any) => pa.team === 'A').forEach((pa: any) => {
+          tirs += pa.actions.tirs;
+          tirsSuccess += pa.actions.tirsSuccess;
+          points += pa.actions.points;
+          pointsSuccess += pa.actions.pointsSuccess;
+          carreaux += pa.actions.carreaux;
+        });
+      }
+    });
+    
     return {
       label: period.label,
       winRate: periodMatches.length > 0 ? Math.round((wins / periodMatches.length) * 100) : 0,
       matches: periodMatches.length,
+      wins,
+      losses: periodMatches.length - wins,
+      tirRate: tirs > 0 ? Math.round((tirsSuccess / tirs) * 100) : 0,
+      pointRate: points > 0 ? Math.round((pointsSuccess / points) * 100) : 0,
+      carreauRate: tirs > 0 ? Math.round((carreaux / tirs) * 100) : 0,
+      avgPointsFor: periodMatches.length > 0 ? Math.round((totalPointsFor / periodMatches.length) * 10) / 10 : 0,
+      avgPointsAgainst: periodMatches.length > 0 ? Math.round((totalPointsAgainst / periodMatches.length) * 10) / 10 : 0,
     };
   });
 }
@@ -185,17 +223,24 @@ function ProgressRing({
   );
 }
 
-// Evolution Line Chart
+// Evolution Line Chart with multiple metrics support
 function EvolutionChart({ 
   data, 
   height = 160,
   color = theme.primary,
+  metric = 'winRate',
+  showLabel = true,
 }: { 
-  data: { label: string; winRate: number; matches: number }[];
+  data: any[];
   height?: number;
   color?: string;
+  metric?: 'winRate' | 'tirRate' | 'pointRate' | 'carreauRate' | 'avgPointsFor';
+  showLabel?: boolean;
 }) {
   const width = screenWidth - 64;
+  
+  const metricKey = metric;
+  const maxValue = metric === 'avgPointsFor' ? 13 : 100;
   
   if (data.length === 0 || data.every(d => d.matches === 0)) {
     return (
@@ -212,8 +257,8 @@ function EvolutionChart({
   
   const points = data.map((d, i) => ({
     x: padding.left + (i / (data.length - 1 || 1)) * chartWidth,
-    y: padding.top + chartHeight - (d.winRate / 100) * chartHeight,
-    value: d.winRate,
+    y: padding.top + chartHeight - (d[metricKey] / maxValue) * chartHeight,
+    value: d[metricKey],
     matches: d.matches,
     label: d.label,
   }));
@@ -242,11 +287,13 @@ function EvolutionChart({
     return `${linePath} L ${lastPoint.x} ${padding.top + chartHeight} L ${firstPoint.x} ${padding.top + chartHeight} Z`;
   };
 
+  const gridValues = metric === 'avgPointsFor' ? [0, 6.5, 13] : [0, 50, 100];
+
   return (
     <Svg width={width} height={height}>
       {/* Grid lines */}
-      {[0, 50, 100].map((val, i) => {
-        const y = padding.top + chartHeight - (val / 100) * chartHeight;
+      {gridValues.map((val, i) => {
+        const y = padding.top + chartHeight - (val / maxValue) * chartHeight;
         return (
           <G key={i}>
             <Line
@@ -256,11 +303,11 @@ function EvolutionChart({
               y2={y}
               stroke={theme.border}
               strokeWidth={1}
-              strokeDasharray={val === 50 ? "0" : "3,3"}
+              strokeDasharray={i === 1 ? "0" : "3,3"}
               opacity={0.5}
             />
             <SvgText x={padding.left - 6} y={y + 3} fontSize={9} fill={theme.textMuted} textAnchor="end">
-              {val}
+              {Math.round(val)}
             </SvgText>
           </G>
         );
@@ -281,11 +328,41 @@ function EvolutionChart({
               <Circle cx={point.x} cy={point.y} r={2} fill={color} />
             </>
           )}
-          <SvgText x={point.x} y={height - 8} fontSize={9} fill={theme.textSecondary} textAnchor="middle">
-            {point.label}
-          </SvgText>
+          {showLabel && (
+            <SvgText x={point.x} y={height - 8} fontSize={9} fill={theme.textSecondary} textAnchor="middle">
+              {point.label}
+            </SvgText>
+          )}
         </G>
       ))}
+    </Svg>
+  );
+}
+
+// Bar Chart for comparison
+function ComparisonBarChart({ data, height = 120 }: { data: { label: string; value: number; color: string }[]; height?: number }) {
+  const width = screenWidth - 64;
+  const maxValue = Math.max(...data.map(d => d.value), 1);
+  const barWidth = (width - 60) / data.length - 10;
+  
+  return (
+    <Svg width={width} height={height}>
+      {data.map((item, i) => {
+        const barHeight = (item.value / maxValue) * (height - 40);
+        const x = 30 + i * (barWidth + 10);
+        const y = height - 25 - barHeight;
+        return (
+          <G key={i}>
+            <Rect x={x} y={y} width={barWidth} height={barHeight} fill={item.color} rx={4} />
+            <SvgText x={x + barWidth / 2} y={y - 6} fontSize={11} fill={theme.textPrimary} textAnchor="middle" fontWeight="600">
+              {item.value}%
+            </SvgText>
+            <SvgText x={x + barWidth / 2} y={height - 8} fontSize={9} fill={theme.textSecondary} textAnchor="middle">
+              {item.label}
+            </SvgText>
+          </G>
+        );
+      })}
     </Svg>
   );
 }
@@ -346,6 +423,52 @@ function SkillBar({ label, value, color, detail }: {
   );
 }
 
+// Filter Chip Component
+function FilterChip({ 
+  label, 
+  selected, 
+  onPress 
+}: { 
+  label: string; 
+  selected: boolean; 
+  onPress: () => void; 
+}) {
+  return (
+    <Pressable
+      style={[styles.filterChip, selected && styles.filterChipSelected]}
+      onPress={() => { Haptics.selectionAsync(); onPress(); }}
+    >
+      <Text style={[styles.filterChipText, selected && styles.filterChipTextSelected]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+// Stat Row for custom stats
+function StatRow({ label, value, subValue, icon, color }: {
+  label: string;
+  value: string | number;
+  subValue?: string;
+  icon?: string;
+  color?: string;
+}) {
+  return (
+    <View style={styles.statRow}>
+      {icon && (
+        <View style={[styles.statRowIcon, { backgroundColor: (color || theme.primary) + '15' }]}>
+          <MaterialIcons name={icon as any} size={18} color={color || theme.primary} />
+        </View>
+      )}
+      <View style={styles.statRowContent}>
+        <Text style={styles.statRowLabel}>{label}</Text>
+        {subValue && <Text style={styles.statRowSubValue}>{subValue}</Text>}
+      </View>
+      <Text style={[styles.statRowValue, color ? { color } : null]}>{value}</Text>
+    </View>
+  );
+}
+
 // ============================================
 // MAIN COMPONENT
 // ============================================
@@ -355,11 +478,36 @@ export default function StatsScreen() {
   
   const [statsMode, setStatsMode] = useState<StatsMode>('simple');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('month');
-  const [showTimeModal, setShowTimeModal] = useState(false);
+  const [advancedTab, setAdvancedTab] = useState<AdvancedTab>('performance');
+  
+  // Custom stats filters
+  const [modeFilter, setModeFilter] = useState<ModeFilter>('all');
+  const [formatFilter, setFormatFilter] = useState<FormatFilter>('all');
+  const [resultFilter, setResultFilter] = useState<ResultFilter>('all');
+  const [evolutionMetric, setEvolutionMetric] = useState<'winRate' | 'tirRate' | 'pointRate' | 'carreauRate'>('winRate');
 
   // Filter data
   const filteredMatches = filterByTime(matches, timeFilter);
   const filteredChallenges = filterByTime(challenges, timeFilter);
+  
+  // Custom filtered matches
+  const customFilteredMatches = useMemo(() => {
+    let result = [...filteredMatches];
+    
+    if (modeFilter !== 'all') {
+      result = result.filter(m => m.mode === modeFilter);
+    }
+    if (formatFilter !== 'all') {
+      result = result.filter(m => m.format === formatFilter);
+    }
+    if (resultFilter === 'wins') {
+      result = result.filter(m => m.winner === 'A');
+    } else if (resultFilter === 'losses') {
+      result = result.filter(m => m.winner === 'B');
+    }
+    
+    return result;
+  }, [filteredMatches, modeFilter, formatFilter, resultFilter]);
   
   // Evolution data
   const evolutionData = useMemo(() => getEvolutionData(matches, timeFilter), [matches, timeFilter]);
@@ -431,6 +579,14 @@ export default function StatsScreen() {
     const finales = filteredMatches.filter(m => m.seriesInfo?.isFinale);
     const finalesWon = finales.filter(m => m.winner === 'A').length;
 
+    // Format stats
+    const byFormat: Record<string, { total: number; wins: number }> = {};
+    filteredMatches.forEach(m => {
+      if (!byFormat[m.format]) byFormat[m.format] = { total: 0, wins: 0 };
+      byFormat[m.format].total++;
+      if (m.winner === 'A') byFormat[m.format].wins++;
+    });
+
     return {
       total,
       wins,
@@ -464,8 +620,53 @@ export default function StatsScreen() {
       finaleWinRate: finales.length > 0 ? Math.round((finalesWon / finales.length) * 100) : 0,
       fannyWins,
       fannyLosses,
+      byFormat,
     };
   }, [filteredMatches]);
+
+  // Custom stats calculation
+  const customStats = useMemo(() => {
+    const total = customFilteredMatches.length;
+    const wins = customFilteredMatches.filter(m => m.winner === 'A').length;
+    const winRate = total > 0 ? Math.round((wins / total) * 100) : 0;
+    
+    let totalPointsFor = 0, totalPointsAgainst = 0;
+    let tirs = 0, tirsSuccess = 0, carreaux = 0;
+    let points = 0, pointsSuccess = 0;
+    let totalDuration = 0;
+    
+    customFilteredMatches.forEach(match => {
+      totalPointsFor += match.teamA.score;
+      totalPointsAgainst += match.teamB.score;
+      totalDuration += match.duration || 0;
+      if (match.playerActions) {
+        match.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
+          tirs += pa.actions.tirs;
+          tirsSuccess += pa.actions.tirsSuccess;
+          carreaux += pa.actions.carreaux;
+          points += pa.actions.points;
+          pointsSuccess += pa.actions.pointsSuccess;
+        });
+      }
+    });
+
+    return {
+      total,
+      wins,
+      losses: total - wins,
+      winRate,
+      avgPointsFor: total > 0 ? Math.round((totalPointsFor / total) * 10) / 10 : 0,
+      avgPointsAgainst: total > 0 ? Math.round((totalPointsAgainst / total) * 10) / 10 : 0,
+      pointDiff: totalPointsFor - totalPointsAgainst,
+      tirRate: tirs > 0 ? Math.round((tirsSuccess / tirs) * 100) : 0,
+      pointRate: points > 0 ? Math.round((pointsSuccess / points) * 100) : 0,
+      carreauRate: tirs > 0 ? Math.round((carreaux / tirs) * 100) : 0,
+      avgDuration: total > 0 ? Math.round(totalDuration / total) : 0,
+      tirs,
+      tirsSuccess,
+      carreaux,
+    };
+  }, [customFilteredMatches]);
 
   // Challenge stats
   const challengeData = useMemo(() => {
@@ -476,7 +677,6 @@ export default function StatsScreen() {
     };
     const typeTotal: Record<ChallengeType, number> = { '10_tirs': 0, '10_tirs_sautee': 0, 'precision': 0 };
 
-    // Aggregate challenge technical stats
     let challengeTirs = 0, challengeTirsSuccess = 0, challengeCarreaux = 0;
     
     filteredChallenges.forEach(c => {
@@ -487,7 +687,6 @@ export default function StatsScreen() {
       } else {
         typeTotal[c.type] += c.successRate || 0;
         byType[c.type].bestScore = Math.max(byType[c.type].bestScore, c.successRate || 0);
-        // Aggregate tir stats from challenges (10_tirs and 10_tirs_sautee are shooting challenges)
         challengeTirs += c.totalShots || 0;
         challengeTirsSuccess += c.successCount || 0;
         challengeCarreaux += c.carreauCount || 0;
@@ -499,7 +698,6 @@ export default function StatsScreen() {
       t.avgSuccess = t.count > 0 ? Math.round(typeTotal[key as ChallengeType] / t.count) : 0;
     });
 
-    // 1v1 stats
     const challenges1v1 = filteredChallenges.filter(c => c.mode === '1v1');
     const won1v1 = challenges1v1.filter(c => c.winner === 'player').length;
 
@@ -517,30 +715,7 @@ export default function StatsScreen() {
     };
   }, [filteredChallenges]);
 
-  // Terrain stats (advanced)
-  const terrainStats = useMemo(() => {
-    const byType: Record<string, { matches: number; wins: number }> = {};
-    filteredMatches.forEach(match => {
-      if (match.tournamentId) {
-        const tournament = tournaments.find(t => t.id === match.tournamentId);
-        if (tournament?.terrainType) {
-          if (!byType[tournament.terrainType]) byType[tournament.terrainType] = { matches: 0, wins: 0 };
-          byType[tournament.terrainType].matches++;
-          if (match.winner === 'A') byType[tournament.terrainType].wins++;
-        }
-      }
-    });
-    return Object.entries(byType)
-      .map(([type, data]) => ({
-        type,
-        matches: data.matches,
-        wins: data.wins,
-        winRate: data.matches > 0 ? Math.round((data.wins / data.matches) * 100) : 0,
-      }))
-      .sort((a, b) => b.matches - a.matches);
-  }, [filteredMatches, tournaments]);
-
-  // Financial stats (advanced)
+  // Financial stats
   const financialStats = useMemo(() => {
     const completedTournaments = tournaments.filter(t => t.status === 'Terminé');
     const totalCost = completedTournaments.reduce((sum, t) => sum + (t.registrationCost || 0), 0);
@@ -553,14 +728,18 @@ export default function StatsScreen() {
     };
   }, [tournaments]);
 
-  // Trend calculation
   const getTrend = (current: number, threshold: number = 50): 'up' | 'down' | 'neutral' => {
     if (current > threshold + 5) return 'up';
     if (current < threshold - 5) return 'down';
     return 'neutral';
   };
 
-  const currentFilter = TIME_FILTERS.find(f => f.id === timeFilter);
+  // Get active filters count for custom tab
+  const activeFiltersCount = [
+    modeFilter !== 'all',
+    formatFilter !== 'all',
+    resultFilter !== 'all',
+  ].filter(Boolean).length;
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
@@ -623,6 +802,33 @@ export default function StatsScreen() {
             </Pressable>
           ))}
         </ScrollView>
+
+        {/* Advanced Mode Tabs */}
+        {statsMode === 'advanced' && (
+          <View style={styles.advancedTabBar}>
+            {ADVANCED_TABS.map(tab => (
+              <Pressable
+                key={tab.id}
+                style={[styles.advancedTab, advancedTab === tab.id && styles.advancedTabActive]}
+                onPress={() => { Haptics.selectionAsync(); setAdvancedTab(tab.id); }}
+              >
+                <MaterialIcons 
+                  name={tab.icon as any} 
+                  size={18} 
+                  color={advancedTab === tab.id ? theme.primary : theme.textMuted} 
+                />
+                <Text style={[styles.advancedTabText, advancedTab === tab.id && styles.advancedTabTextActive]}>
+                  {tab.label}
+                </Text>
+                {tab.id === 'custom' && activeFiltersCount > 0 && (
+                  <View style={styles.filterBadge}>
+                    <Text style={styles.filterBadgeText}>{activeFiltersCount}</Text>
+                  </View>
+                )}
+              </Pressable>
+            ))}
+          </View>
+        )}
       </View>
 
       <ScrollView
@@ -830,13 +1036,13 @@ export default function StatsScreen() {
         )}
 
         {/* ========================================
-            ADVANCED MODE
+            ADVANCED MODE - PERFORMANCE TAB
         ======================================== */}
-        {statsMode === 'advanced' && (
+        {statsMode === 'advanced' && advancedTab === 'performance' && (
           <>
             {/* Overall Performance */}
             <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
-              <Text style={styles.sectionTitle}>Performance globale</Text>
+              <Text style={styles.sectionTitle}>Taux de victoire</Text>
               <View style={styles.advancedGrid}>
                 <View style={styles.advancedCard}>
                   <ProgressRing value={stats.winRate} size={90} strokeWidth={8} color={theme.primary} label="Global" />
@@ -845,65 +1051,62 @@ export default function StatsScreen() {
                   <ProgressRing value={stats.tournamentWinRate} size={90} strokeWidth={8} color={theme.carreauColor} label="Tournois" />
                 </View>
                 <View style={styles.advancedCard}>
-                  <ProgressRing value={stats.trainingWinRate} size={90} strokeWidth={8} color={theme.primary} label="Entraînement" />
+                  <ProgressRing value={stats.trainingWinRate} size={90} strokeWidth={8} color={theme.accent} label="Entraîn." />
                 </View>
               </View>
             </Animated.View>
 
-            {/* Detailed Breakdown */}
+            {/* Win Rate by Format */}
             <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-              <Text style={styles.sectionTitle}>Détail des matchs</Text>
-              <View style={styles.detailCard}>
-                <View style={styles.detailRow}>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Tournois</Text>
-                    <Text style={styles.detailValue}>{stats.tournamentMatches}</Text>
-                    <View style={styles.detailSubRow}>
-                      <Text style={[styles.detailSub, { color: theme.success }]}>{stats.tournamentWins}V</Text>
-                      <Text style={styles.detailSubSep}>•</Text>
-                      <Text style={[styles.detailSub, { color: theme.error }]}>{stats.tournamentMatches - stats.tournamentWins}D</Text>
-                    </View>
+              <Text style={styles.sectionTitle}>Par format de jeu</Text>
+              <View style={styles.chartCard}>
+                <ComparisonBarChart 
+                  data={Object.entries(stats.byFormat).map(([format, data]) => ({
+                    label: format === 'Tête-à-tête' ? 'T-à-T' : format === 'Doublette' ? 'Doub.' : 'Trip.',
+                    value: data.total > 0 ? Math.round((data.wins / data.total) * 100) : 0,
+                    color: format === 'Tête-à-tête' ? theme.tirColor : format === 'Doublette' ? theme.primary : theme.accent,
+                  }))}
+                />
+              </View>
+              <View style={styles.formatDetails}>
+                {Object.entries(stats.byFormat).map(([format, data]) => (
+                  <View key={format} style={styles.formatItem}>
+                    <Text style={styles.formatName}>{format}</Text>
+                    <Text style={styles.formatRecord}>{data.wins}V - {data.total - data.wins}D</Text>
                   </View>
-                  <View style={styles.detailDivider} />
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Entraînement</Text>
-                    <Text style={styles.detailValue}>{stats.trainingMatches}</Text>
-                    <View style={styles.detailSubRow}>
-                      <Text style={[styles.detailSub, { color: theme.success }]}>{stats.trainingWins}V</Text>
-                      <Text style={styles.detailSubSep}>•</Text>
-                      <Text style={[styles.detailSub, { color: theme.error }]}>{stats.trainingMatches - stats.trainingWins}D</Text>
-                    </View>
-                  </View>
-                </View>
+                ))}
               </View>
             </Animated.View>
 
-            {/* Evolution Chart */}
+            {/* Technical Performance */}
             <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
-              <Text style={styles.sectionTitle}>Évolution dans le temps</Text>
-              <View style={styles.chartCard}>
-                <EvolutionChart data={evolutionData} height={180} color={theme.primary} />
-              </View>
-              {/* Evolution Stats */}
-              {evolutionData.some(d => d.matches > 0) && (
-                <View style={styles.evolutionStats}>
-                  <View style={styles.evolutionStat}>
-                    <Text style={styles.evolutionStatLabel}>Meilleure période</Text>
-                    <Text style={styles.evolutionStatValue}>
-                      {(() => {
-                        const best = evolutionData.filter(d => d.matches > 0).sort((a, b) => b.winRate - a.winRate)[0];
-                        return best ? `${best.label} (${best.winRate}%)` : '—';
-                      })()}
-                    </Text>
+              <Text style={styles.sectionTitle}>Performance technique</Text>
+              <View style={styles.technicalGrid}>
+                <View style={styles.technicalCard}>
+                  <View style={[styles.technicalIcon, { backgroundColor: theme.tirColor + '15' }]}>
+                    <MaterialIcons name="gps-fixed" size={24} color={theme.tirColor} />
                   </View>
-                  <View style={styles.evolutionStat}>
-                    <Text style={styles.evolutionStatLabel}>Matchs joués</Text>
-                    <Text style={styles.evolutionStatValue}>
-                      {evolutionData.reduce((sum, d) => sum + d.matches, 0)}
-                    </Text>
-                  </View>
+                  <Text style={styles.technicalTitle}>Tir</Text>
+                  <Text style={[styles.technicalValue, { color: theme.tirColor }]}>{stats.tirRate}%</Text>
+                  <Text style={styles.technicalDetail}>{stats.matchTirsSuccess}/{stats.matchTirs}</Text>
                 </View>
-              )}
+                <View style={styles.technicalCard}>
+                  <View style={[styles.technicalIcon, { backgroundColor: theme.pointColor + '15' }]}>
+                    <MaterialIcons name="adjust" size={24} color={theme.pointColor} />
+                  </View>
+                  <Text style={styles.technicalTitle}>Point</Text>
+                  <Text style={[styles.technicalValue, { color: theme.pointColor }]}>{stats.pointRate}%</Text>
+                  <Text style={styles.technicalDetail}>{stats.matchPointsSuccess}/{stats.matchPoints}</Text>
+                </View>
+                <View style={styles.technicalCard}>
+                  <View style={[styles.technicalIcon, { backgroundColor: theme.carreauColor + '15' }]}>
+                    <MaterialIcons name="stars" size={24} color={theme.carreauColor} />
+                  </View>
+                  <Text style={styles.technicalTitle}>Carreau</Text>
+                  <Text style={[styles.technicalValue, { color: theme.carreauColor }]}>{stats.carreauRate}%</Text>
+                  <Text style={styles.technicalDetail}>{stats.matchCarreaux} réussis</Text>
+                </View>
+              </View>
             </Animated.View>
 
             {/* Series Stats */}
@@ -936,39 +1139,8 @@ export default function StatsScreen() {
               </Animated.View>
             )}
 
-            {/* Technical Skills */}
-            <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-              <Text style={styles.sectionTitle}>Technique détaillée</Text>
-              <View style={styles.technicalGrid}>
-                <View style={styles.technicalCard}>
-                  <View style={[styles.technicalIcon, { backgroundColor: theme.tirColor + '15' }]}>
-                    <MaterialIcons name="gps-fixed" size={24} color={theme.tirColor} />
-                  </View>
-                  <Text style={styles.technicalTitle}>Tir</Text>
-                  <Text style={[styles.technicalValue, { color: theme.tirColor }]}>{stats.tirRate}%</Text>
-                  <Text style={styles.technicalDetail}>{stats.matchTirsSuccess}/{stats.matchTirs}</Text>
-                </View>
-                <View style={styles.technicalCard}>
-                  <View style={[styles.technicalIcon, { backgroundColor: theme.pointColor + '15' }]}>
-                    <MaterialIcons name="adjust" size={24} color={theme.pointColor} />
-                  </View>
-                  <Text style={styles.technicalTitle}>Point</Text>
-                  <Text style={[styles.technicalValue, { color: theme.pointColor }]}>{stats.pointRate}%</Text>
-                  <Text style={styles.technicalDetail}>{stats.matchPointsSuccess}/{stats.matchPoints}</Text>
-                </View>
-                <View style={styles.technicalCard}>
-                  <View style={[styles.technicalIcon, { backgroundColor: theme.carreauColor + '15' }]}>
-                    <MaterialIcons name="stars" size={24} color={theme.carreauColor} />
-                  </View>
-                  <Text style={styles.technicalTitle}>Carreau</Text>
-                  <Text style={[styles.technicalValue, { color: theme.carreauColor }]}>{stats.carreauRate}%</Text>
-                  <Text style={styles.technicalDetail}>{stats.matchCarreaux} réussis</Text>
-                </View>
-              </View>
-            </Animated.View>
-
             {/* Points Analysis */}
-            <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
+            <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
               <Text style={styles.sectionTitle}>Analyse des points</Text>
               <View style={styles.pointsCard}>
                 <View style={styles.pointsRow}>
@@ -1004,9 +1176,9 @@ export default function StatsScreen() {
               </View>
             </Animated.View>
 
-            {/* Duration Stats */}
-            <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
-              <Text style={styles.sectionTitle}>Temps de jeu</Text>
+            {/* Duration & Finance */}
+            <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
+              <Text style={styles.sectionTitle}>Temps et finances</Text>
               <View style={styles.durationCard}>
                 <View style={styles.durationMain}>
                   <MaterialIcons name="timer" size={32} color={theme.primary} />
@@ -1022,122 +1194,363 @@ export default function StatsScreen() {
                   </Text>
                 </View>
               </View>
-            </Animated.View>
-
-            {/* Terrain Performance */}
-            {terrainStats.length > 0 && (
-              <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
-                <Text style={styles.sectionTitle}>Performance par terrain</Text>
-                <View style={styles.terrainList}>
-                  {terrainStats.slice(0, 4).map((terrain, index) => (
-                    <View key={terrain.type} style={styles.terrainItem}>
-                      <Text style={styles.terrainType}>{terrain.type}</Text>
-                      <Text style={styles.terrainMatches}>{terrain.matches} matchs</Text>
-                      <View style={[
-                        styles.terrainWinRate,
-                        { backgroundColor: terrain.winRate >= 50 ? theme.success + '15' : theme.error + '15' }
-                      ]}>
-                        <Text style={[
-                          styles.terrainWinRateText,
-                          { color: terrain.winRate >= 50 ? theme.success : theme.error }
-                        ]}>
-                          {terrain.winRate}%
-                        </Text>
-                      </View>
+              
+              {financialStats.tournamentsPlayed > 0 && (
+                <View style={[styles.financialCard, { marginTop: 12 }]}>
+                  <View style={styles.financialRow}>
+                    <View style={styles.financialItem}>
+                      <MaterialIcons name="remove-circle-outline" size={20} color={theme.error} />
+                      <Text style={styles.financialItemValue}>{financialStats.totalCost}€</Text>
+                      <Text style={styles.financialItemLabel}>dépensés</Text>
                     </View>
-                  ))}
-                </View>
-              </Animated.View>
-            )}
-
-            {/* Challenges Detailed */}
-            {challengeData.total > 0 && (
-              <Animated.View entering={FadeInDown.duration(400).delay(450)} style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Défis détaillés</Text>
-                  <Pressable onPress={() => router.push('/challenge/new')}>
-                    <MaterialIcons name="add-circle" size={24} color={theme.primary} />
-                  </Pressable>
-                </View>
-                <View style={styles.challengeDetailList}>
-                  {Object.entries(CHALLENGE_CONFIG).map(([type, config]) => {
-                    const data = challengeData.byType[type as ChallengeType];
-                    if (data.count === 0) return null;
-                    return (
-                      <View key={type} style={styles.challengeDetailItem}>
-                        <View style={[styles.challengeDetailIcon, { backgroundColor: config.color + '15' }]}>
-                          <MaterialIcons name={config.icon} size={20} color={config.color} />
-                        </View>
-                        <View style={styles.challengeDetailInfo}>
-                          <Text style={styles.challengeDetailName}>{config.name}</Text>
-                          <Text style={styles.challengeDetailCount}>{data.count} essais</Text>
-                        </View>
-                        <View style={styles.challengeDetailScores}>
-                          <View style={styles.challengeDetailScore}>
-                            <Text style={[styles.challengeDetailScoreValue, { color: config.color }]}>
-                              {data.bestScore}{type === 'precision' ? '' : '%'}
-                            </Text>
-                            <Text style={styles.challengeDetailScoreLabel}>Record</Text>
-                          </View>
-                          <View style={styles.challengeDetailScore}>
-                            <Text style={styles.challengeDetailScoreValue}>
-                              {data.avgSuccess}{type === 'precision' ? '' : '%'}
-                            </Text>
-                            <Text style={styles.challengeDetailScoreLabel}>Moyenne</Text>
-                          </View>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-                
-                {/* 1v1 Stats */}
-                {challengeData.challenges1v1 > 0 && (
-                  <View style={styles.vs1Card}>
-                    <MaterialIcons name="people" size={20} color={theme.accent} />
-                    <Text style={styles.vs1Text}>
-                      Défis 1v1: {challengeData.won1v1}/{challengeData.challenges1v1} gagnés ({challengeData.winRate1v1}%)
-                    </Text>
-                  </View>
-                )}
-              </Animated.View>
-            )}
-
-            {/* Financial Summary */}
-            {financialStats.tournamentsPlayed > 0 && (
-              <Animated.View entering={FadeInDown.duration(400).delay(500)} style={styles.section}>
-                <Text style={styles.sectionTitle}>Bilan financier</Text>
-                <View style={styles.financialCard}>
-                  <View style={styles.financialMain}>
                     <View style={[
-                      styles.financialBadge,
+                      styles.financialBadgeSmall,
                       { backgroundColor: financialStats.balance >= 0 ? theme.success + '15' : theme.error + '15' }
                     ]}>
                       <Text style={[
-                        styles.financialValue,
+                        styles.financialBadgeText,
                         { color: financialStats.balance >= 0 ? theme.success : theme.error }
                       ]}>
                         {financialStats.balance > 0 ? '+' : ''}{financialStats.balance}€
                       </Text>
                     </View>
-                    <Text style={styles.financialLabel}>sur {financialStats.tournamentsPlayed} tournois</Text>
-                  </View>
-                  <View style={styles.financialDetails}>
-                    <View style={styles.financialDetail}>
-                      <MaterialIcons name="remove-circle-outline" size={16} color={theme.error} />
-                      <Text style={styles.financialDetailText}>{financialStats.totalCost}€ dépensés</Text>
-                    </View>
-                    <View style={styles.financialDetail}>
-                      <MaterialIcons name="add-circle-outline" size={16} color={theme.success} />
-                      <Text style={styles.financialDetailText}>{financialStats.totalGain}€ gagnés</Text>
+                    <View style={styles.financialItem}>
+                      <MaterialIcons name="add-circle-outline" size={20} color={theme.success} />
+                      <Text style={styles.financialItemValue}>{financialStats.totalGain}€</Text>
+                      <Text style={styles.financialItemLabel}>gagnés</Text>
                     </View>
                   </View>
                 </View>
-              </Animated.View>
-            )}
+              )}
+            </Animated.View>
+          </>
+        )}
+
+        {/* ========================================
+            ADVANCED MODE - EVOLUTION TAB
+        ======================================== */}
+        {statsMode === 'advanced' && advancedTab === 'evolution' && (
+          <>
+            {/* Metric Selector */}
+            <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
+              <Text style={styles.sectionTitle}>Indicateur à suivre</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.metricSelector}>
+                  <FilterChip 
+                    label="Victoires" 
+                    selected={evolutionMetric === 'winRate'} 
+                    onPress={() => setEvolutionMetric('winRate')} 
+                  />
+                  <FilterChip 
+                    label="Tir" 
+                    selected={evolutionMetric === 'tirRate'} 
+                    onPress={() => setEvolutionMetric('tirRate')} 
+                  />
+                  <FilterChip 
+                    label="Point" 
+                    selected={evolutionMetric === 'pointRate'} 
+                    onPress={() => setEvolutionMetric('pointRate')} 
+                  />
+                  <FilterChip 
+                    label="Carreau" 
+                    selected={evolutionMetric === 'carreauRate'} 
+                    onPress={() => setEvolutionMetric('carreauRate')} 
+                  />
+                </View>
+              </ScrollView>
+            </Animated.View>
+
+            {/* Main Evolution Chart */}
+            <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Courbe d'évolution</Text>
+                {evolutionData.some(d => d.matches > 0) && (
+                  <View style={styles.trendBadge}>
+                    {(() => {
+                      const validData = evolutionData.filter(d => d.matches > 0);
+                      if (validData.length < 2) return null;
+                      const diff = validData[validData.length - 1][evolutionMetric] - validData[0][evolutionMetric];
+                      const isUp = diff > 0;
+                      return (
+                        <>
+                          <MaterialIcons 
+                            name={isUp ? 'trending-up' : diff < 0 ? 'trending-down' : 'trending-flat'} 
+                            size={14} 
+                            color={isUp ? theme.success : diff < 0 ? theme.error : theme.textMuted} 
+                          />
+                          <Text style={[styles.trendBadgeText, { color: isUp ? theme.success : diff < 0 ? theme.error : theme.textMuted }]}>
+                            {isUp ? '+' : ''}{diff}%
+                          </Text>
+                        </>
+                      );
+                    })()}
+                  </View>
+                )}
+              </View>
+              <View style={styles.chartCard}>
+                <EvolutionChart 
+                  data={evolutionData} 
+                  height={200} 
+                  color={
+                    evolutionMetric === 'winRate' ? theme.primary :
+                    evolutionMetric === 'tirRate' ? theme.tirColor :
+                    evolutionMetric === 'pointRate' ? theme.pointColor :
+                    theme.carreauColor
+                  }
+                  metric={evolutionMetric}
+                />
+              </View>
+            </Animated.View>
+
+            {/* Period Details */}
+            <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
+              <Text style={styles.sectionTitle}>Détail par période</Text>
+              <View style={styles.periodList}>
+                {evolutionData.filter(d => d.matches > 0).map((period, i) => (
+                  <View key={i} style={styles.periodItem}>
+                    <View style={styles.periodHeader}>
+                      <Text style={styles.periodLabel}>{period.label}</Text>
+                      <Text style={styles.periodMatches}>{period.matches} matchs</Text>
+                    </View>
+                    <View style={styles.periodStats}>
+                      <View style={styles.periodStat}>
+                        <Text style={[styles.periodStatValue, { color: theme.success }]}>{period.wins}</Text>
+                        <Text style={styles.periodStatLabel}>V</Text>
+                      </View>
+                      <View style={styles.periodStat}>
+                        <Text style={[styles.periodStatValue, { color: theme.error }]}>{period.losses}</Text>
+                        <Text style={styles.periodStatLabel}>D</Text>
+                      </View>
+                      <View style={[styles.periodWinRate, { 
+                        backgroundColor: period.winRate >= 50 ? theme.success + '15' : theme.error + '15' 
+                      }]}>
+                        <Text style={[styles.periodWinRateText, { 
+                          color: period.winRate >= 50 ? theme.success : theme.error 
+                        }]}>
+                          {period.winRate}%
+                        </Text>
+                      </View>
+                    </View>
+                    {(period.tirRate > 0 || period.pointRate > 0) && (
+                      <View style={styles.periodTechnical}>
+                        <Text style={styles.periodTechnicalItem}>
+                          <Text style={{ color: theme.tirColor }}>Tir: {period.tirRate}%</Text>
+                        </Text>
+                        <Text style={styles.periodTechnicalSep}>•</Text>
+                        <Text style={styles.periodTechnicalItem}>
+                          <Text style={{ color: theme.pointColor }}>Point: {period.pointRate}%</Text>
+                        </Text>
+                        <Text style={styles.periodTechnicalSep}>•</Text>
+                        <Text style={styles.periodTechnicalItem}>
+                          <Text style={{ color: theme.carreauColor }}>Carreau: {period.carreauRate}%</Text>
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </View>
+            </Animated.View>
+
+            {/* Best/Worst Periods */}
+            <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
+              <Text style={styles.sectionTitle}>Analyse des performances</Text>
+              <View style={styles.analysisCard}>
+                {(() => {
+                  const validData = evolutionData.filter(d => d.matches > 0);
+                  if (validData.length < 2) return (
+                    <Text style={styles.noDataText}>Pas assez de données pour l'analyse</Text>
+                  );
+                  
+                  const best = [...validData].sort((a, b) => b.winRate - a.winRate)[0];
+                  const worst = [...validData].sort((a, b) => a.winRate - b.winRate)[0];
+                  const avgWinRate = Math.round(validData.reduce((sum, d) => sum + d.winRate, 0) / validData.length);
+                  
+                  return (
+                    <>
+                      <View style={styles.analysisRow}>
+                        <MaterialIcons name="emoji-events" size={24} color={theme.success} />
+                        <View style={styles.analysisContent}>
+                          <Text style={styles.analysisTitle}>Meilleure période</Text>
+                          <Text style={styles.analysisValue}>{best.label} — {best.winRate}%</Text>
+                        </View>
+                      </View>
+                      <View style={styles.analysisDivider} />
+                      <View style={styles.analysisRow}>
+                        <MaterialIcons name="trending-down" size={24} color={theme.error} />
+                        <View style={styles.analysisContent}>
+                          <Text style={styles.analysisTitle}>Période à améliorer</Text>
+                          <Text style={styles.analysisValue}>{worst.label} — {worst.winRate}%</Text>
+                        </View>
+                      </View>
+                      <View style={styles.analysisDivider} />
+                      <View style={styles.analysisRow}>
+                        <MaterialIcons name="analytics" size={24} color={theme.primary} />
+                        <View style={styles.analysisContent}>
+                          <Text style={styles.analysisTitle}>Moyenne sur la période</Text>
+                          <Text style={styles.analysisValue}>{avgWinRate}% de victoires</Text>
+                        </View>
+                      </View>
+                    </>
+                  );
+                })()}
+              </View>
+            </Animated.View>
+          </>
+        )}
+
+        {/* ========================================
+            ADVANCED MODE - CUSTOM STATS TAB
+        ======================================== */}
+        {statsMode === 'advanced' && advancedTab === 'custom' && (
+          <>
+            {/* Filter Section */}
+            <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Filtres de données</Text>
+                {activeFiltersCount > 0 && (
+                  <Pressable onPress={() => {
+                    setModeFilter('all');
+                    setFormatFilter('all');
+                    setResultFilter('all');
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}>
+                    <Text style={styles.clearFilters}>Réinitialiser</Text>
+                  </Pressable>
+                )}
+              </View>
+              
+              {/* Mode Filter */}
+              <View style={styles.filterGroup}>
+                <Text style={styles.filterGroupLabel}>Mode de jeu</Text>
+                <View style={styles.filterChips}>
+                  <FilterChip label="Tous" selected={modeFilter === 'all'} onPress={() => setModeFilter('all')} />
+                  <FilterChip label="Entraînement" selected={modeFilter === 'Entraînement'} onPress={() => setModeFilter('Entraînement')} />
+                  <FilterChip label="Tournoi" selected={modeFilter === 'Tournoi'} onPress={() => setModeFilter('Tournoi')} />
+                </View>
+              </View>
+
+              {/* Format Filter */}
+              <View style={styles.filterGroup}>
+                <Text style={styles.filterGroupLabel}>Format</Text>
+                <View style={styles.filterChips}>
+                  <FilterChip label="Tous" selected={formatFilter === 'all'} onPress={() => setFormatFilter('all')} />
+                  <FilterChip label="Tête-à-tête" selected={formatFilter === 'Tête-à-tête'} onPress={() => setFormatFilter('Tête-à-tête')} />
+                  <FilterChip label="Doublette" selected={formatFilter === 'Doublette'} onPress={() => setFormatFilter('Doublette')} />
+                  <FilterChip label="Triplette" selected={formatFilter === 'Triplette'} onPress={() => setFormatFilter('Triplette')} />
+                </View>
+              </View>
+
+              {/* Result Filter */}
+              <View style={styles.filterGroup}>
+                <Text style={styles.filterGroupLabel}>Résultat</Text>
+                <View style={styles.filterChips}>
+                  <FilterChip label="Tous" selected={resultFilter === 'all'} onPress={() => setResultFilter('all')} />
+                  <FilterChip label="Victoires" selected={resultFilter === 'wins'} onPress={() => setResultFilter('wins')} />
+                  <FilterChip label="Défaites" selected={resultFilter === 'losses'} onPress={() => setResultFilter('losses')} />
+                </View>
+              </View>
+            </Animated.View>
+
+            {/* Results Summary */}
+            <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+              <Text style={styles.sectionTitle}>Résultats filtrés</Text>
+              
+              {customFilteredMatches.length === 0 ? (
+                <View style={styles.noResultsCard}>
+                  <MaterialIcons name="filter-list-off" size={48} color={theme.textMuted} />
+                  <Text style={styles.noResultsText}>Aucun match ne correspond aux filtres</Text>
+                  <Text style={styles.noResultsHint}>Essayez d'élargir vos critères de recherche</Text>
+                </View>
+              ) : (
+                <>
+                  {/* Main Stats Card */}
+                  <View style={styles.customStatsCard}>
+                    <View style={styles.customStatsHeader}>
+                      <View style={styles.customStatsMain}>
+                        <Text style={styles.customStatsCount}>{customStats.total}</Text>
+                        <Text style={styles.customStatsLabel}>matchs trouvés</Text>
+                      </View>
+                      <ProgressRing 
+                        value={customStats.winRate} 
+                        size={70} 
+                        strokeWidth={6} 
+                        color={theme.primary} 
+                      />
+                    </View>
+                    
+                    <View style={styles.customStatsDivider} />
+                    
+                    <View style={styles.customStatsGrid}>
+                      <View style={styles.customStatItem}>
+                        <Text style={[styles.customStatValue, { color: theme.success }]}>{customStats.wins}</Text>
+                        <Text style={styles.customStatLabel}>Victoires</Text>
+                      </View>
+                      <View style={styles.customStatItem}>
+                        <Text style={[styles.customStatValue, { color: theme.error }]}>{customStats.losses}</Text>
+                        <Text style={styles.customStatLabel}>Défaites</Text>
+                      </View>
+                      <View style={styles.customStatItem}>
+                        <Text style={styles.customStatValue}>{customStats.avgDuration}m</Text>
+                        <Text style={styles.customStatLabel}>Durée moy.</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Points Stats */}
+                  <View style={[styles.customStatsCard, { marginTop: 12 }]}>
+                    <Text style={styles.customCardTitle}>Points</Text>
+                    <StatRow 
+                      label="Points marqués (moy.)" 
+                      value={customStats.avgPointsFor}
+                      icon="add-circle"
+                      color={theme.success}
+                    />
+                    <StatRow 
+                      label="Points encaissés (moy.)" 
+                      value={customStats.avgPointsAgainst}
+                      icon="remove-circle"
+                      color={theme.error}
+                    />
+                    <StatRow 
+                      label="Différence totale" 
+                      value={customStats.pointDiff > 0 ? `+${customStats.pointDiff}` : customStats.pointDiff}
+                      icon="compare-arrows"
+                      color={customStats.pointDiff >= 0 ? theme.success : theme.error}
+                    />
+                  </View>
+
+                  {/* Technical Stats */}
+                  {(customStats.tirs > 0 || customStats.carreaux > 0) && (
+                    <View style={[styles.customStatsCard, { marginTop: 12 }]}>
+                      <Text style={styles.customCardTitle}>Technique</Text>
+                      <StatRow 
+                        label="Taux de tir" 
+                        value={`${customStats.tirRate}%`}
+                        subValue={`${customStats.tirsSuccess}/${customStats.tirs}`}
+                        icon="gps-fixed"
+                        color={theme.tirColor}
+                      />
+                      <StatRow 
+                        label="Taux de point" 
+                        value={`${customStats.pointRate}%`}
+                        icon="adjust"
+                        color={theme.pointColor}
+                      />
+                      <StatRow 
+                        label="Carreaux réalisés" 
+                        value={customStats.carreaux}
+                        subValue={`${customStats.carreauRate}%`}
+                        icon="stars"
+                        color={theme.carreauColor}
+                      />
+                    </View>
+                  )}
+                </>
+              )}
+            </Animated.View>
 
             {/* Compare Button */}
-            <Animated.View entering={FadeInDown.duration(400).delay(550)} style={styles.section}>
+            <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
               <Pressable 
                 style={styles.compareButton}
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push('/player/compare'); }}
@@ -1197,6 +1610,15 @@ const styles = StyleSheet.create({
   filterPillActive: { backgroundColor: theme.primary },
   filterPillText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
   filterPillTextActive: { color: '#FFF' },
+  
+  // Advanced Tab Bar
+  advancedTabBar: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 12, gap: 8 },
+  advancedTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: theme.borderRadius.md, backgroundColor: theme.backgroundSecondary },
+  advancedTabActive: { backgroundColor: theme.primary + '15' },
+  advancedTabText: { fontSize: 12, fontWeight: '600', color: theme.textMuted },
+  advancedTabTextActive: { color: theme.primary },
+  filterBadge: { backgroundColor: theme.primary, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, marginLeft: 2 },
+  filterBadgeText: { fontSize: 10, fontWeight: '700', color: '#FFF' },
   
   // Scroll
   scrollView: { flex: 1 },
@@ -1275,34 +1697,11 @@ const styles = StyleSheet.create({
   advancedGrid: { flexDirection: 'row', gap: 10 },
   advancedCard: { flex: 1, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 14, alignItems: 'center', ...theme.shadows.card },
   
-  // Detail Card
-  detailCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 20, ...theme.shadows.card },
-  detailRow: { flexDirection: 'row' },
-  detailItem: { flex: 1, alignItems: 'center' },
-  detailLabel: { fontSize: 12, color: theme.textMuted, marginBottom: 4 },
-  detailValue: { fontSize: 32, fontWeight: '700', color: theme.textPrimary },
-  detailSubRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-  detailSub: { fontSize: 14, fontWeight: '600' },
-  detailSubSep: { fontSize: 12, color: theme.textMuted, marginHorizontal: 6 },
-  detailDivider: { width: 1, backgroundColor: theme.border, marginHorizontal: 16 },
-  
-  // Evolution Stats
-  evolutionStats: { flexDirection: 'row', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border },
-  evolutionStat: { flex: 1, alignItems: 'center' },
-  evolutionStatLabel: { fontSize: 11, color: theme.textMuted, marginBottom: 2 },
-  evolutionStatValue: { fontSize: 14, fontWeight: '600', color: theme.textPrimary },
-  
-  // Series Card
-  seriesCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 20, ...theme.shadows.card },
-  seriesMain: { flexDirection: 'row', alignItems: 'center', gap: 20 },
-  seriesRing: {},
-  seriesInfo: { flex: 1 },
-  seriesTotal: { fontSize: 14, color: theme.textSecondary, marginBottom: 4 },
-  seriesRecord: { flexDirection: 'row', alignItems: 'center' },
-  seriesRecordNum: { fontSize: 24, fontWeight: '700' },
-  seriesRecordSep: { fontSize: 18, color: theme.textMuted, marginHorizontal: 8 },
-  finalesRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: theme.border },
-  finalesText: { fontSize: 13, color: theme.textSecondary },
+  // Format Details
+  formatDetails: { marginTop: 12, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, overflow: 'hidden', ...theme.shadows.card },
+  formatItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
+  formatName: { fontSize: 14, fontWeight: '500', color: theme.textPrimary },
+  formatRecord: { fontSize: 13, color: theme.textSecondary },
   
   // Technical Grid
   technicalGrid: { flexDirection: 'row', gap: 10 },
@@ -1324,6 +1723,18 @@ const styles = StyleSheet.create({
   pointsAvg: { marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border, alignItems: 'center' },
   pointsAvgText: { fontSize: 12, color: theme.textMuted },
   
+  // Series Card
+  seriesCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 20, ...theme.shadows.card },
+  seriesMain: { flexDirection: 'row', alignItems: 'center', gap: 20 },
+  seriesRing: {},
+  seriesInfo: { flex: 1 },
+  seriesTotal: { fontSize: 14, color: theme.textSecondary, marginBottom: 4 },
+  seriesRecord: { flexDirection: 'row', alignItems: 'center' },
+  seriesRecordNum: { fontSize: 24, fontWeight: '700' },
+  seriesRecordSep: { fontSize: 18, color: theme.textMuted, marginHorizontal: 8 },
+  finalesRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: theme.border },
+  finalesText: { fontSize: 13, color: theme.textSecondary },
+  
   // Duration Card
   durationCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', ...theme.shadows.card },
   durationMain: { flexDirection: 'row', alignItems: 'center', gap: 14 },
@@ -1334,37 +1745,80 @@ const styles = StyleSheet.create({
   durationTotalLabel: { fontSize: 11, color: theme.textMuted },
   durationTotalValue: { fontSize: 16, fontWeight: '600', color: theme.textPrimary },
   
-  // Terrain List
-  terrainList: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, overflow: 'hidden', ...theme.shadows.card },
-  terrainItem: { flexDirection: 'row', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderBottomColor: theme.border },
-  terrainType: { flex: 1, fontSize: 14, fontWeight: '600', color: theme.textPrimary },
-  terrainMatches: { fontSize: 12, color: theme.textMuted, marginRight: 12 },
-  terrainWinRate: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: theme.borderRadius.sm },
-  terrainWinRateText: { fontSize: 12, fontWeight: '600' },
+  // Financial Card (compact)
+  financialCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, ...theme.shadows.card },
+  financialRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  financialItem: { alignItems: 'center', flex: 1 },
+  financialItemValue: { fontSize: 18, fontWeight: '700', color: theme.textPrimary, marginTop: 4 },
+  financialItemLabel: { fontSize: 11, color: theme.textMuted },
+  financialBadgeSmall: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: theme.borderRadius.md },
+  financialBadgeText: { fontSize: 18, fontWeight: '700' },
   
-  // Challenge Detail List
-  challengeDetailList: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, overflow: 'hidden', ...theme.shadows.card },
-  challengeDetailItem: { flexDirection: 'row', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderBottomColor: theme.border },
-  challengeDetailIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  challengeDetailInfo: { flex: 1 },
-  challengeDetailName: { fontSize: 14, fontWeight: '600', color: theme.textPrimary },
-  challengeDetailCount: { fontSize: 12, color: theme.textMuted, marginTop: 2 },
-  challengeDetailScores: { flexDirection: 'row', gap: 16 },
-  challengeDetailScore: { alignItems: 'center' },
-  challengeDetailScoreValue: { fontSize: 16, fontWeight: '700', color: theme.textPrimary },
-  challengeDetailScoreLabel: { fontSize: 10, color: theme.textMuted },
-  vs1Card: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.accent + '10', padding: 14, borderRadius: theme.borderRadius.md, marginTop: 12 },
-  vs1Text: { fontSize: 13, color: theme.textSecondary },
+  // Metric Selector
+  metricSelector: { flexDirection: 'row', gap: 8, paddingBottom: 4 },
   
-  // Financial Card
-  financialCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 20, ...theme.shadows.card },
-  financialMain: { alignItems: 'center', marginBottom: 16 },
-  financialBadge: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: theme.borderRadius.lg, marginBottom: 8 },
-  financialValue: { fontSize: 28, fontWeight: '700' },
-  financialLabel: { fontSize: 13, color: theme.textMuted },
-  financialDetails: { flexDirection: 'row', justifyContent: 'center', gap: 24 },
-  financialDetail: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  financialDetailText: { fontSize: 13, color: theme.textSecondary },
+  // Filter Chips
+  filterChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: theme.borderRadius.full, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: 'transparent' },
+  filterChipSelected: { backgroundColor: theme.primary + '15', borderColor: theme.primary },
+  filterChipText: { fontSize: 13, fontWeight: '500', color: theme.textSecondary },
+  filterChipTextSelected: { color: theme.primary },
+  
+  // Period List
+  periodList: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, overflow: 'hidden', ...theme.shadows.card },
+  periodItem: { padding: 14, borderBottomWidth: 1, borderBottomColor: theme.border },
+  periodHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  periodLabel: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  periodMatches: { fontSize: 12, color: theme.textMuted },
+  periodStats: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  periodStat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  periodStatValue: { fontSize: 16, fontWeight: '700' },
+  periodStatLabel: { fontSize: 12, color: theme.textMuted },
+  periodWinRate: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: theme.borderRadius.sm, marginLeft: 'auto' },
+  periodWinRateText: { fontSize: 13, fontWeight: '600' },
+  periodTechnical: { flexDirection: 'row', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: theme.border },
+  periodTechnicalItem: { fontSize: 12 },
+  periodTechnicalSep: { fontSize: 12, color: theme.textMuted, marginHorizontal: 8 },
+  
+  // Analysis Card
+  analysisCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, ...theme.shadows.card },
+  analysisRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 8 },
+  analysisContent: { flex: 1 },
+  analysisTitle: { fontSize: 12, color: theme.textMuted, marginBottom: 2 },
+  analysisValue: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  analysisDivider: { height: 1, backgroundColor: theme.border, marginVertical: 4 },
+  noDataText: { fontSize: 14, color: theme.textMuted, textAlign: 'center', paddingVertical: 20 },
+  
+  // Filter Group
+  filterGroup: { marginBottom: 16 },
+  filterGroupLabel: { fontSize: 12, fontWeight: '600', color: theme.textMuted, marginBottom: 8 },
+  filterChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  clearFilters: { fontSize: 13, fontWeight: '600', color: theme.error },
+  
+  // No Results
+  noResultsCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 32, alignItems: 'center', ...theme.shadows.card },
+  noResultsText: { fontSize: 15, fontWeight: '600', color: theme.textPrimary, marginTop: 12 },
+  noResultsHint: { fontSize: 13, color: theme.textMuted, marginTop: 4 },
+  
+  // Custom Stats Card
+  customStatsCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, ...theme.shadows.card },
+  customStatsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  customStatsMain: {},
+  customStatsCount: { fontSize: 36, fontWeight: '700', color: theme.textPrimary },
+  customStatsLabel: { fontSize: 13, color: theme.textMuted },
+  customStatsDivider: { height: 1, backgroundColor: theme.border, marginVertical: 16 },
+  customStatsGrid: { flexDirection: 'row' },
+  customStatItem: { flex: 1, alignItems: 'center' },
+  customStatValue: { fontSize: 22, fontWeight: '700', color: theme.textPrimary },
+  customStatLabel: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
+  customCardTitle: { fontSize: 13, fontWeight: '600', color: theme.textSecondary, marginBottom: 12 },
+  
+  // Stat Row
+  statRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border },
+  statRowIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  statRowContent: { flex: 1 },
+  statRowLabel: { fontSize: 14, color: theme.textPrimary },
+  statRowSubValue: { fontSize: 11, color: theme.textMuted },
+  statRowValue: { fontSize: 16, fontWeight: '700', color: theme.textPrimary },
   
   // Compare Button
   compareButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, borderWidth: 1, borderColor: theme.primary + '30', ...theme.shadows.card },
