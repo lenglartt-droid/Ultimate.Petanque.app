@@ -542,13 +542,59 @@ export default function NewMatchScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
-  const handleScoreChange = (team: 'A' | 'B', delta: number) => {
+  const handleScoreChange = (team: 'A' | 'B', delta: number, autoMene: boolean = true) => {
     Haptics.selectionAsync();
+    
+    // Only create mène for positive changes (points scored)
+    if (autoMene && delta > 0) {
+      const newMene: Mene = {
+        id: menes.length + 1,
+        teamAPoints: team === 'A' ? delta : 0,
+        teamBPoints: team === 'B' ? delta : 0,
+        duration: meneTime,
+        isNull: false,
+      };
+      setMenes(prev => [...prev, newMene]);
+      setMeneTime(0); // Reset mène timer
+    }
+    
     if (team === 'A') {
       setTeamAScore(prev => Math.max(0, Math.min(maxScore, prev + delta)));
     } else {
       setTeamBScore(prev => Math.max(0, Math.min(maxScore, prev + delta)));
     }
+  };
+
+  // Quick score function for fullscreen mode (adds multiple points at once)
+  const handleQuickScore = (team: 'A' | 'B', points: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    const newMene: Mene = {
+      id: menes.length + 1,
+      teamAPoints: team === 'A' ? points : 0,
+      teamBPoints: team === 'B' ? points : 0,
+      duration: meneTime,
+      isNull: false,
+    };
+    setMenes(prev => [...prev, newMene]);
+    setMeneTime(0);
+    
+    if (team === 'A') {
+      setTeamAScore(prev => Math.max(0, Math.min(maxScore, prev + points)));
+    } else {
+      setTeamBScore(prev => Math.max(0, Math.min(maxScore, prev + points)));
+    }
+  };
+
+  // Undo last mène
+  const undoLastMene = () => {
+    if (menes.length === 0) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    
+    const lastMene = menes[menes.length - 1];
+    setTeamAScore(prev => Math.max(0, prev - lastMene.teamAPoints));
+    setTeamBScore(prev => Math.max(0, prev - lastMene.teamBPoints));
+    setMenes(prev => prev.slice(0, -1));
   };
 
   const handleSaveMatch = () => {
@@ -636,7 +682,7 @@ export default function NewMatchScreen() {
 
   const isMatchReady = teamAScore > 0 || teamBScore > 0;
 
-  // Fullscreen Score View
+  // Fullscreen Score View - Enhanced
   const renderFullscreenScore = () => (
     <Modal
       visible={fullscreenMode}
@@ -646,30 +692,48 @@ export default function NewMatchScreen() {
     >
       <View style={styles.fullscreenContainer}>
         <SafeAreaView style={styles.fullscreenSafeArea}>
-          {/* Exit Button */}
-          <Pressable 
-            style={styles.fullscreenExitBtn}
-            onPress={() => {
-              Haptics.selectionAsync();
-              setFullscreenMode(false);
-            }}
-          >
-            <MaterialIcons name="fullscreen-exit" size={32} color="#FFF" />
-          </Pressable>
-
-          {/* Timer if running */}
-          {isTimerRunning && (
-            <View style={styles.fullscreenTimer}>
-              <MaterialIcons name="timer" size={28} color="rgba(255,255,255,0.7)" />
-              <Text style={styles.fullscreenTimerText}>{formatTime(matchTime)}</Text>
+          {/* Top Bar */}
+          <View style={styles.fullscreenTopBar}>
+            {/* Timer Display */}
+            <View style={styles.fullscreenTimerDisplay}>
+              <MaterialIcons name="timer" size={20} color={isTimerRunning ? '#4ADE80' : 'rgba(255,255,255,0.5)'} />
+              <Text style={[styles.fullscreenTimerValue, isTimerRunning && styles.fullscreenTimerValueActive]}>
+                {formatTime(matchTime)}
+              </Text>
+              <Pressable 
+                style={[styles.fullscreenTimerControlBtn, isTimerRunning && styles.fullscreenTimerControlBtnActive]}
+                onPress={isTimerRunning ? pauseTimer : startTimer}
+              >
+                <MaterialIcons name={isTimerRunning ? 'pause' : 'play-arrow'} size={20} color="#FFF" />
+              </Pressable>
             </View>
-          )}
+
+            {/* Mène Counter */}
+            <View style={styles.fullscreenMeneDisplay}>
+              <Text style={styles.fullscreenMeneLabel}>MÈNE</Text>
+              <Text style={styles.fullscreenMeneNumber}>{menes.length + 1}</Text>
+            </View>
+
+            {/* Exit Button */}
+            <Pressable 
+              style={styles.fullscreenExitBtn}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setFullscreenMode(false);
+              }}
+            >
+              <MaterialIcons name="fullscreen-exit" size={28} color="#FFF" />
+            </Pressable>
+          </View>
 
           {/* Main Score Display */}
           <View style={styles.fullscreenScoreContainer}>
             {/* Team A */}
             <View style={styles.fullscreenTeam}>
-              <Text style={styles.fullscreenTeamLabel}>Mon équipe</Text>
+              <View style={styles.fullscreenTeamHeader}>
+                <View style={[styles.fullscreenTeamIndicator, { backgroundColor: theme.primary }]} />
+                <Text style={styles.fullscreenTeamLabel}>MON ÉQUIPE</Text>
+              </View>
               <View style={styles.fullscreenTeamPlayers}>
                 {teamAPlayers.slice(0, 3).map(p => (
                   <Text key={p.playerId} style={styles.fullscreenPlayerName} numberOfLines={1}>
@@ -678,40 +742,63 @@ export default function NewMatchScreen() {
                 ))}
               </View>
               
-              <View style={styles.fullscreenScoreBox}>
+              {/* Score with large touch targets */}
+              <View style={styles.fullscreenScoreArea}>
                 <Pressable 
-                  style={styles.fullscreenScoreBtn}
-                  onPress={() => handleScoreChange('A', -1)}
+                  style={styles.fullscreenScoreBtnMinus}
+                  onPress={() => handleScoreChange('A', -1, false)}
                 >
-                  <MaterialIcons name="remove" size={48} color="rgba(255,255,255,0.8)" />
+                  <MaterialIcons name="remove" size={32} color="rgba(255,255,255,0.6)" />
                 </Pressable>
                 
-                <Text style={[
-                  styles.fullscreenScore,
-                  teamAScore >= teamBScore && teamAScore > 0 && styles.fullscreenScoreWinning
-                ]}>
+                <Animated.Text 
+                  key={`scoreA-${teamAScore}`}
+                  entering={FadeIn.duration(150)}
+                  style={[
+                    styles.fullscreenScore,
+                    teamAScore >= teamBScore && teamAScore > 0 && styles.fullscreenScoreWinning
+                  ]}
+                >
                   {teamAScore}
-                </Text>
+                </Animated.Text>
                 
                 <Pressable 
-                  style={[styles.fullscreenScoreBtn, styles.fullscreenScoreBtnPlus]}
+                  style={[styles.fullscreenScoreBtnPlus, { backgroundColor: theme.primary }]}
                   onPress={() => handleScoreChange('A', 1)}
                 >
-                  <MaterialIcons name="add" size={48} color="#FFF" />
+                  <MaterialIcons name="add" size={32} color="#FFF" />
                 </Pressable>
+              </View>
+
+              {/* Quick Score Buttons */}
+              <View style={styles.fullscreenQuickScoreRow}>
+                {[2, 3, 4, 5, 6].map(pts => (
+                  <Pressable
+                    key={`A-${pts}`}
+                    style={[styles.fullscreenQuickScoreBtn, { borderColor: theme.primary }]}
+                    onPress={() => handleQuickScore('A', pts)}
+                  >
+                    <Text style={[styles.fullscreenQuickScoreText, { color: theme.primary }]}>+{pts}</Text>
+                  </Pressable>
+                ))}
               </View>
             </View>
 
             {/* VS Separator */}
             <View style={styles.fullscreenVS}>
               <View style={styles.fullscreenVSLine} />
-              <Text style={styles.fullscreenVSText}>VS</Text>
+              <View style={styles.fullscreenVSCircle}>
+                <Text style={styles.fullscreenVSText}>VS</Text>
+              </View>
               <View style={styles.fullscreenVSLine} />
             </View>
 
             {/* Team B */}
             <View style={styles.fullscreenTeam}>
-              <Text style={[styles.fullscreenTeamLabel, styles.fullscreenTeamLabelB]}>Adversaire</Text>
+              <View style={styles.fullscreenTeamHeader}>
+                <View style={[styles.fullscreenTeamIndicator, { backgroundColor: theme.accent }]} />
+                <Text style={[styles.fullscreenTeamLabel, styles.fullscreenTeamLabelB]}>ADVERSAIRE</Text>
+              </View>
               <View style={styles.fullscreenTeamPlayers}>
                 {teamBPlayers.slice(0, 3).map(p => (
                   <Text key={p.playerId} style={styles.fullscreenPlayerName} numberOfLines={1}>
@@ -720,27 +807,45 @@ export default function NewMatchScreen() {
                 ))}
               </View>
               
-              <View style={styles.fullscreenScoreBox}>
+              {/* Score with large touch targets */}
+              <View style={styles.fullscreenScoreArea}>
                 <Pressable 
-                  style={styles.fullscreenScoreBtn}
-                  onPress={() => handleScoreChange('B', -1)}
+                  style={styles.fullscreenScoreBtnMinus}
+                  onPress={() => handleScoreChange('B', -1, false)}
                 >
-                  <MaterialIcons name="remove" size={48} color="rgba(255,255,255,0.8)" />
+                  <MaterialIcons name="remove" size={32} color="rgba(255,255,255,0.6)" />
                 </Pressable>
                 
-                <Text style={[
-                  styles.fullscreenScore,
-                  teamBScore > teamAScore && styles.fullscreenScoreLosing
-                ]}>
+                <Animated.Text 
+                  key={`scoreB-${teamBScore}`}
+                  entering={FadeIn.duration(150)}
+                  style={[
+                    styles.fullscreenScore,
+                    teamBScore > teamAScore && styles.fullscreenScoreLosing
+                  ]}
+                >
                   {teamBScore}
-                </Text>
+                </Animated.Text>
                 
                 <Pressable 
-                  style={[styles.fullscreenScoreBtn, styles.fullscreenScoreBtnPlusB]}
+                  style={[styles.fullscreenScoreBtnPlus, { backgroundColor: theme.accent }]}
                   onPress={() => handleScoreChange('B', 1)}
                 >
-                  <MaterialIcons name="add" size={48} color="#FFF" />
+                  <MaterialIcons name="add" size={32} color="#FFF" />
                 </Pressable>
+              </View>
+
+              {/* Quick Score Buttons */}
+              <View style={styles.fullscreenQuickScoreRow}>
+                {[2, 3, 4, 5, 6].map(pts => (
+                  <Pressable
+                    key={`B-${pts}`}
+                    style={[styles.fullscreenQuickScoreBtn, { borderColor: theme.accent }]}
+                    onPress={() => handleQuickScore('B', pts)}
+                  >
+                    <Text style={[styles.fullscreenQuickScoreText, { color: theme.accent }]}>+{pts}</Text>
+                  </Pressable>
+                ))}
               </View>
             </View>
           </View>
@@ -759,24 +864,63 @@ export default function NewMatchScreen() {
             </Animated.View>
           )}
 
-          {/* Mène Counter */}
+          {/* Mènes History Bar */}
           {menes.length > 0 && (
-            <View style={styles.fullscreenMeneCounter}>
-              <Text style={styles.fullscreenMeneText}>Mène {menes.length}</Text>
+            <View style={styles.fullscreenMenesBar}>
+              <View style={styles.fullscreenMenesHeader}>
+                <Text style={styles.fullscreenMenesTitle}>Historique des mènes</Text>
+                <Pressable style={styles.fullscreenUndoBtn} onPress={undoLastMene}>
+                  <MaterialIcons name="undo" size={18} color="rgba(255,255,255,0.7)" />
+                  <Text style={styles.fullscreenUndoBtnText}>Annuler</Text>
+                </Pressable>
+              </View>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.fullscreenMenesList}
+              >
+                {menes.map((m, idx) => (
+                  <View key={m.id} style={styles.fullscreenMeneItem}>
+                    <Text style={styles.fullscreenMeneItemNum}>M{idx + 1}</Text>
+                    {m.isNull ? (
+                      <Text style={styles.fullscreenMeneItemNull}>⊘</Text>
+                    ) : (
+                      <View style={styles.fullscreenMeneItemScores}>
+                        <Text style={[styles.fullscreenMeneItemScore, m.teamAPoints > 0 && styles.fullscreenMeneItemScoreA]}>
+                          {m.teamAPoints > 0 ? `+${m.teamAPoints}` : '0'}
+                        </Text>
+                        <Text style={styles.fullscreenMeneItemSep}>/</Text>
+                        <Text style={[styles.fullscreenMeneItemScore, m.teamBPoints > 0 && styles.fullscreenMeneItemScoreB]}>
+                          {m.teamBPoints > 0 ? `+${m.teamBPoints}` : '0'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </ScrollView>
             </View>
           )}
 
-          {/* Timer Controls */}
-          <View style={styles.fullscreenTimerControls}>
-            {!isTimerRunning ? (
-              <Pressable style={styles.fullscreenTimerBtn} onPress={startTimer}>
-                <MaterialIcons name="play-arrow" size={36} color="#FFF" />
-              </Pressable>
-            ) : (
-              <Pressable style={[styles.fullscreenTimerBtn, styles.fullscreenTimerBtnPause]} onPress={pauseTimer}>
-                <MaterialIcons name="pause" size={36} color="#FFF" />
-              </Pressable>
-            )}
+          {/* Bottom Actions */}
+          <View style={styles.fullscreenBottomActions}>
+            <Pressable 
+              style={styles.fullscreenNullMeneBtn}
+              onPress={() => {
+                Haptics.selectionAsync();
+                const newMene: Mene = {
+                  id: menes.length + 1,
+                  teamAPoints: 0,
+                  teamBPoints: 0,
+                  duration: meneTime,
+                  isNull: true,
+                };
+                setMenes(prev => [...prev, newMene]);
+                setMeneTime(0);
+              }}
+            >
+              <MaterialIcons name="block" size={20} color="rgba(255,255,255,0.7)" />
+              <Text style={styles.fullscreenNullMeneBtnText}>Mène nulle</Text>
+            </Pressable>
           </View>
         </SafeAreaView>
       </View>
@@ -953,7 +1097,7 @@ export default function NewMatchScreen() {
                 <View style={styles.scoreControlsVertical}>
                   <Pressable 
                     style={styles.scoreControlBtn}
-                    onPress={() => handleScoreChange('A', 1)}
+                    onPress={() => handleScoreChange('A', 1, false)}
                   >
                     <MaterialIcons name="add" size={28} color={theme.primary} />
                   </Pressable>
@@ -962,7 +1106,7 @@ export default function NewMatchScreen() {
                   </Text>
                   <Pressable 
                     style={styles.scoreControlBtn}
-                    onPress={() => handleScoreChange('A', -1)}
+                    onPress={() => handleScoreChange('A', -1, false)}
                   >
                     <MaterialIcons name="remove" size={28} color={theme.textMuted} />
                   </Pressable>
@@ -1009,7 +1153,7 @@ export default function NewMatchScreen() {
                 <View style={styles.scoreControlsVertical}>
                   <Pressable 
                     style={styles.scoreControlBtn}
-                    onPress={() => handleScoreChange('B', 1)}
+                    onPress={() => handleScoreChange('B', 1, false)}
                   >
                     <MaterialIcons name="add" size={28} color={theme.accent} />
                   </Pressable>
@@ -1018,7 +1162,7 @@ export default function NewMatchScreen() {
                   </Text>
                   <Pressable 
                     style={styles.scoreControlBtn}
-                    onPress={() => handleScoreChange('B', -1)}
+                    onPress={() => handleScoreChange('B', -1, false)}
                   >
                     <MaterialIcons name="remove" size={28} color={theme.textMuted} />
                   </Pressable>
@@ -2589,7 +2733,7 @@ const styles = StyleSheet.create({
     color: theme.textMuted,
     marginTop: 10,
   },
-  // Fullscreen Mode Styles
+  // Fullscreen Mode Styles - Enhanced
   fullscreenToggleBtn: {
     width: 40,
     height: 40,
@@ -2598,102 +2742,145 @@ const styles = StyleSheet.create({
   },
   fullscreenContainer: {
     flex: 1,
-    backgroundColor: '#1A1A2E',
+    backgroundColor: '#0F172A',
   },
   fullscreenSafeArea: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  fullscreenExitBtn: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 20,
-    right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  // Top Bar
+  fullscreenTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  fullscreenTimerDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  fullscreenTimerValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.5)',
+    fontVariant: ['tabular-nums'],
+    minWidth: 60,
+  },
+  fullscreenTimerValueActive: {
+    color: '#4ADE80',
+  },
+  fullscreenTimerControlBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
   },
-  fullscreenTimer: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 20,
-    left: 20,
-    flexDirection: 'row',
+  fullscreenTimerControlBtnActive: {
+    backgroundColor: '#4ADE80',
+  },
+  fullscreenMeneDisplay: {
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
   },
-  fullscreenTimerText: {
+  fullscreenMeneLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: 1,
+  },
+  fullscreenMeneNumber: {
     fontSize: 24,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#FFF',
-    fontVariant: ['tabular-nums'],
   },
+  fullscreenExitBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Score Container
   fullscreenScoreContainer: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    width: '100%',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
   },
   fullscreenTeam: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  fullscreenTeamLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.primary,
-    textTransform: 'uppercase',
-    letterSpacing: 2,
+  fullscreenTeamHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     marginBottom: 8,
   },
+  fullscreenTeamIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  fullscreenTeamLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.7)',
+    letterSpacing: 1.5,
+  },
   fullscreenTeamLabelB: {
-    color: theme.accent,
+    color: 'rgba(255,255,255,0.7)',
   },
   fullscreenTeamPlayers: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
     gap: 8,
-    marginBottom: 20,
-    minHeight: 24,
+    marginBottom: 16,
+    minHeight: 20,
   },
   fullscreenPlayerName: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.6)',
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.5)',
     fontWeight: '500',
   },
-  fullscreenScoreBox: {
+  fullscreenScoreArea: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 12,
   },
-  fullscreenScoreBtn: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+  fullscreenScoreBtnMinus: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   fullscreenScoreBtnPlus: {
-    backgroundColor: theme.primary,
-  },
-  fullscreenScoreBtnPlusB: {
-    backgroundColor: theme.accent,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   fullscreenScore: {
-    fontSize: 120,
+    fontSize: 100,
     fontWeight: '900',
     color: '#FFF',
-    minWidth: 100,
+    minWidth: 80,
     textAlign: 'center',
     textShadowColor: 'rgba(0,0,0,0.3)',
     textShadowOffset: { width: 0, height: 4 },
@@ -2705,67 +2892,167 @@ const styles = StyleSheet.create({
   fullscreenScoreLosing: {
     color: '#F87171',
   },
+  // Quick Score Row
+  fullscreenQuickScoreRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 20,
+  },
+  fullscreenQuickScoreBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fullscreenQuickScoreText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  // VS Separator
   fullscreenVS: {
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
   },
   fullscreenVSLine: {
     width: 2,
-    height: 60,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    height: 50,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  fullscreenVSCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 12,
   },
   fullscreenVSText: {
-    fontSize: 20,
+    fontSize: 12,
     fontWeight: '800',
-    color: 'rgba(255,255,255,0.4)',
-    marginVertical: 16,
+    color: 'rgba(255,255,255,0.5)',
   },
+  // Winner Banner
   fullscreenWinnerBanner: {
     position: 'absolute',
-    bottom: 140,
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -100 }, { translateY: -30 }],
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(0,0,0,0.8)',
     paddingHorizontal: 32,
     paddingVertical: 16,
     borderRadius: 40,
+    width: 200,
+    justifyContent: 'center',
   },
   fullscreenWinnerText: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '800',
     color: '#FFF',
-    letterSpacing: 2,
+    letterSpacing: 1,
   },
-  fullscreenMeneCounter: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 120 : 90,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 16,
+  // Mènes History Bar
+  fullscreenMenesBar: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    paddingVertical: 12,
   },
-  fullscreenMeneText: {
-    fontSize: 16,
+  fullscreenMenesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  fullscreenMenesTitle: {
+    fontSize: 12,
     fontWeight: '600',
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: 0.5,
+  },
+  fullscreenUndoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 12,
+  },
+  fullscreenUndoBtnText: {
+    fontSize: 12,
+    fontWeight: '500',
     color: 'rgba(255,255,255,0.7)',
   },
-  fullscreenTimerControls: {
-    position: 'absolute',
-    bottom: 50,
-    flexDirection: 'row',
-    gap: 20,
+  fullscreenMenesList: {
+    paddingHorizontal: 16,
+    gap: 8,
   },
-  fullscreenTimerBtn: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: theme.success,
+  fullscreenMeneItem: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     alignItems: 'center',
-    justifyContent: 'center',
-    ...theme.shadows.card,
+    minWidth: 60,
   },
-  fullscreenTimerBtnPause: {
-    backgroundColor: theme.warning,
+  fullscreenMeneItemNum: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.4)',
+    marginBottom: 4,
+  },
+  fullscreenMeneItemScores: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  fullscreenMeneItemScore: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.5)',
+  },
+  fullscreenMeneItemScoreA: {
+    color: '#4ADE80',
+  },
+  fullscreenMeneItemScoreB: {
+    color: '#F87171',
+  },
+  fullscreenMeneItemSep: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.3)',
+  },
+  fullscreenMeneItemNull: {
+    fontSize: 14,
+    color: '#FBBF24',
+  },
+  // Bottom Actions
+  fullscreenBottomActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  fullscreenNullMeneBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 20,
+  },
+  fullscreenNullMeneBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.7)',
   },
 });
