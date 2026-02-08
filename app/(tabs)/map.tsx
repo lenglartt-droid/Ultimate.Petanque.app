@@ -7,6 +7,7 @@ import {
   Platform,
   ScrollView,
   Dimensions,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -46,6 +47,8 @@ export default function MapScreen() {
   const [activeFilter, setActiveFilter] = useState<MarkerType>('all');
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [showLegend, setShowLegend] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
 
   // Filter items with valid locations
   const data = useMemo(() => {
@@ -80,15 +83,57 @@ export default function MapScreen() {
     players: activeFilter === 'all' || activeFilter === 'players',
   }), [activeFilter]);
 
+  // Search filtered data
+  const searchFilteredData = useMemo(() => {
+    if (!searchQuery.trim()) return data;
+    
+    const query = searchQuery.toLowerCase().trim();
+    
+    return {
+      terrains: data.terrains.filter(t => 
+        t.name.toLowerCase().includes(query) ||
+        t.city.toLowerCase().includes(query) ||
+        t.type.toLowerCase().includes(query)
+      ),
+      clubs: data.clubs.filter(c => 
+        c.name.toLowerCase().includes(query) ||
+        c.city.toLowerCase().includes(query)
+      ),
+      players: data.players.filter(p => 
+        p.name.toLowerCase().includes(query) ||
+        p.location?.city?.toLowerCase().includes(query) ||
+        p.club?.toLowerCase().includes(query)
+      ),
+      tournaments: data.tournaments.filter(t => 
+        t.name.toLowerCase().includes(query) ||
+        t.location?.city?.toLowerCase().includes(query)
+      ),
+      total: 0, // Will be recalculated
+    };
+  }, [data, searchQuery]);
+
   // All visible items for list view
   const visibleItems = useMemo(() => {
     const items: any[] = [];
-    if (visibility.terrains) items.push(...data.terrains.map(t => ({ ...t, itemType: 'terrains' })));
-    if (visibility.clubs) items.push(...data.clubs.map(c => ({ ...c, itemType: 'clubs' })));
-    if (visibility.tournaments) items.push(...data.tournaments.map(t => ({ ...t, itemType: 'tournaments' })));
-    if (visibility.players) items.push(...data.players.map(p => ({ ...p, itemType: 'players' })));
+    const sourceData = searchQuery.trim() ? searchFilteredData : data;
+    if (visibility.terrains) items.push(...sourceData.terrains.map(t => ({ ...t, itemType: 'terrains' })));
+    if (visibility.clubs) items.push(...sourceData.clubs.map(c => ({ ...c, itemType: 'clubs' })));
+    if (visibility.tournaments) items.push(...sourceData.tournaments.map(t => ({ ...t, itemType: 'tournaments' })));
+    if (visibility.players) items.push(...sourceData.players.map(p => ({ ...p, itemType: 'players' })));
     return items;
-  }, [data, visibility]);
+  }, [data, searchFilteredData, visibility, searchQuery]);
+
+  // Counts for display
+  const displayCounts = useMemo(() => {
+    const sourceData = searchQuery.trim() ? searchFilteredData : data;
+    return {
+      terrains: sourceData.terrains.length,
+      clubs: sourceData.clubs.length,
+      players: sourceData.players.length,
+      tournaments: sourceData.tournaments.length,
+      total: sourceData.terrains.length + sourceData.clubs.length + sourceData.players.length + sourceData.tournaments.length,
+    };
+  }, [data, searchFilteredData, searchQuery]);
 
   const handleMarkerPress = (item: any, type: string) => {
     Haptics.selectionAsync();
@@ -126,7 +171,7 @@ export default function MapScreen() {
         onPress={() => setSelectedItem(null)}
       >
         {/* Terrain Markers */}
-        {visibility.terrains && data.terrains.map((terrain) => {
+        {visibility.terrains && (searchQuery.trim() ? searchFilteredData : data).terrains.map((terrain) => {
           const typeConfig = getTerrainTypeConfig(terrain.type);
           return (
             <MarkerComponent
@@ -142,7 +187,7 @@ export default function MapScreen() {
         })}
 
         {/* Club Markers */}
-        {visibility.clubs && data.clubs.map((club) => (
+        {visibility.clubs && (searchQuery.trim() ? searchFilteredData : data).clubs.map((club) => (
           <MarkerComponent
             key={`club-${club.id}`}
             coordinate={club.location}
@@ -155,7 +200,7 @@ export default function MapScreen() {
         ))}
 
         {/* Tournament Markers */}
-        {visibility.tournaments && data.tournaments.map((tournament) => (
+        {visibility.tournaments && (searchQuery.trim() ? searchFilteredData : data).tournaments.map((tournament) => (
           <MarkerComponent
             key={`tournament-${tournament.id}`}
             coordinate={tournament.location}
@@ -168,7 +213,7 @@ export default function MapScreen() {
         ))}
 
         {/* Player Markers */}
-        {visibility.players && data.players.map((player) => (
+        {visibility.players && (searchQuery.trim() ? searchFilteredData : data).players.map((player) => (
           <MarkerComponent
             key={`player-${player.id}`}
             coordinate={player.location}
@@ -255,25 +300,68 @@ export default function MapScreen() {
         >
           <View style={styles.statsHeader}>
             <Text style={styles.statsTitle}>Carte</Text>
-            <Pressable 
-              style={styles.legendButton}
-              onPress={() => {
-                Haptics.selectionAsync();
-                setShowLegend(!showLegend);
-              }}
-            >
-              <MaterialIcons 
-                name={showLegend ? 'expand-less' : 'info-outline'} 
-                size={20} 
-                color={theme.textSecondary} 
-              />
-            </Pressable>
+            <View style={styles.statsHeaderActions}>
+              <Pressable 
+                style={[styles.searchToggleButton, showSearch && styles.searchToggleButtonActive]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setShowSearch(!showSearch);
+                  if (showSearch) setSearchQuery('');
+                }}
+              >
+                <MaterialIcons 
+                  name={showSearch ? 'close' : 'search'} 
+                  size={20} 
+                  color={showSearch ? '#FFF' : theme.textSecondary} 
+                />
+              </Pressable>
+              <Pressable 
+                style={styles.legendButton}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setShowLegend(!showLegend);
+                }}
+              >
+                <MaterialIcons 
+                  name={showLegend ? 'expand-less' : 'info-outline'} 
+                  size={20} 
+                  color={theme.textSecondary} 
+                />
+              </Pressable>
+            </View>
           </View>
+          
+          {/* Search Bar */}
+          {showSearch && (
+            <Animated.View entering={FadeIn.duration(200)} style={styles.searchContainer}>
+              <View style={styles.searchBar}>
+                <MaterialIcons name="search" size={20} color={theme.textMuted} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Rechercher un lieu, club, joueur..."
+                  placeholderTextColor={theme.textMuted}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoFocus
+                />
+                {searchQuery.length > 0 && (
+                  <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
+                    <MaterialIcons name="close" size={18} color={theme.textMuted} />
+                  </Pressable>
+                )}
+              </View>
+              {searchQuery.trim() && (
+                <Text style={styles.searchResultsText}>
+                  {displayCounts.total} résultat{displayCounts.total !== 1 ? 's' : ''}
+                </Text>
+              )}
+            </Animated.View>
+          )}
           
           <View style={styles.statsGrid}>
             {(Object.keys(MARKER_CONFIG) as Array<keyof typeof MARKER_CONFIG>).map(key => {
               const cfg = MARKER_CONFIG[key];
-              const count = data[key].length;
+              const count = displayCounts[key];
               const isActive = activeFilter === 'all' || activeFilter === key;
               return (
                 <View key={key} style={[styles.statItem, !isActive && styles.statItemInactive]}>
@@ -328,13 +416,13 @@ export default function MapScreen() {
                 color={activeFilter === 'all' ? '#FFF' : theme.textSecondary} 
               />
               <Text style={[styles.filterChipText, activeFilter === 'all' && styles.filterChipTextActive]}>
-                Tout ({data.total})
+                Tout ({displayCounts.total})
               </Text>
             </Pressable>
             
             {(Object.keys(MARKER_CONFIG) as Array<keyof typeof MARKER_CONFIG>).map(key => {
               const cfg = MARKER_CONFIG[key];
-              const count = data[key].length;
+              const count = displayCounts[key];
               const isActive = activeFilter === key;
               return (
                 <Pressable
@@ -536,6 +624,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: theme.textPrimary,
   },
+  statsHeaderActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  searchToggleButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchToggleButtonActive: {
+    backgroundColor: theme.primary,
+  },
   legendButton: {
     width: 36,
     height: 36,
@@ -543,6 +646,29 @@ const styles = StyleSheet.create({
     backgroundColor: theme.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  searchContainer: {
+    marginBottom: 12,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: 12,
+    height: 44,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: theme.textPrimary,
+  },
+  searchResultsText: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 8,
+    textAlign: 'center',
   },
   statsGrid: {
     flexDirection: 'row',

@@ -10,10 +10,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, router } from 'expo-router';
+import { getSupabaseClient } from '@/template';
+import { decode } from 'base64-arraybuffer';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
@@ -26,11 +31,15 @@ export default function EditPlayerScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getPlayerById, updatePlayer, deletePlayer, clubs } = useApp();
+  const supabase = getSupabaseClient();
 
   const player = getPlayerById(id!);
 
   const [name, setName] = useState('');
   const [nickname, setNickname] = useState('');
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [avatarChanged, setAvatarChanged] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [role, setRole] = useState<PlayerRole>('Milieu');
   const [level, setLevel] = useState<typeof levels[number]>('Intermédiaire');
   const [clubId, setClubId] = useState<string | undefined>();
@@ -46,6 +55,7 @@ export default function EditPlayerScreen() {
     if (player) {
       setName(player.name);
       setNickname(player.nickname || '');
+      setAvatarUri(player.avatar || null);
       setRole(player.role);
       setLevel(player.level);
       setClubId(player.clubId);
@@ -58,6 +68,118 @@ export default function EditPlayerScreen() {
       setBoulesWeight(player.boules?.weight?.toString() || '');
     }
   }, [player]);
+
+  const pickImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission requise', 'Nous avons besoin de votre permission pour accéder à vos photos.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setAvatarUri(result.assets[0].uri);
+        setAvatarChanged(true);
+      }
+    } catch (error) {
+      console.log('Error picking image:', error);
+      Alert.alert('Erreur', 'Impossible de sélectionner la photo');
+    }
+  };
+
+  const takePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission requise', 'Nous avons besoin de votre permission pour utiliser la caméra.');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setAvatarUri(result.assets[0].uri);
+        setAvatarChanged(true);
+      }
+    } catch (error) {
+      console.log('Error taking photo:', error);
+      Alert.alert('Erreur', 'Impossible de prendre la photo');
+    }
+  };
+
+  const showImageOptions = () => {
+    Alert.alert(
+      'Photo de profil',
+      'Choisissez une option',
+      [
+        { text: 'Prendre une photo', onPress: takePhoto },
+        { text: 'Choisir dans la galerie', onPress: pickImage },
+        ...(avatarUri ? [{ text: 'Supprimer', style: 'destructive' as const, onPress: () => { setAvatarUri(null); setAvatarChanged(true); } }] : []),
+        { text: 'Annuler', style: 'cancel' as const },
+      ]
+    );
+  };
+
+  const uploadAvatar = async (): Promise<string | undefined> => {
+    if (!avatarChanged) return player?.avatar;
+    if (!avatarUri) return undefined;
+    // If it's already a URL (not changed), return it
+    if (avatarUri.startsWith('http')) return avatarUri;
+
+    try {
+      setUploadingAvatar(true);
+      
+      // Read file as base64
+      const response = await fetch(avatarUri);
+      const blob = await response.blob();
+      
+      // Convert to base64
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => {
+          const base64 = reader.result as string;
+          const base64Data = base64.split(',')[1];
+          resolve(base64Data);
+        };
+        reader.onerror = reject;
+      });
+      reader.readAsDataURL(blob);
+      const base64Data = await base64Promise;
+
+      const fileName = `player_${id}_${Date.now()}.jpg`;
+      const filePath = `avatars/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, decode(base64Data), {
+          contentType: 'image/jpeg',
+          upsert: true,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
+      return urlData?.publicUrl;
+    } catch (error) {
+      console.log('Error uploading avatar:', error);
+      return player?.avatar;
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   if (!player) {
     return (
@@ -73,13 +195,16 @@ export default function EditPlayerScreen() {
     );
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!name.trim()) {
       Alert.alert('Erreur', 'Le nom est obligatoire');
       return;
     }
 
     const selectedClub = clubs.find(c => c.id === clubId);
+
+    // Upload avatar if changed
+    const avatarUrl = await uploadAvatar();
 
     // Build boules object
     const boules = (boulesName.trim() || boulesDiameter || boulesWeight) ? {
@@ -91,6 +216,7 @@ export default function EditPlayerScreen() {
     updatePlayer(id!, {
       name: name.trim(),
       nickname: nickname.trim() || undefined,
+      avatar: avatarUrl,
       role,
       level,
       clubId,
@@ -154,11 +280,30 @@ export default function EditPlayerScreen() {
         >
           {/* Avatar Preview */}
           <Animated.View entering={FadeInDown.duration(400)} style={styles.avatarSection}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {name.split(' ').map(n => n[0] || '').join('').toUpperCase().slice(0, 2) || '?'}
-              </Text>
-            </View>
+            <Pressable style={styles.avatarContainer} onPress={showImageOptions} disabled={uploadingAvatar}>
+              {avatarUri ? (
+                <Image
+                  source={{ uri: avatarUri }}
+                  style={styles.avatarImage}
+                  contentFit="cover"
+                  transition={200}
+                />
+              ) : (
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>
+                    {name.split(' ').map(n => n[0] || '').join('').toUpperCase().slice(0, 2) || '?'}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.avatarEditBadge}>
+                {uploadingAvatar ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <MaterialIcons name="camera-alt" size={16} color="#FFF" />
+                )}
+              </View>
+            </Pressable>
+            <Text style={styles.avatarHint}>Appuyez pour modifier la photo</Text>
           </Animated.View>
 
           {/* Name */}
@@ -402,9 +547,19 @@ export default function EditPlayerScreen() {
 
         {/* Save Button */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-          <Pressable style={styles.saveButton} onPress={handleSave}>
-            <MaterialIcons name="check" size={24} color="#FFF" />
-            <Text style={styles.saveButtonText}>Enregistrer</Text>
+          <Pressable 
+            style={[styles.saveButton, uploadingAvatar && styles.saveButtonDisabled]} 
+            onPress={handleSave}
+            disabled={uploadingAvatar}
+          >
+            {uploadingAvatar ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <MaterialIcons name="check" size={24} color="#FFF" />
+            )}
+            <Text style={styles.saveButtonText}>
+              {uploadingAvatar ? 'Enregistrement...' : 'Enregistrer'}
+            </Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -455,6 +610,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
   },
+  avatarContainer: {
+    position: 'relative',
+  },
   avatar: {
     width: 100,
     height: 100,
@@ -463,10 +621,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  avatarImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+  },
   avatarText: {
     fontSize: 36,
     fontWeight: '700',
     color: '#FFF',
+  },
+  avatarEditBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: theme.backgroundSecondary,
+  },
+  avatarHint: {
+    fontSize: 12,
+    color: theme.textMuted,
+    marginTop: 8,
+  },
+  saveButtonDisabled: {
+    backgroundColor: theme.textMuted,
   },
   section: {
     marginBottom: 24,
