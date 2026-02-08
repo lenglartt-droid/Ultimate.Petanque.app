@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,1447 +7,792 @@ import {
   TextInput,
   ScrollView,
   Modal,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { router } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
-import { Terrain } from '@/services/mockData';
+import { Terrain, Player, Club, Tournament } from '@/services/mockData';
 import { TerrainType } from '@/constants/config';
 
-type DirectoryTab = 'players' | 'clubs' | 'tournaments' | 'terrains';
+const { width: screenWidth } = Dimensions.get('window');
+
+type DirectoryTab = 'players' | 'clubs' | 'terrains' | 'tournaments';
 type TournamentStatus = 'all' | 'À venir' | 'En cours' | 'Terminé';
+
+// Tab configuration
+const TABS: { id: DirectoryTab; label: string; icon: string; color: string }[] = [
+  { id: 'players', label: 'Joueurs', icon: 'person', color: theme.primary },
+  { id: 'clubs', label: 'Clubs', icon: 'home', color: theme.accent },
+  { id: 'terrains', label: 'Terrains', icon: 'sports-soccer', color: theme.success },
+  { id: 'tournaments', label: 'Tournois', icon: 'emoji-events', color: theme.carreauColor },
+];
 
 export default function DirectoryScreen() {
   const insets = useSafeAreaInsets();
   const { players, clubs, tournaments, terrains, selfPlayer, favoriteTerrainIds } = useApp();
   const [activeTab, setActiveTab] = useState<DirectoryTab>('players');
   const [searchQuery, setSearchQuery] = useState('');
-  const [terrainTypeFilter, setTerrainTypeFilter] = useState<TerrainType | 'all'>('all');
-  const [tournamentStatusFilter, setTournamentStatusFilter] = useState<TournamentStatus>('all');
+  const [showFilters, setShowFilters] = useState(false);
   
-  // Player filters
-  const [playerClubFilter, setPlayerClubFilter] = useState<string>('all');
-  const [playerCityFilter, setPlayerCityFilter] = useState<string>('all');
-  const [playerCountryFilter, setPlayerCountryFilter] = useState<string>('all');
-  const [playerLevelFilter, setPlayerLevelFilter] = useState<string>('all');
-  const [playerRoleFilter, setPlayerRoleFilter] = useState<string>('all');
-  const [showPlayerFilters, setShowPlayerFilters] = useState(false);
-  
-  // Club filters
-  const [clubCityFilter, setClubCityFilter] = useState<string>('all');
-  const [clubCountryFilter, setClubCountryFilter] = useState<string>('all');
-  const [showClubFilters, setShowClubFilters] = useState(false);
-  
-  // Terrain filters
-  const [terrainCityFilter, setTerrainCityFilter] = useState<string>('all');
-  const [terrainLightingFilter, setTerrainLightingFilter] = useState<'all' | 'yes' | 'no'>('all');
-  const [terrainCoveredFilter, setTerrainCoveredFilter] = useState<'all' | 'yes' | 'no'>('all');
-  const [showTerrainFilters, setShowTerrainFilters] = useState(false);
-  
-  // Tournament filters
-  const [tournamentFormatFilter, setTournamentFormatFilter] = useState<string>('all');
-  const [tournamentCadrageFilter, setTournamentCadrageFilter] = useState<string>('all');
-  const [showTournamentFilters, setShowTournamentFilters] = useState(false);
+  // All filters state
+  const [filters, setFilters] = useState({
+    // Player filters
+    playerClub: 'all',
+    playerCity: 'all',
+    playerCountry: 'all',
+    playerLevel: 'all',
+    playerRole: 'all',
+    // Club filters
+    clubCity: 'all',
+    clubCountry: 'all',
+    // Terrain filters
+    terrainType: 'all' as TerrainType | 'all',
+    terrainCity: 'all',
+    terrainLighting: 'all' as 'all' | 'yes' | 'no',
+    terrainCovered: 'all' as 'all' | 'yes' | 'no',
+    // Tournament filters
+    tournamentStatus: 'all' as TournamentStatus,
+    tournamentFormat: 'all',
+    tournamentCadrage: 'all',
+  });
 
-  const tabs = useMemo(() => [
-    { id: 'players' as const, label: 'Joueurs', icon: 'person' as const, count: players.length },
-    { id: 'clubs' as const, label: 'Clubs', icon: 'home' as const, count: clubs.length },
-    { id: 'terrains' as const, label: 'Terrains', icon: 'sports-soccer' as const, count: terrains.length },
-    { id: 'tournaments' as const, label: 'Tournois', icon: 'emoji-events' as const, count: tournaments.length },
-  ], [players.length, clubs.length, terrains.length, tournaments.length]);
+  // Counts for tabs
+  const counts = useMemo(() => ({
+    players: players.length,
+    clubs: clubs.length,
+    terrains: terrains.length,
+    tournaments: tournaments.length,
+  }), [players.length, clubs.length, terrains.length, tournaments.length]);
 
-  // Get unique values for filters
-  const uniquePlayerClubs = useMemo(() => {
-    const clubSet = new Set(players.map(p => p.club).filter(Boolean));
-    return ['all', ...Array.from(clubSet)] as string[];
-  }, [players]);
+  // Unique values for filters
+  const uniqueValues = useMemo(() => ({
+    playerClubs: ['all', ...new Set(players.map(p => p.club).filter(Boolean))] as string[],
+    playerCities: ['all', ...new Set(players.map(p => p.location?.city).filter(Boolean))] as string[],
+    playerCountries: ['all', ...new Set(players.map(p => p.country || 'France'))] as string[],
+    playerLevels: ['all', 'Débutant', 'Intermédiaire', 'Confirmé', 'Expert'],
+    playerRoles: ['all', 'Pointeur', 'Tireur', 'Milieu'],
+    clubCities: ['all', ...new Set(clubs.map(c => c.city).filter(Boolean))] as string[],
+    clubCountries: ['all', ...new Set(clubs.map(c => c.country || 'France'))] as string[],
+    terrainCities: ['all', ...new Set(terrains.map(t => t.city).filter(Boolean))] as string[],
+    tournamentFormats: ['all', ...new Set(tournaments.map(t => t.format).filter(Boolean))] as string[],
+    tournamentCadrages: ['all', ...new Set(tournaments.map(t => t.type).filter(Boolean))] as string[],
+  }), [players, clubs, terrains, tournaments]);
 
-  const uniquePlayerCities = useMemo(() => {
-    const citySet = new Set(players.map(p => p.location?.city).filter(Boolean));
-    return ['all', ...Array.from(citySet)] as string[];
-  }, [players]);
+  // Active filter counts
+  const activeFilterCounts = useMemo(() => ({
+    players: [filters.playerClub, filters.playerCity, filters.playerCountry, filters.playerLevel, filters.playerRole].filter(f => f !== 'all').length,
+    clubs: [filters.clubCity, filters.clubCountry].filter(f => f !== 'all').length,
+    terrains: [filters.terrainType, filters.terrainCity, filters.terrainLighting, filters.terrainCovered].filter(f => f !== 'all').length,
+    tournaments: [filters.tournamentStatus, filters.tournamentFormat, filters.tournamentCadrage].filter(f => f !== 'all').length,
+  }), [filters]);
 
-  const uniquePlayerCountries = useMemo(() => {
-    const countrySet = new Set(players.map(p => p.country || 'France').filter(Boolean));
-    return ['all', ...Array.from(countrySet)] as string[];
-  }, [players]);
+  const currentFilterCount = activeFilterCounts[activeTab];
 
-  const uniquePlayerLevels = ['all', 'Débutant', 'Intermédiaire', 'Confirmé', 'Expert'];
-  const uniquePlayerRoles = ['all', 'Pointeur', 'Tireur', 'Milieu'];
-
-  const uniqueClubCities = useMemo(() => {
-    const citySet = new Set(clubs.map(c => c.city).filter(Boolean));
-    return ['all', ...Array.from(citySet)] as string[];
-  }, [clubs]);
-
-  const uniqueClubCountries = useMemo(() => {
-    const countrySet = new Set(clubs.map(c => c.country || 'France').filter(Boolean));
-    return ['all', ...Array.from(countrySet)] as string[];
-  }, [clubs]);
-
-  // Terrain filter unique values
-  const uniqueTerrainCities = useMemo(() => {
-    const citySet = new Set(terrains.map(t => t.city).filter(Boolean));
-    return ['all', ...Array.from(citySet)] as string[];
-  }, [terrains]);
-
-  // Tournament filter unique values
-  const uniqueTournamentFormats = useMemo(() => {
-    const formatSet = new Set(tournaments.map(t => t.format).filter(Boolean));
-    return ['all', ...Array.from(formatSet)] as string[];
-  }, [tournaments]);
-
-  const uniqueTournamentCadrages = useMemo(() => {
-    const cadrageSet = new Set(tournaments.map(t => t.type).filter(Boolean));
-    return ['all', ...Array.from(cadrageSet)] as string[];
-  }, [tournaments]);
-
-  // Count active player filters
-  const activePlayerFilterCount = useMemo(() => {
-    let count = 0;
-    if (playerClubFilter !== 'all') count++;
-    if (playerCityFilter !== 'all') count++;
-    if (playerCountryFilter !== 'all') count++;
-    if (playerLevelFilter !== 'all') count++;
-    if (playerRoleFilter !== 'all') count++;
-    return count;
-  }, [playerClubFilter, playerCityFilter, playerCountryFilter, playerLevelFilter, playerRoleFilter]);
-
-  // Count active club filters
-  const activeClubFilterCount = useMemo(() => {
-    let count = 0;
-    if (clubCityFilter !== 'all') count++;
-    if (clubCountryFilter !== 'all') count++;
-    return count;
-  }, [clubCityFilter, clubCountryFilter]);
-
-  // Count active terrain filters
-  const activeTerrainFilterCount = useMemo(() => {
-    let count = 0;
-    if (terrainTypeFilter !== 'all') count++;
-    if (terrainCityFilter !== 'all') count++;
-    if (terrainLightingFilter !== 'all') count++;
-    if (terrainCoveredFilter !== 'all') count++;
-    return count;
-  }, [terrainTypeFilter, terrainCityFilter, terrainLightingFilter, terrainCoveredFilter]);
-
-  // Count active tournament filters
-  const activeTournamentFilterCount = useMemo(() => {
-    let count = 0;
-    if (tournamentStatusFilter !== 'all') count++;
-    if (tournamentFormatFilter !== 'all') count++;
-    if (tournamentCadrageFilter !== 'all') count++;
-    return count;
-  }, [tournamentStatusFilter, tournamentFormatFilter, tournamentCadrageFilter]);
-
-  // Filter players and put selfPlayer at the top
+  // Filtered data
   const filteredPlayers = useMemo(() => {
-    let filtered = players.filter(p => {
+    let result = players.filter(p => {
       const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.club?.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      const matchesClub = playerClubFilter === 'all' || p.club === playerClubFilter;
-      const matchesCity = playerCityFilter === 'all' || p.location?.city === playerCityFilter;
-      const matchesCountry = playerCountryFilter === 'all' || (p.country || 'France') === playerCountryFilter;
-      const matchesLevel = playerLevelFilter === 'all' || p.level === playerLevelFilter;
-      const matchesRole = playerRoleFilter === 'all' || p.role === playerRoleFilter;
-      
+      const matchesClub = filters.playerClub === 'all' || p.club === filters.playerClub;
+      const matchesCity = filters.playerCity === 'all' || p.location?.city === filters.playerCity;
+      const matchesCountry = filters.playerCountry === 'all' || (p.country || 'France') === filters.playerCountry;
+      const matchesLevel = filters.playerLevel === 'all' || p.level === filters.playerLevel;
+      const matchesRole = filters.playerRole === 'all' || p.role === filters.playerRole;
       return matchesSearch && matchesClub && matchesCity && matchesCountry && matchesLevel && matchesRole;
     });
     
-    // If selfPlayer exists and matches filter, put it at the top
+    // Put selfPlayer at top
     if (selfPlayer) {
-      const selfIndex = filtered.findIndex(p => p.id === selfPlayer.id);
+      const selfIndex = result.findIndex(p => p.id === selfPlayer.id);
       if (selfIndex > 0) {
-        const [self] = filtered.splice(selfIndex, 1);
-        filtered.unshift(self);
+        const [self] = result.splice(selfIndex, 1);
+        result.unshift(self);
       }
     }
-    
-    return filtered;
-  }, [players, searchQuery, selfPlayer, playerClubFilter, playerCityFilter, playerCountryFilter, playerLevelFilter, playerRoleFilter]);
+    return result;
+  }, [players, searchQuery, filters, selfPlayer]);
 
   const filteredClubs = useMemo(() => {
     return clubs.filter(c => {
       const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.city.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      const matchesCity = clubCityFilter === 'all' || c.city === clubCityFilter;
-      const matchesCountry = clubCountryFilter === 'all' || (c.country || 'France') === clubCountryFilter;
-      
+      const matchesCity = filters.clubCity === 'all' || c.city === filters.clubCity;
+      const matchesCountry = filters.clubCountry === 'all' || (c.country || 'France') === filters.clubCountry;
       return matchesSearch && matchesCity && matchesCountry;
     });
-  }, [clubs, searchQuery, clubCityFilter, clubCountryFilter]);
+  }, [clubs, searchQuery, filters]);
+
+  const filteredTerrains = useMemo(() => {
+    return terrains.filter(t => {
+      const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.city.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesType = filters.terrainType === 'all' || t.type === filters.terrainType;
+      const matchesCity = filters.terrainCity === 'all' || t.city === filters.terrainCity;
+      const matchesLighting = filters.terrainLighting === 'all' || 
+        (filters.terrainLighting === 'yes' ? t.lighting : !t.lighting);
+      const matchesCovered = filters.terrainCovered === 'all' || 
+        (filters.terrainCovered === 'yes' ? t.covered : !t.covered);
+      return matchesSearch && matchesType && matchesCity && matchesLighting && matchesCovered;
+    });
+  }, [terrains, searchQuery, filters]);
 
   const filteredTournaments = useMemo(() => {
     return tournaments.filter(t => {
       const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         t.location.city.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      const matchesStatus = tournamentStatusFilter === 'all' || t.status === tournamentStatusFilter;
-      const matchesFormat = tournamentFormatFilter === 'all' || t.format === tournamentFormatFilter;
-      const matchesCadrage = tournamentCadrageFilter === 'all' || t.type === tournamentCadrageFilter;
-      
+      const matchesStatus = filters.tournamentStatus === 'all' || t.status === filters.tournamentStatus;
+      const matchesFormat = filters.tournamentFormat === 'all' || t.format === filters.tournamentFormat;
+      const matchesCadrage = filters.tournamentCadrage === 'all' || t.type === filters.tournamentCadrage;
       return matchesSearch && matchesStatus && matchesFormat && matchesCadrage;
     });
-  }, [tournaments, searchQuery, tournamentStatusFilter, tournamentFormatFilter, tournamentCadrageFilter]);
+  }, [tournaments, searchQuery, filters]);
 
-  const filteredTerrains = useMemo(() => {
-    return terrains.filter(t => {
-      const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.type.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      const matchesType = terrainTypeFilter === 'all' || t.type === terrainTypeFilter;
-      const matchesCity = terrainCityFilter === 'all' || t.city === terrainCityFilter;
-      const matchesLighting = terrainLightingFilter === 'all' || 
-        (terrainLightingFilter === 'yes' ? t.lighting : !t.lighting);
-      const matchesCovered = terrainCoveredFilter === 'all' || 
-        (terrainCoveredFilter === 'yes' ? t.covered : !t.covered);
-      
-      return matchesSearch && matchesType && matchesCity && matchesLighting && matchesCovered;
-    });
-  }, [terrains, searchQuery, terrainTypeFilter, terrainCityFilter, terrainLightingFilter, terrainCoveredFilter]);
+  const clearFilters = useCallback(() => {
+    if (activeTab === 'players') {
+      setFilters(f => ({ ...f, playerClub: 'all', playerCity: 'all', playerCountry: 'all', playerLevel: 'all', playerRole: 'all' }));
+    } else if (activeTab === 'clubs') {
+      setFilters(f => ({ ...f, clubCity: 'all', clubCountry: 'all' }));
+    } else if (activeTab === 'terrains') {
+      setFilters(f => ({ ...f, terrainType: 'all', terrainCity: 'all', terrainLighting: 'all', terrainCovered: 'all' }));
+    } else if (activeTab === 'tournaments') {
+      setFilters(f => ({ ...f, tournamentStatus: 'all', tournamentFormat: 'all', tournamentCadrage: 'all' }));
+    }
+  }, [activeTab]);
 
-  // Get terrain type config for display
   const getTerrainTypeConfig = (type: string) => {
     return config.terrainTypes.find(t => t.id === type) || config.terrainTypes[0];
   };
 
-  // Terrain type filter options
-  const terrainTypeFilters = [
-    { id: 'all' as const, label: 'Tous', icon: 'layers' as const },
-    ...config.terrainTypes.map(t => ({
-      id: t.id as TerrainType,
-      label: t.label,
-      icon: t.icon as keyof typeof MaterialIcons.glyphMap,
-    })),
-  ];
-
-  // Tournament status filter options
-  const tournamentStatusFilters: { id: TournamentStatus; label: string; icon: keyof typeof MaterialIcons.glyphMap }[] = [
-    { id: 'all', label: 'Tous', icon: 'layers' },
-    { id: 'À venir', label: 'À venir', icon: 'event' },
-    { id: 'En cours', label: 'En cours', icon: 'play-circle' },
-    { id: 'Terminé', label: 'Terminé', icon: 'check-circle' },
-  ];
-
-  const clearPlayerFilters = () => {
-    setPlayerClubFilter('all');
-    setPlayerCityFilter('all');
-    setPlayerCountryFilter('all');
-    setPlayerLevelFilter('all');
-    setPlayerRoleFilter('all');
-  };
-
-  const clearClubFilters = () => {
-    setClubCityFilter('all');
-    setClubCountryFilter('all');
-  };
-
-  const clearTerrainFilters = () => {
-    setTerrainTypeFilter('all');
-    setTerrainCityFilter('all');
-    setTerrainLightingFilter('all');
-    setTerrainCoveredFilter('all');
-  };
-
-  const clearTournamentFilters = () => {
-    setTournamentStatusFilter('all');
-    setTournamentFormatFilter('all');
-    setTournamentCadrageFilter('all');
-  };
-
-  const renderPlayer = ({ item }: { item: typeof players[0] }) => {
+  // Render functions
+  const renderPlayer = ({ item }: { item: Player }) => {
     const isSelf = selfPlayer && item.id === selfPlayer.id;
-    
     return (
       <Pressable
-        style={[styles.card, isSelf && styles.selfCard]}
+        style={[styles.itemCard, isSelf && styles.selfCard]}
         onPress={() => isSelf ? router.push('/player/me') : router.push(`/player/${item.id}`)}
       >
-        <View style={[styles.avatar, { backgroundColor: isSelf ? theme.primary : theme.primary }]}>
+        <View style={[styles.itemAvatar, isSelf && styles.selfAvatar]}>
           <Text style={styles.avatarText}>
             {item.name.split(' ').map(n => n[0]).join('')}
           </Text>
           {isSelf && (
-            <View style={styles.selfAvatarBadge}>
-              <MaterialIcons name="verified" size={16} color={theme.primary} />
+            <View style={styles.selfBadge}>
+              <MaterialIcons name="star" size={10} color="#FFF" />
             </View>
           )}
         </View>
-        <View style={styles.cardContent}>
-          <View style={styles.cardTitleRow}>
-            <Text style={[styles.cardTitle, isSelf && styles.selfCardTitle]}>{item.name}</Text>
+        <View style={styles.itemContent}>
+          <View style={styles.itemHeader}>
+            <Text style={[styles.itemTitle, isSelf && { color: theme.primary }]} numberOfLines={1}>
+              {item.name}
+            </Text>
             {isSelf && (
               <View style={styles.moiBadge}>
                 <Text style={styles.moiBadgeText}>MOI</Text>
               </View>
             )}
           </View>
-          <View style={styles.cardMeta}>
-            <MaterialIcons name="home" size={14} color={theme.textSecondary} />
-            <Text style={styles.cardMetaText}>{item.club || 'Sans club'}</Text>
+          <View style={styles.itemMeta}>
+            {item.club && (
+              <View style={styles.metaItem}>
+                <MaterialIcons name="home" size={12} color={theme.textMuted} />
+                <Text style={styles.metaText} numberOfLines={1}>{item.club}</Text>
+              </View>
+            )}
+            {item.location?.city && (
+              <View style={styles.metaItem}>
+                <MaterialIcons name="place" size={12} color={theme.textMuted} />
+                <Text style={styles.metaText}>{item.location.city}</Text>
+              </View>
+            )}
           </View>
-          {item.location?.city && (
-            <View style={styles.cardMeta}>
-              <MaterialIcons name="place" size={14} color={theme.textSecondary} />
-              <Text style={styles.cardMetaText}>{item.location.city}, {item.country || 'France'}</Text>
+          <View style={styles.itemTags}>
+            <View style={[styles.tag, { backgroundColor: theme.primary + '15' }]}>
+              <Text style={[styles.tagText, { color: theme.primary }]}>{item.role}</Text>
             </View>
-          )}
-          <View style={styles.cardBadges}>
-            <View style={[styles.badge, { backgroundColor: theme.primaryLight + '30' }]}>
-              <Text style={[styles.badgeText, { color: theme.primary }]}>{item.role}</Text>
+            <View style={[styles.tag, { backgroundColor: theme.success + '15' }]}>
+              <Text style={[styles.tagText, { color: theme.success }]}>{item.stats.winRate}%</Text>
             </View>
-            <View style={[styles.badge, { backgroundColor: theme.successLight }]}>
-              <Text style={[styles.badgeText, { color: theme.success }]}>{item.stats.winRate}% W</Text>
+            <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}>
+              <Text style={[styles.tagText, { color: theme.textSecondary }]}>{item.level}</Text>
             </View>
           </View>
         </View>
-        <MaterialIcons name="chevron-right" size={24} color={isSelf ? theme.primary : theme.textMuted} />
+        <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
       </Pressable>
     );
   };
 
-  const renderClub = ({ item }: { item: typeof clubs[0] }) => (
+  const renderClub = ({ item }: { item: Club }) => (
     <Pressable
-      style={styles.card}
+      style={styles.itemCard}
       onPress={() => router.push(`/club/${item.id}`)}
     >
-      <View style={[styles.avatar, { backgroundColor: theme.accent }]}>
+      <View style={[styles.itemAvatar, { backgroundColor: theme.accent }]}>
         <MaterialIcons name="home" size={24} color="#FFF" />
       </View>
-      <View style={styles.cardContent}>
-        <Text style={styles.cardTitle}>{item.name}</Text>
-        <View style={styles.cardMeta}>
-          <MaterialIcons name="place" size={14} color={theme.textSecondary} />
-          <Text style={styles.cardMetaText}>{item.city}, {item.country || 'France'}</Text>
-        </View>
-        {item.terrainName && (
-          <View style={styles.cardMeta}>
-            <MaterialIcons name="sports-soccer" size={14} color={theme.primary} />
-            <Text style={[styles.cardMetaText, { color: theme.primary }]}>{item.terrainName}</Text>
+      <View style={styles.itemContent}>
+        <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
+        <View style={styles.itemMeta}>
+          <View style={styles.metaItem}>
+            <MaterialIcons name="place" size={12} color={theme.textMuted} />
+            <Text style={styles.metaText}>{item.city}, {item.country || 'France'}</Text>
           </View>
-        )}
-        <View style={styles.cardBadges}>
-          <View style={[styles.badge, { backgroundColor: theme.backgroundSecondary }]}>
-            <Text style={[styles.badgeText, { color: theme.textSecondary }]}>
-              {item.membersCount} membres
-            </Text>
-          </View>
-          <View style={[styles.badge, { backgroundColor: theme.backgroundSecondary }]}>
-            <Text style={[styles.badgeText, { color: theme.textSecondary }]}>
-              Depuis {item.foundedYear}
-            </Text>
-          </View>
-        </View>
-      </View>
-      <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
-    </Pressable>
-  );
-
-  const renderTournament = ({ item }: { item: typeof tournaments[0] }) => {
-    const statusColors = {
-      'À venir': { bg: theme.primaryLight + '30', text: theme.primary },
-      'En cours': { bg: theme.warningLight, text: theme.warning },
-      'Terminé': { bg: theme.backgroundSecondary, text: theme.textSecondary },
-    };
-    const colors = statusColors[item.status];
-
-    return (
-      <Pressable
-        style={styles.card}
-        onPress={() => router.push(`/tournament/${item.id}`)}
-      >
-        <View style={[styles.avatar, { backgroundColor: theme.carreauColor }]}>
-          <MaterialIcons name="emoji-events" size={24} color="#FFF" />
-        </View>
-        <View style={styles.cardContent}>
-          <Text style={styles.cardTitle}>{item.name}</Text>
-          <View style={styles.cardMeta}>
-            <MaterialIcons name="event" size={14} color={theme.textSecondary} />
-            <Text style={styles.cardMetaText}>
-              {new Date(item.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
-            </Text>
-          </View>
-          {item.terrainName ? (
-            <View style={styles.cardMeta}>
-              <MaterialIcons name="sports-soccer" size={14} color={theme.textSecondary} />
-              <Text style={styles.cardMetaText}>{item.terrainName}</Text>
-            </View>
-          ) : (
-            <View style={styles.cardMeta}>
-              <MaterialIcons name="place" size={14} color={theme.textSecondary} />
-              <Text style={styles.cardMetaText}>{item.location.city}</Text>
+          {item.terrainName && (
+            <View style={styles.metaItem}>
+              <MaterialIcons name="sports-soccer" size={12} color={theme.success} />
+              <Text style={[styles.metaText, { color: theme.success }]}>{item.terrainName}</Text>
             </View>
           )}
-          <View style={styles.cardBadges}>
-            <View style={[styles.badge, { backgroundColor: colors.bg }]}>
-              <Text style={[styles.badgeText, { color: colors.text }]}>{item.status}</Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: theme.backgroundSecondary }]}>
-              <Text style={[styles.badgeText, { color: theme.textSecondary }]}>{item.format}</Text>
-            </View>
-          </View>
         </View>
-        <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
-      </Pressable>
-    );
-  };
+        <View style={styles.itemTags}>
+          <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}>
+            <MaterialIcons name="people" size={10} color={theme.textSecondary} />
+            <Text style={[styles.tagText, { color: theme.textSecondary }]}>{item.membersCount}</Text>
+          </View>
+          {item.foundedYear && (
+            <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}>
+              <Text style={[styles.tagText, { color: theme.textSecondary }]}>Depuis {item.foundedYear}</Text>
+            </View>
+          )}
+        </View>
+      </View>
+      <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
+    </Pressable>
+  );
 
   const renderTerrain = ({ item }: { item: Terrain }) => {
     const typeConfig = getTerrainTypeConfig(item.type);
     const isFavorite = favoriteTerrainIds.includes(item.id);
-    const typeColors: Record<string, { bg: string; text: string }> = {
-      'Stabilisé': { bg: theme.primary + '20', text: theme.primary },
-      'Graviers': { bg: theme.warning + '20', text: theme.warning },
-      'Sable': { bg: '#F59E0B20', text: '#D97706' },
-      'Cailloux': { bg: theme.textSecondary + '20', text: theme.textSecondary },
-      'Terre battue': { bg: theme.success + '20', text: theme.success },
-    };
-    const colors = typeColors[item.type] || typeColors['Stabilisé'];
-
     return (
       <Pressable
-        style={[styles.card, isFavorite && styles.favoriteCard]}
+        style={[styles.itemCard, isFavorite && styles.favoriteCard]}
         onPress={() => router.push(`/terrain/${item.id}`)}
       >
-        <View style={[styles.avatar, { backgroundColor: theme.accent }]}>
+        <View style={[styles.itemAvatar, { backgroundColor: theme.success }]}>
           <MaterialIcons name={typeConfig.icon as any} size={24} color="#FFF" />
           {isFavorite && (
-            <View style={styles.favoriteAvatarBadge}>
-              <MaterialIcons name="favorite" size={12} color={theme.error} />
+            <View style={styles.favoriteBadge}>
+              <MaterialIcons name="favorite" size={10} color={theme.error} />
             </View>
           )}
         </View>
-        <View style={styles.cardContent}>
-          <Text style={styles.cardTitle}>{item.name}</Text>
-          <View style={styles.cardMeta}>
-            <MaterialIcons name="place" size={14} color={theme.textSecondary} />
-            <Text style={styles.cardMetaText}>{item.city}</Text>
+        <View style={styles.itemContent}>
+          <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
+          <View style={styles.itemMeta}>
+            <View style={styles.metaItem}>
+              <MaterialIcons name="place" size={12} color={theme.textMuted} />
+              <Text style={styles.metaText}>{item.city}</Text>
+            </View>
+            {item.clubName && (
+              <View style={styles.metaItem}>
+                <MaterialIcons name="home" size={12} color={theme.textMuted} />
+                <Text style={styles.metaText}>{item.clubName}</Text>
+              </View>
+            )}
           </View>
-          {item.clubName && (
-            <View style={styles.cardMeta}>
-              <MaterialIcons name="home" size={14} color={theme.textSecondary} />
-              <Text style={styles.cardMetaText}>{item.clubName}</Text>
+          <View style={styles.itemTags}>
+            <View style={[styles.tag, { backgroundColor: theme.success + '15' }]}>
+              <Text style={[styles.tagText, { color: theme.success }]}>{item.type}</Text>
             </View>
-          )}
-          <View style={styles.cardBadges}>
-            <View style={[styles.badge, { backgroundColor: colors.bg }]}>
-              <Text style={[styles.badgeText, { color: colors.text }]}>{item.type}</Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: theme.backgroundSecondary }]}>
-              <Text style={[styles.badgeText, { color: theme.textSecondary }]}>
+            <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}>
+              <Text style={[styles.tagText, { color: theme.textSecondary }]}>
                 {item.courtsCount} terrain{item.courtsCount > 1 ? 's' : ''}
               </Text>
             </View>
             {item.lighting && (
-              <View style={[styles.badge, { backgroundColor: theme.warningLight }]}>
-                <MaterialIcons name="lightbulb" size={12} color={theme.warning} />
+              <View style={[styles.tag, { backgroundColor: theme.warning + '15' }]}>
+                <MaterialIcons name="lightbulb" size={10} color={theme.warning} />
               </View>
             )}
             {item.covered && (
-              <View style={[styles.badge, { backgroundColor: theme.primaryLight + '30' }]}>
-                <MaterialIcons name="roofing" size={12} color={theme.primary} />
+              <View style={[styles.tag, { backgroundColor: theme.primary + '15' }]}>
+                <MaterialIcons name="roofing" size={10} color={theme.primary} />
               </View>
             )}
           </View>
         </View>
-        <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
+        <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
       </Pressable>
     );
   };
 
-  // Filter Modal for Players
-  const PlayerFiltersModal = () => (
-    <Modal
-      visible={showPlayerFilters}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={() => setShowPlayerFilters(false)}
-    >
-      <SafeAreaView style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>Filtrer les joueurs</Text>
-          <Pressable onPress={() => setShowPlayerFilters(false)}>
-            <MaterialIcons name="close" size={24} color={theme.textPrimary} />
-          </Pressable>
+  const renderTournament = ({ item }: { item: Tournament }) => {
+    const statusConfig: Record<string, { bg: string; color: string }> = {
+      'À venir': { bg: theme.primary + '15', color: theme.primary },
+      'En cours': { bg: theme.warning + '15', color: theme.warning },
+      'Terminé': { bg: theme.backgroundSecondary, color: theme.textSecondary },
+    };
+    const status = statusConfig[item.status] || statusConfig['Terminé'];
+    
+    return (
+      <Pressable
+        style={styles.itemCard}
+        onPress={() => router.push(`/tournament/${item.id}`)}
+      >
+        <View style={[styles.itemAvatar, { backgroundColor: theme.carreauColor }]}>
+          <MaterialIcons name="emoji-events" size={24} color="#FFF" />
         </View>
-        
-        <ScrollView style={styles.modalContent}>
-          {/* Club Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>CLUB</Text>
-            <View style={styles.filterOptions}>
-              {uniquePlayerClubs.map(club => (
-                <Pressable
-                  key={club}
-                  style={[
-                    styles.filterOption,
-                    playerClubFilter === club && styles.filterOptionActive
-                  ]}
-                  onPress={() => {
-                    setPlayerClubFilter(club);
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    playerClubFilter === club && styles.filterOptionTextActive
-                  ]}>
-                    {club === 'all' ? 'Tous les clubs' : club}
-                  </Text>
-                </Pressable>
-              ))}
+        <View style={styles.itemContent}>
+          <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
+          <View style={styles.itemMeta}>
+            <View style={styles.metaItem}>
+              <MaterialIcons name="event" size={12} color={theme.textMuted} />
+              <Text style={styles.metaText}>
+                {new Date(item.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+              </Text>
+            </View>
+            <View style={styles.metaItem}>
+              <MaterialIcons name="place" size={12} color={theme.textMuted} />
+              <Text style={styles.metaText}>{item.terrainName || item.location.city}</Text>
             </View>
           </View>
-
-          {/* City Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>VILLE</Text>
-            <View style={styles.filterOptions}>
-              {uniquePlayerCities.map(city => (
-                <Pressable
-                  key={city}
-                  style={[
-                    styles.filterOption,
-                    playerCityFilter === city && styles.filterOptionActive
-                  ]}
-                  onPress={() => {
-                    setPlayerCityFilter(city);
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    playerCityFilter === city && styles.filterOptionTextActive
-                  ]}>
-                    {city === 'all' ? 'Toutes les villes' : city}
-                  </Text>
-                </Pressable>
-              ))}
+          <View style={styles.itemTags}>
+            <View style={[styles.tag, { backgroundColor: status.bg }]}>
+              <Text style={[styles.tagText, { color: status.color }]}>{item.status}</Text>
+            </View>
+            <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}>
+              <Text style={[styles.tagText, { color: theme.textSecondary }]}>{item.format}</Text>
+            </View>
+            <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}>
+              <Text style={[styles.tagText, { color: theme.textSecondary }]}>{item.type}</Text>
             </View>
           </View>
-
-          {/* Country Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>PAYS</Text>
-            <View style={styles.filterOptions}>
-              {uniquePlayerCountries.map(country => (
-                <Pressable
-                  key={country}
-                  style={[
-                    styles.filterOption,
-                    playerCountryFilter === country && styles.filterOptionActive
-                  ]}
-                  onPress={() => {
-                    setPlayerCountryFilter(country);
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    playerCountryFilter === country && styles.filterOptionTextActive
-                  ]}>
-                    {country === 'all' ? 'Tous les pays' : country}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-
-          {/* Level Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>NIVEAU</Text>
-            <View style={styles.filterOptions}>
-              {uniquePlayerLevels.map(level => (
-                <Pressable
-                  key={level}
-                  style={[
-                    styles.filterOption,
-                    playerLevelFilter === level && styles.filterOptionActive
-                  ]}
-                  onPress={() => {
-                    setPlayerLevelFilter(level);
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    playerLevelFilter === level && styles.filterOptionTextActive
-                  ]}>
-                    {level === 'all' ? 'Tous les niveaux' : level}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-
-          {/* Role Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>RÔLE</Text>
-            <View style={styles.filterOptions}>
-              {uniquePlayerRoles.map(role => (
-                <Pressable
-                  key={role}
-                  style={[
-                    styles.filterOption,
-                    playerRoleFilter === role && styles.filterOptionActive
-                  ]}
-                  onPress={() => {
-                    setPlayerRoleFilter(role);
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  <MaterialIcons 
-                    name={role === 'Tireur' ? 'gps-fixed' : role === 'Pointeur' ? 'radio-button-on' : role === 'Milieu' ? 'swap-horiz' : 'people'} 
-                    size={16} 
-                    color={playerRoleFilter === role ? theme.primary : theme.textSecondary} 
-                    style={{ marginRight: 6 }} 
-                  />
-                  <Text style={[
-                    styles.filterOptionText,
-                    playerRoleFilter === role && styles.filterOptionTextActive
-                  ]}>
-                    {role === 'all' ? 'Tous les rôles' : role}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        </ScrollView>
-
-        <View style={styles.modalFooter}>
-          <Pressable style={styles.clearButton} onPress={clearPlayerFilters}>
-            <Text style={styles.clearButtonText}>Effacer les filtres</Text>
-          </Pressable>
-          <Pressable 
-            style={styles.applyButton} 
-            onPress={() => setShowPlayerFilters(false)}
-          >
-            <Text style={styles.applyButtonText}>Appliquer</Text>
-          </Pressable>
         </View>
-      </SafeAreaView>
-    </Modal>
-  );
+        <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
+      </Pressable>
+    );
+  };
 
-  // Filter Modal for Clubs
-  const ClubFiltersModal = () => (
-    <Modal
-      visible={showClubFilters}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={() => setShowClubFilters(false)}
-    >
-      <SafeAreaView style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>Filtrer les clubs</Text>
-          <Pressable onPress={() => setShowClubFilters(false)}>
-            <MaterialIcons name="close" size={24} color={theme.textPrimary} />
-          </Pressable>
-        </View>
-        
-        <ScrollView style={styles.modalContent}>
-          {/* City Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>VILLE</Text>
-            <View style={styles.filterOptions}>
-              {uniqueClubCities.map(city => (
-                <Pressable
-                  key={city}
-                  style={[
-                    styles.filterOption,
-                    clubCityFilter === city && styles.filterOptionActive
-                  ]}
-                  onPress={() => {
-                    setClubCityFilter(city);
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    clubCityFilter === city && styles.filterOptionTextActive
-                  ]}>
-                    {city === 'all' ? 'Toutes les villes' : city}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
+  // Get current filtered data
+  const getCurrentData = () => {
+    switch (activeTab) {
+      case 'players': return filteredPlayers;
+      case 'clubs': return filteredClubs;
+      case 'terrains': return filteredTerrains;
+      case 'tournaments': return filteredTournaments;
+    }
+  };
 
-          {/* Country Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>PAYS</Text>
-            <View style={styles.filterOptions}>
-              {uniqueClubCountries.map(country => (
-                <Pressable
-                  key={country}
-                  style={[
-                    styles.filterOption,
-                    clubCountryFilter === country && styles.filterOptionActive
-                  ]}
-                  onPress={() => {
-                    setClubCountryFilter(country);
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    clubCountryFilter === country && styles.filterOptionTextActive
-                  ]}>
-                    {country === 'all' ? 'Tous les pays' : country}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        </ScrollView>
+  const getCurrentRenderItem = () => {
+    switch (activeTab) {
+      case 'players': return renderPlayer;
+      case 'clubs': return renderClub;
+      case 'terrains': return renderTerrain;
+      case 'tournaments': return renderTournament;
+    }
+  };
 
-        <View style={styles.modalFooter}>
-          <Pressable style={styles.clearButton} onPress={clearClubFilters}>
-            <Text style={styles.clearButtonText}>Effacer les filtres</Text>
-          </Pressable>
-          <Pressable 
-            style={styles.applyButton} 
-            onPress={() => setShowClubFilters(false)}
-          >
-            <Text style={styles.applyButtonText}>Appliquer</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    </Modal>
-  );
+  // Filter Modal Content
+  const renderFilterContent = () => {
+    switch (activeTab) {
+      case 'players':
+        return (
+          <>
+            <FilterSection
+              title="Rôle"
+              options={uniqueValues.playerRoles}
+              value={filters.playerRole}
+              onChange={(v) => setFilters(f => ({ ...f, playerRole: v }))}
+              icons={{ 'Pointeur': 'radio-button-on', 'Tireur': 'gps-fixed', 'Milieu': 'swap-horiz' }}
+            />
+            <FilterSection
+              title="Niveau"
+              options={uniqueValues.playerLevels}
+              value={filters.playerLevel}
+              onChange={(v) => setFilters(f => ({ ...f, playerLevel: v }))}
+            />
+            <FilterSection
+              title="Club"
+              options={uniqueValues.playerClubs}
+              value={filters.playerClub}
+              onChange={(v) => setFilters(f => ({ ...f, playerClub: v }))}
+            />
+            <FilterSection
+              title="Ville"
+              options={uniqueValues.playerCities}
+              value={filters.playerCity}
+              onChange={(v) => setFilters(f => ({ ...f, playerCity: v }))}
+            />
+            <FilterSection
+              title="Pays"
+              options={uniqueValues.playerCountries}
+              value={filters.playerCountry}
+              onChange={(v) => setFilters(f => ({ ...f, playerCountry: v }))}
+            />
+          </>
+        );
+      case 'clubs':
+        return (
+          <>
+            <FilterSection
+              title="Ville"
+              options={uniqueValues.clubCities}
+              value={filters.clubCity}
+              onChange={(v) => setFilters(f => ({ ...f, clubCity: v }))}
+            />
+            <FilterSection
+              title="Pays"
+              options={uniqueValues.clubCountries}
+              value={filters.clubCountry}
+              onChange={(v) => setFilters(f => ({ ...f, clubCountry: v }))}
+            />
+          </>
+        );
+      case 'terrains':
+        return (
+          <>
+            <FilterSection
+              title="Type de surface"
+              options={['all', ...config.terrainTypes.map(t => t.id)]}
+              labels={{ all: 'Tous', ...Object.fromEntries(config.terrainTypes.map(t => [t.id, t.label])) }}
+              value={filters.terrainType}
+              onChange={(v) => setFilters(f => ({ ...f, terrainType: v as TerrainType | 'all' }))}
+              icons={Object.fromEntries(config.terrainTypes.map(t => [t.id, t.icon]))}
+            />
+            <FilterSection
+              title="Ville"
+              options={uniqueValues.terrainCities}
+              value={filters.terrainCity}
+              onChange={(v) => setFilters(f => ({ ...f, terrainCity: v }))}
+            />
+            <FilterSection
+              title="Éclairage"
+              options={['all', 'yes', 'no']}
+              labels={{ all: 'Tous', yes: 'Avec éclairage', no: 'Sans éclairage' }}
+              value={filters.terrainLighting}
+              onChange={(v) => setFilters(f => ({ ...f, terrainLighting: v as 'all' | 'yes' | 'no' }))}
+              icons={{ yes: 'lightbulb', no: 'lightbulb-outline' }}
+            />
+            <FilterSection
+              title="Couverture"
+              options={['all', 'yes', 'no']}
+              labels={{ all: 'Tous', yes: 'Couvert', no: 'Extérieur' }}
+              value={filters.terrainCovered}
+              onChange={(v) => setFilters(f => ({ ...f, terrainCovered: v as 'all' | 'yes' | 'no' }))}
+              icons={{ yes: 'roofing', no: 'wb-sunny' }}
+            />
+          </>
+        );
+      case 'tournaments':
+        return (
+          <>
+            <FilterSection
+              title="Statut"
+              options={['all', 'À venir', 'En cours', 'Terminé']}
+              labels={{ all: 'Tous' }}
+              value={filters.tournamentStatus}
+              onChange={(v) => setFilters(f => ({ ...f, tournamentStatus: v as TournamentStatus }))}
+              icons={{ 'À venir': 'event', 'En cours': 'play-circle', 'Terminé': 'check-circle' }}
+            />
+            <FilterSection
+              title="Format"
+              options={uniqueValues.tournamentFormats}
+              value={filters.tournamentFormat}
+              onChange={(v) => setFilters(f => ({ ...f, tournamentFormat: v }))}
+            />
+            <FilterSection
+              title="Cadrage"
+              options={uniqueValues.tournamentCadrages}
+              value={filters.tournamentCadrage}
+              onChange={(v) => setFilters(f => ({ ...f, tournamentCadrage: v }))}
+            />
+          </>
+        );
+    }
+  };
 
-  // Filter Modal for Terrains
-  const TerrainFiltersModal = () => (
-    <Modal
-      visible={showTerrainFilters}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={() => setShowTerrainFilters(false)}
-    >
-      <SafeAreaView style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>Filtrer les terrains</Text>
-          <Pressable onPress={() => setShowTerrainFilters(false)}>
-            <MaterialIcons name="close" size={24} color={theme.textPrimary} />
-          </Pressable>
-        </View>
-        
-        <ScrollView style={styles.modalContent}>
-          {/* Type Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>TYPE DE SURFACE</Text>
-            <View style={styles.filterOptions}>
-              <Pressable
-                style={[
-                  styles.filterOption,
-                  terrainTypeFilter === 'all' && styles.filterOptionActive
-                ]}
-                onPress={() => {
-                  setTerrainTypeFilter('all');
-                  Haptics.selectionAsync();
-                }}
-              >
-                <Text style={[
-                  styles.filterOptionText,
-                  terrainTypeFilter === 'all' && styles.filterOptionTextActive
-                ]}>
-                  Tous les types
-                </Text>
-              </Pressable>
-              {config.terrainTypes.map(type => (
-                <Pressable
-                  key={type.id}
-                  style={[
-                    styles.filterOption,
-                    terrainTypeFilter === type.id && styles.filterOptionActive
-                  ]}
-                  onPress={() => {
-                    setTerrainTypeFilter(type.id as TerrainType);
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  <MaterialIcons name={type.icon as any} size={16} color={terrainTypeFilter === type.id ? theme.primary : theme.textSecondary} style={{ marginRight: 6 }} />
-                  <Text style={[
-                    styles.filterOptionText,
-                    terrainTypeFilter === type.id && styles.filterOptionTextActive
-                  ]}>
-                    {type.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-
-          {/* City Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>VILLE</Text>
-            <View style={styles.filterOptions}>
-              {uniqueTerrainCities.map(city => (
-                <Pressable
-                  key={city}
-                  style={[
-                    styles.filterOption,
-                    terrainCityFilter === city && styles.filterOptionActive
-                  ]}
-                  onPress={() => {
-                    setTerrainCityFilter(city);
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    terrainCityFilter === city && styles.filterOptionTextActive
-                  ]}>
-                    {city === 'all' ? 'Toutes les villes' : city}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-
-          {/* Lighting Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>ÉCLAIRAGE</Text>
-            <View style={styles.filterOptions}>
-              {[{ id: 'all', label: 'Tous' }, { id: 'yes', label: 'Avec éclairage' }, { id: 'no', label: 'Sans éclairage' }].map(option => (
-                <Pressable
-                  key={option.id}
-                  style={[
-                    styles.filterOption,
-                    terrainLightingFilter === option.id && styles.filterOptionActive
-                  ]}
-                  onPress={() => {
-                    setTerrainLightingFilter(option.id as 'all' | 'yes' | 'no');
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  {option.id !== 'all' && (
-                    <MaterialIcons name="lightbulb" size={16} color={terrainLightingFilter === option.id ? theme.primary : theme.textSecondary} style={{ marginRight: 6 }} />
-                  )}
-                  <Text style={[
-                    styles.filterOptionText,
-                    terrainLightingFilter === option.id && styles.filterOptionTextActive
-                  ]}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-
-          {/* Covered Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>COUVERTURE</Text>
-            <View style={styles.filterOptions}>
-              {[{ id: 'all', label: 'Tous' }, { id: 'yes', label: 'Couvert' }, { id: 'no', label: 'Extérieur' }].map(option => (
-                <Pressable
-                  key={option.id}
-                  style={[
-                    styles.filterOption,
-                    terrainCoveredFilter === option.id && styles.filterOptionActive
-                  ]}
-                  onPress={() => {
-                    setTerrainCoveredFilter(option.id as 'all' | 'yes' | 'no');
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  {option.id !== 'all' && (
-                    <MaterialIcons name="roofing" size={16} color={terrainCoveredFilter === option.id ? theme.primary : theme.textSecondary} style={{ marginRight: 6 }} />
-                  )}
-                  <Text style={[
-                    styles.filterOptionText,
-                    terrainCoveredFilter === option.id && styles.filterOptionTextActive
-                  ]}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        </ScrollView>
-
-        <View style={styles.modalFooter}>
-          <Pressable style={styles.clearButton} onPress={clearTerrainFilters}>
-            <Text style={styles.clearButtonText}>Effacer les filtres</Text>
-          </Pressable>
-          <Pressable 
-            style={styles.applyButton} 
-            onPress={() => setShowTerrainFilters(false)}
-          >
-            <Text style={styles.applyButtonText}>Appliquer</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    </Modal>
-  );
-
-  // Filter Modal for Tournaments
-  const TournamentFiltersModal = () => (
-    <Modal
-      visible={showTournamentFilters}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={() => setShowTournamentFilters(false)}
-    >
-      <SafeAreaView style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>Filtrer les tournois</Text>
-          <Pressable onPress={() => setShowTournamentFilters(false)}>
-            <MaterialIcons name="close" size={24} color={theme.textPrimary} />
-          </Pressable>
-        </View>
-        
-        <ScrollView style={styles.modalContent}>
-          {/* Status Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>STATUT</Text>
-            <View style={styles.filterOptions}>
-              {[{ id: 'all', label: 'Tous les statuts', icon: 'layers' }, { id: 'À venir', label: 'À venir', icon: 'event' }, { id: 'En cours', label: 'En cours', icon: 'play-circle' }, { id: 'Terminé', label: 'Terminé', icon: 'check-circle' }].map(status => (
-                <Pressable
-                  key={status.id}
-                  style={[
-                    styles.filterOption,
-                    tournamentStatusFilter === status.id && styles.filterOptionActive
-                  ]}
-                  onPress={() => {
-                    setTournamentStatusFilter(status.id as TournamentStatus);
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  <MaterialIcons name={status.icon as any} size={16} color={tournamentStatusFilter === status.id ? theme.primary : theme.textSecondary} style={{ marginRight: 6 }} />
-                  <Text style={[
-                    styles.filterOptionText,
-                    tournamentStatusFilter === status.id && styles.filterOptionTextActive
-                  ]}>
-                    {status.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-
-          {/* Format Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>FORMAT</Text>
-            <View style={styles.filterOptions}>
-              {uniqueTournamentFormats.map(format => (
-                <Pressable
-                  key={format}
-                  style={[
-                    styles.filterOption,
-                    tournamentFormatFilter === format && styles.filterOptionActive
-                  ]}
-                  onPress={() => {
-                    setTournamentFormatFilter(format);
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    tournamentFormatFilter === format && styles.filterOptionTextActive
-                  ]}>
-                    {format === 'all' ? 'Tous les formats' : format}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-
-          {/* Cadrage Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>CADRAGE</Text>
-            <View style={styles.filterOptions}>
-              {uniqueTournamentCadrages.map(cadrage => (
-                <Pressable
-                  key={cadrage}
-                  style={[
-                    styles.filterOption,
-                    tournamentCadrageFilter === cadrage && styles.filterOptionActive
-                  ]}
-                  onPress={() => {
-                    setTournamentCadrageFilter(cadrage);
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    tournamentCadrageFilter === cadrage && styles.filterOptionTextActive
-                  ]}>
-                    {cadrage === 'all' ? 'Tous les cadrages' : cadrage}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        </ScrollView>
-
-        <View style={styles.modalFooter}>
-          <Pressable style={styles.clearButton} onPress={clearTournamentFilters}>
-            <Text style={styles.clearButtonText}>Effacer les filtres</Text>
-          </Pressable>
-          <Pressable 
-            style={styles.applyButton} 
-            onPress={() => setShowTournamentFilters(false)}
-          >
-            <Text style={styles.applyButtonText}>Appliquer</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    </Modal>
-  );
+  const tabConfig = TABS.find(t => t.id === activeTab);
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
-      <PlayerFiltersModal />
-      <ClubFiltersModal />
-      <TerrainFiltersModal />
-      <TournamentFiltersModal />
-
       {/* Header */}
-      <Animated.View 
-        entering={FadeInDown.duration(400)}
-        style={styles.header}
-      >
-        <Text style={styles.title}>Annuaire</Text>
-      </Animated.View>
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <Text style={styles.title}>Annuaire</Text>
+          <View style={styles.headerStats}>
+            <Text style={styles.headerStatsText}>
+              {counts.players + counts.clubs + counts.terrains + counts.tournaments} éléments
+            </Text>
+          </View>
+        </View>
 
-      {/* Search */}
-      <Animated.View 
-        entering={FadeInDown.duration(400).delay(100)}
-        style={styles.searchContainer}
-      >
-        <MaterialIcons name="search" size={20} color={theme.textSecondary} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Rechercher..."
-          placeholderTextColor={theme.textMuted}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        {searchQuery.length > 0 && (
-          <Pressable onPress={() => setSearchQuery('')}>
-            <MaterialIcons name="close" size={20} color={theme.textSecondary} />
+        {/* Search Bar */}
+        <View style={styles.searchRow}>
+          <View style={styles.searchBar}>
+            <MaterialIcons name="search" size={20} color={theme.textMuted} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder={`Rechercher un ${activeTab === 'players' ? 'joueur' : activeTab === 'clubs' ? 'club' : activeTab === 'terrains' ? 'terrain' : 'tournoi'}...`}
+              placeholderTextColor={theme.textMuted}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
+                <MaterialIcons name="close" size={18} color={theme.textMuted} />
+              </Pressable>
+            )}
+          </View>
+          <Pressable
+            style={[styles.filterButton, currentFilterCount > 0 && styles.filterButtonActive]}
+            onPress={() => {
+              Haptics.selectionAsync();
+              setShowFilters(true);
+            }}
+          >
+            <MaterialIcons 
+              name="tune" 
+              size={20} 
+              color={currentFilterCount > 0 ? '#FFF' : theme.textSecondary} 
+            />
+            {currentFilterCount > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{currentFilterCount}</Text>
+              </View>
+            )}
           </Pressable>
+        </View>
+
+        {/* Tabs */}
+        <View style={styles.tabsWrapper}>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tabsContainer}
+          >
+            {TABS.map(tab => {
+              const isActive = activeTab === tab.id;
+              return (
+                <Pressable
+                  key={tab.id}
+                  style={[styles.tab, isActive && { backgroundColor: tab.color }]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setActiveTab(tab.id);
+                    setSearchQuery('');
+                  }}
+                >
+                  <MaterialIcons 
+                    name={tab.icon as any} 
+                    size={18} 
+                    color={isActive ? '#FFF' : theme.textSecondary} 
+                  />
+                  <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
+                    {tab.label}
+                  </Text>
+                  <View style={[styles.tabCount, isActive && styles.tabCountActive]}>
+                    <Text style={[styles.tabCountText, isActive && styles.tabCountTextActive]}>
+                      {counts[tab.id]}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </View>
+
+      {/* Active Filters Display */}
+      {currentFilterCount > 0 && (
+        <Animated.View entering={FadeIn.duration(200)} style={styles.activeFiltersContainer}>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.activeFiltersScroll}
+          >
+            <Pressable style={styles.clearAllButton} onPress={clearFilters}>
+              <MaterialIcons name="clear-all" size={16} color={theme.error} />
+              <Text style={styles.clearAllText}>Effacer</Text>
+            </Pressable>
+            {activeTab === 'players' && (
+              <>
+                {filters.playerRole !== 'all' && <ActiveFilterChip label={filters.playerRole} onRemove={() => setFilters(f => ({ ...f, playerRole: 'all' }))} />}
+                {filters.playerLevel !== 'all' && <ActiveFilterChip label={filters.playerLevel} onRemove={() => setFilters(f => ({ ...f, playerLevel: 'all' }))} />}
+                {filters.playerClub !== 'all' && <ActiveFilterChip label={filters.playerClub} onRemove={() => setFilters(f => ({ ...f, playerClub: 'all' }))} />}
+                {filters.playerCity !== 'all' && <ActiveFilterChip label={filters.playerCity} onRemove={() => setFilters(f => ({ ...f, playerCity: 'all' }))} />}
+                {filters.playerCountry !== 'all' && <ActiveFilterChip label={filters.playerCountry} onRemove={() => setFilters(f => ({ ...f, playerCountry: 'all' }))} />}
+              </>
+            )}
+            {activeTab === 'clubs' && (
+              <>
+                {filters.clubCity !== 'all' && <ActiveFilterChip label={filters.clubCity} onRemove={() => setFilters(f => ({ ...f, clubCity: 'all' }))} />}
+                {filters.clubCountry !== 'all' && <ActiveFilterChip label={filters.clubCountry} onRemove={() => setFilters(f => ({ ...f, clubCountry: 'all' }))} />}
+              </>
+            )}
+            {activeTab === 'terrains' && (
+              <>
+                {filters.terrainType !== 'all' && <ActiveFilterChip label={config.terrainTypes.find(t => t.id === filters.terrainType)?.label || filters.terrainType} onRemove={() => setFilters(f => ({ ...f, terrainType: 'all' }))} />}
+                {filters.terrainCity !== 'all' && <ActiveFilterChip label={filters.terrainCity} onRemove={() => setFilters(f => ({ ...f, terrainCity: 'all' }))} />}
+                {filters.terrainLighting !== 'all' && <ActiveFilterChip label={filters.terrainLighting === 'yes' ? 'Éclairé' : 'Non éclairé'} onRemove={() => setFilters(f => ({ ...f, terrainLighting: 'all' }))} icon="lightbulb" />}
+                {filters.terrainCovered !== 'all' && <ActiveFilterChip label={filters.terrainCovered === 'yes' ? 'Couvert' : 'Extérieur'} onRemove={() => setFilters(f => ({ ...f, terrainCovered: 'all' }))} icon="roofing" />}
+              </>
+            )}
+            {activeTab === 'tournaments' && (
+              <>
+                {filters.tournamentStatus !== 'all' && <ActiveFilterChip label={filters.tournamentStatus} onRemove={() => setFilters(f => ({ ...f, tournamentStatus: 'all' }))} />}
+                {filters.tournamentFormat !== 'all' && <ActiveFilterChip label={filters.tournamentFormat} onRemove={() => setFilters(f => ({ ...f, tournamentFormat: 'all' }))} />}
+                {filters.tournamentCadrage !== 'all' && <ActiveFilterChip label={filters.tournamentCadrage} onRemove={() => setFilters(f => ({ ...f, tournamentCadrage: 'all' }))} />}
+              </>
+            )}
+          </ScrollView>
+        </Animated.View>
+      )}
+
+      {/* Results Count */}
+      <View style={styles.resultsHeader}>
+        <Text style={styles.resultsCount}>
+          {getCurrentData().length} {activeTab === 'players' ? 'joueur' : activeTab === 'clubs' ? 'club' : activeTab === 'terrains' ? 'terrain' : 'tournoi'}{getCurrentData().length !== 1 ? 's' : ''}
+        </Text>
+        {searchQuery && (
+          <Text style={styles.searchingFor}>pour "{searchQuery}"</Text>
         )}
-      </Animated.View>
-
-      {/* Tabs */}
-      <Animated.View 
-        entering={FadeInDown.duration(400).delay(200)}
-        style={styles.tabsContainer}
-      >
-        {tabs.map(tab => (
-          <Pressable
-            key={tab.id}
-            style={[
-              styles.tab,
-              activeTab === tab.id && styles.tabActive
-            ]}
-            onPress={() => {
-              setActiveTab(tab.id);
-              Haptics.selectionAsync();
-            }}
-          >
-            <MaterialIcons 
-              name={tab.icon} 
-              size={20} 
-              color={activeTab === tab.id ? '#FFF' : theme.textSecondary} 
-            />
-            <Text style={[
-              styles.tabText,
-              activeTab === tab.id && styles.tabTextActive
-            ]}>
-              {tab.label}
-            </Text>
-            <View style={[
-              styles.tabCount,
-              activeTab === tab.id && styles.tabCountActive
-            ]}>
-              <Text style={[
-                styles.tabCountText,
-                activeTab === tab.id && styles.tabCountTextActive
-              ]}>
-                {tab.count}
-              </Text>
-            </View>
-          </Pressable>
-        ))}
-      </Animated.View>
-
-      {/* Player Filters Button */}
-      {activeTab === 'players' && (
-        <Animated.View 
-          entering={FadeInDown.duration(400).delay(250)}
-          style={styles.filterButtonContainer}
-        >
-          <Pressable
-            style={[
-              styles.filterButton,
-              activePlayerFilterCount > 0 && styles.filterButtonActive
-            ]}
-            onPress={() => {
-              setShowPlayerFilters(true);
-              Haptics.selectionAsync();
-            }}
-          >
-            <MaterialIcons 
-              name="filter-list" 
-              size={20} 
-              color={activePlayerFilterCount > 0 ? '#FFF' : theme.textSecondary} 
-            />
-            <Text style={[
-              styles.filterButtonText,
-              activePlayerFilterCount > 0 && styles.filterButtonTextActive
-            ]}>
-              Filtres
-            </Text>
-            {activePlayerFilterCount > 0 && (
-              <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>{activePlayerFilterCount}</Text>
-              </View>
-            )}
-          </Pressable>
-          
-          {/* Quick filter chips */}
-          {activePlayerFilterCount > 0 && (
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.activeFiltersScroll}
-            >
-              {playerClubFilter !== 'all' && (
-                <Pressable 
-                  style={styles.activeFilterChip}
-                  onPress={() => setPlayerClubFilter('all')}
-                >
-                  <Text style={styles.activeFilterText}>{playerClubFilter}</Text>
-                  <MaterialIcons name="close" size={14} color={theme.primary} />
-                </Pressable>
-              )}
-              {playerCityFilter !== 'all' && (
-                <Pressable 
-                  style={styles.activeFilterChip}
-                  onPress={() => setPlayerCityFilter('all')}
-                >
-                  <Text style={styles.activeFilterText}>{playerCityFilter}</Text>
-                  <MaterialIcons name="close" size={14} color={theme.primary} />
-                </Pressable>
-              )}
-              {playerCountryFilter !== 'all' && (
-                <Pressable 
-                  style={styles.activeFilterChip}
-                  onPress={() => setPlayerCountryFilter('all')}
-                >
-                  <Text style={styles.activeFilterText}>{playerCountryFilter}</Text>
-                  <MaterialIcons name="close" size={14} color={theme.primary} />
-                </Pressable>
-              )}
-              {playerLevelFilter !== 'all' && (
-                <Pressable 
-                  style={styles.activeFilterChip}
-                  onPress={() => setPlayerLevelFilter('all')}
-                >
-                  <Text style={styles.activeFilterText}>{playerLevelFilter}</Text>
-                  <MaterialIcons name="close" size={14} color={theme.primary} />
-                </Pressable>
-              )}
-              {playerRoleFilter !== 'all' && (
-                <Pressable 
-                  style={styles.activeFilterChip}
-                  onPress={() => setPlayerRoleFilter('all')}
-                >
-                  <MaterialIcons name={playerRoleFilter === 'Tireur' ? 'gps-fixed' : playerRoleFilter === 'Pointeur' ? 'radio-button-on' : 'swap-horiz'} size={12} color={theme.primary} />
-                  <Text style={styles.activeFilterText}>{playerRoleFilter}</Text>
-                  <MaterialIcons name="close" size={14} color={theme.primary} />
-                </Pressable>
-              )}
-            </ScrollView>
-          )}
-        </Animated.View>
-      )}
-
-      {/* Club Filters Button */}
-      {activeTab === 'clubs' && (
-        <Animated.View 
-          entering={FadeInDown.duration(400).delay(250)}
-          style={styles.filterButtonContainer}
-        >
-          <Pressable
-            style={[
-              styles.filterButton,
-              activeClubFilterCount > 0 && styles.filterButtonActive
-            ]}
-            onPress={() => {
-              setShowClubFilters(true);
-              Haptics.selectionAsync();
-            }}
-          >
-            <MaterialIcons 
-              name="filter-list" 
-              size={20} 
-              color={activeClubFilterCount > 0 ? '#FFF' : theme.textSecondary} 
-            />
-            <Text style={[
-              styles.filterButtonText,
-              activeClubFilterCount > 0 && styles.filterButtonTextActive
-            ]}>
-              Filtres
-            </Text>
-            {activeClubFilterCount > 0 && (
-              <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>{activeClubFilterCount}</Text>
-              </View>
-            )}
-          </Pressable>
-          
-          {/* Quick filter chips */}
-          {activeClubFilterCount > 0 && (
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.activeFiltersScroll}
-            >
-              {clubCityFilter !== 'all' && (
-                <Pressable 
-                  style={styles.activeFilterChip}
-                  onPress={() => setClubCityFilter('all')}
-                >
-                  <Text style={styles.activeFilterText}>{clubCityFilter}</Text>
-                  <MaterialIcons name="close" size={14} color={theme.primary} />
-                </Pressable>
-              )}
-              {clubCountryFilter !== 'all' && (
-                <Pressable 
-                  style={styles.activeFilterChip}
-                  onPress={() => setClubCountryFilter('all')}
-                >
-                  <Text style={styles.activeFilterText}>{clubCountryFilter}</Text>
-                  <MaterialIcons name="close" size={14} color={theme.primary} />
-                </Pressable>
-              )}
-            </ScrollView>
-          )}
-        </Animated.View>
-      )}
-
-      {/* Tournament Filters Button */}
-      {activeTab === 'tournaments' && (
-        <Animated.View 
-          entering={FadeInDown.duration(400).delay(250)}
-          style={styles.filterButtonContainer}
-        >
-          <Pressable
-            style={[
-              styles.filterButton,
-              activeTournamentFilterCount > 0 && styles.filterButtonActive
-            ]}
-            onPress={() => {
-              setShowTournamentFilters(true);
-              Haptics.selectionAsync();
-            }}
-          >
-            <MaterialIcons 
-              name="filter-list" 
-              size={20} 
-              color={activeTournamentFilterCount > 0 ? '#FFF' : theme.textSecondary} 
-            />
-            <Text style={[
-              styles.filterButtonText,
-              activeTournamentFilterCount > 0 && styles.filterButtonTextActive
-            ]}>
-              Filtres
-            </Text>
-            {activeTournamentFilterCount > 0 && (
-              <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>{activeTournamentFilterCount}</Text>
-              </View>
-            )}
-          </Pressable>
-          
-          {/* Quick filter chips */}
-          {activeTournamentFilterCount > 0 && (
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.activeFiltersScroll}
-            >
-              {tournamentStatusFilter !== 'all' && (
-                <Pressable 
-                  style={styles.activeFilterChip}
-                  onPress={() => setTournamentStatusFilter('all')}
-                >
-                  <Text style={styles.activeFilterText}>{tournamentStatusFilter}</Text>
-                  <MaterialIcons name="close" size={14} color={theme.primary} />
-                </Pressable>
-              )}
-              {tournamentFormatFilter !== 'all' && (
-                <Pressable 
-                  style={styles.activeFilterChip}
-                  onPress={() => setTournamentFormatFilter('all')}
-                >
-                  <Text style={styles.activeFilterText}>{tournamentFormatFilter}</Text>
-                  <MaterialIcons name="close" size={14} color={theme.primary} />
-                </Pressable>
-              )}
-              {tournamentCadrageFilter !== 'all' && (
-                <Pressable 
-                  style={styles.activeFilterChip}
-                  onPress={() => setTournamentCadrageFilter('all')}
-                >
-                  <Text style={styles.activeFilterText}>{tournamentCadrageFilter}</Text>
-                  <MaterialIcons name="close" size={14} color={theme.primary} />
-                </Pressable>
-              )}
-            </ScrollView>
-          )}
-        </Animated.View>
-      )}
-
-      {/* Terrain Filters Button */}
-      {activeTab === 'terrains' && (
-        <Animated.View 
-          entering={FadeInDown.duration(400).delay(250)}
-          style={styles.filterButtonContainer}
-        >
-          <Pressable
-            style={[
-              styles.filterButton,
-              activeTerrainFilterCount > 0 && styles.filterButtonActive
-            ]}
-            onPress={() => {
-              setShowTerrainFilters(true);
-              Haptics.selectionAsync();
-            }}
-          >
-            <MaterialIcons 
-              name="filter-list" 
-              size={20} 
-              color={activeTerrainFilterCount > 0 ? '#FFF' : theme.textSecondary} 
-            />
-            <Text style={[
-              styles.filterButtonText,
-              activeTerrainFilterCount > 0 && styles.filterButtonTextActive
-            ]}>
-              Filtres
-            </Text>
-            {activeTerrainFilterCount > 0 && (
-              <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>{activeTerrainFilterCount}</Text>
-              </View>
-            )}
-          </Pressable>
-          
-          {/* Quick filter chips */}
-          {activeTerrainFilterCount > 0 && (
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.activeFiltersScroll}
-            >
-              {terrainTypeFilter !== 'all' && (
-                <Pressable 
-                  style={styles.activeFilterChip}
-                  onPress={() => setTerrainTypeFilter('all')}
-                >
-                  <Text style={styles.activeFilterText}>{terrainTypeFilter}</Text>
-                  <MaterialIcons name="close" size={14} color={theme.primary} />
-                </Pressable>
-              )}
-              {terrainCityFilter !== 'all' && (
-                <Pressable 
-                  style={styles.activeFilterChip}
-                  onPress={() => setTerrainCityFilter('all')}
-                >
-                  <Text style={styles.activeFilterText}>{terrainCityFilter}</Text>
-                  <MaterialIcons name="close" size={14} color={theme.primary} />
-                </Pressable>
-              )}
-              {terrainLightingFilter !== 'all' && (
-                <Pressable 
-                  style={styles.activeFilterChip}
-                  onPress={() => setTerrainLightingFilter('all')}
-                >
-                  <MaterialIcons name="lightbulb" size={12} color={theme.primary} />
-                  <Text style={styles.activeFilterText}>{terrainLightingFilter === 'yes' ? 'Éclairé' : 'Non éclairé'}</Text>
-                  <MaterialIcons name="close" size={14} color={theme.primary} />
-                </Pressable>
-              )}
-              {terrainCoveredFilter !== 'all' && (
-                <Pressable 
-                  style={styles.activeFilterChip}
-                  onPress={() => setTerrainCoveredFilter('all')}
-                >
-                  <MaterialIcons name="roofing" size={12} color={theme.primary} />
-                  <Text style={styles.activeFilterText}>{terrainCoveredFilter === 'yes' ? 'Couvert' : 'Extérieur'}</Text>
-                  <MaterialIcons name="close" size={14} color={theme.primary} />
-                </Pressable>
-              )}
-            </ScrollView>
-          )}
-        </Animated.View>
-      )}
+      </View>
 
       {/* List */}
       <View style={styles.listContainer}>
-        {activeTab === 'players' && (
-          <FlashList
-            data={filteredPlayers}
-            renderItem={renderPlayer}
-            estimatedItemSize={100}
-            contentContainerStyle={{ 
-              paddingHorizontal: 16,
-              paddingBottom: insets.bottom + 100,
-            }}
-            showsVerticalScrollIndicator={false}
-          />
-        )}
-        {activeTab === 'clubs' && (
-          <FlashList
-            data={filteredClubs}
-            renderItem={renderClub}
-            estimatedItemSize={100}
-            contentContainerStyle={{ 
-              paddingHorizontal: 16,
-              paddingBottom: insets.bottom + 100,
-            }}
-            showsVerticalScrollIndicator={false}
-          />
-        )}
-        {activeTab === 'tournaments' && (
-          <FlashList
-            data={filteredTournaments}
-            renderItem={renderTournament}
-            estimatedItemSize={120}
-            contentContainerStyle={{ 
-              paddingHorizontal: 16,
-              paddingBottom: insets.bottom + 100,
-            }}
-            showsVerticalScrollIndicator={false}
-          />
-        )}
-        {activeTab === 'terrains' && (
-          <FlashList
-            data={filteredTerrains}
-            renderItem={renderTerrain}
-            estimatedItemSize={100}
-            contentContainerStyle={{ 
-              paddingHorizontal: 16,
-              paddingBottom: insets.bottom + 100,
-            }}
-            showsVerticalScrollIndicator={false}
-          />
-        )}
+        <FlashList
+          data={getCurrentData()}
+          renderItem={getCurrentRenderItem() as any}
+          estimatedItemSize={110}
+          contentContainerStyle={{ 
+            paddingHorizontal: 16,
+            paddingBottom: insets.bottom + 100,
+          }}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <MaterialIcons name={tabConfig?.icon as any || 'search'} size={48} color={theme.textMuted} />
+              <Text style={styles.emptyTitle}>Aucun résultat</Text>
+              <Text style={styles.emptyText}>
+                {searchQuery 
+                  ? `Aucun ${activeTab === 'players' ? 'joueur' : activeTab === 'clubs' ? 'club' : activeTab === 'terrains' ? 'terrain' : 'tournoi'} ne correspond à "${searchQuery}"`
+                  : currentFilterCount > 0 
+                    ? 'Essayez de modifier vos filtres'
+                    : `Aucun ${activeTab === 'players' ? 'joueur' : activeTab === 'clubs' ? 'club' : activeTab === 'terrains' ? 'terrain' : 'tournoi'} enregistré`
+                }
+              </Text>
+            </View>
+          }
+        />
       </View>
+
+      {/* Filter Modal */}
+      <Modal
+        visible={showFilters}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowFilters(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <View style={styles.modalHeaderLeft}>
+              <View style={[styles.modalIcon, { backgroundColor: tabConfig?.color + '15' }]}>
+                <MaterialIcons name={tabConfig?.icon as any} size={20} color={tabConfig?.color} />
+              </View>
+              <Text style={styles.modalTitle}>Filtrer les {tabConfig?.label.toLowerCase()}</Text>
+            </View>
+            <Pressable 
+              style={styles.modalCloseButton}
+              onPress={() => setShowFilters(false)}
+            >
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+          </View>
+          
+          <ScrollView 
+            style={styles.modalContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {renderFilterContent()}
+          </ScrollView>
+
+          <View style={[styles.modalFooter, { paddingBottom: insets.bottom + 16 }]}>
+            <Pressable style={styles.clearButton} onPress={clearFilters}>
+              <MaterialIcons name="clear-all" size={20} color={theme.textSecondary} />
+              <Text style={styles.clearButtonText}>Effacer tout</Text>
+            </Pressable>
+            <Pressable 
+              style={[styles.applyButton, { backgroundColor: tabConfig?.color }]}
+              onPress={() => setShowFilters(false)}
+            >
+              <Text style={styles.applyButtonText}>
+                Voir {getCurrentData().length} résultat{getCurrentData().length !== 1 ? 's' : ''}
+              </Text>
+            </Pressable>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
+  );
+}
+
+// Filter Section Component
+function FilterSection({ 
+  title, 
+  options, 
+  value, 
+  onChange, 
+  labels = {}, 
+  icons = {} 
+}: { 
+  title: string; 
+  options: string[]; 
+  value: string; 
+  onChange: (v: string) => void;
+  labels?: Record<string, string>;
+  icons?: Record<string, string>;
+}) {
+  return (
+    <View style={styles.filterSection}>
+      <Text style={styles.filterSectionTitle}>{title}</Text>
+      <View style={styles.filterOptions}>
+        {options.map(option => {
+          const isActive = value === option;
+          const label = labels[option] || (option === 'all' ? 'Tous' : option);
+          const icon = icons[option];
+          return (
+            <Pressable
+              key={option}
+              style={[styles.filterOption, isActive && styles.filterOptionActive]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                onChange(option);
+              }}
+            >
+              {icon && (
+                <MaterialIcons 
+                  name={icon as any} 
+                  size={16} 
+                  color={isActive ? theme.primary : theme.textSecondary} 
+                />
+              )}
+              <Text style={[styles.filterOptionText, isActive && styles.filterOptionTextActive]}>
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+// Active Filter Chip Component
+function ActiveFilterChip({ label, onRemove, icon }: { label: string; onRemove: () => void; icon?: string }) {
+  return (
+    <Pressable style={styles.activeFilterChip} onPress={onRemove}>
+      {icon && <MaterialIcons name={icon as any} size={12} color={theme.primary} />}
+      <Text style={styles.activeFilterChipText}>{label}</Text>
+      <MaterialIcons name="close" size={14} color={theme.primary} />
+    </Pressable>
   );
 }
 
@@ -1457,72 +802,115 @@ const styles = StyleSheet.create({
     backgroundColor: theme.backgroundSecondary,
   },
   header: {
+    backgroundColor: theme.surface,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
     color: theme.textPrimary,
   },
-
-  searchContainer: {
+  headerStats: {
+    backgroundColor: theme.backgroundSecondary,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: theme.borderRadius.full,
+  },
+  headerStatsText: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    fontWeight: '500',
+  },
+  searchRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    gap: 10,
+    marginBottom: 12,
+  },
+  searchBar: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.surface,
-    marginHorizontal: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: theme.borderRadius.md,
-    gap: 12,
-    ...theme.shadows.card,
+    paddingHorizontal: 12,
+    height: 44,
+    gap: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15,
     color: theme.textPrimary,
   },
-  tabsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    gap: 8,
-  },
-  tab: {
-    flex: 1,
-    flexDirection: 'column',
+  filterButton: {
+    width: 44,
+    height: 44,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.surface,
-    gap: 4,
-    minHeight: 60,
   },
-  tabActive: {
+  filterButtonActive: {
     backgroundColor: theme.primary,
   },
-  tabText: {
+  filterBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: '#FFF',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterBadgeText: {
     fontSize: 10,
+    fontWeight: '700',
+    color: theme.primary,
+  },
+  tabsWrapper: {
+    paddingLeft: 16,
+  },
+  tabsContainer: {
+    gap: 8,
+    paddingRight: 16,
+  },
+  tab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.backgroundSecondary,
+  },
+  tabLabel: {
+    fontSize: 13,
     fontWeight: '600',
     color: theme.textSecondary,
-    textAlign: 'center',
   },
-  tabTextActive: {
+  tabLabelActive: {
     color: '#FFF',
   },
   tabCount: {
-    backgroundColor: theme.backgroundSecondary,
+    backgroundColor: 'rgba(0,0,0,0.1)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: theme.borderRadius.full,
   },
   tabCountActive: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.25)',
   },
   tabCountText: {
     fontSize: 11,
@@ -1532,208 +920,206 @@ const styles = StyleSheet.create({
   tabCountTextActive: {
     color: '#FFF',
   },
-  // Filter Button
-  filterButtonContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  filterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+  activeFiltersContainer: {
     backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.full,
-    alignSelf: 'flex-start',
-    ...theme.shadows.card,
-  },
-  filterButtonActive: {
-    backgroundColor: theme.primary,
-  },
-  filterButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  filterButtonTextActive: {
-    color: '#FFF',
-  },
-  filterBadge: {
-    backgroundColor: '#FFF',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: theme.borderRadius.full,
-  },
-  filterBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: theme.primary,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
   },
   activeFiltersScroll: {
-    paddingTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     gap: 8,
+  },
+  clearAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.error + '10',
+    borderWidth: 1,
+    borderColor: theme.error + '30',
+  },
+  clearAllText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.error,
   },
   activeFilterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
+    gap: 4,
+    paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: theme.primary + '15',
+    backgroundColor: theme.primary + '10',
     borderRadius: theme.borderRadius.full,
     borderWidth: 1,
-    borderColor: theme.primary + '30',
+    borderColor: theme.primary + '25',
   },
-  activeFilterText: {
-    fontSize: 13,
+  activeFilterChipText: {
+    fontSize: 12,
     fontWeight: '500',
     color: theme.primary,
   },
-  // Terrain Type Filters
-  terrainFiltersContainer: {
-    paddingBottom: 8,
-  },
-  terrainFiltersScroll: {
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  terrainFilterChip: {
+  resultsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.full,
-    ...theme.shadows.card,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  terrainFilterChipActive: {
-    backgroundColor: theme.accent,
-  },
-  terrainFilterText: {
+  resultsCount: {
     fontSize: 13,
     fontWeight: '600',
     color: theme.textSecondary,
   },
-  terrainFilterTextActive: {
-    color: '#FFF',
-  },
-  tournamentFilterChipActive: {
-    backgroundColor: theme.carreauColor,
-  },
-  // Favorite terrain styles
-  favoriteCard: {
-    borderWidth: 2,
-    borderColor: theme.error + '50',
-    backgroundColor: theme.error + '05',
-  },
-  favoriteAvatarBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    backgroundColor: '#FFF',
-    borderRadius: 10,
-    width: 18,
-    height: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+  searchingFor: {
+    fontSize: 13,
+    color: theme.textMuted,
   },
   listContainer: {
     flex: 1,
   },
-  card: {
+  itemCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: theme.borderRadius.lg,
+    padding: 14,
+    marginBottom: 10,
     ...theme.shadows.card,
   },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  selfCard: {
+    borderWidth: 2,
+    borderColor: theme.primary,
+    backgroundColor: theme.primary + '05',
+  },
+  favoriteCard: {
+    borderWidth: 2,
+    borderColor: theme.error + '50',
+    backgroundColor: theme.error + '03',
+  },
+  itemAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: theme.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
+  selfAvatar: {
+    backgroundColor: theme.primary,
+  },
   avatarText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: '#FFF',
   },
-  cardContent: {
-    flex: 1,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  cardMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 2,
-  },
-  cardMetaText: {
-    fontSize: 13,
-    color: theme.textSecondary,
-  },
-  cardBadges: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 8,
-    flexWrap: 'wrap',
-  },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: theme.borderRadius.sm,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  // Self player card styles
-  selfCard: {
-    borderWidth: 2,
-    borderColor: theme.primary,
-    backgroundColor: theme.primary + '08',
-  },
-  selfCardTitle: {
-    color: theme.primary,
-  },
-  selfAvatarBadge: {
+  selfBadge: {
     position: 'absolute',
     bottom: -2,
     right: -2,
-    backgroundColor: '#FFF',
-    borderRadius: 10,
-    width: 20,
-    height: 20,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: theme.carreauColor,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: theme.surface,
   },
-  cardTitleRow: {
+  favoriteBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#FFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: theme.surface,
+  },
+  itemContent: {
+    flex: 1,
+  },
+  itemHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginBottom: 4,
   },
+  itemTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.textPrimary,
+    flex: 1,
+  },
   moiBadge: {
     backgroundColor: theme.primary,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: theme.borderRadius.sm,
+  },
+  moiBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFF',
+    letterSpacing: 0.5,
+  },
+  itemMeta: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 8,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  metaText: {
+    fontSize: 12,
+    color: theme.textSecondary,
+  },
+  itemTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  tag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: theme.borderRadius.sm,
   },
-  moiBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#FFF',
-    letterSpacing: 0.5,
+  tagText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 32,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.textPrimary,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   // Modal styles
   modalContainer: {
@@ -1746,14 +1132,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 16,
+    backgroundColor: theme.surface,
     borderBottomWidth: 1,
     borderBottomColor: theme.border,
-    backgroundColor: theme.surface,
+  },
+  modalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  modalIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: theme.textPrimary,
+  },
+  modalCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalContent: {
     flex: 1,
@@ -1766,8 +1172,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: theme.textSecondary,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
     marginBottom: 12,
+    textTransform: 'uppercase',
   },
   filterOptions: {
     flexDirection: 'row',
@@ -1775,7 +1182,10 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   filterOption: {
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.md,
@@ -1784,7 +1194,7 @@ const styles = StyleSheet.create({
   },
   filterOptionActive: {
     borderColor: theme.primary,
-    backgroundColor: theme.primary + '10',
+    backgroundColor: theme.primary + '08',
   },
   filterOptionText: {
     fontSize: 14,
@@ -1793,19 +1203,23 @@ const styles = StyleSheet.create({
   },
   filterOptionTextActive: {
     color: theme.primary,
+    fontWeight: '600',
   },
   modalFooter: {
     flexDirection: 'row',
     gap: 12,
     padding: 16,
+    backgroundColor: theme.surface,
     borderTopWidth: 1,
     borderTopColor: theme.border,
-    backgroundColor: theme.surface,
   },
   clearButton: {
-    flex: 1,
-    paddingVertical: 14,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     borderRadius: theme.borderRadius.md,
     backgroundColor: theme.backgroundSecondary,
   },
@@ -1816,8 +1230,9 @@ const styles = StyleSheet.create({
   },
   applyButton: {
     flex: 1,
-    paddingVertical: 14,
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
     borderRadius: theme.borderRadius.md,
     backgroundColor: theme.primary,
   },
