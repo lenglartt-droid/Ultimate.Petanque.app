@@ -310,8 +310,12 @@ export default function HistoryScreen() {
                 e.stopPropagation();
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 // Calculate new series score based on this match result
-                const newWinsA = isWin ? 1 : 0;
-                const newWinsB = isWin ? 0 : 1;
+                // If this match was already part of a series, continue that series
+                const existingSeriesId = match.seriesInfo?.seriesId;
+                const existingWinsA = match.seriesInfo?.winsBeforeThisMatch?.teamA || 0;
+                const existingWinsB = match.seriesInfo?.winsBeforeThisMatch?.teamB || 0;
+                const newWinsA = existingWinsA + (isWin ? 1 : 0);
+                const newWinsB = existingWinsB + (isWin ? 0 : 1);
                 router.push({
                   pathname: '/match/new',
                   params: {
@@ -321,6 +325,7 @@ export default function HistoryScreen() {
                     teamB: encodeTeamForRevanche(match.teamB.playerNames),
                     seriesWinsA: String(newWinsA),
                     seriesWinsB: String(newWinsB),
+                    seriesId: existingSeriesId || `series-${Date.now()}`,
                   }
                 });
               }}

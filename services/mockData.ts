@@ -188,6 +188,16 @@ export interface MatchPlayerRole {
   role: PlayerRole;
 }
 
+// Series tracking for revanche/finale system
+export interface SeriesInfo {
+  seriesId: string; // Unique ID for the series
+  matchNumber: number; // 1, 2, or 3 (for best of 3)
+  winsBeforeThisMatch: { teamA: number; teamB: number };
+  isFinale?: boolean; // True if this is the deciding match (1-1)
+  seriesComplete?: boolean; // True if this match ended the series
+  seriesWinner?: 'A' | 'B'; // Set when series is complete
+}
+
 export interface Match {
   id: string;
   date: string;
@@ -215,6 +225,8 @@ export interface Match {
   menes: Mene[];
   // Real-time action tracking
   playerActions?: PlayerAction[];
+  // Series tracking for revanche/finale
+  seriesInfo?: SeriesInfo;
 }
 
 export interface Mene {
@@ -383,6 +395,16 @@ export interface ChallengePlayerResult {
   atelierScores?: { [key in PrecisionAtelier]?: number };
 }
 
+// Series tracking for challenge revanche/finale system
+export interface ChallengeSeriesInfo {
+  seriesId: string; // Unique ID for the series
+  matchNumber: number; // 1, 2, or 3 (for best of 3)
+  winsBeforeThisMatch: { player: number; opponent: number };
+  isFinale?: boolean; // True if this is the deciding match (1-1)
+  seriesComplete?: boolean; // True if this match ended the series
+  seriesWinner?: 'player' | 'opponent'; // Set when series is complete
+}
+
 export interface Challenge {
   id: string;
   type: ChallengeType;
@@ -396,6 +418,8 @@ export interface Challenge {
   opponentResult?: ChallengePlayerResult;
   // Winner for 1v1 mode ('player' | 'opponent' | 'draw')
   winner?: 'player' | 'opponent' | 'draw';
+  // Series tracking for revanche/finale
+  seriesInfo?: ChallengeSeriesInfo;
   // For 10_tirs and 10_tirs_sautee
   shots?: ChallengeShot[];
   successCount?: number;

@@ -145,7 +145,7 @@ const StepIndicator = ({ currentStep, totalSteps }: { currentStep: number; total
 
 export default function NewMatchScreen() {
   const insets = useSafeAreaInsets();
-  const { tournamentId, revanche, format: revancheFormat, teamA: revancheTeamA, teamB: revancheTeamB, seriesWinsA: initialWinsA, seriesWinsB: initialWinsB } = useLocalSearchParams<{ 
+  const { tournamentId, revanche, format: revancheFormat, teamA: revancheTeamA, teamB: revancheTeamB, seriesWinsA: initialWinsA, seriesWinsB: initialWinsB, seriesId: initialSeriesId } = useLocalSearchParams<{ 
     tournamentId?: string;
     revanche?: string;
     format?: string;
@@ -153,6 +153,7 @@ export default function NewMatchScreen() {
     teamB?: string;
     seriesWinsA?: string;
     seriesWinsB?: string;
+    seriesId?: string;
   }>();
   const { addMatch, players, tournaments, matches, selfPlayer, terrains } = useApp();
   
@@ -160,6 +161,8 @@ export default function NewMatchScreen() {
   const seriesWinsA = parseInt(initialWinsA || '0');
   const seriesWinsB = parseInt(initialWinsB || '0');
   const isFinale = seriesWinsA === 1 && seriesWinsB === 1;
+  const seriesId = initialSeriesId || (isRevanche ? `series-${Date.now()}` : undefined);
+  const currentMatchNumber = seriesWinsA + seriesWinsB + 1;
   const linkedTournament = tournamentId ? tournaments.find(t => t.id === tournamentId) : null;
   const isTournamentMode = !!linkedTournament;
   
@@ -696,6 +699,20 @@ export default function NewMatchScreen() {
       role: p.role,
     }));
     
+    // Calculate series info if this is a revanche/finale match
+    const newWinsA = seriesWinsA + (winner === 'A' ? 1 : 0);
+    const newWinsB = seriesWinsB + (winner === 'A' ? 0 : 1);
+    const isSeriesComplete = newWinsA >= 2 || newWinsB >= 2;
+    
+    const seriesInfo = (isRevanche || seriesId) ? {
+      seriesId: seriesId || `series-${Date.now()}`,
+      matchNumber: currentMatchNumber,
+      winsBeforeThisMatch: { teamA: seriesWinsA, teamB: seriesWinsB },
+      isFinale: isFinale,
+      seriesComplete: isSeriesComplete,
+      seriesWinner: isSeriesComplete ? (newWinsA >= 2 ? 'A' : 'B') as 'A' | 'B' : undefined,
+    } : undefined;
+
     addMatch({
       date: new Date().toISOString(),
       mode: isTournamentMode ? 'Tournoi' : 'Entraînement',
@@ -724,6 +741,7 @@ export default function NewMatchScreen() {
         duration: m.duration,
       })),
       playerActions: playerActions.length > 0 ? playerActions : undefined,
+      seriesInfo,
     });
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -1277,6 +1295,7 @@ export default function NewMatchScreen() {
                                     teamB: teamBPlayers.map(p => getPlayerName(p.playerId)).join(','),
                                     seriesWinsA: String(newWinsA),
                                     seriesWinsB: String(newWinsB),
+                                    seriesId: seriesId || `series-${Date.now()}`,
                                   }
                                 });
                               }, 100);

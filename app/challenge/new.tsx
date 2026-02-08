@@ -163,11 +163,12 @@ function CountdownTimer({
 
 export default function NewChallengeScreen() {
   const insets = useSafeAreaInsets();
-  const { type: initialType, seriesWinsPlayer: initialPlayerWins, seriesWinsOpponent: initialOpponentWins, opponentId: initialOpponentId } = useLocalSearchParams<{ 
+  const { type: initialType, seriesWinsPlayer: initialPlayerWins, seriesWinsOpponent: initialOpponentWins, opponentId: initialOpponentId, seriesId: initialSeriesId } = useLocalSearchParams<{ 
     type?: ChallengeType;
     seriesWinsPlayer?: string;
     seriesWinsOpponent?: string;
     opponentId?: string;
+    seriesId?: string;
   }>();
   const { addChallenge, userStats, selfPlayer, players } = useApp();
 
@@ -181,6 +182,8 @@ export default function NewChallengeScreen() {
   const seriesWinsPlayer = parseInt(initialPlayerWins || '0');
   const seriesWinsOpponent = parseInt(initialOpponentWins || '0');
   const isFinale = seriesWinsPlayer === 1 && seriesWinsOpponent === 1;
+  const seriesId = initialSeriesId || (selectedOpponent && (seriesWinsPlayer > 0 || seriesWinsOpponent > 0) ? `challenge-series-${Date.now()}` : undefined);
+  const currentMatchNumber = seriesWinsPlayer + seriesWinsOpponent + 1;
   
   const [isStarted, setIsStarted] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
@@ -580,6 +583,24 @@ export default function NewChallengeScreen() {
       atelierScores: selectedType === 'precision' ? opponentAtelierScores : undefined,
     } : undefined;
 
+    // Calculate series info if this is a 1v1 challenge
+    const winner = challengeMode === '1v1' ? getWinner() : undefined;
+    const newPlayerWins = seriesWinsPlayer + (winner === 'player' ? 1 : 0);
+    const newOpponentWins = seriesWinsOpponent + (winner === 'opponent' ? 1 : 0);
+    const isSeriesComplete = newPlayerWins >= 2 || newOpponentWins >= 2;
+    
+    const seriesInfo = (challengeMode === '1v1' && selectedOpponent && (isRevanche || seriesId || seriesWinsPlayer > 0 || seriesWinsOpponent > 0)) ? {
+      seriesId: seriesId || `challenge-series-${Date.now()}`,
+      matchNumber: currentMatchNumber,
+      winsBeforeThisMatch: { player: seriesWinsPlayer, opponent: seriesWinsOpponent },
+      isFinale: isFinale,
+      seriesComplete: isSeriesComplete,
+      seriesWinner: isSeriesComplete ? (newPlayerWins >= 2 ? 'player' : 'opponent') as 'player' | 'opponent' : undefined,
+    } : undefined;
+    
+    // Flag to check if this is a revanche/series match
+    const isRevanche = seriesWinsPlayer > 0 || seriesWinsOpponent > 0 || isFinale;
+
     if (selectedType === 'precision') {
       addChallenge({
         type: selectedType,
@@ -590,12 +611,13 @@ export default function NewChallengeScreen() {
         opponentId: selectedOpponent?.id,
         opponentName: selectedOpponent?.name,
         opponentResult,
-        winner: challengeMode === '1v1' ? getWinner() : undefined,
+        winner,
         precisionShots,
         totalPoints: totalPrecisionPoints,
         maxPoints: 100,
         atelierScores,
         duration: elapsedTime,
+        seriesInfo,
       });
     } else {
       addChallenge({
@@ -607,13 +629,14 @@ export default function NewChallengeScreen() {
         opponentId: selectedOpponent?.id,
         opponentName: selectedOpponent?.name,
         opponentResult,
-        winner: challengeMode === '1v1' ? getWinner() : undefined,
+        winner,
         shots,
         successCount,
         totalShots: shots.length,
         carreauCount,
         successRate,
         duration: elapsedTime,
+        seriesInfo,
       });
     }
 
@@ -686,6 +709,7 @@ export default function NewChallengeScreen() {
           seriesWinsPlayer: String(newPlayerWins),
           seriesWinsOpponent: String(newOpponentWins),
           opponentId: selectedOpponent?.id,
+          seriesId: seriesId || `challenge-series-${Date.now()}`,
         }
       });
     }, 100);

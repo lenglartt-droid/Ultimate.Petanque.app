@@ -15,7 +15,7 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
-import { ChallengeType } from '@/services/mockData';
+import { ChallengeType, SeriesInfo, ChallengeSeriesInfo } from '@/services/mockData';
 import { GameFormat } from '@/constants/config';
 import Svg, { Circle, Line, Rect, Path, G, Text as SvgText } from 'react-native-svg';
 import { router } from 'expo-router';
@@ -186,7 +186,7 @@ const CHALLENGE_CONFIG = {
 
 // Time filter types
 type TimeFilter = 'today' | 'week' | 'month' | 'year' | 'all';
-type TabType = 'overview' | 'matches' | 'skills' | 'duration' | 'challenges' | 'financial';
+type TabType = 'overview' | 'matches' | 'skills' | 'duration' | 'challenges' | 'series' | 'financial';
 
 const TIME_FILTERS: { id: TimeFilter; label: string; icon: string }[] = [
   { id: 'today', label: "Aujourd'hui", icon: 'today' },
@@ -202,6 +202,7 @@ const TABS: { id: TabType; label: string; icon: string }[] = [
   { id: 'skills', label: 'Technique', icon: 'gps-fixed' },
   { id: 'duration', label: 'Durée', icon: 'timer' },
   { id: 'challenges', label: 'Défis', icon: 'emoji-events' },
+  { id: 'series', label: 'Séries', icon: 'format-list-numbered' },
   { id: 'financial', label: 'Finance', icon: 'account-balance-wallet' },
 ];
 
@@ -758,6 +759,191 @@ export default function StatsScreen() {
       menesOver1MinPercent,
     };
   }, [filteredMatches]);
+
+  // Series stats calculation
+  const seriesStats = useMemo(() => {
+    // Track match series
+    const matchSeriesMap: Record<string, { 
+      matches: typeof filteredMatches; 
+      seriesWinner?: 'A' | 'B';
+      opponentNames: string[];
+    }> = {};
+    
+    filteredMatches.forEach(match => {
+      if (match.seriesInfo?.seriesId) {
+        if (!matchSeriesMap[match.seriesInfo.seriesId]) {
+          matchSeriesMap[match.seriesInfo.seriesId] = { 
+            matches: [], 
+            opponentNames: match.teamB.playerNames || ['Adversaire']
+          };
+        }
+        matchSeriesMap[match.seriesInfo.seriesId].matches.push(match);
+        if (match.seriesInfo.seriesComplete && match.seriesInfo.seriesWinner) {
+          matchSeriesMap[match.seriesInfo.seriesId].seriesWinner = match.seriesInfo.seriesWinner;
+        }
+      }
+    });
+    
+    // Track challenge series
+    const challengeSeriesMap: Record<string, { 
+      challenges: typeof filteredChallenges; 
+      seriesWinner?: 'player' | 'opponent';
+      opponentName: string;
+      opponentId: string;
+    }> = {};
+    
+    filteredChallenges.forEach(challenge => {
+      if (challenge.seriesInfo?.seriesId) {
+        if (!challengeSeriesMap[challenge.seriesInfo.seriesId]) {
+          challengeSeriesMap[challenge.seriesInfo.seriesId] = { 
+            challenges: [],
+            opponentName: challenge.opponentName || 'Adversaire',
+            opponentId: challenge.opponentId || '',
+          };
+        }
+        challengeSeriesMap[challenge.seriesInfo.seriesId].challenges.push(challenge);
+        if (challenge.seriesInfo.seriesComplete && challenge.seriesInfo.seriesWinner) {
+          challengeSeriesMap[challenge.seriesInfo.seriesId].seriesWinner = challenge.seriesInfo.seriesWinner;
+        }
+      }
+    });
+    
+    // Calculate match series stats
+    const matchSeries = Object.values(matchSeriesMap);
+    const completedMatchSeries = matchSeries.filter(s => s.seriesWinner);
+    const matchSeriesWon = completedMatchSeries.filter(s => s.seriesWinner === 'A').length;
+    const matchSeriesLost = completedMatchSeries.filter(s => s.seriesWinner === 'B').length;
+    
+    // Calculate challenge series stats
+    const challengeSeries = Object.values(challengeSeriesMap);
+    const completedChallengeSeries = challengeSeries.filter(s => s.seriesWinner);
+    const challengeSeriesWon = completedChallengeSeries.filter(s => s.seriesWinner === 'player').length;
+    const challengeSeriesLost = completedChallengeSeries.filter(s => s.seriesWinner === 'opponent').length;
+    
+    // Total series stats
+    const totalSeries = matchSeries.length + challengeSeries.length;
+    const totalCompleted = completedMatchSeries.length + completedChallengeSeries.length;
+    const totalWon = matchSeriesWon + challengeSeriesWon;
+    const totalLost = matchSeriesLost + challengeSeriesLost;
+    
+    // Count finales (matches where isFinale is true)
+    const finalesPlayed = filteredMatches.filter(m => m.seriesInfo?.isFinale).length + 
+                          filteredChallenges.filter(c => c.seriesInfo?.isFinale).length;
+    const finalesWon = filteredMatches.filter(m => m.seriesInfo?.isFinale && m.winner === 'A').length +
+                       filteredChallenges.filter(c => c.seriesInfo?.isFinale && c.winner === 'player').length;
+    const finaleWinRate = finalesPlayed > 0 ? Math.round((finalesWon / finalesPlayed) * 100) : 0;
+    
+    // Calculate confrontations by opponent (from all series)
+    const opponentStats: Record<string, { 
+      name: string;
+      seriesWon: number;
+      seriesLost: number;
+      totalSeries: number;
+      matchesWon: number;
+      matchesLost: number;
+      totalMatches: number;
+    }> = {};
+    
+    // Match series by opponent
+    matchSeries.forEach(series => {
+      const oppKey = series.opponentNames.join(', ');
+      if (!opponentStats[oppKey]) {
+        opponentStats[oppKey] = { name: oppKey, seriesWon: 0, seriesLost: 0, totalSeries: 0, matchesWon: 0, matchesLost: 0, totalMatches: 0 };
+      }
+      opponentStats[oppKey].totalSeries++;
+      opponentStats[oppKey].totalMatches += series.matches.length;
+      opponentStats[oppKey].matchesWon += series.matches.filter(m => m.winner === 'A').length;
+      opponentStats[oppKey].matchesLost += series.matches.filter(m => m.winner === 'B').length;
+      if (series.seriesWinner === 'A') opponentStats[oppKey].seriesWon++;
+      else if (series.seriesWinner === 'B') opponentStats[oppKey].seriesLost++;
+    });
+    
+    // Challenge series by opponent
+    challengeSeries.forEach(series => {
+      const oppKey = series.opponentName;
+      if (!opponentStats[oppKey]) {
+        opponentStats[oppKey] = { name: oppKey, seriesWon: 0, seriesLost: 0, totalSeries: 0, matchesWon: 0, matchesLost: 0, totalMatches: 0 };
+      }
+      opponentStats[oppKey].totalSeries++;
+      opponentStats[oppKey].totalMatches += series.challenges.length;
+      opponentStats[oppKey].matchesWon += series.challenges.filter(c => c.winner === 'player').length;
+      opponentStats[oppKey].matchesLost += series.challenges.filter(c => c.winner === 'opponent').length;
+      if (series.seriesWinner === 'player') opponentStats[oppKey].seriesWon++;
+      else if (series.seriesWinner === 'opponent') opponentStats[oppKey].seriesLost++;
+    });
+    
+    // Sort opponents by total series played
+    const opponentsList = Object.values(opponentStats)
+      .sort((a, b) => b.totalSeries - a.totalSeries);
+    
+    // Recent series (last 5 completed)
+    const recentCompletedSeries: { 
+      id: string;
+      type: 'match' | 'challenge';
+      opponent: string;
+      won: boolean;
+      matchCount: number;
+      date: string;
+    }[] = [];
+    
+    matchSeries.filter(s => s.seriesWinner).forEach(series => {
+      const lastMatch = series.matches.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+      if (lastMatch) {
+        recentCompletedSeries.push({
+          id: lastMatch.seriesInfo?.seriesId || lastMatch.id,
+          type: 'match',
+          opponent: series.opponentNames.join(', '),
+          won: series.seriesWinner === 'A',
+          matchCount: series.matches.length,
+          date: lastMatch.date,
+        });
+      }
+    });
+    
+    challengeSeries.filter(s => s.seriesWinner).forEach(series => {
+      const lastChallenge = series.challenges.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+      if (lastChallenge) {
+        recentCompletedSeries.push({
+          id: lastChallenge.seriesInfo?.seriesId || lastChallenge.id,
+          type: 'challenge',
+          opponent: series.opponentName,
+          won: series.seriesWinner === 'player',
+          matchCount: series.challenges.length,
+          date: lastChallenge.date,
+        });
+      }
+    });
+    
+    // Sort by date and take last 5
+    recentCompletedSeries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    return {
+      totalSeries,
+      totalCompleted,
+      totalWon,
+      totalLost,
+      winRate: totalCompleted > 0 ? Math.round((totalWon / totalCompleted) * 100) : 0,
+      matchSeries: {
+        total: matchSeries.length,
+        completed: completedMatchSeries.length,
+        won: matchSeriesWon,
+        lost: matchSeriesLost,
+      },
+      challengeSeries: {
+        total: challengeSeries.length,
+        completed: completedChallengeSeries.length,
+        won: challengeSeriesWon,
+        lost: challengeSeriesLost,
+      },
+      finales: {
+        played: finalesPlayed,
+        won: finalesWon,
+        winRate: finaleWinRate,
+      },
+      opponentsList,
+      recentCompletedSeries: recentCompletedSeries.slice(0, 5),
+    };
+  }, [filteredMatches, filteredChallenges]);
 
   // Financial stats
   const financialData = useMemo(() => {
@@ -1883,6 +2069,212 @@ export default function StatsScreen() {
                     <MaterialIcons name="add" size={20} color="#FFF" />
                     <Text style={styles.emptyStateButtonText}>Nouveau défi</Text>
                   </Pressable>
+                </View>
+              </Animated.View>
+            )}
+          </>
+        )}
+
+        {/* SERIES TAB */}
+        {activeTab === 'series' && (
+          <>
+            {/* Series Overview */}
+            <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
+              <View style={styles.seriesOverviewCard}>
+                <View style={styles.seriesOverviewMain}>
+                  <View style={styles.seriesOverviewRing}>
+                    <ProgressRing value={seriesStats.winRate} size={90} strokeWidth={8} color={theme.primary} />
+                    <View style={styles.seriesOverviewRingCenter}>
+                      <Text style={styles.seriesOverviewRingValue}>{seriesStats.winRate}%</Text>
+                      <Text style={styles.seriesOverviewRingLabel}>victoire</Text>
+                    </View>
+                  </View>
+                  <View style={styles.seriesOverviewStats}>
+                    <View style={styles.seriesOverviewStatRow}>
+                      <View style={[styles.seriesOverviewDot, { backgroundColor: theme.success }]} />
+                      <Text style={styles.seriesOverviewStatText}>{seriesStats.totalWon} séries gagnées</Text>
+                    </View>
+                    <View style={styles.seriesOverviewStatRow}>
+                      <View style={[styles.seriesOverviewDot, { backgroundColor: theme.error }]} />
+                      <Text style={styles.seriesOverviewStatText}>{seriesStats.totalLost} séries perdues</Text>
+                    </View>
+                    <View style={styles.seriesOverviewStatRow}>
+                      <View style={[styles.seriesOverviewDot, { backgroundColor: theme.textMuted }]} />
+                      <Text style={styles.seriesOverviewStatText}>{seriesStats.totalSeries - seriesStats.totalCompleted} en cours</Text>
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.seriesOverviewFooter}>
+                  <Text style={styles.seriesOverviewFooterText}>
+                    {seriesStats.totalSeries} série{seriesStats.totalSeries > 1 ? 's' : ''} jouée{seriesStats.totalSeries > 1 ? 's' : ''}
+                  </Text>
+                </View>
+              </View>
+            </Animated.View>
+
+            {/* Finale Stats */}
+            <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+              <Text style={styles.sectionTitle}>Performance en finales</Text>
+              <View style={styles.finaleStatsCard}>
+                <View style={styles.finaleStatsMain}>
+                  <MaterialIcons name="emoji-events" size={40} color={theme.carreauColor} />
+                  <View style={styles.finaleStatsInfo}>
+                    <Text style={styles.finaleStatsValue}>{seriesStats.finales.won}/{seriesStats.finales.played}</Text>
+                    <Text style={styles.finaleStatsLabel}>finales gagnées</Text>
+                  </View>
+                </View>
+                <View style={[
+                  styles.finaleWinRateBadge,
+                  { backgroundColor: seriesStats.finales.winRate >= 50 ? theme.success + '15' : theme.error + '15' }
+                ]}>
+                  <Text style={[
+                    styles.finaleWinRateText,
+                    { color: seriesStats.finales.winRate >= 50 ? theme.success : theme.error }
+                  ]}>{seriesStats.finales.winRate}%</Text>
+                </View>
+              </View>
+              {seriesStats.finales.played === 0 && (
+                <View style={styles.noFinalesHint}>
+                  <MaterialIcons name="info-outline" size={16} color={theme.textMuted} />
+                  <Text style={styles.noFinalesText}>Jouez une série complète (best of 3) pour voir vos stats en finale</Text>
+                </View>
+              )}
+            </Animated.View>
+
+            {/* Series by Type */}
+            <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
+              <Text style={styles.sectionTitle}>Séries par type</Text>
+              <View style={styles.seriesByTypeGrid}>
+                {/* Match Series */}
+                <View style={styles.seriesByTypeCard}>
+                  <View style={[styles.seriesByTypeHeader, { backgroundColor: theme.primary + '10' }]}>
+                    <MaterialIcons name="sports" size={24} color={theme.primary} />
+                    <Text style={styles.seriesByTypeTitle}>Matchs</Text>
+                  </View>
+                  <View style={styles.seriesByTypeBody}>
+                    <Text style={styles.seriesByTypeCount}>{seriesStats.matchSeries.completed}</Text>
+                    <Text style={styles.seriesByTypeLabel}>séries</Text>
+                    {seriesStats.matchSeries.completed > 0 && (
+                      <View style={styles.seriesByTypeRecord}>
+                        <Text style={[styles.seriesByTypeRecordValue, { color: theme.success }]}>{seriesStats.matchSeries.won}</Text>
+                        <Text style={styles.seriesByTypeRecordSep}>-</Text>
+                        <Text style={[styles.seriesByTypeRecordValue, { color: theme.error }]}>{seriesStats.matchSeries.lost}</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+
+                {/* Challenge Series */}
+                <View style={styles.seriesByTypeCard}>
+                  <View style={[styles.seriesByTypeHeader, { backgroundColor: theme.accent + '10' }]}>
+                    <MaterialIcons name="gps-fixed" size={24} color={theme.accent} />
+                    <Text style={styles.seriesByTypeTitle}>Défis 1v1</Text>
+                  </View>
+                  <View style={styles.seriesByTypeBody}>
+                    <Text style={styles.seriesByTypeCount}>{seriesStats.challengeSeries.completed}</Text>
+                    <Text style={styles.seriesByTypeLabel}>séries</Text>
+                    {seriesStats.challengeSeries.completed > 0 && (
+                      <View style={styles.seriesByTypeRecord}>
+                        <Text style={[styles.seriesByTypeRecordValue, { color: theme.success }]}>{seriesStats.challengeSeries.won}</Text>
+                        <Text style={styles.seriesByTypeRecordSep}>-</Text>
+                        <Text style={[styles.seriesByTypeRecordValue, { color: theme.error }]}>{seriesStats.challengeSeries.lost}</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </View>
+            </Animated.View>
+
+            {/* Opponent Confrontations */}
+            {seriesStats.opponentsList.length > 0 && (
+              <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
+                <Text style={styles.sectionTitle}>Confrontations par adversaire</Text>
+                <View style={styles.opponentSeriesList}>
+                  {seriesStats.opponentsList.slice(0, 8).map((opponent, index) => {
+                    const winRate = opponent.totalSeries > 0 
+                      ? Math.round((opponent.seriesWon / (opponent.seriesWon + opponent.seriesLost)) * 100) 
+                      : 0;
+                    return (
+                      <View key={opponent.name + index} style={styles.opponentSeriesItem}>
+                        <View style={styles.opponentSeriesAvatar}>
+                          <Text style={styles.opponentSeriesInitials}>
+                            {opponent.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                          </Text>
+                        </View>
+                        <View style={styles.opponentSeriesInfo}>
+                          <Text style={styles.opponentSeriesName} numberOfLines={1}>{opponent.name}</Text>
+                          <Text style={styles.opponentSeriesDetail}>
+                            {opponent.totalSeries} série{opponent.totalSeries > 1 ? 's' : ''} • {opponent.totalMatches} match{opponent.totalMatches > 1 ? 's' : ''}
+                          </Text>
+                        </View>
+                        <View style={styles.opponentSeriesStats}>
+                          <View style={styles.opponentSeriesRecord}>
+                            <Text style={[styles.opponentSeriesRecordValue, { color: theme.success }]}>{opponent.seriesWon}</Text>
+                            <Text style={styles.opponentSeriesRecordSep}>-</Text>
+                            <Text style={[styles.opponentSeriesRecordValue, { color: theme.error }]}>{opponent.seriesLost}</Text>
+                          </View>
+                          {(opponent.seriesWon + opponent.seriesLost) > 0 && (
+                            <View style={[
+                              styles.opponentSeriesWinRate,
+                              { backgroundColor: winRate >= 50 ? theme.success + '15' : theme.error + '15' }
+                            ]}>
+                              <Text style={[
+                                styles.opponentSeriesWinRateText,
+                                { color: winRate >= 50 ? theme.success : theme.error }
+                              ]}>{winRate}%</Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </Animated.View>
+            )}
+
+            {/* Recent Series */}
+            {seriesStats.recentCompletedSeries.length > 0 && (
+              <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
+                <Text style={styles.sectionTitle}>Séries récentes</Text>
+                <View style={styles.recentSeriesList}>
+                  {seriesStats.recentCompletedSeries.map((series, index) => (
+                    <View key={series.id} style={styles.recentSeriesItem}>
+                      <View style={[
+                        styles.recentSeriesResult,
+                        { backgroundColor: series.won ? theme.success : theme.error }
+                      ]}>
+                        <MaterialIcons 
+                          name={series.won ? 'check' : 'close'} 
+                          size={16} 
+                          color="#FFF" 
+                        />
+                      </View>
+                      <View style={styles.recentSeriesInfo}>
+                        <Text style={styles.recentSeriesOpponent} numberOfLines={1}>vs {series.opponent}</Text>
+                        <Text style={styles.recentSeriesMeta}>
+                          {series.type === 'match' ? 'Match' : 'Défi'} • {series.matchCount} partie{series.matchCount > 1 ? 's' : ''}
+                        </Text>
+                      </View>
+                      <View style={styles.recentSeriesDate}>
+                        <Text style={styles.recentSeriesDateText}>
+                          {new Date(series.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </Animated.View>
+            )}
+
+            {/* Empty State */}
+            {seriesStats.totalSeries === 0 && (
+              <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+                <View style={styles.emptyStateCard}>
+                  <MaterialIcons name="format-list-numbered" size={60} color={theme.textMuted} />
+                  <Text style={styles.emptyStateTitle}>Aucune série jouée</Text>
+                  <Text style={styles.emptyStateText}>
+                    Jouez des matchs d'entraînement ou des défis 1v1 avec la fonction "Revanche" pour suivre vos séries
+                  </Text>
                 </View>
               </Animated.View>
             )}
@@ -3351,5 +3743,274 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+  },
+  // Series Tab Styles
+  seriesOverviewCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 20,
+    ...theme.shadows.card,
+  },
+  seriesOverviewMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 24,
+  },
+  seriesOverviewRing: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  seriesOverviewRingCenter: {
+    position: 'absolute',
+    alignItems: 'center',
+  },
+  seriesOverviewRingValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: theme.primary,
+  },
+  seriesOverviewRingLabel: {
+    fontSize: 10,
+    color: theme.textSecondary,
+  },
+  seriesOverviewStats: {
+    flex: 1,
+    gap: 8,
+  },
+  seriesOverviewStatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  seriesOverviewDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  seriesOverviewStatText: {
+    fontSize: 14,
+    color: theme.textPrimary,
+  },
+  seriesOverviewFooter: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+    alignItems: 'center',
+  },
+  seriesOverviewFooterText: {
+    fontSize: 13,
+    color: theme.textSecondary,
+  },
+  finaleStatsCard: {
+    flexDirection: 'row',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 20,
+    alignItems: 'center',
+    ...theme.shadows.card,
+  },
+  finaleStatsMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  finaleStatsInfo: {},
+  finaleStatsValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  finaleStatsLabel: {
+    fontSize: 13,
+    color: theme.textSecondary,
+  },
+  finaleWinRateBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: theme.borderRadius.md,
+  },
+  finaleWinRateText: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  noFinalesHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingHorizontal: 4,
+  },
+  noFinalesText: {
+    flex: 1,
+    fontSize: 12,
+    color: theme.textMuted,
+    lineHeight: 16,
+  },
+  seriesByTypeGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  seriesByTypeCard: {
+    flex: 1,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    overflow: 'hidden',
+    ...theme.shadows.card,
+  },
+  seriesByTypeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 14,
+  },
+  seriesByTypeTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  seriesByTypeBody: {
+    alignItems: 'center',
+    padding: 16,
+    paddingTop: 8,
+  },
+  seriesByTypeCount: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  seriesByTypeLabel: {
+    fontSize: 12,
+    color: theme.textSecondary,
+  },
+  seriesByTypeRecord: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  seriesByTypeRecordValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    minWidth: 24,
+    textAlign: 'center',
+  },
+  seriesByTypeRecordSep: {
+    fontSize: 14,
+    color: theme.textMuted,
+    marginHorizontal: 6,
+  },
+  opponentSeriesList: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    overflow: 'hidden',
+    ...theme.shadows.card,
+  },
+  opponentSeriesItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  opponentSeriesAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: theme.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  opponentSeriesInitials: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  opponentSeriesInfo: {
+    flex: 1,
+  },
+  opponentSeriesName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  opponentSeriesDetail: {
+    fontSize: 12,
+    color: theme.textMuted,
+    marginTop: 2,
+  },
+  opponentSeriesStats: {
+    alignItems: 'flex-end',
+  },
+  opponentSeriesRecord: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  opponentSeriesRecordValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    minWidth: 20,
+    textAlign: 'center',
+  },
+  opponentSeriesRecordSep: {
+    fontSize: 12,
+    color: theme.textMuted,
+    marginHorizontal: 4,
+  },
+  opponentSeriesWinRate: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: theme.borderRadius.sm,
+    marginTop: 4,
+  },
+  opponentSeriesWinRateText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  recentSeriesList: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    overflow: 'hidden',
+    ...theme.shadows.card,
+  },
+  recentSeriesItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  recentSeriesResult: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  recentSeriesInfo: {
+    flex: 1,
+  },
+  recentSeriesOpponent: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  recentSeriesMeta: {
+    fontSize: 12,
+    color: theme.textMuted,
+    marginTop: 2,
+  },
+  recentSeriesDate: {
+    alignItems: 'flex-end',
+  },
+  recentSeriesDateText: {
+    fontSize: 12,
+    color: theme.textSecondary,
   },
 });
