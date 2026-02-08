@@ -58,16 +58,17 @@ export default function MapScreen() {
     const playersWithLocation = players.filter(p => 
       p.location && (p.location.latitude !== 0 || p.location.longitude !== 0)
     );
-    const upcomingTournaments = tournaments.filter(t => 
-      t.status === 'À venir' && t.location && (t.location.latitude !== 0 || t.location.longitude !== 0)
+    // Show all tournaments with valid locations (not just upcoming)
+    const tournamentsWithLocation = tournaments.filter(t => 
+      t.location && (t.location.latitude !== 0 || t.location.longitude !== 0)
     );
 
     return {
       terrains: terrainsWithLocation,
       clubs: clubsWithLocation,
       players: playersWithLocation,
-      tournaments: upcomingTournaments,
-      total: terrainsWithLocation.length + clubsWithLocation.length + playersWithLocation.length + upcomingTournaments.length,
+      tournaments: tournamentsWithLocation,
+      total: terrainsWithLocation.length + clubsWithLocation.length + playersWithLocation.length + tournamentsWithLocation.length,
     };
   }, [terrains, clubs, players, tournaments]);
 
