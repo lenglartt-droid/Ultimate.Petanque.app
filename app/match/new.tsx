@@ -103,6 +103,13 @@ interface PlayerActionState {
 
 type PlayerRoleType = 'Pointeur' | 'Milieu' | 'Tireur';
 
+// Available roles per format
+const ROLES_BY_FORMAT: Record<GameFormat, PlayerRoleType[]> = {
+  'Tête-à-tête': [], // No roles for 1v1
+  'Doublette': ['Pointeur', 'Tireur'], // Only 2 roles for 2v2
+  'Triplette': ['Pointeur', 'Milieu', 'Tireur'], // All 3 roles for 3v3
+};
+
 interface TeamPlayerWithRole {
   playerId: string;
   role: PlayerRoleType;
@@ -212,6 +219,11 @@ export default function NewMatchScreen() {
   // Points per mène based on format
   const maxPointsPerMene = useMemo(() => {
     return format === 'Tête-à-tête' ? 3 : 6;
+  }, [format]);
+
+  // Available roles based on format
+  const availableRoles = useMemo(() => {
+    return ROLES_BY_FORMAT[format] || [];
   }, [format]);
 
   const selectedTerrain = useMemo(() => {
@@ -328,7 +340,14 @@ export default function NewMatchScreen() {
         return;
       }
       const player = players.find(p => p.id === playerId);
-      const defaultRole = (player?.role || 'Milieu') as PlayerRoleType;
+      // Get default role based on format
+      let defaultRole: PlayerRoleType = 'Milieu';
+      if (availableRoles.length > 0) {
+        const playerPreferredRole = player?.role as PlayerRoleType;
+        defaultRole = availableRoles.includes(playerPreferredRole) 
+          ? playerPreferredRole 
+          : availableRoles[0];
+      }
       setTeam(prev => [...prev, { playerId, role: defaultRole }]);
     }
   };
@@ -360,6 +379,27 @@ export default function NewMatchScreen() {
       setTeamBPlayers(prev => prev.slice(0, maxPlayersPerTeam));
     }
   }, [maxPlayersPerTeam, teamAPlayers.length, teamBPlayers.length]);
+
+  // Update player roles when format changes (to ensure valid roles)
+  useEffect(() => {
+    if (availableRoles.length === 0) return; // No roles for this format
+    
+    // Update Team A roles to valid ones
+    setTeamAPlayers(prev => prev.map(p => {
+      if (!availableRoles.includes(p.role)) {
+        return { ...p, role: availableRoles[0] };
+      }
+      return p;
+    }));
+    
+    // Update Team B roles to valid ones
+    setTeamBPlayers(prev => prev.map(p => {
+      if (!availableRoles.includes(p.role)) {
+        return { ...p, role: availableRoles[0] };
+      }
+      return p;
+    }));
+  }, [availableRoles]);
 
   // Initialize player actions when teams change
   useEffect(() => {
@@ -1327,9 +1367,11 @@ export default function NewMatchScreen() {
                         <Text style={styles.playerMiniName} numberOfLines={1}>
                           {getPlayerName(p.playerId).split(' ')[0]}
                         </Text>
-                        <View style={[styles.roleMiniDot, { 
-                          backgroundColor: p.role === 'Tireur' ? '#F97316' : p.role === 'Pointeur' ? '#3B82F6' : '#8B5CF6' 
-                        }]} />
+                        {availableRoles.length > 0 && (
+                          <View style={[styles.roleMiniDot, { 
+                            backgroundColor: p.role === 'Tireur' ? '#F97316' : p.role === 'Pointeur' ? '#3B82F6' : '#8B5CF6' 
+                          }]} />
+                        )}
                       </View>
                     ))
                   ) : (
@@ -1383,9 +1425,11 @@ export default function NewMatchScreen() {
                         <Text style={styles.playerMiniName} numberOfLines={1}>
                           {getPlayerName(p.playerId).split(' ')[0]}
                         </Text>
-                        <View style={[styles.roleMiniDot, { 
-                          backgroundColor: p.role === 'Tireur' ? '#F97316' : p.role === 'Pointeur' ? '#3B82F6' : '#8B5CF6' 
-                        }]} />
+                        {availableRoles.length > 0 && (
+                          <View style={[styles.roleMiniDot, { 
+                            backgroundColor: p.role === 'Tireur' ? '#F97316' : p.role === 'Pointeur' ? '#3B82F6' : '#8B5CF6' 
+                          }]} />
+                        )}
                       </View>
                     ))
                   ) : (
@@ -1931,15 +1975,15 @@ export default function NewMatchScreen() {
               </Pressable>
             )}
 
-            {/* Role Selection for selected players */}
-            {showPlayerPicker && (showPlayerPicker === 'A' ? teamAPlayers : teamBPlayers).length > 0 && (
+            {/* Role Selection for selected players - Only show if format has roles */}
+            {showPlayerPicker && availableRoles.length > 0 && (showPlayerPicker === 'A' ? teamAPlayers : teamBPlayers).length > 0 && (
               <View style={styles.roleSelectionSection}>
                 <Text style={styles.roleSelectionTitle}>Rôles des joueurs sélectionnés</Text>
                 {(showPlayerPicker === 'A' ? teamAPlayers : teamBPlayers).map(p => (
                   <View key={p.playerId} style={styles.roleSelectionRow}>
                     <Text style={styles.roleSelectionName} numberOfLines={1}>{getPlayerName(p.playerId)}</Text>
                     <View style={styles.roleButtonsRow}>
-                      {(['Pointeur', 'Milieu', 'Tireur'] as PlayerRoleType[]).map(role => (
+                      {availableRoles.map(role => (
                         <Pressable
                           key={role}
                           style={[
