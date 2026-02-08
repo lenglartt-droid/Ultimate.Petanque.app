@@ -1239,7 +1239,7 @@ export default function NewMatchScreen() {
                     const newWinsA = seriesWinsA + (teamAScore > teamBScore ? 1 : 0);
                     const newWinsB = seriesWinsB + (teamAScore > teamBScore ? 0 : 1);
                     const isSeriesComplete = newWinsA >= 2 || newWinsB >= 2;
-                    const isFinalMatch = seriesWinsA === 1 && seriesWinsB === 1;
+                    const willBeFinale = newWinsA === 1 && newWinsB === 1;
                     
                     return (
                       <>
@@ -1259,29 +1259,47 @@ export default function NewMatchScreen() {
                           </View>
                         )}
                         
-                        {/* Series complete message */}
+                        {/* Series complete message - Finale terminée */}
                         {isSeriesComplete ? (
-                          <View style={styles.fsSeriesCompleteCard}>
-                            <MaterialIcons 
-                              name={newWinsA >= 2 ? 'emoji-events' : 'sentiment-dissatisfied'} 
-                              size={28} 
-                              color={newWinsA >= 2 ? '#FFD700' : '#F87171'} 
-                            />
-                            <Text style={[styles.fsSeriesCompleteText, { color: newWinsA >= 2 ? '#4ADE80' : '#F87171' }]}>
-                              {newWinsA >= 2 ? 'Série gagnée !' : 'Série perdue'}
-                            </Text>
-                          </View>
+                          <>
+                            <View style={styles.fsSeriesCompleteCard}>
+                              <MaterialIcons 
+                                name={newWinsA >= 2 ? 'emoji-events' : 'sentiment-dissatisfied'} 
+                                size={28} 
+                                color={newWinsA >= 2 ? '#FFD700' : '#F87171'} 
+                              />
+                              <Text style={[styles.fsSeriesCompleteText, { color: newWinsA >= 2 ? '#4ADE80' : '#F87171' }]}>
+                                {newWinsA >= 2 ? 'Série gagnée !' : 'Série perdue'}
+                              </Text>
+                            </View>
+                            {/* Terminer et retourner à l'accueil après la finale */}
+                            <Pressable 
+                              style={styles.fsFinaleTerminerBtn}
+                              onPress={() => {
+                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                setFullscreenMode(false);
+                                handleSaveMatch();
+                                // Rediriger vers l'accueil après la finale
+                                setTimeout(() => {
+                                  router.replace('/(tabs)');
+                                }, 100);
+                              }}
+                            >
+                              <MaterialIcons name="home" size={20} color="#FFF" />
+                              <Text style={styles.fsFinaleTerminerBtnText}>Terminer et retourner à l'accueil</Text>
+                            </Pressable>
+                          </>
                         ) : (
                           <Pressable 
                             style={[
                               styles.fsRevancheBtn,
-                              isFinalMatch && styles.fsRevancheBtnFinale
+                              willBeFinale && styles.fsRevancheBtnFinale
                             ]}
                             onPress={() => {
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                               setFullscreenMode(false);
                               
-                              // Save current match first
+                              // Save current match first (automatic save)
                               handleSaveMatch();
                               
                               // Navigate to new match with series context
@@ -1302,16 +1320,16 @@ export default function NewMatchScreen() {
                             }}
                           >
                             <MaterialIcons 
-                              name={isFinalMatch ? 'emoji-events' : 'sports-mma'} 
+                              name={willBeFinale ? 'emoji-events' : 'sports-mma'} 
                               size={20} 
                               color="#FFF" 
                             />
                             <View style={styles.fsRevancheBtnContent}>
                               <Text style={styles.fsRevancheBtnText}>
-                                {isFinalMatch ? 'FINALE ! (1-1)' : 'Revanche'}
+                                {willBeFinale ? 'FINALE ! (1-1)' : 'Revanche'}
                               </Text>
                               <Text style={styles.fsRevancheBtnSubtext}>
-                                {isFinalMatch ? 'Match décisif' : 'Même équipes, même format'}
+                                {willBeFinale ? 'Match décisif' : 'Même équipes, même format'}
                               </Text>
                             </View>
                           </Pressable>
@@ -3909,6 +3927,22 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   fsRevancheBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  fsFinaleTerminerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginTop: 16,
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    backgroundColor: theme.success,
+    borderRadius: 28,
+  },
+  fsFinaleTerminerBtnText: {
     fontSize: 16,
     fontWeight: '700',
     color: '#FFF',
