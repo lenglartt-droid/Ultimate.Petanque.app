@@ -1342,6 +1342,7 @@ export default function NewMatchScreen() {
                 </View>
               </Animated.View>
             )}
+          </SafeAreaView>
         </View>
       </Modal>
     );
