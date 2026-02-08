@@ -19,7 +19,7 @@ import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import config, { GameFormat, TournamentType } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
-import { AdvancedShotNotation, AdvancedShotRecord } from '@/components';
+import { AdvancedShotNotation, AdvancedShotRecord, SimplifiedShotNotation, SimpleShotRecord } from '@/components';
 
 // Tournament phases configuration
 const BASE_PHASES = [
@@ -227,9 +227,10 @@ export default function NewMatchScreen() {
   const [fullscreenMode, setFullscreenMode] = useState(false);
   // Advanced notation state
   const [showAdvancedNotation, setShowAdvancedNotation] = useState(false);
+  const [useSimplifiedNotation, setUseSimplifiedNotation] = useState(true); // Default to simplified
   const [advancedNotationPlayer, setAdvancedNotationPlayer] = useState<{ id: string; name: string; team: 'A' | 'B' } | null>(null);
   const [advancedNotationType, setAdvancedNotationType] = useState<'tir' | 'point'>('tir');
-  const [advancedShotRecords, setAdvancedShotRecords] = useState<AdvancedShotRecord[]>([]);
+  const [advancedShotRecords, setAdvancedShotRecords] = useState<(AdvancedShotRecord | SimpleShotRecord)[]>([]);
   const [selectedTerrainId, setSelectedTerrainId] = useState<string | null>(null);
   const [showTerrainPicker, setShowTerrainPicker] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -471,7 +472,7 @@ export default function NewMatchScreen() {
     setShowAdvancedNotation(true);
   }, []);
 
-  const handleAdvancedShotSubmit = useCallback((record: AdvancedShotRecord) => {
+  const handleAdvancedShotSubmit = useCallback((record: AdvancedShotRecord | SimpleShotRecord) => {
     // Store the advanced record
     setAdvancedShotRecords(prev => [...prev, record]);
     
@@ -487,6 +488,13 @@ export default function NewMatchScreen() {
         newActions.points++;
         if (record.success) newActions.pointsSuccess++;
       }
+      
+      // Store detailed shot in player actions for stats
+      if (!p.detailedShots) {
+        (p as any).detailedShots = [];
+      }
+      (p as any).detailedShots.push(record);
+      
       return { ...p, actions: newActions };
     }));
     
@@ -1293,9 +1301,9 @@ export default function NewMatchScreen() {
               </Animated.View>
             )}
 
-            {/* Advanced Notation Modal */}
+            {/* Simplified Notation Modal - More intuitive flow */}
             {advancedNotationPlayer && (
-              <AdvancedShotNotation
+              <SimplifiedShotNotation
                 visible={showAdvancedNotation}
                 onClose={() => {
                   setShowAdvancedNotation(false);

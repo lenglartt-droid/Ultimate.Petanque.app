@@ -2,7 +2,7 @@
 export { default as LocationPicker } from './ui/LocationPicker';
 export type { LocationData } from './ui/LocationPicker';
 
-// Advanced Shot Notation
+// Advanced Shot Notation (Full featured)
 export {
   AdvancedShotNotation,
   QuickNotationButton,
@@ -21,3 +21,20 @@ export type {
   PointQuality,
   AdvancedShotRecord,
 } from './ui/AdvancedShotNotation';
+
+// Simplified Shot Notation (Quick & Easy)
+export {
+  SimplifiedShotNotation,
+  QuickShotBar,
+  SHOT_TYPES as SIMPLE_SHOT_TYPES,
+  SHOT_QUALITIES as SIMPLE_SHOT_QUALITIES,
+  POINT_TYPES as SIMPLE_POINT_TYPES,
+  POINT_QUALITIES as SIMPLE_POINT_QUALITIES,
+} from './ui/SimplifiedShotNotation';
+export type {
+  SimpleShotType,
+  SimpleShotQuality,
+  SimplePointType,
+  SimplePointQuality,
+  SimpleShotRecord,
+} from './ui/SimplifiedShotNotation';

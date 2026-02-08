@@ -429,6 +429,29 @@ export default function StatsScreen() {
   const tirStats = useMemo(() => {
     let totalTirs = 0, tirsSuccess = 0, carreaux = 0;
     
+    // Detailed stats from advanced notation
+    const shotTypeStats: Record<string, { total: number; success: number }> = {
+      au_fer: { total: 0, success: 0 },
+      au_plomb: { total: 0, success: 0 },
+      en_rafle: { total: 0, success: 0 },
+      court: { total: 0, success: 0 },
+      long: { total: 0, success: 0 },
+      en_angle: { total: 0, success: 0 },
+      sur_boule: { total: 0, success: 0 },
+      sur_but: { total: 0, success: 0 },
+      autre: { total: 0, success: 0 },
+    };
+    
+    const shotQualityStats: Record<string, number> = {
+      gain_point: 0,
+      sans_effet: 0,
+      negatif: 0,
+      decisif: 0,
+      sous_pression: 0,
+      equipe_menee: 0,
+      equipe_mene: 0,
+    };
+    
     // From matches
     filteredMatches.forEach(match => {
       if (match.playerActions) {
@@ -436,6 +459,19 @@ export default function StatsScreen() {
           totalTirs += pa.actions.tirs;
           tirsSuccess += pa.actions.tirsSuccess;
           carreaux += pa.actions.carreaux;
+          
+          // Process detailed shot records if available
+          if (pa.detailedShots) {
+            pa.detailedShots.filter((s: any) => s.actionType === 'tir').forEach((shot: any) => {
+              if (shot.shotType && shotTypeStats[shot.shotType]) {
+                shotTypeStats[shot.shotType].total++;
+                if (shot.success) shotTypeStats[shot.shotType].success++;
+              }
+              if (shot.shotQuality && shotQualityStats[shot.shotQuality] !== undefined) {
+                shotQualityStats[shot.shotQuality]++;
+              }
+            });
+          }
         });
       }
     });
@@ -465,6 +501,10 @@ export default function StatsScreen() {
     // Demi-tirs estimation (touches without carreau)
     const demiTirs = combinedSuccess - combinedCarreaux;
     const demiTirRate = combinedTirs > 0 ? Math.round((demiTirs / combinedTirs) * 100) : 0;
+    
+    // Calculate detailed stats only if we have data
+    const hasDetailedData = Object.values(shotTypeStats).some(s => s.total > 0);
+    const totalDetailedTirs = Object.values(shotTypeStats).reduce((sum, s) => sum + s.total, 0);
 
     return {
       totalTirs: combinedTirs,
@@ -478,23 +518,25 @@ export default function StatsScreen() {
       tirsPerMene,
       matchTirs: totalTirs,
       challengeTirs,
-      // Quality stats (N/A - need more detailed tracking)
-      tirGainPoint: null,
-      tirSansEffet: null,
-      tirNegatif: null,
-      tirsDecisifs: null,
-      tirsSousPression: null,
-      tirsQuandMene: null,
-      tirsQuandMenant: null,
-      // Type stats (N/A - need more detailed tracking)
-      tirAuFer: null,
-      tirAuPlomb: null,
-      tirEnRafle: null,
-      tirCourt: null,
-      tirLong: null,
-      tirEnAngle: null,
-      tirSurBoule: null,
-      tirSurBut: null,
+      // Quality stats (from detailed tracking)
+      hasDetailedData,
+      totalDetailedTirs,
+      tirGainPoint: hasDetailedData ? shotQualityStats.gain_point : null,
+      tirSansEffet: hasDetailedData ? shotQualityStats.sans_effet : null,
+      tirNegatif: hasDetailedData ? shotQualityStats.negatif : null,
+      tirsDecisifs: hasDetailedData ? shotQualityStats.decisif : null,
+      tirsSousPression: hasDetailedData ? shotQualityStats.sous_pression : null,
+      tirsQuandMene: hasDetailedData ? shotQualityStats.equipe_menee : null,
+      tirsQuandMenant: hasDetailedData ? shotQualityStats.equipe_mene : null,
+      // Type stats (from detailed tracking)
+      tirAuFer: hasDetailedData ? shotTypeStats.au_fer : null,
+      tirAuPlomb: hasDetailedData ? shotTypeStats.au_plomb : null,
+      tirEnRafle: hasDetailedData ? shotTypeStats.en_rafle : null,
+      tirCourt: hasDetailedData ? shotTypeStats.court : null,
+      tirLong: hasDetailedData ? shotTypeStats.long : null,
+      tirEnAngle: hasDetailedData ? shotTypeStats.en_angle : null,
+      tirSurBoule: hasDetailedData ? shotTypeStats.sur_boule : null,
+      tirSurBut: hasDetailedData ? shotTypeStats.sur_but : null,
     };
   }, [filteredMatches, filteredChallenges, performanceStats.totalMenes]);
 
@@ -504,42 +546,89 @@ export default function StatsScreen() {
   const pointStats = useMemo(() => {
     let totalPoints = 0, pointsSuccess = 0;
     
+    // Detailed stats from advanced notation
+    const pointTypeStats: Record<string, { total: number; success: number }> = {
+      roule: { total: 0, success: 0 },
+      plombe: { total: 0, success: 0 },
+      demi_portee: { total: 0, success: 0 },
+      portee_haute: { total: 0, success: 0 },
+      au_but: { total: 0, success: 0 },
+      securite: { total: 0, success: 0 },
+      autre: { total: 0, success: 0 },
+    };
+    
+    const pointQualityStats: Record<string, number> = {
+      excellent: 0,   // < 10cm
+      bon: 0,         // < 30cm
+      moyen: 0,       // < 50cm
+      rate: 0,        // missed
+      gagnant: 0,
+      placement: 0,
+      moins_50cm: 0,
+      moins_30cm: 0,
+      moins_10cm: 0,
+      rate_court: 0,
+      rate_long: 0,
+      trop_droite: 0,
+      trop_gauche: 0,
+    };
+    
     filteredMatches.forEach(match => {
       if (match.playerActions) {
         match.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
           totalPoints += pa.actions.points;
           pointsSuccess += pa.actions.pointsSuccess;
+          
+          // Process detailed point records if available
+          if (pa.detailedShots) {
+            pa.detailedShots.filter((s: any) => s.actionType === 'point').forEach((shot: any) => {
+              if (shot.pointType && pointTypeStats[shot.pointType]) {
+                pointTypeStats[shot.pointType].total++;
+                if (shot.success) pointTypeStats[shot.pointType].success++;
+              }
+              if (shot.pointQuality && pointQualityStats[shot.pointQuality] !== undefined) {
+                pointQualityStats[shot.pointQuality]++;
+              }
+            });
+          }
         });
       }
     });
     
     const successRate = totalPoints > 0 ? Math.round((pointsSuccess / totalPoints) * 100) : 0;
     const pointsPerMene = performanceStats.totalMenes > 0 ? (totalPoints / performanceStats.totalMenes).toFixed(1) : '0';
+    
+    // Calculate detailed stats only if we have data
+    const hasDetailedData = Object.values(pointTypeStats).some(s => s.total > 0);
+    const totalDetailedPoints = Object.values(pointTypeStats).reduce((sum, s) => sum + s.total, 0);
 
     return {
       totalPoints,
       pointsSuccess,
       successRate,
       pointsPerMene,
-      // Quality stats (N/A - need more detailed tracking)
-      distanceMoyenne: null,
+      // Detailed data available flag
+      hasDetailedData,
+      totalDetailedPoints,
+      // Quality stats (from detailed tracking)
+      distanceMoyenne: null, // Would need actual measurements
       ecartMoyen: null,
-      pointsMoins50cm: null,
-      pointsMoins30cm: null,
-      pointsMoins10cm: null,
-      pointsRatesCourts: null,
-      pointsRatesLongs: null,
-      pointsTropDroite: null,
-      pointsTropGauche: null,
-      // Type stats (N/A - need more detailed tracking)
-      pointRoule: null,
-      pointPlombe: null,
-      pointDemiPortee: null,
-      pointPorteeHaute: null,
-      pointAuBut: null,
-      pointSecurite: null,
-      pointsGagnants: null,
-      pointsPlacement: null,
+      pointsMoins50cm: hasDetailedData ? (pointQualityStats.moins_50cm + pointQualityStats.moyen) : null,
+      pointsMoins30cm: hasDetailedData ? (pointQualityStats.moins_30cm + pointQualityStats.bon) : null,
+      pointsMoins10cm: hasDetailedData ? (pointQualityStats.moins_10cm + pointQualityStats.excellent) : null,
+      pointsRatesCourts: hasDetailedData ? pointQualityStats.rate_court : null,
+      pointsRatesLongs: hasDetailedData ? pointQualityStats.rate_long : null,
+      pointsTropDroite: hasDetailedData ? pointQualityStats.trop_droite : null,
+      pointsTropGauche: hasDetailedData ? pointQualityStats.trop_gauche : null,
+      // Type stats (from detailed tracking)
+      pointRoule: hasDetailedData ? pointTypeStats.roule : null,
+      pointPlombe: hasDetailedData ? pointTypeStats.plombe : null,
+      pointDemiPortee: hasDetailedData ? pointTypeStats.demi_portee : null,
+      pointPorteeHaute: hasDetailedData ? pointTypeStats.portee_haute : null,
+      pointAuBut: hasDetailedData ? pointTypeStats.au_but : null,
+      pointSecurite: hasDetailedData ? pointTypeStats.securite : null,
+      pointsGagnants: hasDetailedData ? pointQualityStats.gagnant : null,
+      pointsPlacement: hasDetailedData ? pointQualityStats.placement : null,
     };
   }, [filteredMatches, performanceStats.totalMenes]);
 
@@ -968,33 +1057,131 @@ export default function StatsScreen() {
                   </Animated.View>
                 )}
 
-                {/* Qualité du tir - À venir */}
+                {/* Qualité du tir - Données disponibles si enregistrées */}
                 <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-                  <SectionHeader title="Qualité du tir" subtitle="Statistiques avancées" icon="insights" color={theme.primary} />
+                  <SectionHeader title="Qualité du tir" subtitle={tirStats.hasDetailedData ? `${tirStats.totalDetailedTirs} tirs analysés` : 'Statistiques avancées'} icon="insights" color={theme.primary} />
                   <View style={styles.card}>
-                    <StatRow label="Tir avec gain de point" value="-" isNA icon="trending-up" color={theme.success} />
-                    <StatRow label="Tir sans effet" value="-" isNA icon="remove" color={theme.textMuted} />
-                    <StatRow label="Tir négatif" value="-" isNA icon="trending-down" color={theme.error} />
-                    <StatRow label="Tirs décisifs (fin de mène)" value="-" isNA icon="flag" color={theme.primary} />
-                    <StatRow label="Tirs sous pression" value="-" isNA icon="psychology" color={theme.accent} />
-                    <StatRow label="Tirs quand équipe menée" value="-" isNA icon="arrow-downward" color={theme.error} />
-                    <StatRow label="Tirs quand équipe mène" value="-" isNA icon="arrow-upward" color={theme.success} />
-                    <NAPlaceholder message="Enregistrez les actions détaillées pendant les matchs" />
+                    <StatRow 
+                      label="Tir avec gain de point" 
+                      value={tirStats.tirGainPoint !== null ? tirStats.tirGainPoint : '-'} 
+                      isNA={tirStats.tirGainPoint === null} 
+                      icon="trending-up" 
+                      color={theme.success} 
+                    />
+                    <StatRow 
+                      label="Tir sans effet" 
+                      value={tirStats.tirSansEffet !== null ? tirStats.tirSansEffet : '-'} 
+                      isNA={tirStats.tirSansEffet === null} 
+                      icon="remove" 
+                      color={theme.textMuted} 
+                    />
+                    <StatRow 
+                      label="Tir négatif" 
+                      value={tirStats.tirNegatif !== null ? tirStats.tirNegatif : '-'} 
+                      isNA={tirStats.tirNegatif === null} 
+                      icon="trending-down" 
+                      color={theme.error} 
+                    />
+                    <StatRow 
+                      label="Tirs décisifs (fin de mène)" 
+                      value={tirStats.tirsDecisifs !== null ? tirStats.tirsDecisifs : '-'} 
+                      isNA={tirStats.tirsDecisifs === null} 
+                      icon="flag" 
+                      color={theme.primary} 
+                    />
+                    <StatRow 
+                      label="Tirs sous pression" 
+                      value={tirStats.tirsSousPression !== null ? tirStats.tirsSousPression : '-'} 
+                      isNA={tirStats.tirsSousPression === null} 
+                      icon="psychology" 
+                      color={theme.accent} 
+                    />
+                    <StatRow 
+                      label="Tirs quand équipe menée" 
+                      value={tirStats.tirsQuandMene !== null ? tirStats.tirsQuandMene : '-'} 
+                      isNA={tirStats.tirsQuandMene === null} 
+                      icon="arrow-downward" 
+                      color={theme.error} 
+                    />
+                    <StatRow 
+                      label="Tirs quand équipe mène" 
+                      value={tirStats.tirsQuandMenant !== null ? tirStats.tirsQuandMenant : '-'} 
+                      isNA={tirStats.tirsQuandMenant === null} 
+                      icon="arrow-upward" 
+                      color={theme.success} 
+                    />
+                    {!tirStats.hasDetailedData && (
+                      <NAPlaceholder message="Utilisez la notation détaillée pendant les matchs (appui long sur TIR)" />
+                    )}
                   </View>
                 </Animated.View>
 
-                {/* Types de tir - À venir */}
+                {/* Types de tir - Données disponibles si enregistrées */}
                 <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-                  <SectionHeader title="Types de tir" subtitle="Analyse technique" icon="category" color={theme.tirColor} />
+                  <SectionHeader title="Types de tir" subtitle={tirStats.hasDetailedData ? 'Analyse technique' : 'Analyse technique'} icon="category" color={theme.tirColor} />
                   <View style={styles.card}>
-                    <StatRow label="Tir au fer" value="-" isNA icon="gps-fixed" color={theme.tirColor} />
-                    <StatRow label="Tir au plomb" value="-" isNA icon="flight-takeoff" color={theme.pointColor} />
-                    <StatRow label="Tir en rafle" value="-" isNA icon="swap-horiz" color={theme.accent} />
-                    <StatRow label="Tir court / long" value="-" isNA icon="straighten" color={theme.textSecondary} />
-                    <StatRow label="Tir en angle" value="-" isNA icon="turn-right" color={theme.primary} />
-                    <StatRow label="Tir sur boule adverse" value="-" isNA icon="sports-baseball" color={theme.error} />
-                    <StatRow label="Tir sur but" value="-" isNA icon="adjust" color={theme.carreauColor} />
-                    <NAPlaceholder message="Spécifiez le type de tir lors de l'enregistrement" />
+                    <StatRow 
+                      label="Tir au fer" 
+                      value={tirStats.tirAuFer !== null ? `${tirStats.tirAuFer.success}/${tirStats.tirAuFer.total}` : '-'} 
+                      subValue={tirStats.tirAuFer !== null && tirStats.tirAuFer.total > 0 ? `${Math.round((tirStats.tirAuFer.success / tirStats.tirAuFer.total) * 100)}% réussite` : ''}
+                      isNA={tirStats.tirAuFer === null} 
+                      icon="gps-fixed" 
+                      color={theme.tirColor} 
+                    />
+                    <StatRow 
+                      label="Tir au plomb" 
+                      value={tirStats.tirAuPlomb !== null ? `${tirStats.tirAuPlomb.success}/${tirStats.tirAuPlomb.total}` : '-'} 
+                      subValue={tirStats.tirAuPlomb !== null && tirStats.tirAuPlomb.total > 0 ? `${Math.round((tirStats.tirAuPlomb.success / tirStats.tirAuPlomb.total) * 100)}% réussite` : ''}
+                      isNA={tirStats.tirAuPlomb === null} 
+                      icon="flight-takeoff" 
+                      color={theme.pointColor} 
+                    />
+                    <StatRow 
+                      label="Tir en rafle" 
+                      value={tirStats.tirEnRafle !== null ? `${tirStats.tirEnRafle.success}/${tirStats.tirEnRafle.total}` : '-'} 
+                      subValue={tirStats.tirEnRafle !== null && tirStats.tirEnRafle.total > 0 ? `${Math.round((tirStats.tirEnRafle.success / tirStats.tirEnRafle.total) * 100)}% réussite` : ''}
+                      isNA={tirStats.tirEnRafle === null} 
+                      icon="swap-horiz" 
+                      color={theme.accent} 
+                    />
+                    <StatRow 
+                      label="Tir court" 
+                      value={tirStats.tirCourt !== null ? `${tirStats.tirCourt.success}/${tirStats.tirCourt.total}` : '-'} 
+                      isNA={tirStats.tirCourt === null} 
+                      icon="vertical-align-bottom" 
+                      color={theme.warning} 
+                    />
+                    <StatRow 
+                      label="Tir long" 
+                      value={tirStats.tirLong !== null ? `${tirStats.tirLong.success}/${tirStats.tirLong.total}` : '-'} 
+                      isNA={tirStats.tirLong === null} 
+                      icon="vertical-align-top" 
+                      color={theme.accent} 
+                    />
+                    <StatRow 
+                      label="Tir en angle" 
+                      value={tirStats.tirEnAngle !== null ? `${tirStats.tirEnAngle.success}/${tirStats.tirEnAngle.total}` : '-'} 
+                      isNA={tirStats.tirEnAngle === null} 
+                      icon="turn-right" 
+                      color={theme.primary} 
+                    />
+                    <StatRow 
+                      label="Tir sur boule adverse" 
+                      value={tirStats.tirSurBoule !== null ? `${tirStats.tirSurBoule.success}/${tirStats.tirSurBoule.total}` : '-'} 
+                      isNA={tirStats.tirSurBoule === null} 
+                      icon="sports-baseball" 
+                      color={theme.error} 
+                    />
+                    <StatRow 
+                      label="Tir sur but" 
+                      value={tirStats.tirSurBut !== null ? `${tirStats.tirSurBut.success}/${tirStats.tirSurBut.total}` : '-'} 
+                      isNA={tirStats.tirSurBut === null} 
+                      icon="adjust" 
+                      color={theme.carreauColor} 
+                    />
+                    {!tirStats.hasDetailedData && (
+                      <NAPlaceholder message="Spécifiez le type de tir lors de l'enregistrement (appui long)" />
+                    )}
                   </View>
                 </Animated.View>
               </>
@@ -1043,46 +1230,144 @@ export default function StatsScreen() {
                   </View>
                 </Animated.View>
 
-                {/* Types de points - À venir */}
+                {/* Types de points - Données disponibles si enregistrées */}
                 <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-                  <SectionHeader title="Types de points" subtitle="Analyse technique" icon="category" color={theme.primary} />
+                  <SectionHeader title="Types de points" subtitle={pointStats.hasDetailedData ? `${pointStats.totalDetailedPoints} points analysés` : 'Analyse technique'} icon="category" color={theme.primary} />
                   <View style={styles.card}>
-                    <StatRow label="Points gagnants (meilleure boule)" value="-" isNA icon="emoji-events" color={theme.carreauColor} />
-                    <StatRow label="Points de placement" value="-" isNA icon="shield" color={theme.accent} />
+                    <StatRow 
+                      label="Points gagnants (meilleure boule)" 
+                      value={pointStats.pointsGagnants !== null ? pointStats.pointsGagnants : '-'} 
+                      isNA={pointStats.pointsGagnants === null} 
+                      icon="emoji-events" 
+                      color={theme.carreauColor} 
+                    />
+                    <StatRow 
+                      label="Points de placement" 
+                      value={pointStats.pointsPlacement !== null ? pointStats.pointsPlacement : '-'} 
+                      isNA={pointStats.pointsPlacement === null} 
+                      icon="shield" 
+                      color={theme.accent} 
+                    />
                     <View style={styles.divider} />
-                    <StatRow label="Point roulé" value="-" isNA icon="sports-baseball" color={theme.pointColor} />
-                    <StatRow label="Point plombé" value="-" isNA icon="flight-land" color={theme.tirColor} />
-                    <StatRow label="Point demi-portée" value="-" isNA icon="height" color={theme.primary} />
-                    <StatRow label="Point portée haute" value="-" isNA icon="flight" color={theme.accent} />
-                    <StatRow label="Point au but" value="-" isNA icon="adjust" color={theme.carreauColor} />
-                    <StatRow label="Point de sécurité" value="-" isNA icon="security" color={theme.success} />
-                    <NAPlaceholder message="Spécifiez le type de point lors de l'enregistrement" />
+                    <StatRow 
+                      label="Point roulé" 
+                      value={pointStats.pointRoule !== null ? `${pointStats.pointRoule.success}/${pointStats.pointRoule.total}` : '-'} 
+                      subValue={pointStats.pointRoule !== null && pointStats.pointRoule.total > 0 ? `${Math.round((pointStats.pointRoule.success / pointStats.pointRoule.total) * 100)}% réussite` : ''}
+                      isNA={pointStats.pointRoule === null} 
+                      icon="sports-baseball" 
+                      color={theme.pointColor} 
+                    />
+                    <StatRow 
+                      label="Point plombé" 
+                      value={pointStats.pointPlombe !== null ? `${pointStats.pointPlombe.success}/${pointStats.pointPlombe.total}` : '-'} 
+                      subValue={pointStats.pointPlombe !== null && pointStats.pointPlombe.total > 0 ? `${Math.round((pointStats.pointPlombe.success / pointStats.pointPlombe.total) * 100)}% réussite` : ''}
+                      isNA={pointStats.pointPlombe === null} 
+                      icon="flight-land" 
+                      color={theme.tirColor} 
+                    />
+                    <StatRow 
+                      label="Point demi-portée" 
+                      value={pointStats.pointDemiPortee !== null ? `${pointStats.pointDemiPortee.success}/${pointStats.pointDemiPortee.total}` : '-'} 
+                      isNA={pointStats.pointDemiPortee === null} 
+                      icon="height" 
+                      color={theme.primary} 
+                    />
+                    <StatRow 
+                      label="Point portée haute" 
+                      value={pointStats.pointPorteeHaute !== null ? `${pointStats.pointPorteeHaute.success}/${pointStats.pointPorteeHaute.total}` : '-'} 
+                      isNA={pointStats.pointPorteeHaute === null} 
+                      icon="flight" 
+                      color={theme.accent} 
+                    />
+                    <StatRow 
+                      label="Point au but" 
+                      value={pointStats.pointAuBut !== null ? `${pointStats.pointAuBut.success}/${pointStats.pointAuBut.total}` : '-'} 
+                      isNA={pointStats.pointAuBut === null} 
+                      icon="adjust" 
+                      color={theme.carreauColor} 
+                    />
+                    <StatRow 
+                      label="Point de sécurité" 
+                      value={pointStats.pointSecurite !== null ? `${pointStats.pointSecurite.success}/${pointStats.pointSecurite.total}` : '-'} 
+                      isNA={pointStats.pointSecurite === null} 
+                      icon="security" 
+                      color={theme.success} 
+                    />
+                    {!pointStats.hasDetailedData && (
+                      <NAPlaceholder message="Spécifiez le type de point lors de l'enregistrement (appui long sur POINT)" />
+                    )}
                   </View>
                 </Animated.View>
 
-                {/* Qualité du point - À venir */}
+                {/* Qualité du point - Données disponibles si enregistrées */}
                 <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
                   <SectionHeader title="Qualité du point" subtitle="Précision" icon="straighten" color={theme.success} />
                   <View style={styles.card}>
                     <StatRow label="Distance moyenne du but" value="-" isNA icon="straighten" color={theme.primary} />
                     <StatRow label="Écart moyen boule/but" value="-" isNA icon="swap-horiz" color={theme.accent} />
                     <View style={styles.divider} />
-                    <StatRow label="Points à moins de 50 cm" value="-" isNA icon="looks-one" color={theme.success} />
-                    <StatRow label="Points à moins de 30 cm" value="-" isNA icon="looks-two" color={theme.pointColor} />
-                    <StatRow label="Points à moins de 10 cm" value="-" isNA icon="looks-3" color={theme.carreauColor} />
-                    <NAPlaceholder message="Mesurez les distances pour un suivi précis" />
+                    <StatRow 
+                      label="Points à moins de 50 cm" 
+                      value={pointStats.pointsMoins50cm !== null ? pointStats.pointsMoins50cm : '-'} 
+                      isNA={pointStats.pointsMoins50cm === null} 
+                      icon="looks-one" 
+                      color={theme.success} 
+                    />
+                    <StatRow 
+                      label="Points à moins de 30 cm" 
+                      value={pointStats.pointsMoins30cm !== null ? pointStats.pointsMoins30cm : '-'} 
+                      isNA={pointStats.pointsMoins30cm === null} 
+                      icon="looks-two" 
+                      color={theme.pointColor} 
+                    />
+                    <StatRow 
+                      label="Points à moins de 10 cm" 
+                      value={pointStats.pointsMoins10cm !== null ? pointStats.pointsMoins10cm : '-'} 
+                      isNA={pointStats.pointsMoins10cm === null} 
+                      icon="looks-3" 
+                      color={theme.carreauColor} 
+                    />
+                    {!pointStats.hasDetailedData && (
+                      <NAPlaceholder message="Utilisez la notation détaillée pour un suivi précis (appui long)" />
+                    )}
                   </View>
                 </Animated.View>
 
-                {/* Erreurs de pointage - À venir */}
+                {/* Erreurs de pointage - Données disponibles si enregistrées */}
                 <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
                   <SectionHeader title="Analyse des erreurs" subtitle="Axes d'amélioration" icon="error-outline" color={theme.error} />
                   <View style={styles.card}>
-                    <StatRow label="Points ratés courts" value="-" isNA icon="vertical-align-bottom" color={theme.error} />
-                    <StatRow label="Points ratés longs" value="-" isNA icon="vertical-align-top" color={theme.error} />
-                    <StatRow label="Points trop à droite" value="-" isNA icon="chevron-right" color={theme.error} />
-                    <StatRow label="Points trop à gauche" value="-" isNA icon="chevron-left" color={theme.error} />
-                    <NAPlaceholder message="Analysez vos erreurs pour progresser" />
+                    <StatRow 
+                      label="Points ratés courts" 
+                      value={pointStats.pointsRatesCourts !== null ? pointStats.pointsRatesCourts : '-'} 
+                      isNA={pointStats.pointsRatesCourts === null} 
+                      icon="vertical-align-bottom" 
+                      color={theme.error} 
+                    />
+                    <StatRow 
+                      label="Points ratés longs" 
+                      value={pointStats.pointsRatesLongs !== null ? pointStats.pointsRatesLongs : '-'} 
+                      isNA={pointStats.pointsRatesLongs === null} 
+                      icon="vertical-align-top" 
+                      color={theme.error} 
+                    />
+                    <StatRow 
+                      label="Points trop à droite" 
+                      value={pointStats.pointsTropDroite !== null ? pointStats.pointsTropDroite : '-'} 
+                      isNA={pointStats.pointsTropDroite === null} 
+                      icon="chevron-right" 
+                      color={theme.warning} 
+                    />
+                    <StatRow 
+                      label="Points trop à gauche" 
+                      value={pointStats.pointsTropGauche !== null ? pointStats.pointsTropGauche : '-'} 
+                      isNA={pointStats.pointsTropGauche === null} 
+                      icon="chevron-left" 
+                      color={theme.warning} 
+                    />
+                    {!pointStats.hasDetailedData && (
+                      <NAPlaceholder message="Analysez vos erreurs avec la notation détaillée pour progresser" />
+                    )}
                   </View>
                 </Animated.View>
               </>
