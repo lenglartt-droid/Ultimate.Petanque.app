@@ -161,7 +161,8 @@ export default function NewMatchScreen() {
   const seriesWinsA = parseInt(initialWinsA || '0');
   const seriesWinsB = parseInt(initialWinsB || '0');
   const isFinale = seriesWinsA === 1 && seriesWinsB === 1;
-  const seriesId = initialSeriesId || (isRevanche ? `series-${Date.now()}` : undefined);
+  // Use existing seriesId from params or generate a new one for new series
+  const [seriesId] = useState(() => initialSeriesId || (isRevanche ? `series-${Date.now()}` : undefined));
   const currentMatchNumber = seriesWinsA + seriesWinsB + 1;
   const linkedTournament = tournamentId ? tournaments.find(t => t.id === tournamentId) : null;
   const isTournamentMode = !!linkedTournament;
@@ -704,8 +705,11 @@ export default function NewMatchScreen() {
     const newWinsB = seriesWinsB + (winner === 'A' ? 0 : 1);
     const isSeriesComplete = newWinsA >= 2 || newWinsB >= 2;
     
-    const seriesInfo = (isRevanche || seriesId) ? {
-      seriesId: seriesId || `series-${Date.now()}`,
+    // Generate a consistent seriesId for new series starting from this match
+    const currentSeriesId = seriesId || `series-${Date.now()}`;
+    
+    const seriesInfo = (isRevanche || seriesWinsA > 0 || seriesWinsB > 0 || currentMatchNumber > 1) ? {
+      seriesId: currentSeriesId,
       matchNumber: currentMatchNumber,
       winsBeforeThisMatch: { teamA: seriesWinsA, teamB: seriesWinsB },
       isFinale: isFinale,
@@ -1303,6 +1307,8 @@ export default function NewMatchScreen() {
                               handleSaveMatch();
                               
                               // Navigate to new match with series context
+                              // Use the same seriesId throughout the series
+                              const currentSeriesIdForNav = seriesId || `series-${Date.now()}`;
                               setTimeout(() => {
                                 router.replace({
                                   pathname: '/match/new',
@@ -1313,7 +1319,7 @@ export default function NewMatchScreen() {
                                     teamB: teamBPlayers.map(p => getPlayerName(p.playerId)).join(','),
                                     seriesWinsA: String(newWinsA),
                                     seriesWinsB: String(newWinsB),
-                                    seriesId: seriesId || `series-${Date.now()}`,
+                                    seriesId: currentSeriesIdForNav,
                                   }
                                 });
                               }, 100);

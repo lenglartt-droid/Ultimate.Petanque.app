@@ -543,12 +543,32 @@ export default function HistoryScreen() {
                 e.stopPropagation();
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 // Calculate new series score based on this match result
-                // If this match was already part of a series, continue that series
-                const existingSeriesId = match.seriesInfo?.seriesId;
-                const existingWinsA = match.seriesInfo?.winsBeforeThisMatch?.teamA || 0;
-                const existingWinsB = match.seriesInfo?.winsBeforeThisMatch?.teamB || 0;
-                const newWinsA = existingWinsA + (isWin ? 1 : 0);
-                const newWinsB = existingWinsB + (isWin ? 0 : 1);
+                // If this match was already part of a series, continue from this match's result
+                const existingSeriesInfo = match.seriesInfo;
+                let newSeriesWinsA = 0;
+                let newSeriesWinsB = 0;
+                
+                if (existingSeriesInfo) {
+                  // This match was part of a series - calculate wins after this match
+                  newSeriesWinsA = (existingSeriesInfo.winsBeforeThisMatch?.teamA || 0) + (isWin ? 1 : 0);
+                  newSeriesWinsB = (existingSeriesInfo.winsBeforeThisMatch?.teamB || 0) + (isWin ? 0 : 1);
+                } else {
+                  // Starting a new series from this match
+                  newSeriesWinsA = isWin ? 1 : 0;
+                  newSeriesWinsB = isWin ? 0 : 1;
+                }
+                // Don't allow revanche if series is already complete (2 wins)
+                if (existingSeriesInfo?.seriesComplete) {
+                  // Start a completely new series
+                  newSeriesWinsA = isWin ? 1 : 0;
+                  newSeriesWinsB = isWin ? 0 : 1;
+                }
+                
+                // Generate new seriesId if starting fresh, otherwise continue existing series
+                const seriesIdForRevanche = (existingSeriesInfo && !existingSeriesInfo.seriesComplete) 
+                  ? existingSeriesInfo.seriesId 
+                  : `series-${Date.now()}`;
+                
                 router.push({
                   pathname: '/match/new',
                   params: {
@@ -556,9 +576,9 @@ export default function HistoryScreen() {
                     format: match.format,
                     teamA: encodeTeamForRevanche(match.teamA.playerNames),
                     teamB: encodeTeamForRevanche(match.teamB.playerNames),
-                    seriesWinsA: String(newWinsA),
-                    seriesWinsB: String(newWinsB),
-                    seriesId: existingSeriesId || `series-${Date.now()}`,
+                    seriesWinsA: String(newSeriesWinsA),
+                    seriesWinsB: String(newSeriesWinsB),
+                    seriesId: seriesIdForRevanche,
                   }
                 });
               }}
