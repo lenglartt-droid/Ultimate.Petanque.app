@@ -1395,30 +1395,137 @@ export default function NewMatchScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Mode Banner & Terrain Selection */}
+          {/* Mode Banner & Series Tracking - Training Only */}
           {!isTournamentMode && (
             <Animated.View entering={FadeInDown.duration(300)} style={styles.trainingSetupCard}>
-              <View style={[styles.modeBanner, isRevanche && styles.modeBannerRevanche, isFinale && styles.modeBannerFinale]}>
-                <View style={[styles.modeBannerIcon, isRevanche && styles.modeBannerIconRevanche, isFinale && styles.modeBannerIconFinale]}>
-                  <MaterialIcons name={isFinale ? 'emoji-events' : isRevanche ? 'sports-mma' : 'fitness-center'} size={20} color="#FFF" />
-                </View>
-                <Text style={styles.modeBannerText}>
-                  {isFinale ? 'FINALE - Match décisif' : isRevanche ? 'Match revanche' : 'Entraînement'}
-                </Text>
-                                {isRevanche && (seriesWinsA > 0 || seriesWinsB > 0) && (
-                  <View style={styles.seriesScoreBadge}>
-                    <Text style={styles.seriesScoreText}>
-                      Série : {seriesWinsA} - {seriesWinsB}
-                    </Text>
-                    {isFinale && (
-                      <View style={styles.finaleBadge}>
-                        <MaterialIcons name="emoji-events" size={12} color="#FFF" />
-                        <Text style={styles.finaleBadgeText}>FINALE</Text>
-                      </View>
+              {/* Series Tracking Panel - Show when in a series */}
+              {(isRevanche || seriesWinsA > 0 || seriesWinsB > 0) ? (
+                <View style={styles.seriesPanel}>
+                  {/* Series Header */}
+                  <View style={styles.seriesPanelHeader}>
+                    <View style={styles.seriesPanelTitleRow}>
+                      <MaterialIcons 
+                        name={isFinale ? 'emoji-events' : 'repeat'} 
+                        size={24} 
+                        color={isFinale ? theme.carreauColor : theme.accent} 
+                      />
+                      <Text style={[styles.seriesPanelTitle, isFinale && styles.seriesPanelTitleFinale]}>
+                        {isFinale ? 'FINALE DÉCISIVE' : 'Série en cours'}
+                      </Text>
+                    </View>
+                    {!isFinale && (
+                      <Text style={styles.seriesPanelSubtitle}>Match {currentMatchNumber} / Best of 3</Text>
                     )}
                   </View>
-                )}
-              </View>
+
+                  {/* Series Progress Indicator */}
+                  <View style={styles.seriesProgressContainer}>
+                    {/* Match 1 */}
+                    <View style={styles.seriesMatchIndicator}>
+                      <View style={[
+                        styles.seriesMatchDot,
+                        currentMatchNumber > 1 && (seriesWinsA > 0 ? styles.seriesMatchDotWinA : styles.seriesMatchDotLossB),
+                        currentMatchNumber === 1 && styles.seriesMatchDotCurrent,
+                      ]}>
+                        {currentMatchNumber > 1 && (
+                          <MaterialIcons name={seriesWinsA > 0 ? 'check' : 'close'} size={14} color="#FFF" />
+                        )}
+                        {currentMatchNumber === 1 && <Text style={styles.seriesMatchDotText}>1</Text>}
+                      </View>
+                      <Text style={styles.seriesMatchLabel}>Match 1</Text>
+                    </View>
+
+                    {/* Connector 1-2 */}
+                    <View style={[
+                      styles.seriesConnector,
+                      currentMatchNumber > 1 && styles.seriesConnectorPast,
+                    ]} />
+
+                    {/* Match 2 */}
+                    <View style={styles.seriesMatchIndicator}>
+                      <View style={[
+                        styles.seriesMatchDot,
+                        currentMatchNumber > 2 && (seriesWinsA >= 2 || seriesWinsB >= 2 
+                          ? (seriesWinsA >= 2 ? styles.seriesMatchDotWinA : styles.seriesMatchDotLossB)
+                          : (seriesWinsA === 1 ? styles.seriesMatchDotLossB : styles.seriesMatchDotWinA)),
+                        currentMatchNumber === 2 && styles.seriesMatchDotCurrent,
+                      ]}>
+                        {currentMatchNumber > 2 && (
+                          <MaterialIcons name={seriesWinsA === 2 || (seriesWinsA === 1 && seriesWinsB === 1) ? 'check' : 'close'} size={14} color="#FFF" />
+                        )}
+                        {currentMatchNumber === 2 && <Text style={styles.seriesMatchDotText}>2</Text>}
+                        {currentMatchNumber < 2 && <Text style={styles.seriesMatchDotTextFuture}>2</Text>}
+                      </View>
+                      <Text style={styles.seriesMatchLabel}>Match 2</Text>
+                    </View>
+
+                    {/* Connector 2-3 (Finale) */}
+                    <View style={[
+                      styles.seriesConnector,
+                      isFinale && styles.seriesConnectorFinale,
+                      currentMatchNumber > 2 && styles.seriesConnectorPast,
+                    ]} />
+
+                    {/* Match 3 (Finale) */}
+                    <View style={styles.seriesMatchIndicator}>
+                      <View style={[
+                        styles.seriesMatchDot,
+                        isFinale && styles.seriesMatchDotFinale,
+                        !isFinale && currentMatchNumber < 3 && styles.seriesMatchDotFuture,
+                      ]}>
+                        {isFinale ? (
+                          <MaterialIcons name="emoji-events" size={16} color="#FFF" />
+                        ) : (
+                          <Text style={[styles.seriesMatchDotTextFuture, !isFinale && { opacity: 0.5 }]}>F</Text>
+                        )}
+                      </View>
+                      <Text style={[styles.seriesMatchLabel, isFinale && styles.seriesMatchLabelFinale]}>Finale</Text>
+                    </View>
+                  </View>
+
+                  {/* Current Series Score */}
+                  <View style={styles.seriesScoreDisplay}>
+                    <View style={styles.seriesScoreTeam}>
+                      <Text style={styles.seriesScoreTeamLabel}>Mon équipe</Text>
+                      <Text style={[
+                        styles.seriesScoreTeamValue,
+                        seriesWinsA > seriesWinsB && styles.seriesScoreTeamValueWin
+                      ]}>{seriesWinsA}</Text>
+                    </View>
+                    <View style={styles.seriesScoreDivider}>
+                      <Text style={styles.seriesScoreDividerText}>VICTOIRES</Text>
+                    </View>
+                    <View style={styles.seriesScoreTeam}>
+                      <Text style={styles.seriesScoreTeamLabel}>Adversaire</Text>
+                      <Text style={[
+                        styles.seriesScoreTeamValue,
+                        seriesWinsB > seriesWinsA && styles.seriesScoreTeamValueLoss
+                      ]}>{seriesWinsB}</Text>
+                    </View>
+                  </View>
+
+                  {/* Finale Info */}
+                  {isFinale && (
+                    <View style={styles.finaleInfoBanner}>
+                      <MaterialIcons name="info" size={18} color={theme.carreauColor} />
+                      <Text style={styles.finaleInfoText}>
+                        Le vainqueur de ce match remporte la série !
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              ) : (
+                /* Standard Training Banner */
+                <View style={styles.modeBanner}>
+                  <View style={styles.modeBannerIcon}>
+                    <MaterialIcons name="fitness-center" size={20} color="#FFF" />
+                  </View>
+                  <View style={styles.modeBannerContent}>
+                    <Text style={styles.modeBannerText}>Entraînement</Text>
+                    <Text style={styles.modeBannerSubtext}>Possibilité de revanche et finale</Text>
+                  </View>
+                </View>
+              )}
               
               {/* Terrain Selection */}
               <Pressable 
@@ -2366,63 +2473,198 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     ...theme.shadows.card,
   },
+  // Series Panel Styles
+  seriesPanel: {
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: theme.accent + '30',
+  },
+  seriesPanelHeader: {
+    marginBottom: 16,
+  },
+  seriesPanelTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  seriesPanelTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.accent,
+  },
+  seriesPanelTitleFinale: {
+    color: theme.carreauColor,
+  },
+  seriesPanelSubtitle: {
+    fontSize: 13,
+    color: theme.textSecondary,
+    marginTop: 4,
+    marginLeft: 34,
+  },
+  seriesProgressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: 16,
+  },
+  seriesMatchIndicator: {
+    alignItems: 'center',
+    width: 60,
+  },
+  seriesMatchDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.backgroundSecondary,
+    borderWidth: 2,
+    borderColor: theme.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  seriesMatchDotCurrent: {
+    borderColor: theme.primary,
+    backgroundColor: theme.primary + '15',
+  },
+  seriesMatchDotWinA: {
+    backgroundColor: theme.success,
+    borderColor: theme.success,
+  },
+  seriesMatchDotLossB: {
+    backgroundColor: theme.error,
+    borderColor: theme.error,
+  },
+  seriesMatchDotFinale: {
+    backgroundColor: theme.carreauColor,
+    borderColor: theme.carreauColor,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  seriesMatchDotFuture: {
+    opacity: 0.4,
+  },
+  seriesMatchDotText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.primary,
+  },
+  seriesMatchDotTextFuture: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.textMuted,
+  },
+  seriesMatchLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  seriesMatchLabelFinale: {
+    color: theme.carreauColor,
+    fontWeight: '700',
+  },
+  seriesConnector: {
+    flex: 1,
+    height: 3,
+    backgroundColor: theme.border,
+    marginHorizontal: -4,
+    marginTop: -20,
+  },
+  seriesConnectorPast: {
+    backgroundColor: theme.textMuted,
+  },
+  seriesConnectorFinale: {
+    backgroundColor: theme.carreauColor + '50',
+  },
+  seriesScoreDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    padding: 12,
+  },
+  seriesScoreTeam: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  seriesScoreTeamLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textMuted,
+    marginBottom: 4,
+  },
+  seriesScoreTeamValue: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: theme.textSecondary,
+  },
+  seriesScoreTeamValueWin: {
+    color: theme.success,
+  },
+  seriesScoreTeamValueLoss: {
+    color: theme.error,
+  },
+  seriesScoreDivider: {
+    paddingHorizontal: 16,
+  },
+  seriesScoreDividerText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: theme.textMuted,
+    letterSpacing: 1,
+  },
+  finaleInfoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: theme.carreauColor + '15',
+    borderRadius: theme.borderRadius.md,
+  },
+  finaleInfoText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '500',
+    color: theme.carreauColor,
+  },
   modeBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.primary + '10',
     borderRadius: theme.borderRadius.lg,
-    padding: 12,
+    padding: 14,
     gap: 12,
-  },
-  modeBannerRevanche: {
-    backgroundColor: theme.accent + '10',
-  },
-  modeBannerFinale: {
-    backgroundColor: theme.carreauColor + '15',
+    marginBottom: 12,
   },
   modeBannerIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: theme.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modeBannerIconRevanche: {
-    backgroundColor: theme.accent,
-  },
-  modeBannerIconFinale: {
-    backgroundColor: theme.carreauColor,
-  },
-  seriesScoreBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginLeft: 'auto',
-  },
-  seriesScoreText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  finaleBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: theme.carreauColor,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: theme.borderRadius.sm,
-  },
-  finaleBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FFF',
+  modeBannerContent: {
+    flex: 1,
   },
   modeBannerText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
     color: theme.textPrimary,
+  },
+  modeBannerSubtext: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 2,
   },
   terrainSelector: {
     flexDirection: 'row',

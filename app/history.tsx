@@ -135,8 +135,14 @@ function groupBySeries(
   return { seriesGroups, standalone };
 }
 
-function groupByDate(items: { type: 'match' | 'challenge'; data: Match | Challenge; date: string }[]) {
-  const groups: Record<string, typeof items> = {};
+// Render item type for grouping
+type HistoryItem = { type: 'match' | 'challenge'; data: Match | Challenge; date: string };
+type SeriesGroupItem = { type: 'series'; seriesGroup: SeriesGroup; date: string };
+type GroupedItem = HistoryItem | SeriesGroupItem;
+
+function groupByDate(items: HistoryItem[], seriesGroups: Map<string, SeriesGroup>): { title: string; data: GroupedItem[]; date: Date }[] {
+  const groups: Record<string, GroupedItem[]> = {};
+  const processedSeriesIds = new Set<string>();
   
   items.forEach(item => {
     const date = new Date(item.date);
@@ -158,13 +164,35 @@ function groupByDate(items: { type: 'match' | 'challenge'; data: Match | Challen
     if (!groups[key]) {
       groups[key] = [];
     }
+    
+    // Check if this item is part of a series
+    const seriesInfo = item.type === 'match' 
+      ? (item.data as Match).seriesInfo 
+      : (item.data as Challenge).seriesInfo;
+    
+    if (seriesInfo?.seriesId && !processedSeriesIds.has(seriesInfo.seriesId)) {
+      const seriesGroup = seriesGroups.get(seriesInfo.seriesId);
+      if (seriesGroup && seriesGroup.items.length > 1) {
+        // Add the entire series as a grouped item
+        processedSeriesIds.add(seriesInfo.seriesId);
+        groups[key].push({ type: 'series', seriesGroup, date: seriesGroup.items[0].date });
+        return;
+      }
+    }
+    
+    // Skip if already processed as part of a series
+    if (seriesInfo?.seriesId && processedSeriesIds.has(seriesInfo.seriesId)) {
+      return;
+    }
+    
+    // Add standalone item
     groups[key].push(item);
   });
   
   return Object.entries(groups).map(([title, data]) => ({
     title,
     data,
-    date: new Date(data[0].date),
+    date: new Date(data[0]?.date || new Date()),
   })).sort((a, b) => b.date.getTime() - a.date.getTime());
 }
 
@@ -177,22 +205,20 @@ export default function HistoryScreen() {
 
   const dateRange = useMemo(() => getDateRange(selectedPeriod), [selectedPeriod]);
 
-  // Filter data based on selections
-  const filteredData = useMemo(() => {
-    // First filter by date
+  // Group data by series first
+  const { seriesGroups, allItems: allItemsRaw } = useMemo(() => {
     const dateFilteredMatches = filterByDateRange(matches, dateRange);
     const dateFilteredChallenges = filterByDateRange(challenges, dateRange);
 
-    // Then filter by content type
-    let matchItems: { type: 'match'; data: Match; date: string }[] = [];
-    let challengeItems: { type: 'challenge'; data: Challenge; date: string }[] = [];
+    let matchItems: HistoryItem[] = [];
+    let challengeItems: HistoryItem[] = [];
 
     if (contentFilter === 'all' || contentFilter === 'training') {
       matchItems = [
         ...matchItems,
         ...dateFilteredMatches
           .filter(m => contentFilter === 'all' || m.mode === 'Entraînement')
-          .map(m => ({ type: 'match', data: m, date: m.date })),
+          .map(m => ({ type: 'match' as const, data: m, date: m.date })),
       ];
     }
 
@@ -201,28 +227,34 @@ export default function HistoryScreen() {
         ...matchItems,
         ...dateFilteredMatches
           .filter(m => contentFilter === 'all' || m.mode === 'Tournoi')
-          .map(m => ({ type: 'match', data: m, date: m.date })),
+          .map(m => ({ type: 'match' as const, data: m, date: m.date })),
       ];
     }
 
-    // Remove duplicates if contentFilter is 'all'
     if (contentFilter === 'all') {
       const uniqueMatchIds = new Set<string>();
       matchItems = matchItems.filter(item => {
-        if (uniqueMatchIds.has(item.data.id)) return false;
-        uniqueMatchIds.add(item.data.id);
+        if (uniqueMatchIds.has((item.data as Match).id)) return false;
+        uniqueMatchIds.add((item.data as Match).id);
         return true;
       });
     }
 
     if (contentFilter === 'all' || contentFilter === 'challenges') {
-      challengeItems = dateFilteredChallenges.map(c => ({ type: 'challenge', data: c, date: c.date }));
+      challengeItems = dateFilteredChallenges.map(c => ({ type: 'challenge' as const, data: c, date: c.date }));
     }
 
-    const allItems = [...matchItems, ...challengeItems];
-    const sorted = allItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    return groupByDate(sorted);
+    const allItems = [...matchItems, ...challengeItems]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    const { seriesGroups } = groupBySeries(allItems);
+    return { seriesGroups, allItems };
   }, [matches, challenges, contentFilter, dateRange]);
+
+  // Filter data based on selections
+  const filteredData = useMemo(() => {
+    return groupByDate(allItemsRaw, seriesGroups);
+  }, [allItemsRaw, seriesGroups]);
 
   // Stats for current filter
   const stats = useMemo(() => {
@@ -238,43 +270,157 @@ export default function HistoryScreen() {
 
   const selectedPeriodLabel = PERIOD_OPTIONS.find(p => p.id === selectedPeriod)?.label || 'Sélectionner';
 
-  // Group data by series
-  const { seriesGroups } = useMemo(() => {
-    const allItems = filteredData.flatMap(section => section.data);
-    return groupBySeries(allItems);
-  }, [filteredData]);
-
-  // Helper to get series info for a match/challenge
-  const getSeriesGroupForItem = (item: Match | Challenge): SeriesGroup | undefined => {
-    const seriesInfo = 'teamA' in item ? item.seriesInfo : item.seriesInfo;
-    if (seriesInfo?.seriesId) {
-      return seriesGroups.get(seriesInfo.seriesId);
-    }
-    return undefined;
+  // Render a series group card
+  const renderSeriesCard = (seriesGroup: SeriesGroup) => {
+    const firstItem = seriesGroup.items[0];
+    const isMatch = firstItem.type === 'match';
+    
+    // Calculate series result
+    let winsA = 0;
+    let winsB = 0;
+    seriesGroup.items.forEach(item => {
+      if (item.type === 'match') {
+        const match = item.data as Match;
+        if (match.winner === 'A') winsA++;
+        else winsB++;
+      }
+    });
+    
+    const isSeriesWon = winsA > winsB;
+    const isComplete = winsA >= 2 || winsB >= 2;
+    const hasFinale = seriesGroup.items.some(item => {
+      const info = item.type === 'match' 
+        ? (item.data as Match).seriesInfo 
+        : (item.data as Challenge).seriesInfo;
+      return info?.isFinale;
+    });
+    
+    // Get team names from first match
+    const firstMatch = isMatch ? firstItem.data as Match : null;
+    const teamANames = firstMatch?.teamA.playerNames || ['Mon équipe'];
+    const teamBNames = firstMatch?.teamB.playerNames || ['Adversaire'];
+    
+    return (
+      <View style={styles.seriesCard}>
+        {/* Series Header */}
+        <View style={[styles.seriesCardHeader, isSeriesWon ? styles.seriesCardHeaderWin : styles.seriesCardHeaderLoss]}>
+          <View style={styles.seriesCardHeaderLeft}>
+            <View style={[styles.seriesCardIcon, isSeriesWon && styles.seriesCardIconWin]}>
+              <MaterialIcons 
+                name={hasFinale ? 'emoji-events' : 'repeat'} 
+                size={20} 
+                color="#FFF" 
+              />
+            </View>
+            <View>
+              <Text style={styles.seriesCardTitle}>
+                {hasFinale ? 'Série avec Finale' : 'Série (Best of 3)'}
+              </Text>
+              <Text style={styles.seriesCardDate}>
+                {new Date(firstItem.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+              </Text>
+            </View>
+          </View>
+          
+          {/* Series Result */}
+          {isComplete && (
+            <View style={[styles.seriesResultBadge, isSeriesWon ? styles.seriesResultBadgeWin : styles.seriesResultBadgeLoss]}>
+              <MaterialIcons 
+                name={isSeriesWon ? 'check-circle' : 'cancel'} 
+                size={16} 
+                color={isSeriesWon ? theme.success : theme.error} 
+              />
+              <Text style={[styles.seriesResultText, { color: isSeriesWon ? theme.success : theme.error }]}>
+                {isSeriesWon ? 'Gagnée' : 'Perdue'}
+              </Text>
+            </View>
+          )}
+        </View>
+        
+        {/* Teams Display */}
+        <View style={styles.seriesTeamsRow}>
+          <View style={styles.seriesTeam}>
+            <Text style={styles.seriesTeamLabel}>Mon équipe</Text>
+            <Text style={styles.seriesTeamNames} numberOfLines={1}>
+              {teamANames.slice(0, 2).join(' • ')}
+            </Text>
+          </View>
+          <View style={styles.seriesVs}>
+            <Text style={styles.seriesVsText}>VS</Text>
+          </View>
+          <View style={[styles.seriesTeam, styles.seriesTeamRight]}>
+            <Text style={styles.seriesTeamLabel}>Adversaire</Text>
+            <Text style={styles.seriesTeamNames} numberOfLines={1}>
+              {teamBNames.slice(0, 2).join(' • ')}
+            </Text>
+          </View>
+        </View>
+        
+        {/* Series Score & Timeline */}
+        <View style={styles.seriesScoreRow}>
+          <Text style={[
+            styles.seriesFinalScore,
+            isSeriesWon ? styles.seriesFinalScoreWin : styles.seriesFinalScoreLoss
+          ]}>
+            {winsA}
+          </Text>
+          <View style={styles.seriesTimelineContainer}>
+            {seriesGroup.items.map((item, idx) => {
+              const match = item.data as Match;
+              const isWin = match.winner === 'A';
+              const isFinaleMatch = match.seriesInfo?.isFinale;
+              
+              return (
+                <View key={match.id} style={styles.seriesTimelineItem}>
+                  <View style={[
+                    styles.seriesTimelineDot,
+                    isWin ? styles.seriesTimelineDotWin : styles.seriesTimelineDotLoss,
+                    isFinaleMatch && styles.seriesTimelineDotFinale,
+                  ]}>
+                    <Text style={styles.seriesTimelineDotText}>
+                      {isFinaleMatch ? 'F' : idx + 1}
+                    </Text>
+                  </View>
+                  <Text style={styles.seriesTimelineScore}>
+                    {match.teamA.score}-{match.teamB.score}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+          <Text style={[
+            styles.seriesFinalScore,
+            !isSeriesWon ? styles.seriesFinalScoreWin : styles.seriesFinalScoreLoss
+          ]}>
+            {winsB}
+          </Text>
+        </View>
+        
+        {/* Expand to see details */}
+        <Pressable 
+          style={styles.seriesExpandBtn}
+          onPress={() => {
+            Haptics.selectionAsync();
+            // Navigate to first match detail
+            if (firstMatch) {
+              router.push(`/match/${firstMatch.id}`);
+            }
+          }}
+        >
+          <Text style={styles.seriesExpandText}>Voir les détails</Text>
+          <MaterialIcons name="chevron-right" size={18} color={theme.primary} />
+        </Pressable>
+      </View>
+    );
   };
 
-  const renderMatchCard = (match: Match, isInSeries: boolean = false, seriesPosition?: 'first' | 'middle' | 'last' | 'single') => {
+  const renderMatchCard = (match: Match, isInSeries: boolean = false) => {
     const isWin = match.winner === 'A';
     const isTournament = match.mode === 'Tournoi';
-    
-    // Determine series badge label
-    const getSeriesLabel = () => {
-      if (!match.seriesInfo) return null;
-      if (match.seriesInfo.isFinale) return 'FINALE';
-      if (match.seriesInfo.matchNumber === 1) return 'MATCH 1';
-      return `MATCH ${match.seriesInfo.matchNumber}`;
-    };
-    const seriesLabel = getSeriesLabel();
 
     return (
       <Pressable 
-        style={[
-          styles.card,
-          isInSeries && styles.cardInSeries,
-          seriesPosition === 'first' && styles.cardSeriesFirst,
-          seriesPosition === 'middle' && styles.cardSeriesMiddle,
-          seriesPosition === 'last' && styles.cardSeriesLast,
-        ]}
+        style={styles.card}
         onPress={() => {
           Haptics.selectionAsync();
           router.push(`/match/${match.id}`);
@@ -302,25 +448,6 @@ export default function HistoryScreen() {
                   {isTournament ? 'Tournoi' : 'Entraînement'}
                 </Text>
               </View>
-              {/* Series badge */}
-              {seriesLabel && (
-                <View style={[
-                  styles.seriesBadge,
-                  match.seriesInfo?.isFinale && styles.seriesBadgeFinale
-                ]}>
-                  <MaterialIcons 
-                    name={match.seriesInfo?.isFinale ? 'emoji-events' : 'repeat'} 
-                    size={12} 
-                    color={match.seriesInfo?.isFinale ? theme.carreauColor : theme.accent} 
-                  />
-                  <Text style={[
-                    styles.seriesBadgeText,
-                    match.seriesInfo?.isFinale && styles.seriesBadgeTextFinale
-                  ]}>
-                    {seriesLabel}
-                  </Text>
-                </View>
-              )}
             </View>
             <Text style={styles.cardTime}>
               {new Date(match.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
@@ -593,29 +720,18 @@ export default function HistoryScreen() {
               {/* Items */}
               {section.data.map((item, index) => (
                 <Animated.View
-                  key={`${item.type}-${item.type === 'match' ? (item.data as Match).id : (item.data as Challenge).id}`}
+                  key={item.type === 'series' 
+                    ? `series-${item.seriesGroup.seriesId}`
+                    : `${item.type}-${item.type === 'match' ? (item.data as Match).id : (item.data as Challenge).id}`}
                   entering={FadeIn.duration(200).delay(index * 30)}
                 >
-                  {(() => {
-                    const seriesGroup = getSeriesGroupForItem(item.data);
-                    const isInSeries = !!seriesGroup && seriesGroup.items.length > 1;
-                    let seriesPosition: 'first' | 'middle' | 'last' | 'single' | undefined;
-                    
-                    if (isInSeries && seriesGroup) {
-                      const itemIndex = seriesGroup.items.findIndex(i => 
-                        (i.type === 'match' ? (i.data as Match).id : (i.data as Challenge).id) === 
-                        (item.type === 'match' ? (item.data as Match).id : (item.data as Challenge).id)
-                      );
-                      if (seriesGroup.items.length === 1) seriesPosition = 'single';
-                      else if (itemIndex === 0) seriesPosition = 'first';
-                      else if (itemIndex === seriesGroup.items.length - 1) seriesPosition = 'last';
-                      else seriesPosition = 'middle';
-                    }
-                    
-                    return item.type === 'match' 
-                      ? renderMatchCard(item.data as Match, isInSeries, seriesPosition)
-                      : renderChallengeCard(item.data as Challenge);
-                  })()}
+                  {item.type === 'series' ? (
+                    renderSeriesCard(item.seriesGroup)
+                  ) : item.type === 'match' ? (
+                    renderMatchCard(item.data as Match, false)
+                  ) : (
+                    renderChallengeCard(item.data as Challenge)
+                  )}
                 </Animated.View>
               ))}
             </Animated.View>
@@ -838,6 +954,191 @@ const styles = StyleSheet.create({
     backgroundColor: theme.border,
     marginLeft: 12,
   },
+  // Series Card Styles
+  seriesCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.xl,
+    marginBottom: 16,
+    overflow: 'hidden',
+    ...theme.shadows.card,
+    borderWidth: 2,
+    borderColor: theme.accent + '30',
+  },
+  seriesCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    backgroundColor: theme.accent + '10',
+  },
+  seriesCardHeaderWin: {
+    backgroundColor: theme.success + '10',
+    borderBottomWidth: 1,
+    borderBottomColor: theme.success + '20',
+  },
+  seriesCardHeaderLoss: {
+    backgroundColor: theme.error + '10',
+    borderBottomWidth: 1,
+    borderBottomColor: theme.error + '20',
+  },
+  seriesCardHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  seriesCardIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  seriesCardIconWin: {
+    backgroundColor: theme.success,
+  },
+  seriesCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  seriesCardDate: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 2,
+  },
+  seriesResultBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.full,
+  },
+  seriesResultBadgeWin: {
+    backgroundColor: theme.success + '15',
+  },
+  seriesResultBadgeLoss: {
+    backgroundColor: theme.error + '15',
+  },
+  seriesResultText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  seriesTeamsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 10,
+  },
+  seriesTeam: {
+    flex: 1,
+  },
+  seriesTeamRight: {
+    alignItems: 'flex-end',
+  },
+  seriesTeamLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: theme.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginBottom: 2,
+  },
+  seriesTeamNames: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: theme.textPrimary,
+  },
+  seriesVs: {
+    paddingHorizontal: 12,
+  },
+  seriesVsText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.textMuted,
+  },
+  seriesScoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    gap: 16,
+  },
+  seriesFinalScore: {
+    fontSize: 36,
+    fontWeight: '900',
+    color: theme.textMuted,
+    width: 44,
+    textAlign: 'center',
+  },
+  seriesFinalScoreWin: {
+    color: theme.success,
+  },
+  seriesFinalScoreLoss: {
+    color: theme.error,
+  },
+  seriesTimelineContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  seriesTimelineItem: {
+    alignItems: 'center',
+  },
+  seriesTimelineDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.backgroundSecondary,
+    borderWidth: 2,
+    borderColor: theme.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  seriesTimelineDotWin: {
+    backgroundColor: theme.success,
+    borderColor: theme.success,
+  },
+  seriesTimelineDotLoss: {
+    backgroundColor: theme.error,
+    borderColor: theme.error,
+  },
+  seriesTimelineDotFinale: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: theme.carreauColor,
+    borderColor: theme.carreauColor,
+  },
+  seriesTimelineDotText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  seriesTimelineScore: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  seriesExpandBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+    backgroundColor: theme.backgroundSecondary,
+  },
+  seriesExpandText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.primary,
+  },
   // Card base
   card: {
     flexDirection: 'row',
@@ -846,27 +1147,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     overflow: 'hidden',
     ...theme.shadows.card,
-  },
-  cardInSeries: {
-    marginBottom: 2,
-    borderLeftWidth: 3,
-    borderLeftColor: theme.accent,
-  },
-  cardSeriesFirst: {
-    borderTopLeftRadius: theme.borderRadius.lg,
-    borderTopRightRadius: theme.borderRadius.lg,
-    borderBottomLeftRadius: 4,
-    borderBottomRightRadius: 4,
-  },
-  cardSeriesMiddle: {
-    borderRadius: 4,
-  },
-  cardSeriesLast: {
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
-    borderBottomLeftRadius: theme.borderRadius.lg,
-    borderBottomRightRadius: theme.borderRadius.lg,
-    marginBottom: 12,
   },
   cardIndicator: {
     width: 4,
@@ -887,27 +1167,6 @@ const styles = StyleSheet.create({
     gap: 8,
     flexWrap: 'wrap',
     flex: 1,
-  },
-  seriesBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: theme.accent + '15',
-    borderRadius: theme.borderRadius.sm,
-  },
-  seriesBadgeFinale: {
-    backgroundColor: theme.carreauColor + '15',
-  },
-  seriesBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: theme.accent,
-    letterSpacing: 0.3,
-  },
-  seriesBadgeTextFinale: {
-    color: theme.carreauColor,
   },
   typeBadge: {
     flexDirection: 'row',
