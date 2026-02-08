@@ -17,7 +17,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import theme from '@/constants/theme';
-import config, { GameFormat } from '@/constants/config';
+import config, { GameFormat, PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 
 interface MeneEdit {
@@ -48,6 +48,12 @@ export default function EditMatchScreen() {
   const [location, setLocation] = useState('');
 
   const maxScore = config.game.maxScore;
+
+  const ROLE_CONFIG: Record<PlayerRole, { icon: string; color: string; label: string }> = {
+    'Pointeur': { icon: 'radio-button-on', color: '#3B82F6', label: 'Pointeur' },
+    'Milieu': { icon: 'swap-horiz', color: '#8B5CF6', label: 'Milieu' },
+    'Tireur': { icon: 'gps-fixed', color: '#F97316', label: 'Tireur' },
+  };
 
   useEffect(() => {
     if (match) {
@@ -362,6 +368,23 @@ export default function EditMatchScreen() {
                   placeholder="Noms séparés par des virgules"
                   placeholderTextColor={theme.textMuted}
                 />
+                {/* Display roles if available */}
+                {match?.teamA.playerRoles && match.teamA.playerRoles.length > 0 && (
+                  <View style={styles.rolesDisplay}>
+                    {match.teamA.playerRoles.map((pr, idx) => {
+                      const roleConfig = ROLE_CONFIG[pr.role as PlayerRole];
+                      const playerName = match.teamA.playerNames[idx]?.split(' ')[0] || 'Joueur';
+                      return (
+                        <View key={pr.playerId} style={[styles.roleDisplayBadge, { backgroundColor: roleConfig.color + '15' }]}>
+                          <MaterialIcons name={roleConfig.icon as any} size={12} color={roleConfig.color} />
+                          <Text style={[styles.roleDisplayText, { color: roleConfig.color }]}>
+                            {playerName} - {roleConfig.label}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
               </View>
               <View style={styles.teamDivider} />
               <View style={styles.teamInputGroup}>
@@ -373,6 +396,23 @@ export default function EditMatchScreen() {
                   placeholder="Noms séparés par des virgules"
                   placeholderTextColor={theme.textMuted}
                 />
+                {/* Display roles if available */}
+                {match?.teamB.playerRoles && match.teamB.playerRoles.length > 0 && (
+                  <View style={styles.rolesDisplay}>
+                    {match.teamB.playerRoles.map((pr, idx) => {
+                      const roleConfig = ROLE_CONFIG[pr.role as PlayerRole];
+                      const playerName = match.teamB.playerNames[idx]?.split(' ')[0] || 'Joueur';
+                      return (
+                        <View key={pr.playerId} style={[styles.roleDisplayBadge, { backgroundColor: roleConfig.color + '15' }]}>
+                          <MaterialIcons name={roleConfig.icon as any} size={12} color={roleConfig.color} />
+                          <Text style={[styles.roleDisplayText, { color: roleConfig.color }]}>
+                            {playerName} - {roleConfig.label}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
               </View>
             </View>
           </Animated.View>
@@ -723,6 +763,24 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: theme.border,
     marginVertical: 16,
+  },
+  rolesDisplay: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 10,
+  },
+  roleDisplayBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  roleDisplayText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   scoreContainer: {
     flexDirection: 'row',

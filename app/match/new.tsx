@@ -346,6 +346,59 @@ export default function NewMatchScreen() {
     return team.map(p => p.playerId);
   };
 
+  // Calculate team composition analysis
+  const teamCompositionAnalysis = useMemo(() => {
+    const analyze = (team: TeamPlayerWithRole[]) => {
+      const roles = { Pointeur: 0, Milieu: 0, Tireur: 0 };
+      team.forEach(p => {
+        roles[p.role]++;
+      });
+      return roles;
+    };
+
+    const teamARoles = analyze(teamAPlayers);
+    const teamBRoles = analyze(teamBPlayers);
+
+    // Check if team is balanced based on format
+    const checkBalance = (roles: typeof teamARoles, teamSize: number) => {
+      if (teamSize === 0) return { balanced: true, suggestion: null };
+      if (teamSize === 1) return { balanced: true, suggestion: null }; // Tête-à-tête
+      if (teamSize === 2) {
+        // Doublette: ideally 1 Pointeur + 1 Tireur, or 1 Milieu + 1 (Pointeur or Tireur)
+        const hasPointeur = roles.Pointeur > 0;
+        const hasTireur = roles.Tireur > 0;
+        if (hasPointeur && hasTireur) return { balanced: true, suggestion: null };
+        if (roles.Milieu === 2) return { balanced: false, suggestion: 'Ajoutez un Pointeur ou Tireur' };
+        if (!hasPointeur && !hasTireur) return { balanced: false, suggestion: 'Manque Pointeur/Tireur' };
+        return { balanced: true, suggestion: null };
+      }
+      if (teamSize === 3) {
+        // Triplette: ideally 1 Pointeur + 1 Milieu + 1 Tireur
+        const hasAll = roles.Pointeur > 0 && roles.Milieu > 0 && roles.Tireur > 0;
+        if (hasAll) return { balanced: true, suggestion: null };
+        const missing = [];
+        if (roles.Pointeur === 0) missing.push('Pointeur');
+        if (roles.Tireur === 0) missing.push('Tireur');
+        if (missing.length > 0) {
+          return { balanced: false, suggestion: `Manque: ${missing.join(', ')}` };
+        }
+        return { balanced: true, suggestion: null };
+      }
+      return { balanced: true, suggestion: null };
+    };
+
+    return {
+      teamA: {
+        roles: teamARoles,
+        ...checkBalance(teamARoles, teamAPlayers.length),
+      },
+      teamB: {
+        roles: teamBRoles,
+        ...checkBalance(teamBRoles, teamBPlayers.length),
+      },
+    };
+  }, [teamAPlayers, teamBPlayers]);
+
   // Clear team players when format changes (if exceeds limit)
   useEffect(() => {
     if (teamAPlayers.length > maxPlayersPerTeam) {
@@ -603,6 +656,16 @@ export default function NewMatchScreen() {
         })
       : ['Adversaire'];
     
+    // Build player roles
+    const teamAPlayerRoles = teamAPlayers.map(p => ({
+      playerId: p.playerId,
+      role: p.role,
+    }));
+    const teamBPlayerRoles = teamBPlayers.map(p => ({
+      playerId: p.playerId,
+      role: p.role,
+    }));
+    
     addMatch({
       date: new Date().toISOString(),
       mode: isTournamentMode ? 'Tournoi' : 'Entraînement',
@@ -614,11 +677,13 @@ export default function NewMatchScreen() {
       teamA: {
         players: teamAPlayerIds.length > 0 ? teamAPlayerIds : ['1'],
         playerNames: teamAPlayerNames,
+        playerRoles: teamAPlayerRoles.length > 0 ? teamAPlayerRoles : undefined,
         score: teamAScore,
       },
       teamB: {
         players: teamBPlayerIds.length > 0 ? teamBPlayerIds : ['2'],
         playerNames: teamBPlayerNames,
+        playerRoles: teamBPlayerRoles.length > 0 ? teamBPlayerRoles : undefined,
         score: teamBScore,
       },
       winner,
@@ -874,6 +939,15 @@ export default function NewMatchScreen() {
                     <Text style={styles.noPlayersText}>Aucun joueur</Text>
                   )}
                 </View>
+                {/* Team Composition Suggestion */}
+                {teamAPlayers.length >= 2 && !teamCompositionAnalysis.teamA.balanced && (
+                  <View style={styles.compositionWarning}>
+                    <MaterialIcons name="lightbulb" size={16} color={theme.warning} />
+                    <Text style={styles.compositionWarningText}>
+                      {teamCompositionAnalysis.teamA.suggestion}
+                    </Text>
+                  </View>
+                )}
                 <Pressable
                   style={styles.addPlayerButton}
                   onPress={() => setShowPlayerPicker('A')}
@@ -937,6 +1011,15 @@ export default function NewMatchScreen() {
                     <Text style={styles.noPlayersText}>Aucun joueur</Text>
                   )}
                 </View>
+                {/* Team Composition Suggestion */}
+                {teamBPlayers.length >= 2 && !teamCompositionAnalysis.teamB.balanced && (
+                  <View style={[styles.compositionWarning, { borderColor: theme.warning + '30' }]}>
+                    <MaterialIcons name="lightbulb" size={16} color={theme.warning} />
+                    <Text style={styles.compositionWarningText}>
+                      {teamCompositionAnalysis.teamB.suggestion}
+                    </Text>
+                  </View>
+                )}
                 <Pressable
                   style={[styles.addPlayerButton, styles.addPlayerButtonB]}
                   onPress={() => setShowPlayerPicker('B')}
@@ -3036,6 +3119,24 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: theme.textMuted,
     marginTop: 12,
+  },
+  compositionWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: theme.warning + '10',
+    borderWidth: 1,
+    borderColor: theme.warning + '30',
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 10,
+  },
+  compositionWarningText: {
+    flex: 1,
+    fontSize: 12,
+    color: theme.warning,
+    fontWeight: '500',
   },
   // Create opponent button
   createOpponentButton: {

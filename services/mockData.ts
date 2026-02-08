@@ -181,6 +181,12 @@ export interface Tournament {
   finalResult?: 'Champion' | 'Finaliste' | 'Éliminé'; // Final result for completed tournaments
 }
 
+// Player role in a match (can differ from their default role)
+export interface MatchPlayerRole {
+  playerId: string;
+  role: PlayerRole;
+}
+
 export interface Match {
   id: string;
   date: string;
@@ -194,11 +200,13 @@ export interface Match {
   teamA: {
     players: string[];
     playerNames: string[];
+    playerRoles?: MatchPlayerRole[]; // Roles for team A players
     score: number;
   };
   teamB: {
     players: string[];
     playerNames: string[];
+    playerRoles?: MatchPlayerRole[]; // Roles for team B players
     score: number;
   };
   winner: 'A' | 'B';

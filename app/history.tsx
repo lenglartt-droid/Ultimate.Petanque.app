@@ -249,6 +249,44 @@ export default function HistoryScreen() {
             </View>
           </View>
 
+          {/* Player Roles */}
+          {match.teamA.playerRoles && match.teamA.playerRoles.length > 0 && (
+            <View style={styles.rolesContainer}>
+              <View style={styles.rolesTeam}>
+                {match.teamA.playerRoles.map((pr, idx) => {
+                  const playerName = match.teamA.playerNames[idx]?.split(' ')[0] || 'Joueur';
+                  return (
+                    <View key={pr.playerId} style={styles.roleChip}>
+                      <MaterialIcons 
+                        name={pr.role === 'Tireur' ? 'gps-fixed' : pr.role === 'Pointeur' ? 'radio-button-on' : 'swap-horiz'} 
+                        size={12} 
+                        color={pr.role === 'Tireur' ? '#F97316' : pr.role === 'Pointeur' ? '#3B82F6' : '#8B5CF6'} 
+                      />
+                      <Text style={styles.roleChipText}>{playerName}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+              {match.teamB.playerRoles && match.teamB.playerRoles.length > 0 && (
+                <View style={[styles.rolesTeam, styles.rolesTeamB]}>
+                  {match.teamB.playerRoles.map((pr, idx) => {
+                    const playerName = match.teamB.playerNames[idx]?.split(' ')[0] || 'Joueur';
+                    return (
+                      <View key={pr.playerId} style={[styles.roleChip, styles.roleChipB]}>
+                        <MaterialIcons 
+                          name={pr.role === 'Tireur' ? 'gps-fixed' : pr.role === 'Pointeur' ? 'radio-button-on' : 'swap-horiz'} 
+                          size={12} 
+                          color={pr.role === 'Tireur' ? '#F97316' : pr.role === 'Pointeur' ? '#3B82F6' : '#8B5CF6'} 
+                        />
+                        <Text style={styles.roleChipText}>{playerName}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          )}
+
           {/* Footer */}
           <View style={styles.cardFooter}>
             <View style={[styles.resultBadge, { backgroundColor: isWin ? theme.success + '15' : theme.error + '15' }]}>
@@ -787,6 +825,39 @@ const styles = StyleSheet.create({
   formatText: {
     fontSize: 12,
     color: theme.textMuted,
+  },
+  // Roles display
+  rolesContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    gap: 8,
+  },
+  rolesTeam: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  rolesTeamB: {
+    justifyContent: 'flex-end',
+  },
+  roleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: theme.primary + '10',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: theme.borderRadius.sm,
+  },
+  roleChipB: {
+    backgroundColor: theme.accent + '10',
+  },
+  roleChipText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: theme.textSecondary,
   },
   // Challenge specific
   challengeBody: {

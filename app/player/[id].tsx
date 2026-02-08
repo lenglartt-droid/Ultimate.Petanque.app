@@ -44,13 +44,51 @@ function StatRing({ value, color, size = 80 }: { value: number; color: string; s
 export default function PlayerDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getPlayerById, getMatchesByPlayer, getClubById, getTerrainById, deletePlayer, selfPlayer } = useApp();
+  const { getPlayerById, getMatchesByPlayer, getClubById, getTerrainById, deletePlayer, selfPlayer, matches } = useApp();
 
   const player = getPlayerById(id!);
   const playerMatches = getMatchesByPlayer(id!).slice(0, 5);
   const club = player?.clubId ? getClubById(player.clubId) : null;
   const terrain = player?.terrainId ? getTerrainById(player.terrainId) : null;
   const isSelf = selfPlayer && player?.id === selfPlayer.id;
+
+  // Calculate preferred role from match history
+  const roleAnalysis = React.useMemo(() => {
+    const roleCounts: Record<string, number> = { 'Pointeur': 0, 'Milieu': 0, 'Tireur': 0 };
+    const allMatches = matches.filter(m => 
+      m.teamA.players.includes(id!) || m.teamB.players.includes(id!)
+    );
+    
+    allMatches.forEach(match => {
+      // Check team A roles
+      if (match.teamA.players.includes(id!) && match.teamA.playerRoles) {
+        const playerRole = match.teamA.playerRoles.find(pr => pr.playerId === id!);
+        if (playerRole && roleCounts[playerRole.role] !== undefined) {
+          roleCounts[playerRole.role]++;
+        }
+      }
+      // Check team B roles
+      if (match.teamB.players.includes(id!) && match.teamB.playerRoles) {
+        const playerRole = match.teamB.playerRoles.find(pr => pr.playerId === id!);
+        if (playerRole && roleCounts[playerRole.role] !== undefined) {
+          roleCounts[playerRole.role]++;
+        }
+      }
+    });
+    
+    const totalWithRoles = Object.values(roleCounts).reduce((a, b) => a + b, 0);
+    const preferredRole = totalWithRoles > 0 
+      ? Object.entries(roleCounts).reduce((a, b) => b[1] > a[1] ? b : a)[0]
+      : player?.role || 'Milieu';
+    
+    return { roleCounts, totalWithRoles, preferredRole };
+  }, [matches, id, player?.role]);
+
+  const roleIcons: Record<string, { icon: string; color: string }> = {
+    'Pointeur': { icon: 'radio-button-on', color: '#3B82F6' },
+    'Milieu': { icon: 'swap-horiz', color: '#8B5CF6' },
+    'Tireur': { icon: 'gps-fixed', color: '#F97316' },
+  };
 
   const handleDelete = () => {
     if (isSelf) {
@@ -143,6 +181,32 @@ export default function PlayerDetailScreen() {
               <Text style={styles.clubName}>{club.name}</Text>
               <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
             </Pressable>
+          )}
+          
+          {/* Preferred Role from Match History */}
+          {roleAnalysis.totalWithRoles > 0 && (
+            <View style={styles.preferredRoleSection}>
+              <Text style={styles.preferredRoleLabel}>Rôle préféré (basé sur {roleAnalysis.totalWithRoles} matchs)</Text>
+              <View style={styles.roleDistribution}>
+                {Object.entries(roleAnalysis.roleCounts).map(([role, count]) => {
+                  const config = roleIcons[role] || roleIcons['Milieu'];
+                  const percentage = roleAnalysis.totalWithRoles > 0 
+                    ? Math.round((count / roleAnalysis.totalWithRoles) * 100) 
+                    : 0;
+                  const isPreferred = role === roleAnalysis.preferredRole;
+                  return (
+                    <View key={role} style={[styles.roleDistItem, isPreferred && styles.roleDistItemActive]}>
+                      <View style={[styles.roleDistIcon, { backgroundColor: config.color + (isPreferred ? '' : '30') }]}>
+                        <MaterialIcons name={config.icon as any} size={16} color={isPreferred ? '#FFF' : config.color} />
+                      </View>
+                      <Text style={[styles.roleDistName, isPreferred && { fontWeight: '700', color: config.color }]}>{role}</Text>
+                      <Text style={styles.roleDistCount}>{count}</Text>
+                      <View style={[styles.roleDistBar, { width: `${percentage}%`, backgroundColor: config.color }]} />
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
           )}
           
           {/* Terrain de pratique */}
@@ -435,6 +499,65 @@ const styles = StyleSheet.create({
   clubName: {
     fontSize: 15,
     color: theme.textSecondary,
+  },
+  preferredRoleSection: {
+    width: '100%',
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  preferredRoleLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  roleDistribution: {
+    gap: 8,
+  },
+  roleDistItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.md,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  roleDistItemActive: {
+    borderWidth: 2,
+    borderColor: theme.primary,
+  },
+  roleDistIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  roleDistName: {
+    fontSize: 14,
+    color: theme.textPrimary,
+    flex: 1,
+  },
+  roleDistCount: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.textPrimary,
+    marginRight: 8,
+  },
+  roleDistBar: {
+    position: 'absolute',
+    left: 0,
+    bottom: 0,
+    height: 3,
+    borderRadius: 2,
   },
   playerNickname: {
     fontSize: 15,

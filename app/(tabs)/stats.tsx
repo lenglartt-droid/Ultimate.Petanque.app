@@ -1349,8 +1349,94 @@ export default function StatsScreen() {
               </View>
             </Animated.View>
 
-            {/* Carreau Detail */}
+            {/* Stats by Role */}
             <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
+              <Text style={styles.sectionTitle}>Performance par rôle</Text>
+              <View style={styles.roleStatsCard}>
+                {(() => {
+                  // Calculate stats by role
+                  const roleStats: Record<string, { matches: number; wins: number; tirs: number; tirsSuccess: number }> = {
+                    'Pointeur': { matches: 0, wins: 0, tirs: 0, tirsSuccess: 0 },
+                    'Milieu': { matches: 0, wins: 0, tirs: 0, tirsSuccess: 0 },
+                    'Tireur': { matches: 0, wins: 0, tirs: 0, tirsSuccess: 0 },
+                  };
+                  
+                  filteredMatches.forEach(match => {
+                    // Check team A player roles
+                    if (match.teamA.playerRoles) {
+                      match.teamA.playerRoles.forEach(pr => {
+                        if (roleStats[pr.role]) {
+                          roleStats[pr.role].matches++;
+                          if (match.winner === 'A') roleStats[pr.role].wins++;
+                          // Get player actions if available
+                          if (match.playerActions) {
+                            const playerAction = match.playerActions.find(pa => pa.playerId === pr.playerId);
+                            if (playerAction) {
+                              roleStats[pr.role].tirs += playerAction.actions.tirs;
+                              roleStats[pr.role].tirsSuccess += playerAction.actions.tirsSuccess;
+                            }
+                          }
+                        }
+                      });
+                    }
+                  });
+                  
+                  const roleIcons = {
+                    'Pointeur': { icon: 'radio-button-on', color: '#3B82F6' },
+                    'Milieu': { icon: 'swap-horiz', color: '#8B5CF6' },
+                    'Tireur': { icon: 'gps-fixed', color: '#F97316' },
+                  };
+                  
+                  const hasData = Object.values(roleStats).some(r => r.matches > 0);
+                  
+                  if (!hasData) {
+                    return (
+                      <View style={styles.roleStatsEmpty}>
+                        <MaterialIcons name="person" size={32} color={theme.textMuted} />
+                        <Text style={styles.roleStatsEmptyText}>Jouez des matchs avec des rôles attribués pour voir vos stats par position</Text>
+                      </View>
+                    );
+                  }
+                  
+                  return Object.entries(roleStats).map(([role, data]) => {
+                    const config = roleIcons[role as keyof typeof roleIcons];
+                    const winRate = data.matches > 0 ? Math.round((data.wins / data.matches) * 100) : 0;
+                    const tirRate = data.tirs > 0 ? Math.round((data.tirsSuccess / data.tirs) * 100) : 0;
+                    
+                    return (
+                      <View key={role} style={styles.roleStatRow}>
+                        <View style={[styles.roleStatIcon, { backgroundColor: config.color + '15' }]}>
+                          <MaterialIcons name={config.icon as any} size={20} color={config.color} />
+                        </View>
+                        <View style={styles.roleStatInfo}>
+                          <Text style={styles.roleStatName}>{role}</Text>
+                          <Text style={styles.roleStatMatches}>{data.matches} match{data.matches !== 1 ? 's' : ''}</Text>
+                        </View>
+                        {data.matches > 0 ? (
+                          <View style={styles.roleStatValues}>
+                            <View style={styles.roleStatValue}>
+                              <Text style={[styles.roleStatValueText, { color: winRate >= 50 ? theme.success : theme.error }]}>{winRate}%</Text>
+                              <Text style={styles.roleStatValueLabel}>Victoires</Text>
+                            </View>
+                            {data.tirs > 0 && (
+                              <View style={styles.roleStatValue}>
+                                <Text style={[styles.roleStatValueText, { color: config.color }]}>{tirRate}%</Text>
+                                <Text style={styles.roleStatValueLabel}>Tirs</Text>
+                              </View>
+                            )}
+                          </View>
+                        ) : (
+                          <Text style={styles.roleStatNoData}>—</Text>
+                        )}
+                      </View>
+                    );
+                  });
+                })()}
+              </View>
+            </Animated.View>
+
+            {/* Carreau Detail */}
+            <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
               <Text style={styles.sectionTitle}>Carreaux</Text>
               <View style={styles.carreauCard}>
                 <View style={styles.carreauMain}>
@@ -2278,6 +2364,72 @@ const styles = StyleSheet.create({
   },
   carreauRateLabel: {
     fontSize: 12,
+    color: theme.textMuted,
+  },
+  // Role Stats styles
+  roleStatsCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    overflow: 'hidden',
+    ...theme.shadows.card,
+  },
+  roleStatsEmpty: {
+    alignItems: 'center',
+    padding: 32,
+    gap: 12,
+  },
+  roleStatsEmptyText: {
+    fontSize: 13,
+    color: theme.textMuted,
+    textAlign: 'center',
+    maxWidth: 240,
+  },
+  roleStatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  roleStatIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  roleStatInfo: {
+    flex: 1,
+  },
+  roleStatName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  roleStatMatches: {
+    fontSize: 12,
+    color: theme.textMuted,
+    marginTop: 2,
+  },
+  roleStatValues: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  roleStatValue: {
+    alignItems: 'center',
+  },
+  roleStatValueText: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  roleStatValueLabel: {
+    fontSize: 10,
+    color: theme.textMuted,
+    marginTop: 2,
+  },
+  roleStatNoData: {
+    fontSize: 18,
     color: theme.textMuted,
   },
   // Challenge Overview

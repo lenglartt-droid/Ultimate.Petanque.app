@@ -21,6 +21,37 @@ export default function MyPlayerCardScreen() {
   const { user } = useAuth();
   const { selfPlayer, userStats, challengeStats, matches, challenges } = useApp();
 
+  // Calculate preferred role from match history
+  const roleAnalysis = React.useMemo(() => {
+    if (!selfPlayer) return { roleCounts: {}, totalWithRoles: 0, preferredRole: 'Milieu' };
+    
+    const roleCounts: Record<string, number> = { 'Pointeur': 0, 'Milieu': 0, 'Tireur': 0 };
+    
+    matches.forEach(match => {
+      // Check team A roles (our team)
+      if (match.teamA.playerRoles) {
+        match.teamA.playerRoles.forEach(pr => {
+          if (pr.playerId === selfPlayer.id && roleCounts[pr.role] !== undefined) {
+            roleCounts[pr.role]++;
+          }
+        });
+      }
+    });
+    
+    const totalWithRoles = Object.values(roleCounts).reduce((a, b) => a + b, 0);
+    const preferredRole = totalWithRoles > 0 
+      ? Object.entries(roleCounts).reduce((a, b) => b[1] > a[1] ? b : a)[0]
+      : selfPlayer?.role || 'Milieu';
+    
+    return { roleCounts, totalWithRoles, preferredRole };
+  }, [matches, selfPlayer]);
+
+  const roleIcons: Record<string, { icon: string; color: string }> = {
+    'Pointeur': { icon: 'radio-button-on', color: '#3B82F6' },
+    'Milieu': { icon: 'swap-horiz', color: '#8B5CF6' },
+    'Tireur': { icon: 'gps-fixed', color: '#F97316' },
+  };
+
   // Calculate detailed stats
   const totalMatches = matches.length;
   const tournamentMatches = matches.filter(m => m.mode === 'Tournoi');
@@ -128,6 +159,44 @@ export default function MyPlayerCardScreen() {
               <MaterialIcons name="add-circle-outline" size={16} color={theme.primary} />
               <Text style={styles.addClubText}>Ajouter un club</Text>
             </Pressable>
+          )}
+          
+          {/* Preferred Role from Match History */}
+          {roleAnalysis.totalWithRoles > 0 && (
+            <View style={styles.preferredRoleCard}>
+              <Text style={styles.preferredRoleTitle}>Rôle préféré</Text>
+              <View style={styles.preferredRoleContent}>
+                <View style={[styles.preferredRoleIcon, { backgroundColor: roleIcons[roleAnalysis.preferredRole]?.color || theme.primary }]}>
+                  <MaterialIcons 
+                    name={(roleIcons[roleAnalysis.preferredRole]?.icon || 'person') as any} 
+                    size={20} 
+                    color="#FFF" 
+                  />
+                </View>
+                <View style={styles.preferredRoleInfo}>
+                  <Text style={styles.preferredRoleName}>{roleAnalysis.preferredRole}</Text>
+                  <Text style={styles.preferredRoleStats}>
+                    {roleAnalysis.roleCounts[roleAnalysis.preferredRole]} sur {roleAnalysis.totalWithRoles} matchs
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.roleBreakdown}>
+                {Object.entries(roleAnalysis.roleCounts).map(([role, count]) => {
+                  const config = roleIcons[role];
+                  const pct = roleAnalysis.totalWithRoles > 0 ? Math.round((count / roleAnalysis.totalWithRoles) * 100) : 0;
+                  return (
+                    <View key={role} style={styles.roleBreakdownItem}>
+                      <MaterialIcons name={config?.icon as any || 'person'} size={14} color={config?.color || theme.textMuted} />
+                      <Text style={styles.roleBreakdownLabel}>{role.charAt(0)}</Text>
+                      <View style={styles.roleBreakdownBarBg}>
+                        <View style={[styles.roleBreakdownBar, { width: `${pct}%`, backgroundColor: config?.color || theme.primary }]} />
+                      </View>
+                      <Text style={styles.roleBreakdownPct}>{pct}%</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
           )}
         </Animated.View>
 
@@ -487,6 +556,86 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: theme.primary,
+  },
+  preferredRoleCard: {
+    width: '100%',
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  preferredRoleTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  preferredRoleContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  preferredRoleIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  preferredRoleInfo: {
+    alignItems: 'flex-start',
+  },
+  preferredRoleName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  preferredRoleStats: {
+    fontSize: 12,
+    color: theme.textSecondary,
+  },
+  roleBreakdown: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  roleBreakdownItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: theme.backgroundSecondary,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: theme.borderRadius.md,
+  },
+  roleBreakdownLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textSecondary,
+    width: 12,
+  },
+  roleBreakdownBarBg: {
+    flex: 1,
+    height: 4,
+    backgroundColor: theme.border,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  roleBreakdownBar: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  roleBreakdownPct: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textPrimary,
+    minWidth: 28,
+    textAlign: 'right',
   },
   // Sections
   section: {
