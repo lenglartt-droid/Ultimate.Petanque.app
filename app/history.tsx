@@ -309,6 +309,9 @@ export default function HistoryScreen() {
               onPress={(e) => {
                 e.stopPropagation();
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                // Calculate new series score based on this match result
+                const newWinsA = isWin ? 1 : 0;
+                const newWinsB = isWin ? 0 : 1;
                 router.push({
                   pathname: '/match/new',
                   params: {
@@ -316,6 +319,8 @@ export default function HistoryScreen() {
                     format: match.format,
                     teamA: encodeTeamForRevanche(match.teamA.playerNames),
                     teamB: encodeTeamForRevanche(match.teamB.playerNames),
+                    seriesWinsA: String(newWinsA),
+                    seriesWinsB: String(newWinsB),
                   }
                 });
               }}

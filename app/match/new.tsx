@@ -145,16 +145,21 @@ const StepIndicator = ({ currentStep, totalSteps }: { currentStep: number; total
 
 export default function NewMatchScreen() {
   const insets = useSafeAreaInsets();
-  const { tournamentId, revanche, format: revancheFormat, teamA: revancheTeamA, teamB: revancheTeamB } = useLocalSearchParams<{ 
+  const { tournamentId, revanche, format: revancheFormat, teamA: revancheTeamA, teamB: revancheTeamB, seriesWinsA: initialWinsA, seriesWinsB: initialWinsB } = useLocalSearchParams<{ 
     tournamentId?: string;
     revanche?: string;
     format?: string;
     teamA?: string;
     teamB?: string;
+    seriesWinsA?: string;
+    seriesWinsB?: string;
   }>();
   const { addMatch, players, tournaments, matches, selfPlayer, terrains } = useApp();
   
   const isRevanche = revanche === 'true';
+  const seriesWinsA = parseInt(initialWinsA || '0');
+  const seriesWinsB = parseInt(initialWinsB || '0');
+  const isFinale = seriesWinsA === 1 && seriesWinsB === 1;
   const linkedTournament = tournamentId ? tournaments.find(t => t.id === tournamentId) : null;
   const isTournamentMode = !!linkedTournament;
   
@@ -1210,6 +1215,91 @@ export default function NewMatchScreen() {
                   >
                     <Text style={styles.fsWinnerBtnText}>Terminer le match</Text>
                   </Pressable>
+                  
+                  {/* Series score & Revanche / Finale button for training matches */}
+                  {!isTournamentMode && (() => {
+                    const newWinsA = seriesWinsA + (teamAScore > teamBScore ? 1 : 0);
+                    const newWinsB = seriesWinsB + (teamAScore > teamBScore ? 0 : 1);
+                    const isSeriesComplete = newWinsA >= 2 || newWinsB >= 2;
+                    const isFinalMatch = seriesWinsA === 1 && seriesWinsB === 1;
+                    
+                    return (
+                      <>
+                        {/* Series score display */}
+                        {(seriesWinsA > 0 || seriesWinsB > 0 || isSeriesComplete) && (
+                          <View style={styles.fsSeriesScoreCard}>
+                            <Text style={styles.fsSeriesScoreTitle}>Score de la série</Text>
+                            <View style={styles.fsSeriesScoreDisplay}>
+                              <Text style={[styles.fsSeriesScoreValue, newWinsA > newWinsB && styles.fsSeriesScoreWin]}>
+                                {newWinsA}
+                              </Text>
+                              <Text style={styles.fsSeriesScoreSep}>-</Text>
+                              <Text style={[styles.fsSeriesScoreValue, newWinsB > newWinsA && styles.fsSeriesScoreLoss]}>
+                                {newWinsB}
+                              </Text>
+                            </View>
+                          </View>
+                        )}
+                        
+                        {/* Series complete message */}
+                        {isSeriesComplete ? (
+                          <View style={styles.fsSeriesCompleteCard}>
+                            <MaterialIcons 
+                              name={newWinsA >= 2 ? 'emoji-events' : 'sentiment-dissatisfied'} 
+                              size={28} 
+                              color={newWinsA >= 2 ? '#FFD700' : '#F87171'} 
+                            />
+                            <Text style={[styles.fsSeriesCompleteText, { color: newWinsA >= 2 ? '#4ADE80' : '#F87171' }]}>
+                              {newWinsA >= 2 ? 'Série gagnée !' : 'Série perdue'}
+                            </Text>
+                          </View>
+                        ) : (
+                          <Pressable 
+                            style={[
+                              styles.fsRevancheBtn,
+                              isFinalMatch && styles.fsRevancheBtnFinale
+                            ]}
+                            onPress={() => {
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                              setFullscreenMode(false);
+                              
+                              // Save current match first
+                              handleSaveMatch();
+                              
+                              // Navigate to new match with series context
+                              setTimeout(() => {
+                                router.replace({
+                                  pathname: '/match/new',
+                                  params: {
+                                    revanche: 'true',
+                                    format: format,
+                                    teamA: teamAPlayers.map(p => getPlayerName(p.playerId)).join(','),
+                                    teamB: teamBPlayers.map(p => getPlayerName(p.playerId)).join(','),
+                                    seriesWinsA: String(newWinsA),
+                                    seriesWinsB: String(newWinsB),
+                                  }
+                                });
+                              }, 100);
+                            }}
+                          >
+                            <MaterialIcons 
+                              name={isFinalMatch ? 'emoji-events' : 'sports-mma'} 
+                              size={20} 
+                              color="#FFF" 
+                            />
+                            <View style={styles.fsRevancheBtnContent}>
+                              <Text style={styles.fsRevancheBtnText}>
+                                {isFinalMatch ? 'FINALE ! (1-1)' : 'Revanche'}
+                              </Text>
+                              <Text style={styles.fsRevancheBtnSubtext}>
+                                {isFinalMatch ? 'Match décisif' : 'Même équipes, même format'}
+                              </Text>
+                            </View>
+                          </Pressable>
+                        )}
+                      </>
+                    );
+                  })()}
                 </View>
               </Animated.View>
             )}
@@ -1231,7 +1321,7 @@ export default function NewMatchScreen() {
         </Pressable>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>
-            {isTournamentMode ? 'Match Tournoi' : isRevanche ? 'Revanche' : 'Nouveau Match'}
+            {isTournamentMode ? 'Match Tournoi' : isFinale ? 'FINALE' : isRevanche ? 'Revanche' : 'Nouveau Match'}
           </Text>
           {isTournamentMode && linkedTournament && (
             <Text style={styles.headerSubtitle} numberOfLines={1}>{linkedTournament.name}</Text>
@@ -1271,13 +1361,26 @@ export default function NewMatchScreen() {
           {/* Mode Banner & Terrain Selection */}
           {!isTournamentMode && (
             <Animated.View entering={FadeInDown.duration(300)} style={styles.trainingSetupCard}>
-              <View style={[styles.modeBanner, isRevanche && styles.modeBannerRevanche]}>
-                <View style={[styles.modeBannerIcon, isRevanche && styles.modeBannerIconRevanche]}>
-                  <MaterialIcons name={isRevanche ? 'sports-mma' : 'fitness-center'} size={20} color="#FFF" />
+              <View style={[styles.modeBanner, isRevanche && styles.modeBannerRevanche, isFinale && styles.modeBannerFinale]}>
+                <View style={[styles.modeBannerIcon, isRevanche && styles.modeBannerIconRevanche, isFinale && styles.modeBannerIconFinale]}>
+                  <MaterialIcons name={isFinale ? 'emoji-events' : isRevanche ? 'sports-mma' : 'fitness-center'} size={20} color="#FFF" />
                 </View>
                 <Text style={styles.modeBannerText}>
-                  {isRevanche ? 'Match revanche' : 'Entraînement'}
+                  {isFinale ? 'FINALE - Match décisif' : isRevanche ? 'Match revanche' : 'Entraînement'}
                 </Text>
+                                {isRevanche && (seriesWinsA > 0 || seriesWinsB > 0) && (
+                  <View style={styles.seriesScoreBadge}>
+                    <Text style={styles.seriesScoreText}>
+                      Série : {seriesWinsA} - {seriesWinsB}
+                    </Text>
+                    {isFinale && (
+                      <View style={styles.finaleBadge}>
+                        <MaterialIcons name="emoji-events" size={12} color="#FFF" />
+                        <Text style={styles.finaleBadgeText}>FINALE</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
               </View>
               
               {/* Terrain Selection */}
@@ -2237,6 +2340,9 @@ const styles = StyleSheet.create({
   modeBannerRevanche: {
     backgroundColor: theme.accent + '10',
   },
+  modeBannerFinale: {
+    backgroundColor: theme.carreauColor + '15',
+  },
   modeBannerIcon: {
     width: 36,
     height: 36,
@@ -2247,6 +2353,34 @@ const styles = StyleSheet.create({
   },
   modeBannerIconRevanche: {
     backgroundColor: theme.accent,
+  },
+  modeBannerIconFinale: {
+    backgroundColor: theme.carreauColor,
+  },
+  seriesScoreBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginLeft: 'auto',
+  },
+  seriesScoreText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  finaleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: theme.carreauColor,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: theme.borderRadius.sm,
+  },
+  finaleBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFF',
   },
   modeBannerText: {
     fontSize: 15,
@@ -3680,6 +3814,83 @@ const styles = StyleSheet.create({
   },
   fsWinnerBtnText: {
     fontSize: 18,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  fsRevancheBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginTop: 16,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    backgroundColor: theme.accent,
+    borderRadius: 24,
+  },
+  fsRevancheBtnFinale: {
+    backgroundColor: theme.carreauColor,
+  },
+  fsSeriesScoreCard: {
+    alignItems: 'center',
+    marginTop: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 16,
+  },
+  fsSeriesScoreTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  fsSeriesScoreDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  fsSeriesScoreValue: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.6)',
+  },
+  fsSeriesScoreWin: {
+    color: '#4ADE80',
+  },
+  fsSeriesScoreLoss: {
+    color: '#F87171',
+  },
+  fsSeriesScoreSep: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.3)',
+  },
+  fsSeriesCompleteCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 20,
+  },
+  fsSeriesCompleteText: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  fsRevancheBtnContent: {
+    marginLeft: 4,
+  },
+  fsRevancheBtnSubtext: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 2,
+  },
+  fsRevancheBtnText: {
+    fontSize: 16,
     fontWeight: '700',
     color: '#FFF',
   },

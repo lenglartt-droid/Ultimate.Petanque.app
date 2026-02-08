@@ -163,7 +163,12 @@ function CountdownTimer({
 
 export default function NewChallengeScreen() {
   const insets = useSafeAreaInsets();
-  const { type: initialType } = useLocalSearchParams<{ type?: ChallengeType }>();
+  const { type: initialType, seriesWinsPlayer: initialPlayerWins, seriesWinsOpponent: initialOpponentWins, opponentId: initialOpponentId } = useLocalSearchParams<{ 
+    type?: ChallengeType;
+    seriesWinsPlayer?: string;
+    seriesWinsOpponent?: string;
+    opponentId?: string;
+  }>();
   const { addChallenge, userStats, selfPlayer, players } = useApp();
 
   const [selectedType, setSelectedType] = useState<ChallengeType | null>(initialType || null);
@@ -171,6 +176,11 @@ export default function NewChallengeScreen() {
   const [selectedOpponent, setSelectedOpponent] = useState<Player | null>(null);
   const [showOpponentModal, setShowOpponentModal] = useState(false);
   const [opponentSearch, setOpponentSearch] = useState('');
+  
+  // Series tracking for finale system
+  const seriesWinsPlayer = parseInt(initialPlayerWins || '0');
+  const seriesWinsOpponent = parseInt(initialOpponentWins || '0');
+  const isFinale = seriesWinsPlayer === 1 && seriesWinsOpponent === 1;
   
   const [isStarted, setIsStarted] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
@@ -245,6 +255,17 @@ export default function NewChallengeScreen() {
     if (!opponentSearch) return true;
     return p.name.toLowerCase().includes(opponentSearch.toLowerCase());
   });
+
+  // Pre-select opponent if coming from revanche
+  useEffect(() => {
+    if (initialOpponentId && players.length > 0 && !selectedOpponent) {
+      const opponent = players.find(p => p.id === initialOpponentId);
+      if (opponent) {
+        setSelectedOpponent(opponent);
+        setChallengeMode('1v1');
+      }
+    }
+  }, [initialOpponentId, players, selectedOpponent]);
 
   // Timer effect
   useEffect(() => {
@@ -636,26 +657,38 @@ export default function NewChallengeScreen() {
   // Revanche - restart same challenge with same opponent immediately
   const handleRevanche = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    // Reset all state but keep type, mode, and opponent
-    setShots([]);
-    setOpponentShots([]);
-    setPrecisionShots([]);
-    setOpponentPrecisionShots([]);
-    setCurrentShot(1);
-    setOpponentCurrentShot(1);
-    setCurrentAtelierIndex(0);
-    setCurrentDistanceIndex(0);
-    setOpponentAtelierIndex(0);
-    setOpponentDistanceIndex(0);
-    setElapsedTime(0);
-    setIsFinished(false);
-    setShotTimerRunning(false);
-    setEditingShotIndex(null);
-    setEditingOpponentShotIndex(null);
-    setEditingPrecisionIndex(null);
-    setCurrentTurn('player');
-    // Start immediately
-    setIsStarted(true);
+    
+    // Calculate new series wins
+    const winner = getWinner();
+    const newPlayerWins = seriesWinsPlayer + (winner === 'player' ? 1 : 0);
+    const newOpponentWins = seriesWinsOpponent + (winner === 'opponent' ? 1 : 0);
+    
+    // Save current challenge first
+    saveChallenge();
+    
+    // Check if someone won the series (best of 3)
+    if (newPlayerWins >= 2 || newOpponentWins >= 2) {
+      // Series is over, just go back
+      Alert.alert(
+        newPlayerWins >= 2 ? 'Série gagnée !' : 'Série perdue',
+        `Score final de la série : ${newPlayerWins} - ${newOpponentWins}`,
+        [{ text: 'OK', onPress: () => router.back() }]
+      );
+      return;
+    }
+    
+    // Navigate to new challenge with series context
+    setTimeout(() => {
+      router.replace({
+        pathname: '/challenge/new',
+        params: {
+          type: selectedType!,
+          seriesWinsPlayer: String(newPlayerWins),
+          seriesWinsOpponent: String(newOpponentWins),
+          opponentId: selectedOpponent?.id,
+        }
+      });
+    }, 100);
   };
 
   // Challenge Type Selection Screen
@@ -1272,14 +1305,72 @@ export default function NewChallengeScreen() {
           {/* Revanche button for 1v1 */}
           {challengeMode === '1v1' && selectedOpponent && (
             <Animated.View entering={FadeInDown.duration(400).delay(400)}>
-              <Pressable style={styles.revancheButton} onPress={handleRevanche}>
-                <MaterialIcons name="sports-mma" size={22} color="#FFF" />
-                <View style={styles.revancheButtonContent}>
-                  <Text style={styles.revancheButtonText}>Revanche !</Text>
-                  <Text style={styles.revancheButtonSubtext}>Même défi, même adversaire</Text>
+              {/* Series score display */}
+              {(seriesWinsPlayer > 0 || seriesWinsOpponent > 0) && (
+                <View style={styles.seriesScoreCard}>
+                  <Text style={styles.seriesScoreTitle}>Score de la série</Text>
+                  <View style={styles.seriesScoreDisplay}>
+                    <Text style={[styles.seriesScoreValue, seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) > seriesWinsOpponent + (getWinner() === 'opponent' ? 1 : 0) && styles.seriesScoreWin]}>
+                      {seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0)}
+                    </Text>
+                    <Text style={styles.seriesScoreSep}>-</Text>
+                    <Text style={[styles.seriesScoreValue, seriesWinsOpponent + (getWinner() === 'opponent' ? 1 : 0) > seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) && styles.seriesScoreLoss]}>
+                      {seriesWinsOpponent + (getWinner() === 'opponent' ? 1 : 0)}
+                    </Text>
+                  </View>
                 </View>
-                <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.7)" />
-              </Pressable>
+              )}
+              
+              {/* Check if series is complete */}
+              {(seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) >= 2 || 
+                seriesWinsOpponent + (getWinner() === 'opponent' ? 1 : 0) >= 2) ? (
+                <View style={styles.seriesCompleteCard}>
+                  <MaterialIcons 
+                    name={seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) >= 2 ? 'emoji-events' : 'sentiment-dissatisfied'} 
+                    size={32} 
+                    color={seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) >= 2 ? theme.carreauColor : theme.error} 
+                  />
+                  <Text style={[
+                    styles.seriesCompleteText,
+                    { color: seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) >= 2 ? theme.success : theme.error }
+                  ]}>
+                    {seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) >= 2 
+                      ? 'Vous avez gagn\u00e9 la s\u00e9rie !' 
+                      : `${selectedOpponent.name} a gagn\u00e9 la s\u00e9rie !`}
+                  </Text>
+                </View>
+              ) : (
+                <Pressable 
+                  style={[
+                    styles.revancheButton, 
+                    seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) === 1 && 
+                    seriesWinsOpponent + (getWinner() === 'opponent' ? 1 : 0) === 1 && 
+                    styles.revancheButtonFinale
+                  ]} 
+                  onPress={handleRevanche}
+                >
+                  <MaterialIcons 
+                    name={seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) === 1 && 
+                          seriesWinsOpponent + (getWinner() === 'opponent' ? 1 : 0) === 1 
+                          ? 'emoji-events' : 'sports-mma'} 
+                    size={22} 
+                    color="#FFF" 
+                  />
+                  <View style={styles.revancheButtonContent}>
+                    <Text style={styles.revancheButtonText}>
+                      {seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) === 1 && 
+                       seriesWinsOpponent + (getWinner() === 'opponent' ? 1 : 0) === 1 
+                       ? 'FINALE ! (1-1)' : 'Revanche !'}
+                    </Text>
+                    <Text style={styles.revancheButtonSubtext}>
+                      {seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) === 1 && 
+                       seriesWinsOpponent + (getWinner() === 'opponent' ? 1 : 0) === 1 
+                       ? 'Match décisif' : 'Même défi, même adversaire'}
+                    </Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.7)" />
+                </Pressable>
+              )}
             </Animated.View>
           )}
         </ScrollView>
@@ -1423,14 +1514,72 @@ export default function NewChallengeScreen() {
           {/* Revanche button for 1v1 */}
           {challengeMode === '1v1' && selectedOpponent && (
             <Animated.View entering={FadeInDown.duration(400).delay(400)}>
-              <Pressable style={styles.revancheButton} onPress={handleRevanche}>
-                <MaterialIcons name="sports-mma" size={22} color="#FFF" />
-                <View style={styles.revancheButtonContent}>
-                  <Text style={styles.revancheButtonText}>Revanche !</Text>
-                  <Text style={styles.revancheButtonSubtext}>Même défi, même adversaire</Text>
+              {/* Series score display */}
+              {(seriesWinsPlayer > 0 || seriesWinsOpponent > 0) && (
+                <View style={styles.seriesScoreCard}>
+                  <Text style={styles.seriesScoreTitle}>Score de la série</Text>
+                  <View style={styles.seriesScoreDisplay}>
+                    <Text style={[styles.seriesScoreValue, seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) > seriesWinsOpponent + (getWinner() === 'opponent' ? 1 : 0) && styles.seriesScoreWin]}>
+                      {seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0)}
+                    </Text>
+                    <Text style={styles.seriesScoreSep}>-</Text>
+                    <Text style={[styles.seriesScoreValue, seriesWinsOpponent + (getWinner() === 'opponent' ? 1 : 0) > seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) && styles.seriesScoreLoss]}>
+                      {seriesWinsOpponent + (getWinner() === 'opponent' ? 1 : 0)}
+                    </Text>
+                  </View>
                 </View>
-                <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.7)" />
-              </Pressable>
+              )}
+              
+              {/* Check if series is complete */}
+              {(seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) >= 2 || 
+                seriesWinsOpponent + (getWinner() === 'opponent' ? 1 : 0) >= 2) ? (
+                <View style={styles.seriesCompleteCard}>
+                  <MaterialIcons 
+                    name={seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) >= 2 ? 'emoji-events' : 'sentiment-dissatisfied'} 
+                    size={32} 
+                    color={seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) >= 2 ? theme.carreauColor : theme.error} 
+                  />
+                  <Text style={[
+                    styles.seriesCompleteText,
+                    { color: seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) >= 2 ? theme.success : theme.error }
+                  ]}>
+                    {seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) >= 2 
+                      ? 'Vous avez gagn\u00e9 la s\u00e9rie !' 
+                      : `${selectedOpponent.name} a gagn\u00e9 la s\u00e9rie !`}
+                  </Text>
+                </View>
+              ) : (
+                <Pressable 
+                  style={[
+                    styles.revancheButton, 
+                    seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) === 1 && 
+                    seriesWinsOpponent + (getWinner() === 'opponent' ? 1 : 0) === 1 && 
+                    styles.revancheButtonFinale
+                  ]} 
+                  onPress={handleRevanche}
+                >
+                  <MaterialIcons 
+                    name={seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) === 1 && 
+                          seriesWinsOpponent + (getWinner() === 'opponent' ? 1 : 0) === 1 
+                          ? 'emoji-events' : 'sports-mma'} 
+                    size={22} 
+                    color="#FFF" 
+                  />
+                  <View style={styles.revancheButtonContent}>
+                    <Text style={styles.revancheButtonText}>
+                      {seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) === 1 && 
+                       seriesWinsOpponent + (getWinner() === 'opponent' ? 1 : 0) === 1 
+                       ? 'FINALE ! (1-1)' : 'Revanche !'}
+                    </Text>
+                    <Text style={styles.revancheButtonSubtext}>
+                      {seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) === 1 && 
+                       seriesWinsOpponent + (getWinner() === 'opponent' ? 1 : 0) === 1 
+                       ? 'Match décisif' : 'Même défi, même adversaire'}
+                    </Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.7)" />
+                </Pressable>
+              )}
             </Animated.View>
           )}
         </ScrollView>
@@ -2936,5 +3085,60 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(255,255,255,0.8)',
     marginTop: 2,
+  },
+  revancheButtonFinale: {
+    backgroundColor: theme.carreauColor,
+  },
+  // Series score styles
+  seriesScoreCard: {
+    alignItems: 'center',
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.lg,
+  },
+  seriesScoreTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textMuted,
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  seriesScoreDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  seriesScoreValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: theme.textSecondary,
+  },
+  seriesScoreWin: {
+    color: theme.success,
+  },
+  seriesScoreLoss: {
+    color: theme.error,
+  },
+  seriesScoreSep: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: theme.textMuted,
+  },
+  seriesCompleteCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.lg,
+  },
+  seriesCompleteText: {
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
