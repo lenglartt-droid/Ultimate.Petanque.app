@@ -380,15 +380,6 @@ export interface ChallengePlayerResult {
   atelierScores?: { [key in PrecisionAtelier]?: number };
 }
 
-export interface ChallengeSeriesInfo {
-  seriesId: string;
-  matchNumber: number;
-  winsBeforeThisMatch: { player: number; opponent: number };
-  isFinale?: boolean;
-  seriesComplete?: boolean;
-  seriesWinner?: 'player' | 'opponent';
-}
-
 export interface Challenge {
   id: string;
   type: ChallengeType;
@@ -400,7 +391,6 @@ export interface Challenge {
   opponentName?: string;
   opponentResult?: ChallengePlayerResult;
   winner?: 'player' | 'opponent' | 'draw';
-  seriesInfo?: ChallengeSeriesInfo;
   shots?: ChallengeShot[];
   successCount?: number;
   totalShots?: number;

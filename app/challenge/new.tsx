@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn, ZoomIn, useAnimatedStyle, useSharedValue, withTiming, withSequence, Easing } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
@@ -163,27 +163,13 @@ function CountdownTimer({
 
 export default function NewChallengeScreen() {
   const insets = useSafeAreaInsets();
-  const { type: initialType, seriesWinsPlayer: initialPlayerWins, seriesWinsOpponent: initialOpponentWins, opponentId: initialOpponentId, seriesId: initialSeriesId } = useLocalSearchParams<{ 
-    type?: ChallengeType;
-    seriesWinsPlayer?: string;
-    seriesWinsOpponent?: string;
-    opponentId?: string;
-    seriesId?: string;
-  }>();
   const { addChallenge, userStats, selfPlayer, players } = useApp();
 
-  const [selectedType, setSelectedType] = useState<ChallengeType | null>(initialType || null);
+  const [selectedType, setSelectedType] = useState<ChallengeType | null>(null);
   const [challengeMode, setChallengeMode] = useState<ChallengeMode | null>(null);
   const [selectedOpponent, setSelectedOpponent] = useState<Player | null>(null);
   const [showOpponentModal, setShowOpponentModal] = useState(false);
   const [opponentSearch, setOpponentSearch] = useState('');
-  
-  // Series tracking for finale system
-  const seriesWinsPlayer = parseInt(initialPlayerWins || '0');
-  const seriesWinsOpponent = parseInt(initialOpponentWins || '0');
-  const isFinale = seriesWinsPlayer === 1 && seriesWinsOpponent === 1;
-  const seriesId = initialSeriesId || (selectedOpponent && (seriesWinsPlayer > 0 || seriesWinsOpponent > 0) ? `challenge-series-${Date.now()}` : undefined);
-  const currentMatchNumber = seriesWinsPlayer + seriesWinsOpponent + 1;
   
   const [isStarted, setIsStarted] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
@@ -258,17 +244,6 @@ export default function NewChallengeScreen() {
     if (!opponentSearch) return true;
     return p.name.toLowerCase().includes(opponentSearch.toLowerCase());
   });
-
-  // Pre-select opponent if coming from revanche
-  useEffect(() => {
-    if (initialOpponentId && players.length > 0 && !selectedOpponent) {
-      const opponent = players.find(p => p.id === initialOpponentId);
-      if (opponent) {
-        setSelectedOpponent(opponent);
-        setChallengeMode('1v1');
-      }
-    }
-  }, [initialOpponentId, players, selectedOpponent]);
 
   // Timer effect
   useEffect(() => {
@@ -480,7 +455,6 @@ export default function NewChallengeScreen() {
         // In 1v1 mode, alternate shot by shot
         setCurrentTurn('player');
       }
-      // If player is finished but opponent isn't, stay on opponent's turn
       
       setShotTimerRunning(false);
       setShotStartTime(0);
@@ -537,7 +511,6 @@ export default function NewChallengeScreen() {
           // Alternate to opponent's turn
           setCurrentTurn('opponent');
         }
-        // If opponent is finished but player isn't, stay on player's turn
       }
       
       setShotTimerRunning(false);
@@ -569,9 +542,6 @@ export default function NewChallengeScreen() {
 
   const saveChallenge = () => {
     if (!selectedType || !challengeMode) return;
-
-    // Flag to check if this is a revanche/series match
-    const isRevanche = seriesWinsPlayer > 0 || seriesWinsOpponent > 0 || isFinale;
     
     const opponentResult: ChallengePlayerResult | undefined = challengeMode === '1v1' && selectedOpponent ? {
       playerId: selectedOpponent.id,
@@ -586,20 +556,7 @@ export default function NewChallengeScreen() {
       atelierScores: selectedType === 'precision' ? opponentAtelierScores : undefined,
     } : undefined;
 
-    // Calculate series info if this is a 1v1 challenge
     const winner = challengeMode === '1v1' ? getWinner() : undefined;
-    const newPlayerWins = seriesWinsPlayer + (winner === 'player' ? 1 : 0);
-    const newOpponentWins = seriesWinsOpponent + (winner === 'opponent' ? 1 : 0);
-    const isSeriesComplete = newPlayerWins >= 2 || newOpponentWins >= 2;
-    
-    const challengeSeriesInfo = (challengeMode === '1v1' && selectedOpponent && (isRevanche || seriesId || seriesWinsPlayer > 0 || seriesWinsOpponent > 0)) ? {
-      seriesId: seriesId || `challenge-series-${Date.now()}`,
-      matchNumber: currentMatchNumber,
-      winsBeforeThisMatch: { player: seriesWinsPlayer, opponent: seriesWinsOpponent },
-      isFinale: isFinale,
-      seriesComplete: isSeriesComplete,
-      seriesWinner: isSeriesComplete ? (newPlayerWins >= 2 ? 'player' : 'opponent') as 'player' | 'opponent' : undefined,
-    } : undefined;
 
     if (selectedType === 'precision') {
       addChallenge({
@@ -617,7 +574,6 @@ export default function NewChallengeScreen() {
         maxPoints: 100,
         atelierScores,
         duration: elapsedTime,
-        seriesInfo: challengeSeriesInfo,
       });
     } else {
       addChallenge({
@@ -636,7 +592,6 @@ export default function NewChallengeScreen() {
         carreauCount,
         successRate,
         duration: elapsedTime,
-        seriesInfo: challengeSeriesInfo,
       });
     }
 
@@ -675,44 +630,6 @@ export default function NewChallengeScreen() {
         },
       ]
     );
-  };
-
-  // Revanche - restart same challenge with same opponent immediately
-  // Auto-saves current challenge and navigates to new one
-  const handleRevanche = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
-    // Calculate new series wins
-    const winner = getWinner();
-    const newPlayerWins = seriesWinsPlayer + (winner === 'player' ? 1 : 0);
-    const newOpponentWins = seriesWinsOpponent + (winner === 'opponent' ? 1 : 0);
-    
-    // Save current challenge first (automatic save)
-    saveChallenge();
-    
-    // Navigate to new challenge with series context
-    setTimeout(() => {
-      router.replace({
-        pathname: '/challenge/new',
-        params: {
-          type: selectedType!,
-          seriesWinsPlayer: String(newPlayerWins),
-          seriesWinsOpponent: String(newOpponentWins),
-          opponentId: selectedOpponent?.id,
-          seriesId: seriesId || `challenge-series-${Date.now()}`,
-        }
-      });
-    }, 100);
-  };
-
-  // Terminer la série complète et retourner à l'accueil
-  const handleFinishSeries = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    saveChallenge();
-    // Rediriger vers l'accueil
-    setTimeout(() => {
-      router.replace('/(tabs)');
-    }, 100);
   };
 
   // Challenge Type Selection Screen
@@ -1255,13 +1172,11 @@ export default function NewChallengeScreen() {
                 <Text style={styles.resultsGridValue}>{carreauCount}</Text>
                 <Text style={styles.resultsGridLabel}>Carreaux</Text>
               </View>
-              {challengeMode === 'solo' && (
-                <View style={styles.resultsGridItem}>
-                  <MaterialIcons name="timer" size={24} color={theme.primary} />
-                  <Text style={styles.resultsGridValue}>{formatTime(elapsedTime)}</Text>
-                  <Text style={styles.resultsGridLabel}>Durée</Text>
-                </View>
-              )}
+              <View style={styles.resultsGridItem}>
+                <MaterialIcons name="timer" size={24} color={theme.primary} />
+                <Text style={styles.resultsGridValue}>{formatTime(elapsedTime)}</Text>
+                <Text style={styles.resultsGridLabel}>Durée</Text>
+              </View>
             </View>
           </Animated.View>
 
@@ -1306,14 +1221,6 @@ export default function NewChallengeScreen() {
             </Animated.View>
           )}
 
-          {/* Duration (1v1) */}
-          {challengeMode === '1v1' && (
-            <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.durationCard}>
-              <MaterialIcons name="timer" size={20} color={theme.primary} />
-              <Text style={styles.durationText}>Durée totale : {formatTime(elapsedTime)}</Text>
-            </Animated.View>
-          )}
-
           {/* Actions */}
           <View style={styles.resultsActions}>
             <Pressable style={styles.retryButton} onPress={resetChallenge}>
@@ -1325,84 +1232,6 @@ export default function NewChallengeScreen() {
               <Text style={styles.saveButtonText}>Enregistrer</Text>
             </Pressable>
           </View>
-
-          {/* Revanche button for 1v1 */}
-          {challengeMode === '1v1' && selectedOpponent && (
-            <Animated.View entering={FadeInDown.duration(400).delay(400)}>
-              {/* Series score display */}
-              {(seriesWinsPlayer > 0 || seriesWinsOpponent > 0) && (
-                <View style={styles.seriesScoreCard}>
-                  <Text style={styles.seriesScoreTitle}>Score de la série</Text>
-                  <View style={styles.seriesScoreDisplay}>
-                    <Text style={[styles.seriesScoreValue, seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) > seriesWinsOpponent + (getWinner() === 'opponent' ? 1 : 0) && styles.seriesScoreWin]}>
-                      {seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0)}
-                    </Text>
-                    <Text style={styles.seriesScoreSep}>-</Text>
-                    <Text style={[styles.seriesScoreValue, seriesWinsOpponent + (getWinner() === 'opponent' ? 1 : 0) > seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) && styles.seriesScoreLoss]}>
-                      {seriesWinsOpponent + (getWinner() === 'opponent' ? 1 : 0)}
-                    </Text>
-                  </View>
-                </View>
-              )}
-              
-              {/* Check if series is complete */}
-              {(() => {
-                const winner = getWinner();
-                const newPlayerWins = seriesWinsPlayer + (winner === 'player' ? 1 : 0);
-                const newOpponentWins = seriesWinsOpponent + (winner === 'opponent' ? 1 : 0);
-                const isSeriesComplete = newPlayerWins >= 2 || newOpponentWins >= 2;
-                const willBeFinale = newPlayerWins === 1 && newOpponentWins === 1;
-                
-                return isSeriesComplete ? (
-                  <>
-                    <View style={styles.seriesCompleteCard}>
-                      <MaterialIcons 
-                        name={newPlayerWins >= 2 ? 'emoji-events' : 'sentiment-dissatisfied'} 
-                        size={32} 
-                        color={newPlayerWins >= 2 ? theme.carreauColor : theme.error} 
-                      />
-                      <Text style={[
-                        styles.seriesCompleteText,
-                        { color: newPlayerWins >= 2 ? theme.success : theme.error }
-                      ]}>
-                        {newPlayerWins >= 2 
-                          ? 'Vous avez gagné la série !' 
-                          : `${selectedOpponent.name} a gagné la série !`}
-                      </Text>
-                    </View>
-                    {/* Bouton terminer après finale */}
-                    <Pressable style={styles.finishSeriesButton} onPress={handleFinishSeries}>
-                      <MaterialIcons name="home" size={20} color="#FFF" />
-                      <Text style={styles.finishSeriesButtonText}>Terminer et retourner à l'accueil</Text>
-                    </Pressable>
-                  </>
-                ) : (
-                  <Pressable 
-                    style={[
-                      styles.revancheButton, 
-                      willBeFinale && styles.revancheButtonFinale
-                    ]} 
-                    onPress={handleRevanche}
-                  >
-                    <MaterialIcons 
-                      name={willBeFinale ? 'emoji-events' : 'sports-mma'} 
-                      size={22} 
-                      color="#FFF" 
-                    />
-                    <View style={styles.revancheButtonContent}>
-                      <Text style={styles.revancheButtonText}>
-                        {willBeFinale ? 'FINALE ! (1-1)' : 'Revanche !'}
-                      </Text>
-                      <Text style={styles.revancheButtonSubtext}>
-                        {willBeFinale ? 'Match décisif' : 'Même défi, même adversaire'}
-                      </Text>
-                    </View>
-                    <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.7)" />
-                  </Pressable>
-                );
-              })()}
-            </Animated.View>
-          )}
         </ScrollView>
       </SafeAreaView>
     );
@@ -1471,13 +1300,11 @@ export default function NewChallengeScreen() {
             <Text style={styles.resultsScoreMax}>/ 100 points</Text>
 
             <View style={styles.resultsGrid}>
-              {challengeMode === 'solo' && (
-                <View style={styles.resultsGridItem}>
-                  <MaterialIcons name="timer" size={24} color={theme.primary} />
-                  <Text style={styles.resultsGridValue}>{formatTime(elapsedTime)}</Text>
-                  <Text style={styles.resultsGridLabel}>Durée totale</Text>
-                </View>
-              )}
+              <View style={styles.resultsGridItem}>
+                <MaterialIcons name="timer" size={24} color={theme.primary} />
+                <Text style={styles.resultsGridValue}>{formatTime(elapsedTime)}</Text>
+                <Text style={styles.resultsGridLabel}>Durée totale</Text>
+              </View>
               <View style={styles.resultsGridItem}>
                 <MaterialIcons name="stars" size={24} color={theme.carreauColor} />
                 <Text style={styles.resultsGridValue}>
@@ -1521,14 +1348,6 @@ export default function NewChallengeScreen() {
             </Animated.View>
           )}
 
-          {/* Duration (1v1) */}
-          {challengeMode === '1v1' && (
-            <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.durationCard}>
-              <MaterialIcons name="timer" size={20} color={theme.primary} />
-              <Text style={styles.durationText}>Durée totale : {formatTime(elapsedTime)}</Text>
-            </Animated.View>
-          )}
-
           {/* Actions */}
           <View style={styles.resultsActions}>
             <Pressable style={styles.retryButton} onPress={resetChallenge}>
@@ -1540,84 +1359,6 @@ export default function NewChallengeScreen() {
               <Text style={styles.saveButtonText}>Enregistrer</Text>
             </Pressable>
           </View>
-
-          {/* Revanche button for 1v1 */}
-          {challengeMode === '1v1' && selectedOpponent && (
-            <Animated.View entering={FadeInDown.duration(400).delay(400)}>
-              {/* Series score display */}
-              {(seriesWinsPlayer > 0 || seriesWinsOpponent > 0) && (
-                <View style={styles.seriesScoreCard}>
-                  <Text style={styles.seriesScoreTitle}>Score de la série</Text>
-                  <View style={styles.seriesScoreDisplay}>
-                    <Text style={[styles.seriesScoreValue, seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) > seriesWinsOpponent + (getWinner() === 'opponent' ? 1 : 0) && styles.seriesScoreWin]}>
-                      {seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0)}
-                    </Text>
-                    <Text style={styles.seriesScoreSep}>-</Text>
-                    <Text style={[styles.seriesScoreValue, seriesWinsOpponent + (getWinner() === 'opponent' ? 1 : 0) > seriesWinsPlayer + (getWinner() === 'player' ? 1 : 0) && styles.seriesScoreLoss]}>
-                      {seriesWinsOpponent + (getWinner() === 'opponent' ? 1 : 0)}
-                    </Text>
-                  </View>
-                </View>
-              )}
-              
-              {/* Check if series is complete */}
-              {(() => {
-                const winner = getWinner();
-                const newPlayerWins = seriesWinsPlayer + (winner === 'player' ? 1 : 0);
-                const newOpponentWins = seriesWinsOpponent + (winner === 'opponent' ? 1 : 0);
-                const isSeriesComplete = newPlayerWins >= 2 || newOpponentWins >= 2;
-                const willBeFinale = newPlayerWins === 1 && newOpponentWins === 1;
-                
-                return isSeriesComplete ? (
-                  <>
-                    <View style={styles.seriesCompleteCard}>
-                      <MaterialIcons 
-                        name={newPlayerWins >= 2 ? 'emoji-events' : 'sentiment-dissatisfied'} 
-                        size={32} 
-                        color={newPlayerWins >= 2 ? theme.carreauColor : theme.error} 
-                      />
-                      <Text style={[
-                        styles.seriesCompleteText,
-                        { color: newPlayerWins >= 2 ? theme.success : theme.error }
-                      ]}>
-                        {newPlayerWins >= 2 
-                          ? 'Vous avez gagné la série !' 
-                          : `${selectedOpponent.name} a gagné la série !`}
-                      </Text>
-                    </View>
-                    {/* Bouton terminer après finale */}
-                    <Pressable style={styles.finishSeriesButton} onPress={handleFinishSeries}>
-                      <MaterialIcons name="home" size={20} color="#FFF" />
-                      <Text style={styles.finishSeriesButtonText}>Terminer et retourner à l'accueil</Text>
-                    </Pressable>
-                  </>
-                ) : (
-                  <Pressable 
-                    style={[
-                      styles.revancheButton, 
-                      willBeFinale && styles.revancheButtonFinale
-                    ]} 
-                    onPress={handleRevanche}
-                  >
-                    <MaterialIcons 
-                      name={willBeFinale ? 'emoji-events' : 'sports-mma'} 
-                      size={22} 
-                      color="#FFF" 
-                    />
-                    <View style={styles.revancheButtonContent}>
-                      <Text style={styles.revancheButtonText}>
-                        {willBeFinale ? 'FINALE ! (1-1)' : 'Revanche !'}
-                      </Text>
-                      <Text style={styles.revancheButtonSubtext}>
-                        {willBeFinale ? 'Match décisif' : 'Même défi, même adversaire'}
-                      </Text>
-                    </View>
-                    <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.7)" />
-                  </Pressable>
-                );
-              })()}
-            </Animated.View>
-          )}
         </ScrollView>
       </SafeAreaView>
     );
@@ -1891,1306 +1632,192 @@ export default function NewChallengeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.backgroundSecondary,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: theme.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  closeButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  timerBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: theme.primary + '15',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: theme.borderRadius.full,
-  },
-  timerText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.primary,
-    fontVariant: ['tabular-nums'],
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 24,
-  },
-  introSection: {
-    alignItems: 'center',
-    paddingVertical: 32,
-  },
-  introTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: theme.textPrimary,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  introText: {
-    fontSize: 15,
-    color: theme.textSecondary,
-    textAlign: 'center',
-    paddingHorizontal: 24,
-  },
-  challengeTypeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    marginBottom: 12,
-    ...theme.shadows.card,
-  },
-  challengeTypeIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  challengeTypeInfo: {
-    flex: 1,
-  },
-  challengeTypeName: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: theme.textPrimary,
-    marginBottom: 4,
-  },
-  challengeTypeDesc: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    marginBottom: 8,
-  },
-  challengeTypeMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  challengeTypeMetaText: {
-    fontSize: 12,
-    color: theme.textMuted,
-  },
-  rulesCard: {
-    backgroundColor: theme.primary + '10',
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: theme.primary + '30',
-  },
-  rulesHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  rulesTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.primary,
-  },
-  rulesText: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    lineHeight: 22,
-  },
-  // Mode selection styles
-  modeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    marginBottom: 12,
-    ...theme.shadows.card,
-  },
-  modeIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  modeInfo: {
-    flex: 1,
-  },
-  modeName: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: theme.textPrimary,
-    marginBottom: 4,
-  },
-  modeDesc: {
-    fontSize: 13,
-    color: theme.textSecondary,
-  },
-  modeInfoCard: {
-    flexDirection: 'row',
-    backgroundColor: theme.warning + '15',
-    borderRadius: theme.borderRadius.md,
-    padding: 14,
-    marginTop: 12,
-    gap: 10,
-    alignItems: 'flex-start',
-  },
-  modeInfoText: {
-    flex: 1,
-    fontSize: 13,
-    color: theme.textSecondary,
-    lineHeight: 18,
-  },
-  modeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: theme.primary + '15',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: theme.borderRadius.full,
-    marginTop: 16,
-  },
-  modeBadge1v1: {
-    backgroundColor: theme.accent + '15',
-  },
-  modeBadgeText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.primary,
-  },
-  modeBadgeText1v1: {
-    color: theme.accent,
-  },
-  // Mode selection styles - Enhanced
-  modeSelectionContainer: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 20,
-  },
-  modeHeaderBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
-    gap: 10,
-    backgroundColor: theme.surface,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: theme.borderRadius.full,
-    marginBottom: 20,
-    ...theme.shadows.card,
-  },
-  modeHeaderIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modeHeaderText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  modeSelectionTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: theme.textPrimary,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  modeCardsGrid: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  modeCardWrapper: {
-    flex: 1,
-  },
-  modeCardLarge: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
-    ...theme.shadows.cardElevated,
-  },
-  modeCardSolo: {
-    borderColor: theme.primary + '30',
-  },
-  modeCard1v1: {
-    borderColor: theme.accent + '30',
-  },
-  modeCardLargeIconContainer: {
-    position: 'relative',
-    marginBottom: 12,
-  },
-  modeCardLargeIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  vsIndicator: {
-    position: 'absolute',
-    bottom: -4,
-    right: -4,
-    backgroundColor: theme.warning,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: theme.surface,
-  },
-  vsText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#FFF',
-  },
-  modeCardLargeName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: theme.textPrimary,
-    marginBottom: 4,
-  },
-  modeCardLargeDesc: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    marginBottom: 12,
-  },
-  modeCardLargeFeatures: {
-    width: '100%',
-    gap: 6,
-    marginBottom: 14,
-  },
-  modeCardFeature: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  modeCardFeatureText: {
-    fontSize: 12,
-    color: theme.textSecondary,
-  },
-  modeCardStartButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    width: '100%',
-    paddingVertical: 12,
-    borderRadius: theme.borderRadius.md,
-  },
-  modeCardStartText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  modeTipCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: theme.warning + '15',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: theme.borderRadius.md,
-    marginTop: 20,
-  },
-  modeTipText: {
-    flex: 1,
-    fontSize: 13,
-    color: theme.textSecondary,
-    lineHeight: 18,
-  },
-  // Opponent selection - Enhanced
-  opponent1v1Banner: {
-    backgroundColor: theme.accent,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-  },
-  opponent1v1BannerContent: {
-    alignItems: 'center',
-  },
-  opponent1v1Players: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  opponent1v1PlayerBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  opponent1v1PlayerBadgeEmpty: {
-    backgroundColor: theme.surface,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: theme.accent,
-  },
-  opponent1v1VsBadge: {
-    backgroundColor: theme.warning,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: theme.borderRadius.sm,
-  },
-  opponent1v1VsText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#FFF',
-  },
-  opponent1v1BannerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  // Search and player selection
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    marginHorizontal: 16,
-    marginTop: 16,
-    paddingHorizontal: 14,
-    borderRadius: theme.borderRadius.md,
-    gap: 10,
-    ...theme.shadows.card,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: theme.textPrimary,
-  },
-  playerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: 14,
-    marginBottom: 10,
-    ...theme.shadows.card,
-  },
-  playerAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: theme.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  playerInitials: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  playerInfo: {
-    flex: 1,
-  },
-  playerName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  playerMeta: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    marginTop: 2,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 48,
-  },
-  emptyStateText: {
-    fontSize: 15,
-    color: theme.textMuted,
-    marginTop: 12,
-  },
-  // Opponent player card - Enhanced
-  opponentPlayerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: theme.border,
-    ...theme.shadows.card,
-  },
-  opponentPlayerAvatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: theme.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  opponentPlayerInitials: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  opponentPlayerInfo: {
-    flex: 1,
-  },
-  opponentPlayerName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.textPrimary,
-    marginBottom: 4,
-  },
-  opponentPlayerMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  opponentPlayerMetaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  opponentPlayerMetaText: {
-    fontSize: 12,
-    color: theme.textMuted,
-  },
-  opponentPlayerMetaDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: theme.textMuted,
-    marginHorizontal: 8,
-  },
-  opponentSelectButton: {
-    backgroundColor: theme.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: theme.borderRadius.md,
-  },
-  opponentSelectText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  createPlayerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: theme.primary + '15',
-    borderRadius: theme.borderRadius.md,
-  },
-  createPlayerButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.primary,
-  },
-  // Turn indicator
-  turnIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: theme.primary,
-    paddingVertical: 10,
-  },
-  turnIndicatorOpponent: {
-    backgroundColor: theme.accent,
-  },
-  turnIndicatorText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  // Winner banner
-  winnerBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    paddingVertical: 16,
-    borderRadius: theme.borderRadius.lg,
-    marginBottom: 16,
-  },
-  winnerBannerWin: {
-    backgroundColor: theme.success,
-  },
-  winnerBannerLose: {
-    backgroundColor: theme.error,
-  },
-  winnerBannerDraw: {
-    backgroundColor: theme.warning,
-  },
-  winnerBannerText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  // Results player header
-  resultsPlayerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  resultsPlayerName: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.primary,
-  },
-  // Scores comparison
-  scoresComparison: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.surface,
-    marginHorizontal: 16,
-    marginVertical: 12,
-    paddingVertical: 16,
-    borderRadius: theme.borderRadius.lg,
-    ...theme.shadows.card,
-  },
-  scoreCompareItem: {
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  scoreCompareName: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    marginBottom: 4,
-  },
-  scoreCompareValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: theme.textMuted,
-  },
-  scoreCompareValueActive: {
-    color: theme.primary,
-  },
-  scoreCompareSeparator: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.textMuted,
-    paddingHorizontal: 8,
-  },
-  // Duration card
-  durationCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: theme.surface,
-    paddingVertical: 14,
-    borderRadius: theme.borderRadius.md,
-    marginTop: 8,
-    ...theme.shadows.card,
-  },
-  durationText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  // Precision ready screen
-  precisionReadyHeader: {
-    alignItems: 'center',
-    paddingVertical: 24,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textSecondary,
-    letterSpacing: 1,
-    marginBottom: 12,
-    marginTop: 24,
-  },
-  atelierPreviewCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: 14,
-    marginBottom: 8,
-    ...theme.shadows.card,
-  },
-  atelierPreviewIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  atelierPreviewInfo: {
-    flex: 1,
-  },
-  atelierPreviewName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  atelierPreviewDesc: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    marginTop: 2,
-  },
-  atelierPreviewDistances: {
-    backgroundColor: theme.backgroundSecondary,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: theme.borderRadius.sm,
-  },
-  atelierPreviewDistText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textMuted,
-  },
-  scoringCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    marginTop: 24,
-    ...theme.shadows.card,
-  },
-  scoringTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textSecondary,
-    letterSpacing: 1,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  scoringSubtitle: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 18,
-  },
-  scoringGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  scoringItem: {
-    alignItems: 'center',
-  },
-  scoringBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  scoringPoints: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  scoringLabel: {
-    fontSize: 12,
-    color: theme.textSecondary,
-  },
-  bottomAction: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    backgroundColor: theme.surface,
-    borderTopWidth: 1,
-    borderTopColor: theme.border,
-  },
-  readyContainer: {
-    flex: 1,
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 32,
-  },
-  readyContent: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  readyIcon: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  readyTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: theme.textPrimary,
-    marginBottom: 8,
-  },
-  readyDescription: {
-    fontSize: 16,
-    color: theme.textSecondary,
-    textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 24,
-  },
-  readyStats: {
-    flexDirection: 'row',
-    gap: 32,
-  },
-  readyStatItem: {
-    alignItems: 'center',
-  },
-  readyStatValue: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: theme.primary,
-  },
-  readyStatLabel: {
-    fontSize: 14,
-    color: theme.textSecondary,
-  },
-  startButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: theme.primary,
-    paddingVertical: 18,
-    borderRadius: theme.borderRadius.md,
-    ...theme.shadows.card,
-  },
-  startButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  progressContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  progressBar: {
-    height: 8,
-    backgroundColor: theme.border,
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  progressText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.textSecondary,
-    textAlign: 'center',
-  },
-  shotsIndicator: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    marginBottom: 24,
-  },
-  shotIndicatorDot: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: theme.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  currentStats: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    marginHorizontal: 16,
-    paddingVertical: 16,
-    borderRadius: theme.borderRadius.lg,
-    ...theme.shadows.card,
-  },
-  currentStatItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  currentStatValue: {
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  currentStatLabel: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    marginTop: 4,
-  },
-  currentStatDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: theme.border,
-  },
-  shotButtonsContainer: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 24,
-    justifyContent: 'center',
-  },
-  shotButtonsTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.textPrimary,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  shotButtonsRow: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 16,
-  },
-  shotButton: {
-    flex: 1,
-    aspectRatio: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: theme.borderRadius.lg,
-    ...theme.shadows.cardElevated,
-  },
-  shotButtonFail: {
-    backgroundColor: theme.error,
-  },
-  shotButtonSuccess: {
-    backgroundColor: theme.success,
-  },
-  shotButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFF',
-    marginTop: 8,
-  },
-  carreauButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: theme.carreauColor + '15',
-    paddingVertical: 16,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 2,
-    borderColor: theme.carreauColor,
-  },
-  carreauButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.carreauColor,
-  },
-  precisionGameContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  currentAtelierCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    marginBottom: 16,
-    ...theme.shadows.card,
-  },
-  currentAtelierHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  currentAtelierIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  currentAtelierInfo: {
-    flex: 1,
-  },
-  currentAtelierName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: theme.textPrimary,
-  },
-  currentAtelierDesc: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    marginTop: 2,
-  },
-  currentDistanceBadge: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    backgroundColor: theme.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: theme.borderRadius.md,
-  },
-  currentDistanceText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  precisionProgress: {
-    marginBottom: 16,
-  },
-  precisionProgressText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.textSecondary,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  precisionProgressBar: {
-    height: 6,
-    backgroundColor: theme.border,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  precisionProgressFill: {
-    height: '100%',
-    backgroundColor: theme.primary,
-    borderRadius: 3,
-  },
-  countdownContainer: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  countdownCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.surface,
-    marginBottom: 12,
-  },
-  countdownText: {
-    fontSize: 36,
-    fontWeight: '700',
-  },
-  countdownLabel: {
-    fontSize: 12,
-    color: theme.textMuted,
-    marginTop: -4,
-  },
-  countdownBar: {
-    width: '100%',
-    height: 4,
-    backgroundColor: theme.border,
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  countdownBarFill: {
-    height: '100%',
-    borderRadius: 2,
-  },
-  startTimerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: theme.success,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: theme.borderRadius.md,
-    marginTop: 16,
-  },
-  startTimerButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  currentScoreCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 20,
-    ...theme.shadows.card,
-  },
-  currentScoreLabel: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    marginBottom: 4,
-  },
-  currentScoreValue: {
-    fontSize: 48,
-    fontWeight: '700',
-    color: theme.primary,
-  },
-  currentScoreMax: {
-    fontSize: 16,
-    color: theme.textMuted,
-  },
-  precisionButtonsContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    backgroundColor: theme.surface,
-    borderTopWidth: 1,
-    borderTopColor: theme.border,
-  },
-  scoringButtonsTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.textSecondary,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  scoringButtonsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  scoringButtonLarge: {
-    width: '48%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-    borderRadius: theme.borderRadius.md,
-    minHeight: 100,
-    ...theme.shadows.card,
-  },
-  scoringButtonPointsLarge: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  scoringButtonLabelLarge: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFF',
-    marginTop: 2,
-  },
-  scoringButtonDesc: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.85)',
-    textAlign: 'center',
-    marginTop: 4,
-    lineHeight: 13,
-  },
-  resultsCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 24,
-    alignItems: 'center',
-    marginBottom: 12,
-    ...theme.shadows.cardElevated,
-  },
-  resultsBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: theme.borderRadius.full,
-    marginBottom: 16,
-  },
-  resultsBadgeText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  resultsScore: {
-    fontSize: 72,
-    fontWeight: '700',
-    color: theme.textPrimary,
-  },
-  resultsScoreMax: {
-    fontSize: 18,
-    color: theme.textMuted,
-    marginTop: -8,
-  },
-  resultsLabel: {
-    fontSize: 16,
-    color: theme.textSecondary,
-    marginBottom: 24,
-  },
-  resultsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    width: '100%',
-  },
-  resultsGridItem: {
-    width: '50%',
-    alignItems: 'center',
-    paddingVertical: 16,
-  },
-  resultsGridValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: theme.textPrimary,
-    marginTop: 8,
-  },
-  resultsGridLabel: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    marginTop: 4,
-  },
-  resultsActions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 24,
-  },
-  retryButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: theme.surface,
-    paddingVertical: 16,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 2,
-    borderColor: theme.primary,
-  },
-  retryButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.primary,
-  },
-  saveButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: theme.primary,
-    paddingVertical: 16,
-    borderRadius: theme.borderRadius.md,
-  },
-  saveButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  // Revanche button styles
-  revancheButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.accent,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: theme.borderRadius.lg,
-    marginTop: 16,
-    gap: 14,
-    ...theme.shadows.cardElevated,
-  },
-  revancheButtonContent: {
-    flex: 1,
-  },
-  revancheButtonText: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  revancheButtonSubtext: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 2,
-  },
-  revancheButtonFinale: {
-    backgroundColor: theme.carreauColor,
-  },
-  // Series score styles
-  seriesScoreCard: {
-    alignItems: 'center',
-    marginTop: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.lg,
-  },
-  seriesScoreTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: theme.textMuted,
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  seriesScoreDisplay: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  seriesScoreValue: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: theme.textSecondary,
-  },
-  seriesScoreWin: {
-    color: theme.success,
-  },
-  seriesScoreLoss: {
-    color: theme.error,
-  },
-  seriesScoreSep: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: theme.textMuted,
-  },
-  seriesCompleteCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    marginTop: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.lg,
-  },
-  seriesCompleteText: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  finishSeriesButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: theme.success,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: theme.borderRadius.lg,
-    marginTop: 12,
-  },
-  finishSeriesButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#FFF',
-  },
+  container: { flex: 1, backgroundColor: theme.backgroundSecondary },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  closeButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
+  timerBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.primary + '15', paddingHorizontal: 10, paddingVertical: 6, borderRadius: theme.borderRadius.full },
+  timerText: { fontSize: 14, fontWeight: '600', color: theme.primary, fontVariant: ['tabular-nums'] },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 24 },
+  introSection: { alignItems: 'center', paddingVertical: 32 },
+  introTitle: { fontSize: 24, fontWeight: '700', color: theme.textPrimary, marginTop: 16, marginBottom: 8 },
+  introText: { fontSize: 15, color: theme.textSecondary, textAlign: 'center', paddingHorizontal: 24 },
+  challengeTypeCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 12, ...theme.shadows.card },
+  challengeTypeIcon: { width: 64, height: 64, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  challengeTypeInfo: { flex: 1 },
+  challengeTypeName: { fontSize: 17, fontWeight: '600', color: theme.textPrimary, marginBottom: 4 },
+  challengeTypeDesc: { fontSize: 13, color: theme.textSecondary, marginBottom: 8 },
+  challengeTypeMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  challengeTypeMetaText: { fontSize: 12, color: theme.textMuted },
+  rulesCard: { backgroundColor: theme.primary + '10', borderRadius: theme.borderRadius.lg, padding: 16, marginTop: 12, borderWidth: 1, borderColor: theme.primary + '30' },
+  rulesHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  rulesTitle: { fontSize: 14, fontWeight: '600', color: theme.primary },
+  rulesText: { fontSize: 13, color: theme.textSecondary, lineHeight: 22 },
+  modeBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.primary + '15', paddingHorizontal: 14, paddingVertical: 8, borderRadius: theme.borderRadius.full, marginTop: 16 },
+  modeBadge1v1: { backgroundColor: theme.accent + '15' },
+  modeBadgeText: { fontSize: 14, fontWeight: '600', color: theme.primary },
+  modeBadgeText1v1: { color: theme.accent },
+  modeSelectionContainer: { flex: 1, paddingHorizontal: 16, paddingTop: 20 },
+  modeHeaderBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'center', gap: 10, backgroundColor: theme.surface, paddingHorizontal: 16, paddingVertical: 10, borderRadius: theme.borderRadius.full, marginBottom: 20, ...theme.shadows.card },
+  modeHeaderIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  modeHeaderText: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  modeSelectionTitle: { fontSize: 24, fontWeight: '700', color: theme.textPrimary, textAlign: 'center', marginBottom: 24 },
+  modeCardsGrid: { flexDirection: 'row', gap: 12 },
+  modeCardWrapper: { flex: 1 },
+  modeCardLarge: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, alignItems: 'center', borderWidth: 2, borderColor: 'transparent', ...theme.shadows.cardElevated },
+  modeCardSolo: { borderColor: theme.primary + '30' },
+  modeCard1v1: { borderColor: theme.accent + '30' },
+  modeCardLargeIconContainer: { position: 'relative', marginBottom: 12 },
+  modeCardLargeIcon: { width: 80, height: 80, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  vsIndicator: { position: 'absolute', bottom: -4, right: -4, backgroundColor: theme.warning, width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: theme.surface },
+  vsText: { fontSize: 10, fontWeight: '800', color: '#FFF' },
+  modeCardLargeName: { fontSize: 18, fontWeight: '700', color: theme.textPrimary, marginBottom: 4 },
+  modeCardLargeDesc: { fontSize: 13, color: theme.textSecondary, marginBottom: 12 },
+  modeCardLargeFeatures: { width: '100%', gap: 6, marginBottom: 14 },
+  modeCardFeature: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  modeCardFeatureText: { fontSize: 12, color: theme.textSecondary },
+  modeCardStartButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', paddingVertical: 12, borderRadius: theme.borderRadius.md },
+  modeCardStartText: { fontSize: 14, fontWeight: '600', color: '#FFF' },
+  modeTipCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.warning + '15', paddingHorizontal: 14, paddingVertical: 12, borderRadius: theme.borderRadius.md, marginTop: 20 },
+  modeTipText: { flex: 1, fontSize: 13, color: theme.textSecondary, lineHeight: 18 },
+  opponent1v1Banner: { backgroundColor: theme.accent, paddingVertical: 16, paddingHorizontal: 16 },
+  opponent1v1BannerContent: { alignItems: 'center' },
+  opponent1v1Players: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  opponent1v1PlayerBadge: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center' },
+  opponent1v1PlayerBadgeEmpty: { backgroundColor: theme.surface, borderWidth: 2, borderStyle: 'dashed', borderColor: theme.accent },
+  opponent1v1VsBadge: { backgroundColor: theme.warning, paddingHorizontal: 10, paddingVertical: 4, borderRadius: theme.borderRadius.sm },
+  opponent1v1VsText: { fontSize: 12, fontWeight: '800', color: '#FFF' },
+  opponent1v1BannerTitle: { fontSize: 16, fontWeight: '600', color: '#FFF' },
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, marginHorizontal: 16, marginTop: 16, paddingHorizontal: 14, borderRadius: theme.borderRadius.md, gap: 10, ...theme.shadows.card },
+  searchInput: { flex: 1, paddingVertical: 14, fontSize: 16, color: theme.textPrimary },
+  emptyState: { alignItems: 'center', paddingVertical: 48 },
+  emptyStateText: { fontSize: 15, color: theme.textMuted, marginTop: 12 },
+  opponentPlayerCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: theme.border, ...theme.shadows.card },
+  opponentPlayerAvatar: { width: 52, height: 52, borderRadius: 14, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  opponentPlayerInitials: { fontSize: 18, fontWeight: '700', color: '#FFF' },
+  opponentPlayerInfo: { flex: 1 },
+  opponentPlayerName: { fontSize: 16, fontWeight: '600', color: theme.textPrimary, marginBottom: 4 },
+  opponentPlayerMeta: { flexDirection: 'row', alignItems: 'center' },
+  opponentPlayerMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  opponentPlayerMetaText: { fontSize: 12, color: theme.textMuted },
+  opponentPlayerMetaDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: theme.textMuted, marginHorizontal: 8 },
+  opponentSelectButton: { backgroundColor: theme.accent, paddingHorizontal: 14, paddingVertical: 8, borderRadius: theme.borderRadius.md },
+  opponentSelectText: { fontSize: 13, fontWeight: '600', color: '#FFF' },
+  createPlayerButton: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16, paddingHorizontal: 20, paddingVertical: 12, backgroundColor: theme.primary + '15', borderRadius: theme.borderRadius.md },
+  createPlayerButtonText: { fontSize: 14, fontWeight: '600', color: theme.primary },
+  turnIndicator: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.primary, paddingVertical: 10 },
+  turnIndicatorOpponent: { backgroundColor: theme.accent },
+  turnIndicatorText: { fontSize: 15, fontWeight: '600', color: '#FFF' },
+  winnerBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 16, borderRadius: theme.borderRadius.lg, marginBottom: 16 },
+  winnerBannerWin: { backgroundColor: theme.success },
+  winnerBannerLose: { backgroundColor: theme.error },
+  winnerBannerDraw: { backgroundColor: theme.warning },
+  winnerBannerText: { fontSize: 20, fontWeight: '700', color: '#FFF' },
+  resultsPlayerHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
+  resultsPlayerName: { flex: 1, fontSize: 16, fontWeight: '600', color: theme.primary },
+  scoresComparison: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surface, marginHorizontal: 16, marginVertical: 12, paddingVertical: 16, borderRadius: theme.borderRadius.lg, ...theme.shadows.card },
+  scoreCompareItem: { alignItems: 'center', paddingHorizontal: 24 },
+  scoreCompareName: { fontSize: 12, color: theme.textSecondary, marginBottom: 4 },
+  scoreCompareValue: { fontSize: 24, fontWeight: '700', color: theme.textMuted },
+  scoreCompareValueActive: { color: theme.primary },
+  scoreCompareSeparator: { fontSize: 18, fontWeight: '600', color: theme.textMuted, paddingHorizontal: 8 },
+  durationCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.surface, paddingVertical: 14, borderRadius: theme.borderRadius.md, marginTop: 8, ...theme.shadows.card },
+  durationText: { fontSize: 15, fontWeight: '600', color: theme.textSecondary },
+  precisionReadyHeader: { alignItems: 'center', paddingVertical: 24 },
+  sectionTitle: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, letterSpacing: 1, marginBottom: 12, marginTop: 24 },
+  atelierPreviewCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 14, marginBottom: 8, ...theme.shadows.card },
+  atelierPreviewIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  atelierPreviewInfo: { flex: 1 },
+  atelierPreviewName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  atelierPreviewDesc: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  atelierPreviewDistances: { backgroundColor: theme.backgroundSecondary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: theme.borderRadius.sm },
+  atelierPreviewDistText: { fontSize: 12, fontWeight: '600', color: theme.textMuted },
+  scoringCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginTop: 24, ...theme.shadows.card },
+  scoringTitle: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, letterSpacing: 1, marginBottom: 8, textAlign: 'center' },
+  scoringSubtitle: { fontSize: 12, color: theme.textSecondary, textAlign: 'center', marginBottom: 16, lineHeight: 18 },
+  scoringGrid: { flexDirection: 'row', justifyContent: 'space-around' },
+  scoringItem: { alignItems: 'center' },
+  scoringBadge: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  scoringPoints: { fontSize: 20, fontWeight: '700', color: '#FFF' },
+  scoringLabel: { fontSize: 12, color: theme.textSecondary },
+  bottomAction: { paddingHorizontal: 16, paddingTop: 12, backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border },
+  readyContainer: { flex: 1, justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 32 },
+  readyContent: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  readyIcon: { width: 120, height: 120, borderRadius: 60, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
+  readyTitle: { fontSize: 28, fontWeight: '700', color: theme.textPrimary, marginBottom: 8 },
+  readyDescription: { fontSize: 16, color: theme.textSecondary, textAlign: 'center', marginBottom: 16, lineHeight: 24 },
+  readyStats: { flexDirection: 'row', gap: 32 },
+  readyStatItem: { alignItems: 'center' },
+  readyStatValue: { fontSize: 36, fontWeight: '700', color: theme.primary },
+  readyStatLabel: { fontSize: 14, color: theme.textSecondary },
+  startButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.primary, paddingVertical: 18, borderRadius: theme.borderRadius.md, ...theme.shadows.card },
+  startButtonText: { fontSize: 18, fontWeight: '600', color: '#FFF' },
+  progressContainer: { paddingHorizontal: 16, paddingVertical: 16 },
+  progressBar: { height: 8, backgroundColor: theme.border, borderRadius: 4, overflow: 'hidden', marginBottom: 8 },
+  progressFill: { height: '100%', borderRadius: 4 },
+  progressText: { fontSize: 14, fontWeight: '600', color: theme.textSecondary, textAlign: 'center' },
+  shotsIndicator: { flexDirection: 'row', justifyContent: 'center', gap: 8, paddingHorizontal: 16, marginBottom: 24 },
+  shotIndicatorDot: { width: 24, height: 24, borderRadius: 12, backgroundColor: theme.border, alignItems: 'center', justifyContent: 'center' },
+  currentStats: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', backgroundColor: theme.surface, marginHorizontal: 16, paddingVertical: 16, borderRadius: theme.borderRadius.lg, ...theme.shadows.card },
+  currentStatItem: { flex: 1, alignItems: 'center' },
+  currentStatValue: { fontSize: 28, fontWeight: '700' },
+  currentStatLabel: { fontSize: 12, color: theme.textSecondary, marginTop: 4 },
+  currentStatDivider: { width: 1, height: 40, backgroundColor: theme.border },
+  shotButtonsContainer: { flex: 1, paddingHorizontal: 16, paddingTop: 24, justifyContent: 'center' },
+  shotButtonsTitle: { fontSize: 18, fontWeight: '600', color: theme.textPrimary, textAlign: 'center', marginBottom: 20 },
+  shotButtonsRow: { flexDirection: 'row', gap: 16, marginBottom: 16 },
+  shotButton: { flex: 1, aspectRatio: 1, alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadius.lg, ...theme.shadows.cardElevated },
+  shotButtonFail: { backgroundColor: theme.error },
+  shotButtonSuccess: { backgroundColor: theme.success },
+  shotButtonText: { fontSize: 18, fontWeight: '600', color: '#FFF', marginTop: 8 },
+  carreauButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.carreauColor + '15', paddingVertical: 16, borderRadius: theme.borderRadius.md, borderWidth: 2, borderColor: theme.carreauColor },
+  carreauButtonText: { fontSize: 16, fontWeight: '600', color: theme.carreauColor },
+  precisionGameContent: { paddingHorizontal: 16, paddingTop: 16 },
+  currentAtelierCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 16, ...theme.shadows.card },
+  currentAtelierHeader: { flexDirection: 'row', alignItems: 'center' },
+  currentAtelierIcon: { width: 56, height: 56, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  currentAtelierInfo: { flex: 1 },
+  currentAtelierName: { fontSize: 18, fontWeight: '700', color: theme.textPrimary },
+  currentAtelierDesc: { fontSize: 13, color: theme.textSecondary, marginTop: 2 },
+  currentDistanceBadge: { position: 'absolute', top: 16, right: 16, backgroundColor: theme.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: theme.borderRadius.md },
+  currentDistanceText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
+  precisionProgress: { marginBottom: 16 },
+  precisionProgressText: { fontSize: 14, fontWeight: '600', color: theme.textSecondary, textAlign: 'center', marginBottom: 8 },
+  precisionProgressBar: { height: 6, backgroundColor: theme.border, borderRadius: 3, overflow: 'hidden' },
+  precisionProgressFill: { height: '100%', backgroundColor: theme.primary, borderRadius: 3 },
+  countdownContainer: { alignItems: 'center', marginBottom: 20 },
+  countdownCircle: { width: 100, height: 100, borderRadius: 50, borderWidth: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surface, marginBottom: 12 },
+  countdownText: { fontSize: 36, fontWeight: '700' },
+  countdownLabel: { fontSize: 12, color: theme.textMuted, marginTop: -4 },
+  countdownBar: { width: '100%', height: 4, backgroundColor: theme.border, borderRadius: 2, overflow: 'hidden' },
+  countdownBarFill: { height: '100%', borderRadius: 2 },
+  startTimerButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.success, paddingVertical: 14, paddingHorizontal: 24, borderRadius: theme.borderRadius.md, marginTop: 16 },
+  startTimerButtonText: { fontSize: 16, fontWeight: '600', color: '#FFF' },
+  currentScoreCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 20, alignItems: 'center', marginBottom: 20, ...theme.shadows.card },
+  currentScoreLabel: { fontSize: 12, color: theme.textSecondary, marginBottom: 4 },
+  currentScoreValue: { fontSize: 48, fontWeight: '700', color: theme.primary },
+  currentScoreMax: { fontSize: 16, color: theme.textMuted },
+  precisionButtonsContainer: { paddingHorizontal: 16, paddingTop: 12, backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border },
+  scoringButtonsTitle: { fontSize: 14, fontWeight: '600', color: theme.textSecondary, textAlign: 'center', marginBottom: 12 },
+  scoringButtonsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  scoringButtonLarge: { width: '48%', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, paddingHorizontal: 10, borderRadius: theme.borderRadius.md, minHeight: 100, ...theme.shadows.card },
+  scoringButtonPointsLarge: { fontSize: 28, fontWeight: '700', color: '#FFF' },
+  scoringButtonLabelLarge: { fontSize: 13, fontWeight: '700', color: '#FFF', marginTop: 2 },
+  scoringButtonDesc: { fontSize: 10, color: 'rgba(255,255,255,0.85)', textAlign: 'center', marginTop: 4, lineHeight: 13 },
+  resultsCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 24, alignItems: 'center', marginBottom: 12, ...theme.shadows.cardElevated },
+  resultsBadge: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: theme.borderRadius.full, marginBottom: 16 },
+  resultsBadgeText: { fontSize: 14, fontWeight: '600', color: '#FFF' },
+  resultsScore: { fontSize: 72, fontWeight: '700', color: theme.textPrimary },
+  resultsScoreMax: { fontSize: 18, color: theme.textMuted, marginTop: -8 },
+  resultsLabel: { fontSize: 16, color: theme.textSecondary, marginBottom: 24 },
+  resultsGrid: { flexDirection: 'row', flexWrap: 'wrap', width: '100%' },
+  resultsGridItem: { width: '50%', alignItems: 'center', paddingVertical: 16 },
+  resultsGridValue: { fontSize: 24, fontWeight: '700', color: theme.textPrimary, marginTop: 8 },
+  resultsGridLabel: { fontSize: 13, color: theme.textSecondary, marginTop: 4 },
+  resultsActions: { flexDirection: 'row', gap: 12, marginTop: 24 },
+  retryButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.surface, paddingVertical: 16, borderRadius: theme.borderRadius.md, borderWidth: 2, borderColor: theme.primary },
+  retryButtonText: { fontSize: 16, fontWeight: '600', color: theme.primary },
+  saveButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.primary, paddingVertical: 16, borderRadius: theme.borderRadius.md },
+  saveButtonText: { fontSize: 16, fontWeight: '600', color: '#FFF' },
 });
