@@ -87,6 +87,8 @@ export default function EditTournamentScreen() {
   const [maxParticipants, setMaxParticipants] = useState('32');
   const [prize, setPrize] = useState('');
   const [description, setDescription] = useState('');
+  const [registrationCost, setRegistrationCost] = useState('');
+  const [prizeWon, setPrizeWon] = useState('');
   // Tournament classification fields
   const [tournamentLevel, setTournamentLevel] = useState<TournamentLevel | string | undefined>();
   const [customLevel, setCustomLevel] = useState('');
@@ -109,6 +111,9 @@ export default function EditTournamentScreen() {
       setMaxParticipants(tournament.maxParticipants?.toString() || '32');
       setPrize(tournament.prize || '');
       setDescription(tournament.description || '');
+      // Load financial fields
+      setRegistrationCost(tournament.registrationCost?.toString() || '');
+      setPrizeWon(tournament.prizeWon?.toString() || '');
       // Load classification fields
       if (tournament.tournamentLevel) {
         const isCustom = !config.tournamentLevels.includes(tournament.tournamentLevel as TournamentLevel);
@@ -164,6 +169,8 @@ export default function EditTournamentScreen() {
       tournamentCategory,
       registrationType,
       tournamentScope,
+      registrationCost: registrationCost ? parseFloat(registrationCost) : undefined,
+      prizeWon: prizeWon ? parseFloat(prizeWon) : undefined,
     });
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -631,8 +638,21 @@ export default function EditTournamentScreen() {
             </View>
           </Animated.View>
 
-          {/* Prize */}
+          {/* Registration Cost */}
           <Animated.View entering={FadeInDown.duration(400).delay(450)} style={styles.section}>
+            <Text style={styles.sectionTitle}>COÛT D'INSCRIPTION (€)</Text>
+            <TextInput
+              style={styles.textInput}
+              value={registrationCost}
+              onChangeText={setRegistrationCost}
+              placeholder="Ex: 15"
+              placeholderTextColor={theme.textMuted}
+              keyboardType="numeric"
+            />
+          </Animated.View>
+
+          {/* Prize */}
+          <Animated.View entering={FadeInDown.duration(400).delay(475)} style={styles.section}>
             <Text style={styles.sectionTitle}>DOTATION</Text>
             <TextInput
               style={styles.textInput}
@@ -643,8 +663,23 @@ export default function EditTournamentScreen() {
             />
           </Animated.View>
 
+          {/* Prize Won (only for finished tournaments) */}
+          {status === 'Terminé' && (
+            <Animated.View entering={FadeInDown.duration(400).delay(490)} style={styles.section}>
+              <Text style={styles.sectionTitle}>GAIN OBTENU (€)</Text>
+              <TextInput
+                style={styles.textInput}
+                value={prizeWon}
+                onChangeText={setPrizeWon}
+                placeholder="Ex: 50"
+                placeholderTextColor={theme.textMuted}
+                keyboardType="numeric"
+              />
+            </Animated.View>
+          )}
+
           {/* Description */}
-          <Animated.View entering={FadeInDown.duration(400).delay(500)} style={styles.section}>
+          <Animated.View entering={FadeInDown.duration(400).delay(525)} style={styles.section}>
             <Text style={styles.sectionTitle}>DESCRIPTION</Text>
             <TextInput
               style={[styles.textInput, styles.textArea]}

@@ -667,6 +667,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           tournamentCategory: data.tournament_category,
           registrationType: data.registration_type,
           tournamentScope: data.tournament_scope,
+          registrationCost: tournament.registrationCost, // Preserve from input
+          prizeWon: tournament.prizeWon,
         };
         setTournaments(prev => [...prev, newTournament]);
       }
@@ -760,15 +762,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
         notes: challenge.notes,
       }).select().single();
 
+      // Note: For 1v1 challenges, mode/opponent data is stored in local state only
+      // until database schema is updated to include these fields
+
       if (error) throw error;
 
       if (data) {
         const newChallenge: Challenge = {
           id: data.id,
           type: data.type,
+          mode: challenge.mode, // Preserve mode from input
           date: data.date,
           playerId: data.player_id,
           playerName: data.player_name,
+          opponentId: challenge.opponentId, // Preserve opponent data from input
+          opponentName: challenge.opponentName,
+          opponentResult: challenge.opponentResult,
+          winner: challenge.winner,
           shots: data.shots,
           successCount: data.success_count,
           totalShots: data.total_shots,
@@ -915,6 +925,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.tournamentCategory !== undefined) dbUpdates.tournament_category = updates.tournamentCategory;
       if (updates.registrationType !== undefined) dbUpdates.registration_type = updates.registrationType;
       if (updates.tournamentScope !== undefined) dbUpdates.tournament_scope = updates.tournamentScope;
+      if (updates.registrationCost !== undefined) dbUpdates.registration_cost = updates.registrationCost;
+      if (updates.prizeWon !== undefined) dbUpdates.prize_won = updates.prizeWon;
+      if (updates.finalResult !== undefined) dbUpdates.final_result = updates.finalResult;
       dbUpdates.updated_at = new Date().toISOString();
 
       await supabase.from('tournaments').update(dbUpdates).eq('id', id);

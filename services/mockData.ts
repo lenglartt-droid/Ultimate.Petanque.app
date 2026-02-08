@@ -175,6 +175,10 @@ export interface Tournament {
   tournamentCategory?: TournamentCategory;
   registrationType?: RegistrationType;
   tournamentScope?: TournamentScope;
+  // Financial fields
+  registrationCost?: number; // Cost to register in euros
+  prizeWon?: number; // Prize won at the end in euros
+  finalResult?: 'Champion' | 'Finaliste' | 'Éliminé'; // Final result for completed tournaments
 }
 
 export interface Match {
@@ -1018,6 +1022,7 @@ export const mockTournaments: Tournament[] = [
     maxParticipants: 32,
     prize: '500€',
     description: 'Tournoi annuel ouvert à tous les licenciés - Format poules uniquement',
+    registrationCost: 15,
   },
   {
     id: '2',
@@ -1068,6 +1073,9 @@ export const mockTournaments: Tournament[] = [
     status: 'Terminé',
     participants: 16,
     maxParticipants: 16,
+    registrationCost: 10,
+    prizeWon: 50,
+    finalResult: 'Finaliste',
   },
   {
     id: '5',
@@ -1084,6 +1092,7 @@ export const mockTournaments: Tournament[] = [
     maxParticipants: 32,
     prize: '1500€',
     description: 'Grand tournoi de l\'été avec animations - Format A/B/C avec repêchage',
+    registrationCost: 25,
   },
   {
     id: '6',

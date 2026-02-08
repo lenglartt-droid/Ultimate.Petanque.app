@@ -82,6 +82,7 @@ export default function NewTournamentScreen() {
   const [maxParticipants, setMaxParticipants] = useState('32');
   const [prize, setPrize] = useState('');
   const [description, setDescription] = useState('');
+  const [registrationCost, setRegistrationCost] = useState('');
   // New tournament classification fields
   const [tournamentLevel, setTournamentLevel] = useState<TournamentLevel | string | undefined>();
   const [customLevel, setCustomLevel] = useState('');
@@ -138,6 +139,7 @@ export default function NewTournamentScreen() {
       tournamentCategory,
       registrationType,
       tournamentScope,
+      registrationCost: registrationCost ? parseFloat(registrationCost) : undefined,
     });
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -655,8 +657,21 @@ export default function NewTournamentScreen() {
             </View>
           </Animated.View>
 
-          {/* Prize */}
+          {/* Registration Cost */}
           <Animated.View entering={FadeInDown.duration(400).delay(450)} style={styles.section}>
+            <Text style={styles.sectionTitle}>COÛT D'INSCRIPTION (€)</Text>
+            <TextInput
+              style={styles.textInput}
+              value={registrationCost}
+              onChangeText={setRegistrationCost}
+              placeholder="Ex: 15"
+              placeholderTextColor={theme.textMuted}
+              keyboardType="numeric"
+            />
+          </Animated.View>
+
+          {/* Prize */}
+          <Animated.View entering={FadeInDown.duration(400).delay(475)} style={styles.section}>
             <Text style={styles.sectionTitle}>DOTATION</Text>
             <TextInput
               style={styles.textInput}
@@ -668,7 +683,7 @@ export default function NewTournamentScreen() {
           </Animated.View>
 
           {/* Description */}
-          <Animated.View entering={FadeInDown.duration(400).delay(500)} style={styles.section}>
+          <Animated.View entering={FadeInDown.duration(400).delay(525)} style={styles.section}>
             <Text style={styles.sectionTitle}>DESCRIPTION</Text>
             <TextInput
               style={[styles.textInput, styles.textArea]}

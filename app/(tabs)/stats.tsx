@@ -304,6 +304,24 @@ export default function StatsScreen() {
     };
   }, [filteredChallenges]);
 
+  // Tournament financial stats
+  const tournamentFinancialStats = React.useMemo(() => {
+    const completedTournaments = tournaments.filter(t => t.status === 'Terminé');
+    const totalCost = completedTournaments.reduce((sum, t) => sum + (t.registrationCost || 0), 0);
+    const totalGain = completedTournaments.reduce((sum, t) => sum + (t.prizeWon || 0), 0);
+    const tournamentsWithCost = completedTournaments.filter(t => t.registrationCost && t.registrationCost > 0).length;
+    const tournamentsWithGain = completedTournaments.filter(t => t.prizeWon && t.prizeWon > 0).length;
+    
+    return {
+      totalCost,
+      totalGain,
+      balance: totalGain - totalCost,
+      tournamentsWithCost,
+      tournamentsWithGain,
+      completedCount: completedTournaments.length,
+    };
+  }, [tournaments]);
+
   // Filter matches by mode
   const tournamentMatches = filteredMatches.filter(m => m.mode === 'Tournoi');
   const trainingMatches = filteredMatches.filter(m => m.mode === 'Entraînement');
@@ -1100,6 +1118,54 @@ export default function StatsScreen() {
                 </View>
               </View>
             </Animated.View>
+
+            {/* Financial Stats (only show if there's data) */}
+            {(tournamentFinancialStats.totalCost > 0 || tournamentFinancialStats.totalGain > 0) && (
+              <Animated.View 
+                entering={FadeInDown.duration(400).delay(250)}
+                style={styles.section}
+              >
+                <Text style={styles.sectionTitle}>BILAN FINANCIER</Text>
+                <View style={styles.financialCard}>
+                  <View style={styles.financialRow}>
+                    <View style={styles.financialItem}>
+                      <MaterialIcons name="remove-circle" size={20} color={theme.error} />
+                      <Text style={[styles.financialValue, { color: theme.error }]}>
+                        {tournamentFinancialStats.totalCost}€
+                      </Text>
+                      <Text style={styles.financialLabel}>Dépensé</Text>
+                    </View>
+                    <View style={styles.financialDivider}>
+                      <View style={[
+                        styles.financialBalanceBadge,
+                        { backgroundColor: tournamentFinancialStats.balance >= 0 ? theme.success + '15' : theme.error + '15' }
+                      ]}>
+                        <Text style={[
+                          styles.financialBalanceText,
+                          { color: tournamentFinancialStats.balance >= 0 ? theme.success : theme.error }
+                        ]}>
+                          {tournamentFinancialStats.balance > 0 ? '+' : ''}{tournamentFinancialStats.balance}€
+                        </Text>
+                      </View>
+                      <Text style={styles.financialBalanceLabel}>Bilan</Text>
+                    </View>
+                    <View style={styles.financialItem}>
+                      <MaterialIcons name="add-circle" size={20} color={theme.success} />
+                      <Text style={[styles.financialValue, { color: theme.success }]}>
+                        {tournamentFinancialStats.totalGain}€
+                      </Text>
+                      <Text style={styles.financialLabel}>Gagné</Text>
+                    </View>
+                  </View>
+                  <View style={styles.financialFooter}>
+                    <Text style={styles.financialFooterText}>
+                      {tournamentFinancialStats.tournamentsWithGain} tournoi{tournamentFinancialStats.tournamentsWithGain > 1 ? 's' : ''} avec gain
+                       sur {tournamentFinancialStats.completedCount} terminé{tournamentFinancialStats.completedCount > 1 ? 's' : ''}
+                    </Text>
+                  </View>
+                </View>
+              </Animated.View>
+            )}
 
             {/* Points Stats */}
             <Animated.View 
@@ -2745,5 +2811,60 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: theme.textMuted,
     marginTop: 2,
+  },
+  // Financial stats styles
+  financialCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 20,
+    ...theme.shadows.card,
+  },
+  financialRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+  },
+  financialItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  financialValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  financialLabel: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 4,
+  },
+  financialDivider: {
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  financialBalanceBadge: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: theme.borderRadius.md,
+  },
+  financialBalanceText: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  financialBalanceLabel: {
+    fontSize: 11,
+    color: theme.textMuted,
+    marginTop: 4,
+  },
+  financialFooter: {
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+    alignItems: 'center',
+  },
+  financialFooterText: {
+    fontSize: 12,
+    color: theme.textMuted,
   },
 });
