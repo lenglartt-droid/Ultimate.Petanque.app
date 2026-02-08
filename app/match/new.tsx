@@ -1,7 +1,4 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Audio } from 'expo-av';
-
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
@@ -216,25 +213,6 @@ export default function NewMatchScreen() {
   const [selectedTerrainId, setSelectedTerrainId] = useState<string | null>(null);
   const [showTerrainPicker, setShowTerrainPicker] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [meneAlarmEnabled, setMeneAlarmEnabled] = useState(false);
-  const [meneAlarmTriggered, setMeneAlarmTriggered] = useState(false);
-  const [selectedAlarmSound, setSelectedAlarmSound] = useState<string>('bell');
-  const alarmSoundRef = useRef<Audio.Sound | null>(null);
-
-  // Load alarm sound preference
-  useEffect(() => {
-    const loadAlarmPreference = async () => {
-      try {
-        const savedSound = await AsyncStorage.getItem('meneAlarmSound');
-        if (savedSound) {
-          setSelectedAlarmSound(savedSound);
-        }
-      } catch (error) {
-        console.log('Error loading alarm preference:', error);
-      }
-    };
-    loadAlarmPreference();
-  }, []);
 
   const maxScore = config.game.maxScore;
 
@@ -566,83 +544,6 @@ export default function NewMatchScreen() {
     };
   }, [isTimerRunning]);
 
-  // Mène alarm effect - trigger when mène time exceeds 60 seconds
-  useEffect(() => {
-    if (meneAlarmEnabled && meneTime === 60 && !meneAlarmTriggered) {
-      triggerMeneAlarm();
-    }
-    // Reset alarm triggered state when mène resets
-    if (meneTime < 60 && meneAlarmTriggered) {
-      setMeneAlarmTriggered(false);
-    }
-  }, [meneTime, meneAlarmEnabled, meneAlarmTriggered]);
-
-  // Cleanup alarm sound on unmount
-  useEffect(() => {
-    return () => {
-      if (alarmSoundRef.current) {
-        alarmSoundRef.current.unloadAsync();
-      }
-    };
-  }, []);
-
-  // Get alarm sound URI based on type
-  const getAlarmSoundUri = (soundId: string): string => {
-    const sounds: Record<string, string> = {
-      bell: 'https://cdn.freesound.org/previews/411/411089_5121236-lq.mp3',
-      buzzer: 'https://cdn.freesound.org/previews/254/254316_4597795-lq.mp3',
-      whistle: 'https://cdn.freesound.org/previews/352/352661_4019029-lq.mp3',
-      chime: 'https://cdn.freesound.org/previews/320/320655_5260872-lq.mp3',
-    };
-    return sounds[soundId] || sounds.bell;
-  };
-
-  const triggerMeneAlarm = async () => {
-    setMeneAlarmTriggered(true);
-    
-    // Always play haptics
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    for (let i = 0; i < 3; i++) {
-      setTimeout(() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      }, i * 300);
-    }
-    
-    // Play audio alarm if not set to 'none'
-    if (selectedAlarmSound !== 'none') {
-      try {
-        // Unload previous sound if exists
-        if (alarmSoundRef.current) {
-          await alarmSoundRef.current.unloadAsync();
-        }
-        
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: getAlarmSoundUri(selectedAlarmSound) },
-          { shouldPlay: true, volume: 1.0 }
-        );
-        alarmSoundRef.current = sound;
-        
-        // Unload after playback
-        sound.setOnPlaybackStatusUpdate((status) => {
-          if (status.isLoaded && status.didJustFinish) {
-            sound.unloadAsync();
-            alarmSoundRef.current = null;
-          }
-        });
-      } catch (error) {
-        console.log('Error playing alarm sound:', error);
-      }
-    }
-  };
-
-  const toggleMeneAlarm = () => {
-    Haptics.selectionAsync();
-    setMeneAlarmEnabled(prev => !prev);
-    if (!meneAlarmEnabled) {
-      setMeneAlarmTriggered(false);
-    }
-  };
-
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -861,7 +762,6 @@ export default function NewMatchScreen() {
     
     // Auto-start next mène
     setMeneTime(0);
-    setMeneAlarmTriggered(false); // Reset alarm for new mène
     setFsSelectedPoints({ team: null, points: 0 });
     
     // Show new mène indicator
@@ -890,7 +790,6 @@ export default function NewMatchScreen() {
     
     // Auto-start next mène
     setMeneTime(0);
-    setMeneAlarmTriggered(false); // Reset alarm for new mène
     setFsSelectedPoints({ team: null, points: 0 });
     
     // Show new mène indicator
@@ -939,17 +838,7 @@ export default function NewMatchScreen() {
                 )}
               </View>
 
-              {/* Alarm Toggle */}
-              <Pressable 
-                style={[styles.fsAlarmToggle, meneAlarmEnabled && styles.fsAlarmToggleActive]}
-                onPress={toggleMeneAlarm}
-              >
-                <MaterialIcons 
-                  name={meneAlarmEnabled ? 'notifications-active' : 'notifications-off'} 
-                  size={20} 
-                  color={meneAlarmEnabled ? '#FBBF24' : 'rgba(255,255,255,0.4)'} 
-                />
-              </Pressable>
+              <View style={{ width: 44 }} />
             </View>
 
             {/* Dual Timer Display */}
@@ -975,37 +864,19 @@ export default function NewMatchScreen() {
               {/* Mène Time */}
               <View style={[
                 styles.fsDualTimerPill, 
-                styles.fsDualTimerPillMene,
-                meneAlarmTriggered && styles.fsDualTimerPillAlarm
+                styles.fsDualTimerPillMene
               ]}>
                 <MaterialIcons 
                   name="sports" 
                   size={18} 
-                  color={meneAlarmTriggered ? '#FBBF24' : 'rgba(255,255,255,0.5)'} 
+                  color={'rgba(255,255,255,0.5)'} 
                 />
                 <View style={styles.fsDualTimerContent}>
                   <Text style={styles.fsDualTimerLabel}>MÈNE {menes.length + 1}</Text>
-                  <Text style={[
-                    styles.fsDualTimerValue, 
-                    meneTime >= 60 && styles.fsDualTimerValueWarning,
-                    meneAlarmTriggered && styles.fsDualTimerValueAlarm
-                  ]}>
+                  <Text style={styles.fsDualTimerValue}>
                     {formatTime(meneTime)}
                   </Text>
                 </View>
-                {meneAlarmEnabled && (
-                  <View style={[
-                    styles.fsAlarmIndicator,
-                    meneAlarmTriggered && styles.fsAlarmIndicatorActive
-                  ]}>
-                    <MaterialIcons 
-                      name={meneAlarmTriggered ? 'warning' : 'alarm'} 
-                      size={14} 
-                      color={'#FBBF24'} 
-                    />
-                    {!meneAlarmTriggered && <Text style={styles.fsAlarmIndicatorText}>1min</Text>}
-                  </View>
-                )}
               </View>
             </View>
 
@@ -3362,20 +3233,6 @@ const styles = StyleSheet.create({
   fsTimerTextActive: {
     color: '#4ADE80',
   },
-  // FS Alarm Toggle
-  fsAlarmToggle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fsAlarmToggleActive: {
-    backgroundColor: 'rgba(251, 191, 36, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(251, 191, 36, 0.4)',
-  },
   // FS Dual Timer Bar
   fsDualTimerBar: {
     flexDirection: 'row',
@@ -3403,11 +3260,6 @@ const styles = StyleSheet.create({
   fsDualTimerPillMene: {
     backgroundColor: 'rgba(139, 92, 246, 0.1)',
   },
-  fsDualTimerPillAlarm: {
-    backgroundColor: 'rgba(251, 191, 36, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(251, 191, 36, 0.4)',
-  },
   fsDualTimerContent: {
     flex: 1,
   },
@@ -3425,30 +3277,6 @@ const styles = StyleSheet.create({
   },
   fsDualTimerValueActive: {
     color: '#4ADE80',
-  },
-  fsDualTimerValueWarning: {
-    color: '#F97316',
-  },
-  fsDualTimerValueAlarm: {
-    color: '#FBBF24',
-  },
-  fsAlarmIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: 'rgba(251, 191, 36, 0.15)',
-    borderRadius: 10,
-    marginLeft: 4,
-  },
-  fsAlarmIndicatorActive: {
-    backgroundColor: 'rgba(251, 191, 36, 0.3)',
-  },
-  fsAlarmIndicatorText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FBBF24',
   },
   // FS Giant Score Area
   fsGiantScoreArea: {

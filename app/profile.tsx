@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Audio } from 'expo-av';
 import {
   View,
   Text,
@@ -54,20 +52,7 @@ export default function ProfileScreen() {
   const [newClubName, setNewClubName] = useState('');
   const [newClubCity, setNewClubCity] = useState('');
   
-  // Alarm sound settings
-  const [showAlarmSettings, setShowAlarmSettings] = useState(false);
-  const [selectedAlarmSound, setSelectedAlarmSound] = useState<string>('bell');
-  const [previewSound, setPreviewSound] = useState<Audio.Sound | null>(null);
-  const [isPlayingPreview, setIsPlayingPreview] = useState<string | null>(null);
 
-  // Alarm sound options
-  const alarmSounds = [
-    { id: 'bell', name: 'Cloche', icon: 'notifications' },
-    { id: 'buzzer', name: 'Buzzer', icon: 'sports' },
-    { id: 'whistle', name: 'Sifflet', icon: 'campaign' },
-    { id: 'chime', name: 'Carillon', icon: 'music-note' },
-    { id: 'none', name: 'Aucun (vibration)', icon: 'vibration' },
-  ];
 
   // Filtered clubs based on search
   const filteredClubs = useMemo(() => {
@@ -122,11 +107,7 @@ export default function ProfileScreen() {
           setAvatarUrl(selfPlayer.avatar);
         }
         
-        // Load alarm sound preference
-        const savedAlarmSound = await AsyncStorage.getItem('meneAlarmSound');
-        if (savedAlarmSound) {
-          setSelectedAlarmSound(savedAlarmSound);
-        }
+
       } catch (error) {
         console.log('Error loading profile:', error);
       } finally {
@@ -137,83 +118,7 @@ export default function ProfileScreen() {
     loadProfile();
   }, [user?.id, selfPlayer]);
 
-  // Cleanup preview sound on unmount
-  useEffect(() => {
-    return () => {
-      if (previewSound) {
-        previewSound.unloadAsync();
-      }
-    };
-  }, [previewSound]);
 
-  const handleSelectAlarmSound = async (soundId: string) => {
-    Haptics.selectionAsync();
-    setSelectedAlarmSound(soundId);
-    try {
-      await AsyncStorage.setItem('meneAlarmSound', soundId);
-    } catch (error) {
-      console.log('Error saving alarm sound preference:', error);
-    }
-  };
-
-  const handlePreviewSound = async (soundId: string) => {
-    if (soundId === 'none') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      return;
-    }
-
-    // Stop any currently playing preview
-    if (previewSound) {
-      await previewSound.stopAsync();
-      await previewSound.unloadAsync();
-      setPreviewSound(null);
-    }
-
-    if (isPlayingPreview === soundId) {
-      setIsPlayingPreview(null);
-      return;
-    }
-
-    setIsPlayingPreview(soundId);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    try {
-      // Generate a beep tone for preview using expo-av
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: getAlarmSoundUri(soundId) },
-        { shouldPlay: true, volume: 1.0 }
-      );
-      setPreviewSound(sound);
-
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          setIsPlayingPreview(null);
-        }
-      });
-    } catch (error) {
-      console.log('Error playing preview:', error);
-      setIsPlayingPreview(null);
-      // Fallback to haptics for preview
-      for (let i = 0; i < 3; i++) {
-        setTimeout(() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-        }, i * 200);
-      }
-    }
-  };
-
-  // Get alarm sound URI based on type
-  const getAlarmSoundUri = (soundId: string): string => {
-    // Use data URIs for simple tones
-    // These are base64 encoded short audio samples
-    const sounds: Record<string, string> = {
-      bell: 'https://cdn.freesound.org/previews/411/411089_5121236-lq.mp3',
-      buzzer: 'https://cdn.freesound.org/previews/254/254316_4597795-lq.mp3',
-      whistle: 'https://cdn.freesound.org/previews/352/352661_4019029-lq.mp3',
-      chime: 'https://cdn.freesound.org/previews/320/320655_5260872-lq.mp3',
-    };
-    return sounds[soundId] || sounds.bell;
-  };
 
   const handlePickImage = async () => {
     try {
@@ -759,19 +664,6 @@ export default function ProfileScreen() {
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </Pressable>
 
-            <Pressable style={styles.menuItem} onPress={() => setShowAlarmSettings(true)}>
-              <View style={[styles.menuIcon, { backgroundColor: theme.accent + '15' }]}>
-                <MaterialIcons name="alarm" size={20} color={theme.accent} />
-              </View>
-              <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>Son d'alarme de mène</Text>
-                <Text style={styles.menuItemSubtext}>
-                  {alarmSounds.find(s => s.id === selectedAlarmSound)?.name || 'Cloche'}
-                </Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-            </Pressable>
-
             <Pressable style={styles.menuItem}>
               <View style={[styles.menuIcon, { backgroundColor: theme.success + '15' }]}>
                 <MaterialIcons name="notifications" size={20} color={theme.success} />
@@ -975,89 +867,7 @@ export default function ProfileScreen() {
         </SafeAreaView>
       </Modal>
 
-      {/* Alarm Sound Settings Modal */}
-      <Modal
-        visible={showAlarmSettings}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowAlarmSettings(false)}
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Pressable
-              style={styles.modalCloseBtn}
-              onPress={() => setShowAlarmSettings(false)}
-            >
-              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
-            </Pressable>
-            <Text style={styles.modalTitle}>Son d'alarme de mène</Text>
-            <View style={{ width: 40 }} />
-          </View>
 
-          <ScrollView style={styles.alarmSoundsList} contentContainerStyle={styles.alarmSoundsContent}>
-            <Text style={styles.alarmSoundsDescription}>
-              Choisissez le son qui sera joué quand une mène dépasse 1 minute.
-            </Text>
-
-            {alarmSounds.map((sound) => (
-              <Pressable
-                key={sound.id}
-                style={[
-                  styles.alarmSoundItem,
-                  selectedAlarmSound === sound.id && styles.alarmSoundItemActive,
-                ]}
-                onPress={() => handleSelectAlarmSound(sound.id)}
-              >
-                <View style={[
-                  styles.alarmSoundIcon,
-                  selectedAlarmSound === sound.id && styles.alarmSoundIconActive,
-                ]}>
-                  <MaterialIcons
-                    name={sound.icon as any}
-                    size={24}
-                    color={selectedAlarmSound === sound.id ? '#FFF' : theme.textSecondary}
-                  />
-                </View>
-                <View style={styles.alarmSoundInfo}>
-                  <Text style={[
-                    styles.alarmSoundName,
-                    selectedAlarmSound === sound.id && styles.alarmSoundNameActive,
-                  ]}>
-                    {sound.name}
-                  </Text>
-                </View>
-                
-                {sound.id !== 'none' && (
-                  <Pressable
-                    style={[
-                      styles.alarmPreviewBtn,
-                      isPlayingPreview === sound.id && styles.alarmPreviewBtnActive,
-                    ]}
-                    onPress={() => handlePreviewSound(sound.id)}
-                  >
-                    <MaterialIcons
-                      name={isPlayingPreview === sound.id ? 'stop' : 'play-arrow'}
-                      size={20}
-                      color={isPlayingPreview === sound.id ? '#FFF' : theme.primary}
-                    />
-                  </Pressable>
-                )}
-
-                {selectedAlarmSound === sound.id && (
-                  <MaterialIcons name="check-circle" size={24} color={theme.accent} />
-                )}
-              </Pressable>
-            ))}
-
-            <View style={styles.alarmSoundNote}>
-              <MaterialIcons name="info-outline" size={18} color={theme.textMuted} />
-              <Text style={styles.alarmSoundNoteText}>
-                Les vibrations seront toujours activées en plus du son choisi.
-              </Text>
-            </View>
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -1664,80 +1474,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFF',
   },
-  // Alarm sound settings styles
-  alarmSoundsList: {
-    flex: 1,
-  },
-  alarmSoundsContent: {
-    padding: 16,
-  },
-  alarmSoundsDescription: {
-    fontSize: 14,
-    color: theme.textSecondary,
-    marginBottom: 20,
-    lineHeight: 20,
-  },
-  alarmSoundItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    padding: 14,
-    borderRadius: theme.borderRadius.lg,
-    marginBottom: 10,
-    ...theme.shadows.card,
-  },
-  alarmSoundItemActive: {
-    borderWidth: 2,
-    borderColor: theme.accent,
-  },
-  alarmSoundIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: theme.backgroundSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  alarmSoundIconActive: {
-    backgroundColor: theme.accent,
-  },
-  alarmSoundInfo: {
-    flex: 1,
-  },
-  alarmSoundName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  alarmSoundNameActive: {
-    color: theme.accent,
-  },
-  alarmPreviewBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: theme.primary + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  alarmPreviewBtnActive: {
-    backgroundColor: theme.primary,
-  },
-  alarmSoundNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: theme.backgroundSecondary,
-    padding: 14,
-    borderRadius: theme.borderRadius.md,
-    marginTop: 16,
-  },
-  alarmSoundNoteText: {
-    flex: 1,
-    fontSize: 13,
-    color: theme.textMuted,
-    lineHeight: 18,
-  },
+
 });
