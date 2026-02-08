@@ -17,6 +17,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
+import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 
 const facilities = [
   { id: 'terrains', label: 'Terrains extérieurs', icon: 'sports' },
@@ -34,8 +35,13 @@ export default function NewClubScreen() {
   const { addClub } = useApp();
 
   const [name, setName] = useState('');
-  const [address, setAddress] = useState('');
-  const [city, setCity] = useState('');
+  const [location, setLocation] = useState<LocationData>({
+    address: '',
+    city: '',
+    country: 'France',
+    latitude: 0,
+    longitude: 0,
+  });
   const [description, setDescription] = useState('');
   const [foundedYear, setFoundedYear] = useState('');
   const [contactEmail, setContactEmail] = useState('');
@@ -54,7 +60,7 @@ export default function NewClubScreen() {
       Alert.alert('Erreur', 'Le nom du club est obligatoire');
       return;
     }
-    if (!city.trim()) {
+    if (!location.city.trim()) {
       Alert.alert('Erreur', 'La ville est obligatoire');
       return;
     }
@@ -65,11 +71,12 @@ export default function NewClubScreen() {
 
     addClub({
       name: name.trim(),
-      address: address.trim(),
-      city: city.trim(),
+      address: location.address.trim(),
+      city: location.city.trim(),
+      country: location.country || 'France',
       location: {
-        latitude: 0,
-        longitude: 0,
+        latitude: location.latitude,
+        longitude: location.longitude,
       },
       membersCount: 0,
       foundedYear: parseInt(foundedYear) || new Date().getFullYear(),
@@ -127,20 +134,13 @@ export default function NewClubScreen() {
 
           {/* Location */}
           <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
-            <Text style={styles.sectionTitle}>LOCALISATION *</Text>
-            <TextInput
-              style={[styles.textInput, { marginBottom: 12 }]}
-              value={address}
-              onChangeText={setAddress}
-              placeholder="Adresse"
-              placeholderTextColor={theme.textMuted}
-            />
-            <TextInput
-              style={styles.textInput}
-              value={city}
-              onChangeText={setCity}
-              placeholder="Ville *"
-              placeholderTextColor={theme.textMuted}
+            <LocationPicker
+              label="LOCALISATION"
+              value={location}
+              onChange={setLocation}
+              placeholder="Rechercher une adresse..."
+              required
+              showAddressField
             />
           </Animated.View>
 
@@ -234,7 +234,7 @@ export default function NewClubScreen() {
         {/* Save Button */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
           <Pressable 
-            style={[styles.saveButton, (!name.trim() || !city.trim()) && styles.saveButtonDisabled]} 
+            style={[styles.saveButton, (!name.trim() || !location.city.trim()) && styles.saveButtonDisabled]} 
             onPress={handleSave}
           >
             <MaterialIcons name="check" size={24} color="#FFF" />

@@ -16,9 +16,10 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import * as Location from 'expo-location';
+
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
+import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 
 const facilities = [
   { id: 'terrains', label: 'Terrains extérieurs', icon: 'sports' },
@@ -39,33 +40,41 @@ export default function EditClubScreen() {
   const club = getClubById(id || '');
 
   const [name, setName] = useState('');
-  const [address, setAddress] = useState('');
-  const [city, setCity] = useState('');
+  const [location, setLocation] = useState<LocationData>({
+    address: '',
+    city: '',
+    country: 'France',
+    latitude: 0,
+    longitude: 0,
+  });
   const [description, setDescription] = useState('');
   const [foundedYear, setFoundedYear] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [selectedFacilities, setSelectedFacilities] = useState<string[]>([]);
-  const [latitude, setLatitude] = useState(0);
-  const [longitude, setLongitude] = useState(0);
+  
   const [selectedTerrainId, setSelectedTerrainId] = useState<string | undefined>();
-  const [country, setCountry] = useState('France');
-  const [isGeocoding, setIsGeocoding] = useState(false);
+  
+  
   const [isSaving, setIsSaving] = useState(false);
-  const [locationPermission, setLocationPermission] = useState(false);
+  
 
   // Load club data
   useEffect(() => {
     if (club) {
       setName(club.name);
-      setAddress(club.address);
-      setCity(club.city);
+      setLocation({
+        address: club.address || '',
+        city: club.city || '',
+        country: club.country || 'France',
+        latitude: club.location?.latitude || 0,
+        longitude: club.location?.longitude || 0,
+      });
       setDescription(club.description || '');
       setFoundedYear(club.foundedYear ? String(club.foundedYear) : '');
       setContactEmail(club.contactEmail || '');
       setContactPhone(club.contactPhone || '');
-      setLatitude(club.location?.latitude || 0);
-      setLongitude(club.location?.longitude || 0);
+      
       
       // Convert facility labels back to IDs
       const facilityIds = facilities
@@ -73,17 +82,11 @@ export default function EditClubScreen() {
         .map(f => f.id);
       setSelectedFacilities(facilityIds);
       setSelectedTerrainId(club.terrainId);
-      setCountry(club.country || 'France');
+      
     }
   }, [club]);
 
-  // Request location permission on mount
-  useEffect(() => {
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      setLocationPermission(status === 'granted');
-    })();
-  }, []);
+  
 
   const toggleFacility = (id: string) => {
     Haptics.selectionAsync();
@@ -92,60 +95,7 @@ export default function EditClubScreen() {
     );
   };
 
-  // Geocode address
-  const geocodeAddress = async () => {
-    if (!address.trim() || !city.trim()) return;
-    
-    setIsGeocoding(true);
-    try {
-      const fullAddress = `${address.trim()}, ${city.trim()}, France`;
-      const results = await Location.geocodeAsync(fullAddress);
-      
-      if (results && results.length > 0) {
-        setLatitude(results[0].latitude);
-        setLongitude(results[0].longitude);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else {
-        Alert.alert('Adresse non trouvée', 'Impossible de géolocaliser cette adresse.');
-      }
-    } catch (error) {
-      console.error('Geocoding error:', error);
-    } finally {
-      setIsGeocoding(false);
-    }
-  };
-
-  // Get current location
-  const getCurrentLocation = async () => {
-    if (!locationPermission) {
-      Alert.alert('Permission requise', "Autorisez l'accès à la localisation.");
-      return;
-    }
-
-    setIsGeocoding(true);
-    try {
-      const location = await Location.getCurrentPositionAsync({});
-      setLatitude(location.coords.latitude);
-      setLongitude(location.coords.longitude);
-
-      const reverseResults = await Location.reverseGeocodeAsync({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      });
-
-      if (reverseResults && reverseResults.length > 0) {
-        const result = reverseResults[0];
-        if (result.street) setAddress(`${result.streetNumber || ''} ${result.street}`.trim());
-        if (result.city) setCity(result.city);
-      }
-
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (error) {
-      Alert.alert('Erreur', 'Impossible de récupérer votre position.');
-    } finally {
-      setIsGeocoding(false);
-    }
-  };
+  
 
   const handleSave = async () => {
     if (!club) return;
@@ -154,7 +104,7 @@ export default function EditClubScreen() {
       Alert.alert('Erreur', 'Le nom du club est obligatoire');
       return;
     }
-    if (!city.trim()) {
+    if (!location.city.trim()) {
       Alert.alert('Erreur', 'La ville est obligatoire');
       return;
     }
@@ -169,10 +119,10 @@ export default function EditClubScreen() {
 
       await updateClub(club.id, {
         name: name.trim(),
-        address: address.trim(),
-        city: city.trim(),
-        country: country.trim() || 'France',
-        location: { latitude, longitude },
+        address: location.address.trim(),
+        city: location.city.trim(),
+        country: location.country || 'France',
+        location: { latitude: location.latitude, longitude: location.longitude },
         foundedYear: parseInt(foundedYear) || undefined,
         description: description.trim() || undefined,
         facilities: facilityLabels,
@@ -250,69 +200,14 @@ export default function EditClubScreen() {
 
           {/* Location */}
           <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>LOCALISATION *</Text>
-              <Pressable 
-                style={styles.locationButton}
-                onPress={getCurrentLocation}
-                disabled={isGeocoding}
-              >
-                {isGeocoding ? (
-                  <ActivityIndicator size="small" color={theme.primary} />
-                ) : (
-                  <>
-                    <MaterialIcons name="my-location" size={16} color={theme.primary} />
-                    <Text style={styles.locationButtonText}>Ma position</Text>
-                  </>
-                )}
-              </Pressable>
-            </View>
-            <TextInput
-              style={[styles.textInput, { marginBottom: 12 }]}
-              value={address}
-              onChangeText={setAddress}
-              placeholder="Adresse"
-              placeholderTextColor={theme.textMuted}
+            <LocationPicker
+              label="LOCALISATION"
+              value={location}
+              onChange={setLocation}
+              placeholder="Rechercher une adresse..."
+              required
+              showAddressField
             />
-            <TextInput
-              style={[styles.textInput, { marginBottom: 12 }]}
-              value={city}
-              onChangeText={setCity}
-              placeholder="Ville *"
-              placeholderTextColor={theme.textMuted}
-            />
-            
-            {/* Geocode Button */}
-            <Pressable 
-              style={[
-                styles.geocodeButton, 
-                (!address.trim() || !city.trim()) && styles.geocodeButtonDisabled
-              ]}
-              onPress={geocodeAddress}
-              disabled={!address.trim() || !city.trim() || isGeocoding}
-            >
-              {isGeocoding ? (
-                <ActivityIndicator size="small" color="#FFF" />
-              ) : (
-                <>
-                  <MaterialIcons name="place" size={18} color="#FFF" />
-                  <Text style={styles.geocodeButtonText}>Géolocaliser cette adresse</Text>
-                </>
-              )}
-            </Pressable>
-
-            {/* Location Preview */}
-            {(latitude !== 0 || longitude !== 0) && (
-              <Animated.View entering={FadeInDown.duration(300)} style={styles.locationPreview}>
-                <MaterialIcons name="check-circle" size={20} color={theme.success} />
-                <View style={styles.locationPreviewInfo}>
-                  <Text style={styles.locationPreviewTitle}>Position enregistrée</Text>
-                  <Text style={styles.locationPreviewCoords}>
-                    {latitude.toFixed(6)}, {longitude.toFixed(6)}
-                  </Text>
-                </View>
-              </Animated.View>
-            )}
           </Animated.View>
 
           {/* Description */}
@@ -373,17 +268,7 @@ export default function EditClubScreen() {
             </View>
           </Animated.View>
 
-          {/* Country */}
-          <Animated.View entering={FadeInDown.duration(400).delay(275)} style={styles.section}>
-            <Text style={styles.sectionTitle}>PAYS</Text>
-            <TextInput
-              style={styles.textInput}
-              value={country}
-              onChangeText={setCountry}
-              placeholder="Ex: France, Belgique, Suisse..."
-              placeholderTextColor={theme.textMuted}
-            />
-          </Animated.View>
+
 
           {/* Terrain Association */}
           <Animated.View entering={FadeInDown.duration(400).delay(290)} style={styles.section}>
@@ -485,10 +370,10 @@ export default function EditClubScreen() {
           <Pressable 
             style={[
               styles.saveButton, 
-              (!name.trim() || !city.trim() || isSaving) && styles.saveButtonDisabled
+              (!name.trim() || !location.city.trim() || isSaving) && styles.saveButtonDisabled
             ]} 
             onPress={handleSave}
-            disabled={!name.trim() || !city.trim() || isSaving}
+            disabled={!name.trim() || !location.city.trim() || isSaving}
           >
             {isSaving ? (
               <ActivityIndicator size="small" color="#FFF" />

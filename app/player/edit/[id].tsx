@@ -24,6 +24,7 @@ import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
+import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 
 const levels = ['Débutant', 'Intermédiaire', 'Confirmé', 'Expert'] as const;
 
@@ -43,7 +44,13 @@ export default function EditPlayerScreen() {
   const [role, setRole] = useState<PlayerRole>('Milieu');
   const [level, setLevel] = useState<typeof levels[number]>('Intermédiaire');
   const [clubId, setClubId] = useState<string | undefined>();
-  const [city, setCity] = useState('');
+  const [location, setLocation] = useState<LocationData>({
+    address: '',
+    city: '',
+    country: 'France',
+    latitude: 0,
+    longitude: 0,
+  });
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   // Boules info
@@ -59,7 +66,13 @@ export default function EditPlayerScreen() {
       setRole(player.role);
       setLevel(player.level);
       setClubId(player.clubId);
-      setCity(player.location?.city || '');
+      setLocation({
+        address: '',
+        city: player.location?.city || '',
+        country: player.country || 'France',
+        latitude: player.location?.latitude || 0,
+        longitude: player.location?.longitude || 0,
+      });
       setPhone(player.phone || '');
       setEmail(player.email || '');
       // Boules
@@ -224,12 +237,12 @@ export default function EditPlayerScreen() {
       phone: phone.trim() || undefined,
       email: email.trim() || undefined,
       boules,
-      location: city ? {
-        ...player.location,
-        city,
-        latitude: player.location?.latitude || 0,
-        longitude: player.location?.longitude || 0,
+      location: location.city ? {
+        city: location.city,
+        latitude: location.latitude,
+        longitude: location.longitude,
       } : undefined,
+      country: location.country || 'France',
     });
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -438,15 +451,14 @@ export default function EditPlayerScreen() {
             </ScrollView>
           </Animated.View>
 
-          {/* City */}
+          {/* Location */}
           <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-            <Text style={styles.sectionTitle}>VILLE</Text>
-            <TextInput
-              style={styles.textInput}
-              value={city}
-              onChangeText={setCity}
-              placeholder="Ex: Lyon, Marseille..."
-              placeholderTextColor={theme.textMuted}
+            <LocationPicker
+              label="LOCALISATION"
+              value={location}
+              onChange={setLocation}
+              placeholder="Rechercher une ville..."
+              showCityOnly
             />
           </Animated.View>
 

@@ -65,6 +65,7 @@ const CADRAGE_RULES: Record<TournamentType, { description: string; matches: stri
   },
 };
 import { useApp } from '@/contexts/AppContext';
+import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 
 type TournamentStatus = 'À venir' | 'En cours' | 'Terminé';
 
@@ -81,8 +82,13 @@ export default function EditTournamentScreen() {
   const [type, setType] = useState<TournamentType>('Poules');
   const [format, setFormat] = useState<GameFormat>('Doublette');
   const [status, setStatus] = useState<TournamentStatus>('À venir');
-  const [locationName, setLocationName] = useState('');
-  const [city, setCity] = useState('');
+  const [location, setLocation] = useState<LocationData>({
+    address: '',
+    city: '',
+    country: 'France',
+    latitude: 0,
+    longitude: 0,
+  });
   const [clubId, setClubId] = useState<string | undefined>();
   const [maxParticipants, setMaxParticipants] = useState('32');
   const [prize, setPrize] = useState('');
@@ -105,8 +111,13 @@ export default function EditTournamentScreen() {
       setType(tournament.type);
       setFormat(tournament.format);
       setStatus(tournament.status);
-      setLocationName(tournament.location.name || '');
-      setCity(tournament.location.city);
+      setLocation({
+        address: tournament.location.name || '',
+        city: tournament.location.city || '',
+        country: 'France',
+        latitude: tournament.location.latitude || 0,
+        longitude: tournament.location.longitude || 0,
+      });
       setClubId(tournament.clubId);
       setMaxParticipants(tournament.maxParticipants?.toString() || '32');
       setPrize(tournament.prize || '');
@@ -141,7 +152,7 @@ export default function EditTournamentScreen() {
       Alert.alert('Erreur', 'Le nom du tournoi est obligatoire');
       return;
     }
-    if (!city.trim()) {
+    if (!location.city.trim()) {
       Alert.alert('Erreur', 'La ville est obligatoire');
       return;
     }
@@ -155,10 +166,10 @@ export default function EditTournamentScreen() {
       format,
       status,
       location: {
-        name: locationName.trim() || city.trim(),
-        city: city.trim(),
-        latitude: tournament?.location.latitude || 0,
-        longitude: tournament?.location.longitude || 0,
+        name: location.address.trim() || location.city.trim(),
+        city: location.city.trim(),
+        latitude: location.latitude,
+        longitude: location.longitude,
       },
       clubId,
       clubName: selectedClub?.name,
@@ -546,20 +557,13 @@ export default function EditTournamentScreen() {
 
           {/* Location */}
           <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-            <Text style={styles.sectionTitle}>LIEU *</Text>
-            <TextInput
-              style={[styles.textInput, { marginBottom: 12 }]}
-              value={locationName}
-              onChangeText={setLocationName}
-              placeholder="Nom du lieu (ex: Parc de la Tête d'Or)"
-              placeholderTextColor={theme.textMuted}
-            />
-            <TextInput
-              style={styles.textInput}
-              value={city}
-              onChangeText={setCity}
-              placeholder="Ville *"
-              placeholderTextColor={theme.textMuted}
+            <LocationPicker
+              label="LIEU DU TOURNOI"
+              value={location}
+              onChange={setLocation}
+              placeholder="Rechercher une adresse..."
+              required
+              showAddressField
             />
           </Animated.View>
 
@@ -697,7 +701,7 @@ export default function EditTournamentScreen() {
         {/* Save Button */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
           <Pressable 
-            style={[styles.saveButton, (!name.trim() || !city.trim()) && styles.saveButtonDisabled]} 
+            style={[styles.saveButton, (!name.trim() || !location.city.trim()) && styles.saveButtonDisabled]} 
             onPress={handleSave}
           >
             <MaterialIcons name="check" size={24} color="#FFF" />

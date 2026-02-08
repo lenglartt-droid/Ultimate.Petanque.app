@@ -19,6 +19,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import theme from '@/constants/theme';
 import config, { GameFormat, TournamentType, TerrainType, TournamentLevel, TournamentCategory, RegistrationType, TournamentScope } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
+import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 
 // Cadrage rules configuration
 const CADRAGE_RULES: Record<TournamentType, { description: string; matches: string; points: string; specifics: string[] }> = {
@@ -76,8 +77,13 @@ export default function NewTournamentScreen() {
   const [type, setType] = useState<TournamentType>('Poules');
   const [format, setFormat] = useState<GameFormat>('Doublette');
   const [terrainId, setTerrainId] = useState<string | undefined>();
-  const [locationName, setLocationName] = useState('');
-  const [city, setCity] = useState('');
+  const [manualLocation, setManualLocation] = useState<LocationData>({
+    address: '',
+    city: '',
+    country: 'France',
+    latitude: 0,
+    longitude: 0,
+  });
   const [clubId, setClubId] = useState<string | undefined>();
   const [maxParticipants, setMaxParticipants] = useState('32');
   const [prize, setPrize] = useState('');
@@ -106,7 +112,7 @@ export default function NewTournamentScreen() {
       Alert.alert('Erreur', 'Le nom du tournoi est obligatoire');
       return;
     }
-    if (!terrainId && !city.trim()) {
+    if (!terrainId && !manualLocation.city.trim()) {
       Alert.alert('Erreur', 'Sélectionnez un terrain ou indiquez une ville');
       return;
     }
@@ -120,10 +126,10 @@ export default function NewTournamentScreen() {
       type,
       format,
       location: {
-        name: terrain?.name || locationName.trim() || city.trim(),
-        city: terrain?.city || city.trim(),
-        latitude: terrain?.location.latitude || 0,
-        longitude: terrain?.location.longitude || 0,
+        name: terrain?.name || manualLocation.address.trim() || manualLocation.city.trim(),
+        city: terrain?.city || manualLocation.city.trim(),
+        latitude: terrain?.location.latitude || manualLocation.latitude,
+        longitude: terrain?.location.longitude || manualLocation.longitude,
       },
       terrainId: terrain?.id,
       terrainName: terrain?.name,
@@ -510,7 +516,6 @@ export default function NewTournamentScreen() {
                       onPress={() => {
                         Haptics.selectionAsync();
                         setTerrainId(terrain.id);
-                        setCity(terrain.city);
                       }}
                     >
                       <View style={[
@@ -554,19 +559,13 @@ export default function NewTournamentScreen() {
             {/* Show manual location fields only if no terrain selected */}
             {!terrainId && (
               <Animated.View entering={FadeInDown.duration(300)} style={styles.manualLocationContainer}>
-                <TextInput
-                  style={[styles.textInput, { marginBottom: 12 }]}
-                  value={locationName}
-                  onChangeText={setLocationName}
-                  placeholder="Nom du lieu (ex: Parc de la Tête d'Or)"
-                  placeholderTextColor={theme.textMuted}
-                />
-                <TextInput
-                  style={styles.textInput}
-                  value={city}
-                  onChangeText={setCity}
-                  placeholder="Ville *"
-                  placeholderTextColor={theme.textMuted}
+                <LocationPicker
+                  label="LIEU DU TOURNOI"
+                  value={manualLocation}
+                  onChange={setManualLocation}
+                  placeholder="Rechercher une adresse..."
+                  required
+                  showAddressField
                 />
               </Animated.View>
             )}
@@ -701,7 +700,7 @@ export default function NewTournamentScreen() {
         {/* Save Button */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
           <Pressable 
-            style={[styles.saveButton, (!name.trim() || (!terrainId && !city.trim())) && styles.saveButtonDisabled]} 
+            style={[styles.saveButton, (!name.trim() || (!terrainId && !manualLocation.city.trim())) && styles.saveButtonDisabled]} 
             onPress={handleSave}
           >
             <MaterialIcons name="check" size={24} color="#FFF" />
