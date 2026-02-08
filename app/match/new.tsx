@@ -1270,15 +1270,9 @@ export default function NewMatchScreen() {
                   </Text>
                   <Text style={styles.fsWinnerScore}>{teamAScore} - {teamBScore}</Text>
                   <Text style={styles.fsWinnerMenes}>{menes.length} mène{menes.length > 1 ? 's' : ''} • {formatTime(matchTime)}</Text>
-                  <Pressable 
-                    style={styles.fsWinnerBtn}
-                    onPress={() => setFullscreenMode(false)}
-                  >
-                    <Text style={styles.fsWinnerBtnText}>Terminer le match</Text>
-                  </Pressable>
                   
-                  {/* Series tracking & Revanche/Finale buttons for training matches */}
-                  {!isTournamentMode && (() => {
+                  {/* Training mode - Series tracking & Revanche/Finale buttons */}
+                  {!isTournamentMode ? (() => {
                     // Calculate new series state after this match
                     const matchWinner = teamAScore > teamBScore ? 'A' : 'B';
                     const newWinsA = seriesWinsA + (matchWinner === 'A' ? 1 : 0);
@@ -1360,74 +1354,166 @@ export default function NewMatchScreen() {
                               <Text style={styles.fsFinaleTerminerBtnText}>Retour à l'accueil</Text>
                             </Pressable>
                           </>
-                        ) : (
-                          /* Revanche or Finale button */
-                          <Pressable 
-                            style={[
-                              styles.fsRevancheBtn,
-                              willBeFinale && styles.fsRevancheBtnFinale
-                            ]}
-                            onPress={() => {
-                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                              setFullscreenMode(false);
-                              
-                              // Generate seriesId BEFORE saving if this is the first match
-                              // This ensures the first match is saved WITH series context
-                              const seriesIdForNav = seriesId || `series-${Date.now()}`;
-                              const isFirstMatchOfSeries = !seriesId && !isInSeries;
-                              
-                              if (isFirstMatchOfSeries) {
-                                // First match: save with series context (match 1 of the series)
-                                // The current match result determines the initial series score
+                        ) : isSeriesComplete && !isInSeries ? (
+                          /* Standalone match - not in a series, show simple buttons */
+                          <>
+                            <Pressable 
+                              style={styles.fsRevancheBtn}
+                              onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                setFullscreenMode(false);
+                                
+                                // Generate seriesId and save first match with series context
+                                const seriesIdForNav = `series-${Date.now()}`;
+                                
                                 handleSaveMatch({
                                   seriesId: seriesIdForNav,
                                   matchNumber: 1,
                                   winsBeforeThisMatch: { teamA: 0, teamB: 0 },
                                   isFinale: false,
                                 });
-                              } else {
-                                // Already in a series: save normally (seriesId exists from navigation)
+                                
+                                setTimeout(() => {
+                                  router.replace({
+                                    pathname: '/match/new',
+                                    params: {
+                                      revanche: 'true',
+                                      format: format,
+                                      teamA: teamAPlayers.map(p => getPlayerName(p.playerId)).join(','),
+                                      teamB: teamBPlayers.map(p => getPlayerName(p.playerId)).join(','),
+                                      seriesWinsA: String(newWinsA),
+                                      seriesWinsB: String(newWinsB),
+                                      seriesId: seriesIdForNav,
+                                    }
+                                  });
+                                }, 100);
+                              }}
+                            >
+                              <MaterialIcons name="sports-mma" size={20} color="#FFF" />
+                              <View style={styles.fsRevancheBtnContent}>
+                                <Text style={styles.fsRevancheBtnText}>Revanche ?</Text>
+                                <Text style={styles.fsRevancheBtnSubtext}>Démarrer une série (Best of 3)</Text>
+                              </View>
+                            </Pressable>
+                            <Pressable 
+                              style={styles.fsFinaleTerminerBtn}
+                              onPress={() => {
+                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                setFullscreenMode(false);
                                 handleSaveMatch();
-                              }
-                              
-                              setTimeout(() => {
-                                router.replace({
-                                  pathname: '/match/new',
-                                  params: {
-                                    revanche: 'true',
-                                    format: format,
-                                    teamA: teamAPlayers.map(p => getPlayerName(p.playerId)).join(','),
-                                    teamB: teamBPlayers.map(p => getPlayerName(p.playerId)).join(','),
-                                    seriesWinsA: String(newWinsA),
-                                    seriesWinsB: String(newWinsB),
+                                setTimeout(() => {
+                                  router.replace('/(tabs)');
+                                }, 100);
+                              }}
+                            >
+                              <MaterialIcons name="home" size={20} color="#FFF" />
+                              <Text style={styles.fsFinaleTerminerBtnText}>Retour à l'accueil</Text>
+                            </Pressable>
+                          </>
+                        ) : (
+                          /* Revanche or Finale button - series in progress */
+                          <>
+                            <Pressable 
+                              style={[
+                                styles.fsRevancheBtn,
+                                willBeFinale && styles.fsRevancheBtnFinale
+                              ]}
+                              onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                setFullscreenMode(false);
+                                
+                                // Generate seriesId BEFORE saving if this is the first match
+                                // This ensures the first match is saved WITH series context
+                                const seriesIdForNav = seriesId || `series-${Date.now()}`;
+                                const isFirstMatchOfSeries = !seriesId && !isInSeries;
+                                
+                                if (isFirstMatchOfSeries) {
+                                  // First match: save with series context (match 1 of the series)
+                                  // The current match result determines the initial series score
+                                  handleSaveMatch({
                                     seriesId: seriesIdForNav,
-                                  }
-                                });
-                              }, 100);
-                            }}
-                          >
-                            <MaterialIcons 
-                              name={willBeFinale ? 'emoji-events' : 'sports-mma'} 
-                              size={20} 
-                              color="#FFF" 
-                            />
-                            <View style={styles.fsRevancheBtnContent}>
-                              <Text style={styles.fsRevancheBtnText}>
-                                {willBeFinale ? 'JOUER LA FINALE !' : 'Revanche ?'}
-                              </Text>
-                              <Text style={styles.fsRevancheBtnSubtext}>
-                                {willBeFinale 
-                                  ? 'Égalité 1-1, match décisif' 
-                                  : isInSeries 
-                                    ? `Match ${currentMatchNumber + 1}/3` 
-                                    : 'Démarrer une série (Best of 3)'}
-                              </Text>
-                            </View>
-                          </Pressable>
+                                    matchNumber: 1,
+                                    winsBeforeThisMatch: { teamA: 0, teamB: 0 },
+                                    isFinale: false,
+                                  });
+                                } else {
+                                  // Already in a series: save normally (seriesId exists from navigation)
+                                  handleSaveMatch();
+                                }
+                                
+                                setTimeout(() => {
+                                  router.replace({
+                                    pathname: '/match/new',
+                                    params: {
+                                      revanche: 'true',
+                                      format: format,
+                                      teamA: teamAPlayers.map(p => getPlayerName(p.playerId)).join(','),
+                                      teamB: teamBPlayers.map(p => getPlayerName(p.playerId)).join(','),
+                                      seriesWinsA: String(newWinsA),
+                                      seriesWinsB: String(newWinsB),
+                                      seriesId: seriesIdForNav,
+                                    }
+                                  });
+                                }, 100);
+                              }}
+                            >
+                              <MaterialIcons 
+                                name={willBeFinale ? 'emoji-events' : 'sports-mma'} 
+                                size={20} 
+                                color="#FFF" 
+                              />
+                              <View style={styles.fsRevancheBtnContent}>
+                                <Text style={styles.fsRevancheBtnText}>
+                                  {willBeFinale ? 'JOUER LA FINALE !' : 'Revanche ?'}
+                                </Text>
+                                <Text style={styles.fsRevancheBtnSubtext}>
+                                  {willBeFinale 
+                                    ? 'Égalité 1-1, match décisif' 
+                                    : isInSeries 
+                                      ? `Manche ${currentMatchNumber + 1}/3` 
+                                      : 'Démarrer une série (Best of 3)'}
+                                </Text>
+                              </View>
+                            </Pressable>
+                            <Pressable 
+                              style={styles.fsFinaleTerminerBtn}
+                              onPress={() => {
+                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                setFullscreenMode(false);
+                                // Save match without series context if abandoning
+                                if (!isInSeries) {
+                                  handleSaveMatch();
+                                } else {
+                                  handleSaveMatch();
+                                }
+                                setTimeout(() => {
+                                  router.replace('/(tabs)');
+                                }, 100);
+                              }}
+                            >
+                              <MaterialIcons name="home" size={20} color="#FFF" />
+                              <Text style={styles.fsFinaleTerminerBtnText}>Abandonner la série</Text>
+                            </Pressable>
+                          </>
                         )}
                       </>
                     );
-                  })()}
+                  })() : (
+                    /* Tournament mode - simple finish button */
+                    <Pressable 
+                      style={styles.fsWinnerBtn}
+                      onPress={() => {
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                        setFullscreenMode(false);
+                        handleSaveMatch();
+                        setTimeout(() => {
+                          router.replace('/(tabs)');
+                        }, 100);
+                      }}
+                    >
+                      <Text style={styles.fsWinnerBtnText}>Enregistrer et terminer</Text>
+                    </Pressable>
+                  )}
                 </View>
               </Animated.View>
             )}

@@ -1,4 +1,4 @@
-// PetanqueScore Mock Data
+// PetanqueScore Mock Data - Comprehensive Test Data
 
 import { GameFormat, PlayerRole, TournamentType, TerrainType, TournamentLevel, TournamentCategory, RegistrationType, TournamentScope } from '@/constants/config';
 
@@ -12,7 +12,7 @@ export interface BoulesInfo {
 export interface Player {
   id: string;
   name: string;
-  nickname?: string; // Surnom
+  nickname?: string;
   avatar?: string;
   club?: string;
   clubId?: string;
@@ -68,7 +68,6 @@ export interface Club {
   terrainName?: string;
 }
 
-// Tournament notification
 export interface TournamentNotification {
   id: string;
   tournamentId: string;
@@ -76,7 +75,6 @@ export interface TournamentNotification {
   remindDaysBefore: number;
 }
 
-// Terrain types
 export interface Terrain {
   id: string;
   name: string;
@@ -96,11 +94,10 @@ export interface Terrain {
   courtsCount: number;
   lighting: boolean;
   covered: boolean;
-  environment?: 'indoor' | 'outdoor'; // Intérieur (Boulodrome) ou Extérieur
+  environment?: 'indoor' | 'outdoor';
   createdAt?: string;
 }
 
-// Tournament bracket types
 export interface BracketMatch {
   id: string;
   round: number;
@@ -116,7 +113,7 @@ export interface BracketMatch {
     score?: number;
   };
   winner?: 'A' | 'B';
-  matchId?: string; // Link to actual match
+  matchId?: string;
   status: 'pending' | 'in_progress' | 'completed';
 }
 
@@ -167,35 +164,30 @@ export interface Tournament {
   maxParticipants: number;
   prize?: string;
   description?: string;
-  // Enhanced tournament features
   teams?: TournamentTeam[];
   phases?: TournamentPhase[];
   currentPhaseId?: string;
-  // New tournament classification fields
   tournamentLevel?: TournamentLevel;
   tournamentCategory?: TournamentCategory;
   registrationType?: RegistrationType;
   tournamentScope?: TournamentScope;
-  // Financial fields
-  registrationCost?: number; // Cost to register in euros
-  prizeWon?: number; // Prize won at the end in euros
-  finalResult?: 'Champion' | 'Finaliste' | 'Éliminé'; // Final result for completed tournaments
+  registrationCost?: number;
+  prizeWon?: number;
+  finalResult?: 'Champion' | 'Finaliste' | 'Éliminé';
 }
 
-// Player role in a match (can differ from their default role)
 export interface MatchPlayerRole {
   playerId: string;
   role: PlayerRole;
 }
 
-// Series tracking for revanche/finale system
 export interface SeriesInfo {
-  seriesId: string; // Unique ID for the series
-  matchNumber: number; // 1, 2, or 3 (for best of 3)
+  seriesId: string;
+  matchNumber: number;
   winsBeforeThisMatch: { teamA: number; teamB: number };
-  isFinale?: boolean; // True if this is the deciding match (1-1)
-  seriesComplete?: boolean; // True if this match ended the series
-  seriesWinner?: 'A' | 'B'; // Set when series is complete
+  isFinale?: boolean;
+  seriesComplete?: boolean;
+  seriesWinner?: 'A' | 'B';
 }
 
 export interface Match {
@@ -205,27 +197,25 @@ export interface Match {
   format: GameFormat;
   tournamentId?: string;
   tournamentName?: string;
-  tournamentPhase?: string; // Poules, 1/8, Quart, etc.
-  tournamentBracket?: 'A' | 'B' | 'C' | 'D'; // Tableau after pools
-  bracketMatchId?: string; // Link to bracket position
+  tournamentPhase?: string;
+  tournamentBracket?: 'A' | 'B' | 'C' | 'D';
+  bracketMatchId?: string;
   teamA: {
     players: string[];
     playerNames: string[];
-    playerRoles?: MatchPlayerRole[]; // Roles for team A players
+    playerRoles?: MatchPlayerRole[];
     score: number;
   };
   teamB: {
     players: string[];
     playerNames: string[];
-    playerRoles?: MatchPlayerRole[]; // Roles for team B players
+    playerRoles?: MatchPlayerRole[];
     score: number;
   };
   winner: 'A' | 'B';
-  duration: number; // minutes
+  duration: number;
   menes: Mene[];
-  // Real-time action tracking
   playerActions?: PlayerAction[];
-  // Series tracking for revanche/finale
   seriesInfo?: SeriesInfo;
 }
 
@@ -264,10 +254,8 @@ export interface PlayerAction {
   };
 }
 
-// Challenge types
 export type ChallengeType = '10_tirs' | '10_tirs_sautee' | 'precision';
 
-// Precision challenge specific types
 export type PrecisionAtelier = 
   | 'boule_seule'
   | 'derriere_but'
@@ -281,7 +269,7 @@ export interface PrecisionShot {
   atelier: PrecisionAtelier;
   distance: PrecisionDistance;
   points: 0 | 1 | 3 | 5;
-  timeUsed: number; // seconds used (max 30)
+  timeUsed: number;
   timestamp: string;
 }
 
@@ -363,7 +351,6 @@ export const PRECISION_ATELIERS: PrecisionAtelierConfig[] = [
 
 export const PRECISION_DISTANCES: PrecisionDistance[] = [6, 7, 8, 9];
 
-// Legacy config kept for compatibility
 export const PRECISION_POINTS_CONFIG = {
   carreau: 5,
   touche: 3,
@@ -378,10 +365,8 @@ export interface ChallengeShot {
   timestamp: string;
 }
 
-// Challenge mode: solo or 1v1
 export type ChallengeMode = 'solo' | '1v1';
 
-// Player result in 1v1 challenge
 export interface ChallengePlayerResult {
   playerId: string;
   playerName: string;
@@ -395,44 +380,37 @@ export interface ChallengePlayerResult {
   atelierScores?: { [key in PrecisionAtelier]?: number };
 }
 
-// Series tracking for challenge revanche/finale system
 export interface ChallengeSeriesInfo {
-  seriesId: string; // Unique ID for the series
-  matchNumber: number; // 1, 2, or 3 (for best of 3)
+  seriesId: string;
+  matchNumber: number;
   winsBeforeThisMatch: { player: number; opponent: number };
-  isFinale?: boolean; // True if this is the deciding match (1-1)
-  seriesComplete?: boolean; // True if this match ended the series
-  seriesWinner?: 'player' | 'opponent'; // Set when series is complete
+  isFinale?: boolean;
+  seriesComplete?: boolean;
+  seriesWinner?: 'player' | 'opponent';
 }
 
 export interface Challenge {
   id: string;
   type: ChallengeType;
-  mode: ChallengeMode; // solo or 1v1
+  mode: ChallengeMode;
   date: string;
   playerId?: string;
   playerName?: string;
-  // Opponent for 1v1 mode
   opponentId?: string;
   opponentName?: string;
   opponentResult?: ChallengePlayerResult;
-  // Winner for 1v1 mode ('player' | 'opponent' | 'draw')
   winner?: 'player' | 'opponent' | 'draw';
-  // Series tracking for revanche/finale
   seriesInfo?: ChallengeSeriesInfo;
-  // For 10_tirs and 10_tirs_sautee
   shots?: ChallengeShot[];
   successCount?: number;
   totalShots?: number;
   carreauCount?: number;
   successRate?: number;
-  // For precision challenge
   precisionShots?: PrecisionShot[];
   totalPoints?: number;
-  maxPoints?: number; // 100 for precision
+  maxPoints?: number;
   atelierScores?: { [key in PrecisionAtelier]?: number };
-  // Common
-  duration?: number; // seconds
+  duration?: number;
   notes?: string;
 }
 
@@ -449,7 +427,6 @@ export interface ChallengeStats {
   overallSuccessRate: number;
 }
 
-// Head-to-head comparison data
 export interface HeadToHead {
   player1Id: string;
   player2Id: string;
@@ -474,1139 +451,331 @@ export interface HeadToHead {
   };
 }
 
-// Mock Players Data
+// ============================================
+// 20 MOCK PLAYERS
+// ============================================
 export const mockPlayers: Player[] = [
   {
-    id: '1',
-    name: 'Jean-Pierre Martin',
-    club: 'La Boule Lyonnaise',
-    clubId: '1',
-    role: 'Tireur',
-    level: 'Expert',
-    phone: '06 12 34 56 78',
-    email: 'jp.martin@email.fr',
-    country: 'France',
+    id: '1', name: 'Jean-Pierre Martin', nickname: 'JP', club: 'La Boule Lyonnaise', clubId: '1', role: 'Tireur', level: 'Expert',
+    phone: '06 12 34 56 78', email: 'jp.martin@email.fr', country: 'France',
     location: { latitude: 45.764042, longitude: 4.835659, city: 'Lyon' },
-    stats: {
-      matchesPlayed: 156,
-      wins: 98,
-      losses: 58,
-      winRate: 62.8,
-      tirRate: 78.5,
-      pointRate: 65.2,
-      carreauRate: 12.4,
-      avgPointsScored: 11.2,
-      avgPointsConceded: 8.4,
-      totalTirs: 890,
-      totalTirsSuccess: 698,
-      totalPoints: 456,
-      totalPointsSuccess: 297,
-    },
+    boules: { name: 'Obut ATX', diameter: 74, weight: 700 },
+    stats: { matchesPlayed: 156, wins: 98, losses: 58, winRate: 62.8, tirRate: 78.5, pointRate: 65.2, carreauRate: 12.4, avgPointsScored: 11.2, avgPointsConceded: 8.4 },
     createdAt: '2022-03-15',
   },
   {
-    id: '2',
-    name: 'Marie Dupont',
-    club: 'Pétanque Club Marseillais',
-    clubId: '2',
-    role: 'Pointeur',
-    level: 'Confirmé',
-    phone: '06 98 76 54 32',
-    email: 'marie.dupont@email.fr',
-    country: 'France',
+    id: '2', name: 'Marie Dupont', nickname: 'La Marseillaise', club: 'Pétanque Club Marseillais', clubId: '2', role: 'Pointeur', level: 'Confirmé',
+    phone: '06 98 76 54 32', email: 'marie.dupont@email.fr', country: 'France',
     location: { latitude: 43.296482, longitude: 5.369780, city: 'Marseille' },
-    stats: {
-      matchesPlayed: 89,
-      wins: 52,
-      losses: 37,
-      winRate: 58.4,
-      tirRate: 45.3,
-      pointRate: 82.1,
-      carreauRate: 5.2,
-      avgPointsScored: 10.8,
-      avgPointsConceded: 9.1,
-      totalTirs: 234,
-      totalTirsSuccess: 106,
-      totalPoints: 678,
-      totalPointsSuccess: 557,
-    },
+    stats: { matchesPlayed: 89, wins: 52, losses: 37, winRate: 58.4, tirRate: 45.3, pointRate: 82.1, carreauRate: 5.2, avgPointsScored: 10.8, avgPointsConceded: 9.1 },
     createdAt: '2023-01-08',
   },
   {
-    id: '3',
-    name: 'Pierre Dubois',
-    club: 'AS Pétanque Nice',
-    clubId: '3',
-    role: 'Milieu',
-    level: 'Expert',
-    email: 'p.dubois@petanque-nice.fr',
-    country: 'France',
+    id: '3', name: 'Pierre Dubois', nickname: 'Le Niçois', club: 'AS Pétanque Nice', clubId: '3', role: 'Milieu', level: 'Expert',
+    email: 'p.dubois@petanque-nice.fr', country: 'France',
     location: { latitude: 43.710173, longitude: 7.261953, city: 'Nice' },
-    stats: {
-      matchesPlayed: 203,
-      wins: 142,
-      losses: 61,
-      winRate: 69.9,
-      tirRate: 72.1,
-      pointRate: 74.8,
-      carreauRate: 15.3,
-      avgPointsScored: 11.8,
-      avgPointsConceded: 7.6,
-      totalTirs: 945,
-      totalTirsSuccess: 681,
-      totalPoints: 756,
-      totalPointsSuccess: 565,
-    },
+    stats: { matchesPlayed: 203, wins: 142, losses: 61, winRate: 69.9, tirRate: 72.1, pointRate: 74.8, carreauRate: 15.3, avgPointsScored: 11.8, avgPointsConceded: 7.6 },
     createdAt: '2021-06-20',
   },
   {
-    id: '4',
-    name: 'Sophie Bernard',
-    club: 'La Boule Bordelaise',
-    clubId: '4',
-    role: 'Pointeur',
-    level: 'Intermédiaire',
-    country: 'France',
-    location: { latitude: 44.837789, longitude: -0.579180, city: 'Bordeaux' },
-    stats: {
-      matchesPlayed: 45,
-      wins: 22,
-      losses: 23,
-      winRate: 48.9,
-      tirRate: 38.2,
-      pointRate: 71.5,
-      carreauRate: 3.1,
-      avgPointsScored: 9.4,
-      avgPointsConceded: 10.2,
-      totalTirs: 112,
-      totalTirsSuccess: 43,
-      totalPoints: 234,
-      totalPointsSuccess: 167,
-    },
+    id: '4', name: 'Sophie Bernard', club: 'La Boule Bordelaise', clubId: '4', role: 'Pointeur', level: 'Intermédiaire',
+    country: 'France', location: { latitude: 44.837789, longitude: -0.579180, city: 'Bordeaux' },
+    stats: { matchesPlayed: 45, wins: 22, losses: 23, winRate: 48.9, tirRate: 38.2, pointRate: 71.5, carreauRate: 3.1, avgPointsScored: 9.4, avgPointsConceded: 10.2 },
     createdAt: '2023-09-12',
   },
   {
-    id: '5',
-    name: 'Lucas Moreau',
-    club: 'Pétanque Club Toulousain',
-    clubId: '5',
-    role: 'Tireur',
-    level: 'Confirmé',
-    country: 'France',
-    location: { latitude: 43.604652, longitude: 1.444209, city: 'Toulouse' },
-    stats: {
-      matchesPlayed: 112,
-      wins: 71,
-      losses: 41,
-      winRate: 63.4,
-      tirRate: 76.8,
-      pointRate: 58.3,
-      carreauRate: 11.2,
-      avgPointsScored: 10.9,
-      avgPointsConceded: 8.7,
-      totalTirs: 567,
-      totalTirsSuccess: 435,
-      totalPoints: 345,
-      totalPointsSuccess: 201,
-    },
+    id: '5', name: 'Lucas Moreau', nickname: 'Lulu', club: 'Pétanque Club Toulousain', clubId: '5', role: 'Tireur', level: 'Confirmé',
+    country: 'France', location: { latitude: 43.604652, longitude: 1.444209, city: 'Toulouse' },
+    stats: { matchesPlayed: 112, wins: 71, losses: 41, winRate: 63.4, tirRate: 76.8, pointRate: 58.3, carreauRate: 11.2, avgPointsScored: 10.9, avgPointsConceded: 8.7 },
     createdAt: '2022-07-03',
   },
   {
-    id: '6',
-    name: 'Emma Leroy',
-    club: 'La Boule Lyonnaise',
-    clubId: '1',
-    role: 'Milieu',
-    level: 'Confirmé',
-    country: 'France',
-    location: { latitude: 45.764042, longitude: 4.835659, city: 'Lyon' },
-    stats: {
-      matchesPlayed: 78,
-      wins: 45,
-      losses: 33,
-      winRate: 57.7,
-      tirRate: 65.4,
-      pointRate: 69.8,
-      carreauRate: 8.9,
-      avgPointsScored: 10.5,
-      avgPointsConceded: 9.3,
-      totalTirs: 345,
-      totalTirsSuccess: 226,
-      totalPoints: 423,
-      totalPointsSuccess: 295,
-    },
+    id: '6', name: 'Emma Leroy', club: 'La Boule Lyonnaise', clubId: '1', role: 'Milieu', level: 'Confirmé',
+    country: 'France', location: { latitude: 45.764042, longitude: 4.835659, city: 'Lyon' },
+    stats: { matchesPlayed: 78, wins: 45, losses: 33, winRate: 57.7, tirRate: 65.4, pointRate: 69.8, carreauRate: 8.9, avgPointsScored: 10.5, avgPointsConceded: 9.3 },
     createdAt: '2023-02-28',
   },
   {
-    id: '7',
-    name: 'Thomas Garcia',
-    club: 'Pétanque Club Marseillais',
-    clubId: '2',
-    role: 'Tireur',
-    level: 'Expert',
-    country: 'France',
-    location: { latitude: 43.296482, longitude: 5.369780, city: 'Marseille' },
-    stats: {
-      matchesPlayed: 189,
-      wins: 128,
-      losses: 61,
-      winRate: 67.7,
-      tirRate: 81.2,
-      pointRate: 52.4,
-      carreauRate: 18.6,
-      avgPointsScored: 11.5,
-      avgPointsConceded: 7.9,
-      totalTirs: 1023,
-      totalTirsSuccess: 831,
-      totalPoints: 312,
-      totalPointsSuccess: 163,
-    },
+    id: '7', name: 'Thomas Garcia', nickname: 'TomTom', club: 'Pétanque Club Marseillais', clubId: '2', role: 'Tireur', level: 'Expert',
+    country: 'France', location: { latitude: 43.296482, longitude: 5.369780, city: 'Marseille' },
+    stats: { matchesPlayed: 189, wins: 128, losses: 61, winRate: 67.7, tirRate: 81.2, pointRate: 52.4, carreauRate: 18.6, avgPointsScored: 11.5, avgPointsConceded: 7.9 },
     createdAt: '2021-11-14',
   },
   {
-    id: '8',
-    name: 'Camille Roux',
-    club: 'AS Pétanque Nice',
-    clubId: '3',
-    role: 'Pointeur',
-    level: 'Débutant',
-    country: 'France',
-    location: { latitude: 43.710173, longitude: 7.261953, city: 'Nice' },
-    stats: {
-      matchesPlayed: 18,
-      wins: 7,
-      losses: 11,
-      winRate: 38.9,
-      tirRate: 32.1,
-      pointRate: 58.6,
-      carreauRate: 1.2,
-      avgPointsScored: 8.2,
-      avgPointsConceded: 11.4,
-      totalTirs: 56,
-      totalTirsSuccess: 18,
-      totalPoints: 87,
-      totalPointsSuccess: 51,
-    },
+    id: '8', name: 'Camille Roux', club: 'AS Pétanque Nice', clubId: '3', role: 'Pointeur', level: 'Débutant',
+    country: 'France', location: { latitude: 43.710173, longitude: 7.261953, city: 'Nice' },
+    stats: { matchesPlayed: 18, wins: 7, losses: 11, winRate: 38.9, tirRate: 32.1, pointRate: 58.6, carreauRate: 1.2, avgPointsScored: 8.2, avgPointsConceded: 11.4 },
     createdAt: '2024-01-05',
   },
   {
-    id: '9',
-    name: 'Antoine Lambert',
-    club: 'Boulistes Parisiens',
-    clubId: '6',
-    role: 'Milieu',
-    level: 'Intermédiaire',
-    country: 'France',
-    location: { latitude: 48.856614, longitude: 2.352222, city: 'Paris' },
-    stats: {
-      matchesPlayed: 56,
-      wins: 28,
-      losses: 28,
-      winRate: 50.0,
-      tirRate: 55.8,
-      pointRate: 62.4,
-      carreauRate: 6.3,
-      avgPointsScored: 9.8,
-      avgPointsConceded: 10.1,
-      totalTirs: 234,
-      totalTirsSuccess: 131,
-      totalPoints: 289,
-      totalPointsSuccess: 180,
-    },
+    id: '9', name: 'Antoine Lambert', club: 'Boulistes Parisiens', clubId: '6', role: 'Milieu', level: 'Intermédiaire',
+    country: 'France', location: { latitude: 48.856614, longitude: 2.352222, city: 'Paris' },
+    stats: { matchesPlayed: 56, wins: 28, losses: 28, winRate: 50.0, tirRate: 55.8, pointRate: 62.4, carreauRate: 6.3, avgPointsScored: 9.8, avgPointsConceded: 10.1 },
     createdAt: '2023-05-22',
   },
   {
-    id: '10',
-    name: 'Julie Petit',
-    club: 'Pétanque Club Nantais',
-    clubId: '7',
-    role: 'Pointeur',
-    level: 'Confirmé',
-    country: 'France',
-    location: { latitude: 47.218371, longitude: -1.553621, city: 'Nantes' },
-    stats: {
-      matchesPlayed: 92,
-      wins: 58,
-      losses: 34,
-      winRate: 63.0,
-      tirRate: 41.7,
-      pointRate: 85.3,
-      carreauRate: 4.8,
-      avgPointsScored: 11.1,
-      avgPointsConceded: 8.5,
-      totalTirs: 198,
-      totalTirsSuccess: 83,
-      totalPoints: 567,
-      totalPointsSuccess: 484,
-    },
+    id: '10', name: 'Julie Petit', nickname: 'Juju', club: 'Pétanque Club Nantais', role: 'Pointeur', level: 'Confirmé',
+    country: 'France', location: { latitude: 47.218371, longitude: -1.553621, city: 'Nantes' },
+    stats: { matchesPlayed: 92, wins: 58, losses: 34, winRate: 63.0, tirRate: 41.7, pointRate: 85.3, carreauRate: 4.8, avgPointsScored: 11.1, avgPointsConceded: 8.5 },
     createdAt: '2022-09-08',
   },
+  {
+    id: '11', name: 'François Mercier', nickname: 'Fanfan', club: 'La Boule Lyonnaise', clubId: '1', role: 'Tireur', level: 'Expert',
+    phone: '06 11 22 33 44', country: 'France', location: { latitude: 45.764042, longitude: 4.835659, city: 'Lyon' },
+    boules: { name: 'MS 2110', diameter: 73, weight: 690 },
+    stats: { matchesPlayed: 234, wins: 167, losses: 67, winRate: 71.4, tirRate: 82.3, pointRate: 61.5, carreauRate: 19.2, avgPointsScored: 11.9, avgPointsConceded: 7.2 },
+    createdAt: '2020-05-15',
+  },
+  {
+    id: '12', name: 'Claire Fontaine', club: 'Pétanque Club Marseillais', clubId: '2', role: 'Pointeur', level: 'Confirmé',
+    email: 'claire.f@email.fr', country: 'France', location: { latitude: 43.296482, longitude: 5.369780, city: 'Marseille' },
+    stats: { matchesPlayed: 145, wins: 89, losses: 56, winRate: 61.4, tirRate: 48.2, pointRate: 79.8, carreauRate: 6.1, avgPointsScored: 10.7, avgPointsConceded: 8.9 },
+    createdAt: '2021-08-20',
+  },
+  {
+    id: '13', name: 'Maxime Durand', nickname: 'Max', club: 'AS Pétanque Nice', clubId: '3', role: 'Milieu', level: 'Intermédiaire',
+    country: 'France', location: { latitude: 43.710173, longitude: 7.261953, city: 'Nice' },
+    stats: { matchesPlayed: 67, wins: 35, losses: 32, winRate: 52.2, tirRate: 59.4, pointRate: 64.7, carreauRate: 7.8, avgPointsScored: 10.1, avgPointsConceded: 9.8 },
+    createdAt: '2023-03-10',
+  },
+  {
+    id: '14', name: 'Isabelle Martin', club: 'La Boule Bordelaise', clubId: '4', role: 'Tireur', level: 'Confirmé',
+    country: 'France', location: { latitude: 44.837789, longitude: -0.579180, city: 'Bordeaux' },
+    stats: { matchesPlayed: 98, wins: 61, losses: 37, winRate: 62.2, tirRate: 74.5, pointRate: 55.3, carreauRate: 10.8, avgPointsScored: 10.8, avgPointsConceded: 8.6 },
+    createdAt: '2022-01-25',
+  },
+  {
+    id: '15', name: 'Nicolas Blanc', nickname: 'Nico', club: 'Pétanque Club Toulousain', clubId: '5', role: 'Pointeur', level: 'Expert',
+    phone: '06 55 44 33 22', country: 'France', location: { latitude: 43.604652, longitude: 1.444209, city: 'Toulouse' },
+    stats: { matchesPlayed: 178, wins: 121, losses: 57, winRate: 68.0, tirRate: 52.1, pointRate: 88.4, carreauRate: 5.9, avgPointsScored: 11.4, avgPointsConceded: 7.8 },
+    createdAt: '2020-11-30',
+  },
+  {
+    id: '16', name: 'Sandrine Lefebvre', club: 'Boulistes Parisiens', clubId: '6', role: 'Milieu', level: 'Confirmé',
+    country: 'France', location: { latitude: 48.856614, longitude: 2.352222, city: 'Paris' },
+    stats: { matchesPlayed: 89, wins: 52, losses: 37, winRate: 58.4, tirRate: 62.7, pointRate: 71.2, carreauRate: 8.3, avgPointsScored: 10.4, avgPointsConceded: 9.1 },
+    createdAt: '2022-06-18',
+  },
+  {
+    id: '17', name: 'Olivier Girard', nickname: 'Olive', club: 'La Boule Lyonnaise', clubId: '1', role: 'Pointeur', level: 'Intermédiaire',
+    country: 'France', location: { latitude: 45.764042, longitude: 4.835659, city: 'Lyon' },
+    stats: { matchesPlayed: 54, wins: 27, losses: 27, winRate: 50.0, tirRate: 44.6, pointRate: 72.8, carreauRate: 4.2, avgPointsScored: 9.7, avgPointsConceded: 10.0 },
+    createdAt: '2023-07-12',
+  },
+  {
+    id: '18', name: 'Valérie Rousseau', club: 'Pétanque Club Marseillais', clubId: '2', role: 'Tireur', level: 'Débutant',
+    country: 'France', location: { latitude: 43.296482, longitude: 5.369780, city: 'Marseille' },
+    stats: { matchesPlayed: 23, wins: 9, losses: 14, winRate: 39.1, tirRate: 51.2, pointRate: 48.6, carreauRate: 2.8, avgPointsScored: 8.5, avgPointsConceded: 10.8 },
+    createdAt: '2024-02-01',
+  },
+  {
+    id: '19', name: 'Philippe Morel', nickname: 'Phil', club: 'AS Pétanque Nice', clubId: '3', role: 'Tireur', level: 'Expert',
+    phone: '06 77 88 99 00', country: 'France', location: { latitude: 43.710173, longitude: 7.261953, city: 'Nice' },
+    boules: { name: 'La Boule Noire', diameter: 75, weight: 710 },
+    stats: { matchesPlayed: 212, wins: 152, losses: 60, winRate: 71.7, tirRate: 84.1, pointRate: 58.9, carreauRate: 21.3, avgPointsScored: 12.1, avgPointsConceded: 7.4 },
+    createdAt: '2019-09-05',
+  },
+  {
+    id: '20', name: 'Aurélie Simon', club: 'La Boule Bordelaise', clubId: '4', role: 'Milieu', level: 'Confirmé',
+    email: 'aurelie.s@email.fr', country: 'France', location: { latitude: 44.837789, longitude: -0.579180, city: 'Bordeaux' },
+    stats: { matchesPlayed: 76, wins: 44, losses: 32, winRate: 57.9, tirRate: 67.3, pointRate: 68.4, carreauRate: 9.1, avgPointsScored: 10.6, avgPointsConceded: 9.2 },
+    createdAt: '2022-12-08',
+  },
 ];
 
-// Mock Clubs Data
+// ============================================
+// 6 MOCK CLUBS
+// ============================================
 export const mockClubs: Club[] = [
   {
-    id: '1',
-    name: 'La Boule Lyonnaise',
-    address: '15 Rue du Parc',
-    city: 'Lyon',
-    country: 'France',
-    location: { latitude: 45.764042, longitude: 4.835659 },
-    membersCount: 156,
-    foundedYear: 1952,
-    description: 'Club historique de Lyon, champion régional 2023',
-    facilities: ['12 terrains', 'Club house', 'Parking', 'Bar'],
-    contactEmail: 'contact@boule-lyonnaise.fr',
-    contactPhone: '04 72 00 00 00',
-    terrainId: 't1',
-    terrainName: 'Boulodrome Municipal Lyon',
+    id: '1', name: 'La Boule Lyonnaise', address: '15 Rue du Parc', city: 'Lyon', country: 'France',
+    location: { latitude: 45.764042, longitude: 4.835659 }, membersCount: 156, foundedYear: 1952,
+    description: 'Club historique de Lyon, champion régional 2023', facilities: ['12 terrains', 'Club house', 'Parking', 'Bar'],
+    contactEmail: 'contact@boule-lyonnaise.fr', contactPhone: '04 72 00 00 00', terrainId: 't1', terrainName: 'Boulodrome Municipal Lyon',
   },
   {
-    id: '2',
-    name: 'Pétanque Club Marseillais',
-    address: '42 Avenue du Prado',
-    city: 'Marseille',
-    country: 'France',
-    location: { latitude: 43.296482, longitude: 5.369780 },
-    membersCount: 203,
-    foundedYear: 1948,
-    description: 'Le plus grand club de la région PACA',
-    facilities: ['18 terrains', 'Terrain couvert', 'Restaurant', 'Vestiaires'],
-    contactEmail: 'pcm@petanque-marseille.fr',
-    terrainId: 't2',
-    terrainName: 'Terrain du Prado',
+    id: '2', name: 'Pétanque Club Marseillais', address: '42 Avenue du Prado', city: 'Marseille', country: 'France',
+    location: { latitude: 43.296482, longitude: 5.369780 }, membersCount: 203, foundedYear: 1948,
+    description: 'Le plus grand club de la région PACA', facilities: ['18 terrains', 'Terrain couvert', 'Restaurant', 'Vestiaires'],
+    contactEmail: 'pcm@petanque-marseille.fr', terrainId: 't2', terrainName: 'Terrain du Prado',
   },
   {
-    id: '3',
-    name: 'AS Pétanque Nice',
-    address: '8 Boulevard Gambetta',
-    city: 'Nice',
-    country: 'France',
-    location: { latitude: 43.710173, longitude: 7.261953 },
-    membersCount: 89,
-    foundedYear: 1965,
-    description: 'Club familial au cœur de Nice',
-    facilities: ['8 terrains', 'École de pétanque', 'Parking'],
-    terrainId: 't3',
-    terrainName: 'Plage Pétanque Nice',
+    id: '3', name: 'AS Pétanque Nice', address: '8 Boulevard Gambetta', city: 'Nice', country: 'France',
+    location: { latitude: 43.710173, longitude: 7.261953 }, membersCount: 89, foundedYear: 1965,
+    description: 'Club familial au cœur de Nice', facilities: ['8 terrains', 'École de pétanque', 'Parking'], terrainId: 't3', terrainName: 'Boulodrome de Nice',
   },
   {
-    id: '4',
-    name: 'La Boule Bordelaise',
-    address: '23 Quai des Chartrons',
-    city: 'Bordeaux',
-    country: 'France',
-    location: { latitude: 44.837789, longitude: -0.579180 },
-    membersCount: 67,
-    foundedYear: 1978,
-    description: 'Ambiance conviviale au bord de la Garonne',
-    facilities: ['6 terrains', 'Bar', 'Terrasse'],
-    contactPhone: '05 56 00 00 00',
-    terrainId: 't4',
-    terrainName: 'Terrain des Chartrons',
+    id: '4', name: 'La Boule Bordelaise', address: '23 Quai des Chartrons', city: 'Bordeaux', country: 'France',
+    location: { latitude: 44.837789, longitude: -0.579180 }, membersCount: 67, foundedYear: 1978,
+    description: 'Ambiance conviviale au bord de la Garonne', facilities: ['6 terrains', 'Bar', 'Terrasse'],
+    contactPhone: '05 56 00 00 00', terrainId: 't4', terrainName: 'Terrain des Chartrons',
   },
   {
-    id: '5',
-    name: 'Pétanque Club Toulousain',
-    address: '5 Place du Capitole',
-    city: 'Toulouse',
-    country: 'France',
-    location: { latitude: 43.604652, longitude: 1.444209 },
-    membersCount: 134,
-    foundedYear: 1955,
-    description: 'Club compétitif avec école de formation',
-    facilities: ['10 terrains', 'Salle de réunion', 'Vestiaires', 'Parking'],
-    terrainId: 't5',
-    terrainName: 'Boulodrome Toulouse',
+    id: '5', name: 'Pétanque Club Toulousain', address: '5 Place du Capitole', city: 'Toulouse', country: 'France',
+    location: { latitude: 43.604652, longitude: 1.444209 }, membersCount: 134, foundedYear: 1955,
+    description: 'Club compétitif avec école de formation', facilities: ['10 terrains', 'Salle de réunion', 'Vestiaires', 'Parking'],
+    terrainId: 't5', terrainName: 'Boulodrome Toulouse',
   },
   {
-    id: '6',
-    name: 'Boulistes Parisiens',
-    address: '18 Jardin des Tuileries',
-    city: 'Paris',
-    country: 'France',
-    location: { latitude: 48.856614, longitude: 2.352222 },
-    membersCount: 78,
-    foundedYear: 1982,
-    description: 'La pétanque au cœur de Paris',
-    facilities: ['4 terrains', 'Club house'],
-    terrainId: 't6',
-    terrainName: 'Jardin des Tuileries',
-  },
-  {
-    id: '7',
-    name: 'Pétanque Club Nantais',
-    address: '12 Rue de la Loire',
-    city: 'Nantes',
-    country: 'France',
-    location: { latitude: 47.218371, longitude: -1.553621 },
-    membersCount: 92,
-    foundedYear: 1971,
-    description: 'Club dynamique de l\'Ouest',
-    facilities: ['8 terrains', 'Bar', 'Terrain éclairé'],
-    terrainId: 't7',
-    terrainName: 'Terrain de la Loire',
-  },
-  {
-    id: '8',
-    name: 'La Boule Strasbourgeoise',
-    address: '3 Place Kléber',
-    city: 'Strasbourg',
-    country: 'France',
-    location: { latitude: 48.573405, longitude: 7.752111 },
-    membersCount: 45,
-    foundedYear: 1989,
-    description: 'La pétanque alsacienne',
-    facilities: ['5 terrains', 'Club house'],
-    terrainId: 't8',
-    terrainName: 'Boulodrome Alsacien',
+    id: '6', name: 'Boulistes Parisiens', address: '18 Jardin des Tuileries', city: 'Paris', country: 'France',
+    location: { latitude: 48.856614, longitude: 2.352222 }, membersCount: 78, foundedYear: 1982,
+    description: 'La pétanque au cœur de Paris', facilities: ['4 terrains', 'Club house'], terrainId: 't6', terrainName: 'Jardin des Tuileries',
   },
 ];
 
-// Mock Terrains Data
+// ============================================
+// 12 MOCK TERRAINS
+// ============================================
 export const mockTerrains: Terrain[] = [
-  {
-    id: 't1',
-    name: 'Boulodrome Municipal Lyon',
-    address: '15 Rue du Parc, 69006 Lyon',
-    city: 'Lyon',
-    location: { latitude: 45.764042, longitude: 4.835659 },
-    type: 'Stabilisé',
-    description: 'Boulodrome officiel de la ville de Lyon avec 12 terrains de compétition.',
-    facilities: ['Vestiaires', 'Bar', 'Parking', 'Éclairage'],
-    clubId: '1',
-    clubName: 'La Boule Lyonnaise',
-    isPublic: true,
-    courtsCount: 12,
-    lighting: true,
-    covered: false,
-    createdAt: '2022-01-15',
-  },
-  {
-    id: 't2',
-    name: 'Terrain du Prado',
-    address: '42 Avenue du Prado, 13008 Marseille',
-    city: 'Marseille',
-    location: { latitude: 43.296482, longitude: 5.369780 },
-    type: 'Graviers',
-    description: 'Terrain gravillonné historique de Marseille, idéal pour le jeu porté.',
-    facilities: ['Restaurant', 'Vestiaires', 'Tribune'],
-    clubId: '2',
-    clubName: 'Pétanque Club Marseillais',
-    isPublic: true,
-    courtsCount: 18,
-    lighting: true,
-    covered: true,
-    createdAt: '2021-06-20',
-  },
-  {
-    id: 't3',
-    name: 'Plage Pétanque Nice',
-    address: 'Promenade des Anglais, 06000 Nice',
-    city: 'Nice',
-    location: { latitude: 43.694852, longitude: 7.265722 },
-    type: 'Sable',
-    description: 'Terrain de plage unique avec vue sur la Méditerranée. Parfait pour le point plombé.',
-    facilities: ['Bar de plage', 'Douches'],
-    isPublic: true,
-    courtsCount: 6,
-    lighting: false,
-    covered: false,
-    createdAt: '2023-04-10',
-  },
-  {
-    id: 't4',
-    name: 'Terrain des Chartrons',
-    address: '23 Quai des Chartrons, 33000 Bordeaux',
-    city: 'Bordeaux',
-    location: { latitude: 44.860000, longitude: -0.570000 },
-    type: 'Terre battue',
-    description: 'Terrain naturel au bord de la Garonne, ambiance conviviale.',
-    facilities: ['Bar', 'Terrasse'],
-    clubId: '4',
-    clubName: 'La Boule Bordelaise',
-    isPublic: true,
-    courtsCount: 6,
-    lighting: true,
-    covered: false,
-    createdAt: '2022-09-01',
-  },
-  {
-    id: 't5',
-    name: 'Boulodrome Toulouse',
-    address: '5 Place du Capitole, 31000 Toulouse',
-    city: 'Toulouse',
-    location: { latitude: 43.604652, longitude: 1.444209 },
-    type: 'Stabilisé',
-    description: 'Centre de formation officiel avec terrains aux normes fédérales.',
-    facilities: ['Salle de réunion', 'Vestiaires', 'Parking', 'Éclairage'],
-    clubId: '5',
-    clubName: 'Pétanque Club Toulousain',
-    isPublic: true,
-    courtsCount: 10,
-    lighting: true,
-    covered: false,
-    createdAt: '2021-03-15',
-  },
-  {
-    id: 't6',
-    name: 'Jardin des Tuileries',
-    address: '18 Jardin des Tuileries, 75001 Paris',
-    city: 'Paris',
-    location: { latitude: 48.863300, longitude: 2.327500 },
-    type: 'Cailloux',
-    description: 'Terrain caillouteux technique au cœur de Paris. Réservé aux joueurs expérimentés.',
-    facilities: ['Club house'],
-    clubId: '6',
-    clubName: 'Boulistes Parisiens',
-    isPublic: true,
-    courtsCount: 4,
-    lighting: false,
-    covered: false,
-    createdAt: '2023-01-20',
-  },
-  {
-    id: 't7',
-    name: 'Terrain de la Loire',
-    address: '12 Rue de la Loire, 44000 Nantes',
-    city: 'Nantes',
-    location: { latitude: 47.218371, longitude: -1.553621 },
-    type: 'Stabilisé',
-    description: 'Terrain éclairé pour les parties nocturnes, idéal pour les soirées d\'été.',
-    facilities: ['Bar', 'Éclairage nocturne'],
-    clubId: '7',
-    clubName: 'Pétanque Club Nantais',
-    isPublic: true,
-    courtsCount: 8,
-    lighting: true,
-    covered: false,
-    createdAt: '2022-07-05',
-  },
-  {
-    id: 't8',
-    name: 'Boulodrome Alsacien',
-    address: '3 Place Kléber, 67000 Strasbourg',
-    city: 'Strasbourg',
-    location: { latitude: 48.573405, longitude: 7.752111 },
-    type: 'Graviers',
-    description: 'Terrain couvert permettant de jouer toute l\'année.',
-    facilities: ['Club house', 'Chauffage'],
-    clubId: '8',
-    clubName: 'La Boule Strasbourgeoise',
-    isPublic: true,
-    courtsCount: 5,
-    lighting: true,
-    covered: true,
-    createdAt: '2023-02-28',
-  },
+  { id: 't1', name: 'Boulodrome Municipal Lyon', address: '15 Rue du Parc, 69006 Lyon', city: 'Lyon', location: { latitude: 45.764042, longitude: 4.835659 }, type: 'Stabilisé', description: 'Boulodrome officiel de la ville de Lyon avec 12 terrains de compétition.', facilities: ['Vestiaires', 'Bar', 'Parking', 'Éclairage'], clubId: '1', clubName: 'La Boule Lyonnaise', isPublic: true, courtsCount: 12, lighting: true, covered: false, environment: 'outdoor', createdAt: '2022-01-15' },
+  { id: 't2', name: 'Terrain du Prado', address: '42 Avenue du Prado, 13008 Marseille', city: 'Marseille', location: { latitude: 43.296482, longitude: 5.369780 }, type: 'Graviers', description: 'Terrain gravillonné historique de Marseille.', facilities: ['Restaurant', 'Vestiaires', 'Tribune'], clubId: '2', clubName: 'Pétanque Club Marseillais', isPublic: true, courtsCount: 18, lighting: true, covered: true, environment: 'indoor', createdAt: '2021-06-20' },
+  { id: 't3', name: 'Boulodrome de Nice', address: '8 Boulevard Gambetta, 06000 Nice', city: 'Nice', location: { latitude: 43.710173, longitude: 7.261953 }, type: 'Stabilisé', description: 'Boulodrome moderne avec vue sur la mer.', facilities: ['Bar', 'Douches', 'Parking'], clubId: '3', clubName: 'AS Pétanque Nice', isPublic: true, courtsCount: 8, lighting: true, covered: false, environment: 'outdoor', createdAt: '2023-04-10' },
+  { id: 't4', name: 'Terrain des Chartrons', address: '23 Quai des Chartrons, 33000 Bordeaux', city: 'Bordeaux', location: { latitude: 44.860000, longitude: -0.570000 }, type: 'Terre battue', description: 'Terrain naturel au bord de la Garonne.', facilities: ['Bar', 'Terrasse'], clubId: '4', clubName: 'La Boule Bordelaise', isPublic: true, courtsCount: 6, lighting: true, covered: false, environment: 'outdoor', createdAt: '2022-09-01' },
+  { id: 't5', name: 'Boulodrome Toulouse', address: '5 Place du Capitole, 31000 Toulouse', city: 'Toulouse', location: { latitude: 43.604652, longitude: 1.444209 }, type: 'Stabilisé', description: 'Centre de formation officiel.', facilities: ['Salle de réunion', 'Vestiaires', 'Parking', 'Éclairage'], clubId: '5', clubName: 'Pétanque Club Toulousain', isPublic: true, courtsCount: 10, lighting: true, covered: false, environment: 'outdoor', createdAt: '2021-03-15' },
+  { id: 't6', name: 'Jardin des Tuileries', address: '18 Jardin des Tuileries, 75001 Paris', city: 'Paris', location: { latitude: 48.863300, longitude: 2.327500 }, type: 'Cailloux', description: 'Terrain historique au cœur de Paris.', facilities: ['Club house'], clubId: '6', clubName: 'Boulistes Parisiens', isPublic: true, courtsCount: 4, lighting: false, covered: false, environment: 'outdoor', createdAt: '2023-01-20' },
+  { id: 't7', name: 'Plage Pétanque Nice', address: 'Promenade des Anglais, 06000 Nice', city: 'Nice', location: { latitude: 43.694852, longitude: 7.265722 }, type: 'Sable', description: 'Terrain de plage unique avec vue sur la Méditerranée.', facilities: ['Bar de plage', 'Douches'], isPublic: true, courtsCount: 6, lighting: false, covered: false, environment: 'outdoor', createdAt: '2023-05-15' },
+  { id: 't8', name: 'Boulodrome Couvert Strasbourg', address: '3 Place Kléber, 67000 Strasbourg', city: 'Strasbourg', location: { latitude: 48.573405, longitude: 7.752111 }, type: 'Stabilisé', description: 'Boulodrome couvert pour jouer toute l\'année.', facilities: ['Club house', 'Chauffage', 'Vestiaires'], isPublic: true, courtsCount: 5, lighting: true, covered: true, environment: 'indoor', createdAt: '2023-02-28' },
+  { id: 't9', name: 'Terrain de la Loire', address: '12 Rue de la Loire, 44000 Nantes', city: 'Nantes', location: { latitude: 47.218371, longitude: -1.553621 }, type: 'Stabilisé', description: 'Terrain éclairé pour les parties nocturnes.', facilities: ['Bar', 'Éclairage nocturne'], isPublic: true, courtsCount: 8, lighting: true, covered: false, environment: 'outdoor', createdAt: '2022-07-05' },
+  { id: 't10', name: 'Boulodrome de Montpellier', address: '25 Avenue de la Mer, 34000 Montpellier', city: 'Montpellier', location: { latitude: 43.610769, longitude: 3.876716 }, type: 'Graviers', description: 'Grand boulodrome du sud avec terrains variés.', facilities: ['Restaurant', 'Parking', 'Tribune'], isPublic: true, courtsCount: 14, lighting: true, covered: false, environment: 'outdoor', createdAt: '2022-04-20' },
+  { id: 't11', name: 'Terrain du Parc Borély', address: 'Parc Borély, 13008 Marseille', city: 'Marseille', location: { latitude: 43.261620, longitude: 5.384490 }, type: 'Terre battue', description: 'Terrain naturel dans le magnifique Parc Borély.', facilities: ['Snack', 'WC'], isPublic: true, courtsCount: 4, lighting: false, covered: false, environment: 'outdoor', createdAt: '2023-06-01' },
+  { id: 't12', name: 'Boulodrome Indoor Lille', address: '10 Rue de la Gare, 59000 Lille', city: 'Lille', location: { latitude: 50.629250, longitude: 3.057256 }, type: 'Stabilisé', description: 'Boulodrome intérieur chauffé pour l\'hiver.', facilities: ['Vestiaires', 'Bar', 'Chauffage'], isPublic: true, courtsCount: 6, lighting: true, covered: true, environment: 'indoor', createdAt: '2023-09-15' },
 ];
 
-// Mock tournament with bracket system
-const sampleBracketMatches: BracketMatch[] = [
-  // Round 1 (Quarter-finals)
-  { id: 'b1', round: 1, position: 1, teamA: { name: 'Équipe Lyon 1', score: 13 }, teamB: { name: 'Équipe Nice', score: 8 }, winner: 'A', status: 'completed' },
-  { id: 'b2', round: 1, position: 2, teamA: { name: 'Équipe Marseille', score: 13 }, teamB: { name: 'Équipe Bordeaux', score: 11 }, winner: 'A', status: 'completed' },
-  { id: 'b3', round: 1, position: 3, teamA: { name: 'Équipe Toulouse', score: 10 }, teamB: { name: 'Équipe Paris', score: 13 }, winner: 'B', status: 'completed' },
-  { id: 'b4', round: 1, position: 4, teamA: { name: 'Équipe Nantes', score: 13 }, teamB: { name: 'Équipe Lyon 2', score: 9 }, winner: 'A', status: 'completed' },
-  // Round 2 (Semi-finals)
-  { id: 'b5', round: 2, position: 1, teamA: { name: 'Équipe Lyon 1', score: 13 }, teamB: { name: 'Équipe Marseille', score: 12 }, winner: 'A', status: 'completed' },
-  { id: 'b6', round: 2, position: 2, teamA: { name: 'Équipe Paris' }, teamB: { name: 'Équipe Nantes' }, status: 'in_progress' },
-  // Round 3 (Final)
-  { id: 'b7', round: 3, position: 1, teamA: { name: 'Équipe Lyon 1' }, status: 'pending' },
-];
-
-const samplePhases: TournamentPhase[] = [
-  {
-    id: 'p1',
-    name: 'Quarts de finale',
-    type: 'elimination',
-    order: 1,
-    matches: sampleBracketMatches.filter(m => m.round === 1),
-  },
-  {
-    id: 'p2',
-    name: 'Demi-finales',
-    type: 'elimination',
-    order: 2,
-    matches: sampleBracketMatches.filter(m => m.round === 2),
-  },
-  {
-    id: 'p3',
-    name: 'Finale',
-    type: 'final',
-    order: 3,
-    matches: sampleBracketMatches.filter(m => m.round === 3),
-  },
-];
-
-// Mock Tournaments Data
+// ============================================
+// 10 MOCK TOURNAMENTS
+// ============================================
 export const mockTournaments: Tournament[] = [
-  {
-    id: '1',
-    name: 'Tournoi de Printemps Lyon',
-    date: '2026-04-15',
-    type: 'Poules',
-    format: 'Doublette',
-    location: { name: 'Parc de la Tête d\'Or', city: 'Lyon', latitude: 45.780000, longitude: 4.855000 },
-    clubId: '1',
-    clubName: 'La Boule Lyonnaise',
-    status: 'À venir',
-    participants: 24,
-    maxParticipants: 32,
-    prize: '500€',
-    description: 'Tournoi annuel ouvert à tous les licenciés - Format poules uniquement',
-    registrationCost: 15,
-  },
-  {
-    id: '2',
-    name: 'Championnat Régional PACA',
-    date: '2026-02-01',
-    endDate: '2026-02-02',
-    type: 'Mixte',
-    format: 'Triplette',
-    location: { name: 'Boulodrome du Prado', city: 'Marseille', latitude: 43.270000, longitude: 5.380000 },
-    clubId: '2',
-    clubName: 'Pétanque Club Marseillais',
-    status: 'En cours',
-    participants: 48,
-    maxParticipants: 48,
-    prize: '2000€',
-    phases: samplePhases,
-    currentPhaseId: 'p2',
-    teams: [
-      { id: 't1', name: 'Équipe Lyon 1', playerIds: ['1', '6'], playerNames: ['Jean-Pierre Martin', 'Emma Leroy'], stats: { wins: 3, losses: 0, pointsFor: 39, pointsAgainst: 29, pointDiff: 10 } },
-      { id: 't2', name: 'Équipe Marseille', playerIds: ['2', '7'], playerNames: ['Marie Dupont', 'Thomas Garcia'], stats: { wins: 2, losses: 1, pointsFor: 38, pointsAgainst: 34, pointDiff: 4 } },
-      { id: 't3', name: 'Équipe Paris', playerIds: ['9'], playerNames: ['Antoine Lambert'], stats: { wins: 2, losses: 1, pointsFor: 36, pointsAgainst: 33, pointDiff: 3 } },
-      { id: 't4', name: 'Équipe Nantes', playerIds: ['10'], playerNames: ['Julie Petit'], stats: { wins: 2, losses: 1, pointsFor: 35, pointsAgainst: 31, pointDiff: 4 } },
-    ],
-  },
-  {
-    id: '3',
-    name: 'Open de Nice',
-    date: '2026-05-10',
-    type: 'Élimination directe',
-    format: 'Doublette',
-    location: { name: 'Place Masséna', city: 'Nice', latitude: 43.696940, longitude: 7.270590 },
-    clubId: '3',
-    clubName: 'AS Pétanque Nice',
-    status: 'À venir',
-    participants: 12,
-    maxParticipants: 24,
-    prize: '300€',
-  },
-  {
-    id: '4',
-    name: 'Concours Mensuel Bordeaux',
-    date: '2026-01-28',
-    type: 'Suisse',
-    format: 'Tête-à-tête',
-    location: { name: 'Boulodrome des Chartrons', city: 'Bordeaux', latitude: 44.860000, longitude: -0.570000 },
-    clubId: '4',
-    clubName: 'La Boule Bordelaise',
-    status: 'Terminé',
-    participants: 16,
-    maxParticipants: 16,
-    registrationCost: 10,
-    prizeWon: 50,
-    finalResult: 'Finaliste',
-  },
-  {
-    id: '5',
-    name: 'Trophée Toulousain',
-    date: '2026-06-01',
-    endDate: '2026-06-02',
-    type: 'A/B/C',
-    format: 'Triplette',
-    location: { name: 'Prairie des Filtres', city: 'Toulouse', latitude: 43.600000, longitude: 1.430000 },
-    clubId: '5',
-    clubName: 'Pétanque Club Toulousain',
-    status: 'À venir',
-    participants: 8,
-    maxParticipants: 32,
-    prize: '1500€',
-    description: 'Grand tournoi de l\'été avec animations - Format A/B/C avec repêchage',
-    registrationCost: 25,
-  },
-  {
-    id: '6',
-    name: 'Paris Pétanque Open',
-    date: '2026-07-14',
-    type: 'Tirage intégral',
-    format: 'Doublette',
-    location: { name: 'Jardin des Tuileries', city: 'Paris', latitude: 48.863300, longitude: 2.327500 },
-    clubId: '6',
-    clubName: 'Boulistes Parisiens',
-    status: 'À venir',
-    participants: 6,
-    maxParticipants: 20,
-    description: 'Tournoi du 14 juillet - Tirage intégral au début',
-  },
-  {
-    id: '7',
-    name: 'Tournoi Amical Strasbourg',
-    date: '2026-03-20',
-    type: 'Autre',
-    format: 'Doublette',
-    location: { name: 'Place Kléber', city: 'Strasbourg', latitude: 48.573405, longitude: 7.752111 },
-    clubId: '8',
-    clubName: 'La Boule Strasbourgeoise',
-    status: 'À venir',
-    participants: 10,
-    maxParticipants: 16,
-    description: 'Format libre et convivial',
-  },
+  { id: 'tour1', name: 'Tournoi de Printemps Lyon', date: '2026-04-15', type: 'Poules', format: 'Doublette', location: { name: 'Boulodrome Municipal Lyon', city: 'Lyon', latitude: 45.780000, longitude: 4.855000 }, clubId: '1', clubName: 'La Boule Lyonnaise', terrainId: 't1', terrainName: 'Boulodrome Municipal Lyon', status: 'À venir', participants: 24, maxParticipants: 32, prize: '500€', description: 'Tournoi annuel ouvert à tous', registrationCost: 15 },
+  { id: 'tour2', name: 'Championnat Régional PACA', date: '2026-02-01', endDate: '2026-02-02', type: 'Mixte', format: 'Triplette', location: { name: 'Boulodrome du Prado', city: 'Marseille', latitude: 43.270000, longitude: 5.380000 }, clubId: '2', clubName: 'Pétanque Club Marseillais', terrainId: 't2', status: 'Terminé', participants: 48, maxParticipants: 48, prize: '2000€', registrationCost: 30, prizeWon: 500, finalResult: 'Finaliste' },
+  { id: 'tour3', name: 'Open de Nice', date: '2026-05-10', type: 'Élimination directe', format: 'Doublette', location: { name: 'Boulodrome de Nice', city: 'Nice', latitude: 43.696940, longitude: 7.270590 }, clubId: '3', clubName: 'AS Pétanque Nice', terrainId: 't3', status: 'À venir', participants: 12, maxParticipants: 24, prize: '300€', registrationCost: 10 },
+  { id: 'tour4', name: 'Concours Mensuel Bordeaux', date: '2026-01-28', type: 'Suisse', format: 'Tête-à-tête', location: { name: 'Terrain des Chartrons', city: 'Bordeaux', latitude: 44.860000, longitude: -0.570000 }, clubId: '4', clubName: 'La Boule Bordelaise', terrainId: 't4', status: 'Terminé', participants: 16, maxParticipants: 16, registrationCost: 10, prizeWon: 50, finalResult: 'Champion' },
+  { id: 'tour5', name: 'Trophée Toulousain', date: '2026-06-01', endDate: '2026-06-02', type: 'A/B/C', format: 'Triplette', location: { name: 'Boulodrome Toulouse', city: 'Toulouse', latitude: 43.600000, longitude: 1.430000 }, clubId: '5', clubName: 'Pétanque Club Toulousain', terrainId: 't5', status: 'À venir', participants: 8, maxParticipants: 32, prize: '1500€', description: 'Grand tournoi de l\'été', registrationCost: 25 },
+  { id: 'tour6', name: 'Paris Pétanque Open', date: '2026-07-14', type: 'Tirage intégral', format: 'Doublette', location: { name: 'Jardin des Tuileries', city: 'Paris', latitude: 48.863300, longitude: 2.327500 }, clubId: '6', clubName: 'Boulistes Parisiens', terrainId: 't6', status: 'À venir', participants: 6, maxParticipants: 20, description: 'Tournoi du 14 juillet' },
+  { id: 'tour7', name: 'Challenge d\'Automne Nantes', date: '2025-10-15', type: 'Poules', format: 'Doublette', location: { name: 'Terrain de la Loire', city: 'Nantes', latitude: 47.218371, longitude: -1.553621 }, terrainId: 't9', status: 'Terminé', participants: 20, maxParticipants: 24, prize: '400€', finalResult: 'Éliminé' },
+  { id: 'tour8', name: 'Coupe de Montpellier', date: '2026-03-20', type: 'Élimination directe', format: 'Triplette', location: { name: 'Boulodrome de Montpellier', city: 'Montpellier', latitude: 43.610769, longitude: 3.876716 }, terrainId: 't10', status: 'À venir', participants: 18, maxParticipants: 32, prize: '800€', registrationCost: 20 },
+  { id: 'tour9', name: 'Indoor Winter Cup Lille', date: '2026-01-15', type: 'Mixte', format: 'Doublette', location: { name: 'Boulodrome Indoor Lille', city: 'Lille', latitude: 50.629250, longitude: 3.057256 }, terrainId: 't12', status: 'Terminé', participants: 12, maxParticipants: 16, prize: '250€', finalResult: 'Champion', prizeWon: 250 },
+  { id: 'tour10', name: 'Super Challenge Méditerranée', date: '2026-08-15', endDate: '2026-08-16', type: 'A/B/C', format: 'Triplette', location: { name: 'Terrain du Prado', city: 'Marseille', latitude: 43.296482, longitude: 5.369780 }, clubId: '2', terrainId: 't2', status: 'À venir', participants: 32, maxParticipants: 64, prize: '3000€', description: 'Le plus grand tournoi de l\'été', registrationCost: 40 },
 ];
 
-// Mock Matches Data with player actions
+// ============================================
+// 50 MOCK MATCHES (Including Series)
+// ============================================
+const generateSeriesId = (base: number) => `series-${base}`;
+
 export const mockMatches: Match[] = [
-  // Matchs d'entraînement
-  {
-    id: '1',
-    date: '2026-02-05T14:30:00',
-    mode: 'Entraînement',
-    format: 'Doublette',
-    teamA: {
-      players: ['1', '6'],
-      playerNames: ['Jean-Pierre Martin', 'Emma Leroy'],
-      score: 13,
-    },
-    teamB: {
-      players: ['2', '9'],
-      playerNames: ['Marie Dupont', 'Antoine Lambert'],
-      score: 8,
-    },
-    winner: 'A',
-    duration: 45,
-    menes: [],
-    playerActions: [
-      { playerId: '1', playerName: 'Jean-Pierre Martin', team: 'A', actions: { tirs: 12, tirsSuccess: 10, points: 5, pointsSuccess: 4, carreaux: 2 } },
-      { playerId: '6', playerName: 'Emma Leroy', team: 'A', actions: { tirs: 6, tirsSuccess: 4, points: 8, pointsSuccess: 6, carreaux: 1 } },
-      { playerId: '2', playerName: 'Marie Dupont', team: 'B', actions: { tirs: 4, tirsSuccess: 2, points: 10, pointsSuccess: 7, carreaux: 0 } },
-      { playerId: '9', playerName: 'Antoine Lambert', team: 'B', actions: { tirs: 8, tirsSuccess: 5, points: 6, pointsSuccess: 4, carreaux: 0 } },
-    ],
-  },
-  {
-    id: '3',
-    date: '2026-02-03T10:00:00',
-    mode: 'Entraînement',
-    format: 'Tête-à-tête',
-    teamA: {
-      players: ['1'],
-      playerNames: ['Jean-Pierre Martin'],
-      score: 13,
-    },
-    teamB: {
-      players: ['5'],
-      playerNames: ['Lucas Moreau'],
-      score: 6,
-    },
-    winner: 'A',
-    duration: 35,
-    menes: [],
-    playerActions: [
-      { playerId: '1', playerName: 'Jean-Pierre Martin', team: 'A', actions: { tirs: 15, tirsSuccess: 13, points: 8, pointsSuccess: 6, carreaux: 3 } },
-      { playerId: '5', playerName: 'Lucas Moreau', team: 'B', actions: { tirs: 12, tirsSuccess: 8, points: 10, pointsSuccess: 5, carreaux: 1 } },
-    ],
-  },
-  {
-    id: '4',
-    date: '2026-02-01T15:00:00',
-    mode: 'Entraînement',
-    format: 'Doublette',
-    teamA: {
-      players: ['10', '4'],
-      playerNames: ['Julie Petit', 'Sophie Bernard'],
-      score: 9,
-    },
-    teamB: {
-      players: ['6', '8'],
-      playerNames: ['Emma Leroy', 'Camille Roux'],
-      score: 13,
-    },
-    winner: 'B',
-    duration: 52,
-    menes: [],
-  },
-  // Matchs de tournoi - Championnat Régional PACA (Mixte: Poules puis Élimination)
-  {
-    id: '2',
-    date: '2026-02-01T09:00:00',
-    mode: 'Tournoi',
-    format: 'Triplette',
-    tournamentId: '2',
-    tournamentName: 'Championnat Régional PACA',
-    tournamentPhase: 'Poules',
-    teamA: {
-      players: ['1', '6', '3'],
-      playerNames: ['Jean-Pierre Martin', 'Emma Leroy', 'Pierre Dubois'],
-      score: 13,
-    },
-    teamB: {
-      players: ['5', '4', '8'],
-      playerNames: ['Lucas Moreau', 'Sophie Bernard', 'Camille Roux'],
-      score: 8,
-    },
-    winner: 'A',
-    duration: 48,
-    menes: [],
-    playerActions: [
-      { playerId: '1', playerName: 'Jean-Pierre Martin', team: 'A', actions: { tirs: 10, tirsSuccess: 8, points: 4, pointsSuccess: 3, carreaux: 2 } },
-      { playerId: '6', playerName: 'Emma Leroy', team: 'A', actions: { tirs: 5, tirsSuccess: 3, points: 6, pointsSuccess: 5, carreaux: 0 } },
-      { playerId: '3', playerName: 'Pierre Dubois', team: 'A', actions: { tirs: 6, tirsSuccess: 5, points: 5, pointsSuccess: 4, carreaux: 1 } },
-      { playerId: '5', playerName: 'Lucas Moreau', team: 'B', actions: { tirs: 9, tirsSuccess: 6, points: 3, pointsSuccess: 2, carreaux: 1 } },
-      { playerId: '4', playerName: 'Sophie Bernard', team: 'B', actions: { tirs: 4, tirsSuccess: 2, points: 7, pointsSuccess: 4, carreaux: 0 } },
-      { playerId: '8', playerName: 'Camille Roux', team: 'B', actions: { tirs: 3, tirsSuccess: 1, points: 5, pointsSuccess: 3, carreaux: 0 } },
-    ],
-  },
-  {
-    id: '10',
-    date: '2026-02-01T11:30:00',
-    mode: 'Tournoi',
-    format: 'Triplette',
-    tournamentId: '2',
-    tournamentName: 'Championnat Régional PACA',
-    tournamentPhase: 'Poules',
-    teamA: {
-      players: ['1', '6', '3'],
-      playerNames: ['Jean-Pierre Martin', 'Emma Leroy', 'Pierre Dubois'],
-      score: 13,
-    },
-    teamB: {
-      players: ['2', '7', '9'],
-      playerNames: ['Marie Dupont', 'Thomas Garcia', 'Antoine Lambert'],
-      score: 11,
-    },
-    winner: 'A',
-    duration: 55,
-    menes: [],
-    playerActions: [
-      { playerId: '1', playerName: 'Jean-Pierre Martin', team: 'A', actions: { tirs: 11, tirsSuccess: 9, points: 3, pointsSuccess: 2, carreaux: 2 } },
-      { playerId: '6', playerName: 'Emma Leroy', team: 'A', actions: { tirs: 4, tirsSuccess: 3, points: 7, pointsSuccess: 5, carreaux: 0 } },
-      { playerId: '3', playerName: 'Pierre Dubois', team: 'A', actions: { tirs: 7, tirsSuccess: 5, points: 4, pointsSuccess: 3, carreaux: 1 } },
-      { playerId: '2', playerName: 'Marie Dupont', team: 'B', actions: { tirs: 3, tirsSuccess: 2, points: 9, pointsSuccess: 7, carreaux: 0 } },
-      { playerId: '7', playerName: 'Thomas Garcia', team: 'B', actions: { tirs: 12, tirsSuccess: 10, points: 2, pointsSuccess: 1, carreaux: 3 } },
-      { playerId: '9', playerName: 'Antoine Lambert', team: 'B', actions: { tirs: 6, tirsSuccess: 4, points: 5, pointsSuccess: 3, carreaux: 0 } },
-    ],
-  },
-  {
-    id: '11',
-    date: '2026-02-01T14:30:00',
-    mode: 'Tournoi',
-    format: 'Triplette',
-    tournamentId: '2',
-    tournamentName: 'Championnat Régional PACA',
-    tournamentPhase: '1/8 finale',
-    tournamentBracket: 'A',
-    teamA: {
-      players: ['1', '6', '3'],
-      playerNames: ['Jean-Pierre Martin', 'Emma Leroy', 'Pierre Dubois'],
-      score: 13,
-    },
-    teamB: {
-      players: ['10'],
-      playerNames: ['Julie Petit'],
-      score: 9,
-    },
-    winner: 'A',
-    duration: 42,
-    menes: [],
-    playerActions: [
-      { playerId: '1', playerName: 'Jean-Pierre Martin', team: 'A', actions: { tirs: 9, tirsSuccess: 7, points: 5, pointsSuccess: 4, carreaux: 1 } },
-      { playerId: '6', playerName: 'Emma Leroy', team: 'A', actions: { tirs: 5, tirsSuccess: 4, points: 6, pointsSuccess: 5, carreaux: 1 } },
-      { playerId: '3', playerName: 'Pierre Dubois', team: 'A', actions: { tirs: 6, tirsSuccess: 4, points: 4, pointsSuccess: 3, carreaux: 0 } },
-      { playerId: '10', playerName: 'Julie Petit', team: 'B', actions: { tirs: 8, tirsSuccess: 5, points: 10, pointsSuccess: 6, carreaux: 0 } },
-    ],
-  },
-  {
-    id: '12',
-    date: '2026-02-01T17:00:00',
-    mode: 'Tournoi',
-    format: 'Triplette',
-    tournamentId: '2',
-    tournamentName: 'Championnat Régional PACA',
-    tournamentPhase: 'Quart de finale',
-    tournamentBracket: 'A',
-    teamA: {
-      players: ['1', '6', '3'],
-      playerNames: ['Jean-Pierre Martin', 'Emma Leroy', 'Pierre Dubois'],
-      score: 13,
-    },
-    teamB: {
-      players: ['7', '2'],
-      playerNames: ['Thomas Garcia', 'Marie Dupont'],
-      score: 12,
-    },
-    winner: 'A',
-    duration: 65,
-    menes: [],
-    playerActions: [
-      { playerId: '1', playerName: 'Jean-Pierre Martin', team: 'A', actions: { tirs: 14, tirsSuccess: 11, points: 4, pointsSuccess: 3, carreaux: 3 } },
-      { playerId: '6', playerName: 'Emma Leroy', team: 'A', actions: { tirs: 6, tirsSuccess: 4, points: 8, pointsSuccess: 6, carreaux: 1 } },
-      { playerId: '3', playerName: 'Pierre Dubois', team: 'A', actions: { tirs: 8, tirsSuccess: 6, points: 5, pointsSuccess: 4, carreaux: 1 } },
-      { playerId: '7', playerName: 'Thomas Garcia', team: 'B', actions: { tirs: 15, tirsSuccess: 12, points: 2, pointsSuccess: 1, carreaux: 4 } },
-      { playerId: '2', playerName: 'Marie Dupont', team: 'B', actions: { tirs: 4, tirsSuccess: 2, points: 11, pointsSuccess: 8, carreaux: 0 } },
-    ],
-  },
-  // Match de tournoi - Concours Mensuel Bordeaux (Suisse)
-  {
-    id: '5',
-    date: '2026-01-28T09:00:00',
-    mode: 'Tournoi',
-    format: 'Tête-à-tête',
-    tournamentId: '4',
-    tournamentName: 'Concours Mensuel Bordeaux',
-    tournamentPhase: 'Ronde 1',
-    teamA: {
-      players: ['4'],
-      playerNames: ['Sophie Bernard'],
-      score: 13,
-    },
-    teamB: {
-      players: ['10'],
-      playerNames: ['Julie Petit'],
-      score: 10,
-    },
-    winner: 'A',
-    duration: 38,
-    menes: [],
-  },
-  {
-    id: '6',
-    date: '2026-01-28T10:30:00',
-    mode: 'Tournoi',
-    format: 'Tête-à-tête',
-    tournamentId: '4',
-    tournamentName: 'Concours Mensuel Bordeaux',
-    tournamentPhase: 'Ronde 2',
-    teamA: {
-      players: ['4'],
-      playerNames: ['Sophie Bernard'],
-      score: 11,
-    },
-    teamB: {
-      players: ['3'],
-      playerNames: ['Pierre Dubois'],
-      score: 13,
-    },
-    winner: 'B',
-    duration: 45,
-    menes: [],
-  },
-  {
-    id: '7',
-    date: '2026-01-28T13:00:00',
-    mode: 'Tournoi',
-    format: 'Tête-à-tête',
-    tournamentId: '4',
-    tournamentName: 'Concours Mensuel Bordeaux',
-    tournamentPhase: 'Ronde 3',
-    teamA: {
-      players: ['4'],
-      playerNames: ['Sophie Bernard'],
-      score: 13,
-    },
-    teamB: {
-      players: ['9'],
-      playerNames: ['Antoine Lambert'],
-      score: 8,
-    },
-    winner: 'A',
-    duration: 35,
-    menes: [],
-  },
-  {
-    id: '8',
-    date: '2026-01-28T15:00:00',
-    mode: 'Tournoi',
-    format: 'Tête-à-tête',
-    tournamentId: '4',
-    tournamentName: 'Concours Mensuel Bordeaux',
-    tournamentPhase: 'Ronde 4',
-    teamA: {
-      players: ['4'],
-      playerNames: ['Sophie Bernard'],
-      score: 13,
-    },
-    teamB: {
-      players: ['8'],
-      playerNames: ['Camille Roux'],
-      score: 5,
-    },
-    winner: 'A',
-    duration: 28,
-    menes: [],
-  },
-  {
-    id: '9',
-    date: '2026-01-28T16:30:00',
-    mode: 'Tournoi',
-    format: 'Tête-à-tête',
-    tournamentId: '4',
-    tournamentName: 'Concours Mensuel Bordeaux',
-    tournamentPhase: 'Ronde 5',
-    teamA: {
-      players: ['4'],
-      playerNames: ['Sophie Bernard'],
-      score: 12,
-    },
-    teamB: {
-      players: ['1'],
-      playerNames: ['Jean-Pierre Martin'],
-      score: 13,
-    },
-    winner: 'B',
-    duration: 52,
-    menes: [],
-    playerActions: [
-      { playerId: '4', playerName: 'Sophie Bernard', team: 'A', actions: { tirs: 8, tirsSuccess: 5, points: 12, pointsSuccess: 8, carreaux: 0 } },
-      { playerId: '1', playerName: 'Jean-Pierre Martin', team: 'B', actions: { tirs: 14, tirsSuccess: 11, points: 6, pointsSuccess: 5, carreaux: 2 } },
-    ],
-  },
+  // SÉRIE 1: 2-0 (2 matchs)
+  { id: 'm1', date: '2026-02-07T10:00:00', mode: 'Entraînement', format: 'Doublette', teamA: { players: ['1', '6'], playerNames: ['Jean-Pierre Martin', 'Emma Leroy'], score: 13 }, teamB: { players: ['2', '9'], playerNames: ['Marie Dupont', 'Antoine Lambert'], score: 8 }, winner: 'A', duration: 42, menes: [], seriesInfo: { seriesId: generateSeriesId(1), matchNumber: 1, winsBeforeThisMatch: { teamA: 0, teamB: 0 }, isFinale: false, seriesComplete: false } },
+  { id: 'm2', date: '2026-02-07T11:00:00', mode: 'Entraînement', format: 'Doublette', teamA: { players: ['1', '6'], playerNames: ['Jean-Pierre Martin', 'Emma Leroy'], score: 13 }, teamB: { players: ['2', '9'], playerNames: ['Marie Dupont', 'Antoine Lambert'], score: 11 }, winner: 'A', duration: 55, menes: [], seriesInfo: { seriesId: generateSeriesId(1), matchNumber: 2, winsBeforeThisMatch: { teamA: 1, teamB: 0 }, isFinale: false, seriesComplete: true, seriesWinner: 'A' } },
+  
+  // SÉRIE 2: 2-1 (3 matchs avec finale)
+  { id: 'm3', date: '2026-02-06T14:00:00', mode: 'Entraînement', format: 'Doublette', teamA: { players: ['3', '13'], playerNames: ['Pierre Dubois', 'Maxime Durand'], score: 13 }, teamB: { players: ['7', '12'], playerNames: ['Thomas Garcia', 'Claire Fontaine'], score: 9 }, winner: 'A', duration: 38, menes: [], seriesInfo: { seriesId: generateSeriesId(2), matchNumber: 1, winsBeforeThisMatch: { teamA: 0, teamB: 0 }, isFinale: false, seriesComplete: false } },
+  { id: 'm4', date: '2026-02-06T15:00:00', mode: 'Entraînement', format: 'Doublette', teamA: { players: ['3', '13'], playerNames: ['Pierre Dubois', 'Maxime Durand'], score: 10 }, teamB: { players: ['7', '12'], playerNames: ['Thomas Garcia', 'Claire Fontaine'], score: 13 }, winner: 'B', duration: 48, menes: [], seriesInfo: { seriesId: generateSeriesId(2), matchNumber: 2, winsBeforeThisMatch: { teamA: 1, teamB: 0 }, isFinale: false, seriesComplete: false } },
+  { id: 'm5', date: '2026-02-06T16:00:00', mode: 'Entraînement', format: 'Doublette', teamA: { players: ['3', '13'], playerNames: ['Pierre Dubois', 'Maxime Durand'], score: 13 }, teamB: { players: ['7', '12'], playerNames: ['Thomas Garcia', 'Claire Fontaine'], score: 12 }, winner: 'A', duration: 62, menes: [], seriesInfo: { seriesId: generateSeriesId(2), matchNumber: 3, winsBeforeThisMatch: { teamA: 1, teamB: 1 }, isFinale: true, seriesComplete: true, seriesWinner: 'A' } },
+
+  // SÉRIE 3: 0-2 (défaite en 2 matchs)
+  { id: 'm6', date: '2026-02-05T10:00:00', mode: 'Entraînement', format: 'Tête-à-tête', teamA: { players: ['1'], playerNames: ['Jean-Pierre Martin'], score: 11 }, teamB: { players: ['11'], playerNames: ['François Mercier'], score: 13 }, winner: 'B', duration: 35, menes: [], seriesInfo: { seriesId: generateSeriesId(3), matchNumber: 1, winsBeforeThisMatch: { teamA: 0, teamB: 0 }, isFinale: false, seriesComplete: false } },
+  { id: 'm7', date: '2026-02-05T10:45:00', mode: 'Entraînement', format: 'Tête-à-tête', teamA: { players: ['1'], playerNames: ['Jean-Pierre Martin'], score: 9 }, teamB: { players: ['11'], playerNames: ['François Mercier'], score: 13 }, winner: 'B', duration: 32, menes: [], seriesInfo: { seriesId: generateSeriesId(3), matchNumber: 2, winsBeforeThisMatch: { teamA: 0, teamB: 1 }, isFinale: false, seriesComplete: true, seriesWinner: 'B' } },
+
+  // SÉRIE 4: 1-2 (défaite en finale)
+  { id: 'm8', date: '2026-02-04T14:00:00', mode: 'Entraînement', format: 'Triplette', teamA: { players: ['1', '6', '17'], playerNames: ['Jean-Pierre Martin', 'Emma Leroy', 'Olivier Girard'], score: 13 }, teamB: { players: ['19', '3', '8'], playerNames: ['Philippe Morel', 'Pierre Dubois', 'Camille Roux'], score: 7 }, winner: 'A', duration: 45, menes: [], seriesInfo: { seriesId: generateSeriesId(4), matchNumber: 1, winsBeforeThisMatch: { teamA: 0, teamB: 0 }, isFinale: false, seriesComplete: false } },
+  { id: 'm9', date: '2026-02-04T15:15:00', mode: 'Entraînement', format: 'Triplette', teamA: { players: ['1', '6', '17'], playerNames: ['Jean-Pierre Martin', 'Emma Leroy', 'Olivier Girard'], score: 11 }, teamB: { players: ['19', '3', '8'], playerNames: ['Philippe Morel', 'Pierre Dubois', 'Camille Roux'], score: 13 }, winner: 'B', duration: 52, menes: [], seriesInfo: { seriesId: generateSeriesId(4), matchNumber: 2, winsBeforeThisMatch: { teamA: 1, teamB: 0 }, isFinale: false, seriesComplete: false } },
+  { id: 'm10', date: '2026-02-04T16:30:00', mode: 'Entraînement', format: 'Triplette', teamA: { players: ['1', '6', '17'], playerNames: ['Jean-Pierre Martin', 'Emma Leroy', 'Olivier Girard'], score: 10 }, teamB: { players: ['19', '3', '8'], playerNames: ['Philippe Morel', 'Pierre Dubois', 'Camille Roux'], score: 13 }, winner: 'B', duration: 58, menes: [], seriesInfo: { seriesId: generateSeriesId(4), matchNumber: 3, winsBeforeThisMatch: { teamA: 1, teamB: 1 }, isFinale: true, seriesComplete: true, seriesWinner: 'B' } },
+
+  // Matchs standalone (sans série)
+  { id: 'm11', date: '2026-02-03T09:00:00', mode: 'Entraînement', format: 'Doublette', teamA: { players: ['5', '15'], playerNames: ['Lucas Moreau', 'Nicolas Blanc'], score: 13 }, teamB: { players: ['4', '20'], playerNames: ['Sophie Bernard', 'Aurélie Simon'], score: 6 }, winner: 'A', duration: 35, menes: [] },
+  { id: 'm12', date: '2026-02-02T16:00:00', mode: 'Entraînement', format: 'Tête-à-tête', teamA: { players: ['7'], playerNames: ['Thomas Garcia'], score: 13 }, teamB: { players: ['5'], playerNames: ['Lucas Moreau'], score: 11 }, winner: 'A', duration: 40, menes: [] },
+  { id: 'm13', date: '2026-02-01T14:00:00', mode: 'Entraînement', format: 'Doublette', teamA: { players: ['10', '4'], playerNames: ['Julie Petit', 'Sophie Bernard'], score: 9 }, teamB: { players: ['6', '8'], playerNames: ['Emma Leroy', 'Camille Roux'], score: 13 }, winner: 'B', duration: 52, menes: [] },
+  
+  // SÉRIE 5: 2-0
+  { id: 'm14', date: '2026-01-31T10:00:00', mode: 'Entraînement', format: 'Doublette', teamA: { players: ['11', '1'], playerNames: ['François Mercier', 'Jean-Pierre Martin'], score: 13 }, teamB: { players: ['14', '20'], playerNames: ['Isabelle Martin', 'Aurélie Simon'], score: 5 }, winner: 'A', duration: 28, menes: [], seriesInfo: { seriesId: generateSeriesId(5), matchNumber: 1, winsBeforeThisMatch: { teamA: 0, teamB: 0 }, isFinale: false, seriesComplete: false } },
+  { id: 'm15', date: '2026-01-31T10:40:00', mode: 'Entraînement', format: 'Doublette', teamA: { players: ['11', '1'], playerNames: ['François Mercier', 'Jean-Pierre Martin'], score: 13 }, teamB: { players: ['14', '20'], playerNames: ['Isabelle Martin', 'Aurélie Simon'], score: 8 }, winner: 'A', duration: 38, menes: [], seriesInfo: { seriesId: generateSeriesId(5), matchNumber: 2, winsBeforeThisMatch: { teamA: 1, teamB: 0 }, isFinale: false, seriesComplete: true, seriesWinner: 'A' } },
+
+  // Matchs de tournoi
+  { id: 'm16', date: '2026-02-01T09:00:00', mode: 'Tournoi', format: 'Triplette', tournamentId: 'tour2', tournamentName: 'Championnat Régional PACA', tournamentPhase: 'Poules', teamA: { players: ['1', '6', '11'], playerNames: ['Jean-Pierre Martin', 'Emma Leroy', 'François Mercier'], score: 13 }, teamB: { players: ['5', '4', '8'], playerNames: ['Lucas Moreau', 'Sophie Bernard', 'Camille Roux'], score: 8 }, winner: 'A', duration: 48, menes: [] },
+  { id: 'm17', date: '2026-02-01T11:00:00', mode: 'Tournoi', format: 'Triplette', tournamentId: 'tour2', tournamentName: 'Championnat Régional PACA', tournamentPhase: 'Poules', teamA: { players: ['1', '6', '11'], playerNames: ['Jean-Pierre Martin', 'Emma Leroy', 'François Mercier'], score: 13 }, teamB: { players: ['2', '7', '12'], playerNames: ['Marie Dupont', 'Thomas Garcia', 'Claire Fontaine'], score: 11 }, winner: 'A', duration: 55, menes: [] },
+  { id: 'm18', date: '2026-02-01T14:00:00', mode: 'Tournoi', format: 'Triplette', tournamentId: 'tour2', tournamentName: 'Championnat Régional PACA', tournamentPhase: '1/8 finale', tournamentBracket: 'A', teamA: { players: ['1', '6', '11'], playerNames: ['Jean-Pierre Martin', 'Emma Leroy', 'François Mercier'], score: 13 }, teamB: { players: ['10', '13', '18'], playerNames: ['Julie Petit', 'Maxime Durand', 'Valérie Rousseau'], score: 7 }, winner: 'A', duration: 38, menes: [] },
+  { id: 'm19', date: '2026-02-01T16:00:00', mode: 'Tournoi', format: 'Triplette', tournamentId: 'tour2', tournamentName: 'Championnat Régional PACA', tournamentPhase: 'Quart de finale', tournamentBracket: 'A', teamA: { players: ['1', '6', '11'], playerNames: ['Jean-Pierre Martin', 'Emma Leroy', 'François Mercier'], score: 13 }, teamB: { players: ['7', '2', '9'], playerNames: ['Thomas Garcia', 'Marie Dupont', 'Antoine Lambert'], score: 12 }, winner: 'A', duration: 65, menes: [] },
+  { id: 'm20', date: '2026-02-02T10:00:00', mode: 'Tournoi', format: 'Triplette', tournamentId: 'tour2', tournamentName: 'Championnat Régional PACA', tournamentPhase: 'Demi-finale', teamA: { players: ['1', '6', '11'], playerNames: ['Jean-Pierre Martin', 'Emma Leroy', 'François Mercier'], score: 13 }, teamB: { players: ['19', '3', '15'], playerNames: ['Philippe Morel', 'Pierre Dubois', 'Nicolas Blanc'], score: 10 }, winner: 'A', duration: 58, menes: [] },
+  { id: 'm21', date: '2026-02-02T14:00:00', mode: 'Tournoi', format: 'Triplette', tournamentId: 'tour2', tournamentName: 'Championnat Régional PACA', tournamentPhase: 'Finale', teamA: { players: ['1', '6', '11'], playerNames: ['Jean-Pierre Martin', 'Emma Leroy', 'François Mercier'], score: 12 }, teamB: { players: ['7', '12', '5'], playerNames: ['Thomas Garcia', 'Claire Fontaine', 'Lucas Moreau'], score: 13 }, winner: 'B', duration: 72, menes: [] },
+
+  // Plus de matchs standalone
+  { id: 'm22', date: '2026-01-30T15:00:00', mode: 'Entraînement', format: 'Doublette', teamA: { players: ['2', '12'], playerNames: ['Marie Dupont', 'Claire Fontaine'], score: 13 }, teamB: { players: ['16', '9'], playerNames: ['Sandrine Lefebvre', 'Antoine Lambert'], score: 10 }, winner: 'A', duration: 45, menes: [] },
+  { id: 'm23', date: '2026-01-29T10:00:00', mode: 'Entraînement', format: 'Tête-à-tête', teamA: { players: ['3'], playerNames: ['Pierre Dubois'], score: 13 }, teamB: { players: ['19'], playerNames: ['Philippe Morel'], score: 11 }, winner: 'A', duration: 38, menes: [] },
+  { id: 'm24', date: '2026-01-28T14:00:00', mode: 'Entraînement', format: 'Triplette', teamA: { players: ['1', '6', '17'], playerNames: ['Jean-Pierre Martin', 'Emma Leroy', 'Olivier Girard'], score: 13 }, teamB: { players: ['5', '15', '4'], playerNames: ['Lucas Moreau', 'Nicolas Blanc', 'Sophie Bernard'], score: 9 }, winner: 'A', duration: 50, menes: [] },
+
+  // Tournoi Bordeaux
+  { id: 'm25', date: '2026-01-28T09:00:00', mode: 'Tournoi', format: 'Tête-à-tête', tournamentId: 'tour4', tournamentName: 'Concours Mensuel Bordeaux', tournamentPhase: 'Ronde 1', teamA: { players: ['1'], playerNames: ['Jean-Pierre Martin'], score: 13 }, teamB: { players: ['10'], playerNames: ['Julie Petit'], score: 10 }, winner: 'A', duration: 38, menes: [] },
+  { id: 'm26', date: '2026-01-28T10:30:00', mode: 'Tournoi', format: 'Tête-à-tête', tournamentId: 'tour4', tournamentName: 'Concours Mensuel Bordeaux', tournamentPhase: 'Ronde 2', teamA: { players: ['1'], playerNames: ['Jean-Pierre Martin'], score: 13 }, teamB: { players: ['3'], playerNames: ['Pierre Dubois'], score: 11 }, winner: 'A', duration: 45, menes: [] },
+  { id: 'm27', date: '2026-01-28T13:00:00', mode: 'Tournoi', format: 'Tête-à-tête', tournamentId: 'tour4', tournamentName: 'Concours Mensuel Bordeaux', tournamentPhase: 'Ronde 3', teamA: { players: ['1'], playerNames: ['Jean-Pierre Martin'], score: 13 }, teamB: { players: ['9'], playerNames: ['Antoine Lambert'], score: 8 }, winner: 'A', duration: 35, menes: [] },
+  { id: 'm28', date: '2026-01-28T15:00:00', mode: 'Tournoi', format: 'Tête-à-tête', tournamentId: 'tour4', tournamentName: 'Concours Mensuel Bordeaux', tournamentPhase: 'Ronde 4', teamA: { players: ['1'], playerNames: ['Jean-Pierre Martin'], score: 13 }, teamB: { players: ['8'], playerNames: ['Camille Roux'], score: 5 }, winner: 'A', duration: 28, menes: [] },
+  { id: 'm29', date: '2026-01-28T16:30:00', mode: 'Tournoi', format: 'Tête-à-tête', tournamentId: 'tour4', tournamentName: 'Concours Mensuel Bordeaux', tournamentPhase: 'Ronde 5', teamA: { players: ['1'], playerNames: ['Jean-Pierre Martin'], score: 13 }, teamB: { players: ['11'], playerNames: ['François Mercier'], score: 10 }, winner: 'A', duration: 42, menes: [] },
+
+  // SÉRIE 6: 2-1 
+  { id: 'm30', date: '2026-01-27T14:00:00', mode: 'Entraînement', format: 'Doublette', teamA: { players: ['5', '15'], playerNames: ['Lucas Moreau', 'Nicolas Blanc'], score: 8 }, teamB: { players: ['7', '12'], playerNames: ['Thomas Garcia', 'Claire Fontaine'], score: 13 }, winner: 'B', duration: 42, menes: [], seriesInfo: { seriesId: generateSeriesId(6), matchNumber: 1, winsBeforeThisMatch: { teamA: 0, teamB: 0 }, isFinale: false, seriesComplete: false } },
+  { id: 'm31', date: '2026-01-27T15:00:00', mode: 'Entraînement', format: 'Doublette', teamA: { players: ['5', '15'], playerNames: ['Lucas Moreau', 'Nicolas Blanc'], score: 13 }, teamB: { players: ['7', '12'], playerNames: ['Thomas Garcia', 'Claire Fontaine'], score: 11 }, winner: 'A', duration: 55, menes: [], seriesInfo: { seriesId: generateSeriesId(6), matchNumber: 2, winsBeforeThisMatch: { teamA: 0, teamB: 1 }, isFinale: false, seriesComplete: false } },
+  { id: 'm32', date: '2026-01-27T16:15:00', mode: 'Entraînement', format: 'Doublette', teamA: { players: ['5', '15'], playerNames: ['Lucas Moreau', 'Nicolas Blanc'], score: 13 }, teamB: { players: ['7', '12'], playerNames: ['Thomas Garcia', 'Claire Fontaine'], score: 9 }, winner: 'A', duration: 48, menes: [], seriesInfo: { seriesId: generateSeriesId(6), matchNumber: 3, winsBeforeThisMatch: { teamA: 1, teamB: 1 }, isFinale: true, seriesComplete: true, seriesWinner: 'A' } },
+
+  // Plus de matchs
+  { id: 'm33', date: '2026-01-26T10:00:00', mode: 'Entraînement', format: 'Tête-à-tête', teamA: { players: ['6'], playerNames: ['Emma Leroy'], score: 13 }, teamB: { players: ['16'], playerNames: ['Sandrine Lefebvre'], score: 8 }, winner: 'A', duration: 32, menes: [] },
+  { id: 'm34', date: '2026-01-25T14:00:00', mode: 'Entraînement', format: 'Doublette', teamA: { players: ['19', '3'], playerNames: ['Philippe Morel', 'Pierre Dubois'], score: 13 }, teamB: { players: ['11', '1'], playerNames: ['François Mercier', 'Jean-Pierre Martin'], score: 12 }, winner: 'A', duration: 58, menes: [] },
+  { id: 'm35', date: '2026-01-24T16:00:00', mode: 'Entraînement', format: 'Triplette', teamA: { players: ['2', '7', '12'], playerNames: ['Marie Dupont', 'Thomas Garcia', 'Claire Fontaine'], score: 13 }, teamB: { players: ['10', '4', '20'], playerNames: ['Julie Petit', 'Sophie Bernard', 'Aurélie Simon'], score: 11 }, winner: 'A', duration: 52, menes: [] },
+
+  // Tournoi Lille
+  { id: 'm36', date: '2026-01-15T09:00:00', mode: 'Tournoi', format: 'Doublette', tournamentId: 'tour9', tournamentName: 'Indoor Winter Cup Lille', tournamentPhase: 'Poules', teamA: { players: ['1', '6'], playerNames: ['Jean-Pierre Martin', 'Emma Leroy'], score: 13 }, teamB: { players: ['9', '16'], playerNames: ['Antoine Lambert', 'Sandrine Lefebvre'], score: 7 }, winner: 'A', duration: 35, menes: [] },
+  { id: 'm37', date: '2026-01-15T11:00:00', mode: 'Tournoi', format: 'Doublette', tournamentId: 'tour9', tournamentName: 'Indoor Winter Cup Lille', tournamentPhase: 'Poules', teamA: { players: ['1', '6'], playerNames: ['Jean-Pierre Martin', 'Emma Leroy'], score: 13 }, teamB: { players: ['17', '13'], playerNames: ['Olivier Girard', 'Maxime Durand'], score: 10 }, winner: 'A', duration: 42, menes: [] },
+  { id: 'm38', date: '2026-01-15T14:00:00', mode: 'Tournoi', format: 'Doublette', tournamentId: 'tour9', tournamentName: 'Indoor Winter Cup Lille', tournamentPhase: 'Demi-finale', teamA: { players: ['1', '6'], playerNames: ['Jean-Pierre Martin', 'Emma Leroy'], score: 13 }, teamB: { players: ['5', '15'], playerNames: ['Lucas Moreau', 'Nicolas Blanc'], score: 11 }, winner: 'A', duration: 50, menes: [] },
+  { id: 'm39', date: '2026-01-15T16:00:00', mode: 'Tournoi', format: 'Doublette', tournamentId: 'tour9', tournamentName: 'Indoor Winter Cup Lille', tournamentPhase: 'Finale', teamA: { players: ['1', '6'], playerNames: ['Jean-Pierre Martin', 'Emma Leroy'], score: 13 }, teamB: { players: ['7', '12'], playerNames: ['Thomas Garcia', 'Claire Fontaine'], score: 9 }, winner: 'A', duration: 45, menes: [] },
+
+  // Encore des matchs standalone
+  { id: 'm40', date: '2026-01-20T10:00:00', mode: 'Entraînement', format: 'Doublette', teamA: { players: ['1', '17'], playerNames: ['Jean-Pierre Martin', 'Olivier Girard'], score: 13 }, teamB: { players: ['8', '18'], playerNames: ['Camille Roux', 'Valérie Rousseau'], score: 4 }, winner: 'A', duration: 25, menes: [] },
+  { id: 'm41', date: '2026-01-19T15:00:00', mode: 'Entraînement', format: 'Tête-à-tête', teamA: { players: ['15'], playerNames: ['Nicolas Blanc'], score: 13 }, teamB: { players: ['2'], playerNames: ['Marie Dupont'], score: 10 }, winner: 'A', duration: 38, menes: [] },
+  { id: 'm42', date: '2026-01-18T14:00:00', mode: 'Entraînement', format: 'Doublette', teamA: { players: ['3', '13'], playerNames: ['Pierre Dubois', 'Maxime Durand'], score: 11 }, teamB: { players: ['1', '6'], playerNames: ['Jean-Pierre Martin', 'Emma Leroy'], score: 13 }, winner: 'B', duration: 48, menes: [] },
+  { id: 'm43', date: '2026-01-17T10:00:00', mode: 'Entraînement', format: 'Triplette', teamA: { players: ['7', '2', '9'], playerNames: ['Thomas Garcia', 'Marie Dupont', 'Antoine Lambert'], score: 13 }, teamB: { players: ['5', '4', '20'], playerNames: ['Lucas Moreau', 'Sophie Bernard', 'Aurélie Simon'], score: 8 }, winner: 'A', duration: 45, menes: [] },
+
+  // SÉRIE 7: 2-0
+  { id: 'm44', date: '2026-01-16T14:00:00', mode: 'Entraînement', format: 'Tête-à-tête', teamA: { players: ['19'], playerNames: ['Philippe Morel'], score: 13 }, teamB: { players: ['1'], playerNames: ['Jean-Pierre Martin'], score: 10 }, winner: 'A', duration: 35, menes: [], seriesInfo: { seriesId: generateSeriesId(7), matchNumber: 1, winsBeforeThisMatch: { teamA: 0, teamB: 0 }, isFinale: false, seriesComplete: false } },
+  { id: 'm45', date: '2026-01-16T14:45:00', mode: 'Entraînement', format: 'Tête-à-tête', teamA: { players: ['19'], playerNames: ['Philippe Morel'], score: 13 }, teamB: { players: ['1'], playerNames: ['Jean-Pierre Martin'], score: 11 }, winner: 'A', duration: 40, menes: [], seriesInfo: { seriesId: generateSeriesId(7), matchNumber: 2, winsBeforeThisMatch: { teamA: 1, teamB: 0 }, isFinale: false, seriesComplete: true, seriesWinner: 'A' } },
+
+  // Derniers matchs
+  { id: 'm46', date: '2026-01-14T10:00:00', mode: 'Entraînement', format: 'Doublette', teamA: { players: ['12', '2'], playerNames: ['Claire Fontaine', 'Marie Dupont'], score: 13 }, teamB: { players: ['14', '4'], playerNames: ['Isabelle Martin', 'Sophie Bernard'], score: 9 }, winner: 'A', duration: 42, menes: [] },
+  { id: 'm47', date: '2026-01-13T15:00:00', mode: 'Entraînement', format: 'Tête-à-tête', teamA: { players: ['11'], playerNames: ['François Mercier'], score: 13 }, teamB: { players: ['7'], playerNames: ['Thomas Garcia'], score: 12 }, winner: 'A', duration: 45, menes: [] },
+  { id: 'm48', date: '2026-01-12T14:00:00', mode: 'Entraînement', format: 'Doublette', teamA: { players: ['1', '11'], playerNames: ['Jean-Pierre Martin', 'François Mercier'], score: 13 }, teamB: { players: ['19', '3'], playerNames: ['Philippe Morel', 'Pierre Dubois'], score: 11 }, winner: 'A', duration: 52, menes: [] },
+  { id: 'm49', date: '2026-01-11T10:00:00', mode: 'Entraînement', format: 'Triplette', teamA: { players: ['5', '15', '10'], playerNames: ['Lucas Moreau', 'Nicolas Blanc', 'Julie Petit'], score: 13 }, teamB: { players: ['1', '6', '17'], playerNames: ['Jean-Pierre Martin', 'Emma Leroy', 'Olivier Girard'], score: 10 }, winner: 'A', duration: 48, menes: [] },
+  { id: 'm50', date: '2026-01-10T14:00:00', mode: 'Entraînement', format: 'Doublette', teamA: { players: ['7', '12'], playerNames: ['Thomas Garcia', 'Claire Fontaine'], score: 13 }, teamB: { players: ['2', '9'], playerNames: ['Marie Dupont', 'Antoine Lambert'], score: 8 }, winner: 'A', duration: 38, menes: [] },
 ];
 
-// Current user stats (for dashboard)
-// Mock Challenges Data
+// ============================================
+// 10 MOCK CHALLENGES
+// ============================================
 export const mockChallenges: Challenge[] = [
-  {
-    id: 'c1',
-    type: '10_tirs',
-    mode: 'solo',
-    date: '2026-02-06T10:30:00',
-    playerId: '1',
-    playerName: 'Jean-Pierre Martin',
-    shots: [
-      { number: 1, success: true, timestamp: '2026-02-06T10:30:05' },
-      { number: 2, success: true, carreau: true, timestamp: '2026-02-06T10:30:25' },
-      { number: 3, success: false, timestamp: '2026-02-06T10:30:45' },
-      { number: 4, success: true, timestamp: '2026-02-06T10:31:05' },
-      { number: 5, success: true, timestamp: '2026-02-06T10:31:25' },
-      { number: 6, success: true, timestamp: '2026-02-06T10:31:45' },
-      { number: 7, success: false, timestamp: '2026-02-06T10:32:05' },
-      { number: 8, success: true, timestamp: '2026-02-06T10:32:25' },
-      { number: 9, success: true, timestamp: '2026-02-06T10:32:45' },
-      { number: 10, success: true, timestamp: '2026-02-06T10:33:05' },
-    ],
-    successCount: 8,
-    totalShots: 10,
-    carreauCount: 1,
-    successRate: 80,
-    duration: 185,
-  },
-  {
-    id: 'c2',
-    type: '10_tirs_sautee',
-    mode: 'solo',
-    date: '2026-02-05T15:00:00',
-    playerId: '1',
-    playerName: 'Jean-Pierre Martin',
-    shots: [
-      { number: 1, success: true, timestamp: '2026-02-05T15:00:05' },
-      { number: 2, success: false, timestamp: '2026-02-05T15:00:25' },
-      { number: 3, success: true, timestamp: '2026-02-05T15:00:45' },
-      { number: 4, success: false, timestamp: '2026-02-05T15:01:05' },
-      { number: 5, success: true, timestamp: '2026-02-05T15:01:25' },
-      { number: 6, success: true, timestamp: '2026-02-05T15:01:45' },
-      { number: 7, success: false, timestamp: '2026-02-05T15:02:05' },
-      { number: 8, success: true, timestamp: '2026-02-05T15:02:25' },
-      { number: 9, success: false, timestamp: '2026-02-05T15:02:45' },
-      { number: 10, success: true, timestamp: '2026-02-05T15:03:05' },
-    ],
-    successCount: 6,
-    totalShots: 10,
-    carreauCount: 0,
-    successRate: 60,
-    duration: 180,
-  },
-  {
-    id: 'c3',
-    type: 'precision',
-    mode: 'solo',
-    date: '2026-02-04T11:00:00',
-    playerId: '1',
-    playerName: 'Jean-Pierre Martin',
-    precisionShots: [
-      { atelier: 'boule_seule', distance: 6, points: 5, timeUsed: 18, timestamp: '2026-02-04T11:00:30' },
-      { atelier: 'boule_seule', distance: 7, points: 3, timeUsed: 22, timestamp: '2026-02-04T11:01:00' },
-      { atelier: 'boule_seule', distance: 8, points: 3, timeUsed: 25, timestamp: '2026-02-04T11:01:30' },
-      { atelier: 'boule_seule', distance: 9, points: 1, timeUsed: 28, timestamp: '2026-02-04T11:02:00' },
-      { atelier: 'derriere_but', distance: 6, points: 3, timeUsed: 20, timestamp: '2026-02-04T11:02:30' },
-      { atelier: 'derriere_but', distance: 7, points: 3, timeUsed: 23, timestamp: '2026-02-04T11:03:00' },
-      { atelier: 'derriere_but', distance: 8, points: 1, timeUsed: 26, timestamp: '2026-02-04T11:03:30' },
-      { atelier: 'derriere_but', distance: 9, points: 0, timeUsed: 30, timestamp: '2026-02-04T11:04:00' },
-      { atelier: 'entre_2_boules', distance: 6, points: 5, timeUsed: 19, timestamp: '2026-02-04T11:04:30' },
-      { atelier: 'entre_2_boules', distance: 7, points: 3, timeUsed: 21, timestamp: '2026-02-04T11:05:00' },
-      { atelier: 'entre_2_boules', distance: 8, points: 1, timeUsed: 24, timestamp: '2026-02-04T11:05:30' },
-      { atelier: 'entre_2_boules', distance: 9, points: 0, timeUsed: 30, timestamp: '2026-02-04T11:06:00' },
-      { atelier: 'sautee', distance: 6, points: 3, timeUsed: 22, timestamp: '2026-02-04T11:06:30' },
-      { atelier: 'sautee', distance: 7, points: 1, timeUsed: 25, timestamp: '2026-02-04T11:07:00' },
-      { atelier: 'sautee', distance: 8, points: 1, timeUsed: 27, timestamp: '2026-02-04T11:07:30' },
-      { atelier: 'sautee', distance: 9, points: 0, timeUsed: 30, timestamp: '2026-02-04T11:08:00' },
-      { atelier: 'tir_but', distance: 6, points: 5, timeUsed: 15, timestamp: '2026-02-04T11:08:30' },
-      { atelier: 'tir_but', distance: 7, points: 3, timeUsed: 18, timestamp: '2026-02-04T11:09:00' },
-      { atelier: 'tir_but', distance: 8, points: 3, timeUsed: 22, timestamp: '2026-02-04T11:09:30' },
-      { atelier: 'tir_but', distance: 9, points: 0, timeUsed: 30, timestamp: '2026-02-04T11:10:00' },
-    ],
-    totalPoints: 44,
-    maxPoints: 100,
-    atelierScores: {
-      'boule_seule': 12,
-      'derriere_but': 7,
-      'entre_2_boules': 9,
-      'sautee': 5,
-      'tir_but': 11,
-    },
-    duration: 600,
-  },
-  {
-    id: 'c4',
-    type: '10_tirs',
-    mode: '1v1',
-    date: '2026-02-03T09:00:00',
-    playerId: '1',
-    playerName: 'Jean-Pierre Martin',
-    opponentId: '5',
-    opponentName: 'Lucas Moreau',
-    opponentResult: {
-      playerId: '5',
-      playerName: 'Lucas Moreau',
-      shots: [
-        { number: 1, success: true, timestamp: '2026-02-03T09:00:05' },
-        { number: 2, success: false, timestamp: '2026-02-03T09:00:25' },
-        { number: 3, success: true, timestamp: '2026-02-03T09:00:45' },
-        { number: 4, success: true, timestamp: '2026-02-03T09:01:05' },
-        { number: 5, success: false, timestamp: '2026-02-03T09:01:25' },
-        { number: 6, success: true, timestamp: '2026-02-03T09:01:45' },
-        { number: 7, success: false, timestamp: '2026-02-03T09:02:05' },
-        { number: 8, success: true, timestamp: '2026-02-03T09:02:25' },
-        { number: 9, success: false, timestamp: '2026-02-03T09:02:45' },
-        { number: 10, success: true, timestamp: '2026-02-03T09:03:05' },
-      ],
-      successCount: 6,
-      totalShots: 10,
-      carreauCount: 0,
-      successRate: 60,
-    },
-    winner: 'player',
-    shots: [
-      { number: 1, success: true, timestamp: '2026-02-03T09:00:05' },
-      { number: 2, success: true, timestamp: '2026-02-03T09:00:25' },
-      { number: 3, success: true, carreau: true, timestamp: '2026-02-03T09:00:45' },
-      { number: 4, success: true, timestamp: '2026-02-03T09:01:05' },
-      { number: 5, success: false, timestamp: '2026-02-03T09:01:25' },
-      { number: 6, success: true, timestamp: '2026-02-03T09:01:45' },
-      { number: 7, success: true, carreau: true, timestamp: '2026-02-03T09:02:05' },
-      { number: 8, success: true, timestamp: '2026-02-03T09:02:25' },
-      { number: 9, success: true, timestamp: '2026-02-03T09:02:45' },
-      { number: 10, success: false, timestamp: '2026-02-03T09:03:05' },
-    ],
-    successCount: 8,
-    totalShots: 10,
-    carreauCount: 2,
-    successRate: 80,
-    duration: 180,
-  },
+  { id: 'c1', type: '10_tirs', mode: 'solo', date: '2026-02-06T10:30:00', playerId: '1', playerName: 'Jean-Pierre Martin', shots: Array.from({ length: 10 }, (_, i) => ({ number: i + 1, success: i < 8, carreau: i === 1 || i === 6, timestamp: new Date().toISOString() })), successCount: 8, totalShots: 10, carreauCount: 2, successRate: 80, duration: 185 },
+  { id: 'c2', type: '10_tirs_sautee', mode: 'solo', date: '2026-02-05T15:00:00', playerId: '1', playerName: 'Jean-Pierre Martin', shots: Array.from({ length: 10 }, (_, i) => ({ number: i + 1, success: i % 2 === 0, timestamp: new Date().toISOString() })), successCount: 5, totalShots: 10, carreauCount: 0, successRate: 50, duration: 180 },
+  { id: 'c3', type: 'precision', mode: 'solo', date: '2026-02-04T11:00:00', playerId: '1', playerName: 'Jean-Pierre Martin', precisionShots: [
+    { atelier: 'boule_seule', distance: 6, points: 5, timeUsed: 18, timestamp: new Date().toISOString() },
+    { atelier: 'boule_seule', distance: 7, points: 3, timeUsed: 22, timestamp: new Date().toISOString() },
+    { atelier: 'derriere_but', distance: 6, points: 3, timeUsed: 20, timestamp: new Date().toISOString() },
+    { atelier: 'derriere_but', distance: 7, points: 1, timeUsed: 25, timestamp: new Date().toISOString() },
+  ], totalPoints: 12, maxPoints: 20, duration: 300 },
+  { id: 'c4', type: '10_tirs', mode: '1v1', date: '2026-02-03T09:00:00', playerId: '1', playerName: 'Jean-Pierre Martin', opponentId: '5', opponentName: 'Lucas Moreau', winner: 'player', shots: Array.from({ length: 10 }, (_, i) => ({ number: i + 1, success: i < 7, timestamp: new Date().toISOString() })), successCount: 7, totalShots: 10, carreauCount: 1, successRate: 70, opponentResult: { playerId: '5', playerName: 'Lucas Moreau', successCount: 5, totalShots: 10, successRate: 50 }, duration: 200 },
+  { id: 'c5', type: '10_tirs', mode: '1v1', date: '2026-02-02T14:00:00', playerId: '1', playerName: 'Jean-Pierre Martin', opponentId: '7', opponentName: 'Thomas Garcia', winner: 'opponent', shots: Array.from({ length: 10 }, (_, i) => ({ number: i + 1, success: i < 6, timestamp: new Date().toISOString() })), successCount: 6, totalShots: 10, carreauCount: 0, successRate: 60, opponentResult: { playerId: '7', playerName: 'Thomas Garcia', successCount: 9, totalShots: 10, successRate: 90 }, duration: 180 },
+  { id: 'c6', type: '10_tirs_sautee', mode: '1v1', date: '2026-02-01T10:00:00', playerId: '1', playerName: 'Jean-Pierre Martin', opponentId: '11', opponentName: 'François Mercier', winner: 'draw', shots: Array.from({ length: 10 }, (_, i) => ({ number: i + 1, success: i < 6, timestamp: new Date().toISOString() })), successCount: 6, totalShots: 10, carreauCount: 0, successRate: 60, opponentResult: { playerId: '11', playerName: 'François Mercier', successCount: 6, totalShots: 10, successRate: 60 }, duration: 190 },
+  { id: 'c7', type: 'precision', mode: '1v1', date: '2026-01-30T15:00:00', playerId: '1', playerName: 'Jean-Pierre Martin', opponentId: '19', opponentName: 'Philippe Morel', winner: 'opponent', precisionShots: [
+    { atelier: 'boule_seule', distance: 6, points: 3, timeUsed: 20, timestamp: new Date().toISOString() },
+    { atelier: 'entre_2_boules', distance: 7, points: 1, timeUsed: 25, timestamp: new Date().toISOString() },
+  ], totalPoints: 4, maxPoints: 10, opponentResult: { playerId: '19', playerName: 'Philippe Morel', totalPoints: 8 }, duration: 250 },
+  { id: 'c8', type: '10_tirs', mode: 'solo', date: '2026-01-28T09:00:00', playerId: '1', playerName: 'Jean-Pierre Martin', shots: Array.from({ length: 10 }, (_, i) => ({ number: i + 1, success: i < 9, carreau: i === 2 || i === 5 || i === 8, timestamp: new Date().toISOString() })), successCount: 9, totalShots: 10, carreauCount: 3, successRate: 90, duration: 175 },
+  { id: 'c9', type: '10_tirs_sautee', mode: 'solo', date: '2026-01-25T14:00:00', playerId: '1', playerName: 'Jean-Pierre Martin', shots: Array.from({ length: 10 }, (_, i) => ({ number: i + 1, success: i < 7, timestamp: new Date().toISOString() })), successCount: 7, totalShots: 10, carreauCount: 1, successRate: 70, duration: 195 },
+  { id: 'c10', type: 'precision', mode: 'solo', date: '2026-01-20T11:00:00', playerId: '1', playerName: 'Jean-Pierre Martin', precisionShots: [
+    { atelier: 'tir_but', distance: 6, points: 5, timeUsed: 15, timestamp: new Date().toISOString() },
+    { atelier: 'tir_but', distance: 7, points: 3, timeUsed: 18, timestamp: new Date().toISOString() },
+    { atelier: 'sautee', distance: 6, points: 3, timeUsed: 22, timestamp: new Date().toISOString() },
+    { atelier: 'sautee', distance: 7, points: 1, timeUsed: 25, timestamp: new Date().toISOString() },
+  ], totalPoints: 12, maxPoints: 20, atelierScores: { 'tir_but': 8, 'sautee': 4 }, duration: 280 },
 ];
 
+// ============================================
+// CURRENT USER STATS
+// ============================================
 export const currentUserStats = {
   playerId: '1',
   playerName: 'Jean-Pierre Martin',
