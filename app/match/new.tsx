@@ -663,7 +663,13 @@ export default function NewMatchScreen() {
     setMenes(prev => prev.slice(0, -1));
   };
 
-  const handleSaveMatch = () => {
+  // Save match with optional series context for revanche
+  const handleSaveMatch = (overrideSeriesContext?: {
+    seriesId: string;
+    matchNumber: number;
+    winsBeforeThisMatch: { teamA: number; teamB: number };
+    isFinale: boolean;
+  }) => {
     if (teamAScore === 0 && teamBScore === 0) {
       Alert.alert('Erreur', 'Veuillez entrer un score valide');
       return;
@@ -706,27 +712,49 @@ export default function NewMatchScreen() {
     }));
     
     // Calculate series info for training matches
-    // Series logic:
-    // - First match: no seriesInfo initially, but generates seriesId if user clicks "Revanche"
-    // - Second match: if revanche, has seriesInfo with matchNumber=2
-    // - Third match (Finale): if tied 1-1, has seriesInfo with matchNumber=3 and isFinale=true
-    const newWinsA = seriesWinsA + (winner === 'A' ? 1 : 0);
-    const newWinsB = seriesWinsB + (winner === 'A' ? 0 : 1);
-    const isSeriesComplete = newWinsA >= 2 || newWinsB >= 2;
+    // Use overrideSeriesContext if provided (for revanche from first match)
+    // Otherwise use existing series context from navigation params
+    let seriesInfoData: {
+      seriesId: string;
+      matchNumber: number;
+      winsBeforeThisMatch: { teamA: number; teamB: number };
+      isFinale: boolean;
+      seriesComplete: boolean;
+      seriesWinner?: 'A' | 'B';
+    } | undefined = undefined;
     
-    // Only include seriesInfo if this match is part of a series (has seriesId)
-    // The first match doesn't have seriesInfo - it only becomes part of a series 
-    // when the user clicks "Revanche" after the match
-    const shouldIncludeSeriesInfo = !isTournamentMode && seriesId;
-    
-    const seriesInfoData = shouldIncludeSeriesInfo ? {
-      seriesId: seriesId,
-      matchNumber: currentMatchNumber,
-      winsBeforeThisMatch: { teamA: seriesWinsA, teamB: seriesWinsB },
-      isFinale: isFinale,
-      seriesComplete: isSeriesComplete,
-      seriesWinner: isSeriesComplete ? (newWinsA >= 2 ? 'A' : 'B') as 'A' | 'B' : undefined,
-    } : undefined;
+    if (!isTournamentMode) {
+      if (overrideSeriesContext) {
+        // First match becoming part of a series (user clicked Revanche)
+        const newWinsA = overrideSeriesContext.winsBeforeThisMatch.teamA + (winner === 'A' ? 1 : 0);
+        const newWinsB = overrideSeriesContext.winsBeforeThisMatch.teamB + (winner === 'A' ? 0 : 1);
+        const isSeriesComplete = newWinsA >= 2 || newWinsB >= 2;
+        
+        seriesInfoData = {
+          seriesId: overrideSeriesContext.seriesId,
+          matchNumber: overrideSeriesContext.matchNumber,
+          winsBeforeThisMatch: overrideSeriesContext.winsBeforeThisMatch,
+          isFinale: overrideSeriesContext.isFinale,
+          seriesComplete: isSeriesComplete,
+          seriesWinner: isSeriesComplete ? (newWinsA >= 2 ? 'A' : 'B') : undefined,
+        };
+      } else if (seriesId) {
+        // Match is already part of a series (came from navigation with seriesId)
+        const newWinsA = seriesWinsA + (winner === 'A' ? 1 : 0);
+        const newWinsB = seriesWinsB + (winner === 'A' ? 0 : 1);
+        const isSeriesComplete = newWinsA >= 2 || newWinsB >= 2;
+        
+        seriesInfoData = {
+          seriesId: seriesId,
+          matchNumber: currentMatchNumber,
+          winsBeforeThisMatch: { teamA: seriesWinsA, teamB: seriesWinsB },
+          isFinale: isFinale,
+          seriesComplete: isSeriesComplete,
+          seriesWinner: isSeriesComplete ? (newWinsA >= 2 ? 'A' : 'B') : undefined,
+        };
+      }
+      // If neither overrideSeriesContext nor seriesId, this is a standalone match (no seriesInfoData)
+    }
 
     addMatch({
       date: new Date().toISOString(),
@@ -1343,12 +1371,24 @@ export default function NewMatchScreen() {
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                               setFullscreenMode(false);
                               
-                              // Save current match first
-                              handleSaveMatch();
-                              
-                              // Generate or reuse seriesId for the series
-                              // If this is the first match and no seriesId exists, create one now
+                              // Generate seriesId BEFORE saving if this is the first match
+                              // This ensures the first match is saved WITH series context
                               const seriesIdForNav = seriesId || `series-${Date.now()}`;
+                              const isFirstMatchOfSeries = !seriesId && !isInSeries;
+                              
+                              if (isFirstMatchOfSeries) {
+                                // First match: save with series context (match 1 of the series)
+                                // The current match result determines the initial series score
+                                handleSaveMatch({
+                                  seriesId: seriesIdForNav,
+                                  matchNumber: 1,
+                                  winsBeforeThisMatch: { teamA: 0, teamB: 0 },
+                                  isFinale: false,
+                                });
+                              } else {
+                                // Already in a series: save normally (seriesId exists from navigation)
+                                handleSaveMatch();
+                              }
                               
                               setTimeout(() => {
                                 router.replace({

@@ -700,33 +700,19 @@ export default function HistoryScreen() {
             <Text style={styles.formatText}>{match.format}</Text>
           </View>
 
-          {/* Revanche button for training matches - Only show if series not complete */}
-          {!isTournament && !match.seriesInfo?.seriesComplete && (
+          {/* Revanche button for training matches - Only show if standalone match (no series yet) */}
+          {!isTournament && !match.seriesInfo?.seriesId && (
             <Pressable 
               style={styles.revancheCardButton}
               onPress={(e) => {
                 e.stopPropagation();
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                // Calculate new series score based on this match result
-                // The current match counts as the first match in the series
-                const existingSeriesInfo = match.seriesInfo;
-                let newSeriesWinsA = 0;
-                let newSeriesWinsB = 0;
-                
-                if (existingSeriesInfo && existingSeriesInfo.matchNumber > 0) {
-                  // This match was already part of a series - include its result
-                  // winsBeforeThisMatch + this match's result = total wins before next match
-                  newSeriesWinsA = (existingSeriesInfo.winsBeforeThisMatch?.teamA || 0) + (isWin ? 1 : 0);
-                  newSeriesWinsB = (existingSeriesInfo.winsBeforeThisMatch?.teamB || 0) + (isWin ? 0 : 1);
-                } else {
-                  // This is the first match - it becomes match 1 of a new series
-                  // Its result counts: winner has 1 win, loser has 0
-                  newSeriesWinsA = isWin ? 1 : 0;
-                  newSeriesWinsB = isWin ? 0 : 1;
-                }
-                
-                // Use existing seriesId if available, otherwise use match's seriesId or generate new
-                const seriesIdForRevanche = existingSeriesInfo?.seriesId || match.seriesInfo?.seriesId || `series-${Date.now()}`;
+                // This is a standalone match - starting a new series
+                // The match result will be counted when the user plays the next game
+                // Navigate with win counts based on this match's result
+                const newSeriesWinsA = isWin ? 1 : 0;
+                const newSeriesWinsB = isWin ? 0 : 1;
+                const newSeriesId = `series-${Date.now()}`;
                 
                 router.push({
                   pathname: '/match/new',
@@ -737,7 +723,7 @@ export default function HistoryScreen() {
                     teamB: encodeTeamForRevanche(match.teamB.playerNames),
                     seriesWinsA: String(newSeriesWinsA),
                     seriesWinsB: String(newSeriesWinsB),
-                    seriesId: seriesIdForRevanche,
+                    seriesId: newSeriesId,
                   }
                 });
               }}
