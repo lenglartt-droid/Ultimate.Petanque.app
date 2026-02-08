@@ -697,8 +697,9 @@ export default function NewMatchScreen() {
   // Track shots in fullscreen mode
   const [fsShowActions, setFsShowActions] = useState(false);
   const [fsSelectedPoints, setFsSelectedPoints] = useState<{ team: 'A' | 'B' | null; points: number }>({ team: null, points: 0 });
+  const [fsNewMeneIndicator, setFsNewMeneIndicator] = useState<number | null>(null);
 
-  // Validate and add mène in fullscreen
+  // Validate and add mène in fullscreen - auto-start next mène
   const handleFsValidateMene = () => {
     if (!fsSelectedPoints.team || fsSelectedPoints.points === 0) return;
     
@@ -718,8 +719,48 @@ export default function NewMatchScreen() {
     } else {
       setTeamBScore(prev => Math.min(maxScore, prev + fsSelectedPoints.points));
     }
+    
+    // Auto-start next mène
     setMeneTime(0);
     setFsSelectedPoints({ team: null, points: 0 });
+    
+    // Show new mène indicator
+    const nextMeneNumber = menes.length + 2;
+    setFsNewMeneIndicator(nextMeneNumber);
+    setTimeout(() => setFsNewMeneIndicator(null), 1500);
+    
+    // Auto-start timer if not already running
+    if (!isTimerRunning) {
+      setIsTimerRunning(true);
+    }
+  };
+  
+  // Handle null mène in fullscreen - auto-start next mène
+  const handleFsNullMene = () => {
+    Haptics.selectionAsync();
+    
+    const newMene: Mene = {
+      id: menes.length + 1,
+      teamAPoints: 0,
+      teamBPoints: 0,
+      duration: meneTime,
+      isNull: true,
+    };
+    setMenes(prev => [...prev, newMene]);
+    
+    // Auto-start next mène
+    setMeneTime(0);
+    setFsSelectedPoints({ team: null, points: 0 });
+    
+    // Show new mène indicator
+    const nextMeneNumber = menes.length + 2;
+    setFsNewMeneIndicator(nextMeneNumber);
+    setTimeout(() => setFsNewMeneIndicator(null), 1500);
+    
+    // Auto-start timer if not already running
+    if (!isTimerRunning) {
+      setIsTimerRunning(true);
+    }
   };
 
   // Fullscreen Score View - Completely Redesigned
@@ -907,19 +948,7 @@ export default function NewMatchScreen() {
                 
                 <Pressable
                   style={styles.fsNullMeneBtn}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    const newMene: Mene = {
-                      id: menes.length + 1,
-                      teamAPoints: 0,
-                      teamBPoints: 0,
-                      duration: meneTime,
-                      isNull: true,
-                    };
-                    setMenes(prev => [...prev, newMene]);
-                    setMeneTime(0);
-                    setFsSelectedPoints({ team: null, points: 0 });
-                  }}
+                  onPress={handleFsNullMene}
                 >
                   <MaterialIcons name="block" size={24} color="#FBBF24" />
                 </Pressable>
@@ -1076,6 +1105,21 @@ export default function NewMatchScreen() {
                   </Animated.View>
                 )}
               </View>
+            )}
+
+            {/* New Mène Indicator Overlay */}
+            {fsNewMeneIndicator && !(teamAScore >= maxScore || teamBScore >= maxScore) && (
+              <Animated.View entering={FadeIn.duration(200)} style={styles.fsNewMeneOverlay}>
+                <Animated.View entering={FadeInUp.springify().damping(12)} style={styles.fsNewMeneCard}>
+                  <MaterialIcons name="sports" size={40} color="#4ADE80" />
+                  <Text style={styles.fsNewMeneTitle}>Mène {fsNewMeneIndicator}</Text>
+                  <Text style={styles.fsNewMeneSubtitle}>C'est parti !</Text>
+                  <View style={styles.fsNewMeneTimerIndicator}>
+                    <MaterialIcons name="timer" size={16} color="#4ADE80" />
+                    <Text style={styles.fsNewMeneTimerText}>Chrono démarré</Text>
+                  </View>
+                </Animated.View>
+              </Animated.View>
             )}
 
             {/* Winner Overlay */}
@@ -3516,5 +3560,50 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#FFF',
+  },
+  // FS New Mène Indicator
+  fsNewMeneOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
+  },
+  fsNewMeneCard: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(74, 222, 128, 0.1)',
+    borderWidth: 2,
+    borderColor: 'rgba(74, 222, 128, 0.3)',
+    borderRadius: 32,
+    padding: 40,
+    minWidth: 240,
+  },
+  fsNewMeneTitle: {
+    fontSize: 42,
+    fontWeight: '900',
+    color: '#FFF',
+    marginTop: 16,
+    letterSpacing: 2,
+  },
+  fsNewMeneSubtitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.6)',
+    marginTop: 8,
+  },
+  fsNewMeneTimerIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(74, 222, 128, 0.15)',
+    borderRadius: 20,
+  },
+  fsNewMeneTimerText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#4ADE80',
   },
 });
