@@ -17,7 +17,7 @@ import Animated, { FadeInDown, FadeIn, ZoomIn, useAnimatedStyle, useSharedValue,
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
-import { AdvancedShotNotation, AdvancedShotRecord, SHOT_TYPES, SHOT_QUALITIES } from '@/components';
+import { AdvancedShotNotation, AdvancedShotRecord } from '@/components';
 import { 
   ChallengeType, 
   ChallengeShot,
