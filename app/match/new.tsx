@@ -145,7 +145,7 @@ export default function NewMatchScreen() {
     teamA?: string;
     teamB?: string;
   }>();
-  const { addMatch, players, tournaments, matches, selfPlayer } = useApp();
+  const { addMatch, players, tournaments, matches, selfPlayer, terrains } = useApp();
   
   const isRevanche = revanche === 'true';
   const linkedTournament = tournamentId ? tournaments.find(t => t.id === tournamentId) : null;
@@ -203,9 +203,21 @@ export default function NewMatchScreen() {
   const [manualActionMode, setManualActionMode] = useState(false);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [fullscreenMode, setFullscreenMode] = useState(false);
+  const [selectedTerrainId, setSelectedTerrainId] = useState<string | null>(null);
+  const [showTerrainPicker, setShowTerrainPicker] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const maxScore = config.game.maxScore;
+
+  // Points per mène based on format
+  const maxPointsPerMene = useMemo(() => {
+    return format === 'Tête-à-tête' ? 3 : 6;
+  }, [format]);
+
+  const selectedTerrain = useMemo(() => {
+    if (!selectedTerrainId) return null;
+    return terrains.find(t => t.id === selectedTerrainId) || null;
+  }, [selectedTerrainId, terrains]);
 
   const maxPlayersPerTeam = useMemo(() => {
     switch (format) {
@@ -684,18 +696,35 @@ export default function NewMatchScreen() {
 
   // Track shots in fullscreen mode
   const [fsShowActions, setFsShowActions] = useState(false);
+  const [fsSelectedPoints, setFsSelectedPoints] = useState<{ team: 'A' | 'B' | null; points: number }>({ team: null, points: 0 });
 
-  // Fullscreen Score View - Enhanced & Reorganized
+  // Validate and add mène in fullscreen
+  const handleFsValidateMene = () => {
+    if (!fsSelectedPoints.team || fsSelectedPoints.points === 0) return;
+    
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    
+    const newMene: Mene = {
+      id: menes.length + 1,
+      teamAPoints: fsSelectedPoints.team === 'A' ? fsSelectedPoints.points : 0,
+      teamBPoints: fsSelectedPoints.team === 'B' ? fsSelectedPoints.points : 0,
+      duration: meneTime,
+      isNull: false,
+    };
+    
+    setMenes(prev => [...prev, newMene]);
+    if (fsSelectedPoints.team === 'A') {
+      setTeamAScore(prev => Math.min(maxScore, prev + fsSelectedPoints.points));
+    } else {
+      setTeamBScore(prev => Math.min(maxScore, prev + fsSelectedPoints.points));
+    }
+    setMeneTime(0);
+    setFsSelectedPoints({ team: null, points: 0 });
+  };
+
+  // Fullscreen Score View - Completely Redesigned
   const renderFullscreenScore = () => {
-    // Calculate current score evolution for visual timeline
-    const scoreEvolution = menes.reduce((acc, m, idx) => {
-      const prev = acc[idx] || { teamA: 0, teamB: 0 };
-      return [...acc, {
-        teamA: prev.teamA + m.teamAPoints,
-        teamB: prev.teamB + m.teamBPoints,
-        isNull: m.isNull,
-      }];
-    }, [{ teamA: 0, teamB: 0 }]);
+    const pointOptions = Array.from({ length: maxPointsPerMene }, (_, i) => i + 1);
 
     return (
       <Modal
@@ -706,7 +735,7 @@ export default function NewMatchScreen() {
       >
         <View style={styles.fullscreenContainer}>
           <SafeAreaView style={styles.fullscreenSafeArea}>
-            {/* Top Bar - Compact & Informative */}
+            {/* Compact Top Bar */}
             <View style={styles.fsTopBar}>
               <Pressable 
                 style={styles.fsExitBtn}
@@ -718,202 +747,336 @@ export default function NewMatchScreen() {
                 <MaterialIcons name="close" size={24} color="rgba(255,255,255,0.8)" />
               </Pressable>
 
-              {/* Timer - Centered */}
+              <View style={styles.fsTopCenter}>
+                <Text style={styles.fsFormatBadge}>{format}</Text>
+                {selectedTerrain && (
+                  <Text style={styles.fsTerrainName} numberOfLines={1}>
+                    <MaterialIcons name="place" size={12} color="rgba(255,255,255,0.5)" /> {selectedTerrain.name}
+                  </Text>
+                )}
+              </View>
+
+              {/* Timer */}
               <Pressable 
                 style={[styles.fsTimerPill, isTimerRunning && styles.fsTimerPillActive]}
                 onPress={isTimerRunning ? pauseTimer : startTimer}
               >
                 <MaterialIcons 
                   name={isTimerRunning ? 'pause' : 'play-arrow'} 
-                  size={18} 
+                  size={20} 
                   color={isTimerRunning ? '#4ADE80' : 'rgba(255,255,255,0.6)'} 
                 />
                 <Text style={[styles.fsTimerText, isTimerRunning && styles.fsTimerTextActive]}>
                   {formatTime(matchTime)}
                 </Text>
               </Pressable>
+            </View>
 
-              {/* Mène Badge */}
-              <View style={styles.fsMeneBadge}>
-                <Text style={styles.fsMeneText}>M{menes.length + 1}</Text>
+            {/* Giant Score Display */}
+            <View style={styles.fsGiantScoreArea}>
+              {/* Team A Score */}
+              <Pressable 
+                style={[
+                  styles.fsGiantScoreBlock,
+                  fsSelectedPoints.team === 'A' && styles.fsGiantScoreBlockSelected,
+                  { borderColor: theme.primary + '40' }
+                ]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setFsSelectedPoints(prev => ({ 
+                    team: prev.team === 'A' ? null : 'A', 
+                    points: prev.team === 'A' ? 0 : prev.points || 1 
+                  }));
+                }}
+              >
+                <View style={styles.fsGiantScoreHeader}>
+                  <View style={[styles.fsGiantTeamDot, { backgroundColor: theme.primary }]} />
+                  <Text style={styles.fsGiantTeamLabel}>MON ÉQUIPE</Text>
+                </View>
+                {teamAPlayers.length > 0 && (
+                  <Text style={styles.fsGiantPlayerNames} numberOfLines={1}>
+                    {teamAPlayers.map(p => getPlayerName(p.playerId).split(' ')[0]).join(' • ')}
+                  </Text>
+                )}
+                <Text style={[
+                  styles.fsGiantScoreValue,
+                  teamAScore >= teamBScore && teamAScore > 0 && styles.fsGiantScoreWinning
+                ]}>
+                  {teamAScore}
+                </Text>
+                {fsSelectedPoints.team === 'A' && (
+                  <View style={[styles.fsSelectedIndicator, { backgroundColor: theme.primary }]}>
+                    <Text style={styles.fsSelectedIndicatorText}>+{fsSelectedPoints.points}</Text>
+                  </View>
+                )}
+              </Pressable>
+
+              {/* VS Badge */}
+              <View style={styles.fsGiantVsBadge}>
+                <Text style={styles.fsGiantVsText}>VS</Text>
+                <View style={styles.fsGiantMeneBadge}>
+                  <Text style={styles.fsGiantMeneText}>M{menes.length + 1}</Text>
+                </View>
+              </View>
+
+              {/* Team B Score */}
+              <Pressable 
+                style={[
+                  styles.fsGiantScoreBlock,
+                  fsSelectedPoints.team === 'B' && styles.fsGiantScoreBlockSelected,
+                  { borderColor: theme.accent + '40' }
+                ]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setFsSelectedPoints(prev => ({ 
+                    team: prev.team === 'B' ? null : 'B', 
+                    points: prev.team === 'B' ? 0 : prev.points || 1 
+                  }));
+                }}
+              >
+                <View style={styles.fsGiantScoreHeader}>
+                  <View style={[styles.fsGiantTeamDot, { backgroundColor: theme.accent }]} />
+                  <Text style={styles.fsGiantTeamLabel}>ADVERSAIRE</Text>
+                </View>
+                {teamBPlayers.length > 0 && (
+                  <Text style={styles.fsGiantPlayerNames} numberOfLines={1}>
+                    {teamBPlayers.map(p => getPlayerName(p.playerId).split(' ')[0]).join(' • ')}
+                  </Text>
+                )}
+                <Text style={[
+                  styles.fsGiantScoreValue,
+                  teamBScore > teamAScore && styles.fsGiantScoreLosing
+                ]}>
+                  {teamBScore}
+                </Text>
+                {fsSelectedPoints.team === 'B' && (
+                  <View style={[styles.fsSelectedIndicator, { backgroundColor: theme.accent }]}>
+                    <Text style={styles.fsSelectedIndicatorText}>+{fsSelectedPoints.points}</Text>
+                  </View>
+                )}
+              </Pressable>
+            </View>
+
+            {/* Point Selection - Large Buttons */}
+            <View style={styles.fsPointSelection}>
+              <Text style={styles.fsPointSelectionTitle}>
+                {fsSelectedPoints.team ? `Points pour ${fsSelectedPoints.team === 'A' ? 'Mon équipe' : 'Adversaire'}` : 'Sélectionner une équipe'}
+              </Text>
+              <View style={styles.fsPointButtonsRow}>
+                {pointOptions.map(pts => (
+                  <Pressable
+                    key={pts}
+                    style={[
+                      styles.fsPointButton,
+                      fsSelectedPoints.points === pts && fsSelectedPoints.team && styles.fsPointButtonActive,
+                      fsSelectedPoints.points === pts && fsSelectedPoints.team === 'A' && { backgroundColor: theme.primary },
+                      fsSelectedPoints.points === pts && fsSelectedPoints.team === 'B' && { backgroundColor: theme.accent },
+                      !fsSelectedPoints.team && styles.fsPointButtonDisabled,
+                    ]}
+                    onPress={() => {
+                      if (!fsSelectedPoints.team) return;
+                      Haptics.selectionAsync();
+                      setFsSelectedPoints(prev => ({ ...prev, points: pts }));
+                    }}
+                    disabled={!fsSelectedPoints.team}
+                  >
+                    <Text style={[
+                      styles.fsPointButtonText,
+                      fsSelectedPoints.points === pts && fsSelectedPoints.team && styles.fsPointButtonTextActive,
+                      !fsSelectedPoints.team && styles.fsPointButtonTextDisabled,
+                    ]}>
+                      {pts}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              
+              {/* Validate Mène Button */}
+              <View style={styles.fsValidateRow}>
+                <Pressable
+                  style={[
+                    styles.fsValidateMeneBtn,
+                    (!fsSelectedPoints.team || fsSelectedPoints.points === 0) && styles.fsValidateMeneBtnDisabled,
+                  ]}
+                  onPress={handleFsValidateMene}
+                  disabled={!fsSelectedPoints.team || fsSelectedPoints.points === 0}
+                >
+                  <MaterialIcons name="check" size={28} color="#FFF" />
+                  <Text style={styles.fsValidateMeneBtnText}>Valider la mène</Text>
+                </Pressable>
+                
+                <Pressable
+                  style={styles.fsNullMeneBtn}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    const newMene: Mene = {
+                      id: menes.length + 1,
+                      teamAPoints: 0,
+                      teamBPoints: 0,
+                      duration: meneTime,
+                      isNull: true,
+                    };
+                    setMenes(prev => [...prev, newMene]);
+                    setMeneTime(0);
+                    setFsSelectedPoints({ team: null, points: 0 });
+                  }}
+                >
+                  <MaterialIcons name="block" size={24} color="#FBBF24" />
+                </Pressable>
               </View>
             </View>
 
-            {/* Score Timeline - Visual Mène Tracker */}
-            {menes.length > 0 && (
-              <View style={styles.fsTimeline}>
+            {/* Mène Timeline - Large & Visual */}
+            <View style={styles.fsMeneTimeline}>
+              <View style={styles.fsMeneTimelineHeader}>
+                <Text style={styles.fsMeneTimelineTitle}>Déroulé du match</Text>
+                {menes.length > 0 && (
+                  <Pressable style={styles.fsMeneUndoBtn} onPress={undoLastMene}>
+                    <MaterialIcons name="undo" size={18} color="rgba(255,255,255,0.6)" />
+                    <Text style={styles.fsMeneUndoBtnText}>Annuler</Text>
+                  </Pressable>
+                )}
+              </View>
+              
+              {menes.length === 0 ? (
+                <View style={styles.fsMeneEmptyState}>
+                  <MaterialIcons name="sports" size={32} color="rgba(255,255,255,0.2)" />
+                  <Text style={styles.fsMeneEmptyText}>Le match commence...</Text>
+                </View>
+              ) : (
                 <ScrollView 
                   horizontal 
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.fsTimelineContent}
+                  contentContainerStyle={styles.fsMeneTimelineScroll}
                 >
                   {menes.map((m, idx) => {
-                    const isTeamAPoint = m.teamAPoints > 0;
-                    const isTeamBPoint = m.teamBPoints > 0;
+                    // Calculate running score
+                    const runningScoreA = menes.slice(0, idx + 1).reduce((sum, me) => sum + me.teamAPoints, 0);
+                    const runningScoreB = menes.slice(0, idx + 1).reduce((sum, me) => sum + me.teamBPoints, 0);
+                    
                     return (
-                      <View key={m.id} style={styles.fsTimelineItem}>
-                        <View style={[
-                          styles.fsTimelineDot,
-                          m.isNull && styles.fsTimelineDotNull,
-                          isTeamAPoint && styles.fsTimelineDotA,
-                          isTeamBPoint && styles.fsTimelineDotB,
-                        ]}>
-                          {m.isNull ? (
-                            <Text style={styles.fsTimelineDotText}>⊘</Text>
-                          ) : (
-                            <Text style={styles.fsTimelineDotText}>
-                              {isTeamAPoint ? `+${m.teamAPoints}` : isTeamBPoint ? `+${m.teamBPoints}` : '0'}
-                            </Text>
-                          )}
-                        </View>
-                        <Text style={styles.fsTimelineLabel}>M{idx + 1}</Text>
+                      <View key={m.id} style={styles.fsMeneCard}>
+                        <Text style={styles.fsMeneCardNumber}>M{idx + 1}</Text>
+                        {m.isNull ? (
+                          <View style={styles.fsMeneCardNull}>
+                            <MaterialIcons name="block" size={24} color="#FBBF24" />
+                            <Text style={styles.fsMeneCardNullText}>Nulle</Text>
+                          </View>
+                        ) : (
+                          <View style={styles.fsMeneCardScore}>
+                            <View style={[
+                              styles.fsMeneCardDelta,
+                              m.teamAPoints > 0 && styles.fsMeneCardDeltaA
+                            ]}>
+                              <Text style={styles.fsMeneCardDeltaText}>
+                                {m.teamAPoints > 0 ? `+${m.teamAPoints}` : '-'}
+                              </Text>
+                            </View>
+                            <View style={[
+                              styles.fsMeneCardDelta,
+                              m.teamBPoints > 0 && styles.fsMeneCardDeltaB
+                            ]}>
+                              <Text style={styles.fsMeneCardDeltaText}>
+                                {m.teamBPoints > 0 ? `+${m.teamBPoints}` : '-'}
+                              </Text>
+                            </View>
+                          </View>
+                        )}
+                        <Text style={styles.fsMeneCardRunning}>{runningScoreA} - {runningScoreB}</Text>
                       </View>
                     );
                   })}
-                  {/* Current mène indicator */}
-                  <View style={styles.fsTimelineItem}>
-                    <View style={[styles.fsTimelineDot, styles.fsTimelineDotCurrent]}>
-                      <MaterialIcons name="more-horiz" size={16} color="rgba(255,255,255,0.5)" />
-                    </View>
-                    <Text style={[styles.fsTimelineLabel, styles.fsTimelineLabelCurrent]}>En cours</Text>
-                  </View>
                 </ScrollView>
-                {/* Undo button */}
-                <Pressable style={styles.fsUndoBtn} onPress={undoLastMene}>
-                  <MaterialIcons name="undo" size={20} color="rgba(255,255,255,0.6)" />
+              )}
+            </View>
+
+            {/* Shot Notation - Bottom Panel */}
+            {(teamAPlayers.length > 0 || teamBPlayers.length > 0) && (
+              <View style={styles.fsBottomPanel}>
+                <Pressable 
+                  style={[styles.fsBottomPanelHeader, fsShowActions && styles.fsBottomPanelHeaderActive]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setFsShowActions(!fsShowActions);
+                  }}
+                >
+                  <MaterialIcons 
+                    name="sports" 
+                    size={20} 
+                    color={fsShowActions ? '#FFF' : 'rgba(255,255,255,0.6)'} 
+                  />
+                  <Text style={[styles.fsBottomPanelTitle, fsShowActions && styles.fsBottomPanelTitleActive]}>
+                    Notation des coups
+                  </Text>
+                  <MaterialIcons 
+                    name={fsShowActions ? 'keyboard-arrow-down' : 'keyboard-arrow-up'} 
+                    size={24} 
+                    color="rgba(255,255,255,0.6)" 
+                  />
                 </Pressable>
+                
+                {fsShowActions && (
+                  <Animated.View entering={FadeInUp.duration(200)} style={styles.fsActionsContent}>
+                    <ScrollView 
+                      horizontal 
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.fsActionsScrollContent}
+                    >
+                      {/* All players in a row */}
+                      {[...teamAPlayers, ...teamBPlayers].map((p, idx) => {
+                        const isTeamA = idx < teamAPlayers.length;
+                        const stats = getPlayerActionStats(p.playerId);
+                        const teamColor = isTeamA ? theme.primary : theme.accent;
+                        
+                        return (
+                          <View key={p.playerId} style={[styles.fsPlayerActionCard, { borderColor: teamColor + '40' }]}>
+                            <View style={styles.fsPlayerActionHeader}>
+                              <View style={[styles.fsPlayerActionDot, { backgroundColor: teamColor }]} />
+                              <Text style={styles.fsPlayerActionName} numberOfLines={1}>
+                                {getPlayerName(p.playerId).split(' ')[0]}
+                              </Text>
+                            </View>
+                            
+                            <View style={styles.fsPlayerActionButtons}>
+                              <Pressable
+                                style={[styles.fsPlayerActionBtn, { backgroundColor: theme.tirColor }]}
+                                onPress={() => recordAction(p.playerId, 'tir', true)}
+                                onLongPress={() => recordAction(p.playerId, 'tir', false)}
+                              >
+                                <MaterialIcons name="gps-fixed" size={22} color="#FFF" />
+                                <Text style={styles.fsPlayerActionBtnLabel}>TIR</Text>
+                              </Pressable>
+                              <Pressable
+                                style={[styles.fsPlayerActionBtn, { backgroundColor: theme.pointColor }]}
+                                onPress={() => recordAction(p.playerId, 'point', true)}
+                                onLongPress={() => recordAction(p.playerId, 'point', false)}
+                              >
+                                <MaterialIcons name="adjust" size={22} color="#FFF" />
+                                <Text style={styles.fsPlayerActionBtnLabel}>POINT</Text>
+                              </Pressable>
+                              <Pressable
+                                style={[styles.fsPlayerActionBtn, { backgroundColor: theme.carreauColor }]}
+                                onPress={() => recordAction(p.playerId, 'carreau', true)}
+                              >
+                                <MaterialIcons name="stars" size={22} color="#FFF" />
+                                <Text style={styles.fsPlayerActionBtnLabel}>CARREAU</Text>
+                              </Pressable>
+                            </View>
+                            
+                            <View style={styles.fsPlayerActionStats}>
+                              <Text style={styles.fsPlayerActionStatsText}>
+                                T: {stats.tirsSuccess}/{stats.tirs} • P: {stats.pointsSuccess}/{stats.points} • C: {stats.carreaux}
+                              </Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </ScrollView>
+                    <Text style={styles.fsActionsHint}>Appui long = coup raté</Text>
+                  </Animated.View>
+                )}
               </View>
             )}
-
-            {/* Main Score Area */}
-            <View style={styles.fsMainContent}>
-              {/* Team A Section */}
-              <View style={styles.fsTeamSection}>
-                <View style={styles.fsTeamHeader}>
-                  <View style={[styles.fsTeamDot, { backgroundColor: theme.primary }]} />
-                  <Text style={styles.fsTeamName}>MON ÉQUIPE</Text>
-                </View>
-                
-                {teamAPlayers.length > 0 && (
-                  <View style={styles.fsPlayersList}>
-                    {teamAPlayers.slice(0, 3).map(p => (
-                      <Text key={p.playerId} style={styles.fsPlayerName} numberOfLines={1}>
-                        {getPlayerName(p.playerId).split(' ')[0]}
-                      </Text>
-                    ))}
-                  </View>
-                )}
-
-                {/* Large Score Display */}
-                <View style={styles.fsScoreBlock}>
-                  <Pressable 
-                    style={styles.fsScoreBtn}
-                    onPress={() => handleScoreChange('A', -1, false)}
-                  >
-                    <MaterialIcons name="remove" size={28} color="rgba(255,255,255,0.4)" />
-                  </Pressable>
-                  
-                  <Animated.Text 
-                    key={`fsA-${teamAScore}`}
-                    entering={FadeIn.duration(100)}
-                    style={[
-                      styles.fsScoreValue,
-                      teamAScore >= teamBScore && teamAScore > 0 && { color: '#4ADE80' }
-                    ]}
-                  >
-                    {teamAScore}
-                  </Animated.Text>
-                  
-                  <Pressable 
-                    style={[styles.fsScoreBtn, styles.fsScoreBtnPlus, { backgroundColor: theme.primary }]}
-                    onPress={() => handleScoreChange('A', 1)}
-                  >
-                    <MaterialIcons name="add" size={28} color="#FFF" />
-                  </Pressable>
-                </View>
-
-                {/* Quick Points */}
-                <View style={styles.fsQuickPoints}>
-                  {[2, 3, 4, 5, 6].map(pts => (
-                    <Pressable
-                      key={`qA-${pts}`}
-                      style={[styles.fsQuickBtn, { borderColor: theme.primary + '60' }]}
-                      onPress={() => handleQuickScore('A', pts)}
-                    >
-                      <Text style={[styles.fsQuickBtnText, { color: theme.primary }]}>+{pts}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-
-              {/* VS Divider */}
-              <View style={styles.fsDivider}>
-                <View style={styles.fsDividerLine} />
-                <View style={styles.fsDividerBadge}>
-                  <Text style={styles.fsDividerText}>VS</Text>
-                </View>
-                <View style={styles.fsDividerLine} />
-              </View>
-
-              {/* Team B Section */}
-              <View style={styles.fsTeamSection}>
-                <View style={styles.fsTeamHeader}>
-                  <View style={[styles.fsTeamDot, { backgroundColor: theme.accent }]} />
-                  <Text style={styles.fsTeamName}>ADVERSAIRE</Text>
-                </View>
-                
-                {teamBPlayers.length > 0 && (
-                  <View style={styles.fsPlayersList}>
-                    {teamBPlayers.slice(0, 3).map(p => (
-                      <Text key={p.playerId} style={styles.fsPlayerName} numberOfLines={1}>
-                        {getPlayerName(p.playerId).split(' ')[0]}
-                      </Text>
-                    ))}
-                  </View>
-                )}
-
-                {/* Large Score Display */}
-                <View style={styles.fsScoreBlock}>
-                  <Pressable 
-                    style={styles.fsScoreBtn}
-                    onPress={() => handleScoreChange('B', -1, false)}
-                  >
-                    <MaterialIcons name="remove" size={28} color="rgba(255,255,255,0.4)" />
-                  </Pressable>
-                  
-                  <Animated.Text 
-                    key={`fsB-${teamBScore}`}
-                    entering={FadeIn.duration(100)}
-                    style={[
-                      styles.fsScoreValue,
-                      teamBScore > teamAScore && { color: '#F87171' }
-                    ]}
-                  >
-                    {teamBScore}
-                  </Animated.Text>
-                  
-                  <Pressable 
-                    style={[styles.fsScoreBtn, styles.fsScoreBtnPlus, { backgroundColor: theme.accent }]}
-                    onPress={() => handleScoreChange('B', 1)}
-                  >
-                    <MaterialIcons name="add" size={28} color="#FFF" />
-                  </Pressable>
-                </View>
-
-                {/* Quick Points */}
-                <View style={styles.fsQuickPoints}>
-                  {[2, 3, 4, 5, 6].map(pts => (
-                    <Pressable
-                      key={`qB-${pts}`}
-                      style={[styles.fsQuickBtn, { borderColor: theme.accent + '60' }]}
-                      onPress={() => handleQuickScore('B', pts)}
-                    >
-                      <Text style={[styles.fsQuickBtnText, { color: theme.accent }]}>+{pts}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-            </View>
 
             {/* Winner Overlay */}
             {(teamAScore >= maxScore || teamBScore >= maxScore) && (
@@ -921,183 +1084,21 @@ export default function NewMatchScreen() {
                 <View style={styles.fsWinnerCard}>
                   <MaterialIcons 
                     name={teamAScore > teamBScore ? 'emoji-events' : 'sentiment-dissatisfied'} 
-                    size={60} 
+                    size={80} 
                     color={teamAScore > teamBScore ? '#FFD700' : '#F87171'} 
                   />
                   <Text style={styles.fsWinnerTitle}>
                     {teamAScore > teamBScore ? 'VICTOIRE !' : 'DÉFAITE'}
                   </Text>
                   <Text style={styles.fsWinnerScore}>{teamAScore} - {teamBScore}</Text>
+                  <Text style={styles.fsWinnerMenes}>{menes.length} mène{menes.length > 1 ? 's' : ''} • {formatTime(matchTime)}</Text>
                   <Pressable 
                     style={styles.fsWinnerBtn}
                     onPress={() => setFullscreenMode(false)}
                   >
-                    <Text style={styles.fsWinnerBtnText}>Terminer</Text>
+                    <Text style={styles.fsWinnerBtnText}>Terminer le match</Text>
                   </Pressable>
                 </View>
-              </Animated.View>
-            )}
-
-            {/* Bottom Actions Bar */}
-            <View style={styles.fsBottomBar}>
-              {/* Null Mène Button */}
-              <Pressable 
-                style={styles.fsActionBtn}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  const newMene: Mene = {
-                    id: menes.length + 1,
-                    teamAPoints: 0,
-                    teamBPoints: 0,
-                    duration: meneTime,
-                    isNull: true,
-                  };
-                  setMenes(prev => [...prev, newMene]);
-                  setMeneTime(0);
-                }}
-              >
-                <MaterialIcons name="block" size={20} color="#FBBF24" />
-                <Text style={styles.fsActionBtnText}>Mène nulle</Text>
-              </Pressable>
-
-              {/* Toggle Actions Panel */}
-              <Pressable 
-                style={[styles.fsActionBtn, fsShowActions && styles.fsActionBtnActive]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setFsShowActions(!fsShowActions);
-                }}
-              >
-                <MaterialIcons name="sports" size={20} color={fsShowActions ? '#FFF' : 'rgba(255,255,255,0.7)'} />
-                <Text style={[styles.fsActionBtnText, fsShowActions && styles.fsActionBtnTextActive]}>Actions</Text>
-              </Pressable>
-
-              {/* Stats Summary */}
-              <View style={styles.fsStatsBox}>
-                <Text style={styles.fsStatsLabel}>Mènes</Text>
-                <Text style={styles.fsStatsValue}>{menes.length}</Text>
-              </View>
-            </View>
-
-            {/* Shot Notation Panel - Slide up */}
-            {fsShowActions && (teamAPlayers.length > 0 || teamBPlayers.length > 0) && (
-              <Animated.View entering={FadeInUp.duration(200)} style={styles.fsActionsPanel}>
-                <View style={styles.fsActionsPanelHeader}>
-                  <Text style={styles.fsActionsPanelTitle}>Notation des coups</Text>
-                  <Pressable onPress={() => setFsShowActions(false)}>
-                    <MaterialIcons name="keyboard-arrow-down" size={24} color="rgba(255,255,255,0.6)" />
-                  </Pressable>
-                </View>
-                
-                <View style={styles.fsActionsTeams}>
-                  {/* Team A Actions */}
-                  {teamAPlayers.length > 0 && (
-                    <View style={styles.fsActionsTeam}>
-                      <View style={styles.fsActionsTeamHeader}>
-                        <View style={[styles.fsActionsTeamDot, { backgroundColor: theme.primary }]} />
-                        <Text style={styles.fsActionsTeamName}>Mon équipe</Text>
-                      </View>
-                      {teamAPlayers.map(p => (
-                        <View key={p.playerId} style={styles.fsActionsPlayer}>
-                          <Text style={styles.fsActionsPlayerName} numberOfLines={1}>
-                            {getPlayerName(p.playerId).split(' ')[0]}
-                          </Text>
-                          <View style={styles.fsActionsButtons}>
-                            <Pressable
-                              style={[styles.fsActionButton, { backgroundColor: theme.tirColor }]}
-                              onPress={() => recordAction(p.playerId, 'tir', true)}
-                              onLongPress={() => recordAction(p.playerId, 'tir', false)}
-                            >
-                              <MaterialIcons name="gps-fixed" size={16} color="#FFF" />
-                              <Text style={styles.fsActionButtonLabel}>T</Text>
-                            </Pressable>
-                            <Pressable
-                              style={[styles.fsActionButton, { backgroundColor: theme.pointColor }]}
-                              onPress={() => recordAction(p.playerId, 'point', true)}
-                              onLongPress={() => recordAction(p.playerId, 'point', false)}
-                            >
-                              <MaterialIcons name="adjust" size={16} color="#FFF" />
-                              <Text style={styles.fsActionButtonLabel}>P</Text>
-                            </Pressable>
-                            <Pressable
-                              style={[styles.fsActionButton, { backgroundColor: theme.carreauColor }]}
-                              onPress={() => recordAction(p.playerId, 'carreau', true)}
-                            >
-                              <MaterialIcons name="stars" size={16} color="#FFF" />
-                              <Text style={styles.fsActionButtonLabel}>C</Text>
-                            </Pressable>
-                          </View>
-                          {/* Mini stats */}
-                          <View style={styles.fsActionsMiniStats}>
-                            {(() => {
-                              const stats = getPlayerActionStats(p.playerId);
-                              return (
-                                <Text style={styles.fsActionsMiniStatsText}>
-                                  {stats.tirsSuccess}/{stats.tirs} T • {stats.pointsSuccess}/{stats.points} P • {stats.carreaux} C
-                                </Text>
-                              );
-                            })()}
-                          </View>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-
-                  {/* Team B Actions */}
-                  {teamBPlayers.length > 0 && (
-                    <View style={styles.fsActionsTeam}>
-                      <View style={styles.fsActionsTeamHeader}>
-                        <View style={[styles.fsActionsTeamDot, { backgroundColor: theme.accent }]} />
-                        <Text style={styles.fsActionsTeamName}>Adversaire</Text>
-                      </View>
-                      {teamBPlayers.map(p => (
-                        <View key={p.playerId} style={styles.fsActionsPlayer}>
-                          <Text style={styles.fsActionsPlayerName} numberOfLines={1}>
-                            {getPlayerName(p.playerId).split(' ')[0]}
-                          </Text>
-                          <View style={styles.fsActionsButtons}>
-                            <Pressable
-                              style={[styles.fsActionButton, { backgroundColor: theme.tirColor }]}
-                              onPress={() => recordAction(p.playerId, 'tir', true)}
-                              onLongPress={() => recordAction(p.playerId, 'tir', false)}
-                            >
-                              <MaterialIcons name="gps-fixed" size={16} color="#FFF" />
-                              <Text style={styles.fsActionButtonLabel}>T</Text>
-                            </Pressable>
-                            <Pressable
-                              style={[styles.fsActionButton, { backgroundColor: theme.pointColor }]}
-                              onPress={() => recordAction(p.playerId, 'point', true)}
-                              onLongPress={() => recordAction(p.playerId, 'point', false)}
-                            >
-                              <MaterialIcons name="adjust" size={16} color="#FFF" />
-                              <Text style={styles.fsActionButtonLabel}>P</Text>
-                            </Pressable>
-                            <Pressable
-                              style={[styles.fsActionButton, { backgroundColor: theme.carreauColor }]}
-                              onPress={() => recordAction(p.playerId, 'carreau', true)}
-                            >
-                              <MaterialIcons name="stars" size={16} color="#FFF" />
-                              <Text style={styles.fsActionButtonLabel}>C</Text>
-                            </Pressable>
-                          </View>
-                          {/* Mini stats */}
-                          <View style={styles.fsActionsMiniStats}>
-                            {(() => {
-                              const stats = getPlayerActionStats(p.playerId);
-                              return (
-                                <Text style={styles.fsActionsMiniStatsText}>
-                                  {stats.tirsSuccess}/{stats.tirs} T • {stats.pointsSuccess}/{stats.points} P • {stats.carreaux} C
-                                </Text>
-                              );
-                            })()}
-                          </View>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                </View>
-
-                <Text style={styles.fsActionsHint}>Appui long = coup raté</Text>
               </Animated.View>
             )}
           </SafeAreaView>
@@ -1155,15 +1156,34 @@ export default function NewMatchScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Mode Banner */}
+          {/* Mode Banner & Terrain Selection */}
           {!isTournamentMode && (
-            <Animated.View entering={FadeInDown.duration(300)} style={[styles.modeBanner, isRevanche && styles.modeBannerRevanche]}>
-              <View style={[styles.modeBannerIcon, isRevanche && styles.modeBannerIconRevanche]}>
-                <MaterialIcons name={isRevanche ? 'sports-mma' : 'fitness-center'} size={20} color="#FFF" />
+            <Animated.View entering={FadeInDown.duration(300)} style={styles.trainingSetupCard}>
+              <View style={[styles.modeBanner, isRevanche && styles.modeBannerRevanche]}>
+                <View style={[styles.modeBannerIcon, isRevanche && styles.modeBannerIconRevanche]}>
+                  <MaterialIcons name={isRevanche ? 'sports-mma' : 'fitness-center'} size={20} color="#FFF" />
+                </View>
+                <Text style={styles.modeBannerText}>
+                  {isRevanche ? 'Match revanche' : 'Entraînement'}
+                </Text>
               </View>
-              <Text style={styles.modeBannerText}>
-                {isRevanche ? 'Match revanche' : 'Entraînement'}
-              </Text>
+              
+              {/* Terrain Selection */}
+              <Pressable 
+                style={styles.terrainSelector}
+                onPress={() => setShowTerrainPicker(true)}
+              >
+                <View style={styles.terrainSelectorIcon}>
+                  <MaterialIcons name="place" size={20} color={selectedTerrain ? theme.primary : theme.textMuted} />
+                </View>
+                <View style={styles.terrainSelectorContent}>
+                  <Text style={styles.terrainSelectorLabel}>Terrain</Text>
+                  <Text style={[styles.terrainSelectorValue, !selectedTerrain && styles.terrainSelectorPlaceholder]} numberOfLines={1}>
+                    {selectedTerrain ? selectedTerrain.name : 'Choisir un terrain (optionnel)'}
+                  </Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              </Pressable>
             </Animated.View>
           )}
 
@@ -1470,7 +1490,7 @@ export default function NewMatchScreen() {
                     <View style={styles.meneRow}>
                       <Text style={styles.meneTeamLabel}>Mon équipe</Text>
                       <View style={styles.menePointsRow}>
-                        {[1, 2, 3, 4, 5, 6].map(pts => (
+                        {Array.from({ length: maxPointsPerMene }, (_, i) => i + 1).map(pts => (
                           <Pressable
                             key={`A-${pts}`}
                             style={[styles.menePointBtn, currentMenePoints.teamA === pts && styles.menePointBtnActiveA]}
@@ -1489,7 +1509,7 @@ export default function NewMatchScreen() {
                     <View style={styles.meneRow}>
                       <Text style={styles.meneTeamLabel}>Adversaire</Text>
                       <View style={styles.menePointsRow}>
-                        {[1, 2, 3, 4, 5, 6].map(pts => (
+                        {Array.from({ length: maxPointsPerMene }, (_, i) => i + 1).map(pts => (
                           <Pressable
                             key={`B-${pts}`}
                             style={[styles.menePointBtn, currentMenePoints.teamB === pts && styles.menePointBtnActiveB]}
@@ -1719,6 +1739,85 @@ export default function NewMatchScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Terrain Picker Modal */}
+      <Modal
+        visible={showTerrainPicker}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowTerrainPicker(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Pressable style={styles.modalCloseBtn} onPress={() => setShowTerrainPicker(false)}>
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+            <Text style={styles.modalTitle}>Choisir un terrain</Text>
+            <Pressable 
+              style={styles.modalDoneBtn} 
+              onPress={() => {
+                setSelectedTerrainId(null);
+                setShowTerrainPicker(false);
+              }}
+            >
+              <Text style={[styles.modalDoneText, { color: theme.textMuted }]}>Aucun</Text>
+            </Pressable>
+          </View>
+
+          <ScrollView style={styles.playersList} contentContainerStyle={styles.playersListContent}>
+            {/* Create new terrain */}
+            <Pressable
+              style={styles.createPlayerBtn}
+              onPress={() => {
+                setShowTerrainPicker(false);
+                router.push('/terrain/new');
+              }}
+            >
+              <View style={[styles.createPlayerIcon, { backgroundColor: theme.primary + '20' }]}>
+                <MaterialIcons name="add-location" size={22} color={theme.primary} />
+              </View>
+              <View style={styles.createPlayerInfo}>
+                <Text style={[styles.createPlayerTitle, { color: theme.primary }]}>Ajouter un terrain</Text>
+                <Text style={styles.createPlayerSubtitle}>Créer un nouveau boulodrome</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+            </Pressable>
+
+            {/* Terrain list */}
+            {terrains.length === 0 ? (
+              <View style={styles.emptySearch}>
+                <MaterialIcons name="location-off" size={40} color={theme.textMuted} />
+                <Text style={styles.emptySearchText}>Aucun terrain enregistré</Text>
+              </View>
+            ) : (
+              terrains.map(terrain => (
+                <Pressable
+                  key={terrain.id}
+                  style={[styles.playerItem, selectedTerrainId === terrain.id && styles.playerItemSelected]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setSelectedTerrainId(terrain.id);
+                    setShowTerrainPicker(false);
+                  }}
+                >
+                  <View style={[styles.playerAvatar, selectedTerrainId === terrain.id && styles.playerAvatarSelected]}>
+                    <MaterialIcons name="place" size={22} color="#FFF" />
+                  </View>
+                  <View style={styles.playerInfo}>
+                    <Text style={styles.playerName}>{terrain.name}</Text>
+                    <Text style={styles.playerMeta}>{terrain.type} • {terrain.city}</Text>
+                  </View>
+                  <MaterialIcons 
+                    name={selectedTerrainId === terrain.id ? 'check-circle' : 'radio-button-unchecked'} 
+                    size={24} 
+                    color={selectedTerrainId === terrain.id ? theme.primary : theme.border} 
+                  />
+                </Pressable>
+              ))
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
 
       {/* Player Picker Modal */}
       <Modal
@@ -2004,13 +2103,19 @@ const styles = StyleSheet.create({
     paddingTop: 16,
   },
   // Mode Banner
+  trainingSetupCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.xl,
+    padding: 16,
+    marginBottom: 16,
+    ...theme.shadows.card,
+  },
   modeBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.primary + '10',
     borderRadius: theme.borderRadius.lg,
     padding: 12,
-    marginBottom: 16,
     gap: 12,
   },
   modeBannerRevanche: {
@@ -2031,6 +2136,41 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: theme.textPrimary,
+  },
+  terrainSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+    gap: 10,
+  },
+  terrainSelectorIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  terrainSelectorContent: {
+    flex: 1,
+  },
+  terrainSelectorLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textMuted,
+    marginBottom: 2,
+  },
+  terrainSelectorValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.textPrimary,
+  },
+  terrainSelectorPlaceholder: {
+    color: theme.textMuted,
+    fontStyle: 'italic',
   },
   // Phase Section
   phaseSection: {
@@ -2912,7 +3052,7 @@ const styles = StyleSheet.create({
     color: theme.textMuted,
     marginTop: 10,
   },
-  // Fullscreen Mode Styles - Reorganized & Improved
+  // Fullscreen Mode Styles - Completely Redesigned
   fullscreenToggleBtn: {
     width: 40,
     height: 40,
@@ -2921,7 +3061,7 @@ const styles = StyleSheet.create({
   },
   fullscreenContainer: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#0A0F1A',
   },
   fullscreenSafeArea: {
     flex: 1,
@@ -2932,26 +3072,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+    paddingVertical: 12,
   },
   fsExitBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  fsTopCenter: {
+    alignItems: 'center',
+  },
+  fsFormatBadge: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: 1,
+  },
+  fsTerrainName: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.4)',
+    marginTop: 2,
   },
   fsTimerPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10,
     backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 20,
+    borderRadius: 22,
   },
   fsTimerPillActive: {
     backgroundColor: 'rgba(74, 222, 128, 0.15)',
@@ -2965,358 +3117,404 @@ const styles = StyleSheet.create({
   fsTimerTextActive: {
     color: '#4ADE80',
   },
-  fsMeneBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
-  },
-  fsMeneText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  // FS Timeline
-  fsTimeline: {
+  // FS Giant Score Area
+  fsGiantScoreArea: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
-  },
-  fsTimelineContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  fsTimelineItem: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  fsTimelineDot: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 20,
+    gap: 12,
   },
-  fsTimelineDotNull: {
-    backgroundColor: 'rgba(251, 191, 36, 0.2)',
+  fsGiantScoreBlock: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 3,
+    borderColor: 'transparent',
   },
-  fsTimelineDotA: {
-    backgroundColor: 'rgba(74, 222, 128, 0.25)',
-  },
-  fsTimelineDotB: {
-    backgroundColor: 'rgba(248, 113, 113, 0.25)',
-  },
-  fsTimelineDotCurrent: {
+  fsGiantScoreBlockSelected: {
     backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.2)',
-    borderStyle: 'dashed',
   },
-  fsTimelineDotText: {
+  fsGiantScoreHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  fsGiantTeamDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  fsGiantTeamLabel: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  fsTimelineLabel: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.4)',
-  },
-  fsTimelineLabelCurrent: {
-    color: 'rgba(255,255,255,0.3)',
-    fontStyle: 'italic',
-  },
-  fsUndoBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  // FS Main Content
-  fsMainContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingHorizontal: 8,
-  },
-  fsTeamSection: {
-    flex: 1,
-    alignItems: 'center',
-    paddingHorizontal: 8,
-  },
-  fsTeamHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
-  },
-  fsTeamDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  fsTeamName: {
-    fontSize: 11,
     fontWeight: '700',
     color: 'rgba(255,255,255,0.6)',
     letterSpacing: 1,
   },
-  fsPlayersList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 6,
-    marginBottom: 12,
-    minHeight: 18,
-  },
-  fsPlayerName: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.4)',
-    fontWeight: '500',
-  },
-  fsScoreBlock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  fsScoreBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fsScoreBtnPlus: {
-    backgroundColor: theme.primary,
-  },
-  fsScoreValue: {
-    fontSize: 88,
-    fontWeight: '900',
-    color: '#FFF',
-    textAlign: 'center',
-    minWidth: 70,
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 3 },
-    textShadowRadius: 6,
-  },
-  fsQuickPoints: {
-    flexDirection: 'row',
-    gap: 6,
-    marginTop: 16,
-  },
-  fsQuickBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fsQuickBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  // FS Divider
-  fsDivider: {
-    alignItems: 'center',
-    paddingHorizontal: 8,
-  },
-  fsDividerLine: {
-    width: 2,
-    height: 40,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
-  fsDividerBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 8,
-  },
-  fsDividerText: {
+  fsGiantPlayerNames: {
     fontSize: 11,
-    fontWeight: '800',
     color: 'rgba(255,255,255,0.4)',
+    marginBottom: 8,
   },
-  // FS Winner Overlay
-  fsWinnerOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fsWinnerCard: {
-    alignItems: 'center',
-    padding: 32,
-  },
-  fsWinnerTitle: {
-    fontSize: 32,
+  fsGiantScoreValue: {
+    fontSize: 100,
     fontWeight: '900',
     color: '#FFF',
-    marginTop: 16,
-    letterSpacing: 2,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 4 },
+    textShadowRadius: 8,
   },
-  fsWinnerScore: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.6)',
-    marginTop: 8,
+  fsGiantScoreWinning: {
+    color: '#4ADE80',
   },
-  fsWinnerBtn: {
-    marginTop: 24,
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    backgroundColor: theme.primary,
-    borderRadius: 24,
+  fsGiantScoreLosing: {
+    color: '#F87171',
   },
-  fsWinnerBtnText: {
-    fontSize: 16,
-    fontWeight: '600',
+  fsSelectedIndicator: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  fsSelectedIndicatorText: {
+    fontSize: 14,
+    fontWeight: '700',
     color: '#FFF',
   },
-  // FS Bottom Bar
-  fsBottomBar: {
+  fsGiantVsBadge: {
+    alignItems: 'center',
+  },
+  fsGiantVsText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: 'rgba(255,255,255,0.3)',
+  },
+  fsGiantMeneBadge: {
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 10,
+  },
+  fsGiantMeneText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  // FS Point Selection
+  fsPointSelection: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  fsPointSelectionTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.5)',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  fsPointButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  fsPointButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  fsPointButtonActive: {
+    borderColor: 'transparent',
+  },
+  fsPointButtonDisabled: {
+    opacity: 0.4,
+  },
+  fsPointButtonText: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.6)',
+  },
+  fsPointButtonTextActive: {
+    color: '#FFF',
+  },
+  fsPointButtonTextDisabled: {
+    color: 'rgba(255,255,255,0.3)',
+  },
+  fsValidateRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.08)',
+    marginTop: 16,
   },
-  fsActionBtn: {
+  fsValidateMeneBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 20,
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: theme.success,
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 28,
   },
-  fsActionBtnActive: {
-    backgroundColor: theme.primary,
+  fsValidateMeneBtnDisabled: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
-  fsActionBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.7)',
-  },
-  fsActionBtnTextActive: {
-    color: '#FFF',
-  },
-  fsStatsBox: {
-    alignItems: 'center',
-    paddingHorizontal: 16,
-  },
-  fsStatsLabel: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.4)',
-  },
-  fsStatsValue: {
-    fontSize: 18,
+  fsValidateMeneBtnText: {
+    fontSize: 16,
     fontWeight: '700',
     color: '#FFF',
   },
-  // FS Actions Panel
-  fsActionsPanel: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.1)',
-    paddingVertical: 12,
-    maxHeight: 280,
+  fsNullMeneBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(251, 191, 36, 0.3)',
   },
-  fsActionsPanelHeader: {
+  // FS Mène Timeline
+  fsMeneTimeline: {
+    flex: 1,
+    paddingVertical: 12,
+  },
+  fsMeneTimelineHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     marginBottom: 12,
   },
-  fsActionsPanelTitle: {
+  fsMeneTimelineTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(255,255,255,0.6)',
   },
-  fsActionsTeams: {
-    flexDirection: 'row',
-    paddingHorizontal: 12,
-    gap: 12,
-  },
-  fsActionsTeam: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 12,
-    padding: 10,
-  },
-  fsActionsTeamHeader: {
+  fsMeneUndoBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 12,
   },
-  fsActionsTeamDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  fsActionsTeamName: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.7)',
-  },
-  fsActionsPlayer: {
-    marginBottom: 8,
-  },
-  fsActionsPlayerName: {
+  fsMeneUndoBtnText: {
     fontSize: 12,
     fontWeight: '500',
     color: 'rgba(255,255,255,0.6)',
-    marginBottom: 6,
   },
-  fsActionsButtons: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  fsActionButton: {
-    flexDirection: 'row',
+  fsMeneEmptyState: {
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
+    justifyContent: 'center',
+    paddingVertical: 24,
   },
-  fsActionButtonLabel: {
+  fsMeneEmptyText: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.3)',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  fsMeneTimelineScroll: {
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  fsMeneCard: {
+    width: 80,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 16,
+    padding: 12,
+    alignItems: 'center',
+  },
+  fsMeneCardNumber: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.4)',
+    marginBottom: 8,
+  },
+  fsMeneCardNull: {
+    alignItems: 'center',
+  },
+  fsMeneCardNullText: {
+    fontSize: 10,
+    color: '#FBBF24',
+    marginTop: 4,
+  },
+  fsMeneCardScore: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  fsMeneCardDelta: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fsMeneCardDeltaA: {
+    backgroundColor: 'rgba(74, 222, 128, 0.25)',
+  },
+  fsMeneCardDeltaB: {
+    backgroundColor: 'rgba(248, 113, 113, 0.25)',
+  },
+  fsMeneCardDeltaText: {
     fontSize: 11,
     fontWeight: '700',
     color: '#FFF',
   },
-  fsActionsMiniStats: {
-    marginTop: 4,
+  fsMeneCardRunning: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.5)',
+    marginTop: 8,
   },
-  fsActionsMiniStatsText: {
+  // FS Bottom Panel (Actions)
+  fsBottomPanel: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  fsBottomPanelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  fsBottomPanelHeaderActive: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  fsBottomPanelTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.6)',
+  },
+  fsBottomPanelTitleActive: {
+    color: '#FFF',
+  },
+  fsActionsContent: {
+    paddingBottom: 12,
+  },
+  fsActionsScrollContent: {
+    paddingHorizontal: 12,
+    gap: 12,
+  },
+  fsPlayerActionCard: {
+    width: 160,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 2,
+  },
+  fsPlayerActionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  fsPlayerActionDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  fsPlayerActionName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFF',
+    flex: 1,
+  },
+  fsPlayerActionButtons: {
+    gap: 8,
+  },
+  fsPlayerActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  fsPlayerActionBtnLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  fsPlayerActionStats: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+  },
+  fsPlayerActionStatsText: {
     fontSize: 10,
-    color: 'rgba(255,255,255,0.4)',
+    color: 'rgba(255,255,255,0.5)',
+    textAlign: 'center',
   },
   fsActionsHint: {
     fontSize: 11,
-    color: 'rgba(255,255,255,0.4)',
+    color: 'rgba(255,255,255,0.3)',
     textAlign: 'center',
-    marginTop: 10,
+    marginTop: 8,
     fontStyle: 'italic',
+  },
+  // FS Winner Overlay
+  fsWinnerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fsWinnerCard: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  fsWinnerTitle: {
+    fontSize: 36,
+    fontWeight: '900',
+    color: '#FFF',
+    marginTop: 20,
+    letterSpacing: 3,
+  },
+  fsWinnerScore: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 12,
+  },
+  fsWinnerMenes: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.5)',
+    marginTop: 8,
+  },
+  fsWinnerBtn: {
+    marginTop: 32,
+    paddingHorizontal: 40,
+    paddingVertical: 18,
+    backgroundColor: theme.primary,
+    borderRadius: 28,
+  },
+  fsWinnerBtnText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFF',
   },
 });
