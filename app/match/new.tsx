@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Audio } from 'expo-av';
 import {
   View,
   Text,
@@ -213,6 +214,9 @@ export default function NewMatchScreen() {
   const [selectedTerrainId, setSelectedTerrainId] = useState<string | null>(null);
   const [showTerrainPicker, setShowTerrainPicker] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [meneAlarmEnabled, setMeneAlarmEnabled] = useState(false);
+  const [meneAlarmTriggered, setMeneAlarmTriggered] = useState(false);
+  const alarmSoundRef = useRef<Audio.Sound | null>(null);
 
   const maxScore = config.game.maxScore;
 
@@ -544,6 +548,46 @@ export default function NewMatchScreen() {
     };
   }, [isTimerRunning]);
 
+  // Mène alarm effect - trigger when mène time exceeds 60 seconds
+  useEffect(() => {
+    if (meneAlarmEnabled && meneTime === 60 && !meneAlarmTriggered) {
+      triggerMeneAlarm();
+    }
+    // Reset alarm triggered state when mène resets
+    if (meneTime < 60 && meneAlarmTriggered) {
+      setMeneAlarmTriggered(false);
+    }
+  }, [meneTime, meneAlarmEnabled, meneAlarmTriggered]);
+
+  // Cleanup alarm sound on unmount
+  useEffect(() => {
+    return () => {
+      if (alarmSoundRef.current) {
+        alarmSoundRef.current.unloadAsync();
+      }
+    };
+  }, []);
+
+  const triggerMeneAlarm = async () => {
+    setMeneAlarmTriggered(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    
+    // Play a series of haptic feedbacks as alarm
+    for (let i = 0; i < 3; i++) {
+      setTimeout(() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      }, i * 300);
+    }
+  };
+
+  const toggleMeneAlarm = () => {
+    Haptics.selectionAsync();
+    setMeneAlarmEnabled(prev => !prev);
+    if (!meneAlarmEnabled) {
+      setMeneAlarmTriggered(false);
+    }
+  };
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -762,6 +806,7 @@ export default function NewMatchScreen() {
     
     // Auto-start next mène
     setMeneTime(0);
+    setMeneAlarmTriggered(false); // Reset alarm for new mène
     setFsSelectedPoints({ team: null, points: 0 });
     
     // Show new mène indicator
@@ -790,6 +835,7 @@ export default function NewMatchScreen() {
     
     // Auto-start next mène
     setMeneTime(0);
+    setMeneAlarmTriggered(false); // Reset alarm for new mène
     setFsSelectedPoints({ team: null, points: 0 });
     
     // Show new mène indicator
@@ -837,20 +883,74 @@ export default function NewMatchScreen() {
                 )}
               </View>
 
-              {/* Timer */}
+              {/* Alarm Toggle */}
               <Pressable 
-                style={[styles.fsTimerPill, isTimerRunning && styles.fsTimerPillActive]}
+                style={[styles.fsAlarmToggle, meneAlarmEnabled && styles.fsAlarmToggleActive]}
+                onPress={toggleMeneAlarm}
+              >
+                <MaterialIcons 
+                  name={meneAlarmEnabled ? 'notifications-active' : 'notifications-off'} 
+                  size={20} 
+                  color={meneAlarmEnabled ? '#FBBF24' : 'rgba(255,255,255,0.4)'} 
+                />
+              </Pressable>
+            </View>
+
+            {/* Dual Timer Display */}
+            <View style={styles.fsDualTimerBar}>
+              {/* Total Match Time */}
+              <Pressable 
+                style={[styles.fsDualTimerPill, isTimerRunning && styles.fsDualTimerPillActive]}
                 onPress={isTimerRunning ? pauseTimer : startTimer}
               >
                 <MaterialIcons 
                   name={isTimerRunning ? 'pause' : 'play-arrow'} 
-                  size={20} 
-                  color={isTimerRunning ? '#4ADE80' : 'rgba(255,255,255,0.6)'} 
+                  size={18} 
+                  color={isTimerRunning ? '#4ADE80' : 'rgba(255,255,255,0.5)'} 
                 />
-                <Text style={[styles.fsTimerText, isTimerRunning && styles.fsTimerTextActive]}>
-                  {formatTime(matchTime)}
-                </Text>
+                <View style={styles.fsDualTimerContent}>
+                  <Text style={styles.fsDualTimerLabel}>PARTIE</Text>
+                  <Text style={[styles.fsDualTimerValue, isTimerRunning && styles.fsDualTimerValueActive]}>
+                    {formatTime(matchTime)}
+                  </Text>
+                </View>
               </Pressable>
+
+              {/* Mène Time */}
+              <View style={[
+                styles.fsDualTimerPill, 
+                styles.fsDualTimerPillMene,
+                meneAlarmTriggered && styles.fsDualTimerPillAlarm
+              ]}>
+                <MaterialIcons 
+                  name="sports" 
+                  size={18} 
+                  color={meneAlarmTriggered ? '#FBBF24' : 'rgba(255,255,255,0.5)'} 
+                />
+                <View style={styles.fsDualTimerContent}>
+                  <Text style={styles.fsDualTimerLabel}>MÈNE {menes.length + 1}</Text>
+                  <Text style={[
+                    styles.fsDualTimerValue, 
+                    meneTime >= 60 && styles.fsDualTimerValueWarning,
+                    meneAlarmTriggered && styles.fsDualTimerValueAlarm
+                  ]}>
+                    {formatTime(meneTime)}
+                  </Text>
+                </View>
+                {meneAlarmEnabled && (
+                  <View style={[
+                    styles.fsAlarmIndicator,
+                    meneAlarmTriggered && styles.fsAlarmIndicatorActive
+                  ]}>
+                    <MaterialIcons 
+                      name={meneAlarmTriggered ? 'warning' : 'alarm'} 
+                      size={14} 
+                      color={meneAlarmTriggered ? '#FBBF24' : 'rgba(255,255,255,0.4)'} 
+                    />
+                    {!meneAlarmTriggered && <Text style={styles.fsAlarmIndicatorText}>1min</Text>}
+                  </View>
+                )}
+              </View>
             </View>
 
             {/* Giant Score Display */}
@@ -1052,6 +1152,7 @@ export default function NewMatchScreen() {
                           </View>
                         )}
                         <Text style={styles.fsMeneCardRunning}>{runningScoreA} - {runningScoreB}</Text>
+                        <Text style={styles.fsMeneCardDuration}>{formatTime(m.duration)}</Text>
                       </View>
                     );
                   })}
@@ -3205,6 +3306,90 @@ const styles = StyleSheet.create({
   fsTimerTextActive: {
     color: '#4ADE80',
   },
+  // FS Alarm Toggle
+  fsAlarmToggle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fsAlarmToggleActive: {
+    backgroundColor: 'rgba(251, 191, 36, 0.2)',
+  },
+  // FS Dual Timer Bar
+  fsDualTimerBar: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  fsDualTimerPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 16,
+    minWidth: 140,
+  },
+  fsDualTimerPillActive: {
+    backgroundColor: 'rgba(74, 222, 128, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(74, 222, 128, 0.3)',
+  },
+  fsDualTimerPillMene: {
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+  },
+  fsDualTimerPillAlarm: {
+    backgroundColor: 'rgba(251, 191, 36, 0.2)',
+    borderWidth: 2,
+    borderColor: '#FBBF24',
+  },
+  fsDualTimerContent: {
+    flex: 1,
+  },
+  fsDualTimerLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: 0.5,
+  },
+  fsDualTimerValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.6)',
+    fontVariant: ['tabular-nums'],
+  },
+  fsDualTimerValueActive: {
+    color: '#4ADE80',
+  },
+  fsDualTimerValueWarning: {
+    color: '#F97316',
+  },
+  fsDualTimerValueAlarm: {
+    color: '#FBBF24',
+  },
+  fsAlarmIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 10,
+  },
+  fsAlarmIndicatorActive: {
+    backgroundColor: 'rgba(251, 191, 36, 0.3)',
+  },
+  fsAlarmIndicatorText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.5)',
+  },
   // FS Giant Score Area
   fsGiantScoreArea: {
     flexDirection: 'row',
@@ -3473,6 +3658,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: 'rgba(255,255,255,0.5)',
     marginTop: 8,
+  },
+  fsMeneCardDuration: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.3)',
+    marginTop: 4,
   },
   // FS Bottom Panel (Actions)
   fsBottomPanel: {
