@@ -87,6 +87,8 @@ interface SeriesGroup {
   seriesWinner?: 'A' | 'B' | 'player' | 'opponent';
   seriesComplete: boolean;
   totalMatches: number;
+  winsA: number;
+  winsB: number;
 }
 
 function groupBySeries(
@@ -116,6 +118,8 @@ function groupBySeries(
           seriesComplete: seriesInfo.seriesComplete || false,
           seriesWinner: seriesInfo.seriesWinner,
           totalMatches: seriesInfo.matchNumber || 1,
+          winsA: 0,
+          winsB: 0,
         });
       }
     } else {
@@ -123,13 +127,36 @@ function groupBySeries(
     }
   });
   
-  // Sort items within each series by matchNumber
+  // Sort items within each series by matchNumber and calculate wins
   seriesGroups.forEach(group => {
     group.items.sort((a, b) => {
       const aNum = (a.type === 'match' ? (a.data as Match).seriesInfo?.matchNumber : (a.data as Challenge).seriesInfo?.matchNumber) || 1;
       const bNum = (b.type === 'match' ? (b.data as Match).seriesInfo?.matchNumber : (b.data as Challenge).seriesInfo?.matchNumber) || 1;
       return aNum - bNum;
     });
+    
+    // Calculate actual wins from match results
+    let winsA = 0;
+    let winsB = 0;
+    group.items.forEach(item => {
+      if (item.type === 'match') {
+        const match = item.data as Match;
+        if (match.winner === 'A') winsA++;
+        else winsB++;
+      } else {
+        const challenge = item.data as Challenge;
+        if (challenge.winner === 'player') winsA++;
+        else if (challenge.winner === 'opponent') winsB++;
+      }
+    });
+    group.winsA = winsA;
+    group.winsB = winsB;
+    
+    // Update series complete status based on actual results
+    if (winsA >= 2 || winsB >= 2) {
+      group.seriesComplete = true;
+      group.seriesWinner = winsA >= 2 ? 'A' : 'B';
+    }
   });
   
   return { seriesGroups, standalone };
@@ -275,19 +302,12 @@ export default function HistoryScreen() {
     const firstItem = seriesGroup.items[0];
     const isMatch = firstItem.type === 'match';
     
-    // Calculate series result
-    let winsA = 0;
-    let winsB = 0;
-    seriesGroup.items.forEach(item => {
-      if (item.type === 'match') {
-        const match = item.data as Match;
-        if (match.winner === 'A') winsA++;
-        else winsB++;
-      }
-    });
+    // Use pre-calculated wins from groupBySeries
+    const winsA = seriesGroup.winsA;
+    const winsB = seriesGroup.winsB;
     
     const isSeriesWon = winsA > winsB;
-    const isComplete = winsA >= 2 || winsB >= 2;
+    const isComplete = seriesGroup.seriesComplete;
     const hasFinale = seriesGroup.items.some(item => {
       const info = item.type === 'match' 
         ? (item.data as Match).seriesInfo 
@@ -396,20 +416,48 @@ export default function HistoryScreen() {
           </Text>
         </View>
         
-        {/* Expand to see details */}
-        <Pressable 
-          style={styles.seriesExpandBtn}
-          onPress={() => {
-            Haptics.selectionAsync();
-            // Navigate to first match detail
-            if (firstMatch) {
-              router.push(`/match/${firstMatch.id}`);
-            }
-          }}
-        >
-          <Text style={styles.seriesExpandText}>Voir les détails</Text>
-          <MaterialIcons name="chevron-right" size={18} color={theme.primary} />
-        </Pressable>
+        {/* Action buttons */}
+        <View style={styles.seriesActionsRow}>
+          {/* View details */}
+          <Pressable 
+            style={styles.seriesExpandBtn}
+            onPress={() => {
+              Haptics.selectionAsync();
+              if (firstMatch) {
+                router.push(`/match/${firstMatch.id}`);
+              }
+            }}
+          >
+            <MaterialIcons name="visibility" size={16} color={theme.primary} />
+            <Text style={styles.seriesExpandText}>Détails</Text>
+          </Pressable>
+          
+          {/* New Series button - only show if series is complete */}
+          {isComplete && firstMatch && (
+            <Pressable 
+              style={styles.seriesNewBtn}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                // Start a completely new series with same teams
+                router.push({
+                  pathname: '/match/new',
+                  params: {
+                    revanche: 'true',
+                    format: firstMatch.format,
+                    teamA: encodeTeamForRevanche(teamANames),
+                    teamB: encodeTeamForRevanche(teamBNames),
+                    seriesWinsA: '0',
+                    seriesWinsB: '0',
+                    seriesId: `series-${Date.now()}`,
+                  }
+                });
+              }}
+            >
+              <MaterialIcons name="replay" size={16} color={theme.accent} />
+              <Text style={styles.seriesNewBtnText}>Nouvelle série</Text>
+            </Pressable>
+          )}
+        </View>
       </View>
     );
   };
@@ -535,15 +583,14 @@ export default function HistoryScreen() {
             <Text style={styles.formatText}>{match.format}</Text>
           </View>
 
-          {/* Revanche button for training matches */}
-          {!isTournament && (
+          {/* Revanche button for training matches - Only show if series not complete */}
+          {!isTournament && !match.seriesInfo?.seriesComplete && (
             <Pressable 
               style={styles.revancheCardButton}
               onPress={(e) => {
                 e.stopPropagation();
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 // Calculate new series score based on this match result
-                // If this match was already part of a series, continue from this match's result
                 const existingSeriesInfo = match.seriesInfo;
                 let newSeriesWinsA = 0;
                 let newSeriesWinsB = 0;
@@ -557,15 +604,9 @@ export default function HistoryScreen() {
                   newSeriesWinsA = isWin ? 1 : 0;
                   newSeriesWinsB = isWin ? 0 : 1;
                 }
-                // Don't allow revanche if series is already complete (2 wins)
-                if (existingSeriesInfo?.seriesComplete) {
-                  // Start a completely new series
-                  newSeriesWinsA = isWin ? 1 : 0;
-                  newSeriesWinsB = isWin ? 0 : 1;
-                }
                 
                 // Generate new seriesId if starting fresh, otherwise continue existing series
-                const seriesIdForRevanche = (existingSeriesInfo && !existingSeriesInfo.seriesComplete) 
+                const seriesIdForRevanche = existingSeriesInfo 
                   ? existingSeriesInfo.seriesId 
                   : `series-${Date.now()}`;
                 
@@ -982,14 +1023,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...theme.shadows.card,
     borderWidth: 2,
-    borderColor: theme.accent + '30',
+    borderColor: theme.primary + '30',
   },
   seriesCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 14,
-    backgroundColor: theme.accent + '10',
+    backgroundColor: theme.primary + '08',
   },
   seriesCardHeaderWin: {
     backgroundColor: theme.success + '10',
@@ -1010,7 +1051,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: theme.accent,
+    backgroundColor: theme.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1144,20 +1185,40 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.textSecondary,
   },
+  seriesActionsRow: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
   seriesExpandBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: theme.border,
     backgroundColor: theme.backgroundSecondary,
   },
   seriesExpandText: {
     fontSize: 13,
     fontWeight: '600',
     color: theme.primary,
+  },
+  seriesNewBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    backgroundColor: theme.accent + '10',
+    borderLeftWidth: 1,
+    borderLeftColor: theme.border,
+  },
+  seriesNewBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.accent,
   },
   // Card base
   card: {
