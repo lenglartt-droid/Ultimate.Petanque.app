@@ -872,6 +872,7 @@ export default function NewMatchScreen() {
 
   // Track shots in fullscreen mode
   const [fsShowActions, setFsShowActions] = useState(false);
+  const [fsLandscapeActionsOpen, setFsLandscapeActionsOpen] = useState(false);
   const [fsSelectedPoints, setFsSelectedPoints] = useState<{ team: 'A' | 'B' | null; points: number }>({ team: null, points: 0 });
   const [fsNewMeneIndicator, setFsNewMeneIndicator] = useState<number | null>(null);
 
@@ -1160,7 +1161,144 @@ export default function NewMatchScreen() {
                     )}
                   </Pressable>
                 </View>
+
+                {/* Shot Notation Toggle Button - Right Edge */}
+                {(teamAPlayers.length > 0 || teamBPlayers.length > 0) && (
+                  <Pressable
+                    style={[
+                      styles.fsLandscapeActionsToggle,
+                      fsLandscapeActionsOpen && styles.fsLandscapeActionsToggleActive
+                    ]}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setFsLandscapeActionsOpen(!fsLandscapeActionsOpen);
+                    }}
+                  >
+                    <MaterialIcons 
+                      name={fsLandscapeActionsOpen ? 'chevron-right' : 'sports'} 
+                      size={20} 
+                      color={fsLandscapeActionsOpen ? '#FFF' : 'rgba(255,255,255,0.6)'} 
+                    />
+                  </Pressable>
+                )}
               </View>
+
+              {/* Sliding Shot Notation Panel - Landscape */}
+              {fsLandscapeActionsOpen && (teamAPlayers.length > 0 || teamBPlayers.length > 0) && (
+                <Animated.View 
+                  entering={FadeIn.duration(200)} 
+                  style={styles.fsLandscapeActionsPanel}
+                >
+                  <View style={styles.fsLandscapeActionsPanelHeader}>
+                    <MaterialIcons name="sports" size={18} color="#FFF" />
+                    <Text style={styles.fsLandscapeActionsPanelTitle}>Notation des coups</Text>
+                    <Pressable
+                      style={styles.fsLandscapeActionsPanelClose}
+                      onPress={() => setFsLandscapeActionsOpen(false)}
+                    >
+                      <MaterialIcons name="close" size={20} color="rgba(255,255,255,0.6)" />
+                    </Pressable>
+                  </View>
+                  
+                  <ScrollView 
+                    style={styles.fsLandscapeActionsScrollView}
+                    contentContainerStyle={styles.fsLandscapeActionsScrollContent}
+                    showsVerticalScrollIndicator={false}
+                  >
+                    {/* Team A Players */}
+                    {teamAPlayers.length > 0 && (
+                      <View style={styles.fsLandscapeActionsTeamSection}>
+                        <View style={styles.fsLandscapeActionsTeamHeader}>
+                          <View style={[styles.fsLandscapeActionsTeamDot, { backgroundColor: theme.primary }]} />
+                          <Text style={styles.fsLandscapeActionsTeamTitle}>Mon équipe</Text>
+                        </View>
+                        {teamAPlayers.map(p => {
+                          const stats = getPlayerActionStats(p.playerId);
+                          return (
+                            <View key={p.playerId} style={styles.fsLandscapeActionsPlayerCard}>
+                              <Text style={styles.fsLandscapeActionsPlayerName} numberOfLines={1}>
+                                {getPlayerName(p.playerId).split(' ')[0]}
+                              </Text>
+                              <View style={styles.fsLandscapeActionsButtonRow}>
+                                <Pressable
+                                  style={[styles.fsLandscapeActionBtn, { backgroundColor: theme.tirColor }]}
+                                  onPress={() => recordAction(p.playerId, 'tir', true)}
+                                  onLongPress={() => recordAction(p.playerId, 'tir', false)}
+                                >
+                                  <MaterialIcons name="gps-fixed" size={18} color="#FFF" />
+                                </Pressable>
+                                <Pressable
+                                  style={[styles.fsLandscapeActionBtn, { backgroundColor: theme.pointColor }]}
+                                  onPress={() => recordAction(p.playerId, 'point', true)}
+                                  onLongPress={() => recordAction(p.playerId, 'point', false)}
+                                >
+                                  <MaterialIcons name="adjust" size={18} color="#FFF" />
+                                </Pressable>
+                                <Pressable
+                                  style={[styles.fsLandscapeActionBtn, { backgroundColor: theme.carreauColor }]}
+                                  onPress={() => recordAction(p.playerId, 'carreau', true)}
+                                >
+                                  <MaterialIcons name="stars" size={18} color="#FFF" />
+                                </Pressable>
+                              </View>
+                              <Text style={styles.fsLandscapeActionsPlayerStats}>
+                                T:{stats.tirsSuccess}/{stats.tirs} P:{stats.pointsSuccess}/{stats.points} C:{stats.carreaux}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )}
+
+                    {/* Team B Players */}
+                    {teamBPlayers.length > 0 && (
+                      <View style={styles.fsLandscapeActionsTeamSection}>
+                        <View style={styles.fsLandscapeActionsTeamHeader}>
+                          <View style={[styles.fsLandscapeActionsTeamDot, { backgroundColor: theme.accent }]} />
+                          <Text style={styles.fsLandscapeActionsTeamTitle}>Adversaire</Text>
+                        </View>
+                        {teamBPlayers.map(p => {
+                          const stats = getPlayerActionStats(p.playerId);
+                          return (
+                            <View key={p.playerId} style={styles.fsLandscapeActionsPlayerCard}>
+                              <Text style={styles.fsLandscapeActionsPlayerName} numberOfLines={1}>
+                                {getPlayerName(p.playerId).split(' ')[0]}
+                              </Text>
+                              <View style={styles.fsLandscapeActionsButtonRow}>
+                                <Pressable
+                                  style={[styles.fsLandscapeActionBtn, { backgroundColor: theme.tirColor }]}
+                                  onPress={() => recordAction(p.playerId, 'tir', true)}
+                                  onLongPress={() => recordAction(p.playerId, 'tir', false)}
+                                >
+                                  <MaterialIcons name="gps-fixed" size={18} color="#FFF" />
+                                </Pressable>
+                                <Pressable
+                                  style={[styles.fsLandscapeActionBtn, { backgroundColor: theme.pointColor }]}
+                                  onPress={() => recordAction(p.playerId, 'point', true)}
+                                  onLongPress={() => recordAction(p.playerId, 'point', false)}
+                                >
+                                  <MaterialIcons name="adjust" size={18} color="#FFF" />
+                                </Pressable>
+                                <Pressable
+                                  style={[styles.fsLandscapeActionBtn, { backgroundColor: theme.carreauColor }]}
+                                  onPress={() => recordAction(p.playerId, 'carreau', true)}
+                                >
+                                  <MaterialIcons name="stars" size={18} color="#FFF" />
+                                </Pressable>
+                              </View>
+                              <Text style={styles.fsLandscapeActionsPlayerStats}>
+                                T:{stats.tirsSuccess}/{stats.tirs} P:{stats.pointsSuccess}/{stats.points} C:{stats.carreaux}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )}
+                  </ScrollView>
+                  
+                  <Text style={styles.fsLandscapeActionsHint}>Appui long = coup raté</Text>
+                </Animated.View>
+              )}
 
               {/* Winner Overlay - Landscape */}
               {(teamAScore >= maxScore || teamBScore >= maxScore) && (
@@ -4491,5 +4629,120 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#FFF',
     letterSpacing: 1,
+  },
+  // Landscape Shot Notation Panel
+  fsLandscapeActionsToggle: {
+    position: 'absolute',
+    right: 0,
+    top: '50%',
+    marginTop: -30,
+    width: 32,
+    height: 60,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderTopLeftRadius: 16,
+    borderBottomLeftRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  fsLandscapeActionsToggleActive: {
+    backgroundColor: theme.primary,
+  },
+  fsLandscapeActionsPanel: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 220,
+    backgroundColor: 'rgba(15, 23, 42, 0.98)',
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(255,255,255,0.1)',
+    zIndex: 20,
+  },
+  fsLandscapeActionsPanelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  fsLandscapeActionsPanelTitle: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  fsLandscapeActionsPanelClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fsLandscapeActionsScrollView: {
+    flex: 1,
+  },
+  fsLandscapeActionsScrollContent: {
+    padding: 12,
+    gap: 16,
+  },
+  fsLandscapeActionsTeamSection: {
+    gap: 8,
+  },
+  fsLandscapeActionsTeamHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  fsLandscapeActionsTeamDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  fsLandscapeActionsTeamTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.7)',
+  },
+  fsLandscapeActionsPlayerCard: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 12,
+    padding: 12,
+  },
+  fsLandscapeActionsPlayerName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFF',
+    marginBottom: 10,
+  },
+  fsLandscapeActionsButtonRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  fsLandscapeActionBtn: {
+    flex: 1,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fsLandscapeActionsPlayerStats: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.5)',
+    textAlign: 'center',
+  },
+  fsLandscapeActionsHint: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.3)',
+    textAlign: 'center',
+    paddingVertical: 10,
+    fontStyle: 'italic',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
   },
 });
