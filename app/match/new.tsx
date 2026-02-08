@@ -999,7 +999,7 @@ export default function NewMatchScreen() {
                     <MaterialIcons 
                       name={meneAlarmTriggered ? 'warning' : 'alarm'} 
                       size={14} 
-                      color={meneAlarmTriggered ? '#FBBF24' : 'rgba(255,255,255,0.4)'} 
+                      color={'#FBBF24'} 
                     />
                     {!meneAlarmTriggered && <Text style={styles.fsAlarmIndicatorText}>1min</Text>}
                   </View>
@@ -3386,11 +3386,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 16,
-    minWidth: 140,
+    minWidth: 130,
+    flexShrink: 0,
   },
   fsDualTimerPillActive: {
     backgroundColor: 'rgba(74, 222, 128, 0.12)',
@@ -3435,16 +3436,17 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
     borderRadius: 10,
+    marginLeft: 4,
   },
   fsAlarmIndicatorActive: {
     backgroundColor: 'rgba(251, 191, 36, 0.3)',
   },
   fsAlarmIndicatorText: {
     fontSize: 10,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.5)',
+    fontWeight: '700',
+    color: '#FBBF24',
   },
   // FS Giant Score Area
   fsGiantScoreArea: {
