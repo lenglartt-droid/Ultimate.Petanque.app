@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,157 +11,44 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { ChallengeType } from '@/services/mockData';
+import Svg, { Circle, Line, Rect } from 'react-native-svg';
+import { router } from 'expo-router';
 
+const { width: screenWidth } = Dimensions.get('window');
+
+// Challenge configuration
 const CHALLENGE_CONFIG = {
   '10_tirs': { name: '10 Tirs', icon: 'gps-fixed' as const, color: '#F97316' },
   '10_tirs_sautee': { name: 'Tirs Sautée', icon: 'sports' as const, color: '#3B82F6' },
   'precision': { name: 'Précision', icon: 'stars' as const, color: '#F59E0B' },
 };
-import Svg, { Circle, Line, Rect } from 'react-native-svg';
-import { router } from 'expo-router';
 
-const { width: screenWidth } = Dimensions.get('window');
-const chartWidth = screenWidth - 64;
-
-// Simple Bar Chart Component
-function WeeklyChart({ data }: { data: { day: string; matches: number; wins: number }[] }) {
-  const maxValue = Math.max(...data.map(d => d.matches), 1);
-  const barWidth = (chartWidth - 60) / 7;
-
-  return (
-    <View style={styles.chartContainer}>
-      <Svg width={chartWidth} height={160}>
-        {/* Grid lines */}
-        {[0, 1, 2, 3, 4].map(i => (
-          <Line
-            key={i}
-            x1={30}
-            y1={20 + i * 30}
-            x2={chartWidth}
-            y2={20 + i * 30}
-            stroke={theme.border}
-            strokeWidth={1}
-          />
-        ))}
-        
-        {/* Bars */}
-        {data.map((item, index) => {
-          const barHeight = (item.matches / maxValue) * 100;
-          const winHeight = (item.wins / maxValue) * 100;
-          const x = 40 + index * barWidth;
-          
-          return (
-            <React.Fragment key={item.day}>
-              {/* Total matches bar */}
-              <Rect
-                x={x}
-                y={120 - barHeight}
-                width={barWidth - 8}
-                height={barHeight}
-                fill={theme.border}
-                rx={4}
-              />
-              {/* Wins bar */}
-              <Rect
-                x={x}
-                y={120 - winHeight}
-                width={barWidth - 8}
-                height={winHeight}
-                fill={theme.primary}
-                rx={4}
-              />
-            </React.Fragment>
-          );
-        })}
-      </Svg>
-      
-      {/* X-axis labels */}
-      <View style={styles.chartLabels}>
-        {data.map(item => (
-          <Text key={item.day} style={styles.chartLabel}>{item.day}</Text>
-        ))}
-      </View>
-      
-      {/* Legend */}
-      <View style={styles.chartLegend}>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: theme.primary }]} />
-          <Text style={styles.legendText}>Victoires</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: theme.border }]} />
-          <Text style={styles.legendText}>Total matchs</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-// Progress Ring Component
-function StatRing({ 
-  value, 
-  label, 
-  color, 
-  size = 100 
-}: { 
-  value: number; 
-  label: string; 
-  color: string; 
-  size?: number;
-}) {
-  const strokeWidth = 8;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = radius * 2 * Math.PI;
-  const strokeDashoffset = circumference - (value / 100) * circumference;
-
-  return (
-    <View style={styles.statRingContainer}>
-      <Svg width={size} height={size}>
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke={theme.border}
-          strokeWidth={strokeWidth}
-          fill="none"
-        />
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke={color}
-          strokeWidth={strokeWidth}
-          strokeDasharray={circumference}
-          strokeDashoffset={strokeDashoffset}
-          strokeLinecap="round"
-          fill="none"
-          rotation="-90"
-          origin={`${size / 2}, ${size / 2}`}
-        />
-      </Svg>
-      <View style={[styles.statRingCenter, { width: size, height: size }]}>
-        <Text style={[styles.statRingValue, { color }]}>{value}%</Text>
-        <Text style={styles.statRingLabel}>{label}</Text>
-      </View>
-    </View>
-  );
-}
-
+// Time filter types
 type TimeFilter = 'today' | 'week' | 'month' | 'year' | 'all';
+type TabType = 'overview' | 'matches' | 'skills' | 'challenges' | 'financial';
 
-const TIME_FILTERS: { id: TimeFilter; label: string }[] = [
-  { id: 'today', label: "Aujourd'hui" },
-  { id: 'week', label: 'Semaine' },
-  { id: 'month', label: 'Mois' },
-  { id: 'year', label: 'Année' },
-  { id: 'all', label: 'Tout' },
+const TIME_FILTERS: { id: TimeFilter; label: string; icon: string }[] = [
+  { id: 'today', label: "Aujourd'hui", icon: 'today' },
+  { id: 'week', label: 'Semaine', icon: 'date-range' },
+  { id: 'month', label: 'Mois', icon: 'calendar-today' },
+  { id: 'year', label: 'Année', icon: 'event' },
+  { id: 'all', label: 'Tout', icon: 'all-inclusive' },
 ];
 
+const TABS: { id: TabType; label: string; icon: string }[] = [
+  { id: 'overview', label: 'Aperçu', icon: 'dashboard' },
+  { id: 'matches', label: 'Matchs', icon: 'sports' },
+  { id: 'skills', label: 'Technique', icon: 'gps-fixed' },
+  { id: 'challenges', label: 'Défis', icon: 'emoji-events' },
+  { id: 'financial', label: 'Finance', icon: 'account-balance-wallet' },
+];
+
+// Helper function to filter by time
 function filterByTime<T extends { date: string }>(items: T[], filter: TimeFilter): T[] {
   if (filter === 'all') return items;
   
@@ -175,7 +62,7 @@ function filterByTime<T extends { date: string }>(items: T[], filter: TimeFilter
       break;
     case 'week':
       const dayOfWeek = now.getDay();
-      const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Monday as first day
+      const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
       startDate = new Date(startOfDay);
       startDate.setDate(startDate.getDate() - diff);
       break;
@@ -192,80 +79,208 @@ function filterByTime<T extends { date: string }>(items: T[], filter: TimeFilter
   return items.filter(item => new Date(item.date) >= startDate);
 }
 
+// Progress Ring Component
+function ProgressRing({ 
+  value, 
+  size = 80,
+  strokeWidth = 6,
+  color = theme.primary,
+  backgroundColor = theme.border,
+}: { 
+  value: number; 
+  size?: number;
+  strokeWidth?: number;
+  color?: string;
+  backgroundColor?: string;
+}) {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = radius * 2 * Math.PI;
+  const strokeDashoffset = circumference - (Math.min(value, 100) / 100) * circumference;
+
+  return (
+    <Svg width={size} height={size}>
+      <Circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        stroke={backgroundColor}
+        strokeWidth={strokeWidth}
+        fill="none"
+      />
+      <Circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeDasharray={circumference}
+        strokeDashoffset={strokeDashoffset}
+        strokeLinecap="round"
+        fill="none"
+        rotation="-90"
+        origin={`${size / 2}, ${size / 2}`}
+      />
+    </Svg>
+  );
+}
+
+// Stat Card Component
+function StatCard({ 
+  icon, 
+  iconColor, 
+  label, 
+  value, 
+  subValue,
+  trend,
+}: { 
+  icon: string; 
+  iconColor: string; 
+  label: string; 
+  value: string | number;
+  subValue?: string;
+  trend?: 'up' | 'down' | 'neutral';
+}) {
+  return (
+    <View style={styles.statCard}>
+      <View style={[styles.statCardIcon, { backgroundColor: iconColor + '15' }]}>
+        <MaterialIcons name={icon as any} size={20} color={iconColor} />
+      </View>
+      <Text style={styles.statCardLabel}>{label}</Text>
+      <View style={styles.statCardValueRow}>
+        <Text style={styles.statCardValue}>{value}</Text>
+        {trend && (
+          <MaterialIcons 
+            name={trend === 'up' ? 'trending-up' : trend === 'down' ? 'trending-down' : 'trending-flat'} 
+            size={16} 
+            color={trend === 'up' ? theme.success : trend === 'down' ? theme.error : theme.textMuted} 
+          />
+        )}
+      </View>
+      {subValue && <Text style={styles.statCardSubValue}>{subValue}</Text>}
+    </View>
+  );
+}
+
+// Mini Bar Chart
+function MiniBarChart({ data, color }: { data: number[]; color: string }) {
+  const max = Math.max(...data, 1);
+  return (
+    <View style={styles.miniBarChart}>
+      {data.map((value, index) => (
+        <View 
+          key={index} 
+          style={[
+            styles.miniBar, 
+            { 
+              height: Math.max((value / max) * 40, 2),
+              backgroundColor: color,
+              opacity: 0.3 + (index / data.length) * 0.7,
+            }
+          ]} 
+        />
+      ))}
+    </View>
+  );
+}
+
 export default function StatsScreen() {
   const insets = useSafeAreaInsets();
-  const { userStats, matches, challengeStats, challenges, tournaments, terrains } = useApp();
-  const [activeTab, setActiveTab] = useState<'global' | 'tournois' | 'entrainement' | 'tir' | 'point' | 'challenges' | 'matchups' | 'terrains'>('global');
+  const { userStats, matches, challengeStats, challenges, tournaments } = useApp();
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
   const [showTimeFilterModal, setShowTimeFilterModal] = useState(false);
-  const [includeChallengesInTirStats, setIncludeChallengesInTirStats] = useState(false);
+  const [includeChallengesInStats, setIncludeChallengesInStats] = useState(false);
 
   // Filter data by time
   const filteredMatches = filterByTime(matches, timeFilter);
   const filteredChallenges = filterByTime(challenges, timeFilter);
-
-  // Calculate 1v1 challenge stats by opponent
-  const opponent1v1Stats = React.useMemo(() => {
-    const statsByOpponent: Record<string, {
-      opponentId: string;
-      opponentName: string;
-      wins: number;
-      losses: number;
-      draws: number;
-      total: number;
-    }> = {};
-
-    filteredChallenges
-      .filter(c => c.mode === '1v1' && c.opponentId && c.opponentName)
-      .forEach(challenge => {
-        const oppId = challenge.opponentId!;
-        if (!statsByOpponent[oppId]) {
-          statsByOpponent[oppId] = {
-            opponentId: oppId,
-            opponentName: challenge.opponentName!,
-            wins: 0,
-            losses: 0,
-            draws: 0,
-            total: 0,
-          };
-        }
-        statsByOpponent[oppId].total++;
-        if (challenge.winner === 'player') {
-          statsByOpponent[oppId].wins++;
-        } else if (challenge.winner === 'opponent') {
-          statsByOpponent[oppId].losses++;
-        } else {
-          statsByOpponent[oppId].draws++;
-        }
-      });
-
-    return Object.values(statsByOpponent).sort((a, b) => b.total - a.total);
-  }, [filteredChallenges]);
+  const tournamentMatches = filteredMatches.filter(m => m.mode === 'Tournoi');
+  const trainingMatches = filteredMatches.filter(m => m.mode === 'Entraînement');
 
   // Calculate filtered stats
-  const filteredStats = React.useMemo(() => {
+  const stats = useMemo(() => {
     const wins = filteredMatches.filter(m => m.winner === 'A').length;
-    const losses = filteredMatches.length - wins;
-    const winRate = filteredMatches.length > 0 ? Math.round((wins / filteredMatches.length) * 100) : 0;
+    const total = filteredMatches.length;
+    const winRate = total > 0 ? Math.round((wins / total) * 100) : 0;
     
-    return {
-      totalMatches: filteredMatches.length,
-      wins,
-      losses,
-      winRate,
-    };
-  }, [filteredMatches]);
+    const tournamentWins = tournamentMatches.filter(m => m.winner === 'A').length;
+    const trainingWins = trainingMatches.filter(m => m.winner === 'A').length;
+    
+    // Points
+    let totalPointsFor = 0, totalPointsAgainst = 0;
+    filteredMatches.forEach(match => {
+      totalPointsFor += match.teamA.score;
+      totalPointsAgainst += match.teamB.score;
+    });
 
-  // Calculate filtered challenge stats
-  const filteredChallengeStats = React.useMemo(() => {
-    const byType = {
+    // Actions from matches
+    let matchTirs = 0, matchTirsSuccess = 0, matchCarreaux = 0;
+    let matchPoints = 0, matchPointsSuccess = 0;
+    filteredMatches.forEach(match => {
+      if (match.playerActions) {
+        match.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
+          matchTirs += pa.actions.tirs;
+          matchTirsSuccess += pa.actions.tirsSuccess;
+          matchCarreaux += pa.actions.carreaux;
+          matchPoints += pa.actions.points;
+          matchPointsSuccess += pa.actions.pointsSuccess;
+        });
+      }
+    });
+
+    // Challenge shots
+    const challengeTirs = filteredChallenges
+      .filter(c => c.type !== 'precision')
+      .reduce((acc, c) => acc + (c.totalShots || 0), 0);
+    const challengeTirsSuccess = filteredChallenges
+      .filter(c => c.type !== 'precision')
+      .reduce((acc, c) => acc + (c.successCount || 0), 0);
+    const challengeCarreaux = filteredChallenges
+      .filter(c => c.type !== 'precision')
+      .reduce((acc, c) => acc + (c.carreauCount || 0), 0);
+
+    const totalTirs = includeChallengesInStats ? matchTirs + challengeTirs : matchTirs;
+    const totalTirsSuccess = includeChallengesInStats ? matchTirsSuccess + challengeTirsSuccess : matchTirsSuccess;
+    const totalCarreaux = includeChallengesInStats ? matchCarreaux + challengeCarreaux : matchCarreaux;
+
+    const tirRate = totalTirs > 0 ? Math.round((totalTirsSuccess / totalTirs) * 100) : 0;
+    const pointRate = matchPoints > 0 ? Math.round((matchPointsSuccess / matchPoints) * 100) : 0;
+    const carreauRate = totalTirs > 0 ? Math.round((totalCarreaux / totalTirs) * 100) : 0;
+
+    return {
+      total,
+      wins,
+      losses: total - wins,
+      winRate,
+      tournamentMatches: tournamentMatches.length,
+      tournamentWins,
+      tournamentWinRate: tournamentMatches.length > 0 ? Math.round((tournamentWins / tournamentMatches.length) * 100) : 0,
+      trainingMatches: trainingMatches.length,
+      trainingWins,
+      trainingWinRate: trainingMatches.length > 0 ? Math.round((trainingWins / trainingMatches.length) * 100) : 0,
+      totalPointsFor,
+      totalPointsAgainst,
+      pointDiff: totalPointsFor - totalPointsAgainst,
+      tirRate,
+      pointRate,
+      carreauRate,
+      totalTirs,
+      totalTirsSuccess,
+      totalCarreaux,
+      matchPoints,
+      matchPointsSuccess,
+      challengeTirs,
+      challengeTirsSuccess,
+    };
+  }, [filteredMatches, filteredChallenges, includeChallengesInStats]);
+
+  // Challenge stats
+  const challengeData = useMemo(() => {
+    const byType: Record<ChallengeType, { count: number; avgSuccess: number; bestScore: number; totalSuccess: number }> = {
       '10_tirs': { count: 0, avgSuccess: 0, bestScore: 0, totalSuccess: 0 },
       '10_tirs_sautee': { count: 0, avgSuccess: 0, bestScore: 0, totalSuccess: 0 },
       'precision': { count: 0, avgSuccess: 0, bestScore: 0, totalSuccess: 0 },
     };
-
-    let totalShots = 0;
-    let totalSuccess = 0;
 
     filteredChallenges.forEach(c => {
       const type = byType[c.type];
@@ -275,13 +290,9 @@ export default function StatsScreen() {
         const score = c.totalPoints || 0;
         type.totalSuccess += score;
         type.bestScore = Math.max(type.bestScore, score);
-        totalShots += 20;
-        totalSuccess += (c.precisionShots?.filter(s => s.points >= 3).length || 0);
       } else {
         type.totalSuccess += (c.successRate || 0);
         type.bestScore = Math.max(type.bestScore, c.successRate || 0);
-        totalShots += (c.totalShots || 0);
-        totalSuccess += (c.successCount || 0);
       }
     });
 
@@ -290,234 +301,86 @@ export default function StatsScreen() {
       t.avgSuccess = t.count > 0 ? Math.round(t.totalSuccess / t.count) : 0;
     });
 
+    // 1v1 stats
+    const opponent1v1: Record<string, { name: string; wins: number; losses: number; draws: number; total: number }> = {};
+    filteredChallenges
+      .filter(c => c.mode === '1v1' && c.opponentId && c.opponentName)
+      .forEach(c => {
+        const oppId = c.opponentId!;
+        if (!opponent1v1[oppId]) {
+          opponent1v1[oppId] = { name: c.opponentName!, wins: 0, losses: 0, draws: 0, total: 0 };
+        }
+        opponent1v1[oppId].total++;
+        if (c.winner === 'player') opponent1v1[oppId].wins++;
+        else if (c.winner === 'opponent') opponent1v1[oppId].losses++;
+        else opponent1v1[oppId].draws++;
+      });
+
     return {
-      totalChallenges: filteredChallenges.length,
-      byType: {
-        '10_tirs': { count: byType['10_tirs'].count, avgSuccess: byType['10_tirs'].avgSuccess, bestScore: byType['10_tirs'].bestScore },
-        '10_tirs_sautee': { count: byType['10_tirs_sautee'].count, avgSuccess: byType['10_tirs_sautee'].avgSuccess, bestScore: byType['10_tirs_sautee'].bestScore },
-        'precision': { count: byType['precision'].count, avgSuccess: byType['precision'].avgSuccess, bestScore: byType['precision'].bestScore },
-      },
-      recentChallenges: [...filteredChallenges].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5),
-      totalShots,
-      totalSuccess,
-      overallSuccessRate: totalShots > 0 ? Math.round((totalSuccess / totalShots) * 100) : 0,
+      total: filteredChallenges.length,
+      byType,
+      opponents: Object.entries(opponent1v1)
+        .map(([id, data]) => ({ id, ...data }))
+        .sort((a, b) => b.total - a.total),
+      recent: [...filteredChallenges].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5),
     };
   }, [filteredChallenges]);
 
-  // Tournament financial stats
-  const tournamentFinancialStats = React.useMemo(() => {
-    const completedTournaments = tournaments.filter(t => t.status === 'Terminé');
-    const totalCost = completedTournaments.reduce((sum, t) => sum + (t.registrationCost || 0), 0);
-    const totalGain = completedTournaments.reduce((sum, t) => sum + (t.prizeWon || 0), 0);
-    const tournamentsWithCost = completedTournaments.filter(t => t.registrationCost && t.registrationCost > 0).length;
-    const tournamentsWithGain = completedTournaments.filter(t => t.prizeWon && t.prizeWon > 0).length;
-    
+  // Financial stats
+  const financialData = useMemo(() => {
+    const completed = tournaments.filter(t => t.status === 'Terminé');
+    const totalCost = completed.reduce((sum, t) => sum + (t.registrationCost || 0), 0);
+    const totalGain = completed.reduce((sum, t) => sum + (t.prizeWon || 0), 0);
     return {
       totalCost,
       totalGain,
       balance: totalGain - totalCost,
-      tournamentsWithCost,
-      tournamentsWithGain,
-      completedCount: completedTournaments.length,
+      tournamentsWithGain: completed.filter(t => t.prizeWon && t.prizeWon > 0).length,
+      completedCount: completed.length,
     };
   }, [tournaments]);
 
-  // Filter matches by mode
-  const tournamentMatches = filteredMatches.filter(m => m.mode === 'Tournoi');
-  const trainingMatches = filteredMatches.filter(m => m.mode === 'Entraînement');
-
-  // Tournament stats
-  const tournamentStats = React.useMemo(() => {
-    const wins = tournamentMatches.filter(m => m.winner === 'A').length;
-    const losses = tournamentMatches.length - wins;
-    const winRate = tournamentMatches.length > 0 ? Math.round((wins / tournamentMatches.length) * 100) : 0;
-    
-    // Calculate action stats
-    let totalTirs = 0, totalTirsSuccess = 0, totalCarreaux = 0;
-    let totalPoints = 0, totalPointsSuccess = 0;
-    let totalPointsFor = 0, totalPointsAgainst = 0;
-    
-    tournamentMatches.forEach(match => {
-      totalPointsFor += match.teamA.score;
-      totalPointsAgainst += match.teamB.score;
-      if (match.playerActions) {
-        match.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
-          totalTirs += pa.actions.tirs;
-          totalTirsSuccess += pa.actions.tirsSuccess;
-          totalCarreaux += pa.actions.carreaux;
-          totalPoints += pa.actions.points;
-          totalPointsSuccess += pa.actions.pointsSuccess;
-        });
-      }
-    });
-
-    const tirRate = totalTirs > 0 ? Math.round((totalTirsSuccess / totalTirs) * 100) : null;
-    const pointRate = totalPoints > 0 ? Math.round((totalPointsSuccess / totalPoints) * 100) : null;
-    const carreauRate = totalTirs > 0 ? Math.round((totalCarreaux / totalTirs) * 100) : 0;
-
-    // Get unique tournaments played
-    const uniqueTournaments = new Set(tournamentMatches.map(m => m.tournamentId).filter(Boolean));
-    
-    // Phase stats
-    const phaseStats: Record<string, { played: number; wins: number }> = {};
-    tournamentMatches.forEach(match => {
-      const phase = match.tournamentPhase || 'Autre';
-      if (!phaseStats[phase]) {
-        phaseStats[phase] = { played: 0, wins: 0 };
-      }
-      phaseStats[phase].played++;
-      if (match.winner === 'A') phaseStats[phase].wins++;
-    });
-
-    return {
-      totalMatches: tournamentMatches.length,
-      wins,
-      losses,
-      winRate,
-      totalPointsFor,
-      totalPointsAgainst,
-      pointDiff: totalPointsFor - totalPointsAgainst,
-      tirRate,
-      pointRate,
-      carreauRate,
-      totalTirs,
-      totalTirsSuccess,
-      totalCarreaux,
-      totalPoints,
-      totalPointsSuccess,
-      tournamentsPlayed: uniqueTournaments.size,
-      phaseStats,
-    };
-  }, [tournamentMatches]);
-
-  // Training stats
-  const trainingStats = React.useMemo(() => {
-    const wins = trainingMatches.filter(m => m.winner === 'A').length;
-    const losses = trainingMatches.length - wins;
-    const winRate = trainingMatches.length > 0 ? Math.round((wins / trainingMatches.length) * 100) : 0;
-    
-    // Calculate action stats
-    let totalTirs = 0, totalTirsSuccess = 0, totalCarreaux = 0;
-    let totalPoints = 0, totalPointsSuccess = 0;
-    let totalPointsFor = 0, totalPointsAgainst = 0;
-    let totalDuration = 0;
-    
-    trainingMatches.forEach(match => {
-      totalPointsFor += match.teamA.score;
-      totalPointsAgainst += match.teamB.score;
-      totalDuration += match.duration || 0;
-      if (match.playerActions) {
-        match.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
-          totalTirs += pa.actions.tirs;
-          totalTirsSuccess += pa.actions.tirsSuccess;
-          totalCarreaux += pa.actions.carreaux;
-          totalPoints += pa.actions.points;
-          totalPointsSuccess += pa.actions.pointsSuccess;
-        });
-      }
-    });
-
-    const tirRate = totalTirs > 0 ? Math.round((totalTirsSuccess / totalTirs) * 100) : null;
-    const pointRate = totalPoints > 0 ? Math.round((totalPointsSuccess / totalPoints) * 100) : null;
-    const carreauRate = totalTirs > 0 ? Math.round((totalCarreaux / totalTirs) * 100) : 0;
-    const avgDuration = trainingMatches.length > 0 ? Math.round(totalDuration / trainingMatches.length) : 0;
-
-    return {
-      totalMatches: trainingMatches.length,
-      wins,
-      losses,
-      winRate,
-      totalPointsFor,
-      totalPointsAgainst,
-      pointDiff: totalPointsFor - totalPointsAgainst,
-      tirRate,
-      pointRate,
-      carreauRate,
-      totalTirs,
-      totalTirsSuccess,
-      totalCarreaux,
-      totalPoints,
-      totalPointsSuccess,
-      avgDuration,
-    };
-  }, [trainingMatches]);
-
-  // Calculate stats by terrain type
-  const terrainTypeStats = React.useMemo(() => {
-    const statsByType: Record<string, { matches: number; wins: number; losses: number; winRate: number; pointsFor: number; pointsAgainst: number }> = {};
-    
-    // Initialize all terrain types
+  // Terrain stats
+  const terrainStats = useMemo(() => {
+    const byType: Record<string, { matches: number; wins: number; winRate: number }> = {};
     ['Stabilisé', 'Graviers', 'Sable', 'Cailloux', 'Terre battue'].forEach(type => {
-      statsByType[type] = { matches: 0, wins: 0, losses: 0, winRate: 0, pointsFor: 0, pointsAgainst: 0 };
+      byType[type] = { matches: 0, wins: 0, winRate: 0 };
     });
     
-    // Calculate stats for each match based on tournament terrain
     filteredMatches.forEach(match => {
       if (match.tournamentId) {
         const tournament = tournaments.find(t => t.id === match.tournamentId);
-        if (tournament?.terrainType) {
-          const type = tournament.terrainType;
-          if (statsByType[type]) {
-            statsByType[type].matches++;
-            statsByType[type].pointsFor += match.teamA.score;
-            statsByType[type].pointsAgainst += match.teamB.score;
-            if (match.winner === 'A') {
-              statsByType[type].wins++;
-            } else {
-              statsByType[type].losses++;
-            }
-          }
+        if (tournament?.terrainType && byType[tournament.terrainType]) {
+          byType[tournament.terrainType].matches++;
+          if (match.winner === 'A') byType[tournament.terrainType].wins++;
         }
       }
     });
     
-    // Calculate win rates
-    Object.keys(statsByType).forEach(type => {
-      const stats = statsByType[type];
-      stats.winRate = stats.matches > 0 ? Math.round((stats.wins / stats.matches) * 100) : 0;
+    Object.keys(byType).forEach(type => {
+      const s = byType[type];
+      s.winRate = s.matches > 0 ? Math.round((s.wins / s.matches) * 100) : 0;
     });
     
-    return statsByType;
+    return byType;
   }, [filteredMatches, tournaments]);
 
-  const tabs = [
-    { id: 'global', label: 'Global' },
-    { id: 'tournois', label: 'Tournois' },
-    { id: 'entrainement', label: 'Entraînement' },
-    { id: 'terrains', label: 'Terrains' },
-    { id: 'tir', label: 'Tir' },
-    { id: 'point', label: 'Point' },
-    { id: 'challenges', label: 'Défis' },
-    { id: 'matchups', label: 'Adversaires' },
-  ] as const;
+  const currentTimeFilter = TIME_FILTERS.find(f => f.id === timeFilter);
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: insets.bottom + 100 }
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <Animated.View 
-          entering={FadeInDown.duration(400)}
-          style={styles.header}
-        >
-          <View style={styles.headerRow}>
-            <View>
-              <Text style={styles.title}>Statistiques</Text>
-              <Text style={styles.subtitle}>
-                {timeFilter === 'all' 
-                  ? `${userStats.totalMatches} matchs joués`
-                  : `${filteredStats.totalMatches} matchs (${TIME_FILTERS.find(f => f.id === timeFilter)?.label.toLowerCase()})`
-                }
-              </Text>
-            </View>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.headerTitle}>Statistiques</Text>
+            <Text style={styles.headerSubtitle}>
+              {stats.total} matchs • {stats.winRate}% victoires
+            </Text>
+          </View>
+          <View style={styles.headerActions}>
             <Pressable 
-              style={styles.compareButton}
+              style={styles.headerButton}
               onPress={() => {
                 Haptics.selectionAsync();
                 router.push('/player/compare');
@@ -525,1087 +388,739 @@ export default function StatsScreen() {
             >
               <MaterialIcons name="compare-arrows" size={22} color={theme.primary} />
             </Pressable>
-          </View>
-        </Animated.View>
-
-        {/* Time Filter Button */}
-        <Animated.View 
-          entering={FadeInDown.duration(400).delay(50)}
-          style={styles.timeFilterWrapper}
-        >
-          <Pressable
-            style={styles.timeFilterButtonSingle}
-            onPress={() => setShowTimeFilterModal(true)}
-          >
-            <MaterialIcons name="date-range" size={20} color={theme.primary} />
-            <Text style={styles.timeFilterButtonText}>
-              {TIME_FILTERS.find(f => f.id === timeFilter)?.label || 'Tout'}
-            </Text>
-            <MaterialIcons name="expand-more" size={20} color={theme.textSecondary} />
-          </Pressable>
-        </Animated.View>
-
-        {/* Time Filter Modal */}
-        <Modal
-          visible={showTimeFilterModal}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowTimeFilterModal(false)}
-        >
-          <Pressable 
-            style={styles.modalOverlay}
-            onPress={() => setShowTimeFilterModal(false)}
-          >
-            <Pressable style={styles.timeFilterModalContent} onPress={() => {}}>
-              <View style={styles.timeFilterModalHeader}>
-                <Text style={styles.timeFilterModalTitle}>Période</Text>
-                <Pressable onPress={() => setShowTimeFilterModal(false)}>
-                  <MaterialIcons name="close" size={24} color={theme.textSecondary} />
-                </Pressable>
-              </View>
-              <View style={styles.timeFilterModalOptions}>
-                {TIME_FILTERS.map(filter => (
-                  <Pressable
-                    key={filter.id}
-                    style={[
-                      styles.timeFilterModalOption,
-                      timeFilter === filter.id && styles.timeFilterModalOptionActive
-                    ]}
-                    onPress={() => {
-                      Haptics.selectionAsync();
-                      setTimeFilter(filter.id);
-                      setShowTimeFilterModal(false);
-                    }}
-                  >
-                    <Text style={[
-                      styles.timeFilterModalOptionText,
-                      timeFilter === filter.id && styles.timeFilterModalOptionTextActive
-                    ]}>
-                      {filter.label}
-                    </Text>
-                    {timeFilter === filter.id && (
-                      <MaterialIcons name="check" size={20} color={theme.primary} />
-                    )}
-                  </Pressable>
-                ))}
-              </View>
+            <Pressable 
+              style={styles.timeFilterButton}
+              onPress={() => setShowTimeFilterModal(true)}
+            >
+              <MaterialIcons name={currentTimeFilter?.icon as any || 'date-range'} size={18} color={theme.primary} />
+              <Text style={styles.timeFilterButtonText}>{currentTimeFilter?.label}</Text>
+              <MaterialIcons name="expand-more" size={18} color={theme.textSecondary} />
             </Pressable>
-          </Pressable>
-        </Modal>
+          </View>
+        </View>
 
-        {/* Tabs */}
-        <Animated.View 
-          entering={FadeInDown.duration(400).delay(100)}
+        {/* Tab Bar */}
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabBar}
         >
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.tabsContainer}
-          >
-            {tabs.map(tab => (
+          {TABS.map(tab => (
+            <Pressable
+              key={tab.id}
+              style={[styles.tab, activeTab === tab.id && styles.tabActive]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setActiveTab(tab.id);
+              }}
+            >
+              <MaterialIcons 
+                name={tab.icon as any} 
+                size={18} 
+                color={activeTab === tab.id ? '#FFF' : theme.textSecondary} 
+              />
+              <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>
+                {tab.label}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Time Filter Modal */}
+      <Modal
+        visible={showTimeFilterModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowTimeFilterModal(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowTimeFilterModal(false)}>
+          <Pressable style={styles.modalContent} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Période</Text>
+            {TIME_FILTERS.map(filter => (
               <Pressable
-                key={tab.id}
-                style={[
-                  styles.tab,
-                  activeTab === tab.id && styles.tabActive
-                ]}
-                onPress={() => setActiveTab(tab.id)}
-              >
-                <Text style={[
-                  styles.tabText,
-                  activeTab === tab.id && styles.tabTextActive
-                ]}>
-                  {tab.label}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </Animated.View>
-
-        {activeTab === 'global' && (
-          <>
-            {/* Weekly Progress Chart */}
-            <Animated.View 
-              entering={FadeInDown.duration(400).delay(200)}
-              style={styles.section}
-            >
-              <Text style={styles.sectionTitle}>CETTE SEMAINE</Text>
-              <View style={styles.chartCard}>
-                <WeeklyChart data={userStats.weeklyProgress} />
-              </View>
-            </Animated.View>
-
-            {/* Win Rate Hero Card */}
-            <Animated.View 
-              entering={FadeInDown.duration(400).delay(300)}
-              style={styles.section}
-            >
-              <Text style={styles.sectionTitle}>TAUX DE VICTOIRE</Text>
-              <View style={styles.winRateCard}>
-                <StatRing 
-                  value={timeFilter === 'all' ? userStats.winRate : filteredStats.winRate} 
-                  label="Victoires" 
-                  color={theme.primary}
-                  size={160}
-                />
-                <View style={styles.winRateStats}>
-                  <View style={styles.winRateStatItem}>
-                    <Text style={[styles.winRateStatValue, { color: theme.success }]}>
-                      {timeFilter === 'all' ? userStats.wins : filteredStats.wins}
-                    </Text>
-                    <Text style={styles.winRateStatLabel}>Gagnés</Text>
-                  </View>
-                  <View style={styles.winRateStatItem}>
-                    <Text style={[styles.winRateStatValue, { color: theme.error }]}>
-                      {timeFilter === 'all' ? userStats.losses : filteredStats.losses}
-                    </Text>
-                    <Text style={styles.winRateStatLabel}>Perdus</Text>
-                  </View>
-                  <View style={styles.winRateStatItem}>
-                    <Text style={[styles.winRateStatValue, { color: theme.accent }]}>{userStats.currentStreak}</Text>
-                    <Text style={styles.winRateStatLabel}>Série en cours</Text>
-                  </View>
-                </View>
-              </View>
-            </Animated.View>
-
-            {/* Performance Grid */}
-            <Animated.View 
-              entering={FadeInDown.duration(400).delay(400)}
-              style={styles.section}
-            >
-              <Text style={styles.sectionTitle}>PERFORMANCE</Text>
-              <View style={styles.performanceGrid}>
-                <View style={[styles.perfCard, { backgroundColor: '#EFF6FF' }]}>
-                  <MaterialIcons name="gps-fixed" size={24} color={theme.tirColor} />
-                  <Text style={[styles.perfValue, { color: theme.tirColor }]}>
-                    {userStats.tirSuccessRate}%
-                  </Text>
-                  <Text style={styles.perfLabel}>Tir</Text>
-                </View>
-                <View style={[styles.perfCard, { backgroundColor: '#F0FDF4' }]}>
-                  <MaterialIcons name="radio-button-on" size={24} color={theme.pointColor} />
-                  <Text style={[styles.perfValue, { color: theme.pointColor }]}>
-                    {userStats.pointSuccessRate}%
-                  </Text>
-                  <Text style={styles.perfLabel}>Point</Text>
-                </View>
-                <View style={[styles.perfCard, { backgroundColor: '#FFFBEB' }]}>
-                  <MaterialIcons name="star" size={24} color={theme.carreauColor} />
-                  <Text style={[styles.perfValue, { color: theme.carreauColor }]}>
-                    {userStats.carreauRate}%
-                  </Text>
-                  <Text style={styles.perfLabel}>Carreau</Text>
-                </View>
-                <View style={[styles.perfCard, { backgroundColor: '#FDF2F8' }]}>
-                  <MaterialIcons name="emoji-events" size={24} color="#EC4899" />
-                  <Text style={[styles.perfValue, { color: '#EC4899' }]}>
-                    {userStats.tournamentsWon}
-                  </Text>
-                  <Text style={styles.perfLabel}>Tournois gagnés</Text>
-                </View>
-              </View>
-            </Animated.View>
-
-            {/* Summary Stats */}
-            <Animated.View 
-              entering={FadeInDown.duration(400).delay(500)}
-              style={styles.section}
-            >
-              <Text style={styles.sectionTitle}>RÉSUMÉ</Text>
-              <View style={styles.summaryGrid}>
-                <View style={styles.summaryCard}>
-                  <MaterialIcons name="whatshot" size={28} color={theme.error} />
-                  <Text style={styles.summaryValue}>{userStats.longestStreak}</Text>
-                  <Text style={styles.summaryLabel}>Meilleure série</Text>
-                </View>
-                <View style={styles.summaryCard}>
-                  <MaterialIcons name="timer" size={28} color={theme.primary} />
-                  <Text style={styles.summaryValue}>{userStats.avgMatchDuration}</Text>
-                  <Text style={styles.summaryLabel}>Min / match</Text>
-                </View>
-              </View>
-            </Animated.View>
-          </>
-        )}
-
-        {activeTab === 'tir' && (
-          <>
-            {/* Include Challenges Toggle */}
-            <Animated.View 
-              entering={FadeInDown.duration(400).delay(150)}
-              style={styles.section}
-            >
-              <Pressable
-                style={[
-                  styles.includeChallengesToggle,
-                  includeChallengesInTirStats && styles.includeChallengesToggleActive
-                ]}
-                onPress={() => setIncludeChallengesInTirStats(!includeChallengesInTirStats)}
+                key={filter.id}
+                style={[styles.modalOption, timeFilter === filter.id && styles.modalOptionActive]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setTimeFilter(filter.id);
+                  setShowTimeFilterModal(false);
+                }}
               >
                 <MaterialIcons 
-                  name={includeChallengesInTirStats ? 'check-box' : 'check-box-outline-blank'} 
-                  size={24} 
-                  color={includeChallengesInTirStats ? theme.primary : theme.textSecondary} 
+                  name={filter.icon as any} 
+                  size={20} 
+                  color={timeFilter === filter.id ? theme.primary : theme.textSecondary} 
                 />
-                <View style={styles.includeChallengesInfo}>
-                  <Text style={[
-                    styles.includeChallengesTitle,
-                    includeChallengesInTirStats && styles.includeChallengesTitleActive
+                <Text style={[styles.modalOptionText, timeFilter === filter.id && styles.modalOptionTextActive]}>
+                  {filter.label}
+                </Text>
+                {timeFilter === filter.id && (
+                  <MaterialIcons name="check" size={20} color={theme.primary} />
+                )}
+              </Pressable>
+            ))}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* OVERVIEW TAB */}
+        {activeTab === 'overview' && (
+          <>
+            {/* Quick Stats Grid */}
+            <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
+              <View style={styles.quickStatsGrid}>
+                <View style={styles.mainStatCard}>
+                  <View style={styles.mainStatRing}>
+                    <ProgressRing value={stats.winRate} size={100} strokeWidth={8} color={theme.primary} />
+                    <View style={styles.mainStatRingCenter}>
+                      <Text style={styles.mainStatValue}>{stats.winRate}%</Text>
+                      <Text style={styles.mainStatLabel}>Victoires</Text>
+                    </View>
+                  </View>
+                  <View style={styles.mainStatDetails}>
+                    <View style={styles.mainStatRow}>
+                      <View style={[styles.mainStatDot, { backgroundColor: theme.success }]} />
+                      <Text style={styles.mainStatDetailText}>{stats.wins} gagnés</Text>
+                    </View>
+                    <View style={styles.mainStatRow}>
+                      <View style={[styles.mainStatDot, { backgroundColor: theme.error }]} />
+                      <Text style={styles.mainStatDetailText}>{stats.losses} perdus</Text>
+                    </View>
+                  </View>
+                </View>
+                
+                <View style={styles.sideStats}>
+                  <StatCard 
+                    icon="emoji-events" 
+                    iconColor={theme.carreauColor} 
+                    label="Tournois" 
+                    value={stats.tournamentMatches}
+                    subValue={`${stats.tournamentWinRate}% victoires`}
+                  />
+                  <StatCard 
+                    icon="fitness-center" 
+                    iconColor={theme.primary} 
+                    label="Entraînement" 
+                    value={stats.trainingMatches}
+                    subValue={`${stats.trainingWinRate}% victoires`}
+                  />
+                </View>
+              </View>
+            </Animated.View>
+
+            {/* Skills Summary */}
+            <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+              <Text style={styles.sectionTitle}>Performance technique</Text>
+              <View style={styles.skillsGrid}>
+                <View style={[styles.skillCard, { borderLeftColor: theme.tirColor }]}>
+                  <View style={styles.skillHeader}>
+                    <MaterialIcons name="gps-fixed" size={20} color={theme.tirColor} />
+                    <Text style={styles.skillLabel}>Tir</Text>
+                  </View>
+                  <Text style={[styles.skillValue, { color: theme.tirColor }]}>{stats.tirRate}%</Text>
+                  <Text style={styles.skillDetail}>{stats.totalTirsSuccess}/{stats.totalTirs}</Text>
+                </View>
+                <View style={[styles.skillCard, { borderLeftColor: theme.pointColor }]}>
+                  <View style={styles.skillHeader}>
+                    <MaterialIcons name="adjust" size={20} color={theme.pointColor} />
+                    <Text style={styles.skillLabel}>Point</Text>
+                  </View>
+                  <Text style={[styles.skillValue, { color: theme.pointColor }]}>{stats.pointRate}%</Text>
+                  <Text style={styles.skillDetail}>{stats.matchPointsSuccess}/{stats.matchPoints}</Text>
+                </View>
+                <View style={[styles.skillCard, { borderLeftColor: theme.carreauColor }]}>
+                  <View style={styles.skillHeader}>
+                    <MaterialIcons name="stars" size={20} color={theme.carreauColor} />
+                    <Text style={styles.skillLabel}>Carreau</Text>
+                  </View>
+                  <Text style={[styles.skillValue, { color: theme.carreauColor }]}>{stats.carreauRate}%</Text>
+                  <Text style={styles.skillDetail}>{stats.totalCarreaux} réussis</Text>
+                </View>
+              </View>
+            </Animated.View>
+
+            {/* Points Balance */}
+            <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
+              <Text style={styles.sectionTitle}>Balance des points</Text>
+              <View style={styles.pointsBalanceCard}>
+                <View style={styles.pointsBalanceItem}>
+                  <MaterialIcons name="add-circle" size={24} color={theme.success} />
+                  <Text style={[styles.pointsBalanceValue, { color: theme.success }]}>{stats.totalPointsFor}</Text>
+                  <Text style={styles.pointsBalanceLabel}>Marqués</Text>
+                </View>
+                <View style={styles.pointsBalanceDivider}>
+                  <View style={[
+                    styles.pointsBalanceBadge,
+                    { backgroundColor: stats.pointDiff >= 0 ? theme.success + '15' : theme.error + '15' }
                   ]}>
+                    <Text style={[
+                      styles.pointsBalanceDiffText,
+                      { color: stats.pointDiff >= 0 ? theme.success : theme.error }
+                    ]}>
+                      {stats.pointDiff > 0 ? '+' : ''}{stats.pointDiff}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.pointsBalanceItem}>
+                  <MaterialIcons name="remove-circle" size={24} color={theme.error} />
+                  <Text style={[styles.pointsBalanceValue, { color: theme.error }]}>{stats.totalPointsAgainst}</Text>
+                  <Text style={styles.pointsBalanceLabel}>Encaissés</Text>
+                </View>
+              </View>
+            </Animated.View>
+
+            {/* Challenges Preview */}
+            {challengeData.total > 0 && (
+              <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Défis récents</Text>
+                  <Pressable onPress={() => setActiveTab('challenges')}>
+                    <Text style={styles.sectionLink}>Voir tout</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.challengePreviewCard}>
+                  {challengeData.recent.slice(0, 3).map((challenge, index) => {
+                    const config = CHALLENGE_CONFIG[challenge.type];
+                    const score = challenge.type === 'precision' 
+                      ? `${challenge.totalPoints || 0}/100` 
+                      : `${challenge.successRate || 0}%`;
+                    return (
+                      <View key={challenge.id} style={[
+                        styles.challengePreviewItem,
+                        index < 2 && styles.challengePreviewItemBorder
+                      ]}>
+                        <View style={[styles.challengePreviewIcon, { backgroundColor: config.color + '15' }]}>
+                          <MaterialIcons name={config.icon} size={18} color={config.color} />
+                        </View>
+                        <View style={styles.challengePreviewInfo}>
+                          <Text style={styles.challengePreviewName}>{config.name}</Text>
+                          <Text style={styles.challengePreviewDate}>
+                            {new Date(challenge.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                          </Text>
+                        </View>
+                        <Text style={[styles.challengePreviewScore, { color: config.color }]}>{score}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </Animated.View>
+            )}
+          </>
+        )}
+
+        {/* MATCHES TAB */}
+        {activeTab === 'matches' && (
+          <>
+            {/* Match Types */}
+            <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
+              <View style={styles.matchTypesGrid}>
+                {/* Tournaments */}
+                <View style={styles.matchTypeCard}>
+                  <View style={[styles.matchTypeHeader, { backgroundColor: theme.carreauColor + '10' }]}>
+                    <MaterialIcons name="emoji-events" size={28} color={theme.carreauColor} />
+                    <Text style={styles.matchTypeTitle}>Tournois</Text>
+                  </View>
+                  <View style={styles.matchTypeBody}>
+                    <View style={styles.matchTypeMainStat}>
+                      <Text style={styles.matchTypeValue}>{stats.tournamentMatches}</Text>
+                      <Text style={styles.matchTypeLabel}>matchs</Text>
+                    </View>
+                    <View style={styles.matchTypeStats}>
+                      <View style={styles.matchTypeStatRow}>
+                        <Text style={[styles.matchTypeStatValue, { color: theme.success }]}>{stats.tournamentWins}</Text>
+                        <Text style={styles.matchTypeStatLabel}>V</Text>
+                      </View>
+                      <View style={styles.matchTypeStatRow}>
+                        <Text style={[styles.matchTypeStatValue, { color: theme.error }]}>{stats.tournamentMatches - stats.tournamentWins}</Text>
+                        <Text style={styles.matchTypeStatLabel}>D</Text>
+                      </View>
+                      <View style={[
+                        styles.matchTypeWinRate,
+                        { backgroundColor: stats.tournamentWinRate >= 50 ? theme.success + '15' : theme.error + '15' }
+                      ]}>
+                        <Text style={[
+                          styles.matchTypeWinRateText,
+                          { color: stats.tournamentWinRate >= 50 ? theme.success : theme.error }
+                        ]}>{stats.tournamentWinRate}%</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Training */}
+                <View style={styles.matchTypeCard}>
+                  <View style={[styles.matchTypeHeader, { backgroundColor: theme.primary + '10' }]}>
+                    <MaterialIcons name="fitness-center" size={28} color={theme.primary} />
+                    <Text style={styles.matchTypeTitle}>Entraînement</Text>
+                  </View>
+                  <View style={styles.matchTypeBody}>
+                    <View style={styles.matchTypeMainStat}>
+                      <Text style={styles.matchTypeValue}>{stats.trainingMatches}</Text>
+                      <Text style={styles.matchTypeLabel}>matchs</Text>
+                    </View>
+                    <View style={styles.matchTypeStats}>
+                      <View style={styles.matchTypeStatRow}>
+                        <Text style={[styles.matchTypeStatValue, { color: theme.success }]}>{stats.trainingWins}</Text>
+                        <Text style={styles.matchTypeStatLabel}>V</Text>
+                      </View>
+                      <View style={styles.matchTypeStatRow}>
+                        <Text style={[styles.matchTypeStatValue, { color: theme.error }]}>{stats.trainingMatches - stats.trainingWins}</Text>
+                        <Text style={styles.matchTypeStatLabel}>D</Text>
+                      </View>
+                      <View style={[
+                        styles.matchTypeWinRate,
+                        { backgroundColor: stats.trainingWinRate >= 50 ? theme.success + '15' : theme.error + '15' }
+                      ]}>
+                        <Text style={[
+                          styles.matchTypeWinRateText,
+                          { color: stats.trainingWinRate >= 50 ? theme.success : theme.error }
+                        ]}>{stats.trainingWinRate}%</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </Animated.View>
+
+            {/* Terrain Performance */}
+            <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+              <Text style={styles.sectionTitle}>Performance par terrain</Text>
+              <View style={styles.terrainList}>
+                {Object.entries(terrainStats).map(([type, data], index) => {
+                  const terrainIcons: Record<string, { icon: string; color: string }> = {
+                    'Stabilisé': { icon: 'landscape', color: theme.primary },
+                    'Graviers': { icon: 'grain', color: theme.warning },
+                    'Sable': { icon: 'beach-access', color: '#F59E0B' },
+                    'Cailloux': { icon: 'terrain', color: theme.textSecondary },
+                    'Terre battue': { icon: 'grass', color: theme.success },
+                  };
+                  const config = terrainIcons[type] || terrainIcons['Stabilisé'];
+                  
+                  return (
+                    <View key={type} style={styles.terrainItem}>
+                      <View style={[styles.terrainIcon, { backgroundColor: config.color + '15' }]}>
+                        <MaterialIcons name={config.icon as any} size={20} color={config.color} />
+                      </View>
+                      <View style={styles.terrainInfo}>
+                        <Text style={styles.terrainName}>{type}</Text>
+                        <Text style={styles.terrainMatches}>{data.matches} match{data.matches !== 1 ? 's' : ''}</Text>
+                      </View>
+                      {data.matches > 0 ? (
+                        <View style={styles.terrainStats}>
+                          <Text style={styles.terrainRecord}>
+                            <Text style={{ color: theme.success }}>{data.wins}</Text>
+                            <Text style={{ color: theme.textMuted }}> - </Text>
+                            <Text style={{ color: theme.error }}>{data.matches - data.wins}</Text>
+                          </Text>
+                          <View style={[
+                            styles.terrainWinRate,
+                            { backgroundColor: data.winRate >= 50 ? theme.success + '15' : theme.error + '15' }
+                          ]}>
+                            <Text style={[
+                              styles.terrainWinRateText,
+                              { color: data.winRate >= 50 ? theme.success : theme.error }
+                            ]}>{data.winRate}%</Text>
+                          </View>
+                        </View>
+                      ) : (
+                        <Text style={styles.terrainNoData}>—</Text>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            </Animated.View>
+
+            {/* Opponents */}
+            <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
+              <Text style={styles.sectionTitle}>Adversaires fréquents</Text>
+              {userStats.recentOpponents.length > 0 ? (
+                <View style={styles.opponentsList}>
+                  {userStats.recentOpponents.slice(0, 5).map((opponent, index) => {
+                    const total = opponent.wins + opponent.losses;
+                    const winRate = Math.round((opponent.wins / total) * 100);
+                    return (
+                      <View key={opponent.id} style={styles.opponentItem}>
+                        <View style={styles.opponentAvatar}>
+                          <Text style={styles.opponentInitials}>
+                            {opponent.name.split(' ').map(n => n[0]).join('')}
+                          </Text>
+                        </View>
+                        <View style={styles.opponentInfo}>
+                          <Text style={styles.opponentName}>{opponent.name}</Text>
+                          <Text style={styles.opponentMatches}>{total} confrontations</Text>
+                        </View>
+                        <View style={styles.opponentStats}>
+                          <Text style={styles.opponentRecord}>
+                            <Text style={{ color: theme.success }}>{opponent.wins}</Text>
+                            <Text style={{ color: theme.textMuted }}> - </Text>
+                            <Text style={{ color: theme.error }}>{opponent.losses}</Text>
+                          </Text>
+                          <View style={[
+                            styles.opponentWinRate,
+                            { backgroundColor: winRate >= 50 ? theme.success + '15' : theme.error + '15' }
+                          ]}>
+                            <Text style={[
+                              styles.opponentWinRateText,
+                              { color: winRate >= 50 ? theme.success : theme.error }
+                            ]}>{winRate}%</Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : (
+                <View style={styles.emptyCard}>
+                  <MaterialIcons name="people" size={40} color={theme.textMuted} />
+                  <Text style={styles.emptyText}>Jouez plus de matchs pour voir vos adversaires</Text>
+                </View>
+              )}
+            </Animated.View>
+          </>
+        )}
+
+        {/* SKILLS TAB */}
+        {activeTab === 'skills' && (
+          <>
+            {/* Include Challenges Toggle */}
+            <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
+              <Pressable
+                style={[styles.toggleCard, includeChallengesInStats && styles.toggleCardActive]}
+                onPress={() => setIncludeChallengesInStats(!includeChallengesInStats)}
+              >
+                <MaterialIcons 
+                  name={includeChallengesInStats ? 'check-box' : 'check-box-outline-blank'} 
+                  size={24} 
+                  color={includeChallengesInStats ? theme.primary : theme.textSecondary} 
+                />
+                <View style={styles.toggleInfo}>
+                  <Text style={[styles.toggleTitle, includeChallengesInStats && { color: theme.primary }]}>
                     Inclure les défis
                   </Text>
-                  <Text style={styles.includeChallengesSubtitle}>
-                    Ajouter les tirs des défis aux statistiques
+                  <Text style={styles.toggleSubtitle}>
+                    {includeChallengesInStats 
+                      ? `+${stats.challengeTirs} tirs ajoutés des défis`
+                      : 'Statistiques des matchs uniquement'}
                   </Text>
                 </View>
-                {includeChallengesInTirStats && (
-                  <View style={styles.includeChallengesBadge}>
-                    <Text style={styles.includeChallengesBadgeText}>+{filteredChallengeStats.totalShots} tirs</Text>
-                  </View>
-                )}
               </Pressable>
             </Animated.View>
 
-            <Animated.View 
-              entering={FadeInDown.duration(400).delay(200)}
-              style={styles.section}
-            >
-              <Text style={styles.sectionTitle}>PERFORMANCE AU TIR</Text>
-              <View style={styles.performanceCard}>
-                {(() => {
-                  // Calculate combined stats
-                  const matchTirs = userStats.totalMatches * 15;
-                  const matchTirsSuccess = Math.round(matchTirs * userStats.tirSuccessRate / 100);
-                  const matchCarreaux = Math.round(matchTirs * userStats.carreauRate / 100);
-                  
-                  // Challenge tirs (10_tirs and 10_tirs_sautee)
-                  const challengeTirs = filteredChallenges
-                    .filter(c => c.type !== 'precision')
-                    .reduce((acc, c) => acc + (c.totalShots || 0), 0);
-                  const challengeTirsSuccess = filteredChallenges
-                    .filter(c => c.type !== 'precision')
-                    .reduce((acc, c) => acc + (c.successCount || 0), 0);
-                  const challengeCarreaux = filteredChallenges
-                    .filter(c => c.type !== 'precision')
-                    .reduce((acc, c) => acc + (c.carreauCount || 0), 0);
+            {/* Skills Cards */}
+            <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+              {/* Tir */}
+              <View style={styles.bigSkillCard}>
+                <View style={styles.bigSkillHeader}>
+                  <View style={[styles.bigSkillIcon, { backgroundColor: theme.tirColor + '15' }]}>
+                    <MaterialIcons name="gps-fixed" size={28} color={theme.tirColor} />
+                  </View>
+                  <View style={styles.bigSkillTitleArea}>
+                    <Text style={styles.bigSkillTitle}>Tir</Text>
+                    <Text style={styles.bigSkillSubtitle}>Réussite au tir</Text>
+                  </View>
+                  <View style={styles.bigSkillRing}>
+                    <ProgressRing value={stats.tirRate} size={70} strokeWidth={6} color={theme.tirColor} />
+                    <Text style={[styles.bigSkillRingValue, { color: theme.tirColor }]}>{stats.tirRate}%</Text>
+                  </View>
+                </View>
+                <View style={styles.bigSkillStats}>
+                  <View style={styles.bigSkillStat}>
+                    <Text style={styles.bigSkillStatValue}>{stats.totalTirsSuccess}</Text>
+                    <Text style={styles.bigSkillStatLabel}>Réussis</Text>
+                  </View>
+                  <View style={styles.bigSkillStatDivider} />
+                  <View style={styles.bigSkillStat}>
+                    <Text style={styles.bigSkillStatValue}>{stats.totalTirs}</Text>
+                    <Text style={styles.bigSkillStatLabel}>Tentés</Text>
+                  </View>
+                  <View style={styles.bigSkillStatDivider} />
+                  <View style={styles.bigSkillStat}>
+                    <Text style={[styles.bigSkillStatValue, { color: theme.carreauColor }]}>{stats.carreauRate}%</Text>
+                    <Text style={styles.bigSkillStatLabel}>Carreaux</Text>
+                  </View>
+                </View>
+              </View>
 
-                  const totalTirs = includeChallengesInTirStats ? matchTirs + challengeTirs : matchTirs;
-                  const totalTirsSuccess = includeChallengesInTirStats ? matchTirsSuccess + challengeTirsSuccess : matchTirsSuccess;
-                  const totalCarreaux = includeChallengesInTirStats ? matchCarreaux + challengeCarreaux : matchCarreaux;
-                  const tirRate = totalTirs > 0 ? Math.round((totalTirsSuccess / totalTirs) * 100) : 0;
-                  const carreauRate = totalTirs > 0 ? Math.round((totalCarreaux / totalTirs) * 100) : 0;
+              {/* Point */}
+              <View style={[styles.bigSkillCard, { marginTop: 12 }]}>
+                <View style={styles.bigSkillHeader}>
+                  <View style={[styles.bigSkillIcon, { backgroundColor: theme.pointColor + '15' }]}>
+                    <MaterialIcons name="adjust" size={28} color={theme.pointColor} />
+                  </View>
+                  <View style={styles.bigSkillTitleArea}>
+                    <Text style={styles.bigSkillTitle}>Point</Text>
+                    <Text style={styles.bigSkillSubtitle}>Réussite au point</Text>
+                  </View>
+                  <View style={styles.bigSkillRing}>
+                    <ProgressRing value={stats.pointRate} size={70} strokeWidth={6} color={theme.pointColor} />
+                    <Text style={[styles.bigSkillRingValue, { color: theme.pointColor }]}>{stats.pointRate}%</Text>
+                  </View>
+                </View>
+                <View style={styles.bigSkillStats}>
+                  <View style={styles.bigSkillStat}>
+                    <Text style={styles.bigSkillStatValue}>{stats.matchPointsSuccess}</Text>
+                    <Text style={styles.bigSkillStatLabel}>Réussis</Text>
+                  </View>
+                  <View style={styles.bigSkillStatDivider} />
+                  <View style={styles.bigSkillStat}>
+                    <Text style={styles.bigSkillStatValue}>{stats.matchPoints}</Text>
+                    <Text style={styles.bigSkillStatLabel}>Tentés</Text>
+                  </View>
+                </View>
+              </View>
+            </Animated.View>
 
-                  return (
-                    <>
-                      <StatRing 
-                        value={tirRate} 
-                        label="Tir" 
-                        color={theme.tirColor}
-                        size={160}
-                      />
-                      <View style={styles.performanceDetails}>
-                        <View style={styles.detailRow}>
-                          <Text style={styles.detailLabel}>Tirs réussis</Text>
-                          <Text style={styles.detailValue}>{totalTirsSuccess}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                          <Text style={styles.detailLabel}>Tirs tentés</Text>
-                          <Text style={styles.detailValue}>{totalTirs}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                          <Text style={styles.detailLabel}>Carreaux</Text>
-                          <Text style={[styles.detailValue, { color: theme.carreauColor }]}>
-                            {carreauRate}%
-                          </Text>
-                        </View>
-                        {includeChallengesInTirStats && (
-                          <>
-                            <View style={styles.detailDivider} />
-                            <View style={styles.detailRow}>
-                              <Text style={[styles.detailLabel, { color: theme.primary }]}>Dont défis</Text>
-                              <Text style={[styles.detailValue, { color: theme.primary }]}>
-                                {challengeTirsSuccess}/{challengeTirs}
-                              </Text>
-                            </View>
-                          </>
-                        )}
-                      </View>
-                    </>
-                  );
-                })()}
+            {/* Carreau Detail */}
+            <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
+              <Text style={styles.sectionTitle}>Carreaux</Text>
+              <View style={styles.carreauCard}>
+                <View style={styles.carreauMain}>
+                  <MaterialIcons name="stars" size={40} color={theme.carreauColor} />
+                  <Text style={styles.carreauValue}>{stats.totalCarreaux}</Text>
+                  <Text style={styles.carreauLabel}>carreaux réussis</Text>
+                </View>
+                <View style={styles.carreauRate}>
+                  <Text style={styles.carreauRateValue}>{stats.carreauRate}%</Text>
+                  <Text style={styles.carreauRateLabel}>des tirs</Text>
+                </View>
               </View>
             </Animated.View>
           </>
         )}
 
-        {activeTab === 'point' && (
-          <Animated.View 
-            entering={FadeInDown.duration(400).delay(200)}
-            style={styles.section}
-          >
-            <Text style={styles.sectionTitle}>PERFORMANCE AU POINT</Text>
-            <View style={styles.performanceCard}>
-              <StatRing 
-                value={userStats.pointSuccessRate} 
-                label="Point" 
-                color={theme.pointColor}
-                size={160}
-              />
-              <View style={styles.performanceDetails}>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Points réussis</Text>
-                  <Text style={styles.detailValue}>{Math.round(userStats.totalMatches * 12 * userStats.pointSuccessRate / 100)}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Points tentés</Text>
-                  <Text style={styles.detailValue}>{userStats.totalMatches * 12}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Bouchons</Text>
-                  <Text style={[styles.detailValue, { color: theme.accent }]}>
-                    23
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </Animated.View>
-        )}
-
+        {/* CHALLENGES TAB */}
         {activeTab === 'challenges' && (
           <>
-            {/* Challenge Stats Overview */}
-            <Animated.View 
-              entering={FadeInDown.duration(400).delay(200)}
-              style={styles.section}
-            >
-              <Text style={styles.sectionTitle}>STATISTIQUES DÉFIS</Text>
-              <View style={styles.challengeOverallCard}>
-                <View style={styles.challengeOverallStat}>
-                  <Text style={styles.challengeOverallValue}>
-                    {timeFilter === 'all' ? challengeStats.totalChallenges : filteredChallengeStats.totalChallenges}
-                  </Text>
-                  <Text style={styles.challengeOverallLabel}>Défis</Text>
+            {/* Challenge Overview */}
+            <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
+              <View style={styles.challengeOverview}>
+                <View style={styles.challengeOverviewMain}>
+                  <Text style={styles.challengeOverviewValue}>{challengeData.total}</Text>
+                  <Text style={styles.challengeOverviewLabel}>défis réalisés</Text>
                 </View>
-                <View style={styles.challengeOverallDivider} />
-                <View style={styles.challengeOverallStat}>
-                  <Text style={styles.challengeOverallValue}>
-                    {timeFilter === 'all' ? challengeStats.totalShots : filteredChallengeStats.totalShots}
-                  </Text>
-                  <Text style={styles.challengeOverallLabel}>Tirs</Text>
-                </View>
-                <View style={styles.challengeOverallDivider} />
-                <View style={styles.challengeOverallStat}>
-                  <Text style={[styles.challengeOverallValue, { color: theme.success }]}>
-                    {timeFilter === 'all' ? challengeStats.overallSuccessRate : filteredChallengeStats.overallSuccessRate}%
-                  </Text>
-                  <Text style={styles.challengeOverallLabel}>Réussite</Text>
-                </View>
+                <Pressable 
+                  style={styles.newChallengeButton}
+                  onPress={() => router.push('/challenge/new')}
+                >
+                  <MaterialIcons name="add" size={20} color="#FFF" />
+                  <Text style={styles.newChallengeButtonText}>Nouveau</Text>
+                </Pressable>
               </View>
             </Animated.View>
 
             {/* Challenge Types */}
-            <Animated.View 
-              entering={FadeInDown.duration(400).delay(300)}
-              style={styles.section}
-            >
-              <Text style={styles.sectionTitle}>PAR TYPE DE DÉFI</Text>
+            <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+              <Text style={styles.sectionTitle}>Par type de défi</Text>
               <View style={styles.challengeTypesGrid}>
                 {Object.entries(CHALLENGE_CONFIG).map(([type, config]) => {
-                  const stats = timeFilter === 'all' 
-                    ? challengeStats.byType[type as ChallengeType]
-                    : filteredChallengeStats.byType[type as ChallengeType];
+                  const data = challengeData.byType[type as ChallengeType];
                   return (
                     <View key={type} style={styles.challengeTypeCard}>
-                      <View style={[styles.challengeTypeIcon, { backgroundColor: config.color + '20' }]}>
-                        <MaterialIcons name={config.icon} size={28} color={config.color} />
+                      <View style={[styles.challengeTypeIcon, { backgroundColor: config.color + '15' }]}>
+                        <MaterialIcons name={config.icon} size={24} color={config.color} />
                       </View>
                       <Text style={styles.challengeTypeName}>{config.name}</Text>
-                      <View style={styles.challengeTypeStats}>
-                        <View style={styles.challengeTypeStat}>
-                          <Text style={[styles.challengeTypeBest, { color: config.color }]}>
-                            {stats.bestScore > 0 ? `${stats.bestScore}%` : '-'}
-                          </Text>
-                          <Text style={styles.challengeTypeStatLabel}>Meilleur</Text>
-                        </View>
-                        <View style={styles.challengeTypeStat}>
-                          <Text style={styles.challengeTypeAvg}>
-                            {stats.avgSuccess > 0 ? `${stats.avgSuccess}%` : '-'}
-                          </Text>
-                          <Text style={styles.challengeTypeStatLabel}>Moyenne</Text>
-                        </View>
-                      </View>
-                      <View style={styles.challengeTypeCountBadge}>
-                        <Text style={styles.challengeTypeCount}>{stats.count} essais</Text>
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-            </Animated.View>
-
-            {/* Recent Challenges */}
-            {(timeFilter === 'all' ? challengeStats.recentChallenges : filteredChallengeStats.recentChallenges).length > 0 && (
-              <Animated.View 
-                entering={FadeInDown.duration(400).delay(400)}
-                style={styles.section}
-              >
-                <Text style={styles.sectionTitle}>DÉFIS RÉCENTS</Text>
-                {(timeFilter === 'all' ? challengeStats.recentChallenges : filteredChallengeStats.recentChallenges).map((challenge, index) => {
-                  const config = CHALLENGE_CONFIG[challenge.type];
-                  const score = challenge.type === 'precision' 
-                    ? `${challenge.totalPoints || 0}/100` 
-                    : `${challenge.successRate || 0}%`;
-                  return (
-                    <View key={challenge.id} style={styles.recentChallengeCard}>
-                      <View style={[styles.recentChallengeIcon, { backgroundColor: config.color + '20' }]}>
-                        <MaterialIcons name={config.icon} size={20} color={config.color} />
-                      </View>
-                      <View style={styles.recentChallengeInfo}>
-                        <Text style={styles.recentChallengeName}>{config.name}</Text>
-                        <Text style={styles.recentChallengeDate}>
-                          {new Date(challenge.date).toLocaleDateString('fr-FR', {
-                            day: 'numeric',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </Text>
-                      </View>
-                      <Text style={[styles.recentChallengeScore, { color: config.color }]}>
-                        {score}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </Animated.View>
-            )}
-
-            {/* 1v1 Stats by Opponent */}
-            {opponent1v1Stats.length > 0 && (
-              <Animated.View 
-                entering={FadeInDown.duration(400).delay(500)}
-                style={styles.section}
-              >
-                <Text style={styles.sectionTitle}>BILAN 1V1 PAR ADVERSAIRE</Text>
-                <View style={styles.opponent1v1Card}>
-                  {opponent1v1Stats.map((opponent, index) => {
-                    const winRate = opponent.total > 0 
-                      ? Math.round((opponent.wins / opponent.total) * 100) 
-                      : 0;
-                    return (
-                      <View 
-                        key={opponent.opponentId} 
-                        style={[
-                          styles.opponent1v1Row,
-                          index < opponent1v1Stats.length - 1 && styles.opponent1v1RowBorder
-                        ]}
-                      >
-                        <View style={styles.opponent1v1Info}>
-                          <View style={styles.opponent1v1Avatar}>
-                            <Text style={styles.opponent1v1Initials}>
-                              {opponent.opponentName.split(' ').map(n => n[0]).join('')}
+                      <Text style={styles.challengeTypeCount}>{data.count} essai{data.count !== 1 ? 's' : ''}</Text>
+                      {data.count > 0 && (
+                        <View style={styles.challengeTypeScores}>
+                          <View style={styles.challengeTypeScore}>
+                            <Text style={[styles.challengeTypeScoreValue, { color: config.color }]}>
+                              {data.bestScore}{type === 'precision' ? '' : '%'}
                             </Text>
+                            <Text style={styles.challengeTypeScoreLabel}>Meilleur</Text>
                           </View>
-                          <View style={styles.opponent1v1Details}>
-                            <Text style={styles.opponent1v1Name}>{opponent.opponentName}</Text>
-                            <Text style={styles.opponent1v1Total}>
-                              {opponent.total} défi{opponent.total > 1 ? 's' : ''}
+                          <View style={styles.challengeTypeScore}>
+                            <Text style={styles.challengeTypeScoreValue}>
+                              {data.avgSuccess}{type === 'precision' ? '' : '%'}
                             </Text>
+                            <Text style={styles.challengeTypeScoreLabel}>Moyenne</Text>
                           </View>
-                        </View>
-                        <View style={styles.opponent1v1Stats}>
-                          <View style={styles.opponent1v1Record}>
-                            <View style={styles.opponent1v1RecordItem}>
-                              <Text style={[styles.opponent1v1RecordValue, { color: theme.success }]}>
-                                {opponent.wins}
-                              </Text>
-                              <Text style={styles.opponent1v1RecordLabel}>V</Text>
-                            </View>
-                            <Text style={styles.opponent1v1RecordSeparator}>-</Text>
-                            <View style={styles.opponent1v1RecordItem}>
-                              <Text style={[styles.opponent1v1RecordValue, { color: theme.textMuted }]}>
-                                {opponent.draws}
-                              </Text>
-                              <Text style={styles.opponent1v1RecordLabel}>N</Text>
-                            </View>
-                            <Text style={styles.opponent1v1RecordSeparator}>-</Text>
-                            <View style={styles.opponent1v1RecordItem}>
-                              <Text style={[styles.opponent1v1RecordValue, { color: theme.error }]}>
-                                {opponent.losses}
-                              </Text>
-                              <Text style={styles.opponent1v1RecordLabel}>D</Text>
-                            </View>
-                          </View>
-                          <View style={[
-                            styles.opponent1v1WinRateBadge,
-                            { backgroundColor: winRate >= 50 ? theme.success + '15' : winRate > 0 ? theme.error + '15' : theme.textMuted + '15' }
-                          ]}>
-                            <Text style={[
-                              styles.opponent1v1WinRateText,
-                              { color: winRate >= 50 ? theme.success : winRate > 0 ? theme.error : theme.textMuted }
-                            ]}>
-                              {winRate}%
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              </Animated.View>
-            )}
-
-            {/* Empty State */}
-            {(timeFilter === 'all' ? challengeStats.totalChallenges : filteredChallengeStats.totalChallenges) === 0 && (
-              <Animated.View 
-                entering={FadeInDown.duration(400).delay(300)}
-                style={styles.emptyChallengesCard}
-              >
-                <MaterialIcons name="emoji-events" size={64} color={theme.textMuted} />
-                <Text style={styles.emptyChallengesTitle}>Aucun défi réalisé</Text>
-                <Text style={styles.emptyChallengesText}>
-                  Commencez un défi pour voir vos statistiques ici
-                </Text>
-                <Pressable
-                  style={styles.startChallengeButton}
-                  onPress={() => router.push('/challenge/new')}
-                >
-                  <MaterialIcons name="add" size={20} color="#FFF" />
-                  <Text style={styles.startChallengeButtonText}>Nouveau défi</Text>
-                </Pressable>
-              </Animated.View>
-            )}
-          </>
-        )}
-
-        {activeTab === 'tournois' && (
-          <>
-            {/* Tournament Overview */}
-            <Animated.View 
-              entering={FadeInDown.duration(400).delay(200)}
-              style={styles.section}
-            >
-              <Text style={styles.sectionTitle}>VUE D'ENSEMBLE TOURNOIS</Text>
-              <View style={styles.tournamentOverviewCard}>
-                <View style={styles.tournamentOverviewMain}>
-                  <View style={styles.tournamentOverviewIcon}>
-                    <MaterialIcons name="emoji-events" size={32} color={theme.carreauColor} />
-                  </View>
-                  <View style={styles.tournamentOverviewStats}>
-                    <Text style={styles.tournamentOverviewValue}>{tournamentStats.tournamentsPlayed}</Text>
-                    <Text style={styles.tournamentOverviewLabel}>Tournois joués</Text>
-                  </View>
-                </View>
-                <View style={styles.tournamentOverviewDivider} />
-                <View style={styles.tournamentOverviewRow}>
-                  <View style={styles.tournamentOverviewStat}>
-                    <Text style={styles.tournamentStatValue}>{tournamentStats.totalMatches}</Text>
-                    <Text style={styles.tournamentStatLabel}>Matchs</Text>
-                  </View>
-                  <View style={styles.tournamentOverviewStat}>
-                    <Text style={[styles.tournamentStatValue, { color: theme.success }]}>{tournamentStats.wins}</Text>
-                    <Text style={styles.tournamentStatLabel}>Victoires</Text>
-                  </View>
-                  <View style={styles.tournamentOverviewStat}>
-                    <Text style={[styles.tournamentStatValue, { color: theme.error }]}>{tournamentStats.losses}</Text>
-                    <Text style={styles.tournamentStatLabel}>Défaites</Text>
-                  </View>
-                  <View style={styles.tournamentOverviewStat}>
-                    <Text style={[styles.tournamentStatValue, { color: theme.primary }]}>{tournamentStats.winRate}%</Text>
-                    <Text style={styles.tournamentStatLabel}>Victoires</Text>
-                  </View>
-                </View>
-              </View>
-            </Animated.View>
-
-            {/* Financial Stats (only show if there's data) */}
-            {(tournamentFinancialStats.totalCost > 0 || tournamentFinancialStats.totalGain > 0) && (
-              <Animated.View 
-                entering={FadeInDown.duration(400).delay(250)}
-                style={styles.section}
-              >
-                <Text style={styles.sectionTitle}>BILAN FINANCIER</Text>
-                <View style={styles.financialCard}>
-                  <View style={styles.financialRow}>
-                    <View style={styles.financialItem}>
-                      <MaterialIcons name="remove-circle" size={20} color={theme.error} />
-                      <Text style={[styles.financialValue, { color: theme.error }]}>
-                        {tournamentFinancialStats.totalCost}€
-                      </Text>
-                      <Text style={styles.financialLabel}>Dépensé</Text>
-                    </View>
-                    <View style={styles.financialDivider}>
-                      <View style={[
-                        styles.financialBalanceBadge,
-                        { backgroundColor: tournamentFinancialStats.balance >= 0 ? theme.success + '15' : theme.error + '15' }
-                      ]}>
-                        <Text style={[
-                          styles.financialBalanceText,
-                          { color: tournamentFinancialStats.balance >= 0 ? theme.success : theme.error }
-                        ]}>
-                          {tournamentFinancialStats.balance > 0 ? '+' : ''}{tournamentFinancialStats.balance}€
-                        </Text>
-                      </View>
-                      <Text style={styles.financialBalanceLabel}>Bilan</Text>
-                    </View>
-                    <View style={styles.financialItem}>
-                      <MaterialIcons name="add-circle" size={20} color={theme.success} />
-                      <Text style={[styles.financialValue, { color: theme.success }]}>
-                        {tournamentFinancialStats.totalGain}€
-                      </Text>
-                      <Text style={styles.financialLabel}>Gagné</Text>
-                    </View>
-                  </View>
-                  <View style={styles.financialFooter}>
-                    <Text style={styles.financialFooterText}>
-                      {tournamentFinancialStats.tournamentsWithGain} tournoi{tournamentFinancialStats.tournamentsWithGain > 1 ? 's' : ''} avec gain
-                       sur {tournamentFinancialStats.completedCount} terminé{tournamentFinancialStats.completedCount > 1 ? 's' : ''}
-                    </Text>
-                  </View>
-                </View>
-              </Animated.View>
-            )}
-
-            {/* Points Stats */}
-            <Animated.View 
-              entering={FadeInDown.duration(400).delay(300)}
-              style={styles.section}
-            >
-              <Text style={styles.sectionTitle}>POINTS</Text>
-              <View style={styles.pointsStatsCard}>
-                <View style={styles.pointsStatsRow}>
-                  <View style={styles.pointsStatItem}>
-                    <Text style={[styles.pointsStatValue, { color: theme.success }]}>{tournamentStats.totalPointsFor}</Text>
-                    <Text style={styles.pointsStatLabel}>Marqués</Text>
-                  </View>
-                  <View style={styles.pointsStatDivider}>
-                    <Text style={styles.pointsDiffValue}>
-                      {tournamentStats.pointDiff > 0 ? '+' : ''}{tournamentStats.pointDiff}
-                    </Text>
-                    <Text style={styles.pointsDiffLabel}>Diff.</Text>
-                  </View>
-                  <View style={styles.pointsStatItem}>
-                    <Text style={[styles.pointsStatValue, { color: theme.error }]}>{tournamentStats.totalPointsAgainst}</Text>
-                    <Text style={styles.pointsStatLabel}>Encaissés</Text>
-                  </View>
-                </View>
-              </View>
-            </Animated.View>
-
-            {/* Tir/Point Performance */}
-            {(tournamentStats.tirRate !== null || tournamentStats.pointRate !== null) && (
-              <Animated.View 
-                entering={FadeInDown.duration(400).delay(400)}
-                style={styles.section}
-              >
-                <Text style={styles.sectionTitle}>PERFORMANCE ACTIONS</Text>
-                <View style={styles.actionStatsGrid}>
-                  {tournamentStats.tirRate !== null && (
-                    <View style={[styles.actionStatCard, { backgroundColor: theme.tirColor + '10' }]}>
-                      <MaterialIcons name="gps-fixed" size={28} color={theme.tirColor} />
-                      <Text style={[styles.actionStatValue, { color: theme.tirColor }]}>{tournamentStats.tirRate}%</Text>
-                      <Text style={styles.actionStatLabel}>Tir</Text>
-                      <Text style={styles.actionStatDetail}>
-                        {tournamentStats.totalTirsSuccess}/{tournamentStats.totalTirs}
-                      </Text>
-                    </View>
-                  )}
-                  {tournamentStats.pointRate !== null && (
-                    <View style={[styles.actionStatCard, { backgroundColor: theme.pointColor + '10' }]}>
-                      <MaterialIcons name="adjust" size={28} color={theme.pointColor} />
-                      <Text style={[styles.actionStatValue, { color: theme.pointColor }]}>{tournamentStats.pointRate}%</Text>
-                      <Text style={styles.actionStatLabel}>Point</Text>
-                      <Text style={styles.actionStatDetail}>
-                        {tournamentStats.totalPointsSuccess}/{tournamentStats.totalPoints}
-                      </Text>
-                    </View>
-                  )}
-                  <View style={[styles.actionStatCard, { backgroundColor: theme.carreauColor + '10' }]}>
-                    <MaterialIcons name="stars" size={28} color={theme.carreauColor} />
-                    <Text style={[styles.actionStatValue, { color: theme.carreauColor }]}>{tournamentStats.carreauRate}%</Text>
-                    <Text style={styles.actionStatLabel}>Carreau</Text>
-                    <Text style={styles.actionStatDetail}>{tournamentStats.totalCarreaux} réussis</Text>
-                  </View>
-                </View>
-              </Animated.View>
-            )}
-
-            {/* Phase Stats */}
-            {Object.keys(tournamentStats.phaseStats).length > 0 && (
-              <Animated.View 
-                entering={FadeInDown.duration(400).delay(500)}
-                style={styles.section}
-              >
-                <Text style={styles.sectionTitle}>PAR PHASE</Text>
-                <View style={styles.phaseStatsCard}>
-                  {Object.entries(tournamentStats.phaseStats).map(([phase, stats]) => {
-                    const phaseWinRate = stats.played > 0 ? Math.round((stats.wins / stats.played) * 100) : 0;
-                    return (
-                      <View key={phase} style={styles.phaseStatRow}>
-                        <Text style={styles.phaseName}>{phase}</Text>
-                        <View style={styles.phaseStatValues}>
-                          <Text style={styles.phaseRecord}>
-                            <Text style={{ color: theme.success }}>{stats.wins}</Text>
-                            <Text style={{ color: theme.textMuted }}> - </Text>
-                            <Text style={{ color: theme.error }}>{stats.played - stats.wins}</Text>
-                          </Text>
-                          <View style={[
-                            styles.phaseWinRateBadge,
-                            { backgroundColor: phaseWinRate >= 50 ? theme.success + '15' : theme.error + '15' }
-                          ]}>
-                            <Text style={[
-                              styles.phaseWinRateText,
-                              { color: phaseWinRate >= 50 ? theme.success : theme.error }
-                            ]}>
-                              {phaseWinRate}%
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              </Animated.View>
-            )}
-
-            {/* Empty State */}
-            {tournamentStats.totalMatches === 0 && (
-              <Animated.View 
-                entering={FadeInDown.duration(400).delay(300)}
-                style={styles.emptyStateCard}
-              >
-                <MaterialIcons name="emoji-events" size={64} color={theme.textMuted} />
-                <Text style={styles.emptyStateTitle}>Aucun match de tournoi</Text>
-                <Text style={styles.emptyStateText}>
-                  Créez un tournoi et enregistrez vos matchs pour voir vos statistiques
-                </Text>
-              </Animated.View>
-            )}
-          </>
-        )}
-
-        {activeTab === 'entrainement' && (
-          <>
-            {/* Training Overview */}
-            <Animated.View 
-              entering={FadeInDown.duration(400).delay(200)}
-              style={styles.section}
-            >
-              <Text style={styles.sectionTitle}>VUE D'ENSEMBLE ENTRAÎNEMENT</Text>
-              <View style={styles.trainingOverviewCard}>
-                <View style={styles.trainingOverviewMain}>
-                  <View style={styles.trainingOverviewIcon}>
-                    <MaterialIcons name="fitness-center" size={32} color={theme.primary} />
-                  </View>
-                  <View style={styles.trainingOverviewStats}>
-                    <Text style={styles.trainingOverviewValue}>{trainingStats.totalMatches}</Text>
-                    <Text style={styles.trainingOverviewLabel}>Matchs d'entraînement</Text>
-                  </View>
-                </View>
-                <View style={styles.trainingOverviewDivider} />
-                <View style={styles.trainingOverviewRow}>
-                  <View style={styles.trainingOverviewStat}>
-                    <Text style={[styles.trainingStatValue, { color: theme.success }]}>{trainingStats.wins}</Text>
-                    <Text style={styles.trainingStatLabel}>Victoires</Text>
-                  </View>
-                  <View style={styles.trainingOverviewStat}>
-                    <Text style={[styles.trainingStatValue, { color: theme.error }]}>{trainingStats.losses}</Text>
-                    <Text style={styles.trainingStatLabel}>Défaites</Text>
-                  </View>
-                  <View style={styles.trainingOverviewStat}>
-                    <Text style={[styles.trainingStatValue, { color: theme.primary }]}>{trainingStats.winRate}%</Text>
-                    <Text style={styles.trainingStatLabel}>Taux</Text>
-                  </View>
-                  <View style={styles.trainingOverviewStat}>
-                    <Text style={styles.trainingStatValue}>{trainingStats.avgDuration}</Text>
-                    <Text style={styles.trainingStatLabel}>Min/match</Text>
-                  </View>
-                </View>
-              </View>
-            </Animated.View>
-
-            {/* Win Rate Ring */}
-            <Animated.View 
-              entering={FadeInDown.duration(400).delay(300)}
-              style={styles.section}
-            >
-              <Text style={styles.sectionTitle}>TAUX DE VICTOIRE</Text>
-              <View style={styles.winRateCard}>
-                <StatRing 
-                  value={trainingStats.winRate} 
-                  label="Victoires" 
-                  color={theme.primary}
-                  size={140}
-                />
-                <View style={styles.winRateStats}>
-                  <View style={styles.winRateStatItem}>
-                    <Text style={[styles.winRateStatValue, { color: theme.success }]}>
-                      {trainingStats.totalPointsFor}
-                    </Text>
-                    <Text style={styles.winRateStatLabel}>Points marqués</Text>
-                  </View>
-                  <View style={styles.winRateStatItem}>
-                    <Text style={[styles.winRateStatValue, { color: theme.error }]}>
-                      {trainingStats.totalPointsAgainst}
-                    </Text>
-                    <Text style={styles.winRateStatLabel}>Points encaissés</Text>
-                  </View>
-                  <View style={styles.winRateStatItem}>
-                    <Text style={[styles.winRateStatValue, { color: trainingStats.pointDiff >= 0 ? theme.success : theme.error }]}>
-                      {trainingStats.pointDiff > 0 ? '+' : ''}{trainingStats.pointDiff}
-                    </Text>
-                    <Text style={styles.winRateStatLabel}>Différence</Text>
-                  </View>
-                </View>
-              </View>
-            </Animated.View>
-
-            {/* Tir/Point Performance */}
-            {(trainingStats.tirRate !== null || trainingStats.pointRate !== null) && (
-              <Animated.View 
-                entering={FadeInDown.duration(400).delay(400)}
-                style={styles.section}
-              >
-                <Text style={styles.sectionTitle}>PERFORMANCE ACTIONS</Text>
-                <View style={styles.actionStatsGrid}>
-                  {trainingStats.tirRate !== null && (
-                    <View style={[styles.actionStatCard, { backgroundColor: theme.tirColor + '10' }]}>
-                      <MaterialIcons name="gps-fixed" size={28} color={theme.tirColor} />
-                      <Text style={[styles.actionStatValue, { color: theme.tirColor }]}>{trainingStats.tirRate}%</Text>
-                      <Text style={styles.actionStatLabel}>Tir</Text>
-                      <Text style={styles.actionStatDetail}>
-                        {trainingStats.totalTirsSuccess}/{trainingStats.totalTirs}
-                      </Text>
-                    </View>
-                  )}
-                  {trainingStats.pointRate !== null && (
-                    <View style={[styles.actionStatCard, { backgroundColor: theme.pointColor + '10' }]}>
-                      <MaterialIcons name="adjust" size={28} color={theme.pointColor} />
-                      <Text style={[styles.actionStatValue, { color: theme.pointColor }]}>{trainingStats.pointRate}%</Text>
-                      <Text style={styles.actionStatLabel}>Point</Text>
-                      <Text style={styles.actionStatDetail}>
-                        {trainingStats.totalPointsSuccess}/{trainingStats.totalPoints}
-                      </Text>
-                    </View>
-                  )}
-                  <View style={[styles.actionStatCard, { backgroundColor: theme.carreauColor + '10' }]}>
-                    <MaterialIcons name="stars" size={28} color={theme.carreauColor} />
-                    <Text style={[styles.actionStatValue, { color: theme.carreauColor }]}>{trainingStats.carreauRate}%</Text>
-                    <Text style={styles.actionStatLabel}>Carreau</Text>
-                    <Text style={styles.actionStatDetail}>{trainingStats.totalCarreaux} réussis</Text>
-                  </View>
-                </View>
-              </Animated.View>
-            )}
-
-            {/* Empty State */}
-            {trainingStats.totalMatches === 0 && (
-              <Animated.View 
-                entering={FadeInDown.duration(400).delay(300)}
-                style={styles.emptyStateCard}
-              >
-                <MaterialIcons name="fitness-center" size={64} color={theme.textMuted} />
-                <Text style={styles.emptyStateTitle}>Aucun match d'entraînement</Text>
-                <Text style={styles.emptyStateText}>
-                  Enregistrez vos matchs d'entraînement pour suivre votre progression
-                </Text>
-                <Pressable
-                  style={styles.emptyStateButton}
-                  onPress={() => router.push('/match/new')}
-                >
-                  <MaterialIcons name="add" size={20} color="#FFF" />
-                  <Text style={styles.emptyStateButtonText}>Nouveau match</Text>
-                </Pressable>
-              </Animated.View>
-            )}
-          </>
-        )}
-
-        {activeTab === 'terrains' && (
-          <>
-            {/* Terrain Stats Overview */}
-            <Animated.View 
-              entering={FadeInDown.duration(400).delay(200)}
-              style={styles.section}
-            >
-              <Text style={styles.sectionTitle}>RÉSULTATS PAR TYPE DE TERRAIN</Text>
-              <Text style={styles.terrainStatsSubtitle}>
-                Statistiques basées sur vos matchs de tournoi
-              </Text>
-            </Animated.View>
-
-            {/* Terrain Type Cards */}
-            <Animated.View 
-              entering={FadeInDown.duration(400).delay(300)}
-              style={styles.section}
-            >
-              {Object.entries(terrainTypeStats).map(([type, stats], index) => {
-                const typeColors: Record<string, { bg: string; icon: string }> = {
-                  'Stabilisé': { bg: theme.primary, icon: 'landscape' },
-                  'Graviers': { bg: theme.warning, icon: 'grain' },
-                  'Sable': { bg: '#F59E0B', icon: 'beach-access' },
-                  'Cailloux': { bg: theme.textSecondary, icon: 'terrain' },
-                  'Terre battue': { bg: theme.success, icon: 'grass' },
-                };
-                const color = typeColors[type] || typeColors['Stabilisé'];
-                
-                return (
-                  <Animated.View
-                    key={type}
-                    entering={FadeInDown.duration(400).delay(300 + index * 50)}
-                    style={styles.terrainTypeCard}
-                  >
-                    <View style={styles.terrainTypeHeader}>
-                      <View style={[styles.terrainTypeIcon, { backgroundColor: color.bg + '20' }]}>
-                        <MaterialIcons name={color.icon as any} size={28} color={color.bg} />
-                      </View>
-                      <View style={styles.terrainTypeInfo}>
-                        <Text style={styles.terrainTypeName}>{type}</Text>
-                        <Text style={styles.terrainTypeMatches}>
-                          {stats.matches} match{stats.matches !== 1 ? 's' : ''} joué{stats.matches !== 1 ? 's' : ''}
-                        </Text>
-                      </View>
-                      {stats.matches > 0 && (
-                        <View style={[
-                          styles.terrainWinRateBadge,
-                          { backgroundColor: stats.winRate >= 50 ? theme.success + '15' : theme.error + '15' }
-                        ]}>
-                          <Text style={[
-                            styles.terrainWinRateText,
-                            { color: stats.winRate >= 50 ? theme.success : theme.error }
-                          ]}>
-                            {stats.winRate}%
-                          </Text>
                         </View>
                       )}
                     </View>
-                    
-                    {stats.matches > 0 ? (
-                      <View style={styles.terrainTypeStats}>
-                        <View style={styles.terrainTypeStat}>
-                          <Text style={[styles.terrainTypeStatValue, { color: theme.success }]}>
-                            {stats.wins}
-                          </Text>
-                          <Text style={styles.terrainTypeStatLabel}>Victoires</Text>
-                        </View>
-                        <View style={styles.terrainTypeStatDivider} />
-                        <View style={styles.terrainTypeStat}>
-                          <Text style={[styles.terrainTypeStatValue, { color: theme.error }]}>
-                            {stats.losses}
-                          </Text>
-                          <Text style={styles.terrainTypeStatLabel}>Défaites</Text>
-                        </View>
-                        <View style={styles.terrainTypeStatDivider} />
-                        <View style={styles.terrainTypeStat}>
-                          <Text style={styles.terrainTypeStatValue}>
-                            {stats.pointsFor}
-                          </Text>
-                          <Text style={styles.terrainTypeStatLabel}>Pts marqués</Text>
-                        </View>
-                        <View style={styles.terrainTypeStatDivider} />
-                        <View style={styles.terrainTypeStat}>
-                          <Text style={styles.terrainTypeStatValue}>
-                            {stats.pointsAgainst}
-                          </Text>
-                          <Text style={styles.terrainTypeStatLabel}>Pts encaissés</Text>
-                        </View>
-                      </View>
-                    ) : (
-                      <View style={styles.terrainNoMatchesContainer}>
-                        <Text style={styles.terrainNoMatchesText}>
-                          Aucun match sur ce type de terrain
-                        </Text>
-                      </View>
-                    )}
-                  </Animated.View>
-                );
-              })}
+                  );
+                })}
+              </View>
             </Animated.View>
 
-            {/* Terrain Tips */}
-            <Animated.View 
-              entering={FadeInDown.duration(400).delay(600)}
-              style={styles.section}
-            >
-              <View style={styles.terrainTipsCard}>
+            {/* 1v1 Opponents */}
+            {challengeData.opponents.length > 0 && (
+              <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
+                <Text style={styles.sectionTitle}>Bilan 1v1</Text>
+                <View style={styles.opponents1v1List}>
+                  {challengeData.opponents.map((opponent, index) => {
+                    const winRate = opponent.total > 0 ? Math.round((opponent.wins / opponent.total) * 100) : 0;
+                    return (
+                      <View key={opponent.id} style={styles.opponent1v1Item}>
+                        <View style={styles.opponent1v1Avatar}>
+                          <Text style={styles.opponent1v1Initials}>
+                            {opponent.name.split(' ').map(n => n[0]).join('')}
+                          </Text>
+                        </View>
+                        <View style={styles.opponent1v1Info}>
+                          <Text style={styles.opponent1v1Name}>{opponent.name}</Text>
+                          <Text style={styles.opponent1v1Total}>{opponent.total} défi{opponent.total > 1 ? 's' : ''}</Text>
+                        </View>
+                        <View style={styles.opponent1v1Record}>
+                          <Text style={[styles.opponent1v1RecordValue, { color: theme.success }]}>{opponent.wins}</Text>
+                          <Text style={styles.opponent1v1RecordSep}>-</Text>
+                          <Text style={[styles.opponent1v1RecordValue, { color: theme.textMuted }]}>{opponent.draws}</Text>
+                          <Text style={styles.opponent1v1RecordSep}>-</Text>
+                          <Text style={[styles.opponent1v1RecordValue, { color: theme.error }]}>{opponent.losses}</Text>
+                        </View>
+                        <View style={[
+                          styles.opponent1v1WinRate,
+                          { backgroundColor: winRate >= 50 ? theme.success + '15' : theme.error + '15' }
+                        ]}>
+                          <Text style={[
+                            styles.opponent1v1WinRateText,
+                            { color: winRate >= 50 ? theme.success : theme.error }
+                          ]}>{winRate}%</Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </Animated.View>
+            )}
+
+            {/* Recent Challenges */}
+            {challengeData.recent.length > 0 && (
+              <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
+                <Text style={styles.sectionTitle}>Historique récent</Text>
+                <View style={styles.recentChallengesList}>
+                  {challengeData.recent.map((challenge, index) => {
+                    const config = CHALLENGE_CONFIG[challenge.type];
+                    const score = challenge.type === 'precision' 
+                      ? `${challenge.totalPoints || 0}/100` 
+                      : `${challenge.successRate || 0}%`;
+                    return (
+                      <View key={challenge.id} style={styles.recentChallengeItem}>
+                        <View style={[styles.recentChallengeIcon, { backgroundColor: config.color + '15' }]}>
+                          <MaterialIcons name={config.icon} size={20} color={config.color} />
+                        </View>
+                        <View style={styles.recentChallengeInfo}>
+                          <Text style={styles.recentChallengeName}>{config.name}</Text>
+                          <Text style={styles.recentChallengeDate}>
+                            {new Date(challenge.date).toLocaleDateString('fr-FR', {
+                              day: 'numeric',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </Text>
+                        </View>
+                        {challenge.mode === '1v1' && (
+                          <View style={styles.recentChallenge1v1Badge}>
+                            <Text style={styles.recentChallenge1v1Text}>1v1</Text>
+                          </View>
+                        )}
+                        <Text style={[styles.recentChallengeScore, { color: config.color }]}>{score}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </Animated.View>
+            )}
+
+            {/* Empty State */}
+            {challengeData.total === 0 && (
+              <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+                <View style={styles.emptyStateCard}>
+                  <MaterialIcons name="emoji-events" size={60} color={theme.textMuted} />
+                  <Text style={styles.emptyStateTitle}>Aucun défi réalisé</Text>
+                  <Text style={styles.emptyStateText}>
+                    Commencez un défi pour améliorer vos compétences et suivre votre progression
+                  </Text>
+                  <Pressable
+                    style={styles.emptyStateButton}
+                    onPress={() => router.push('/challenge/new')}
+                  >
+                    <MaterialIcons name="add" size={20} color="#FFF" />
+                    <Text style={styles.emptyStateButtonText}>Nouveau défi</Text>
+                  </Pressable>
+                </View>
+              </Animated.View>
+            )}
+          </>
+        )}
+
+        {/* FINANCIAL TAB */}
+        {activeTab === 'financial' && (
+          <>
+            {/* Balance Card */}
+            <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
+              <View style={styles.balanceCard}>
+                <Text style={styles.balanceTitle}>Bilan financier</Text>
+                <View style={[
+                  styles.balanceBadge,
+                  { backgroundColor: financialData.balance >= 0 ? theme.success + '15' : theme.error + '15' }
+                ]}>
+                  <Text style={[
+                    styles.balanceValue,
+                    { color: financialData.balance >= 0 ? theme.success : theme.error }
+                  ]}>
+                    {financialData.balance > 0 ? '+' : ''}{financialData.balance}€
+                  </Text>
+                </View>
+                <Text style={styles.balanceSubtitle}>
+                  Sur {financialData.completedCount} tournoi{financialData.completedCount > 1 ? 's' : ''} terminé{financialData.completedCount > 1 ? 's' : ''}
+                </Text>
+              </View>
+            </Animated.View>
+
+            {/* Cost vs Gain */}
+            <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+              <View style={styles.financialGrid}>
+                <View style={[styles.financialCard, { borderTopColor: theme.error }]}>
+                  <MaterialIcons name="remove-circle-outline" size={28} color={theme.error} />
+                  <Text style={[styles.financialValue, { color: theme.error }]}>{financialData.totalCost}€</Text>
+                  <Text style={styles.financialLabel}>Dépensé</Text>
+                  <Text style={styles.financialDetail}>en inscriptions</Text>
+                </View>
+                <View style={[styles.financialCard, { borderTopColor: theme.success }]}>
+                  <MaterialIcons name="add-circle-outline" size={28} color={theme.success} />
+                  <Text style={[styles.financialValue, { color: theme.success }]}>{financialData.totalGain}€</Text>
+                  <Text style={styles.financialLabel}>Gagné</Text>
+                  <Text style={styles.financialDetail}>{financialData.tournamentsWithGain} tournoi{financialData.tournamentsWithGain > 1 ? 's' : ''}</Text>
+                </View>
+              </View>
+            </Animated.View>
+
+            {/* Tip */}
+            <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
+              <View style={styles.tipCard}>
                 <MaterialIcons name="lightbulb" size={24} color={theme.warning} />
-                <View style={styles.terrainTipsContent}>
-                  <Text style={styles.terrainTipsTitle}>Conseil</Text>
-                  <Text style={styles.terrainTipsText}>
-                    Analysez vos performances par type de terrain pour identifier vos points forts et adapter votre jeu.
+                <View style={styles.tipContent}>
+                  <Text style={styles.tipTitle}>Conseil</Text>
+                  <Text style={styles.tipText}>
+                    Renseignez le coût d'inscription et vos gains lors de la création ou modification de vos tournois pour suivre votre bilan financier.
                   </Text>
                 </View>
               </View>
             </Animated.View>
+
+            {/* Empty State */}
+            {financialData.completedCount === 0 && (
+              <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+                <View style={styles.emptyStateCard}>
+                  <MaterialIcons name="account-balance-wallet" size={60} color={theme.textMuted} />
+                  <Text style={styles.emptyStateTitle}>Aucun tournoi terminé</Text>
+                  <Text style={styles.emptyStateText}>
+                    Terminez des tournois avec coûts et gains pour voir votre bilan financier
+                  </Text>
+                </View>
+              </Animated.View>
+            )}
           </>
         )}
-
-        {activeTab === 'matchups' && (
-          <Animated.View 
-            entering={FadeInDown.duration(400).delay(200)}
-            style={styles.section}
-          >
-            <Text style={styles.sectionTitle}>FACE À FACE</Text>
-            {userStats.recentOpponents.map((opponent, index) => {
-              const total = opponent.wins + opponent.losses;
-              const winRate = Math.round((opponent.wins / total) * 100);
-              
-              return (
-                <View key={opponent.id} style={styles.opponentCard}>
-                  <View style={styles.opponentInfo}>
-                    <View style={styles.opponentAvatar}>
-                      <Text style={styles.opponentInitials}>
-                        {opponent.name.split(' ').map(n => n[0]).join('')}
-                      </Text>
-                    </View>
-                    <View>
-                      <Text style={styles.opponentName}>{opponent.name}</Text>
-                      <Text style={styles.opponentMeta}>
-                        {total} confrontations
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.opponentStats}>
-                    <View style={styles.opponentRecord}>
-                      <Text style={[styles.recordValue, { color: theme.success }]}>
-                        {opponent.wins}
-                      </Text>
-                      <Text style={styles.recordSeparator}>-</Text>
-                      <Text style={[styles.recordValue, { color: theme.error }]}>
-                        {opponent.losses}
-                      </Text>
-                    </View>
-                    <View style={[
-                      styles.winRateBadge,
-                      { backgroundColor: winRate >= 50 ? theme.successLight : theme.errorLight }
-                    ]}>
-                      <Text style={[
-                        styles.winRateText,
-                        { color: winRate >= 50 ? theme.success : theme.error }
-                      ]}>
-                        {winRate}%
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              );
-            })}
-            
-            {/* Empty state hint */}
-            <View style={styles.hintCard}>
-              <Image
-                source={require('@/assets/images/empty-stats.png')}
-                style={styles.hintImage}
-                contentFit="contain"
-              />
-              <Text style={styles.hintText}>
-                Jouez plus de matchs pour enrichir vos statistiques adversaires
-              </Text>
-            </View>
-          </Animated.View>
-        )}
-
       </ScrollView>
     </SafeAreaView>
   );
@@ -1616,80 +1131,83 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.backgroundSecondary,
   },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-  },
   header: {
-    paddingVertical: 16,
+    backgroundColor: theme.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
   },
-  headerRow: {
+  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
   },
-  compareButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: theme.primary + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
+  headerTitle: {
     fontSize: 28,
     fontWeight: '700',
     color: theme.textPrimary,
   },
-  subtitle: {
-    fontSize: 15,
+  headerSubtitle: {
+    fontSize: 14,
     color: theme.textSecondary,
-    marginTop: 4,
+    marginTop: 2,
   },
-  tabsContainer: {
-    paddingBottom: 16,
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeFilterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: theme.backgroundSecondary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: theme.borderRadius.full,
+  },
+  timeFilterButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.primary,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
     gap: 8,
   },
   tab: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.surface,
+    backgroundColor: theme.backgroundSecondary,
   },
   tabActive: {
     backgroundColor: theme.primary,
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: theme.textSecondary,
   },
   tabTextActive: {
     color: '#FFF',
   },
-  // Time filter styles
-  timeFilterWrapper: {
-    marginBottom: 16,
-  },
-  timeFilterButtonSingle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: theme.surface,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: theme.borderRadius.md,
-    alignSelf: 'flex-start',
-    ...theme.shadows.card,
-  },
-  timeFilterButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.primary,
-  },
-  // Time Filter Modal
+  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -1697,824 +1215,466 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
   },
-  timeFilterModalContent: {
+  modalContent: {
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg,
     width: '100%',
-    maxWidth: 340,
-    overflow: 'hidden',
+    maxWidth: 320,
+    padding: 20,
   },
-  timeFilterModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  timeFilterModalTitle: {
+  modalTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: theme.textPrimary,
+    marginBottom: 16,
   },
-  timeFilterModalOptions: {
-    padding: 8,
-  },
-  timeFilterModalOption: {
+  modalOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     borderRadius: theme.borderRadius.md,
+    marginBottom: 4,
   },
-  timeFilterModalOptionActive: {
-    backgroundColor: theme.primary + '15',
+  modalOptionActive: {
+    backgroundColor: theme.primary + '10',
   },
-  timeFilterModalOptionText: {
-    fontSize: 16,
+  modalOptionText: {
+    flex: 1,
+    fontSize: 15,
     color: theme.textPrimary,
   },
-  timeFilterModalOptionTextActive: {
+  modalOptionTextActive: {
     fontWeight: '600',
     color: theme.primary,
+  },
+  // Scroll
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 20,
   },
   section: {
     marginBottom: 24,
   },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textSecondary,
-    letterSpacing: 1,
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 12,
   },
-  chartCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    ...theme.shadows.card,
-  },
-  chartContainer: {
-    alignItems: 'center',
-  },
-  chartLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-    paddingHorizontal: 30,
-    marginTop: 8,
-  },
-  chartLabel: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    width: (chartWidth - 60) / 7,
-    textAlign: 'center',
-  },
-  chartLegend: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 24,
-    marginTop: 16,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  legendText: {
-    fontSize: 12,
-    color: theme.textSecondary,
-  },
-  summaryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  summaryCard: {
-    width: '47%',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: 16,
-    alignItems: 'center',
-    ...theme.shadows.card,
-  },
-  summaryValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: theme.textPrimary,
-    marginTop: 8,
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  // Win Rate Card
-  winRateCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 24,
-    alignItems: 'center',
-    ...theme.shadows.cardElevated,
-  },
-  winRateStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-    marginTop: 24,
-    paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: theme.border,
-  },
-  winRateStatItem: {
-    alignItems: 'center',
-  },
-  winRateStatValue: {
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  winRateStatLabel: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    marginTop: 4,
-  },
-  // Performance Grid
-  performanceGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  perfCard: {
-    width: '47%',
-    padding: 16,
-    borderRadius: theme.borderRadius.md,
-    alignItems: 'center',
-  },
-  perfValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginTop: 8,
-  },
-  perfLabel: {
+  sectionTitle: {
     fontSize: 13,
+    fontWeight: '600',
     color: theme.textSecondary,
-    marginTop: 4,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 12,
   },
-  performanceCard: {
+  sectionLink: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.primary,
+  },
+  // Quick Stats Grid
+  quickStatsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  mainStatCard: {
+    flex: 1.2,
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg,
-    padding: 24,
+    padding: 16,
     alignItems: 'center',
     ...theme.shadows.card,
   },
-  statRingContainer: {
+  mainStatRing: {
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statRingCenter: {
+  mainStatRingCenter: {
     position: 'absolute',
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  statRingValue: {
-    fontSize: 36,
+  mainStatValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: theme.primary,
+  },
+  mainStatLabel: {
+    fontSize: 11,
+    color: theme.textSecondary,
+  },
+  mainStatDetails: {
+    marginTop: 12,
+    gap: 6,
+  },
+  mainStatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  mainStatDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  mainStatDetailText: {
+    fontSize: 13,
+    color: theme.textSecondary,
+  },
+  sideStats: {
+    flex: 1,
+    gap: 12,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    padding: 12,
+    ...theme.shadows.card,
+  },
+  statCardIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  statCardLabel: {
+    fontSize: 11,
+    color: theme.textSecondary,
+    marginBottom: 2,
+  },
+  statCardValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statCardValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  statCardSubValue: {
+    fontSize: 11,
+    color: theme.textMuted,
+    marginTop: 2,
+  },
+  // Skills Grid
+  skillsGrid: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  skillCard: {
+    flex: 1,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    padding: 12,
+    borderLeftWidth: 3,
+    ...theme.shadows.card,
+  },
+  skillHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  skillLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  skillValue: {
+    fontSize: 22,
     fontWeight: '700',
   },
-  statRingLabel: {
-    fontSize: 14,
+  skillDetail: {
+    fontSize: 11,
+    color: theme.textMuted,
+    marginTop: 2,
+  },
+  // Points Balance
+  pointsBalanceCard: {
+    flexDirection: 'row',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 20,
+    alignItems: 'center',
+    ...theme.shadows.card,
+  },
+  pointsBalanceItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  pointsBalanceValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  pointsBalanceLabel: {
+    fontSize: 12,
     color: theme.textSecondary,
     marginTop: 4,
   },
-  performanceDetails: {
-    width: '100%',
-    marginTop: 24,
-    gap: 12,
+  pointsBalanceDivider: {
+    alignItems: 'center',
+    paddingHorizontal: 16,
   },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  pointsBalanceBadge: {
+    paddingHorizontal: 14,
     paddingVertical: 8,
+    borderRadius: theme.borderRadius.md,
+  },
+  pointsBalanceDiffText: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  // Challenge Preview
+  challengePreviewCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    overflow: 'hidden',
+    ...theme.shadows.card,
+  },
+  challengePreviewItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+  },
+  challengePreviewItemBorder: {
     borderBottomWidth: 1,
     borderBottomColor: theme.border,
   },
-  detailLabel: {
-    fontSize: 15,
-    color: theme.textSecondary,
+  challengePreviewIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
-  detailValue: {
-    fontSize: 15,
+  challengePreviewInfo: {
+    flex: 1,
+  },
+  challengePreviewName: {
+    fontSize: 14,
     fontWeight: '600',
     color: theme.textPrimary,
   },
-  opponentCard: {
+  challengePreviewDate: {
+    fontSize: 12,
+    color: theme.textMuted,
+    marginTop: 2,
+  },
+  challengePreviewScore: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  // Match Types
+  matchTypesGrid: {
+    gap: 12,
+  },
+  matchTypeCard: {
     backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    borderRadius: theme.borderRadius.lg,
+    overflow: 'hidden',
     ...theme.shadows.card,
   },
-  opponentInfo: {
+  matchTypeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    padding: 16,
   },
-  opponentAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: theme.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  opponentInitials: {
+  matchTypeTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  opponentName: {
-    fontSize: 15,
     fontWeight: '600',
     color: theme.textPrimary,
   },
-  opponentMeta: {
-    fontSize: 13,
+  matchTypeBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  matchTypeMainStat: {
+    alignItems: 'center',
+    marginRight: 24,
+  },
+  matchTypeValue: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  matchTypeLabel: {
+    fontSize: 12,
     color: theme.textSecondary,
+  },
+  matchTypeStats: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  matchTypeStatRow: {
+    alignItems: 'center',
+  },
+  matchTypeStatValue: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  matchTypeStatLabel: {
+    fontSize: 10,
+    color: theme.textMuted,
+    fontWeight: '600',
+  },
+  matchTypeWinRate: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.full,
+  },
+  matchTypeWinRateText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  // Terrain List
+  terrainList: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    overflow: 'hidden',
+    ...theme.shadows.card,
+  },
+  terrainItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  terrainIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  terrainInfo: {
+    flex: 1,
+  },
+  terrainName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  terrainMatches: {
+    fontSize: 12,
+    color: theme.textMuted,
+    marginTop: 2,
+  },
+  terrainStats: {
+    alignItems: 'flex-end',
+  },
+  terrainRecord: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  terrainWinRate: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: theme.borderRadius.sm,
+    marginTop: 4,
+  },
+  terrainWinRateText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  terrainNoData: {
+    fontSize: 16,
+    color: theme.textMuted,
+  },
+  // Opponents List
+  opponentsList: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    overflow: 'hidden',
+    ...theme.shadows.card,
+  },
+  opponentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  opponentAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: theme.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  opponentInitials: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  opponentInfo: {
+    flex: 1,
+  },
+  opponentName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  opponentMatches: {
+    fontSize: 12,
+    color: theme.textMuted,
+    marginTop: 2,
   },
   opponentStats: {
     alignItems: 'flex-end',
   },
   opponentRecord: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  recordValue: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  recordSeparator: {
-    fontSize: 18,
-    color: theme.textMuted,
-  },
-  winRateBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: theme.borderRadius.sm,
-    marginTop: 4,
-  },
-  winRateText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  hintCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: 24,
-    alignItems: 'center',
-    marginTop: 12,
-    ...theme.shadows.card,
-  },
-  hintImage: {
-    width: 80,
-    height: 80,
-    marginBottom: 12,
-  },
-  hintText: {
-    fontSize: 14,
-    color: theme.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  historyCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    ...theme.shadows.card,
-  },
-  historyDate: {
-    width: 50,
-    alignItems: 'center',
-    borderRightWidth: 1,
-    borderRightColor: theme.border,
-    paddingRight: 12,
-    marginRight: 12,
-  },
-  historyDay: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: theme.textPrimary,
-  },
-  historyMonth: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    textTransform: 'uppercase',
-  },
-  historyContent: {
-    flex: 1,
-  },
-  historyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  historyBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: theme.borderRadius.sm,
-  },
-  historyBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  historyFormat: {
-    fontSize: 12,
-    color: theme.textSecondary,
-  },
-  historyTeams: {
-    fontSize: 13,
-    color: theme.textPrimary,
-  },
-  historyScore: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginLeft: 8,
-  },
-  historyScoreText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  historyScoreWin: {
-    color: theme.success,
-  },
-  historyScoreSeparator: {
-    fontSize: 14,
-    color: theme.textMuted,
-  },
-  // Challenge stats styles
-  challengeOverallCard: {
-    flexDirection: 'row',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 20,
-    ...theme.shadows.card,
-  },
-  challengeOverallStat: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  challengeOverallValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: theme.textPrimary,
-  },
-  challengeOverallLabel: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    marginTop: 4,
-  },
-  challengeOverallDivider: {
-    width: 1,
-    backgroundColor: theme.border,
-    marginHorizontal: 12,
-  },
-  challengeTypesGrid: {
-    gap: 12,
-  },
-  challengeTypeCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    alignItems: 'center',
-    ...theme.shadows.card,
-  },
-  challengeTypeIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  challengeTypeName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.textPrimary,
-    marginBottom: 12,
-  },
-  challengeTypeStats: {
-    flexDirection: 'row',
-    gap: 32,
-    marginBottom: 12,
-  },
-  challengeTypeStat: {
-    alignItems: 'center',
-  },
-  challengeTypeBest: {
-    fontSize: 24,
-    fontWeight: '700',
-  },
-  challengeTypeAvg: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: theme.textSecondary,
-  },
-  challengeTypeStatLabel: {
-    fontSize: 11,
-    color: theme.textMuted,
-    marginTop: 2,
-  },
-  challengeTypeCountBadge: {
-    backgroundColor: theme.backgroundSecondary,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: theme.borderRadius.full,
-  },
-  challengeTypeCount: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    fontWeight: '500',
-  },
-  recentChallengeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: 14,
-    marginBottom: 8,
-    ...theme.shadows.card,
-  },
-  recentChallengeIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  recentChallengeInfo: {
-    flex: 1,
-  },
-  recentChallengeName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  recentChallengeDate: {
-    fontSize: 12,
-    color: theme.textMuted,
-    marginTop: 2,
-  },
-  recentChallengeScore: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  emptyChallengesCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 32,
-    alignItems: 'center',
-    marginTop: 24,
-    ...theme.shadows.card,
-  },
-  emptyChallengesTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.textPrimary,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyChallengesText: {
-    fontSize: 14,
-    color: theme.textSecondary,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  startChallengeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: theme.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: theme.borderRadius.md,
-  },
-  startChallengeButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  // Challenge history styles
-  challengeHistoryCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    ...theme.shadows.card,
-  },
-  challengeHistoryDate: {
-    width: 50,
-    alignItems: 'center',
-    borderRightWidth: 1,
-    borderRightColor: theme.border,
-    paddingRight: 12,
-    marginRight: 12,
-  },
-  challengeHistoryDay: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: theme.textPrimary,
-  },
-  challengeHistoryMonth: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    textTransform: 'uppercase',
-  },
-  challengeHistoryContent: {
-    flex: 1,
-  },
-  challengeHistoryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  challengeHistoryBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  challengeHistoryType: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  challengeHistoryMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  challengeHistoryTime: {
-    fontSize: 12,
-    color: theme.textMuted,
-  },
-  challengeHistoryCarreaux: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  challengeHistoryCarreauxText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.carreauColor,
-  },
-  challengeHistoryScore: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginLeft: 12,
-  },
-  emptyChallengeHistory: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: 32,
-    alignItems: 'center',
-    ...theme.shadows.card,
-  },
-  emptyChallengeHistoryText: {
-    fontSize: 15,
-    color: theme.textMuted,
-    marginTop: 12,
-  },
-  emptyHistoryCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: 32,
-    alignItems: 'center',
-    ...theme.shadows.card,
-  },
-  emptyHistoryText: {
-    fontSize: 15,
-    color: theme.textMuted,
-    marginTop: 12,
-  },
-  // 1v1 opponent stats styles
-  opponent1v1Card: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    overflow: 'hidden',
-    ...theme.shadows.card,
-  },
-  opponent1v1Row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 14,
-  },
-  opponent1v1RowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  opponent1v1Info: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  opponent1v1Avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: theme.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  opponent1v1Initials: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#FFF',
   },
-  opponent1v1Details: {
-    flex: 1,
-  },
-  opponent1v1Name: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  opponent1v1Total: {
-    fontSize: 12,
-    color: theme.textMuted,
-    marginTop: 2,
-  },
-  opponent1v1Stats: {
-    alignItems: 'flex-end',
-  },
-  opponent1v1Record: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  opponent1v1RecordItem: {
-    alignItems: 'center',
-    minWidth: 24,
-  },
-  opponent1v1RecordValue: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  opponent1v1RecordLabel: {
-    fontSize: 9,
-    color: theme.textMuted,
-    fontWeight: '600',
-  },
-  opponent1v1RecordSeparator: {
-    fontSize: 14,
-    color: theme.textMuted,
-    marginHorizontal: 2,
-  },
-  opponent1v1WinRateBadge: {
+  opponentWinRate: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: theme.borderRadius.sm,
-    marginTop: 6,
+    marginTop: 4,
   },
-  opponent1v1WinRateText: {
+  opponentWinRateText: {
     fontSize: 12,
     fontWeight: '600',
   },
-  // Terrain stats styles
-  terrainStatsSubtitle: {
-    fontSize: 13,
-    color: theme.textMuted,
-    marginTop: -8,
-    marginBottom: 8,
-  },
-  terrainTypeCard: {
+  // Empty Card
+  emptyCard: {
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    marginBottom: 12,
+    padding: 32,
+    alignItems: 'center',
     ...theme.shadows.card,
   },
-  terrainTypeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  terrainTypeIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  terrainTypeInfo: {
-    flex: 1,
-  },
-  terrainTypeName: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  terrainTypeMatches: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    marginTop: 2,
-  },
-  terrainWinRateBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: theme.borderRadius.full,
-  },
-  terrainWinRateText: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  terrainTypeStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: theme.border,
-  },
-  terrainTypeStat: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  terrainTypeStatValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: theme.textPrimary,
-  },
-  terrainTypeStatLabel: {
-    fontSize: 11,
+  emptyText: {
+    fontSize: 14,
     color: theme.textMuted,
-    marginTop: 2,
+    textAlign: 'center',
+    marginTop: 12,
   },
-  terrainTypeStatDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: theme.border,
-  },
-  terrainNoMatchesContainer: {
-    paddingVertical: 12,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: theme.border,
-    alignItems: 'center',
-  },
-  terrainNoMatchesText: {
-    fontSize: 13,
-    color: theme.textMuted,
-    fontStyle: 'italic',
-  },
-  terrainTipsCard: {
-    flexDirection: 'row',
-    backgroundColor: theme.warning + '10',
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: theme.warning + '30',
-  },
-  terrainTipsContent: {
-    flex: 1,
-  },
-  terrainTipsTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.warning,
-    marginBottom: 4,
-  },
-  terrainTipsText: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    lineHeight: 18,
-  },
-  // Include challenges toggle
-  includeChallengesToggle: {
+  // Toggle Card
+  toggleCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.surface,
@@ -2524,209 +1684,339 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
     ...theme.shadows.card,
   },
-  includeChallengesToggleActive: {
+  toggleCardActive: {
     borderColor: theme.primary,
-    backgroundColor: theme.primary + '08',
+    backgroundColor: theme.primary + '05',
   },
-  includeChallengesInfo: {
+  toggleInfo: {
     flex: 1,
     marginLeft: 12,
   },
-  includeChallengesTitle: {
+  toggleTitle: {
     fontSize: 15,
     fontWeight: '600',
     color: theme.textPrimary,
   },
-  includeChallengesTitleActive: {
-    color: theme.primary,
-  },
-  includeChallengesSubtitle: {
+  toggleSubtitle: {
     fontSize: 12,
-    color: theme.textSecondary,
-    marginTop: 2,
-  },
-  includeChallengesBadge: {
-    backgroundColor: theme.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: theme.borderRadius.full,
-  },
-  includeChallengesBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  detailDivider: {
-    height: 1,
-    backgroundColor: theme.border,
-    marginVertical: 8,
-  },
-  // Tournament stats styles
-  tournamentOverviewCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 20,
-    ...theme.shadows.card,
-  },
-  tournamentOverviewMain: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  tournamentOverviewIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: theme.carreauColor + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  tournamentOverviewStats: {
-    flex: 1,
-  },
-  tournamentOverviewValue: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: theme.textPrimary,
-  },
-  tournamentOverviewLabel: {
-    fontSize: 14,
-    color: theme.textSecondary,
-  },
-  tournamentOverviewDivider: {
-    height: 1,
-    backgroundColor: theme.border,
-    marginVertical: 12,
-  },
-  tournamentOverviewRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  tournamentOverviewStat: {
-    alignItems: 'center',
-  },
-  tournamentStatValue: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: theme.textPrimary,
-  },
-  tournamentStatLabel: {
-    fontSize: 11,
     color: theme.textMuted,
     marginTop: 2,
   },
-  // Points stats
-  pointsStatsCard: {
+  // Big Skill Card
+  bigSkillCard: {
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg,
-    padding: 20,
+    padding: 16,
     ...theme.shadows.card,
   },
-  pointsStatsRow: {
+  bigSkillHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
   },
-  pointsStatItem: {
+  bigSkillIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  bigSkillTitleArea: {
     flex: 1,
   },
-  pointsStatValue: {
-    fontSize: 32,
+  bigSkillTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  bigSkillSubtitle: {
+    fontSize: 12,
+    color: theme.textMuted,
+    marginTop: 2,
+  },
+  bigSkillRing: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bigSkillRingValue: {
+    position: 'absolute',
+    fontSize: 16,
     fontWeight: '700',
   },
-  pointsStatLabel: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    marginTop: 4,
+  bigSkillStats: {
+    flexDirection: 'row',
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
   },
-  pointsStatDivider: {
+  bigSkillStat: {
+    flex: 1,
     alignItems: 'center',
-    paddingHorizontal: 16,
   },
-  pointsDiffValue: {
+  bigSkillStatValue: {
     fontSize: 20,
     fontWeight: '700',
     color: theme.textPrimary,
   },
-  pointsDiffLabel: {
+  bigSkillStatLabel: {
     fontSize: 11,
     color: theme.textMuted,
+    marginTop: 2,
   },
-  // Action stats grid
-  actionStatsGrid: {
+  bigSkillStatDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: theme.border,
+  },
+  // Carreau Card
+  carreauCard: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  actionStatCard: {
-    flex: 1,
-    minWidth: '30%',
-    padding: 16,
+    backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg,
+    padding: 20,
+    alignItems: 'center',
+    ...theme.shadows.card,
+  },
+  carreauMain: {
+    flex: 1,
     alignItems: 'center',
   },
-  actionStatValue: {
-    fontSize: 24,
+  carreauValue: {
+    fontSize: 48,
     fontWeight: '700',
+    color: theme.carreauColor,
     marginTop: 8,
   },
-  actionStatLabel: {
+  carreauLabel: {
     fontSize: 13,
     color: theme.textSecondary,
-    marginTop: 4,
   },
-  actionStatDetail: {
+  carreauRate: {
+    paddingLeft: 20,
+    borderLeftWidth: 1,
+    borderLeftColor: theme.border,
+    alignItems: 'center',
+  },
+  carreauRateValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  carreauRateLabel: {
+    fontSize: 12,
+    color: theme.textMuted,
+  },
+  // Challenge Overview
+  challengeOverview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 20,
+    ...theme.shadows.card,
+  },
+  challengeOverviewMain: {},
+  challengeOverviewValue: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  challengeOverviewLabel: {
+    fontSize: 14,
+    color: theme.textSecondary,
+  },
+  newChallengeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: theme.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: theme.borderRadius.md,
+  },
+  newChallengeButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  // Challenge Types Grid
+  challengeTypesGrid: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  challengeTypeCard: {
+    flex: 1,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 14,
+    alignItems: 'center',
+    ...theme.shadows.card,
+  },
+  challengeTypeIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  challengeTypeName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textPrimary,
+    textAlign: 'center',
+  },
+  challengeTypeCount: {
     fontSize: 11,
     color: theme.textMuted,
-    marginTop: 4,
+    marginTop: 2,
   },
-  // Phase stats
-  phaseStatsCard: {
+  challengeTypeScores: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  challengeTypeScore: {
+    alignItems: 'center',
+  },
+  challengeTypeScoreValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  challengeTypeScoreLabel: {
+    fontSize: 10,
+    color: theme.textMuted,
+  },
+  // 1v1 Opponents
+  opponents1v1List: {
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg,
     overflow: 'hidden',
     ...theme.shadows.card,
   },
-  phaseStatRow: {
+  opponent1v1Item: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     padding: 14,
     borderBottomWidth: 1,
     borderBottomColor: theme.border,
   },
-  phaseName: {
-    fontSize: 15,
-    fontWeight: '500',
+  opponent1v1Avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  opponent1v1Initials: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  opponent1v1Info: {
+    flex: 1,
+  },
+  opponent1v1Name: {
+    fontSize: 14,
+    fontWeight: '600',
     color: theme.textPrimary,
   },
-  phaseStatValues: {
+  opponent1v1Total: {
+    fontSize: 11,
+    color: theme.textMuted,
+    marginTop: 2,
+  },
+  opponent1v1Record: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    marginRight: 12,
   },
-  phaseRecord: {
-    fontSize: 15,
-    fontWeight: '600',
+  opponent1v1RecordValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    minWidth: 20,
+    textAlign: 'center',
   },
-  phaseWinRateBadge: {
+  opponent1v1RecordSep: {
+    fontSize: 12,
+    color: theme.textMuted,
+    marginHorizontal: 2,
+  },
+  opponent1v1WinRate: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: theme.borderRadius.sm,
   },
-  phaseWinRateText: {
-    fontSize: 13,
+  opponent1v1WinRateText: {
+    fontSize: 12,
     fontWeight: '600',
   },
-  // Empty state
+  // Recent Challenges
+  recentChallengesList: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    overflow: 'hidden',
+    ...theme.shadows.card,
+  },
+  recentChallengeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  recentChallengeIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  recentChallengeInfo: {
+    flex: 1,
+  },
+  recentChallengeName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  recentChallengeDate: {
+    fontSize: 12,
+    color: theme.textMuted,
+    marginTop: 2,
+  },
+  recentChallenge1v1Badge: {
+    backgroundColor: theme.accent + '15',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: theme.borderRadius.sm,
+    marginRight: 10,
+  },
+  recentChallenge1v1Text: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: theme.accent,
+  },
+  recentChallengeScore: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  // Empty State
   emptyStateCard: {
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg,
     padding: 40,
     alignItems: 'center',
-    marginTop: 24,
     ...theme.shadows.card,
   },
   emptyStateTitle: {
@@ -2734,19 +2024,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.textPrimary,
     marginTop: 16,
-    marginBottom: 8,
   },
   emptyStateText: {
     fontSize: 14,
     color: theme.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
+    marginTop: 8,
     marginBottom: 20,
+    maxWidth: 260,
   },
   emptyStateButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     backgroundColor: theme.primary,
     paddingHorizontal: 20,
     paddingVertical: 12,
@@ -2757,114 +2048,96 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFF',
   },
-  // Training stats styles
-  trainingOverviewCard: {
+  // Balance Card
+  balanceCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 24,
+    alignItems: 'center',
+    ...theme.shadows.card,
+  },
+  balanceTitle: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    marginBottom: 12,
+  },
+  balanceBadge: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: theme.borderRadius.lg,
+    marginBottom: 12,
+  },
+  balanceValue: {
+    fontSize: 36,
+    fontWeight: '700',
+  },
+  balanceSubtitle: {
+    fontSize: 13,
+    color: theme.textMuted,
+  },
+  // Financial Grid
+  financialGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  financialCard: {
+    flex: 1,
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg,
     padding: 20,
+    alignItems: 'center',
+    borderTopWidth: 3,
     ...theme.shadows.card,
   },
-  trainingOverviewMain: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  trainingOverviewIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: theme.primary + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  trainingOverviewStats: {
-    flex: 1,
-  },
-  trainingOverviewValue: {
-    fontSize: 36,
+  financialValue: {
+    fontSize: 28,
     fontWeight: '700',
-    color: theme.textPrimary,
+    marginTop: 12,
   },
-  trainingOverviewLabel: {
+  financialLabel: {
     fontSize: 14,
-    color: theme.textSecondary,
-  },
-  trainingOverviewDivider: {
-    height: 1,
-    backgroundColor: theme.border,
-    marginVertical: 12,
-  },
-  trainingOverviewRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  trainingOverviewStat: {
-    alignItems: 'center',
-  },
-  trainingStatValue: {
-    fontSize: 22,
-    fontWeight: '700',
     color: theme.textPrimary,
+    fontWeight: '600',
+    marginTop: 4,
   },
-  trainingStatLabel: {
-    fontSize: 11,
+  financialDetail: {
+    fontSize: 12,
     color: theme.textMuted,
     marginTop: 2,
   },
-  // Financial stats styles
-  financialCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 20,
-    ...theme.shadows.card,
-  },
-  financialRow: {
+  // Tip Card
+  tipCard: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
+    backgroundColor: theme.warning + '10',
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: theme.warning + '30',
   },
-  financialItem: {
-    alignItems: 'center',
+  tipContent: {
     flex: 1,
   },
-  financialValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginTop: 8,
+  tipTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.warning,
+    marginBottom: 4,
   },
-  financialLabel: {
-    fontSize: 12,
+  tipText: {
+    fontSize: 13,
     color: theme.textSecondary,
-    marginTop: 4,
+    lineHeight: 18,
   },
-  financialDivider: {
-    alignItems: 'center',
-    paddingHorizontal: 16,
+  // Mini Bar Chart
+  miniBarChart: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 3,
+    height: 40,
   },
-  financialBalanceBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: theme.borderRadius.md,
-  },
-  financialBalanceText: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  financialBalanceLabel: {
-    fontSize: 11,
-    color: theme.textMuted,
-    marginTop: 4,
-  },
-  financialFooter: {
-    marginTop: 16,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: theme.border,
-    alignItems: 'center',
-  },
-  financialFooterText: {
-    fontSize: 12,
-    color: theme.textMuted,
+  miniBar: {
+    width: 6,
+    borderRadius: 3,
   },
 });
