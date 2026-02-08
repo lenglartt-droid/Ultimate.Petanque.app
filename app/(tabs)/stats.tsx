@@ -23,7 +23,68 @@ const { width: screenWidth } = Dimensions.get('window');
 
 // Evolution chart helper
 function getEvolutionData(matches: any[], timeFilter: TimeFilter): { label: string; winRate: number; matches: number }[] {
-  if (matches.length === 0) return [];
+  return getTimeBasedEvolutionData(matches, timeFilter, (periodMatches) => {
+    const wins = periodMatches.filter(m => m.winner === 'A').length;
+    return periodMatches.length > 0 ? Math.round((wins / periodMatches.length) * 100) : 0;
+  });
+}
+
+// Shooting evolution helper
+function getShootingEvolutionData(
+  matches: any[], 
+  challenges: any[], 
+  timeFilter: TimeFilter,
+  includeChallenges: boolean
+): { label: string; tirRate: number; count: number }[] {
+  return getTimeBasedEvolutionData(
+    [...matches, ...challenges.map(c => ({ ...c, isChallenge: true }))],
+    timeFilter,
+    (periodItems) => {
+      let totalTirs = 0;
+      let totalSuccess = 0;
+      
+      periodItems.forEach(item => {
+        if (item.isChallenge) {
+          // Challenge data
+          if (includeChallenges && item.type !== 'precision') {
+            totalTirs += item.totalShots || 0;
+            totalSuccess += item.successCount || 0;
+          }
+        } else {
+          // Match data
+          if (item.playerActions) {
+            item.playerActions.filter((pa: any) => pa.team === 'A').forEach((pa: any) => {
+              totalTirs += pa.actions.tirs;
+              totalSuccess += pa.actions.tirsSuccess;
+            });
+          }
+        }
+      });
+      
+      return totalTirs > 0 ? Math.round((totalSuccess / totalTirs) * 100) : 0;
+    },
+    (periodItems) => {
+      let count = 0;
+      periodItems.forEach(item => {
+        if (item.isChallenge) {
+          if (includeChallenges && item.type !== 'precision') count++;
+        } else {
+          if (item.playerActions?.some((pa: any) => pa.team === 'A' && pa.actions.tirs > 0)) count++;
+        }
+      });
+      return count;
+    }
+  );
+}
+
+// Generic time-based evolution helper
+function getTimeBasedEvolutionData<T>(
+  items: any[], 
+  timeFilter: TimeFilter,
+  valueCalculator: (periodItems: any[]) => number,
+  countCalculator?: (periodItems: any[]) => number
+): T[] {
+  if (items.length === 0) return [];
   
   const now = new Date();
   let periods: { start: Date; end: Date; label: string }[] = [];
@@ -99,17 +160,19 @@ function getEvolutionData(matches: any[], timeFilter: TimeFilter): { label: stri
   }
   
   return periods.map(period => {
-    const periodMatches = matches.filter(m => {
-      const matchDate = new Date(m.date);
-      return matchDate >= period.start && matchDate < period.end;
+    const periodItems = items.filter(item => {
+      const itemDate = new Date(item.date);
+      return itemDate >= period.start && itemDate < period.end;
     });
-    const wins = periodMatches.filter(m => m.winner === 'A').length;
-    const winRate = periodMatches.length > 0 ? Math.round((wins / periodMatches.length) * 100) : 0;
+    const value = valueCalculator(periodItems);
+    const count = countCalculator ? countCalculator(periodItems) : periodItems.length;
     return {
       label: period.label,
-      winRate,
-      matches: periodMatches.length,
-    };
+      winRate: value,
+      tirRate: value,
+      matches: count,
+      count,
+    } as T;
   });
 }
 
@@ -279,13 +342,21 @@ function MiniBarChart({ data, color }: { data: number[]; color: string }) {
 function EvolutionChart({ 
   data, 
   width = screenWidth - 64, 
-  height = 180 
+  height = 180,
+  valueKey = 'winRate',
+  countKey = 'matches',
+  color = theme.primary,
+  label = 'Taux de victoire',
 }: { 
-  data: { label: string; winRate: number; matches: number }[];
+  data: { label: string; winRate?: number; tirRate?: number; matches?: number; count?: number }[];
+  valueKey?: 'winRate' | 'tirRate';
+  countKey?: 'matches' | 'count';
+  color?: string;
+  label?: string;
   width?: number;
   height?: number;
 }) {
-  if (data.length === 0 || data.every(d => d.matches === 0)) {
+  if (data.length === 0 || data.every(d => (d[countKey] || 0) === 0)) {
     return (
       <View style={[styles.evolutionChartEmpty, { height }]}>
         <MaterialIcons name="show-chart" size={40} color={theme.textMuted} />
@@ -302,13 +373,17 @@ function EvolutionChart({
   const minValue = 0;
   
   // Calculate points
-  const points = data.map((d, i) => ({
-    x: padding.left + (i / (data.length - 1 || 1)) * chartWidth,
-    y: padding.top + chartHeight - ((d.winRate - minValue) / (maxValue - minValue)) * chartHeight,
-    value: d.winRate,
-    matches: d.matches,
-    label: d.label,
-  }));
+  const points = data.map((d, i) => {
+    const value = d[valueKey] || 0;
+    const count = d[countKey] || 0;
+    return {
+      x: padding.left + (i / (data.length - 1 || 1)) * chartWidth,
+      y: padding.top + chartHeight - ((value - minValue) / (maxValue - minValue)) * chartHeight,
+      value,
+      matches: count,
+      label: d.label,
+    };
+  });
   
   // Create smooth path
   const createSmoothPath = () => {
@@ -381,14 +456,14 @@ function EvolutionChart({
         {/* Area fill */}
         <Path
           d={createAreaPath()}
-          fill={theme.primary}
+          fill={color}
           opacity={0.1}
         />
         
         {/* Line */}
         <Path
           d={createSmoothPath()}
-          stroke={theme.primary}
+          stroke={color}
           strokeWidth={2.5}
           fill="none"
           strokeLinecap="round"
@@ -404,7 +479,7 @@ function EvolutionChart({
               cy={point.y}
               r={point.matches > 0 ? 6 : 4}
               fill={theme.surface}
-              stroke={point.matches > 0 ? theme.primary : theme.textMuted}
+              stroke={point.matches > 0 ? color : theme.textMuted}
               strokeWidth={2}
             />
             {/* Inner circle for active points */}
@@ -413,7 +488,7 @@ function EvolutionChart({
                 cx={point.x}
                 cy={point.y}
                 r={3}
-                fill={theme.primary}
+                fill={color}
               />
             )}
             {/* X-axis labels */}
@@ -434,8 +509,8 @@ function EvolutionChart({
       {/* Legend */}
       <View style={styles.evolutionLegend}>
         <View style={styles.evolutionLegendItem}>
-          <View style={[styles.evolutionLegendDot, { backgroundColor: theme.primary }]} />
-          <Text style={styles.evolutionLegendText}>Taux de victoire</Text>
+          <View style={[styles.evolutionLegendDot, { backgroundColor: color }]} />
+          <Text style={styles.evolutionLegendText}>{label}</Text>
         </View>
       </View>
     </View>
@@ -457,6 +532,11 @@ export default function StatsScreen() {
   const evolutionData = useMemo(() => {
     return getEvolutionData(matches, timeFilter);
   }, [matches, timeFilter]);
+  
+  // Shooting evolution data
+  const shootingEvolutionData = useMemo(() => {
+    return getShootingEvolutionData(matches, challenges, timeFilter, includeChallengesInStats);
+  }, [matches, challenges, timeFilter, includeChallengesInStats]);
   const filteredChallenges = filterByTime(challenges, timeFilter);
   const tournamentMatches = filteredMatches.filter(m => m.mode === 'Tournoi');
   const trainingMatches = filteredMatches.filter(m => m.mode === 'Entraînement');
@@ -1202,8 +1282,75 @@ export default function StatsScreen() {
               </View>
             </Animated.View>
 
-            {/* Carreau Detail */}
+            {/* Shooting Evolution Chart */}
             <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
+              <Text style={styles.sectionTitle}>Évolution du tir</Text>
+              <View style={styles.evolutionChartCard}>
+                <EvolutionChart 
+                  data={shootingEvolutionData} 
+                  valueKey="tirRate"
+                  countKey="count"
+                  color={theme.tirColor}
+                  label="Taux de réussite au tir"
+                />
+                {/* Stats summary under chart */}
+                {shootingEvolutionData.some(d => (d.count || 0) > 0) && (
+                  <View style={styles.evolutionSummary}>
+                    {shootingEvolutionData.filter(d => (d.count || 0) > 0).length > 1 && (
+                      <>
+                        <View style={styles.evolutionSummaryStat}>
+                          <Text style={styles.evolutionSummaryLabel}>Tendance</Text>
+                          {(() => {
+                            const validData = shootingEvolutionData.filter(d => (d.count || 0) > 0);
+                            if (validData.length < 2) return <Text style={styles.evolutionSummaryValue}>—</Text>;
+                            const first = validData[0].tirRate || 0;
+                            const last = validData[validData.length - 1].tirRate || 0;
+                            const diff = last - first;
+                            return (
+                              <View style={styles.evolutionTrend}>
+                                <MaterialIcons 
+                                  name={diff > 0 ? 'trending-up' : diff < 0 ? 'trending-down' : 'trending-flat'} 
+                                  size={18} 
+                                  color={diff > 0 ? theme.success : diff < 0 ? theme.error : theme.textMuted} 
+                                />
+                                <Text style={[
+                                  styles.evolutionSummaryValue,
+                                  { color: diff > 0 ? theme.success : diff < 0 ? theme.error : theme.textMuted }
+                                ]}>
+                                  {diff > 0 ? '+' : ''}{diff}%
+                                </Text>
+                              </View>
+                            );
+                          })()}
+                        </View>
+                        <View style={styles.evolutionSummaryDivider} />
+                      </>
+                    )}
+                    <View style={styles.evolutionSummaryStat}>
+                      <Text style={styles.evolutionSummaryLabel}>Meilleure période</Text>
+                      <Text style={styles.evolutionSummaryValue}>
+                        {(() => {
+                          const validData = shootingEvolutionData.filter(d => (d.count || 0) > 0);
+                          if (validData.length === 0) return '—';
+                          const best = validData.reduce((a, b) => (a.tirRate || 0) > (b.tirRate || 0) ? a : b);
+                          return `${best.label} (${best.tirRate}%)`;
+                        })()}
+                      </Text>
+                    </View>
+                    <View style={styles.evolutionSummaryDivider} />
+                    <View style={styles.evolutionSummaryStat}>
+                      <Text style={styles.evolutionSummaryLabel}>Sessions</Text>
+                      <Text style={styles.evolutionSummaryValue}>
+                        {shootingEvolutionData.reduce((sum, d) => sum + (d.count || 0), 0)}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+            </Animated.View>
+
+            {/* Carreau Detail */}
+            <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
               <Text style={styles.sectionTitle}>Carreaux</Text>
               <View style={styles.carreauCard}>
                 <View style={styles.carreauMain}>
