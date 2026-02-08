@@ -308,8 +308,10 @@ export default function HistoryScreen() {
     const winsA = seriesGroup.winsA;
     const winsB = seriesGroup.winsB;
     
-    const isSeriesWon = winsA > winsB;
-    const isComplete = seriesGroup.seriesComplete;
+    // isSeriesWon = true when user's team (A/player) has more wins
+    // A series is won when winsA >= 2 (best of 3)
+    const isSeriesWon = winsA >= 2;
+    const isComplete = seriesGroup.seriesComplete || winsA >= 2 || winsB >= 2;
     const hasFinale = seriesGroup.items.some(item => {
       const info = item.type === 'match' 
         ? (item.data as Match).seriesInfo 
@@ -382,18 +384,33 @@ export default function HistoryScreen() {
         <View style={styles.seriesScoreRow}>
           <Text style={[
             styles.seriesFinalScore,
-            isSeriesWon ? styles.seriesFinalScoreWin : styles.seriesFinalScoreLoss
+            winsA >= 2 ? styles.seriesFinalScoreWin : (winsA > winsB ? styles.seriesFinalScoreWin : styles.seriesFinalScoreLoss)
           ]}>
             {winsA}
           </Text>
           <View style={styles.seriesTimelineContainer}>
             {seriesGroup.items.map((item, idx) => {
-              const match = item.data as Match;
-              const isWin = match.winner === 'A';
-              const isFinaleMatch = match.seriesInfo?.isFinale;
+              // Handle both matches and challenges
+              const isMatchItem = item.type === 'match';
+              const match = isMatchItem ? item.data as Match : null;
+              const challenge = !isMatchItem ? item.data as Challenge : null;
+              
+              // Determine if this game was won by the user
+              const isWin = isMatchItem 
+                ? match?.winner === 'A' 
+                : challenge?.winner === 'player';
+              
+              const seriesInfo = isMatchItem 
+                ? match?.seriesInfo 
+                : challenge?.seriesInfo;
+              const isFinaleMatch = seriesInfo?.isFinale;
+              
+              // Get scores for display
+              const scoreA = match?.teamA.score ?? (challenge?.successRate ?? 0);
+              const scoreB = match?.teamB.score ?? (challenge?.opponentResult?.successRate ?? 0);
               
               return (
-                <View key={match.id} style={styles.seriesTimelineItem}>
+                <View key={match?.id || challenge?.id || idx} style={styles.seriesTimelineItem}>
                   <View style={[
                     styles.seriesTimelineDot,
                     isWin ? styles.seriesTimelineDotWin : styles.seriesTimelineDotLoss,
@@ -404,7 +421,7 @@ export default function HistoryScreen() {
                     </Text>
                   </View>
                   <Text style={styles.seriesTimelineScore}>
-                    {match.teamA.score}-{match.teamB.score}
+                    {match ? `${scoreA}-${scoreB}` : `${scoreA}%`}
                   </Text>
                 </View>
               );
@@ -412,7 +429,7 @@ export default function HistoryScreen() {
           </View>
           <Text style={[
             styles.seriesFinalScore,
-            !isSeriesWon ? styles.seriesFinalScoreWin : styles.seriesFinalScoreLoss
+            winsB >= 2 ? styles.seriesFinalScoreWin : (winsB > winsA ? styles.seriesFinalScoreWin : styles.seriesFinalScoreLoss)
           ]}>
             {winsB}
           </Text>
