@@ -435,21 +435,29 @@ export default function NewChallengeScreen() {
 
       setOpponentPrecisionShots(prev => [...prev, newShot]);
 
+      // Advance opponent position
+      const newOpponentShotCount = opponentPrecisionShots.length + 1;
       if (opponentDistanceIndex < 3) {
         setOpponentDistanceIndex(prev => prev + 1);
       } else if (opponentAtelierIndex < 4) {
         setOpponentAtelierIndex(prev => prev + 1);
         setOpponentDistanceIndex(0);
-      } else {
-        // Opponent finished
-        if (precisionShots.length >= 20) {
-          setIsFinished(true);
-          if (timerRef.current) clearInterval(timerRef.current);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        } else {
-          setCurrentTurn('player');
-        }
       }
+      
+      // Check if both finished
+      if (newOpponentShotCount >= 20 && precisionShots.length >= 20) {
+        setIsFinished(true);
+        if (timerRef.current) clearInterval(timerRef.current);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else if (newOpponentShotCount >= 20) {
+        // Opponent finished but player hasn't - switch to player
+        setCurrentTurn('player');
+      } else if (precisionShots.length < 20) {
+        // In 1v1 mode, alternate shot by shot
+        setCurrentTurn('player');
+      }
+      // If player is finished but opponent isn't, stay on opponent's turn
+      
       setShotTimerRunning(false);
       setShotStartTime(0);
     } else {
@@ -476,27 +484,38 @@ export default function NewChallengeScreen() {
 
       setPrecisionShots(prev => [...prev, newShot]);
 
+      // Advance player position
+      const newPlayerShotCount = precisionShots.length + 1;
       if (currentDistanceIndex < 3) {
         setCurrentDistanceIndex(prev => prev + 1);
       } else if (currentAtelierIndex < 4) {
         setCurrentAtelierIndex(prev => prev + 1);
         setCurrentDistanceIndex(0);
-      } else {
-        // Player finished
-        if (challengeMode === 'solo') {
+      }
+      
+      // Check completion and turn switching
+      if (challengeMode === 'solo') {
+        if (newPlayerShotCount >= 20) {
           setIsFinished(true);
           if (timerRef.current) clearInterval(timerRef.current);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        } else {
-          if (opponentPrecisionShots.length >= 20) {
-            setIsFinished(true);
-            if (timerRef.current) clearInterval(timerRef.current);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          } else {
-            setCurrentTurn('opponent');
-          }
         }
+      } else {
+        // 1v1 mode - alternate shot by shot
+        if (newPlayerShotCount >= 20 && opponentPrecisionShots.length >= 20) {
+          setIsFinished(true);
+          if (timerRef.current) clearInterval(timerRef.current);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } else if (newPlayerShotCount >= 20) {
+          // Player finished but opponent hasn't - switch to opponent
+          setCurrentTurn('opponent');
+        } else if (opponentPrecisionShots.length < 20) {
+          // Alternate to opponent's turn
+          setCurrentTurn('opponent');
+        }
+        // If opponent is finished but player isn't, stay on player's turn
       }
+      
       setShotTimerRunning(false);
       setShotStartTime(0);
     }
