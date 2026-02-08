@@ -103,6 +103,14 @@ interface PlayerActionState {
   };
 }
 
+// Player role selection for team composition
+type PlayerRoleType = 'Pointeur' | 'Milieu' | 'Tireur';
+
+interface TeamPlayerWithRole {
+  playerId: string;
+  role: PlayerRoleType;
+}
+
 type ActionType = 'tir' | 'point' | 'carreau';
 
 export default function NewMatchScreen() {
@@ -167,21 +175,25 @@ export default function NewMatchScreen() {
     if (isTournamentMode) {
       // For tournament mode, prefer last match's team composition, fallback to selfPlayer
       if (tournamentHistory.lastTeamAPlayers.length > 0) {
-        setTeamAPlayers(tournamentHistory.lastTeamAPlayers);
+        const playersWithRoles = tournamentHistory.lastTeamAPlayers.map(id => {
+          const player = players.find(p => p.id === id);
+          return { playerId: id, role: (player?.role || 'Milieu') as PlayerRoleType };
+        });
+        setTeamAPlayers(playersWithRoles);
       } else {
-        setTeamAPlayers([selfPlayer.id]);
+        setTeamAPlayers([{ playerId: selfPlayer.id, role: (selfPlayer.role || 'Milieu') as PlayerRoleType }]);
       }
     } else {
       // For training mode, always add selfPlayer
-      setTeamAPlayers([selfPlayer.id]);
+      setTeamAPlayers([{ playerId: selfPlayer.id, role: (selfPlayer.role || 'Milieu') as PlayerRoleType }]);
     }
-  }, [selfPlayer, isTournamentMode, tournamentHistory.lastTeamAPlayers]);
+  }, [selfPlayer, isTournamentMode, tournamentHistory.lastTeamAPlayers, players]);
   
   const [format, setFormat] = useState<GameFormat>(linkedTournament?.format || (isRevanche && revancheFormat ? revancheFormat as GameFormat : 'Doublette'));
   const [teamAScore, setTeamAScore] = useState(0);
   const [teamBScore, setTeamBScore] = useState(0);
-  const [teamAPlayers, setTeamAPlayers] = useState<string[]>([]);
-  const [teamBPlayers, setTeamBPlayers] = useState<string[]>([]);
+  const [teamAPlayers, setTeamAPlayers] = useState<TeamPlayerWithRole[]>([]);
+  const [teamBPlayers, setTeamBPlayers] = useState<TeamPlayerWithRole[]>([]);
   const [showPlayerPicker, setShowPlayerPicker] = useState<'A' | 'B' | null>(null);
   const [playerSearch, setPlayerSearch] = useState('');
   const [selectedPhase, setSelectedPhase] = useState<string | null>(tournamentHistory.lastPhase);
@@ -192,23 +204,29 @@ export default function NewMatchScreen() {
     if (isRevanche) {
       if (revancheTeamA) {
         const teamANames = decodeURIComponent(revancheTeamA).split(',').map(n => n.trim());
-        const teamAIds = teamANames.map(name => {
+        const teamAPlayersWithRoles = teamANames.map(name => {
           // Try to find player by name
           const player = players.find(p => p.name.toLowerCase() === name.toLowerCase());
-          return player?.id;
-        }).filter((id): id is string => id !== undefined);
-        if (teamAIds.length > 0) {
-          setTeamAPlayers(teamAIds);
+          if (player) {
+            return { playerId: player.id, role: (player.role || 'Milieu') as PlayerRoleType };
+          }
+          return null;
+        }).filter((p): p is TeamPlayerWithRole => p !== null);
+        if (teamAPlayersWithRoles.length > 0) {
+          setTeamAPlayers(teamAPlayersWithRoles);
         }
       }
       if (revancheTeamB) {
         const teamBNames = decodeURIComponent(revancheTeamB).split(',').map(n => n.trim());
-        const teamBIds = teamBNames.map(name => {
+        const teamBPlayersWithRoles = teamBNames.map(name => {
           const player = players.find(p => p.name.toLowerCase() === name.toLowerCase());
-          return player?.id;
-        }).filter((id): id is string => id !== undefined);
-        if (teamBIds.length > 0) {
-          setTeamBPlayers(teamBIds);
+          if (player) {
+            return { playerId: player.id, role: (player.role || 'Milieu') as PlayerRoleType };
+          }
+          return null;
+        }).filter((p): p is TeamPlayerWithRole => p !== null);
+        if (teamBPlayersWithRoles.length > 0) {
+          setTeamBPlayers(teamBPlayersWithRoles);
         }
       }
     }
@@ -280,20 +298,39 @@ export default function NewMatchScreen() {
     const currentTeam = team === 'A' ? teamAPlayers : teamBPlayers;
 
     // Check if player is in other team
-    if (otherTeam.includes(playerId)) {
+    if (otherTeam.some(p => p.playerId === playerId)) {
       Alert.alert('Erreur', 'Ce joueur est déjà dans l\'autre équipe');
       return;
     }
 
-    if (currentTeam.includes(playerId)) {
-      setTeam(prev => prev.filter(id => id !== playerId));
+    if (currentTeam.some(p => p.playerId === playerId)) {
+      setTeam(prev => prev.filter(p => p.playerId !== playerId));
     } else {
       if (currentTeam.length >= maxPlayersPerTeam) {
         Alert.alert('Équipe complète', `Maximum ${maxPlayersPerTeam} joueur(s) en ${format}`);
         return;
       }
-      setTeam(prev => [...prev, playerId]);
+      // Get player's default role from their profile
+      const player = players.find(p => p.id === playerId);
+      const defaultRole = (player?.role || 'Milieu') as PlayerRoleType;
+      setTeam(prev => [...prev, { playerId, role: defaultRole }]);
     }
+  };
+
+  // Update player role
+  const updatePlayerRole = (playerId: string, team: 'A' | 'B', newRole: PlayerRoleType) => {
+    Haptics.selectionAsync();
+    const setTeam = team === 'A' ? setTeamAPlayers : setTeamBPlayers;
+    setTeam(prev => prev.map(p => 
+      p.playerId === playerId ? { ...p, role: newRole } : p
+    ));
+  };
+
+  // Get player role in team
+  const getPlayerRole = (playerId: string, team: 'A' | 'B'): PlayerRoleType => {
+    const teamPlayers = team === 'A' ? teamAPlayers : teamBPlayers;
+    const player = teamPlayers.find(p => p.playerId === playerId);
+    return player?.role || 'Milieu';
   };
 
   // Get player name by ID - show "Moi" for self player
@@ -304,6 +341,11 @@ export default function NewMatchScreen() {
     return players.find(p => p.id === id)?.name || 'Inconnu';
   };
 
+  // Get player IDs from team with roles
+  const getTeamPlayerIds = (team: TeamPlayerWithRole[]): string[] => {
+    return team.map(p => p.playerId);
+  };
+
   // Clear team players when format changes (if exceeds limit)
   useEffect(() => {
     if (teamAPlayers.length > maxPlayersPerTeam) {
@@ -312,13 +354,13 @@ export default function NewMatchScreen() {
     if (teamBPlayers.length > maxPlayersPerTeam) {
       setTeamBPlayers(prev => prev.slice(0, maxPlayersPerTeam));
     }
-  }, [maxPlayersPerTeam]);
+  }, [maxPlayersPerTeam, teamAPlayers.length, teamBPlayers.length]);
 
   // Initialize player actions when teams change
   useEffect(() => {
     const allPlayers = [
-      ...teamAPlayers.map(id => ({ id, team: 'A' as const })),
-      ...teamBPlayers.map(id => ({ id, team: 'B' as const })),
+      ...teamAPlayers.map(p => ({ id: p.playerId, team: 'A' as const })),
+      ...teamBPlayers.map(p => ({ id: p.playerId, team: 'B' as const })),
     ];
     
     setPlayerActions(prev => {
@@ -545,6 +587,22 @@ export default function NewMatchScreen() {
     const winner = teamAScore > teamBScore ? 'A' : 'B';
     const duration = matchTime > 0 ? Math.round(matchTime / 60) : Math.floor(Math.random() * 30) + 30;
     
+    // Build player names with roles
+    const teamAPlayerIds = getTeamPlayerIds(teamAPlayers);
+    const teamBPlayerIds = getTeamPlayerIds(teamBPlayers);
+    const teamAPlayerNames = teamAPlayers.length > 0 
+      ? teamAPlayers.map(p => {
+          const player = players.find(pl => pl.id === p.playerId);
+          return player?.name || 'Joueur';
+        })
+      : ['Mon équipe'];
+    const teamBPlayerNames = teamBPlayers.length > 0 
+      ? teamBPlayers.map(p => {
+          const player = players.find(pl => pl.id === p.playerId);
+          return player?.name || 'Joueur';
+        })
+      : ['Adversaire'];
+    
     addMatch({
       date: new Date().toISOString(),
       mode: isTournamentMode ? 'Tournoi' : 'Entraînement',
@@ -554,17 +612,13 @@ export default function NewMatchScreen() {
       tournamentPhase: isTournamentMode ? (selectedPhase || undefined) : undefined,
       tournamentBracket: isTournamentMode && selectedPhase !== 'Poules' ? selectedBracket || undefined : undefined,
       teamA: {
-        players: teamAPlayers.length > 0 ? teamAPlayers : ['1'],
-        playerNames: teamAPlayers.length > 0 
-          ? teamAPlayers.map(id => players.find(p => p.id === id)?.name || 'Joueur')
-          : ['Mon équipe'],
+        players: teamAPlayerIds.length > 0 ? teamAPlayerIds : ['1'],
+        playerNames: teamAPlayerNames,
         score: teamAScore,
       },
       teamB: {
-        players: teamBPlayers.length > 0 ? teamBPlayers : ['2'],
-        playerNames: teamBPlayers.length > 0 
-          ? teamBPlayers.map(id => players.find(p => p.id === id)?.name || 'Joueur')
-          : ['Adversaire'],
+        players: teamBPlayerIds.length > 0 ? teamBPlayerIds : ['2'],
+        playerNames: teamBPlayerNames,
         score: teamBScore,
       },
       winner,
@@ -771,23 +825,49 @@ export default function NewMatchScreen() {
                 </View>
                 <View style={styles.selectedPlayers}>
                   {teamAPlayers.length > 0 ? (
-                    teamAPlayers.map(id => (
-                      <View key={id} style={styles.selectedPlayerChip}>
-                        <Text style={styles.selectedPlayerName} numberOfLines={1}>
-                          {getPlayerName(id)}
-                        </Text>
-                        {id === selfPlayer?.id && (
-                          <View style={styles.youBadge}>
-                            <Text style={styles.youBadgeText}>Vous</Text>
-                          </View>
-                        )}
-                        <Pressable
-                          style={styles.removePlayerBtn}
-                          onPress={() => togglePlayer(id, 'A')}
-                          hitSlop={8}
-                        >
-                          <MaterialIcons name="close" size={16} color={theme.textSecondary} />
-                        </Pressable>
+                    teamAPlayers.map(p => (
+                      <View key={p.playerId} style={styles.selectedPlayerCard}>
+                        <View style={styles.selectedPlayerHeader}>
+                          <Text style={styles.selectedPlayerName} numberOfLines={1}>
+                            {getPlayerName(p.playerId)}
+                          </Text>
+                          {p.playerId === selfPlayer?.id && (
+                            <View style={styles.youBadge}>
+                              <Text style={styles.youBadgeText}>Vous</Text>
+                            </View>
+                          )}
+                          <Pressable
+                            style={styles.removePlayerBtn}
+                            onPress={() => togglePlayer(p.playerId, 'A')}
+                            hitSlop={8}
+                          >
+                            <MaterialIcons name="close" size={16} color={theme.textSecondary} />
+                          </Pressable>
+                        </View>
+                        <View style={styles.roleSelector}>
+                          {(['Pointeur', 'Milieu', 'Tireur'] as PlayerRoleType[]).map(role => (
+                            <Pressable
+                              key={role}
+                              style={[
+                                styles.roleChip,
+                                p.role === role && styles.roleChipActiveA
+                              ]}
+                              onPress={() => updatePlayerRole(p.playerId, 'A', role)}
+                            >
+                              <MaterialIcons 
+                                name={role === 'Tireur' ? 'gps-fixed' : role === 'Pointeur' ? 'radio-button-on' : 'swap-horiz'} 
+                                size={12} 
+                                color={p.role === role ? '#FFF' : theme.textSecondary} 
+                              />
+                              <Text style={[
+                                styles.roleChipText,
+                                p.role === role && styles.roleChipTextActive
+                              ]}>
+                                {role.charAt(0)}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </View>
                       </View>
                     ))
                   ) : (
@@ -813,18 +893,44 @@ export default function NewMatchScreen() {
                 </View>
                 <View style={styles.selectedPlayers}>
                   {teamBPlayers.length > 0 ? (
-                    teamBPlayers.map(id => (
-                      <View key={id} style={[styles.selectedPlayerChip, styles.selectedPlayerChipB]}>
-                        <Text style={styles.selectedPlayerName} numberOfLines={1}>
-                          {getPlayerName(id)}
-                        </Text>
-                        <Pressable
-                          style={styles.removePlayerBtn}
-                          onPress={() => togglePlayer(id, 'B')}
-                          hitSlop={8}
-                        >
-                          <MaterialIcons name="close" size={16} color={theme.textSecondary} />
-                        </Pressable>
+                    teamBPlayers.map(p => (
+                      <View key={p.playerId} style={[styles.selectedPlayerCard, styles.selectedPlayerCardB]}>
+                        <View style={styles.selectedPlayerHeader}>
+                          <Text style={styles.selectedPlayerName} numberOfLines={1}>
+                            {getPlayerName(p.playerId)}
+                          </Text>
+                          <Pressable
+                            style={styles.removePlayerBtn}
+                            onPress={() => togglePlayer(p.playerId, 'B')}
+                            hitSlop={8}
+                          >
+                            <MaterialIcons name="close" size={16} color={theme.textSecondary} />
+                          </Pressable>
+                        </View>
+                        <View style={styles.roleSelector}>
+                          {(['Pointeur', 'Milieu', 'Tireur'] as PlayerRoleType[]).map(role => (
+                            <Pressable
+                              key={role}
+                              style={[
+                                styles.roleChip,
+                                p.role === role && styles.roleChipActiveB
+                              ]}
+                              onPress={() => updatePlayerRole(p.playerId, 'B', role)}
+                            >
+                              <MaterialIcons 
+                                name={role === 'Tireur' ? 'gps-fixed' : role === 'Pointeur' ? 'radio-button-on' : 'swap-horiz'} 
+                                size={12} 
+                                color={p.role === role ? '#FFF' : theme.textSecondary} 
+                              />
+                              <Text style={[
+                                styles.roleChipText,
+                                p.role === role && styles.roleChipTextActive
+                              ]}>
+                                {role.charAt(0)}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </View>
                       </View>
                     ))
                   ) : (
@@ -1157,7 +1263,7 @@ export default function NewMatchScreen() {
           {scoringMode === 'actions' && (
             <Animated.View entering={FadeInDown.duration(300).delay(isTournamentMode ? 250 : 200)} style={styles.section}>
               {/* Info banner when no players selected */}
-              {teamAPlayers.length === 0 && teamBPlayers.length === 0 && (
+              {getTeamPlayerIds(teamAPlayers).length === 0 && getTeamPlayerIds(teamBPlayers).length === 0 && (
                 <View style={styles.actionTrackerEmptyBanner}>
                   <MaterialIcons name="info-outline" size={24} color={theme.primary} />
                   <View style={styles.actionTrackerEmptyContent}>
@@ -1167,7 +1273,7 @@ export default function NewMatchScreen() {
                 </View>
               )}
               
-              {(teamAPlayers.length > 0 || teamBPlayers.length > 0) && (
+              {(getTeamPlayerIds(teamAPlayers).length > 0 || getTeamPlayerIds(teamBPlayers).length > 0) && (
               <View style={styles.actionTrackerPanel}>
                 {/* Mode Toggle */}
                 <View style={styles.actionModeToggle}>
@@ -1211,7 +1317,7 @@ export default function NewMatchScreen() {
                   </Pressable>
                 </View>
                 {/* Team A Actions */}
-                {teamAPlayers.length > 0 && (
+                {getTeamPlayerIds(teamAPlayers).length > 0 && (
                   <View style={styles.actionTeamSection}>
                     <View style={styles.actionTeamHeader}>
                       <View style={[styles.actionTeamDot, { backgroundColor: theme.primary }]} />
@@ -1225,7 +1331,7 @@ export default function NewMatchScreen() {
                         </Text>
                       </View>
                     </View>
-                    {teamAPlayers.map(playerId => {
+                    {getTeamPlayerIds(teamAPlayers).map(playerId => {
                       const stats = getPlayerActionStats(playerId);
                       const tirRate = stats.tirs > 0 ? Math.round((stats.tirsSuccess / stats.tirs) * 100) : 0;
                       const pointRate = stats.points > 0 ? Math.round((stats.pointsSuccess / stats.points) * 100) : 0;
@@ -1356,12 +1462,12 @@ export default function NewMatchScreen() {
                 )}
 
                 {/* Divider */}
-                {teamAPlayers.length > 0 && teamBPlayers.length > 0 && (
+                {getTeamPlayerIds(teamAPlayers).length > 0 && getTeamPlayerIds(teamBPlayers).length > 0 && (
                   <View style={styles.actionDivider} />
                 )}
 
                 {/* Team B Actions */}
-                {teamBPlayers.length > 0 && (
+                {getTeamPlayerIds(teamBPlayers).length > 0 && (
                   <View style={styles.actionTeamSection}>
                     <View style={styles.actionTeamHeader}>
                       <View style={[styles.actionTeamDot, { backgroundColor: theme.accent }]} />
@@ -1375,7 +1481,7 @@ export default function NewMatchScreen() {
                         </Text>
                       </View>
                     </View>
-                    {teamBPlayers.map(playerId => {
+                    {getTeamPlayerIds(teamBPlayers).map(playerId => {
                       const stats = getPlayerActionStats(playerId);
                       const tirRate = stats.tirs > 0 ? Math.round((stats.tirsSuccess / stats.tirs) * 100) : 0;
                       const pointRate = stats.points > 0 ? Math.round((stats.pointsSuccess / stats.points) * 100) : 0;
@@ -1653,14 +1759,14 @@ export default function NewMatchScreen() {
             {showPlayerPicker === 'A' && selfPlayer && (
               <Pressable
                 style={[
-                  styles.selfPlayerCard,
-                  teamAPlayers.includes(selfPlayer.id) && styles.selfPlayerCardSelected,
+                  styles.selfPlayerCardModal,
+                  teamAPlayers.some(p => p.playerId === selfPlayer.id) && styles.selfPlayerCardModalSelected,
                 ]}
                 onPress={() => togglePlayer(selfPlayer.id, 'A')}
               >
                 <View style={[
                   styles.selfPlayerAvatar,
-                  teamAPlayers.includes(selfPlayer.id) && styles.selfPlayerAvatarSelected,
+                  teamAPlayers.some(p => p.playerId === selfPlayer.id) && styles.selfPlayerAvatarSelected,
                 ]}>
                   <Text style={styles.selfPlayerAvatarText}>
                     {selfPlayer.name?.charAt(0).toUpperCase() || 'M'}
@@ -1678,7 +1784,7 @@ export default function NewMatchScreen() {
                     {selfPlayer.club ? ` • ${selfPlayer.club}` : ''}
                   </Text>
                 </View>
-                {teamAPlayers.includes(selfPlayer.id) ? (
+                {teamAPlayers.some(p => p.playerId === selfPlayer.id) ? (
                   <MaterialIcons name="check-circle" size={24} color={theme.primary} />
                 ) : (
                   <MaterialIcons name="radio-button-unchecked" size={24} color={theme.border} />
@@ -1710,8 +1816,8 @@ export default function NewMatchScreen() {
             {filteredPlayers
               .filter(player => !(showPlayerPicker === 'A' && selfPlayer && player.id === selfPlayer.id))
               .map(player => {
-              const isSelectedA = teamAPlayers.includes(player.id);
-              const isSelectedB = teamBPlayers.includes(player.id);
+              const isSelectedA = teamAPlayers.some(p => p.playerId === player.id);
+              const isSelectedB = teamBPlayers.some(p => p.playerId === player.id);
               const isInOtherTeam = showPlayerPicker === 'A' ? isSelectedB : isSelectedA;
               const isSelected = showPlayerPicker === 'A' ? isSelectedA : isSelectedB;
 
@@ -2508,24 +2614,57 @@ const styles = StyleSheet.create({
     minHeight: 36,
     marginBottom: 12,
   },
-  selectedPlayerChip: {
+  selectedPlayerCard: {
+    backgroundColor: theme.primary + '08',
+    borderRadius: theme.borderRadius.md,
+    padding: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: theme.primary + '25',
+    width: '100%',
+  },
+  selectedPlayerCardB: {
+    backgroundColor: theme.accent + '08',
+    borderColor: theme.accent + '25',
+  },
+  selectedPlayerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.primary + '15',
-    paddingLeft: 12,
-    paddingRight: 6,
-    paddingVertical: 6,
-    borderRadius: theme.borderRadius.full,
-    gap: 6,
-  },
-  selectedPlayerChipB: {
-    backgroundColor: theme.accent + '15',
+    marginBottom: 8,
   },
   selectedPlayerName: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
     color: theme.textPrimary,
-    maxWidth: 100,
+    flex: 1,
+  },
+  roleSelector: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  roleChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.sm,
+  },
+  roleChipActiveA: {
+    backgroundColor: theme.primary,
+  },
+  roleChipActiveB: {
+    backgroundColor: theme.accent,
+  },
+  roleChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  roleChipTextActive: {
+    color: '#FFF',
   },
   youBadge: {
     backgroundColor: theme.primary,
@@ -2933,7 +3072,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   // Self player "Moi" card styles
-  selfPlayerCard: {
+  selfPlayerCardModal: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.primary + '08',
@@ -2943,7 +3082,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: theme.primary + '30',
   },
-  selfPlayerCardSelected: {
+  selfPlayerCardModalSelected: {
     backgroundColor: theme.primary + '15',
     borderColor: theme.primary,
   },
