@@ -2186,7 +2186,7 @@ export default function NewMatchScreen() {
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
           <Pressable 
             style={[styles.saveButton, !isMatchReady && styles.saveButtonDisabled]}
-            onPress={handleSaveMatch}
+            onPress={() => handleSaveMatch()}
           >
             <MaterialIcons name="check" size={24} color="#FFF" />
             <Text style={styles.saveButtonText}>Enregistrer le match</Text>
