@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Audio } from 'expo-av';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
@@ -216,7 +217,23 @@ export default function NewMatchScreen() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [meneAlarmEnabled, setMeneAlarmEnabled] = useState(false);
   const [meneAlarmTriggered, setMeneAlarmTriggered] = useState(false);
+  const [selectedAlarmSound, setSelectedAlarmSound] = useState<string>('bell');
   const alarmSoundRef = useRef<Audio.Sound | null>(null);
+
+  // Load alarm sound preference
+  useEffect(() => {
+    const loadAlarmPreference = async () => {
+      try {
+        const savedSound = await AsyncStorage.getItem('meneAlarmSound');
+        if (savedSound) {
+          setSelectedAlarmSound(savedSound);
+        }
+      } catch (error) {
+        console.log('Error loading alarm preference:', error);
+      }
+    };
+    loadAlarmPreference();
+  }, []);
 
   const maxScore = config.game.maxScore;
 
@@ -568,15 +585,52 @@ export default function NewMatchScreen() {
     };
   }, []);
 
+  // Get alarm sound URI based on type
+  const getAlarmSoundUri = (soundId: string): string => {
+    const sounds: Record<string, string> = {
+      bell: 'https://cdn.freesound.org/previews/411/411089_5121236-lq.mp3',
+      buzzer: 'https://cdn.freesound.org/previews/254/254316_4597795-lq.mp3',
+      whistle: 'https://cdn.freesound.org/previews/352/352661_4019029-lq.mp3',
+      chime: 'https://cdn.freesound.org/previews/320/320655_5260872-lq.mp3',
+    };
+    return sounds[soundId] || sounds.bell;
+  };
+
   const triggerMeneAlarm = async () => {
     setMeneAlarmTriggered(true);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     
-    // Play a series of haptic feedbacks as alarm
+    // Always play haptics
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     for (let i = 0; i < 3; i++) {
       setTimeout(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       }, i * 300);
+    }
+    
+    // Play audio alarm if not set to 'none'
+    if (selectedAlarmSound !== 'none') {
+      try {
+        // Unload previous sound if exists
+        if (alarmSoundRef.current) {
+          await alarmSoundRef.current.unloadAsync();
+        }
+        
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: getAlarmSoundUri(selectedAlarmSound) },
+          { shouldPlay: true, volume: 1.0 }
+        );
+        alarmSoundRef.current = sound;
+        
+        // Unload after playback
+        sound.setOnPlaybackStatusUpdate((status) => {
+          if (status.isLoaded && status.didJustFinish) {
+            sound.unloadAsync();
+            alarmSoundRef.current = null;
+          }
+        });
+      } catch (error) {
+        console.log('Error playing alarm sound:', error);
+      }
     }
   };
 
@@ -3316,7 +3370,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   fsAlarmToggleActive: {
-    backgroundColor: 'rgba(251, 191, 36, 0.2)',
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.4)',
   },
   // FS Dual Timer Bar
   fsDualTimerBar: {
@@ -3345,9 +3401,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(139, 92, 246, 0.1)',
   },
   fsDualTimerPillAlarm: {
-    backgroundColor: 'rgba(251, 191, 36, 0.2)',
-    borderWidth: 2,
-    borderColor: '#FBBF24',
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.4)',
   },
   fsDualTimerContent: {
     flex: 1,
