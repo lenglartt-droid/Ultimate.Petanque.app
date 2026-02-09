@@ -190,16 +190,13 @@ const SeriesCard = React.memo(({ series, onMatchPress }: { series: SeriesGroup; 
     transform: [{ rotate: `${rotateAnim.value * 180}deg` }],
   }));
 
-  // Determine series result text
   const getResultText = () => {
     if (!series.isComplete) return 'En cours';
-    if (isWin) return 'Série gagnée';
-    return 'Série perdue';
+    return isWin ? 'Série gagnée' : 'Série perdue';
   };
 
   return (
     <View style={styles.seriesCard}>
-      {/* Series Header - Always visible */}
       <Pressable style={styles.seriesHeader} onPress={handleToggle}>
         <View style={[styles.seriesIndicator, { backgroundColor: isWin ? theme.success : series.isComplete ? theme.error : theme.warning }]} />
         
@@ -251,7 +248,6 @@ const SeriesCard = React.memo(({ series, onMatchPress }: { series: SeriesGroup; 
             </View>
           </View>
 
-          {/* Match count indicator */}
           <View style={styles.seriesFooter}>
             <View style={styles.matchCountRow}>
               {series.matches.map((match, idx) => (
@@ -274,16 +270,10 @@ const SeriesCard = React.memo(({ series, onMatchPress }: { series: SeriesGroup; 
         </View>
       </Pressable>
 
-      {/* Expanded Match List */}
       {expanded && (
         <Animated.View entering={FadeIn.duration(200)} style={styles.seriesMatchList}>
           {series.matches.map((match) => (
-            <MatchCard 
-              key={match.id} 
-              match={match} 
-              onPress={() => onMatchPress(match)} 
-              compact 
-            />
+            <MatchCard key={match.id} match={match} onPress={() => onMatchPress(match)} compact />
           ))}
         </Animated.View>
       )}
@@ -291,6 +281,7 @@ const SeriesCard = React.memo(({ series, onMatchPress }: { series: SeriesGroup; 
   );
 });
 
+// Challenge Card Component - Improved design
 const ChallengeCard = React.memo(({ challenge, onPress }: { challenge: Challenge; onPress: () => void }) => {
   const config = CHALLENGE_CONFIG[challenge.type];
   const score = challenge.type === 'precision' ? challenge.totalPoints || 0 : challenge.successRate || 0;
@@ -298,38 +289,23 @@ const ChallengeCard = React.memo(({ challenge, onPress }: { challenge: Challenge
   const is1v1 = challenge.mode === '1v1';
 
   return (
-    <Pressable style={styles.card} onPress={onPress}>
-      <View style={[styles.cardIndicator, { backgroundColor: config.color }]} />
-      <View style={styles.cardContent}>
-        <View style={styles.cardHeader}>
-          <View style={styles.badgeRow}>
-            <View style={[styles.badge, { backgroundColor: config.color + '15' }]}>
-              <MaterialIcons name={config.icon} size={12} color={config.color} />
-              <Text style={[styles.badgeText, { color: config.color }]}>Défi</Text>
-            </View>
-            {is1v1 && (
-              <View style={[styles.badge, { backgroundColor: theme.accent + '15' }]}>
-                <MaterialIcons name="people" size={12} color={theme.accent} />
-                <Text style={[styles.badgeText, { color: theme.accent }]}>1v1</Text>
-              </View>
-            )}
+    <Pressable style={styles.challengeCard} onPress={onPress}>
+      <View style={[styles.challengeIndicator, { backgroundColor: config.color }]} />
+      <View style={styles.challengeContent}>
+        <View style={styles.challengeHeader}>
+          <View style={[styles.challengeIconBox, { backgroundColor: config.color + '15' }]}>
+            <MaterialIcons name={config.icon} size={20} color={config.color} />
           </View>
-          <Text style={styles.timeText}>
-            {new Date(challenge.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-          </Text>
-        </View>
-
-        <View style={styles.challengeRow}>
           <View style={styles.challengeInfo}>
             <Text style={styles.challengeName}>{config.name}</Text>
             {challenge.playerName && (
-              <Text style={styles.challengePlayer}>
+              <Text style={styles.challengePlayer} numberOfLines={1}>
                 {is1v1 ? `${challenge.playerName} vs ${challenge.opponentName}` : challenge.playerName}
               </Text>
             )}
           </View>
-          <View style={styles.challengeScoreCol}>
-            <Text style={[styles.challengeScoreNum, { color: config.color }]}>
+          <View style={styles.challengeScoreBox}>
+            <Text style={[styles.challengeScoreValue, { color: config.color }]}>
               {score}{challenge.type === 'precision' ? '' : '%'}
             </Text>
             <Text style={styles.challengeScoreLabel}>
@@ -338,29 +314,48 @@ const ChallengeCard = React.memo(({ challenge, onPress }: { challenge: Challenge
           </View>
         </View>
 
-        {is1v1 && challenge.winner && (
-          <View style={[
-            styles.winnerBadge,
-            { backgroundColor: challenge.winner === 'player' ? theme.success : challenge.winner === 'opponent' ? theme.error : theme.warning }
-          ]}>
-            <MaterialIcons 
-              name={challenge.winner === 'draw' ? 'handshake' : challenge.winner === 'player' ? 'emoji-events' : 'sentiment-dissatisfied'} 
-              size={14} 
-              color="#FFF" 
-            />
-            <Text style={styles.winnerText}>
-              {challenge.winner === 'draw' ? 'Égalité' : challenge.winner === 'player' ? 'Victoire' : 'Défaite'}
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.progressRow}>
+        {/* Progress bar */}
+        <View style={styles.challengeProgress}>
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: `${percentage}%`, backgroundColor: config.color }]} />
           </View>
           {challenge.successCount !== undefined && (
             <Text style={styles.progressLabel}>{challenge.successCount}/{challenge.totalShots}</Text>
           )}
+        </View>
+
+        {/* Footer with badges */}
+        <View style={styles.challengeFooter}>
+          {is1v1 && challenge.winner && (
+            <View style={[
+              styles.challengeWinnerBadge,
+              { backgroundColor: challenge.winner === 'player' ? theme.success : challenge.winner === 'opponent' ? theme.error : theme.warning }
+            ]}>
+              <MaterialIcons 
+                name={challenge.winner === 'draw' ? 'handshake' : challenge.winner === 'player' ? 'emoji-events' : 'sentiment-dissatisfied'} 
+                size={12} 
+                color="#FFF" 
+              />
+              <Text style={styles.challengeWinnerText}>
+                {challenge.winner === 'draw' ? 'Égalité' : challenge.winner === 'player' ? 'Victoire' : 'Défaite'}
+              </Text>
+            </View>
+          )}
+          {is1v1 && (
+            <View style={[styles.modeBadge, { backgroundColor: theme.accent + '15' }]}>
+              <MaterialIcons name="people" size={10} color={theme.accent} />
+              <Text style={[styles.modeBadgeText, { color: theme.accent }]}>1v1</Text>
+            </View>
+          )}
+          {challenge.carreauCount && challenge.carreauCount > 0 ? (
+            <View style={[styles.modeBadge, { backgroundColor: theme.carreauColor + '15' }]}>
+              <MaterialIcons name="stars" size={10} color={theme.carreauColor} />
+              <Text style={[styles.modeBadgeText, { color: theme.carreauColor }]}>{challenge.carreauCount} carreau{challenge.carreauCount > 1 ? 'x' : ''}</Text>
+            </View>
+          ) : null}
+          <Text style={styles.challengeTime}>
+            {new Date(challenge.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+          </Text>
         </View>
       </View>
     </Pressable>
@@ -374,6 +369,63 @@ const SectionHeader = React.memo(({ title }: { title: string }) => (
     <View style={styles.sectionLine} />
   </View>
 ));
+
+// Challenge Stats Summary
+const ChallengeStatsSummary = React.memo(({ challenges }: { challenges: Challenge[] }) => {
+  const stats = useMemo(() => {
+    const byType = {
+      '10_tirs': challenges.filter(c => c.type === '10_tirs'),
+      '10_tirs_sautee': challenges.filter(c => c.type === '10_tirs_sautee'),
+      'precision': challenges.filter(c => c.type === 'precision'),
+    };
+    
+    const avgRate = (arr: Challenge[]) => {
+      if (arr.length === 0) return 0;
+      return Math.round(arr.reduce((sum, c) => sum + (c.successRate || c.totalPoints || 0), 0) / arr.length);
+    };
+
+    return {
+      total: challenges.length,
+      byType: {
+        '10_tirs': { count: byType['10_tirs'].length, avg: avgRate(byType['10_tirs']) },
+        '10_tirs_sautee': { count: byType['10_tirs_sautee'].length, avg: avgRate(byType['10_tirs_sautee']) },
+        'precision': { count: byType['precision'].length, avg: avgRate(byType['precision']) },
+      },
+    };
+  }, [challenges]);
+
+  if (challenges.length === 0) return null;
+
+  return (
+    <View style={styles.challengeStatsCard}>
+      <View style={styles.challengeStatsHeader}>
+        <MaterialIcons name="track-changes" size={18} color={theme.primary} />
+        <Text style={styles.challengeStatsTitle}>Résumé des défis</Text>
+        <View style={styles.challengeStatsCount}>
+          <Text style={styles.challengeStatsCountText}>{stats.total}</Text>
+        </View>
+      </View>
+      <View style={styles.challengeStatsGrid}>
+        {(Object.keys(CHALLENGE_CONFIG) as (keyof typeof CHALLENGE_CONFIG)[]).map(type => {
+          const cfg = CHALLENGE_CONFIG[type];
+          const data = stats.byType[type];
+          if (data.count === 0) return null;
+          return (
+            <View key={type} style={styles.challengeStatItem}>
+              <View style={[styles.challengeStatIcon, { backgroundColor: cfg.color + '15' }]}>
+                <MaterialIcons name={cfg.icon} size={16} color={cfg.color} />
+              </View>
+              <View style={styles.challengeStatInfo}>
+                <Text style={styles.challengeStatName}>{cfg.name}</Text>
+                <Text style={styles.challengeStatMeta}>{data.count} défi{data.count > 1 ? 's' : ''} • {data.avg}{type === 'precision' ? ' pts' : '%'} moy.</Text>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+});
 
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
@@ -402,14 +454,13 @@ export default function HistoryScreen() {
     const result: (Match | SeriesGroup)[] = [...standaloneMatches];
 
     seriesMap.forEach((seriesMatches, seriesId) => {
-      // Sort matches by match number
       seriesMatches.sort((a, b) => (a.seriesInfo?.matchNumber || 0) - (b.seriesInfo?.matchNumber || 0));
       
       const lastMatch = seriesMatches[seriesMatches.length - 1];
       const teamAWins = seriesMatches.filter(m => m.winner === 'A').length;
       const teamBWins = seriesMatches.filter(m => m.winner === 'B').length;
       
-      const seriesGroup: SeriesGroup = {
+      result.push({
         seriesId,
         matches: seriesMatches,
         teamAWins,
@@ -419,29 +470,22 @@ export default function HistoryScreen() {
         format: lastMatch.format,
         teamANames: lastMatch.teamA.playerNames,
         teamBNames: lastMatch.teamB.playerNames,
-        date: seriesMatches[0].date, // Use first match date for sorting
-      };
-      
-      result.push(seriesGroup);
+        date: seriesMatches[0].date,
+      });
     });
 
     return result;
   }, []);
 
   // Filtered and grouped data
-  const { listData, stats } = useMemo(() => {
+  const { listData, stats, filteredChallenges } = useMemo(() => {
     const periodDays = PERIOD_OPTIONS.find(p => p.id === selectedPeriod)?.days || 0;
     const filteredMatches = filterByPeriod(matches, periodDays);
-    const filteredChallenges = filterByPeriod(challenges, periodDays);
+    const filteredChallengesData = filterByPeriod(challenges, periodDays);
 
-    // Calculate stats
     const trainingMatches = filteredMatches.filter(m => m.mode === 'Entraînement');
     const tournamentMatches = filteredMatches.filter(m => m.mode === 'Tournoi');
-    const trainingCount = trainingMatches.length;
-    const tournamentCount = tournamentMatches.length;
-    const challengeCount = filteredChallenges.length;
 
-    // Build items based on filter
     let items: { type: 'match' | 'series' | 'challenge'; data: Match | SeriesGroup | Challenge; date: string }[] = [];
     
     if (contentFilter === 'all' || contentFilter === 'training') {
@@ -455,31 +499,24 @@ export default function HistoryScreen() {
       });
     }
     if (contentFilter === 'all' || contentFilter === 'tournament') {
-      // Tournament matches are not grouped into series
       tournamentMatches.forEach(m => {
         items.push({ type: 'match', data: m, date: m.date });
       });
     }
     if (contentFilter === 'all' || contentFilter === 'challenges') {
-      filteredChallenges.forEach(c => {
+      filteredChallengesData.forEach(c => {
         items.push({ type: 'challenge', data: c, date: c.date });
       });
     }
 
-    // Sort by date descending
     items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    // Remove duplicates (in case training filter adds them twice)
+    // Remove duplicates
     const uniqueIds = new Set<string>();
     items = items.filter(item => {
-      let id: string;
-      if (item.type === 'series') {
-        id = `series-${(item.data as SeriesGroup).seriesId}`;
-      } else if (item.type === 'match') {
-        id = `match-${(item.data as Match).id}`;
-      } else {
-        id = `challenge-${(item.data as Challenge).id}`;
-      }
+      const id = item.type === 'series' ? `series-${(item.data as SeriesGroup).seriesId}` :
+                 item.type === 'match' ? `match-${(item.data as Match).id}` :
+                 `challenge-${(item.data as Challenge).id}`;
       if (uniqueIds.has(id)) return false;
       uniqueIds.add(id);
       return true;
@@ -500,7 +537,13 @@ export default function HistoryScreen() {
 
     return {
       listData,
-      stats: { trainingCount, tournamentCount, challengeCount, total: trainingCount + tournamentCount + challengeCount }
+      stats: {
+        trainingCount: trainingMatches.length,
+        tournamentCount: tournamentMatches.length,
+        challengeCount: filteredChallengesData.length,
+        total: trainingMatches.length + tournamentMatches.length + filteredChallengesData.length
+      },
+      filteredChallenges: filteredChallengesData,
     };
   }, [matches, challenges, contentFilter, selectedPeriod, groupMatchesBySeries]);
 
@@ -575,6 +618,12 @@ export default function HistoryScreen() {
 
   const selectedPeriodLabel = PERIOD_OPTIONS.find(p => p.id === selectedPeriod)?.label || 'Tout';
 
+  // List header with challenge stats
+  const ListHeader = useCallback(() => {
+    if (contentFilter !== 'challenges' || filteredChallenges.length === 0) return null;
+    return <ChallengeStatsSummary challenges={filteredChallenges} />;
+  }, [contentFilter, filteredChallenges]);
+
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
       {/* Header */}
@@ -625,6 +674,7 @@ export default function HistoryScreen() {
         data={listData}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
+        ListHeaderComponent={ListHeader}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
         initialNumToRender={15}
@@ -958,9 +1008,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...theme.shadows.card,
   },
-  seriesHeader: {
-    flexDirection: 'row',
-  },
+  seriesHeader: { flexDirection: 'row' },
   seriesIndicator: { width: 4 },
   seriesHeaderContent: { flex: 1, padding: 12 },
   seriesHeaderTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
@@ -978,12 +1026,7 @@ const styles = StyleSheet.create({
   seriesTeamLabel: { fontSize: 9, fontWeight: '700', color: theme.textMuted, letterSpacing: 0.5, marginBottom: 2 },
   seriesTeamNames: { fontSize: 12, fontWeight: '500', color: theme.textPrimary },
   seriesScoreContainer: { alignItems: 'center', paddingHorizontal: 12 },
-  seriesScoreBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: theme.borderRadius.md,
-    marginBottom: 4,
-  },
+  seriesScoreBadge: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: theme.borderRadius.md, marginBottom: 4 },
   seriesScoreText: { fontSize: 18, fontWeight: '800', color: '#FFF' },
   seriesResultLabel: { fontSize: 10, fontWeight: '600' },
   seriesFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -991,24 +1034,10 @@ const styles = StyleSheet.create({
   matchDot: { width: 10, height: 10, borderRadius: 5 },
   expandButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   expandText: { fontSize: 12, fontWeight: '600', color: theme.primary },
-  seriesMatchList: {
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-    gap: 8,
-    borderTopWidth: 1,
-    borderTopColor: theme.border,
-    paddingTop: 10,
-  },
+  seriesMatchList: { paddingHorizontal: 12, paddingBottom: 12, gap: 8, borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 10 },
   
-  // Compact Match Card (for series expansion)
-  compactMatchCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.sm,
-    padding: 10,
-    gap: 10,
-  },
+  // Compact Match Card
+  compactMatchCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.sm, padding: 10, gap: 10 },
   compactIndicator: { width: 3, height: 28, borderRadius: 2 },
   compactMatchContent: { flex: 1 },
   compactMatchLabel: { fontSize: 11, fontWeight: '600', color: theme.textSecondary, marginBottom: 2 },
@@ -1018,51 +1047,61 @@ const styles = StyleSheet.create({
   compactScoreLoss: { color: theme.error },
   compactScoreSep: { fontSize: 12, color: theme.textMuted },
   
-  // Challenge Card
-  challengeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  // Challenge Card - New improved design
+  challengeCard: {
+    flexDirection: 'row',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: 10,
+    overflow: 'hidden',
+    ...theme.shadows.card,
+  },
+  challengeIndicator: { width: 4 },
+  challengeContent: { flex: 1, padding: 12 },
+  challengeHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  challengeIconBox: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   challengeInfo: { flex: 1 },
   challengeName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
   challengePlayer: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
-  challengeScoreCol: { alignItems: 'flex-end' },
-  challengeScoreNum: { fontSize: 20, fontWeight: '800' },
+  challengeScoreBox: { alignItems: 'flex-end' },
+  challengeScoreValue: { fontSize: 22, fontWeight: '800' },
   challengeScoreLabel: { fontSize: 10, color: theme.textMuted },
-  winnerBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 6,
-    borderRadius: theme.borderRadius.sm,
-    marginBottom: 10,
-  },
-  winnerText: { fontSize: 12, fontWeight: '600', color: '#FFF' },
-  progressRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  challengeProgress: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   progressTrack: { flex: 1, height: 5, backgroundColor: theme.backgroundSecondary, borderRadius: 3, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 3 },
   progressLabel: { fontSize: 11, color: theme.textSecondary, fontWeight: '500' },
+  challengeFooter: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  challengeWinnerBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: theme.borderRadius.full },
+  challengeWinnerText: { fontSize: 10, fontWeight: '600', color: '#FFF' },
+  modeBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 3, borderRadius: theme.borderRadius.sm },
+  modeBadgeText: { fontSize: 10, fontWeight: '600' },
+  challengeTime: { fontSize: 10, color: theme.textMuted, marginLeft: 'auto' },
+  
+  // Challenge Stats Summary Card
+  challengeStatsCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 14,
+    marginBottom: 16,
+    ...theme.shadows.card,
+  },
+  challengeStatsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  challengeStatsTitle: { flex: 1, fontSize: 14, fontWeight: '600', color: theme.textPrimary },
+  challengeStatsCount: { backgroundColor: theme.primary + '15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: theme.borderRadius.full },
+  challengeStatsCountText: { fontSize: 12, fontWeight: '700', color: theme.primary },
+  challengeStatsGrid: { gap: 8 },
+  challengeStatItem: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  challengeStatIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  challengeStatInfo: { flex: 1 },
+  challengeStatName: { fontSize: 13, fontWeight: '600', color: theme.textPrimary },
+  challengeStatMeta: { fontSize: 11, color: theme.textSecondary, marginTop: 1 },
   
   // Empty State
   emptyState: { alignItems: 'center', paddingVertical: 60 },
-  emptyIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: theme.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
+  emptyIcon: { width: 80, height: 80, borderRadius: 40, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: theme.textPrimary, marginBottom: 6 },
   emptyText: { fontSize: 13, color: theme.textSecondary, marginBottom: 20 },
-  resetBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    backgroundColor: theme.primary,
-    borderRadius: theme.borderRadius.full,
-  },
+  resetBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 20, backgroundColor: theme.primary, borderRadius: theme.borderRadius.full },
   resetBtnText: { fontSize: 13, fontWeight: '600', color: '#FFF' },
   
   // Modal
@@ -1117,12 +1156,7 @@ const styles = StyleSheet.create({
   detailStatItem: { alignItems: 'center' },
   detailStatValue: { fontSize: 18, fontWeight: '700', color: theme.textPrimary, marginTop: 6 },
   detailStatLabel: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
-  detailOpponent: {
-    backgroundColor: theme.accent + '10',
-    borderRadius: theme.borderRadius.md,
-    padding: 14,
-    marginBottom: 20,
-  },
+  detailOpponent: { backgroundColor: theme.accent + '10', borderRadius: theme.borderRadius.md, padding: 14, marginBottom: 20 },
   detailOpponentRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   detailOpponentName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
   detailOpponentScore: { fontSize: 16, fontWeight: '700', color: theme.accent },

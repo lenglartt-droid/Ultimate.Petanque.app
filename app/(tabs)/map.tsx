@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,12 +6,11 @@ import {
   Pressable,
   Platform,
   ScrollView,
-  Dimensions,
   TextInput,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -19,19 +18,16 @@ import theme from '@/constants/theme';
 import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 
-const { width: screenWidth } = Dimensions.get('window');
-
 type MarkerType = 'all' | 'terrains' | 'clubs' | 'tournaments' | 'players';
 
-// Marker configuration
-const MARKER_CONFIG: Record<Exclude<MarkerType, 'all'>, { label: string; icon: string; color: string }> = {
+const MARKER_CONFIG = {
   terrains: { label: 'Terrains', icon: 'sports-soccer', color: theme.success },
   clubs: { label: 'Clubs', icon: 'home', color: theme.accent },
   tournaments: { label: 'Tournois', icon: 'emoji-events', color: theme.carreauColor },
   players: { label: 'Joueurs', icon: 'person', color: theme.primary },
-};
+} as const;
 
-// Conditionally import map components based on platform
+// Conditionally import map components
 let MapViewComponent: React.ComponentType<any> | null = null;
 let MarkerComponent: React.ComponentType<any> | null = null;
 
@@ -41,186 +37,168 @@ if (Platform.OS !== 'web') {
   MarkerComponent = Maps.Marker;
 }
 
+// Memoized list item component
+const ListItem = React.memo(({ item, onPress }: { item: any; onPress: () => void }) => {
+  const cfg = MARKER_CONFIG[item.itemType as keyof typeof MARKER_CONFIG];
+  const terrainConfig = item.itemType === 'terrains' 
+    ? config.terrainTypes.find(t => t.id === item.type) 
+    : null;
+  
+  return (
+    <Pressable style={styles.listItem} onPress={onPress}>
+      <View style={[styles.listIcon, { backgroundColor: cfg.color }]}>
+        <MaterialIcons name={(terrainConfig?.icon || cfg.icon) as any} size={18} color="#FFF" />
+      </View>
+      <View style={styles.listContent}>
+        <Text style={styles.listName} numberOfLines={1}>{item.name}</Text>
+        <Text style={styles.listMeta} numberOfLines={1}>
+          {item.itemType === 'terrains' ? `${item.city} • ${item.type}` :
+           item.itemType === 'clubs' ? item.city :
+           item.itemType === 'players' ? (item.location?.city || item.club || '-') :
+           item.location?.city}
+        </Text>
+      </View>
+      <View style={[styles.listBadge, { backgroundColor: cfg.color + '15' }]}>
+        <Text style={[styles.listBadgeText, { color: cfg.color }]}>
+          {cfg.label.slice(0, -1)}
+        </Text>
+      </View>
+    </Pressable>
+  );
+});
+
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const { clubs, tournaments, terrains, players } = useApp();
-  const [activeFilter, setActiveFilter] = useState<MarkerType>('all');
-  const [selectedItem, setSelectedItem] = useState<any>(null);
-  const [showLegend, setShowLegend] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [filter, setFilter] = useState<MarkerType>('all');
+  const [selected, setSelected] = useState<any>(null);
+  const [search, setSearch] = useState('');
   const [showSearch, setShowSearch] = useState(false);
 
-  // Filter items with valid locations
-  const data = useMemo(() => {
-    const terrainsWithLocation = terrains.filter(t => 
-      t.location && (t.location.latitude !== 0 || t.location.longitude !== 0)
-    );
-    const clubsWithLocation = clubs.filter(c => 
-      c.location && (c.location.latitude !== 0 || c.location.longitude !== 0)
-    );
-    const playersWithLocation = players.filter(p => 
-      p.location && (p.location.latitude !== 0 || p.location.longitude !== 0)
-    );
-    // Show all tournaments with valid locations (not just upcoming)
-    const tournamentsWithLocation = tournaments.filter(t => 
-      t.location && (t.location.latitude !== 0 || t.location.longitude !== 0)
-    );
+  // Filtered data with valid locations
+  const data = useMemo(() => ({
+    terrains: terrains.filter(t => t.location?.latitude || t.location?.longitude),
+    clubs: clubs.filter(c => c.location?.latitude || c.location?.longitude),
+    players: players.filter(p => p.location?.latitude || p.location?.longitude),
+    tournaments: tournaments.filter(t => t.location?.latitude || t.location?.longitude),
+  }), [terrains, clubs, players, tournaments]);
 
-    return {
-      terrains: terrainsWithLocation,
-      clubs: clubsWithLocation,
-      players: playersWithLocation,
-      tournaments: tournamentsWithLocation,
-      total: terrainsWithLocation.length + clubsWithLocation.length + playersWithLocation.length + tournamentsWithLocation.length,
+  // Search + filter results
+  const results = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    const matchSearch = (item: any, type: string) => {
+      if (!q) return true;
+      const fields = type === 'terrains' ? [item.name, item.city, item.type] :
+                     type === 'clubs' ? [item.name, item.city] :
+                     type === 'players' ? [item.name, item.location?.city, item.club] :
+                     [item.name, item.location?.city];
+      return fields.some(f => f?.toLowerCase().includes(q));
     };
-  }, [terrains, clubs, players, tournaments]);
 
-  // Visibility flags
-  const visibility = useMemo(() => ({
-    terrains: activeFilter === 'all' || activeFilter === 'terrains',
-    clubs: activeFilter === 'all' || activeFilter === 'clubs',
-    tournaments: activeFilter === 'all' || activeFilter === 'tournaments',
-    players: activeFilter === 'all' || activeFilter === 'players',
-  }), [activeFilter]);
-
-  // Search filtered data
-  const searchFilteredData = useMemo(() => {
-    if (!searchQuery.trim()) return data;
-    
-    const query = searchQuery.toLowerCase().trim();
-    
-    return {
-      terrains: data.terrains.filter(t => 
-        t.name.toLowerCase().includes(query) ||
-        t.city.toLowerCase().includes(query) ||
-        t.type.toLowerCase().includes(query)
-      ),
-      clubs: data.clubs.filter(c => 
-        c.name.toLowerCase().includes(query) ||
-        c.city.toLowerCase().includes(query)
-      ),
-      players: data.players.filter(p => 
-        p.name.toLowerCase().includes(query) ||
-        p.location?.city?.toLowerCase().includes(query) ||
-        p.club?.toLowerCase().includes(query)
-      ),
-      tournaments: data.tournaments.filter(t => 
-        t.name.toLowerCase().includes(query) ||
-        t.location?.city?.toLowerCase().includes(query)
-      ),
-      total: 0, // Will be recalculated
-    };
-  }, [data, searchQuery]);
-
-  // All visible items for list view
-  const visibleItems = useMemo(() => {
     const items: any[] = [];
-    const sourceData = searchQuery.trim() ? searchFilteredData : data;
-    if (visibility.terrains) items.push(...sourceData.terrains.map(t => ({ ...t, itemType: 'terrains' })));
-    if (visibility.clubs) items.push(...sourceData.clubs.map(c => ({ ...c, itemType: 'clubs' })));
-    if (visibility.tournaments) items.push(...sourceData.tournaments.map(t => ({ ...t, itemType: 'tournaments' })));
-    if (visibility.players) items.push(...sourceData.players.map(p => ({ ...p, itemType: 'players' })));
-    return items;
-  }, [data, searchFilteredData, visibility, searchQuery]);
-
-  // Counts for display
-  const displayCounts = useMemo(() => {
-    const sourceData = searchQuery.trim() ? searchFilteredData : data;
-    return {
-      terrains: sourceData.terrains.length,
-      clubs: sourceData.clubs.length,
-      players: sourceData.players.length,
-      tournaments: sourceData.tournaments.length,
-      total: sourceData.terrains.length + sourceData.clubs.length + sourceData.players.length + sourceData.tournaments.length,
-    };
-  }, [data, searchFilteredData, searchQuery]);
-
-  const handleMarkerPress = (item: any, type: string) => {
-    Haptics.selectionAsync();
-    setSelectedItem({ ...item, itemType: type });
-  };
-
-  const handleCardPress = () => {
-    if (!selectedItem) return;
-    const routes: Record<string, string> = {
-      clubs: `/club/${selectedItem.id}`,
-      terrains: `/terrain/${selectedItem.id}`,
-      tournaments: `/tournament/${selectedItem.id}`,
-      players: `/player/${selectedItem.id}`,
-    };
-    router.push(routes[selectedItem.itemType] as any);
-    setSelectedItem(null);
-  };
-
-  const getTerrainTypeConfig = (type: string) => {
-    return config.terrainTypes.find(t => t.id === type) || config.terrainTypes[0];
-  };
-
-  // Native Map Component
-  const renderNativeMap = () => {
-    if (!MapViewComponent || !MarkerComponent) {
-      return renderWebFallback();
+    if (filter === 'all' || filter === 'terrains') {
+      items.push(...data.terrains.filter(t => matchSearch(t, 'terrains')).map(t => ({ ...t, itemType: 'terrains' })));
     }
+    if (filter === 'all' || filter === 'clubs') {
+      items.push(...data.clubs.filter(c => matchSearch(c, 'clubs')).map(c => ({ ...c, itemType: 'clubs' })));
+    }
+    if (filter === 'all' || filter === 'tournaments') {
+      items.push(...data.tournaments.filter(t => matchSearch(t, 'tournaments')).map(t => ({ ...t, itemType: 'tournaments' })));
+    }
+    if (filter === 'all' || filter === 'players') {
+      items.push(...data.players.filter(p => matchSearch(p, 'players')).map(p => ({ ...p, itemType: 'players' })));
+    }
+    return items;
+  }, [data, filter, search]);
+
+  // Counts
+  const counts = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    const count = (arr: any[], type: string) => {
+      if (!q) return arr.length;
+      return arr.filter(item => {
+        const fields = type === 'terrains' ? [item.name, item.city, item.type] :
+                       type === 'clubs' ? [item.name, item.city] :
+                       type === 'players' ? [item.name, item.location?.city, item.club] :
+                       [item.name, item.location?.city];
+        return fields.some(f => f?.toLowerCase().includes(q));
+      }).length;
+    };
+    return {
+      terrains: count(data.terrains, 'terrains'),
+      clubs: count(data.clubs, 'clubs'),
+      players: count(data.players, 'players'),
+      tournaments: count(data.tournaments, 'tournaments'),
+      total: results.length,
+    };
+  }, [data, results, search]);
+
+  const handleSelect = useCallback((item: any, type: string) => {
+    Haptics.selectionAsync();
+    setSelected({ ...item, itemType: type });
+  }, []);
+
+  const handleNavigate = useCallback(() => {
+    if (!selected) return;
+    const routes: Record<string, string> = {
+      clubs: `/club/${selected.id}`,
+      terrains: `/terrain/${selected.id}`,
+      tournaments: `/tournament/${selected.id}`,
+      players: `/player/${selected.id}`,
+    };
+    router.push(routes[selected.itemType] as any);
+    setSelected(null);
+  }, [selected]);
+
+  const handleFilterPress = useCallback((f: MarkerType) => {
+    Haptics.selectionAsync();
+    setFilter(f);
+    setSelected(null);
+  }, []);
+
+  const renderItem = useCallback(({ item }: { item: any }) => (
+    <ListItem item={item} onPress={() => handleSelect(item, item.itemType)} />
+  ), [handleSelect]);
+
+  const keyExtractor = useCallback((item: any) => `${item.itemType}-${item.id}`, []);
+
+  // Native map renderer
+  const renderMap = () => {
+    if (!MapViewComponent || !MarkerComponent) return renderList();
 
     return (
       <MapViewComponent
-        style={styles.map}
+        style={StyleSheet.absoluteFillObject}
         initialRegion={config.map.defaultRegion}
         showsUserLocation
         showsMyLocationButton={false}
-        onPress={() => setSelectedItem(null)}
+        onPress={() => setSelected(null)}
       >
-        {/* Terrain Markers */}
-        {visibility.terrains && (searchQuery.trim() ? searchFilteredData : data).terrains.map((terrain) => {
-          const typeConfig = getTerrainTypeConfig(terrain.type);
-          return (
-            <MarkerComponent
-              key={`terrain-${terrain.id}`}
-              coordinate={terrain.location}
-              onPress={() => handleMarkerPress(terrain, 'terrains')}
-            >
-              <View style={[styles.marker, { backgroundColor: MARKER_CONFIG.terrains.color }]}>
-                <MaterialIcons name={typeConfig.icon as any} size={16} color="#FFF" />
-              </View>
-            </MarkerComponent>
-          );
-        })}
-
-        {/* Club Markers */}
-        {visibility.clubs && (searchQuery.trim() ? searchFilteredData : data).clubs.map((club) => (
-          <MarkerComponent
-            key={`club-${club.id}`}
-            coordinate={club.location}
-            onPress={() => handleMarkerPress(club, 'clubs')}
-          >
+        {(filter === 'all' || filter === 'terrains') && results.filter(i => i.itemType === 'terrains').map(t => (
+          <MarkerComponent key={`t-${t.id}`} coordinate={t.location} onPress={() => handleSelect(t, 'terrains')}>
+            <View style={[styles.marker, { backgroundColor: MARKER_CONFIG.terrains.color }]}>
+              <MaterialIcons name={(config.terrainTypes.find(tt => tt.id === t.type)?.icon || 'sports-soccer') as any} size={14} color="#FFF" />
+            </View>
+          </MarkerComponent>
+        ))}
+        {(filter === 'all' || filter === 'clubs') && results.filter(i => i.itemType === 'clubs').map(c => (
+          <MarkerComponent key={`c-${c.id}`} coordinate={c.location} onPress={() => handleSelect(c, 'clubs')}>
             <View style={[styles.marker, { backgroundColor: MARKER_CONFIG.clubs.color }]}>
-              <MaterialIcons name="home" size={16} color="#FFF" />
+              <MaterialIcons name="home" size={14} color="#FFF" />
             </View>
           </MarkerComponent>
         ))}
-
-        {/* Tournament Markers */}
-        {visibility.tournaments && (searchQuery.trim() ? searchFilteredData : data).tournaments.map((tournament) => (
-          <MarkerComponent
-            key={`tournament-${tournament.id}`}
-            coordinate={tournament.location}
-            onPress={() => handleMarkerPress(tournament, 'tournaments')}
-          >
+        {(filter === 'all' || filter === 'tournaments') && results.filter(i => i.itemType === 'tournaments').map(t => (
+          <MarkerComponent key={`to-${t.id}`} coordinate={t.location} onPress={() => handleSelect(t, 'tournaments')}>
             <View style={[styles.marker, { backgroundColor: MARKER_CONFIG.tournaments.color }]}>
-              <MaterialIcons name="emoji-events" size={16} color="#FFF" />
+              <MaterialIcons name="emoji-events" size={14} color="#FFF" />
             </View>
           </MarkerComponent>
         ))}
-
-        {/* Player Markers */}
-        {visibility.players && (searchQuery.trim() ? searchFilteredData : data).players.map((player) => (
-          <MarkerComponent
-            key={`player-${player.id}`}
-            coordinate={player.location}
-            onPress={() => handleMarkerPress(player, 'players')}
-          >
+        {(filter === 'all' || filter === 'players') && results.filter(i => i.itemType === 'players').map(p => (
+          <MarkerComponent key={`p-${p.id}`} coordinate={p.location} onPress={() => handleSelect(p, 'players')}>
             <View style={[styles.marker, { backgroundColor: MARKER_CONFIG.players.color }]}>
-              <MaterialIcons name="person" size={16} color="#FFF" />
+              <MaterialIcons name="person" size={14} color="#FFF" />
             </View>
           </MarkerComponent>
         ))}
@@ -228,362 +206,159 @@ export default function MapScreen() {
     );
   };
 
-  // Web Fallback with List
-  const renderWebFallback = () => (
-    <View style={styles.webContainer}>
-      <View style={styles.webHeader}>
-        <Image
-          source={require('@/assets/images/map-marker.png')}
-          style={styles.webMapIcon}
-          contentFit="contain"
-        />
-        <Text style={styles.webTitle}>Carte Interactive</Text>
-        <Text style={styles.webSubtitle}>
-          Disponible sur l'application mobile
-        </Text>
+  // List fallback for web
+  const renderList = () => (
+    <View style={styles.listContainer}>
+      <View style={styles.listHeader}>
+        <MaterialIcons name="map" size={48} color={theme.textMuted} />
+        <Text style={styles.listTitle}>Carte Interactive</Text>
+        <Text style={styles.listSubtitle}>Disponible sur mobile</Text>
       </View>
-      
-      <ScrollView 
-        style={styles.webList}
-        contentContainerStyle={[styles.webListContent, { paddingBottom: insets.bottom + 120 }]}
+      <FlatList
+        data={results}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        contentContainerStyle={[styles.listScroll, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
-      >
-        {visibleItems.slice(0, 30).map((item, index) => {
-          const markerConfig = MARKER_CONFIG[item.itemType as keyof typeof MARKER_CONFIG];
-          const terrainConfig = item.itemType === 'terrains' ? getTerrainTypeConfig(item.type) : null;
-          
-          return (
-            <Pressable 
-              key={`${item.itemType}-${item.id}-${index}`}
-              style={styles.webListItem}
-              onPress={() => handleMarkerPress(item, item.itemType)}
-            >
-              <View style={[styles.webListIcon, { backgroundColor: markerConfig.color }]}>
-                <MaterialIcons 
-                  name={(terrainConfig?.icon || markerConfig.icon) as any} 
-                  size={18} 
-                  color="#FFF" 
-                />
-              </View>
-              <View style={styles.webListItemContent}>
-                <Text style={styles.webListName} numberOfLines={1}>{item.name}</Text>
-                <Text style={styles.webListMeta} numberOfLines={1}>
-                  {item.itemType === 'terrains' ? `${item.city} • ${item.type}` :
-                   item.itemType === 'clubs' ? item.city :
-                   item.itemType === 'players' ? (item.location?.city || item.club || 'Sans localisation') :
-                   item.location?.city}
-                </Text>
-              </View>
-              <View style={[styles.webListBadge, { backgroundColor: markerConfig.color + '15' }]}>
-                <Text style={[styles.webListBadgeText, { color: markerConfig.color }]}>
-                  {markerConfig.label.slice(0, -1)}
-                </Text>
-              </View>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+        initialNumToRender={15}
+        maxToRenderPerBatch={10}
+      />
     </View>
   );
 
   return (
     <View style={styles.container}>
-      {/* Map */}
-      {Platform.OS === 'web' ? renderWebFallback() : renderNativeMap()}
+      {Platform.OS === 'web' ? renderList() : renderMap()}
 
-      {/* Header Overlay */}
-      <SafeAreaView edges={['top']} style={styles.headerContainer}>
-        {/* Stats Card */}
-        <Animated.View 
-          entering={FadeInDown.duration(400)}
-          style={styles.statsCard}
-        >
-          <View style={styles.statsHeader}>
-            <Text style={styles.statsTitle}>Carte</Text>
-            <View style={styles.statsHeaderActions}>
-              <Pressable 
-                style={[styles.searchToggleButton, showSearch && styles.searchToggleButtonActive]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setShowSearch(!showSearch);
-                  if (showSearch) setSearchQuery('');
-                }}
-              >
-                <MaterialIcons 
-                  name={showSearch ? 'close' : 'search'} 
-                  size={20} 
-                  color={showSearch ? '#FFF' : theme.textSecondary} 
-                />
-              </Pressable>
-              <Pressable 
-                style={styles.legendButton}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setShowLegend(!showLegend);
-                }}
-              >
-                <MaterialIcons 
-                  name={showLegend ? 'expand-less' : 'info-outline'} 
-                  size={20} 
-                  color={theme.textSecondary} 
-                />
-              </Pressable>
-            </View>
+      {/* Header */}
+      <SafeAreaView edges={['top']} style={styles.header}>
+        <Animated.View entering={FadeInDown.duration(300)} style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Carte</Text>
+            <Pressable
+              style={[styles.searchBtn, showSearch && styles.searchBtnActive]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setShowSearch(!showSearch);
+                if (showSearch) setSearch('');
+              }}
+            >
+              <MaterialIcons name={showSearch ? 'close' : 'search'} size={20} color={showSearch ? '#FFF' : theme.textSecondary} />
+            </Pressable>
           </View>
-          
-          {/* Search Bar */}
+
           {showSearch && (
-            <Animated.View entering={FadeIn.duration(200)} style={styles.searchContainer}>
+            <Animated.View entering={FadeIn.duration(200)} style={styles.searchRow}>
               <View style={styles.searchBar}>
-                <MaterialIcons name="search" size={20} color={theme.textMuted} />
+                <MaterialIcons name="search" size={18} color={theme.textMuted} />
                 <TextInput
                   style={styles.searchInput}
-                  placeholder="Rechercher un lieu, club, joueur..."
+                  placeholder="Rechercher..."
                   placeholderTextColor={theme.textMuted}
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
+                  value={search}
+                  onChangeText={setSearch}
                   autoFocus
                 />
-                {searchQuery.length > 0 && (
-                  <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
-                    <MaterialIcons name="close" size={18} color={theme.textMuted} />
+                {search.length > 0 && (
+                  <Pressable onPress={() => setSearch('')} hitSlop={8}>
+                    <MaterialIcons name="close" size={16} color={theme.textMuted} />
                   </Pressable>
                 )}
               </View>
-              {searchQuery.trim() && (
-                <Text style={styles.searchResultsText}>
-                  {displayCounts.total} résultat{displayCounts.total !== 1 ? 's' : ''}
-                </Text>
+              {search.trim() && (
+                <Text style={styles.searchCount}>{counts.total} résultat{counts.total !== 1 ? 's' : ''}</Text>
               )}
             </Animated.View>
           )}
-          
-          <View style={styles.statsGrid}>
-            {(Object.keys(MARKER_CONFIG) as Array<keyof typeof MARKER_CONFIG>).map(key => {
-              const cfg = MARKER_CONFIG[key];
-              const count = displayCounts[key];
-              const isActive = activeFilter === 'all' || activeFilter === key;
-              return (
-                <View key={key} style={[styles.statItem, !isActive && styles.statItemInactive]}>
-                  <View style={[styles.statDot, { backgroundColor: cfg.color }]} />
-                  <Text style={styles.statValue}>{count}</Text>
-                  <Text style={styles.statLabel}>{cfg.label.toLowerCase()}</Text>
-                </View>
-              );
-            })}
-          </View>
 
-          {/* Legend */}
-          {showLegend && (
-            <Animated.View entering={FadeIn.duration(200)} style={styles.legendContainer}>
-              <View style={styles.legendDivider} />
-              {(Object.keys(MARKER_CONFIG) as Array<keyof typeof MARKER_CONFIG>).map(key => {
-                const cfg = MARKER_CONFIG[key];
-                return (
-                  <View key={key} style={styles.legendItem}>
-                    <View style={[styles.legendMarker, { backgroundColor: cfg.color }]}>
-                      <MaterialIcons name={cfg.icon as any} size={12} color="#FFF" />
-                    </View>
-                    <Text style={styles.legendText}>{cfg.label}</Text>
-                  </View>
-                );
-              })}
-            </Animated.View>
-          )}
+          <View style={styles.statsRow}>
+            {(Object.keys(MARKER_CONFIG) as (keyof typeof MARKER_CONFIG)[]).map(k => (
+              <View key={k} style={[styles.statItem, filter !== 'all' && filter !== k && styles.statItemDim]}>
+                <View style={[styles.statDot, { backgroundColor: MARKER_CONFIG[k].color }]} />
+                <Text style={styles.statValue}>{counts[k]}</Text>
+                <Text style={styles.statLabel}>{MARKER_CONFIG[k].label.toLowerCase()}</Text>
+              </View>
+            ))}
+          </View>
         </Animated.View>
 
         {/* Filters */}
-        <Animated.View 
-          entering={FadeInDown.duration(400).delay(100)}
-          style={styles.filtersContainer}
-        >
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filtersScroll}
-          >
+        <Animated.View entering={FadeInDown.duration(300).delay(50)}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
             <Pressable
-              style={[styles.filterChip, activeFilter === 'all' && styles.filterChipActive]}
-              onPress={() => {
-                Haptics.selectionAsync();
-                setActiveFilter('all');
-                setSelectedItem(null);
-              }}
+              style={[styles.chip, filter === 'all' && styles.chipActive]}
+              onPress={() => handleFilterPress('all')}
             >
-              <MaterialIcons 
-                name="layers" 
-                size={16} 
-                color={activeFilter === 'all' ? '#FFF' : theme.textSecondary} 
-              />
-              <Text style={[styles.filterChipText, activeFilter === 'all' && styles.filterChipTextActive]}>
-                Tout ({displayCounts.total})
-              </Text>
+              <MaterialIcons name="layers" size={14} color={filter === 'all' ? '#FFF' : theme.textSecondary} />
+              <Text style={[styles.chipText, filter === 'all' && styles.chipTextActive]}>Tout ({counts.total})</Text>
             </Pressable>
-            
-            {(Object.keys(MARKER_CONFIG) as Array<keyof typeof MARKER_CONFIG>).map(key => {
-              const cfg = MARKER_CONFIG[key];
-              const count = displayCounts[key];
-              const isActive = activeFilter === key;
-              return (
-                <Pressable
-                  key={key}
-                  style={[
-                    styles.filterChip, 
-                    isActive && styles.filterChipActive,
-                    isActive && { backgroundColor: cfg.color }
-                  ]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setActiveFilter(key);
-                    setSelectedItem(null);
-                  }}
-                >
-                  <MaterialIcons 
-                    name={cfg.icon as any} 
-                    size={16} 
-                    color={isActive ? '#FFF' : theme.textSecondary} 
-                  />
-                  <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
-                    {cfg.label} ({count})
-                  </Text>
-                </Pressable>
-              );
-            })}
+            {(Object.keys(MARKER_CONFIG) as (keyof typeof MARKER_CONFIG)[]).map(k => (
+              <Pressable
+                key={k}
+                style={[styles.chip, filter === k && { backgroundColor: MARKER_CONFIG[k].color }]}
+                onPress={() => handleFilterPress(k)}
+              >
+                <MaterialIcons name={MARKER_CONFIG[k].icon as any} size={14} color={filter === k ? '#FFF' : theme.textSecondary} />
+                <Text style={[styles.chipText, filter === k && styles.chipTextActive]}>{MARKER_CONFIG[k].label} ({counts[k]})</Text>
+              </Pressable>
+            ))}
           </ScrollView>
         </Animated.View>
       </SafeAreaView>
 
-      {/* Selected Item Card */}
-      {selectedItem && (
-        <Animated.View 
-          entering={FadeInUp.duration(300)}
-          style={[styles.selectedCard, { bottom: insets.bottom + 100 }]}
-        >
-          <Pressable style={styles.selectedCardInner} onPress={handleCardPress}>
-            <View style={[
-              styles.selectedAvatar,
-              { backgroundColor: MARKER_CONFIG[selectedItem.itemType as keyof typeof MARKER_CONFIG]?.color || theme.primary }
-            ]}>
-              <MaterialIcons 
-                name={
-                  selectedItem.itemType === 'terrains' 
-                    ? (getTerrainTypeConfig(selectedItem.type)?.icon as any) 
-                    : (MARKER_CONFIG[selectedItem.itemType as keyof typeof MARKER_CONFIG]?.icon as any)
-                } 
-                size={24} 
-                color="#FFF" 
+      {/* Selected Card */}
+      {selected && (
+        <Animated.View entering={FadeInUp.duration(250)} style={[styles.selectedCard, { bottom: insets.bottom + 100 }]}>
+          <Pressable style={styles.selectedInner} onPress={handleNavigate}>
+            <View style={[styles.selectedIcon, { backgroundColor: MARKER_CONFIG[selected.itemType as keyof typeof MARKER_CONFIG]?.color }]}>
+              <MaterialIcons
+                name={(selected.itemType === 'terrains'
+                  ? config.terrainTypes.find(t => t.id === selected.type)?.icon
+                  : MARKER_CONFIG[selected.itemType as keyof typeof MARKER_CONFIG]?.icon) as any}
+                size={22}
+                color="#FFF"
               />
             </View>
-            
             <View style={styles.selectedContent}>
-              <View style={styles.selectedHeader}>
-                <Text style={styles.selectedTitle} numberOfLines={1}>{selectedItem.name}</Text>
-                <View style={[
-                  styles.selectedTypeBadge, 
-                  { backgroundColor: MARKER_CONFIG[selectedItem.itemType as keyof typeof MARKER_CONFIG]?.color + '15' }
-                ]}>
-                  <Text style={[
-                    styles.selectedTypeBadgeText,
-                    { color: MARKER_CONFIG[selectedItem.itemType as keyof typeof MARKER_CONFIG]?.color }
-                  ]}>
-                    {MARKER_CONFIG[selectedItem.itemType as keyof typeof MARKER_CONFIG]?.label.slice(0, -1)}
+              <Text style={styles.selectedTitle} numberOfLines={1}>{selected.name}</Text>
+              <View style={styles.selectedMeta}>
+                <MaterialIcons name="place" size={12} color={theme.textMuted} />
+                <Text style={styles.selectedMetaText}>
+                  {selected.itemType === 'terrains' ? `${selected.city} • ${selected.type}` :
+                   selected.itemType === 'clubs' ? selected.city :
+                   selected.itemType === 'players' ? (selected.location?.city || selected.club || '-') :
+                   selected.location?.city}
+                </Text>
+              </View>
+              <View style={styles.selectedTags}>
+                <View style={[styles.tag, { backgroundColor: MARKER_CONFIG[selected.itemType as keyof typeof MARKER_CONFIG]?.color + '15' }]}>
+                  <Text style={[styles.tagText, { color: MARKER_CONFIG[selected.itemType as keyof typeof MARKER_CONFIG]?.color }]}>
+                    {MARKER_CONFIG[selected.itemType as keyof typeof MARKER_CONFIG]?.label.slice(0, -1)}
                   </Text>
                 </View>
+                {selected.itemType === 'terrains' && selected.courtsCount && (
+                  <View style={styles.tag}>
+                    <Text style={styles.tagText}>{selected.courtsCount} terrain{selected.courtsCount > 1 ? 's' : ''}</Text>
+                  </View>
+                )}
+                {selected.itemType === 'players' && (
+                  <View style={styles.tag}>
+                    <Text style={styles.tagText}>{selected.role}</Text>
+                  </View>
+                )}
+                {selected.itemType === 'tournaments' && (
+                  <View style={styles.tag}>
+                    <Text style={styles.tagText}>{selected.format}</Text>
+                  </View>
+                )}
               </View>
-              
-              {selectedItem.itemType === 'terrains' && (
-                <>
-                  <View style={styles.selectedMeta}>
-                    <MaterialIcons name="place" size={14} color={theme.textMuted} />
-                    <Text style={styles.selectedMetaText}>{selectedItem.city} • {selectedItem.type}</Text>
-                  </View>
-                  <View style={styles.selectedTags}>
-                    <View style={styles.selectedTag}>
-                      <Text style={styles.selectedTagText}>
-                        {selectedItem.courtsCount} terrain{selectedItem.courtsCount > 1 ? 's' : ''}
-                      </Text>
-                    </View>
-                    {selectedItem.lighting && (
-                      <View style={[styles.selectedTag, { backgroundColor: theme.warning + '15' }]}>
-                        <MaterialIcons name="lightbulb" size={10} color={theme.warning} />
-                        <Text style={[styles.selectedTagText, { color: theme.warning }]}>Éclairé</Text>
-                      </View>
-                    )}
-                    {selectedItem.covered && (
-                      <View style={[styles.selectedTag, { backgroundColor: theme.primary + '15' }]}>
-                        <MaterialIcons name="roofing" size={10} color={theme.primary} />
-                        <Text style={[styles.selectedTagText, { color: theme.primary }]}>Couvert</Text>
-                      </View>
-                    )}
-                  </View>
-                </>
-              )}
-              
-              {selectedItem.itemType === 'clubs' && (
-                <>
-                  <View style={styles.selectedMeta}>
-                    <MaterialIcons name="place" size={14} color={theme.textMuted} />
-                    <Text style={styles.selectedMetaText}>{selectedItem.city}, {selectedItem.country || 'France'}</Text>
-                  </View>
-                  <View style={styles.selectedTags}>
-                    <View style={styles.selectedTag}>
-                      <MaterialIcons name="people" size={10} color={theme.textSecondary} />
-                      <Text style={styles.selectedTagText}>{selectedItem.membersCount} membres</Text>
-                    </View>
-                  </View>
-                </>
-              )}
-              
-              {selectedItem.itemType === 'tournaments' && (
-                <>
-                  <View style={styles.selectedMeta}>
-                    <MaterialIcons name="event" size={14} color={theme.textMuted} />
-                    <Text style={styles.selectedMetaText}>
-                      {new Date(selectedItem.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
-                    </Text>
-                  </View>
-                  <View style={styles.selectedTags}>
-                    <View style={[styles.selectedTag, { backgroundColor: theme.primary + '15' }]}>
-                      <Text style={[styles.selectedTagText, { color: theme.primary }]}>{selectedItem.status}</Text>
-                    </View>
-                    <View style={styles.selectedTag}>
-                      <Text style={styles.selectedTagText}>{selectedItem.format}</Text>
-                    </View>
-                  </View>
-                </>
-              )}
-              
-              {selectedItem.itemType === 'players' && (
-                <>
-                  <View style={styles.selectedMeta}>
-                    <MaterialIcons name="place" size={14} color={theme.textMuted} />
-                    <Text style={styles.selectedMetaText}>
-                      {selectedItem.location?.city || selectedItem.club || 'Sans localisation'}
-                    </Text>
-                  </View>
-                  <View style={styles.selectedTags}>
-                    <View style={[styles.selectedTag, { backgroundColor: theme.primary + '15' }]}>
-                      <Text style={[styles.selectedTagText, { color: theme.primary }]}>{selectedItem.role}</Text>
-                    </View>
-                    <View style={styles.selectedTag}>
-                      <Text style={styles.selectedTagText}>{selectedItem.level}</Text>
-                    </View>
-                  </View>
-                </>
-              )}
             </View>
-            
-            <View style={styles.selectedAction}>
-              <MaterialIcons name="arrow-forward" size={20} color={theme.primary} />
+            <View style={styles.selectedArrow}>
+              <MaterialIcons name="arrow-forward" size={18} color={theme.primary} />
             </View>
           </Pressable>
-          
-          {/* Close button */}
-          <Pressable 
-            style={styles.selectedCloseButton}
-            onPress={() => setSelectedItem(null)}
-          >
-            <MaterialIcons name="close" size={18} color={theme.textMuted} />
+          <Pressable style={styles.selectedClose} onPress={() => setSelected(null)}>
+            <MaterialIcons name="close" size={16} color={theme.textMuted} />
           </Pressable>
         </Animated.View>
       )}
@@ -592,338 +367,60 @@ export default function MapScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.backgroundSecondary,
-  },
-  map: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  headerContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-  },
-  statsCard: {
+  container: { flex: 1, backgroundColor: theme.backgroundSecondary },
+  header: { position: 'absolute', top: 0, left: 0, right: 0 },
+  card: {
     backgroundColor: 'rgba(255,255,255,0.97)',
     marginHorizontal: 16,
     marginTop: 8,
     borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    ...theme.shadows.cardElevated,
-  },
-  statsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  statsTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: theme.textPrimary,
-  },
-  statsHeaderActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  searchToggleButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: theme.backgroundSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  searchToggleButtonActive: {
-    backgroundColor: theme.primary,
-  },
-  legendButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: theme.backgroundSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  searchContainer: {
-    marginBottom: 12,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.md,
-    paddingHorizontal: 12,
-    height: 44,
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: theme.textPrimary,
-  },
-  searchResultsText: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  statItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  statItemInactive: {
-    opacity: 0.4,
-  },
-  statDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: theme.textPrimary,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: theme.textSecondary,
-    marginTop: 2,
-  },
-  legendContainer: {
-    marginTop: 12,
-  },
-  legendDivider: {
-    height: 1,
-    backgroundColor: theme.border,
-    marginBottom: 12,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 8,
-  },
-  legendMarker: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  legendText: {
-    fontSize: 14,
-    color: theme.textSecondary,
-  },
-  filtersContainer: {
-    marginTop: 12,
-  },
-  filtersScroll: {
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  filterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    ...theme.shadows.card,
-  },
-  filterChipActive: {
-    backgroundColor: theme.primary,
-  },
-  filterChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  filterChipTextActive: {
-    color: '#FFF',
-  },
-  marker: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#FFF',
-    ...theme.shadows.cardElevated,
-  },
-  selectedCard: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    ...theme.shadows.cardElevated,
-  },
-  selectedCardInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-  },
-  selectedAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  selectedContent: {
-    flex: 1,
-  },
-  selectedHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
-  },
-  selectedTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.textPrimary,
-    flex: 1,
-  },
-  selectedTypeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: theme.borderRadius.sm,
-  },
-  selectedTypeBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  selectedMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 8,
-  },
-  selectedMetaText: {
-    fontSize: 13,
-    color: theme.textSecondary,
-  },
-  selectedTags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  selectedTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.sm,
-  },
-  selectedTagText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  selectedAction: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: theme.primary + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
-  },
-  selectedCloseButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: theme.backgroundSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // Web fallback styles
-  webContainer: {
-    flex: 1,
-    paddingTop: 180,
-  },
-  webHeader: {
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    marginBottom: 24,
-  },
-  webMapIcon: {
-    width: 80,
-    height: 80,
-    marginBottom: 12,
-    opacity: 0.5,
-  },
-  webTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: theme.textPrimary,
-    marginBottom: 6,
-  },
-  webSubtitle: {
-    fontSize: 14,
-    color: theme.textSecondary,
-    textAlign: 'center',
-  },
-  webList: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  webListContent: {
-    gap: 8,
-  },
-  webListItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
     padding: 14,
-    borderRadius: theme.borderRadius.lg,
     ...theme.shadows.card,
   },
-  webListIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  webListItemContent: {
-    flex: 1,
-  },
-  webListName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.textPrimary,
-    marginBottom: 2,
-  },
-  webListMeta: {
-    fontSize: 13,
-    color: theme.textSecondary,
-  },
-  webListBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: theme.borderRadius.sm,
-  },
-  webListBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  cardTitle: { fontSize: 20, fontWeight: '700', color: theme.textPrimary },
+  searchBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
+  searchBtnActive: { backgroundColor: theme.primary },
+  searchRow: { marginBottom: 10 },
+  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, paddingHorizontal: 10, height: 40, gap: 6 },
+  searchInput: { flex: 1, fontSize: 14, color: theme.textPrimary },
+  searchCount: { fontSize: 11, color: theme.textSecondary, marginTop: 6, textAlign: 'center' },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  statItem: { alignItems: 'center', flex: 1 },
+  statItemDim: { opacity: 0.35 },
+  statDot: { width: 6, height: 6, borderRadius: 3, marginBottom: 3 },
+  statValue: { fontSize: 16, fontWeight: '700', color: theme.textPrimary },
+  statLabel: { fontSize: 10, color: theme.textSecondary },
+  filters: { paddingHorizontal: 16, paddingTop: 10, gap: 6 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: theme.borderRadius.full, backgroundColor: 'rgba(255,255,255,0.95)', ...theme.shadows.card },
+  chipActive: { backgroundColor: theme.primary },
+  chipText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  chipTextActive: { color: '#FFF' },
+  marker: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF', ...theme.shadows.card },
+  // Selected card
+  selectedCard: { position: 'absolute', left: 16, right: 16, backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, ...theme.shadows.cardElevated },
+  selectedInner: { flexDirection: 'row', alignItems: 'center', padding: 14 },
+  selectedIcon: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  selectedContent: { flex: 1 },
+  selectedTitle: { fontSize: 15, fontWeight: '600', color: theme.textPrimary, marginBottom: 4 },
+  selectedMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 },
+  selectedMetaText: { fontSize: 12, color: theme.textSecondary },
+  selectedTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+  tag: { paddingHorizontal: 6, paddingVertical: 2, backgroundColor: theme.backgroundSecondary, borderRadius: 4 },
+  tagText: { fontSize: 10, fontWeight: '600', color: theme.textSecondary },
+  selectedArrow: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center' },
+  selectedClose: { position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: 12, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
+  // List fallback
+  listContainer: { flex: 1, paddingTop: 170 },
+  listHeader: { alignItems: 'center', paddingHorizontal: 24, marginBottom: 16 },
+  listTitle: { fontSize: 18, fontWeight: '700', color: theme.textPrimary, marginTop: 8 },
+  listSubtitle: { fontSize: 13, color: theme.textSecondary },
+  listScroll: { paddingHorizontal: 16, gap: 8 },
+  listItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, padding: 12, borderRadius: theme.borderRadius.md, ...theme.shadows.card },
+  listIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  listContent: { flex: 1 },
+  listName: { fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginBottom: 2 },
+  listMeta: { fontSize: 12, color: theme.textSecondary },
+  listBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 },
+  listBadgeText: { fontSize: 10, fontWeight: '600' },
 });
