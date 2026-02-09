@@ -24,6 +24,7 @@ const CHALLENGE_CONFIG = {
 } as const;
 
 type ContentFilter = 'all' | 'training' | 'tournament' | 'challenges';
+type TrainingSubFilter = 'all' | 'matches' | 'challenges' | 'series';
 type PeriodOption = 'all' | 'week' | '2weeks' | 'month' | '3months' | '6months' | 'year';
 
 const PERIOD_OPTIONS: { id: PeriodOption; label: string; days: number }[] = [
@@ -41,6 +42,13 @@ const CONTENT_FILTERS: { id: ContentFilter; label: string; icon: keyof typeof Ma
   { id: 'training', label: 'Entraînements', icon: 'fitness-center' },
   { id: 'tournament', label: 'Tournois', icon: 'emoji-events' },
   { id: 'challenges', label: 'Défis', icon: 'track-changes' },
+];
+
+const TRAINING_SUB_FILTERS: { id: TrainingSubFilter; label: string; icon: keyof typeof MaterialIcons.glyphMap }[] = [
+  { id: 'all', label: 'Tout', icon: 'layers' },
+  { id: 'matches', label: 'Matchs', icon: 'sports' },
+  { id: 'challenges', label: 'Défis', icon: 'track-changes' },
+  { id: 'series', label: 'Best of 3', icon: 'replay' },
 ];
 
 // Types
@@ -432,6 +440,7 @@ export default function HistoryScreen() {
   const { matches, challenges, deleteChallenge } = useApp();
   
   const [contentFilter, setContentFilter] = useState<ContentFilter>('all');
+  const [trainingSubFilter, setTrainingSubFilter] = useState<TrainingSubFilter>('all');
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodOption>('all');
   const [showPeriodModal, setShowPeriodModal] = useState(false);
   const [editingChallenge, setEditingChallenge] = useState<Challenge | null>(null);
@@ -478,17 +487,26 @@ export default function HistoryScreen() {
   }, []);
 
   // Filtered and grouped data
-  const { listData, stats, filteredChallenges } = useMemo(() => {
+  const { listData, stats, filteredChallenges, trainingStats } = useMemo(() => {
     const periodDays = PERIOD_OPTIONS.find(p => p.id === selectedPeriod)?.days || 0;
     const filteredMatches = filterByPeriod(matches, periodDays);
     const filteredChallengesData = filterByPeriod(challenges, periodDays);
 
     const trainingMatches = filteredMatches.filter(m => m.mode === 'Entraînement');
     const tournamentMatches = filteredMatches.filter(m => m.mode === 'Tournoi');
+    
+    // Separate training matches into standalone and series
+    const standaloneTraining = trainingMatches.filter(m => !m.seriesInfo?.seriesId);
+    const seriesTraining = trainingMatches.filter(m => m.seriesInfo?.seriesId);
+    
+    // Group series matches
+    const groupedSeries = groupMatchesBySeries(seriesTraining);
+    const seriesGroups = groupedSeries.filter(item => 'seriesId' in item) as SeriesGroup[];
 
     let items: { type: 'match' | 'series' | 'challenge'; data: Match | SeriesGroup | Challenge; date: string }[] = [];
     
-    if (contentFilter === 'all' || contentFilter === 'training') {
+    if (contentFilter === 'all') {
+      // Show everything
       const groupedTraining = groupMatchesBySeries(trainingMatches);
       groupedTraining.forEach(item => {
         if ('seriesId' in item) {
@@ -497,13 +515,42 @@ export default function HistoryScreen() {
           items.push({ type: 'match', data: item as Match, date: item.date });
         }
       });
-    }
-    if (contentFilter === 'all' || contentFilter === 'tournament') {
       tournamentMatches.forEach(m => {
         items.push({ type: 'match', data: m, date: m.date });
       });
-    }
-    if (contentFilter === 'all' || contentFilter === 'challenges') {
+      filteredChallengesData.forEach(c => {
+        items.push({ type: 'challenge', data: c, date: c.date });
+      });
+    } else if (contentFilter === 'training') {
+      // Apply training sub-filter
+      if (trainingSubFilter === 'all') {
+        standaloneTraining.forEach(m => {
+          items.push({ type: 'match', data: m, date: m.date });
+        });
+        seriesGroups.forEach(s => {
+          items.push({ type: 'series', data: s, date: s.date });
+        });
+        filteredChallengesData.forEach(c => {
+          items.push({ type: 'challenge', data: c, date: c.date });
+        });
+      } else if (trainingSubFilter === 'matches') {
+        standaloneTraining.forEach(m => {
+          items.push({ type: 'match', data: m, date: m.date });
+        });
+      } else if (trainingSubFilter === 'series') {
+        seriesGroups.forEach(s => {
+          items.push({ type: 'series', data: s, date: s.date });
+        });
+      } else if (trainingSubFilter === 'challenges') {
+        filteredChallengesData.forEach(c => {
+          items.push({ type: 'challenge', data: c, date: c.date });
+        });
+      }
+    } else if (contentFilter === 'tournament') {
+      tournamentMatches.forEach(m => {
+        items.push({ type: 'match', data: m, date: m.date });
+      });
+    } else if (contentFilter === 'challenges') {
       filteredChallengesData.forEach(c => {
         items.push({ type: 'challenge', data: c, date: c.date });
       });
@@ -544,8 +591,13 @@ export default function HistoryScreen() {
         total: trainingMatches.length + tournamentMatches.length + filteredChallengesData.length
       },
       filteredChallenges: filteredChallengesData,
+      trainingStats: {
+        matchesCount: standaloneTraining.length,
+        seriesCount: seriesGroups.length,
+        challengesCount: filteredChallengesData.length,
+      },
     };
-  }, [matches, challenges, contentFilter, selectedPeriod, groupMatchesBySeries]);
+  }, [matches, challenges, contentFilter, trainingSubFilter, selectedPeriod, groupMatchesBySeries]);
 
   // Handlers
   const handleMatchPress = useCallback((match: Match) => {
@@ -568,6 +620,14 @@ export default function HistoryScreen() {
   const handleFilterPress = useCallback((filter: ContentFilter) => {
     Haptics.selectionAsync();
     setContentFilter(filter);
+    if (filter !== 'training') {
+      setTrainingSubFilter('all');
+    }
+  }, []);
+
+  const handleTrainingSubFilterPress = useCallback((filter: TrainingSubFilter) => {
+    Haptics.selectionAsync();
+    setTrainingSubFilter(filter);
   }, []);
 
   const handlePeriodPress = useCallback((period: PeriodOption) => {
@@ -620,9 +680,14 @@ export default function HistoryScreen() {
 
   // List header with challenge stats
   const ListHeader = useCallback(() => {
-    if (contentFilter !== 'challenges' || filteredChallenges.length === 0) return null;
-    return <ChallengeStatsSummary challenges={filteredChallenges} />;
-  }, [contentFilter, filteredChallenges]);
+    if (contentFilter === 'challenges' && filteredChallenges.length > 0) {
+      return <ChallengeStatsSummary challenges={filteredChallenges} />;
+    }
+    if (contentFilter === 'training' && trainingSubFilter === 'challenges' && filteredChallenges.length > 0) {
+      return <ChallengeStatsSummary challenges={filteredChallenges} />;
+    }
+    return null;
+  }, [contentFilter, trainingSubFilter, filteredChallenges]);
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
@@ -668,6 +733,31 @@ export default function HistoryScreen() {
           );
         })}
       </View>
+
+      {/* Training Sub-Filters */}
+      {contentFilter === 'training' && (
+        <Animated.View entering={FadeInDown.duration(200)} style={styles.subFiltersRow}>
+          {TRAINING_SUB_FILTERS.map((filter) => {
+            const isActive = trainingSubFilter === filter.id;
+            const count = filter.id === 'all' ? (trainingStats.matchesCount + trainingStats.seriesCount + trainingStats.challengesCount)
+              : filter.id === 'matches' ? trainingStats.matchesCount
+              : filter.id === 'series' ? trainingStats.seriesCount
+              : trainingStats.challengesCount;
+
+            return (
+              <Pressable
+                key={filter.id}
+                style={[styles.subFilterChip, isActive && styles.subFilterChipActive]}
+                onPress={() => handleTrainingSubFilterPress(filter.id)}
+              >
+                <MaterialIcons name={filter.icon} size={12} color={isActive ? theme.primary : theme.textMuted} />
+                <Text style={[styles.subFilterChipText, isActive && styles.subFilterChipTextActive]}>{filter.label}</Text>
+                <Text style={[styles.subFilterCount, isActive && styles.subFilterCountActive]}>{count}</Text>
+              </Pressable>
+            );
+          })}
+        </Animated.View>
+      )}
 
       {/* List */}
       <FlatList
@@ -1103,6 +1193,36 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 13, color: theme.textSecondary, marginBottom: 20 },
   resetBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 20, backgroundColor: theme.primary, borderRadius: theme.borderRadius.full },
   resetBtnText: { fontSize: 13, fontWeight: '600', color: '#FFF' },
+  
+  // Sub-filters
+  subFiltersRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+    backgroundColor: theme.backgroundSecondary,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  subFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  subFilterChipActive: {
+    backgroundColor: theme.primary + '15',
+    borderColor: theme.primary,
+  },
+  subFilterChipText: { fontSize: 11, fontWeight: '500', color: theme.textMuted },
+  subFilterChipTextActive: { color: theme.primary, fontWeight: '600' },
+  subFilterCount: { fontSize: 10, fontWeight: '600', color: theme.textMuted, marginLeft: 2 },
+  subFilterCountActive: { color: theme.primary },
   
   // Modal
   modalContainer: { flex: 1, backgroundColor: theme.backgroundSecondary },
