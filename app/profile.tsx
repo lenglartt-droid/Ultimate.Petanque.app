@@ -675,7 +675,13 @@ export default function ProfileScreen() {
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </Pressable>
 
-            <Pressable style={styles.menuItem}>
+            <Pressable 
+              style={styles.menuItem}
+              onPress={() => {
+                Haptics.selectionAsync();
+                router.push('/faq');
+              }}
+            >
               <View style={[styles.menuIcon, { backgroundColor: theme.carreauColor + '15' }]}>
                 <MaterialIcons name="help-outline" size={20} color={theme.carreauColor} />
               </View>

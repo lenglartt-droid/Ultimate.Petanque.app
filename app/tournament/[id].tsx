@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,8 +6,8 @@ import {
   Pressable,
   StyleSheet,
   Modal,
-  TextInput,
   Alert,
+  Switch,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -98,8 +98,66 @@ export default function TournamentDetailScreen() {
   // End tournament modal state
   const [showEndTournament, setShowEndTournament] = useState(false);
   
+  // Notification modal state
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [notificationSettings, setNotificationSettings] = useState({
+    enabled: false,
+    oneWeek: true,
+    threeDays: true,
+    oneDayBefore: true,
+  });
+  
   // Notification state
   const isNotificationEnabled = tournament ? isTournamentNotificationEnabled(tournament.id) : false;
+
+  // Check if tournament is upcoming (can set notifications)
+  const isUpcoming = tournament && tournament.status === 'À venir';
+  const tournamentDate = tournament ? new Date(tournament.date) : new Date();
+  const daysUntilTournament = Math.ceil((tournamentDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+
+  // Handle notification toggle
+  const handleNotificationPress = useCallback(() => {
+    if (!tournament) return;
+    Haptics.selectionAsync();
+    
+    if (!isUpcoming) {
+      Alert.alert(
+        'Tournoi passé',
+        'Les notifications ne sont disponibles que pour les tournois à venir.'
+      );
+      return;
+    }
+    
+    setNotificationSettings(prev => ({ ...prev, enabled: isNotificationEnabled }));
+    setShowNotificationModal(true);
+  }, [tournament, isUpcoming, isNotificationEnabled]);
+
+  const handleSaveNotifications = useCallback(() => {
+    if (!tournament) return;
+    
+    // Toggle the notification state
+    const willEnable = !isNotificationEnabled;
+    toggleTournamentNotification(tournament.id);
+    
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setShowNotificationModal(false);
+    
+    if (willEnable) {
+      const reminders = [];
+      if (notificationSettings.oneWeek && daysUntilTournament >= 7) reminders.push('1 semaine avant');
+      if (notificationSettings.threeDays && daysUntilTournament >= 3) reminders.push('3 jours avant');
+      if (notificationSettings.oneDayBefore && daysUntilTournament >= 1) reminders.push('la veille');
+      
+      Alert.alert(
+        'Notifications activées',
+        reminders.length > 0 
+          ? `Vous recevrez des rappels : ${reminders.join(', ')}.`
+          : 'Le tournoi est très proche, vous recevrez un rappel très bientôt.'
+      );
+    } else {
+      Alert.alert('Notifications désactivées', 'Vous ne recevrez plus de rappel pour ce tournoi.');
+    }
+  }, [tournament, isNotificationEnabled, notificationSettings, daysUntilTournament, toggleTournamentNotification]);
 
   // Filter and sort matches
   const myMatches = useMemo(() => {
@@ -243,16 +301,7 @@ export default function TournamentDetailScreen() {
         <View style={styles.headerActions}>
           <Pressable 
             style={[styles.notificationButton, isNotificationEnabled && styles.notificationButtonActive]}
-            onPress={() => {
-              toggleTournamentNotification(tournament.id);
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              Alert.alert(
-                isNotificationEnabled ? 'Notification désactivée' : 'Notification activée',
-                isNotificationEnabled 
-                  ? 'Vous ne recevrez plus de rappel pour ce tournoi.'
-                  : 'Vous recevrez un rappel avant ce tournoi.'
-              );
-            }}
+            onPress={handleNotificationPress}
           >
             <MaterialIcons 
               name={isNotificationEnabled ? 'notifications-active' : 'notifications-none'} 
@@ -556,6 +605,192 @@ export default function TournamentDetailScreen() {
           <Text style={styles.fabText}>Nouveau Match</Text>
         </Pressable>
       </Animated.View>
+
+      {/* Notification Settings Modal */}
+      <Modal
+        visible={showNotificationModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowNotificationModal(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Pressable style={styles.modalClose} onPress={() => setShowNotificationModal(false)}>
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+            <Text style={styles.modalTitle}>Notifications</Text>
+            <Pressable 
+              style={styles.modalSave}
+              onPress={handleSaveNotifications}
+            >
+              <Text style={styles.modalSaveText}>
+                {isNotificationEnabled ? 'Désactiver' : 'Activer'}
+              </Text>
+            </Pressable>
+          </View>
+
+          <ScrollView 
+            style={styles.modalContent}
+            contentContainerStyle={styles.notificationModalScroll}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Tournament Info */}
+            <View style={styles.notificationTournamentInfo}>
+              <View style={styles.notificationTournamentIcon}>
+                <MaterialIcons name="emoji-events" size={28} color={theme.carreauColor} />
+              </View>
+              <View style={styles.notificationTournamentDetails}>
+                <Text style={styles.notificationTournamentName} numberOfLines={2}>
+                  {tournament?.name}
+                </Text>
+                <Text style={styles.notificationTournamentDate}>
+                  {tournamentDate.toLocaleDateString('fr-FR', { 
+                    weekday: 'long', 
+                    day: 'numeric', 
+                    month: 'long', 
+                    year: 'numeric' 
+                  })}
+                </Text>
+                {daysUntilTournament > 0 ? (
+                  <View style={styles.daysCountdown}>
+                    <MaterialIcons name="schedule" size={14} color={theme.primary} />
+                    <Text style={styles.daysCountdownText}>
+                      Dans {daysUntilTournament} jour{daysUntilTournament > 1 ? 's' : ''}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={[styles.daysCountdown, { backgroundColor: theme.warning + '15' }]}>
+                    <MaterialIcons name="event" size={14} color={theme.warning} />
+                    <Text style={[styles.daysCountdownText, { color: theme.warning }]}>
+                      {daysUntilTournament === 0 ? "Aujourd'hui" : 'Passé'}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* Current Status */}
+            <View style={[
+              styles.notificationStatusBanner,
+              isNotificationEnabled ? styles.notificationStatusEnabled : styles.notificationStatusDisabled
+            ]}>
+              <MaterialIcons 
+                name={isNotificationEnabled ? 'notifications-active' : 'notifications-off'} 
+                size={24} 
+                color={isNotificationEnabled ? theme.success : theme.textMuted} 
+              />
+              <View style={styles.notificationStatusInfo}>
+                <Text style={[
+                  styles.notificationStatusTitle,
+                  { color: isNotificationEnabled ? theme.success : theme.textSecondary }
+                ]}>
+                  {isNotificationEnabled ? 'Notifications activées' : 'Notifications désactivées'}
+                </Text>
+                <Text style={styles.notificationStatusDesc}>
+                  {isNotificationEnabled 
+                    ? 'Vous recevrez des rappels avant le tournoi'
+                    : 'Activez pour recevoir des rappels'
+                  }
+                </Text>
+              </View>
+            </View>
+
+            {/* Reminder Options */}
+            <View style={styles.notificationSection}>
+              <Text style={styles.notificationSectionTitle}>RAPPELS À ENVOYER</Text>
+              <Text style={styles.notificationSectionSubtitle}>
+                Choisissez quand vous souhaitez être notifié
+              </Text>
+
+              {/* 1 Week Before */}
+              <View style={[
+                styles.notificationOption,
+                daysUntilTournament < 7 && styles.notificationOptionDisabled
+              ]}>
+                <View style={[styles.notificationOptionIcon, { backgroundColor: theme.primary + '15' }]}>
+                  <MaterialIcons name="date-range" size={22} color={theme.primary} />
+                </View>
+                <View style={styles.notificationOptionInfo}>
+                  <Text style={styles.notificationOptionTitle}>1 semaine avant</Text>
+                  <Text style={styles.notificationOptionDesc}>
+                    {daysUntilTournament >= 7 
+                      ? `Le ${new Date(tournamentDate.getTime() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`
+                      : 'Délai dépassé'
+                    }
+                  </Text>
+                </View>
+                <Switch
+                  value={notificationSettings.oneWeek && daysUntilTournament >= 7}
+                  onValueChange={(val) => setNotificationSettings(prev => ({ ...prev, oneWeek: val }))}
+                  trackColor={{ false: theme.border, true: theme.primary + '50' }}
+                  thumbColor={notificationSettings.oneWeek && daysUntilTournament >= 7 ? theme.primary : theme.surface}
+                  disabled={daysUntilTournament < 7}
+                />
+              </View>
+
+              {/* 3 Days Before */}
+              <View style={[
+                styles.notificationOption,
+                daysUntilTournament < 3 && styles.notificationOptionDisabled
+              ]}>
+                <View style={[styles.notificationOptionIcon, { backgroundColor: theme.accent + '15' }]}>
+                  <MaterialIcons name="event-note" size={22} color={theme.accent} />
+                </View>
+                <View style={styles.notificationOptionInfo}>
+                  <Text style={styles.notificationOptionTitle}>3 jours avant</Text>
+                  <Text style={styles.notificationOptionDesc}>
+                    {daysUntilTournament >= 3 
+                      ? `Le ${new Date(tournamentDate.getTime() - 3 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`
+                      : 'Délai dépassé'
+                    }
+                  </Text>
+                </View>
+                <Switch
+                  value={notificationSettings.threeDays && daysUntilTournament >= 3}
+                  onValueChange={(val) => setNotificationSettings(prev => ({ ...prev, threeDays: val }))}
+                  trackColor={{ false: theme.border, true: theme.accent + '50' }}
+                  thumbColor={notificationSettings.threeDays && daysUntilTournament >= 3 ? theme.accent : theme.surface}
+                  disabled={daysUntilTournament < 3}
+                />
+              </View>
+
+              {/* 1 Day Before */}
+              <View style={[
+                styles.notificationOption,
+                daysUntilTournament < 1 && styles.notificationOptionDisabled
+              ]}>
+                <View style={[styles.notificationOptionIcon, { backgroundColor: theme.warning + '15' }]}>
+                  <MaterialIcons name="today" size={22} color={theme.warning} />
+                </View>
+                <View style={styles.notificationOptionInfo}>
+                  <Text style={styles.notificationOptionTitle}>La veille</Text>
+                  <Text style={styles.notificationOptionDesc}>
+                    {daysUntilTournament >= 1 
+                      ? `Le ${new Date(tournamentDate.getTime() - 1 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`
+                      : 'Délai dépassé'
+                    }
+                  </Text>
+                </View>
+                <Switch
+                  value={notificationSettings.oneDayBefore && daysUntilTournament >= 1}
+                  onValueChange={(val) => setNotificationSettings(prev => ({ ...prev, oneDayBefore: val }))}
+                  trackColor={{ false: theme.border, true: theme.warning + '50' }}
+                  thumbColor={notificationSettings.oneDayBefore && daysUntilTournament >= 1 ? theme.warning : theme.surface}
+                  disabled={daysUntilTournament < 1}
+                />
+              </View>
+            </View>
+
+            {/* Info */}
+            <View style={styles.notificationInfoCard}>
+              <MaterialIcons name="info-outline" size={20} color={theme.textMuted} />
+              <Text style={styles.notificationInfoText}>
+                Les rappels seront envoyés sous forme de notifications push. Assurez-vous que les notifications sont activées dans les paramètres de votre téléphone.
+              </Text>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
 
       {/* End Tournament Modal */}
       <Modal
@@ -1329,5 +1564,148 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: theme.textMuted,
     marginTop: 2,
+  },
+  // Notification Modal Styles
+  notificationModalScroll: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+  notificationTournamentInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    marginBottom: 16,
+    ...theme.shadows.card,
+  },
+  notificationTournamentIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: theme.carreauColor + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  notificationTournamentDetails: {
+    flex: 1,
+  },
+  notificationTournamentName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.textPrimary,
+    marginBottom: 4,
+  },
+  notificationTournamentDate: {
+    fontSize: 13,
+    color: theme.textSecondary,
+    marginBottom: 8,
+  },
+  daysCountdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    backgroundColor: theme.primary + '15',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: theme.borderRadius.full,
+  },
+  daysCountdownText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.primary,
+  },
+  notificationStatusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: theme.borderRadius.lg,
+    marginBottom: 20,
+    gap: 14,
+  },
+  notificationStatusEnabled: {
+    backgroundColor: theme.success + '15',
+    borderWidth: 1,
+    borderColor: theme.success + '30',
+  },
+  notificationStatusDisabled: {
+    backgroundColor: theme.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  notificationStatusInfo: {
+    flex: 1,
+  },
+  notificationStatusTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  notificationStatusDesc: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 2,
+  },
+  notificationSection: {
+    marginBottom: 20,
+  },
+  notificationSectionTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.textSecondary,
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  notificationSectionSubtitle: {
+    fontSize: 13,
+    color: theme.textMuted,
+    marginBottom: 16,
+  },
+  notificationOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 14,
+    marginBottom: 10,
+    ...theme.shadows.card,
+  },
+  notificationOptionDisabled: {
+    opacity: 0.5,
+  },
+  notificationOptionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  notificationOptionInfo: {
+    flex: 1,
+  },
+  notificationOptionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  notificationOptionDesc: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 2,
+  },
+  notificationInfoCard: {
+    flexDirection: 'row',
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.md,
+    padding: 14,
+    gap: 12,
+  },
+  notificationInfoText: {
+    flex: 1,
+    fontSize: 12,
+    color: theme.textMuted,
+    lineHeight: 18,
   },
 });
