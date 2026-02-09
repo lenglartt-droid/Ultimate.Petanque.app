@@ -19,7 +19,7 @@ import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import config, { GameFormat, TournamentType } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
-import { AdvancedShotNotation, AdvancedShotRecord, SimplifiedShotNotation, SimpleShotRecord } from '@/components';
+import { SimplifiedShotNotation, SimpleShotRecord } from '@/components';
 
 // Tournament phases configuration
 const BASE_PHASES = [
@@ -100,15 +100,15 @@ interface PlayerActionState {
     pointsSuccess: number;
     carreaux: number;
   };
+  detailedShots?: SimpleShotRecord[];
 }
 
 type PlayerRoleType = 'Pointeur' | 'Milieu' | 'Tireur';
 
-// Available roles per format
 const ROLES_BY_FORMAT: Record<GameFormat, PlayerRoleType[]> = {
-  'Tête-à-tête': [], // No roles for 1v1
-  'Doublette': ['Pointeur', 'Tireur'], // Only 2 roles for 2v2
-  'Triplette': ['Pointeur', 'Milieu', 'Tireur'], // All 3 roles for 3v3
+  'Tête-à-tête': [],
+  'Doublette': ['Pointeur', 'Tireur'],
+  'Triplette': ['Pointeur', 'Milieu', 'Tireur'],
 };
 
 interface TeamPlayerWithRole {
@@ -117,32 +117,6 @@ interface TeamPlayerWithRole {
 }
 
 type ActionType = 'tir' | 'point' | 'carreau';
-
-// Step indicator component
-const StepIndicator = ({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) => (
-  <View style={styles.stepIndicator}>
-    {Array.from({ length: totalSteps }).map((_, i) => (
-      <View key={i} style={styles.stepRow}>
-        <View style={[
-          styles.stepDot,
-          i < currentStep && styles.stepDotCompleted,
-          i === currentStep && styles.stepDotActive,
-        ]}>
-          {i < currentStep ? (
-            <MaterialIcons name="check" size={12} color="#FFF" />
-          ) : (
-            <Text style={[styles.stepNumber, i === currentStep && styles.stepNumberActive]}>
-              {i + 1}
-            </Text>
-          )}
-        </View>
-        {i < totalSteps - 1 && (
-          <View style={[styles.stepLine, i < currentStep && styles.stepLineCompleted]} />
-        )}
-      </View>
-    ))}
-  </View>
-);
 
 export default function NewMatchScreen() {
   const insets = useSafeAreaInsets();
@@ -161,14 +135,8 @@ export default function NewMatchScreen() {
   const isRevanche = revanche === 'true';
   const seriesWinsA = parseInt(initialWinsA || '0');
   const seriesWinsB = parseInt(initialWinsB || '0');
-  // Finale is when both teams have 1 win each (match 3 of the series)
   const isFinale = seriesWinsA === 1 && seriesWinsB === 1;
-  // Use existing seriesId from params or generate a new one only when starting a revanche
   const [seriesId] = useState(() => initialSeriesId || (isRevanche ? `series-${Date.now()}` : undefined));
-  // Calculate current match number in the series
-  // Match 1: no series yet (seriesWinsA + seriesWinsB = 0)
-  // Match 2: one team has 1 win (seriesWinsA + seriesWinsB = 1)
-  // Match 3 (Finale): both have 1 win (seriesWinsA + seriesWinsB = 2)
   const currentMatchNumber = seriesWinsA + seriesWinsB + 1;
   const linkedTournament = tournamentId ? tournaments.find(t => t.id === tournamentId) : null;
   const isTournamentMode = !!linkedTournament;
@@ -214,7 +182,6 @@ export default function NewMatchScreen() {
   const [playerSearch, setPlayerSearch] = useState('');
   const [selectedPhase, setSelectedPhase] = useState<string | null>(tournamentHistory.lastPhase);
   const [selectedBracket, setSelectedBracket] = useState<TournamentBracket | null>(tournamentHistory.lastBracket as TournamentBracket | null);
-  const [scoringMode, setScoringMode] = useState<'simple' | 'detailed' | 'actions'>('simple');
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [matchTime, setMatchTime] = useState(0);
   const [meneTime, setMeneTime] = useState(0);
@@ -222,27 +189,23 @@ export default function NewMatchScreen() {
   const [currentMenePoints, setCurrentMenePoints] = useState({ teamA: 0, teamB: 0 });
   const [isNullMene, setIsNullMene] = useState(false);
   const [playerActions, setPlayerActions] = useState<PlayerActionState[]>([]);
-  const [manualActionMode, setManualActionMode] = useState(false);
-  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [fullscreenMode, setFullscreenMode] = useState(false);
-  // Advanced notation state
+  const [hasExitedFullscreen, setHasExitedFullscreen] = useState(false);
+  const [showActionsEditor, setShowActionsEditor] = useState(false);
   const [showAdvancedNotation, setShowAdvancedNotation] = useState(false);
-  const [useSimplifiedNotation, setUseSimplifiedNotation] = useState(true); // Default to simplified
   const [advancedNotationPlayer, setAdvancedNotationPlayer] = useState<{ id: string; name: string; team: 'A' | 'B' } | null>(null);
   const [advancedNotationType, setAdvancedNotationType] = useState<'tir' | 'point'>('tir');
-  const [advancedShotRecords, setAdvancedShotRecords] = useState<(AdvancedShotRecord | SimpleShotRecord)[]>([]);
+  const [advancedShotRecords, setAdvancedShotRecords] = useState<SimpleShotRecord[]>([]);
   const [selectedTerrainId, setSelectedTerrainId] = useState<string | null>(null);
   const [showTerrainPicker, setShowTerrainPicker] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const maxScore = config.game.maxScore;
 
-  // Points per mène based on format
   const maxPointsPerMene = useMemo(() => {
     return format === 'Tête-à-tête' ? 3 : 6;
   }, [format]);
 
-  // Available roles based on format
   const availableRoles = useMemo(() => {
     return ROLES_BY_FORMAT[format] || [];
   }, [format]);
@@ -323,7 +286,6 @@ export default function NewMatchScreen() {
     }
   }, [isRevanche, revancheTeamA, revancheTeamB, players]);
 
-  // Auto-set format and phase when tournament is linked
   useEffect(() => {
     if (linkedTournament) {
       setFormat(linkedTournament.format);
@@ -361,7 +323,6 @@ export default function NewMatchScreen() {
         return;
       }
       const player = players.find(p => p.id === playerId);
-      // Get default role based on format
       let defaultRole: PlayerRoleType = 'Milieu';
       if (availableRoles.length > 0) {
         const playerPreferredRole = player?.role as PlayerRoleType;
@@ -401,11 +362,9 @@ export default function NewMatchScreen() {
     }
   }, [maxPlayersPerTeam, teamAPlayers.length, teamBPlayers.length]);
 
-  // Update player roles when format changes (to ensure valid roles)
   useEffect(() => {
-    if (availableRoles.length === 0) return; // No roles for this format
+    if (availableRoles.length === 0) return;
     
-    // Update Team A roles to valid ones
     setTeamAPlayers(prev => prev.map(p => {
       if (!availableRoles.includes(p.role)) {
         return { ...p, role: availableRoles[0] };
@@ -413,7 +372,6 @@ export default function NewMatchScreen() {
       return p;
     }));
     
-    // Update Team B roles to valid ones
     setTeamBPlayers(prev => prev.map(p => {
       if (!availableRoles.includes(p.role)) {
         return { ...p, role: availableRoles[0] };
@@ -464,7 +422,6 @@ export default function NewMatchScreen() {
     }));
   }, []);
 
-  // Handle advanced shot notation
   const openAdvancedNotation = useCallback((playerId: string, playerName: string, team: 'A' | 'B', actionType: 'tir' | 'point') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     setAdvancedNotationPlayer({ id: playerId, name: playerName, team });
@@ -472,11 +429,9 @@ export default function NewMatchScreen() {
     setShowAdvancedNotation(true);
   }, []);
 
-  const handleAdvancedShotSubmit = useCallback((record: AdvancedShotRecord | SimpleShotRecord) => {
-    // Store the advanced record
+  const handleAdvancedShotSubmit = useCallback((record: SimpleShotRecord) => {
     setAdvancedShotRecords(prev => [...prev, record]);
     
-    // Update basic stats
     setPlayerActions(prev => prev.map(p => {
       if (p.playerId !== record.playerId) return p;
       const newActions = { ...p.actions };
@@ -489,61 +444,17 @@ export default function NewMatchScreen() {
         if (record.success) newActions.pointsSuccess++;
       }
       
-      // Store detailed shot in player actions for stats
-      if (!p.detailedShots) {
-        (p as any).detailedShots = [];
-      }
-      (p as any).detailedShots.push(record);
-      
-      return { ...p, actions: newActions };
+      const detailedShots = p.detailedShots || [];
+      return { ...p, actions: newActions, detailedShots: [...detailedShots, record] };
     }));
     
     setShowAdvancedNotation(false);
     setAdvancedNotationPlayer(null);
   }, []);
 
-  const updatePlayerAction = useCallback((playerId: string, field: keyof PlayerActionState['actions'], value: number) => {
-    Haptics.selectionAsync();
-    setPlayerActions(prev => prev.map(p => {
-      if (p.playerId !== playerId) return p;
-      const newActions = { ...p.actions, [field]: Math.max(0, value) };
-      if (field === 'tirsSuccess' && newActions.tirsSuccess > newActions.tirs) {
-        newActions.tirs = newActions.tirsSuccess;
-      }
-      if (field === 'tirs' && newActions.tirsSuccess > newActions.tirs) {
-        newActions.tirsSuccess = newActions.tirs;
-      }
-      if (field === 'pointsSuccess' && newActions.pointsSuccess > newActions.points) {
-        newActions.points = newActions.pointsSuccess;
-      }
-      if (field === 'points' && newActions.pointsSuccess > newActions.points) {
-        newActions.pointsSuccess = newActions.points;
-      }
-      if (field === 'carreaux' && newActions.carreaux > newActions.tirsSuccess) {
-        newActions.tirsSuccess = newActions.carreaux;
-        if (newActions.tirs < newActions.tirsSuccess) {
-          newActions.tirs = newActions.tirsSuccess;
-        }
-      }
-      return { ...p, actions: newActions };
-    }));
-  }, []);
-
   const getPlayerActionStats = (playerId: string) => {
     return playerActions.find(p => p.playerId === playerId)?.actions || 
       { tirs: 0, tirsSuccess: 0, points: 0, pointsSuccess: 0, carreaux: 0 };
-  };
-
-  const getTeamActionTotals = (team: 'A' | 'B') => {
-    return playerActions
-      .filter(p => p.team === team)
-      .reduce((acc, p) => ({
-        tirs: acc.tirs + p.actions.tirs,
-        tirsSuccess: acc.tirsSuccess + p.actions.tirsSuccess,
-        points: acc.points + p.actions.points,
-        pointsSuccess: acc.pointsSuccess + p.actions.pointsSuccess,
-        carreaux: acc.carreaux + p.actions.carreaux,
-      }), { tirs: 0, tirsSuccess: 0, points: 0, pointsSuccess: 0, carreaux: 0 });
   };
 
   // Timer functions
@@ -653,50 +564,6 @@ export default function NewMatchScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
-  const handleScoreChange = (team: 'A' | 'B', delta: number, autoMene: boolean = true) => {
-    Haptics.selectionAsync();
-    
-    // Only create mène for positive changes (points scored)
-    if (autoMene && delta > 0) {
-      const newMene: Mene = {
-        id: menes.length + 1,
-        teamAPoints: team === 'A' ? delta : 0,
-        teamBPoints: team === 'B' ? delta : 0,
-        duration: meneTime,
-        isNull: false,
-      };
-      setMenes(prev => [...prev, newMene]);
-      setMeneTime(0); // Reset mène timer
-    }
-    
-    if (team === 'A') {
-      setTeamAScore(prev => Math.max(0, Math.min(maxScore, prev + delta)));
-    } else {
-      setTeamBScore(prev => Math.max(0, Math.min(maxScore, prev + delta)));
-    }
-  };
-
-  // Quick score function for fullscreen mode (adds multiple points at once)
-  const handleQuickScore = (team: 'A' | 'B', points: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
-    const newMene: Mene = {
-      id: menes.length + 1,
-      teamAPoints: team === 'A' ? points : 0,
-      teamBPoints: team === 'B' ? points : 0,
-      duration: meneTime,
-      isNull: false,
-    };
-    setMenes(prev => [...prev, newMene]);
-    setMeneTime(0);
-    
-    if (team === 'A') {
-      setTeamAScore(prev => Math.max(0, Math.min(maxScore, prev + points)));
-    } else {
-      setTeamBScore(prev => Math.max(0, Math.min(maxScore, prev + points)));
-    }
-  };
-
   // Undo last mène
   const undoLastMene = () => {
     if (menes.length === 0) return;
@@ -708,7 +575,7 @@ export default function NewMatchScreen() {
     setMenes(prev => prev.slice(0, -1));
   };
 
-  // Save match with optional series context for revanche
+  // Save match
   const handleSaveMatch = (overrideSeriesContext?: {
     seriesId: string;
     matchNumber: number;
@@ -756,9 +623,6 @@ export default function NewMatchScreen() {
       role: p.role,
     }));
     
-    // Calculate series info for training matches
-    // Use overrideSeriesContext if provided (for revanche from first match)
-    // Otherwise use existing series context from navigation params
     let seriesInfoData: {
       seriesId: string;
       matchNumber: number;
@@ -770,7 +634,6 @@ export default function NewMatchScreen() {
     
     if (!isTournamentMode) {
       if (overrideSeriesContext) {
-        // First match becoming part of a series (user clicked Revanche)
         const newWinsA = overrideSeriesContext.winsBeforeThisMatch.teamA + (winner === 'A' ? 1 : 0);
         const newWinsB = overrideSeriesContext.winsBeforeThisMatch.teamB + (winner === 'A' ? 0 : 1);
         const isSeriesComplete = newWinsA >= 2 || newWinsB >= 2;
@@ -784,7 +647,6 @@ export default function NewMatchScreen() {
           seriesWinner: isSeriesComplete ? (newWinsA >= 2 ? 'A' : 'B') : undefined,
         };
       } else if (seriesId) {
-        // Match is already part of a series (came from navigation with seriesId)
         const newWinsA = seriesWinsA + (winner === 'A' ? 1 : 0);
         const newWinsB = seriesWinsB + (winner === 'A' ? 0 : 1);
         const isSeriesComplete = newWinsA >= 2 || newWinsB >= 2;
@@ -798,7 +660,6 @@ export default function NewMatchScreen() {
           seriesWinner: isSeriesComplete ? (newWinsA >= 2 ? 'A' : 'B') : undefined,
         };
       }
-      // If neither overrideSeriesContext nor seriesId, this is a standalone match (no seriesInfoData)
     }
 
     addMatch({
@@ -836,21 +697,13 @@ export default function NewMatchScreen() {
     router.back();
   };
 
-  // Calculate current step for indicator
-  const currentStep = useMemo(() => {
-    if (teamAScore > 0 || teamBScore > 0) return 2;
-    if (teamAPlayers.length > 0 || teamBPlayers.length > 0) return 1;
-    return 0;
-  }, [teamAPlayers, teamBPlayers, teamAScore, teamBScore]);
-
+  const teamsReady = teamAPlayers.length > 0 || teamBPlayers.length > 0;
   const isMatchReady = teamAScore > 0 || teamBScore > 0;
 
-  // Track shots in fullscreen mode
-  const [fsShowActions, setFsShowActions] = useState(false);
+  // Fullscreen state tracking
   const [fsSelectedPoints, setFsSelectedPoints] = useState<{ team: 'A' | 'B' | null; points: number }>({ team: null, points: 0 });
   const [fsNewMeneIndicator, setFsNewMeneIndicator] = useState<number | null>(null);
 
-  // Validate and add mène in fullscreen - auto-start next mène
   const handleFsValidateMene = () => {
     if (!fsSelectedPoints.team || fsSelectedPoints.points === 0) return;
     
@@ -871,22 +724,18 @@ export default function NewMatchScreen() {
       setTeamBScore(prev => Math.min(maxScore, prev + fsSelectedPoints.points));
     }
     
-    // Auto-start next mène
     setMeneTime(0);
     setFsSelectedPoints({ team: null, points: 0 });
     
-    // Show new mène indicator
     const nextMeneNumber = menes.length + 2;
     setFsNewMeneIndicator(nextMeneNumber);
     setTimeout(() => setFsNewMeneIndicator(null), 1500);
     
-    // Auto-start timer if not already running
     if (!isTimerRunning) {
       setIsTimerRunning(true);
     }
   };
   
-  // Handle null mène in fullscreen - auto-start next mène
   const handleFsNullMene = () => {
     Haptics.selectionAsync();
     
@@ -899,22 +748,19 @@ export default function NewMatchScreen() {
     };
     setMenes(prev => [...prev, newMene]);
     
-    // Auto-start next mène
     setMeneTime(0);
     setFsSelectedPoints({ team: null, points: 0 });
     
-    // Show new mène indicator
     const nextMeneNumber = menes.length + 2;
     setFsNewMeneIndicator(nextMeneNumber);
     setTimeout(() => setFsNewMeneIndicator(null), 1500);
     
-    // Auto-start timer if not already running
     if (!isTimerRunning) {
       setIsTimerRunning(true);
     }
   };
 
-  // Fullscreen Score View - Portrait Only
+  // Fullscreen Score View
   const renderFullscreenScore = () => {
     const pointOptions = Array.from({ length: maxPointsPerMene }, (_, i) => i + 1);
 
@@ -924,7 +770,10 @@ export default function NewMatchScreen() {
         animationType="fade"
         statusBarTranslucent
         supportedOrientations={['portrait']}
-        onRequestClose={() => setFullscreenMode(false)}
+        onRequestClose={() => {
+          setFullscreenMode(false);
+          setHasExitedFullscreen(true);
+        }}
       >
         <View style={styles.fullscreenContainer}>
           <SafeAreaView style={styles.fullscreenSafeArea}>
@@ -935,6 +784,7 @@ export default function NewMatchScreen() {
                 onPress={() => {
                   Haptics.selectionAsync();
                   setFullscreenMode(false);
+                  setHasExitedFullscreen(true);
                 }}
               >
                 <MaterialIcons name="close" size={24} color="rgba(255,255,255,0.8)" />
@@ -954,7 +804,6 @@ export default function NewMatchScreen() {
 
             {/* Dual Timer Display */}
             <View style={styles.fsDualTimerBar}>
-              {/* Total Match Time */}
               <Pressable 
                 style={[styles.fsDualTimerPill, isTimerRunning && styles.fsDualTimerPillActive]}
                 onPress={isTimerRunning ? pauseTimer : startTimer}
@@ -972,26 +821,16 @@ export default function NewMatchScreen() {
                 </View>
               </Pressable>
 
-              {/* Mène Time */}
-              <View style={[
-                styles.fsDualTimerPill, 
-                styles.fsDualTimerPillMene
-              ]}>
-                <MaterialIcons 
-                  name="sports" 
-                  size={18} 
-                  color={'rgba(255,255,255,0.5)'} 
-                />
+              <View style={[styles.fsDualTimerPill, styles.fsDualTimerPillMene]}>
+                <MaterialIcons name="sports" size={18} color={'rgba(255,255,255,0.5)'} />
                 <View style={styles.fsDualTimerContent}>
                   <Text style={styles.fsDualTimerLabel}>MÈNE {menes.length + 1}</Text>
-                  <Text style={styles.fsDualTimerValue}>
-                    {formatTime(meneTime)}
-                  </Text>
+                  <Text style={styles.fsDualTimerValue}>{formatTime(meneTime)}</Text>
                 </View>
               </View>
             </View>
 
-            {/* Quick Shot Notation - Above Score */}
+            {/* Quick Shot Notation */}
             {(teamAPlayers.length > 0 || teamBPlayers.length > 0) && (
               <View style={styles.fsQuickNotationBar}>
                 <ScrollView 
@@ -1007,7 +846,6 @@ export default function NewMatchScreen() {
                     
                     return (
                       <View key={p.playerId} style={styles.fsQuickNotationPlayer}>
-                        {/* Player Name Badge */}
                         <View style={[styles.fsQuickNotationNameBadge, { backgroundColor: teamColor + '25' }]}>
                           <View style={[styles.fsQuickNotationDot, { backgroundColor: teamColor }]} />
                           <Text style={styles.fsQuickNotationName} numberOfLines={1}>{firstName}</Text>
@@ -1015,7 +853,6 @@ export default function NewMatchScreen() {
                             {stats.tirsSuccess}/{stats.tirs} • {stats.pointsSuccess}/{stats.points}
                           </Text>
                         </View>
-                        {/* Action Buttons */}
                         <View style={styles.fsQuickNotationBtns}>
                           <Pressable
                             style={styles.fsQuickNotationTirBtn}
@@ -1041,7 +878,6 @@ export default function NewMatchScreen() {
 
             {/* Giant Score Display */}
             <View style={styles.fsGiantScoreArea}>
-              {/* Team A Score */}
               <Pressable 
                 style={[
                   styles.fsGiantScoreBlock,
@@ -1078,7 +914,6 @@ export default function NewMatchScreen() {
                 )}
               </Pressable>
 
-              {/* VS Badge */}
               <View style={styles.fsGiantVsBadge}>
                 <Text style={styles.fsGiantVsText}>VS</Text>
                 <View style={styles.fsGiantMeneBadge}>
@@ -1086,7 +921,6 @@ export default function NewMatchScreen() {
                 </View>
               </View>
 
-              {/* Team B Score */}
               <Pressable 
                 style={[
                   styles.fsGiantScoreBlock,
@@ -1124,7 +958,7 @@ export default function NewMatchScreen() {
               </Pressable>
             </View>
 
-            {/* Point Selection - Large Buttons */}
+            {/* Point Selection */}
             <View style={styles.fsPointSelection}>
               <Text style={styles.fsPointSelectionTitle}>
                 {fsSelectedPoints.team ? `Points pour ${fsSelectedPoints.team === 'A' ? 'Mon équipe' : 'Adversaire'}` : 'Sélectionner une équipe'}
@@ -1158,7 +992,6 @@ export default function NewMatchScreen() {
                 ))}
               </View>
               
-              {/* Validate Mène Button */}
               <View style={styles.fsValidateRow}>
                 <Pressable
                   style={[
@@ -1172,16 +1005,13 @@ export default function NewMatchScreen() {
                   <Text style={styles.fsValidateMeneBtnText}>Valider la mène</Text>
                 </Pressable>
                 
-                <Pressable
-                  style={styles.fsNullMeneBtn}
-                  onPress={handleFsNullMene}
-                >
+                <Pressable style={styles.fsNullMeneBtn} onPress={handleFsNullMene}>
                   <MaterialIcons name="block" size={24} color="#FBBF24" />
                 </Pressable>
               </View>
             </View>
 
-            {/* Mène Timeline - Large & Visual */}
+            {/* Mène Timeline */}
             <View style={styles.fsMeneTimeline}>
               <View style={styles.fsMeneTimelineHeader}>
                 <Text style={styles.fsMeneTimelineTitle}>Déroulé du match</Text>
@@ -1205,7 +1035,6 @@ export default function NewMatchScreen() {
                   contentContainerStyle={styles.fsMeneTimelineScroll}
                 >
                   {menes.map((m, idx) => {
-                    // Calculate running score
                     const runningScoreA = menes.slice(0, idx + 1).reduce((sum, me) => sum + me.teamAPoints, 0);
                     const runningScoreB = menes.slice(0, idx + 1).reduce((sum, me) => sum + me.teamBPoints, 0);
                     
@@ -1219,18 +1048,12 @@ export default function NewMatchScreen() {
                           </View>
                         ) : (
                           <View style={styles.fsMeneCardScore}>
-                            <View style={[
-                              styles.fsMeneCardDelta,
-                              m.teamAPoints > 0 && styles.fsMeneCardDeltaA
-                            ]}>
+                            <View style={[styles.fsMeneCardDelta, m.teamAPoints > 0 && styles.fsMeneCardDeltaA]}>
                               <Text style={styles.fsMeneCardDeltaText}>
                                 {m.teamAPoints > 0 ? `+${m.teamAPoints}` : '-'}
                               </Text>
                             </View>
-                            <View style={[
-                              styles.fsMeneCardDelta,
-                              m.teamBPoints > 0 && styles.fsMeneCardDeltaB
-                            ]}>
+                            <View style={[styles.fsMeneCardDelta, m.teamBPoints > 0 && styles.fsMeneCardDeltaB]}>
                               <Text style={styles.fsMeneCardDeltaText}>
                                 {m.teamBPoints > 0 ? `+${m.teamBPoints}` : '-'}
                               </Text>
@@ -1246,24 +1069,7 @@ export default function NewMatchScreen() {
               )}
             </View>
 
-
-
-            {/* New Mène Indicator Overlay */}
-            {fsNewMeneIndicator && !(teamAScore >= maxScore || teamBScore >= maxScore) && (
-              <Animated.View entering={FadeIn.duration(200)} style={styles.fsNewMeneOverlay}>
-                <Animated.View entering={FadeInUp.springify().damping(12)} style={styles.fsNewMeneCard}>
-                  <MaterialIcons name="sports" size={40} color="#4ADE80" />
-                  <Text style={styles.fsNewMeneTitle}>Mène {fsNewMeneIndicator}</Text>
-                  <Text style={styles.fsNewMeneSubtitle}>C'est parti !</Text>
-                  <View style={styles.fsNewMeneTimerIndicator}>
-                    <MaterialIcons name="timer" size={16} color="#4ADE80" />
-                    <Text style={styles.fsNewMeneTimerText}>Chrono démarré</Text>
-                  </View>
-                </Animated.View>
-              </Animated.View>
-            )}
-
-            {/* Simplified Notation Modal - More intuitive flow */}
+            {/* Simplified Notation Modal */}
             {advancedNotationPlayer && (
               <SimplifiedShotNotation
                 visible={showAdvancedNotation}
@@ -1277,6 +1083,17 @@ export default function NewMatchScreen() {
                 team={advancedNotationPlayer.team}
                 onSubmit={handleAdvancedShotSubmit}
               />
+            )}
+
+            {/* New Mène Indicator */}
+            {fsNewMeneIndicator && !(teamAScore >= maxScore || teamBScore >= maxScore) && (
+              <Animated.View entering={FadeIn.duration(200)} style={styles.fsNewMeneOverlay}>
+                <Animated.View entering={FadeInUp.springify().damping(12)} style={styles.fsNewMeneCard}>
+                  <MaterialIcons name="sports" size={40} color="#4ADE80" />
+                  <Text style={styles.fsNewMeneTitle}>Mène {fsNewMeneIndicator}</Text>
+                  <Text style={styles.fsNewMeneSubtitle}>C'est parti !</Text>
+                </Animated.View>
+              </Animated.View>
             )}
 
             {/* Winner Overlay */}
@@ -1294,249 +1111,18 @@ export default function NewMatchScreen() {
                   <Text style={styles.fsWinnerScore}>{teamAScore} - {teamBScore}</Text>
                   <Text style={styles.fsWinnerMenes}>{menes.length} mène{menes.length > 1 ? 's' : ''} • {formatTime(matchTime)}</Text>
                   
-                  {/* Training mode - Series tracking & Revanche/Finale buttons */}
-                  {!isTournamentMode ? (() => {
-                    // Calculate new series state after this match
-                    const matchWinner = teamAScore > teamBScore ? 'A' : 'B';
-                    const newWinsA = seriesWinsA + (matchWinner === 'A' ? 1 : 0);
-                    const newWinsB = seriesWinsB + (matchWinner === 'A' ? 0 : 1);
-                    const isSeriesComplete = newWinsA >= 2 || newWinsB >= 2;
-                    const willBeFinale = newWinsA === 1 && newWinsB === 1;
-                    const isInSeries = seriesId || seriesWinsA > 0 || seriesWinsB > 0;
-                    
-                    return (
-                      <>
-                        {/* Series score display - only show if in a series */}
-                        {isInSeries && (
-                          <View style={styles.fsSeriesScoreCard}>
-                            <Text style={styles.fsSeriesScoreTitle}>Score de la série (Best of 3)</Text>
-                            <View style={styles.fsSeriesScoreDisplay}>
-                              <Text style={[styles.fsSeriesScoreValue, newWinsA > newWinsB && styles.fsSeriesScoreWin]}>
-                                {newWinsA}
-                              </Text>
-                              <Text style={styles.fsSeriesScoreSep}>-</Text>
-                              <Text style={[styles.fsSeriesScoreValue, newWinsB > newWinsA && styles.fsSeriesScoreLoss]}>
-                                {newWinsB}
-                              </Text>
-                            </View>
-                          </View>
-                        )}
-                        
-                        {/* Series complete - someone won 2 matches */}
-                        {isSeriesComplete && isInSeries ? (
-                          <>
-                            <View style={styles.fsSeriesCompleteCard}>
-                              <MaterialIcons 
-                                name={newWinsA >= 2 ? 'emoji-events' : 'sentiment-dissatisfied'} 
-                                size={28} 
-                                color={newWinsA >= 2 ? '#FFD700' : '#F87171'} 
-                              />
-                              <Text style={[styles.fsSeriesCompleteText, { color: newWinsA >= 2 ? '#4ADE80' : '#F87171' }]}>
-                                {newWinsA >= 2 ? 'Série gagnée (2-' + newWinsB + ')' : 'Série perdue (' + newWinsA + '-2)'}
-                              </Text>
-                            </View>
-                            {/* Option to start a new series with same teams */}
-                            <Pressable 
-                              style={styles.fsNewSeriesBtn}
-                              onPress={() => {
-                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                                setFullscreenMode(false);
-                                handleSaveMatch();
-                                // Start a completely new series
-                                setTimeout(() => {
-                                  router.replace({
-                                    pathname: '/match/new',
-                                    params: {
-                                      revanche: 'true',
-                                      format: format,
-                                      teamA: teamAPlayers.map(p => getPlayerName(p.playerId)).join(','),
-                                      teamB: teamBPlayers.map(p => getPlayerName(p.playerId)).join(','),
-                                      seriesWinsA: '0',
-                                      seriesWinsB: '0',
-                                      seriesId: `series-${Date.now()}`, // New series ID
-                                    }
-                                  });
-                                }, 100);
-                              }}
-                            >
-                              <MaterialIcons name="replay" size={20} color="#FFF" />
-                              <Text style={styles.fsNewSeriesBtnText}>Nouvelle série</Text>
-                            </Pressable>
-                            <Pressable 
-                              style={styles.fsFinaleTerminerBtn}
-                              onPress={() => {
-                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                                setFullscreenMode(false);
-                                handleSaveMatch();
-                                setTimeout(() => {
-                                  router.replace('/(tabs)');
-                                }, 100);
-                              }}
-                            >
-                              <MaterialIcons name="home" size={20} color="#FFF" />
-                              <Text style={styles.fsFinaleTerminerBtnText}>Retour à l'accueil</Text>
-                            </Pressable>
-                          </>
-                        ) : isSeriesComplete && !isInSeries ? (
-                          /* Standalone match - not in a series, show simple buttons */
-                          <>
-                            <Pressable 
-                              style={styles.fsRevancheBtn}
-                              onPress={() => {
-                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                                setFullscreenMode(false);
-                                
-                                // Generate seriesId and save first match with series context
-                                const seriesIdForNav = `series-${Date.now()}`;
-                                
-                                handleSaveMatch({
-                                  seriesId: seriesIdForNav,
-                                  matchNumber: 1,
-                                  winsBeforeThisMatch: { teamA: 0, teamB: 0 },
-                                  isFinale: false,
-                                });
-                                
-                                setTimeout(() => {
-                                  router.replace({
-                                    pathname: '/match/new',
-                                    params: {
-                                      revanche: 'true',
-                                      format: format,
-                                      teamA: teamAPlayers.map(p => getPlayerName(p.playerId)).join(','),
-                                      teamB: teamBPlayers.map(p => getPlayerName(p.playerId)).join(','),
-                                      seriesWinsA: String(newWinsA),
-                                      seriesWinsB: String(newWinsB),
-                                      seriesId: seriesIdForNav,
-                                    }
-                                  });
-                                }, 100);
-                              }}
-                            >
-                              <MaterialIcons name="sports-mma" size={20} color="#FFF" />
-                              <View style={styles.fsRevancheBtnContent}>
-                                <Text style={styles.fsRevancheBtnText}>Revanche ?</Text>
-                                <Text style={styles.fsRevancheBtnSubtext}>Démarrer une série (Best of 3)</Text>
-                              </View>
-                            </Pressable>
-                            <Pressable 
-                              style={styles.fsFinaleTerminerBtn}
-                              onPress={() => {
-                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                                setFullscreenMode(false);
-                                handleSaveMatch();
-                                setTimeout(() => {
-                                  router.replace('/(tabs)');
-                                }, 100);
-                              }}
-                            >
-                              <MaterialIcons name="home" size={20} color="#FFF" />
-                              <Text style={styles.fsFinaleTerminerBtnText}>Retour à l'accueil</Text>
-                            </Pressable>
-                          </>
-                        ) : (
-                          /* Revanche or Finale button - series in progress */
-                          <>
-                            <Pressable 
-                              style={[
-                                styles.fsRevancheBtn,
-                                willBeFinale && styles.fsRevancheBtnFinale
-                              ]}
-                              onPress={() => {
-                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                                setFullscreenMode(false);
-                                
-                                // Generate seriesId BEFORE saving if this is the first match
-                                // This ensures the first match is saved WITH series context
-                                const seriesIdForNav = seriesId || `series-${Date.now()}`;
-                                const isFirstMatchOfSeries = !seriesId && !isInSeries;
-                                
-                                if (isFirstMatchOfSeries) {
-                                  // First match: save with series context (match 1 of the series)
-                                  // The current match result determines the initial series score
-                                  handleSaveMatch({
-                                    seriesId: seriesIdForNav,
-                                    matchNumber: 1,
-                                    winsBeforeThisMatch: { teamA: 0, teamB: 0 },
-                                    isFinale: false,
-                                  });
-                                } else {
-                                  // Already in a series: save normally (seriesId exists from navigation)
-                                  handleSaveMatch();
-                                }
-                                
-                                setTimeout(() => {
-                                  router.replace({
-                                    pathname: '/match/new',
-                                    params: {
-                                      revanche: 'true',
-                                      format: format,
-                                      teamA: teamAPlayers.map(p => getPlayerName(p.playerId)).join(','),
-                                      teamB: teamBPlayers.map(p => getPlayerName(p.playerId)).join(','),
-                                      seriesWinsA: String(newWinsA),
-                                      seriesWinsB: String(newWinsB),
-                                      seriesId: seriesIdForNav,
-                                    }
-                                  });
-                                }, 100);
-                              }}
-                            >
-                              <MaterialIcons 
-                                name={willBeFinale ? 'emoji-events' : 'sports-mma'} 
-                                size={20} 
-                                color="#FFF" 
-                              />
-                              <View style={styles.fsRevancheBtnContent}>
-                                <Text style={styles.fsRevancheBtnText}>
-                                  {willBeFinale ? 'JOUER LA FINALE !' : 'Revanche ?'}
-                                </Text>
-                                <Text style={styles.fsRevancheBtnSubtext}>
-                                  {willBeFinale 
-                                    ? 'Égalité 1-1, match décisif' 
-                                    : isInSeries 
-                                      ? `Manche ${currentMatchNumber + 1}/3` 
-                                      : 'Démarrer une série (Best of 3)'}
-                                </Text>
-                              </View>
-                            </Pressable>
-                            <Pressable 
-                              style={styles.fsFinaleTerminerBtn}
-                              onPress={() => {
-                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                                setFullscreenMode(false);
-                                // Save match without series context if abandoning
-                                if (!isInSeries) {
-                                  handleSaveMatch();
-                                } else {
-                                  handleSaveMatch();
-                                }
-                                setTimeout(() => {
-                                  router.replace('/(tabs)');
-                                }, 100);
-                              }}
-                            >
-                              <MaterialIcons name="home" size={20} color="#FFF" />
-                              <Text style={styles.fsFinaleTerminerBtnText}>Abandonner la série</Text>
-                            </Pressable>
-                          </>
-                        )}
-                      </>
-                    );
-                  })() : (
-                    /* Tournament mode - simple finish button */
-                    <Pressable 
-                      style={styles.fsWinnerBtn}
-                      onPress={() => {
-                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                        setFullscreenMode(false);
-                        handleSaveMatch();
-                        setTimeout(() => {
-                          router.replace('/(tabs)');
-                        }, 100);
-                      }}
-                    >
-                      <Text style={styles.fsWinnerBtnText}>Enregistrer et terminer</Text>
-                    </Pressable>
-                  )}
+                  <Pressable 
+                    style={styles.fsWinnerBtn}
+                    onPress={() => {
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                      setFullscreenMode(false);
+                      setHasExitedFullscreen(true);
+                      handleSaveMatch();
+                      setTimeout(() => router.replace('/(tabs)'), 100);
+                    }}
+                  >
+                    <Text style={styles.fsWinnerBtnText}>Enregistrer et terminer</Text>
+                  </Pressable>
                 </View>
               </Animated.View>
             )}
@@ -1544,11 +1130,10 @@ export default function NewMatchScreen() {
         </View>
       </Modal>
     );
-  }
+  };
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
-      {/* Fullscreen Score Modal */}
       {renderFullscreenScore()}
 
       {/* Header */}
@@ -1564,174 +1149,30 @@ export default function NewMatchScreen() {
             <Text style={styles.headerSubtitle} numberOfLines={1}>{linkedTournament.name}</Text>
           )}
         </View>
-        <Pressable 
-          style={styles.fullscreenToggleBtn}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            setFullscreenMode(true);
-          }}
-        >
-          <MaterialIcons name="fullscreen" size={24} color={theme.textSecondary} />
-        </Pressable>
+        <View style={{ width: 40 }} />
       </View>
 
-      {/* Step Indicator */}
-      <View style={styles.stepContainer}>
-        <StepIndicator currentStep={currentStep} totalSteps={3} />
-        <View style={styles.stepLabels}>
-          <Text style={[styles.stepLabel, currentStep >= 0 && styles.stepLabelActive]}>Équipes</Text>
-          <Text style={[styles.stepLabel, currentStep >= 1 && styles.stepLabelActive]}>Score</Text>
-          <Text style={[styles.stepLabel, currentStep >= 2 && styles.stepLabelActive]}>Terminé</Text>
-        </View>
-      </View>
-
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Mode Banner & Series Tracking - Training Only */}
+          {/* Mode & Terrain Selection */}
           {!isTournamentMode && (
-            <Animated.View entering={FadeInDown.duration(300)} style={styles.trainingSetupCard}>
-              {/* Series Tracking Panel - Show when in a series */}
-              {(isRevanche || seriesWinsA > 0 || seriesWinsB > 0) ? (
-                <View style={styles.seriesPanel}>
-                  {/* Series Header */}
-                  <View style={styles.seriesPanelHeader}>
-                    <View style={styles.seriesPanelTitleRow}>
-                      <MaterialIcons 
-                        name={isFinale ? 'emoji-events' : 'repeat'} 
-                        size={24} 
-                        color={isFinale ? theme.carreauColor : theme.accent} 
-                      />
-                      <Text style={[styles.seriesPanelTitle, isFinale && styles.seriesPanelTitleFinale]}>
-                        {isFinale ? 'FINALE DÉCISIVE' : 'Série en cours'}
-                      </Text>
-                    </View>
-                    {!isFinale && (
-                      <Text style={styles.seriesPanelSubtitle}>Match {currentMatchNumber} / Best of 3</Text>
-                    )}
-                  </View>
-
-                  {/* Series Progress Indicator */}
-                  <View style={styles.seriesProgressContainer}>
-                    {/* Match 1 */}
-                    <View style={styles.seriesMatchIndicator}>
-                      <View style={[
-                        styles.seriesMatchDot,
-                        currentMatchNumber > 1 && (seriesWinsA > 0 ? styles.seriesMatchDotWinA : styles.seriesMatchDotLossB),
-                        currentMatchNumber === 1 && styles.seriesMatchDotCurrent,
-                      ]}>
-                        {currentMatchNumber > 1 && (
-                          <MaterialIcons name={seriesWinsA > 0 ? 'check' : 'close'} size={14} color="#FFF" />
-                        )}
-                        {currentMatchNumber === 1 && <Text style={styles.seriesMatchDotText}>1</Text>}
-                      </View>
-                      <Text style={styles.seriesMatchLabel}>Match 1</Text>
-                    </View>
-
-                    {/* Connector 1-2 */}
-                    <View style={[
-                      styles.seriesConnector,
-                      currentMatchNumber > 1 && styles.seriesConnectorPast,
-                    ]} />
-
-                    {/* Match 2 */}
-                    <View style={styles.seriesMatchIndicator}>
-                      <View style={[
-                        styles.seriesMatchDot,
-                        currentMatchNumber > 2 && (seriesWinsA >= 2 || seriesWinsB >= 2 
-                          ? (seriesWinsA >= 2 ? styles.seriesMatchDotWinA : styles.seriesMatchDotLossB)
-                          : (seriesWinsA === 1 ? styles.seriesMatchDotLossB : styles.seriesMatchDotWinA)),
-                        currentMatchNumber === 2 && styles.seriesMatchDotCurrent,
-                      ]}>
-                        {currentMatchNumber > 2 && (
-                          <MaterialIcons name={seriesWinsA === 2 || (seriesWinsA === 1 && seriesWinsB === 1) ? 'check' : 'close'} size={14} color="#FFF" />
-                        )}
-                        {currentMatchNumber === 2 && <Text style={styles.seriesMatchDotText}>2</Text>}
-                        {currentMatchNumber < 2 && <Text style={styles.seriesMatchDotTextFuture}>2</Text>}
-                      </View>
-                      <Text style={styles.seriesMatchLabel}>Match 2</Text>
-                    </View>
-
-                    {/* Connector 2-3 (Finale) */}
-                    <View style={[
-                      styles.seriesConnector,
-                      isFinale && styles.seriesConnectorFinale,
-                      currentMatchNumber > 2 && styles.seriesConnectorPast,
-                    ]} />
-
-                    {/* Match 3 (Finale) */}
-                    <View style={styles.seriesMatchIndicator}>
-                      <View style={[
-                        styles.seriesMatchDot,
-                        isFinale && styles.seriesMatchDotFinale,
-                        !isFinale && currentMatchNumber < 3 && styles.seriesMatchDotFuture,
-                      ]}>
-                        {isFinale ? (
-                          <MaterialIcons name="emoji-events" size={16} color="#FFF" />
-                        ) : (
-                          <Text style={[styles.seriesMatchDotTextFuture, !isFinale && { opacity: 0.5 }]}>F</Text>
-                        )}
-                      </View>
-                      <Text style={[styles.seriesMatchLabel, isFinale && styles.seriesMatchLabelFinale]}>Finale</Text>
-                    </View>
-                  </View>
-
-                  {/* Current Series Score */}
-                  <View style={styles.seriesScoreDisplay}>
-                    <View style={styles.seriesScoreTeam}>
-                      <Text style={styles.seriesScoreTeamLabel}>Mon équipe</Text>
-                      <Text style={[
-                        styles.seriesScoreTeamValue,
-                        seriesWinsA > seriesWinsB && styles.seriesScoreTeamValueWin
-                      ]}>{seriesWinsA}</Text>
-                    </View>
-                    <View style={styles.seriesScoreDivider}>
-                      <Text style={styles.seriesScoreDividerText}>VICTOIRES</Text>
-                    </View>
-                    <View style={styles.seriesScoreTeam}>
-                      <Text style={styles.seriesScoreTeamLabel}>Adversaire</Text>
-                      <Text style={[
-                        styles.seriesScoreTeamValue,
-                        seriesWinsB > seriesWinsA && styles.seriesScoreTeamValueLoss
-                      ]}>{seriesWinsB}</Text>
-                    </View>
-                  </View>
-
-                  {/* Finale Info */}
-                  {isFinale && (
-                    <View style={styles.finaleInfoBanner}>
-                      <MaterialIcons name="info" size={18} color={theme.carreauColor} />
-                      <Text style={styles.finaleInfoText}>
-                        Le vainqueur de ce match remporte la série !
-                      </Text>
-                    </View>
-                  )}
+            <Animated.View entering={FadeInDown.duration(300)} style={styles.setupCard}>
+              <View style={styles.modeBanner}>
+                <View style={styles.modeBannerIcon}>
+                  <MaterialIcons name="fitness-center" size={20} color="#FFF" />
                 </View>
-              ) : (
-                /* Standard Training Banner */
-                <View style={styles.modeBanner}>
-                  <View style={styles.modeBannerIcon}>
-                    <MaterialIcons name="fitness-center" size={20} color="#FFF" />
-                  </View>
-                  <View style={styles.modeBannerContent}>
-                    <Text style={styles.modeBannerText}>Entraînement</Text>
-                    <Text style={styles.modeBannerSubtext}>Possibilité de revanche et finale</Text>
-                  </View>
+                <View style={styles.modeBannerContent}>
+                  <Text style={styles.modeBannerText}>Entraînement</Text>
+                  <Text style={styles.modeBannerSubtext}>Possibilité de revanche et finale</Text>
                 </View>
-              )}
+              </View>
               
-              {/* Terrain Selection */}
-              <Pressable 
-                style={styles.terrainSelector}
-                onPress={() => setShowTerrainPicker(true)}
-              >
+              <Pressable style={styles.terrainSelector} onPress={() => setShowTerrainPicker(true)}>
                 <View style={styles.terrainSelectorIcon}>
                   <MaterialIcons name="place" size={20} color={selectedTerrain ? theme.primary : theme.textMuted} />
                 </View>
@@ -1755,10 +1196,7 @@ export default function NewMatchScreen() {
                   <Pressable
                     key={phase.id}
                     style={[styles.phaseChip, selectedPhase === phase.id && styles.phaseChipActive]}
-                    onPress={() => {
-                      Haptics.selectionAsync();
-                      setSelectedPhase(phase.id);
-                    }}
+                    onPress={() => { Haptics.selectionAsync(); setSelectedPhase(phase.id); }}
                   >
                     <Text style={[styles.phaseChipText, selectedPhase === phase.id && styles.phaseChipTextActive]}>
                       {phase.label}
@@ -1766,26 +1204,6 @@ export default function NewMatchScreen() {
                   </Pressable>
                 ))}
               </ScrollView>
-              
-              {linkedTournament.type === 'Mixte' && selectedPhase && selectedPhase !== 'Poules' && (
-                <View style={styles.bracketRow}>
-                  <Text style={styles.bracketLabel}>Tableau :</Text>
-                  {TOURNAMENT_BRACKETS.map((bracket) => (
-                    <Pressable
-                      key={bracket}
-                      style={[styles.bracketChip, selectedBracket === bracket && styles.bracketChipActive]}
-                      onPress={() => {
-                        Haptics.selectionAsync();
-                        setSelectedBracket(bracket);
-                      }}
-                    >
-                      <Text style={[styles.bracketChipText, selectedBracket === bracket && styles.bracketChipTextActive]}>
-                        {bracket}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              )}
             </Animated.View>
           )}
 
@@ -1800,11 +1218,7 @@ export default function NewMatchScreen() {
                   <Pressable
                     key={f}
                     style={[styles.formatChip, isActive && styles.formatChipActive, isDisabled && styles.formatChipDisabled]}
-                    onPress={() => {
-                      if (isDisabled) return;
-                      Haptics.selectionAsync();
-                      setFormat(f);
-                    }}
+                    onPress={() => { if (isDisabled) return; Haptics.selectionAsync(); setFormat(f); }}
                     disabled={isDisabled}
                   >
                     <MaterialIcons 
@@ -1821,487 +1235,268 @@ export default function NewMatchScreen() {
             </View>
           </Animated.View>
 
-          {/* Main Score Display - Central and Prominent */}
-          <Animated.View entering={FadeInDown.duration(300).delay(100)} style={styles.scoreSection}>
-            <View style={styles.scoreCard}>
-              {/* Team A */}
-              <View style={styles.scoreTeam}>
-                <Pressable 
-                  style={styles.scoreTeamHeader}
-                  onPress={() => setShowPlayerPicker('A')}
-                >
-                  <View style={[styles.teamColorDot, { backgroundColor: theme.primary }]} />
-                  <Text style={styles.scoreTeamLabel}>Mon équipe</Text>
-                  <MaterialIcons name="edit" size={16} color={theme.textMuted} />
-                </Pressable>
-                
-                <View style={styles.scoreTeamPlayers}>
-                  {teamAPlayers.length > 0 ? (
-                    teamAPlayers.map((p, idx) => (
-                      <View key={p.playerId} style={styles.playerMiniChip}>
-                        <Text style={styles.playerMiniName} numberOfLines={1}>
-                          {getPlayerName(p.playerId).split(' ')[0]}
-                        </Text>
-                        {availableRoles.length > 0 && (
-                          <View style={[styles.roleMiniDot, { 
-                            backgroundColor: p.role === 'Tireur' ? '#F97316' : p.role === 'Pointeur' ? '#3B82F6' : '#8B5CF6' 
-                          }]} />
-                        )}
-                      </View>
-                    ))
-                  ) : (
-                    <Text style={styles.noPlayersHint}>Ajouter joueurs</Text>
-                  )}
-                </View>
-
-                <View style={styles.scoreControlsVertical}>
-                  <Pressable 
-                    style={styles.scoreControlBtn}
-                    onPress={() => handleScoreChange('A', 1, false)}
-                  >
-                    <MaterialIcons name="add" size={28} color={theme.primary} />
-                  </Pressable>
-                  <Text style={[styles.scoreValueLarge, teamAScore >= teamBScore && teamAScore > 0 && styles.scoreValueWinning]}>
-                    {teamAScore}
-                  </Text>
-                  <Pressable 
-                    style={styles.scoreControlBtn}
-                    onPress={() => handleScoreChange('A', -1, false)}
-                  >
-                    <MaterialIcons name="remove" size={28} color={theme.textMuted} />
-                  </Pressable>
-                </View>
+          {/* Team Selection Section */}
+          <Animated.View entering={FadeInDown.duration(300).delay(100)} style={styles.teamSelectionSection}>
+            <Text style={styles.sectionLabel}>CHOIX DES ÉQUIPES</Text>
+            
+            {/* Team A */}
+            <Pressable style={styles.teamCard} onPress={() => setShowPlayerPicker('A')}>
+              <View style={styles.teamCardHeader}>
+                <View style={[styles.teamColorDot, { backgroundColor: theme.primary }]} />
+                <Text style={styles.teamCardTitle}>Mon équipe</Text>
+                <MaterialIcons name="edit" size={18} color={theme.textMuted} />
               </View>
-
-              {/* VS Divider */}
-              <View style={styles.vsDivider}>
-                <View style={styles.vsLine} />
-                <View style={styles.vsCircle}>
-                  <Text style={styles.vsText}>VS</Text>
-                </View>
-                <View style={styles.vsLine} />
+              <View style={styles.teamCardPlayers}>
+                {teamAPlayers.length > 0 ? (
+                  teamAPlayers.map(p => (
+                    <View key={p.playerId} style={[styles.playerChip, { borderColor: theme.primary }]}>
+                      <Text style={styles.playerChipName}>{getPlayerName(p.playerId)}</Text>
+                      {availableRoles.length > 0 && (
+                        <View style={[styles.playerChipRole, { backgroundColor: p.role === 'Tireur' ? theme.tirColor : p.role === 'Pointeur' ? theme.pointColor : theme.accent }]}>
+                          <Text style={styles.playerChipRoleText}>{p.role.charAt(0)}</Text>
+                        </View>
+                      )}
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.teamCardPlaceholder}>Ajouter des joueurs...</Text>
+                )}
               </View>
+              <Text style={styles.teamCardCount}>{teamAPlayers.length}/{maxPlayersPerTeam}</Text>
+            </Pressable>
 
-              {/* Team B */}
-              <View style={styles.scoreTeam}>
-                <Pressable 
-                  style={styles.scoreTeamHeader}
-                  onPress={() => setShowPlayerPicker('B')}
-                >
-                  <View style={[styles.teamColorDot, { backgroundColor: theme.accent }]} />
-                  <Text style={styles.scoreTeamLabel}>Adversaire</Text>
-                  <MaterialIcons name="edit" size={16} color={theme.textMuted} />
-                </Pressable>
-                
-                <View style={styles.scoreTeamPlayers}>
-                  {teamBPlayers.length > 0 ? (
-                    teamBPlayers.map((p, idx) => (
-                      <View key={p.playerId} style={[styles.playerMiniChip, styles.playerMiniChipB]}>
-                        <Text style={styles.playerMiniName} numberOfLines={1}>
-                          {getPlayerName(p.playerId).split(' ')[0]}
-                        </Text>
-                        {availableRoles.length > 0 && (
-                          <View style={[styles.roleMiniDot, { 
-                            backgroundColor: p.role === 'Tireur' ? '#F97316' : p.role === 'Pointeur' ? '#3B82F6' : '#8B5CF6' 
-                          }]} />
-                        )}
-                      </View>
-                    ))
-                  ) : (
-                    <Text style={styles.noPlayersHint}>Ajouter joueurs</Text>
-                  )}
-                </View>
-
-                <View style={styles.scoreControlsVertical}>
-                  <Pressable 
-                    style={styles.scoreControlBtn}
-                    onPress={() => handleScoreChange('B', 1, false)}
-                  >
-                    <MaterialIcons name="add" size={28} color={theme.accent} />
-                  </Pressable>
-                  <Text style={[styles.scoreValueLarge, teamBScore > teamAScore && styles.scoreValueLosing]}>
-                    {teamBScore}
-                  </Text>
-                  <Pressable 
-                    style={styles.scoreControlBtn}
-                    onPress={() => handleScoreChange('B', -1, false)}
-                  >
-                    <MaterialIcons name="remove" size={28} color={theme.textMuted} />
-                  </Pressable>
-                </View>
+            {/* Team B */}
+            <Pressable style={styles.teamCard} onPress={() => setShowPlayerPicker('B')}>
+              <View style={styles.teamCardHeader}>
+                <View style={[styles.teamColorDot, { backgroundColor: theme.accent }]} />
+                <Text style={styles.teamCardTitle}>Adversaire</Text>
+                <MaterialIcons name="edit" size={18} color={theme.textMuted} />
               </View>
-            </View>
-
-            {/* Quick Score Buttons */}
-            <View style={styles.quickScoreRow}>
-              <Text style={styles.quickScoreLabel}>Score rapide :</Text>
-              {[13, 11, 9, 7].map(score => (
-                <Pressable
-                  key={score}
-                  style={styles.quickScoreBtn}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setTeamAScore(score);
-                    setTeamBScore(Math.floor(Math.random() * (score - 2)));
-                  }}
-                >
-                  <Text style={styles.quickScoreBtnText}>{score}-X</Text>
-                </Pressable>
-              ))}
-            </View>
+              <View style={styles.teamCardPlayers}>
+                {teamBPlayers.length > 0 ? (
+                  teamBPlayers.map(p => (
+                    <View key={p.playerId} style={[styles.playerChip, { borderColor: theme.accent }]}>
+                      <Text style={styles.playerChipName}>{getPlayerName(p.playerId)}</Text>
+                      {availableRoles.length > 0 && (
+                        <View style={[styles.playerChipRole, { backgroundColor: p.role === 'Tireur' ? theme.tirColor : p.role === 'Pointeur' ? theme.pointColor : theme.accent }]}>
+                          <Text style={styles.playerChipRoleText}>{p.role.charAt(0)}</Text>
+                        </View>
+                      )}
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.teamCardPlaceholder}>Ajouter des joueurs...</Text>
+                )}
+              </View>
+              <Text style={styles.teamCardCount}>{teamBPlayers.length}/{maxPlayersPerTeam}</Text>
+            </Pressable>
           </Animated.View>
 
-          {/* Winner Indicator */}
-          {isMatchReady && (
-            <Animated.View entering={FadeInUp.duration(300)} style={styles.winnerBanner}>
-              <MaterialIcons 
-                name={teamAScore > teamBScore ? 'emoji-events' : teamAScore < teamBScore ? 'sentiment-dissatisfied' : 'drag-handle'} 
-                size={28} 
-                color={teamAScore > teamBScore ? theme.success : teamAScore < teamBScore ? theme.error : theme.textMuted} 
-              />
-              <Text style={[
-                styles.winnerText,
-                { color: teamAScore > teamBScore ? theme.success : teamAScore < teamBScore ? theme.error : theme.textMuted }
-              ]}>
-                {teamAScore > teamBScore ? 'Victoire !' : teamAScore < teamBScore ? 'Défaite' : 'Égalité'}
-              </Text>
-            </Animated.View>
-          )}
+          {/* Actions Editor Button */}
+          <Animated.View entering={FadeInDown.duration(300).delay(150)}>
+            <Pressable 
+              style={styles.actionsEditorButton}
+              onPress={() => { Haptics.selectionAsync(); setShowActionsEditor(true); }}
+            >
+              <MaterialIcons name="edit-note" size={24} color={theme.primary} />
+              <View style={styles.actionsEditorContent}>
+                <Text style={styles.actionsEditorTitle}>Édition des actions de match</Text>
+                <Text style={styles.actionsEditorSubtitle}>Mènes, actions des joueurs, chronomètre</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
+            </Pressable>
+          </Animated.View>
 
-          {/* Advanced Options Toggle */}
-          <Pressable 
-            style={styles.advancedToggle}
-            onPress={() => {
-              Haptics.selectionAsync();
-              setShowAdvancedOptions(!showAdvancedOptions);
-            }}
-          >
-            <MaterialIcons 
-              name={showAdvancedOptions ? 'expand-less' : 'expand-more'} 
-              size={24} 
-              color={theme.textSecondary} 
-            />
-            <Text style={styles.advancedToggleText}>
-              {showAdvancedOptions ? 'Masquer les options avancées' : 'Options avancées (mènes, actions, chrono)'}
-            </Text>
-          </Pressable>
-
-          {/* Advanced Scoring Options - Collapsible */}
-          {showAdvancedOptions && (
-            <Animated.View entering={FadeInDown.duration(300)}>
-              {/* Scoring Mode Selection */}
-              <View style={styles.scoringModeSection}>
-                <Text style={styles.sectionLabel}>MODE DE NOTATION</Text>
-                <View style={styles.scoringModeRow}>
-                  <Pressable
-                    style={[styles.scoringModeBtn, scoringMode === 'simple' && styles.scoringModeBtnActive]}
-                    onPress={() => setScoringMode('simple')}
-                  >
-                    <MaterialIcons name="speed" size={20} color={scoringMode === 'simple' ? '#FFF' : theme.textSecondary} />
-                    <Text style={[styles.scoringModeBtnText, scoringMode === 'simple' && styles.scoringModeBtnTextActive]}>Simple</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.scoringModeBtn, scoringMode === 'detailed' && styles.scoringModeBtnActive]}
-                    onPress={() => setScoringMode('detailed')}
-                  >
-                    <MaterialIcons name="format-list-numbered" size={20} color={scoringMode === 'detailed' ? '#FFF' : theme.textSecondary} />
-                    <Text style={[styles.scoringModeBtnText, scoringMode === 'detailed' && styles.scoringModeBtnTextActive]}>Mènes</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.scoringModeBtn, scoringMode === 'actions' && styles.scoringModeBtnActiveAlt]}
-                    onPress={() => setScoringMode('actions')}
-                  >
-                    <MaterialIcons name="sports" size={20} color={scoringMode === 'actions' ? '#FFF' : theme.textSecondary} />
-                    <Text style={[styles.scoringModeBtnText, scoringMode === 'actions' && styles.scoringModeBtnTextActive]}>Actions</Text>
-                  </Pressable>
+          {/* Summary Stats */}
+          {(menes.length > 0 || matchTime > 0) && (
+            <Animated.View entering={FadeInDown.duration(300).delay(200)} style={styles.summaryCard}>
+              <Text style={styles.summaryTitle}>Résumé du match</Text>
+              <View style={styles.summaryRow}>
+                <View style={styles.summaryItem}>
+                  <MaterialIcons name="timer" size={20} color={theme.primary} />
+                  <Text style={styles.summaryValue}>{formatTime(matchTime)}</Text>
+                  <Text style={styles.summaryLabel}>Durée</Text>
+                </View>
+                <View style={styles.summaryItem}>
+                  <MaterialIcons name="sports" size={20} color={theme.accent} />
+                  <Text style={styles.summaryValue}>{menes.length}</Text>
+                  <Text style={styles.summaryLabel}>Mènes</Text>
+                </View>
+                <View style={styles.summaryItem}>
+                  <MaterialIcons name="scoreboard" size={20} color={theme.carreauColor} />
+                  <Text style={styles.summaryValue}>{teamAScore} - {teamBScore}</Text>
+                  <Text style={styles.summaryLabel}>Score</Text>
                 </View>
               </View>
-
-              {/* Timer - Show for detailed mode */}
-              {scoringMode === 'detailed' && (
-                <View style={styles.timerSection}>
-                  <View style={styles.timerDisplay}>
-                    <View style={styles.timerMain}>
-                      <MaterialIcons name="timer" size={24} color={isTimerRunning ? theme.primary : theme.textMuted} />
-                      <Text style={[styles.timerValue, isTimerRunning && styles.timerValueActive]}>
-                        {formatTime(matchTime)}
-                      </Text>
-                    </View>
-                    <View style={styles.timerControls}>
-                      {!isTimerRunning ? (
-                        <Pressable style={[styles.timerBtn, styles.timerBtnStart]} onPress={startTimer}>
-                          <MaterialIcons name="play-arrow" size={24} color="#FFF" />
-                        </Pressable>
-                      ) : (
-                        <Pressable style={[styles.timerBtn, styles.timerBtnPause]} onPress={pauseTimer}>
-                          <MaterialIcons name="pause" size={24} color="#FFF" />
-                        </Pressable>
-                      )}
-                      <Pressable style={[styles.timerBtn, styles.timerBtnReset]} onPress={resetTimer}>
-                        <MaterialIcons name="refresh" size={20} color={theme.textSecondary} />
-                      </Pressable>
-                    </View>
-                  </View>
-                </View>
-              )}
-
-              {/* Mène Input - Show for detailed mode */}
-              {scoringMode === 'detailed' && (
-                <View style={styles.meneSection}>
-                  <Text style={styles.sectionLabel}>POINTS DE LA MÈNE</Text>
-                  <View style={styles.meneCard}>
-                    <View style={styles.meneRow}>
-                      <Text style={styles.meneTeamLabel}>Mon équipe</Text>
-                      <View style={styles.menePointsRow}>
-                        {Array.from({ length: maxPointsPerMene }, (_, i) => i + 1).map(pts => (
-                          <Pressable
-                            key={`A-${pts}`}
-                            style={[styles.menePointBtn, currentMenePoints.teamA === pts && styles.menePointBtnActiveA]}
-                            onPress={() => handleMenePoint('teamA', pts)}
-                          >
-                            <Text style={[styles.menePointText, currentMenePoints.teamA === pts && styles.menePointTextActive]}>
-                              {pts}
-                            </Text>
-                          </Pressable>
-                        ))}
-                      </View>
-                    </View>
-                    
-                    <View style={styles.meneDivider} />
-                    
-                    <View style={styles.meneRow}>
-                      <Text style={styles.meneTeamLabel}>Adversaire</Text>
-                      <View style={styles.menePointsRow}>
-                        {Array.from({ length: maxPointsPerMene }, (_, i) => i + 1).map(pts => (
-                          <Pressable
-                            key={`B-${pts}`}
-                            style={[styles.menePointBtn, currentMenePoints.teamB === pts && styles.menePointBtnActiveB]}
-                            onPress={() => handleMenePoint('teamB', pts)}
-                          >
-                            <Text style={[styles.menePointText, currentMenePoints.teamB === pts && styles.menePointTextActive]}>
-                              {pts}
-                            </Text>
-                          </Pressable>
-                        ))}
-                      </View>
-                    </View>
-
-                    <Pressable style={[styles.nullMeneBtn, isNullMene && styles.nullMeneBtnActive]} onPress={handleNullMene}>
-                      <MaterialIcons 
-                        name={isNullMene ? 'check-box' : 'check-box-outline-blank'} 
-                        size={18} 
-                        color={isNullMene ? theme.warning : theme.textMuted} 
-                      />
-                      <Text style={[styles.nullMeneText, isNullMene && styles.nullMeneTextActive]}>Mène nulle</Text>
-                    </Pressable>
-
-                    <Pressable 
-                      style={[styles.addMeneBtn, (!isNullMene && !currentMenePoints.teamA && !currentMenePoints.teamB) && styles.addMeneBtnDisabled]}
-                      onPress={addMene}
-                    >
-                      <MaterialIcons name="check" size={20} color="#FFF" />
-                      <Text style={styles.addMeneBtnText}>Valider mène {menes.length + 1}</Text>
-                    </Pressable>
-                  </View>
-
-                  {/* Mènes History */}
-                  {menes.length > 0 && (
-                    <View style={styles.menesHistory}>
-                      <Text style={styles.menesHistoryTitle}>Historique ({menes.length} mènes)</Text>
-                      <View style={styles.menesHistoryList}>
-                        {menes.map((m) => (
-                          <View key={m.id} style={styles.meneHistoryItem}>
-                            <Text style={styles.meneHistoryNum}>M{m.id}</Text>
-                            {m.isNull ? (
-                              <Text style={styles.meneHistoryNull}>⊘</Text>
-                            ) : (
-                              <>
-                                <Text style={[styles.meneHistoryScore, m.teamAPoints > 0 && styles.meneHistoryWin]}>
-                                  {m.teamAPoints > 0 ? `+${m.teamAPoints}` : '-'}
-                                </Text>
-                                <Text style={styles.meneHistorySep}>/</Text>
-                                <Text style={[styles.meneHistoryScore, m.teamBPoints > 0 && styles.meneHistoryLoss]}>
-                                  {m.teamBPoints > 0 ? `+${m.teamBPoints}` : '-'}
-                                </Text>
-                              </>
-                            )}
-                          </View>
-                        ))}
-                      </View>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {/* Action Tracker - Show for actions mode */}
-              {scoringMode === 'actions' && (
-                <View style={styles.actionsSection}>
-                  <View style={styles.actionModeToggle}>
-                    <Pressable
-                      style={[styles.actionModeBtn, !manualActionMode && styles.actionModeBtnActive]}
-                      onPress={() => setManualActionMode(false)}
-                    >
-                      <MaterialIcons name="touch-app" size={16} color={!manualActionMode ? '#FFF' : theme.textSecondary} />
-                      <Text style={[styles.actionModeBtnText, !manualActionMode && styles.actionModeBtnTextActive]}>Temps réel</Text>
-                    </Pressable>
-                    <Pressable
-                      style={[styles.actionModeBtn, manualActionMode && styles.actionModeBtnActive]}
-                      onPress={() => setManualActionMode(true)}
-                    >
-                      <MaterialIcons name="edit" size={16} color={manualActionMode ? '#FFF' : theme.textSecondary} />
-                      <Text style={[styles.actionModeBtnText, manualActionMode && styles.actionModeBtnTextActive]}>Manuel</Text>
-                    </Pressable>
-                  </View>
-
-                  {(teamAPlayers.length === 0 && teamBPlayers.length === 0) ? (
-                    <View style={styles.actionsEmptyState}>
-                      <MaterialIcons name="info-outline" size={24} color={theme.textMuted} />
-                      <Text style={styles.actionsEmptyText}>Ajoutez des joueurs pour suivre leurs actions</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.actionsGrid}>
-                      {/* Team A Players */}
-                      {teamAPlayers.length > 0 && (
-                        <View style={styles.actionsTeam}>
-                          <View style={styles.actionsTeamHeader}>
-                            <View style={[styles.actionsTeamDot, { backgroundColor: theme.primary }]} />
-                            <Text style={styles.actionsTeamTitle}>Mon équipe</Text>
-                          </View>
-                          {teamAPlayers.map(p => {
-                            const stats = getPlayerActionStats(p.playerId);
-                            return (
-                              <View key={p.playerId} style={styles.actionPlayerCard}>
-                                <Text style={styles.actionPlayerName} numberOfLines={1}>{getPlayerName(p.playerId)}</Text>
-                                {manualActionMode ? (
-                                  <View style={styles.actionManualRow}>
-                                    <View style={styles.actionManualGroup}>
-                                      <Text style={styles.actionManualLabel}>T</Text>
-                                      <Text style={styles.actionManualValue}>{stats.tirsSuccess}/{stats.tirs}</Text>
-                                    </View>
-                                    <View style={styles.actionManualGroup}>
-                                      <Text style={styles.actionManualLabel}>P</Text>
-                                      <Text style={styles.actionManualValue}>{stats.pointsSuccess}/{stats.points}</Text>
-                                    </View>
-                                    <View style={styles.actionManualGroup}>
-                                      <Text style={styles.actionManualLabel}>C</Text>
-                                      <Text style={[styles.actionManualValue, { color: theme.carreauColor }]}>{stats.carreaux}</Text>
-                                    </View>
-                                  </View>
-                                ) : (
-                                  <View style={styles.actionBtnsRow}>
-                                    <Pressable
-                                      style={[styles.actionBtn, { backgroundColor: theme.accent }]}
-                                      onPress={() => recordAction(p.playerId, 'tir', true)}
-                                      onLongPress={() => recordAction(p.playerId, 'tir', false)}
-                                    >
-                                      <MaterialIcons name="gps-fixed" size={16} color="#FFF" />
-                                    </Pressable>
-                                    <Pressable
-                                      style={[styles.actionBtn, { backgroundColor: theme.primary }]}
-                                      onPress={() => recordAction(p.playerId, 'point', true)}
-                                      onLongPress={() => recordAction(p.playerId, 'point', false)}
-                                    >
-                                      <MaterialIcons name="adjust" size={16} color="#FFF" />
-                                    </Pressable>
-                                    <Pressable
-                                      style={[styles.actionBtn, { backgroundColor: theme.carreauColor }]}
-                                      onPress={() => recordAction(p.playerId, 'carreau', true)}
-                                    >
-                                      <MaterialIcons name="stars" size={16} color="#FFF" />
-                                    </Pressable>
-                                  </View>
-                                )}
-                              </View>
-                            );
-                          })}
-                        </View>
-                      )}
-
-                      {/* Team B Players */}
-                      {teamBPlayers.length > 0 && (
-                        <View style={styles.actionsTeam}>
-                          <View style={styles.actionsTeamHeader}>
-                            <View style={[styles.actionsTeamDot, { backgroundColor: theme.accent }]} />
-                            <Text style={styles.actionsTeamTitle}>Adversaire</Text>
-                          </View>
-                          {teamBPlayers.map(p => {
-                            const stats = getPlayerActionStats(p.playerId);
-                            return (
-                              <View key={p.playerId} style={styles.actionPlayerCard}>
-                                <Text style={styles.actionPlayerName} numberOfLines={1}>{getPlayerName(p.playerId)}</Text>
-                                {manualActionMode ? (
-                                  <View style={styles.actionManualRow}>
-                                    <View style={styles.actionManualGroup}>
-                                      <Text style={styles.actionManualLabel}>T</Text>
-                                      <Text style={styles.actionManualValue}>{stats.tirsSuccess}/{stats.tirs}</Text>
-                                    </View>
-                                    <View style={styles.actionManualGroup}>
-                                      <Text style={styles.actionManualLabel}>P</Text>
-                                      <Text style={styles.actionManualValue}>{stats.pointsSuccess}/{stats.points}</Text>
-                                    </View>
-                                    <View style={styles.actionManualGroup}>
-                                      <Text style={styles.actionManualLabel}>C</Text>
-                                      <Text style={[styles.actionManualValue, { color: theme.carreauColor }]}>{stats.carreaux}</Text>
-                                    </View>
-                                  </View>
-                                ) : (
-                                  <View style={styles.actionBtnsRow}>
-                                    <Pressable
-                                      style={[styles.actionBtn, { backgroundColor: theme.accent }]}
-                                      onPress={() => recordAction(p.playerId, 'tir', true)}
-                                      onLongPress={() => recordAction(p.playerId, 'tir', false)}
-                                    >
-                                      <MaterialIcons name="gps-fixed" size={16} color="#FFF" />
-                                    </Pressable>
-                                    <Pressable
-                                      style={[styles.actionBtn, { backgroundColor: theme.primary }]}
-                                      onPress={() => recordAction(p.playerId, 'point', true)}
-                                      onLongPress={() => recordAction(p.playerId, 'point', false)}
-                                    >
-                                      <MaterialIcons name="adjust" size={16} color="#FFF" />
-                                    </Pressable>
-                                    <Pressable
-                                      style={[styles.actionBtn, { backgroundColor: theme.carreauColor }]}
-                                      onPress={() => recordAction(p.playerId, 'carreau', true)}
-                                    >
-                                      <MaterialIcons name="stars" size={16} color="#FFF" />
-                                    </Pressable>
-                                  </View>
-                                )}
-                              </View>
-                            );
-                          })}
-                        </View>
-                      )}
-                    </View>
-                  )}
-
-                  {!manualActionMode && (teamAPlayers.length > 0 || teamBPlayers.length > 0) && (
-                    <View style={styles.actionLegend}>
-                      <Text style={styles.actionLegendText}>
-                        <MaterialIcons name="gps-fixed" size={12} color={theme.accent} /> Tir (appui long = raté)  •  
-                        <MaterialIcons name="adjust" size={12} color={theme.primary} /> Point  •  
-                        <MaterialIcons name="stars" size={12} color={theme.carreauColor} /> Carreau
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              )}
             </Animated.View>
           )}
         </ScrollView>
 
-        {/* Save Button */}
+        {/* Footer Button */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-          <Pressable 
-            style={[styles.saveButton, !isMatchReady && styles.saveButtonDisabled]}
-            onPress={() => handleSaveMatch()}
-          >
-            <MaterialIcons name="check" size={24} color="#FFF" />
-            <Text style={styles.saveButtonText}>Enregistrer le match</Text>
-          </Pressable>
+          {hasExitedFullscreen && isMatchReady ? (
+            <Pressable style={styles.saveButton} onPress={() => handleSaveMatch()}>
+              <MaterialIcons name="check" size={24} color="#FFF" />
+              <Text style={styles.saveButtonText}>Enregistrer le match</Text>
+            </Pressable>
+          ) : (
+            <Pressable 
+              style={styles.fullscreenButton}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setFullscreenMode(true); }}
+            >
+              <MaterialIcons name="fullscreen" size={24} color="#FFF" />
+              <Text style={styles.fullscreenButtonText}>Plein Écran</Text>
+            </Pressable>
+          )}
         </View>
       </KeyboardAvoidingView>
+
+      {/* Actions Editor Modal */}
+      <Modal
+        visible={showActionsEditor}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowActionsEditor(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Pressable style={styles.modalCloseBtn} onPress={() => setShowActionsEditor(false)}>
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+            <Text style={styles.modalTitle}>Actions de match</Text>
+            <Pressable style={styles.modalDoneBtn} onPress={() => setShowActionsEditor(false)}>
+              <Text style={styles.modalDoneText}>OK</Text>
+            </Pressable>
+          </View>
+
+          <ScrollView style={styles.actionsEditorScroll} contentContainerStyle={styles.actionsEditorContent}>
+            {/* Timer Section */}
+            <View style={styles.editorSection}>
+              <Text style={styles.editorSectionTitle}>Chronomètre</Text>
+              <View style={styles.timerDisplay}>
+                <View style={styles.timerMain}>
+                  <MaterialIcons name="timer" size={28} color={isTimerRunning ? theme.primary : theme.textMuted} />
+                  <Text style={[styles.timerValue, isTimerRunning && styles.timerValueActive]}>{formatTime(matchTime)}</Text>
+                </View>
+                <View style={styles.timerControls}>
+                  {!isTimerRunning ? (
+                    <Pressable style={[styles.timerBtn, styles.timerBtnStart]} onPress={startTimer}>
+                      <MaterialIcons name="play-arrow" size={24} color="#FFF" />
+                    </Pressable>
+                  ) : (
+                    <Pressable style={[styles.timerBtn, styles.timerBtnPause]} onPress={pauseTimer}>
+                      <MaterialIcons name="pause" size={24} color="#FFF" />
+                    </Pressable>
+                  )}
+                  <Pressable style={[styles.timerBtn, styles.timerBtnReset]} onPress={resetTimer}>
+                    <MaterialIcons name="refresh" size={20} color={theme.textSecondary} />
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+
+            {/* Mène Section */}
+            <View style={styles.editorSection}>
+              <Text style={styles.editorSectionTitle}>Mènes ({menes.length})</Text>
+              <View style={styles.meneCard}>
+                <View style={styles.meneRow}>
+                  <Text style={styles.meneTeamLabel}>Mon équipe</Text>
+                  <View style={styles.menePointsRow}>
+                    {Array.from({ length: maxPointsPerMene }, (_, i) => i + 1).map(pts => (
+                      <Pressable
+                        key={`A-${pts}`}
+                        style={[styles.menePointBtn, currentMenePoints.teamA === pts && styles.menePointBtnActiveA]}
+                        onPress={() => handleMenePoint('teamA', pts)}
+                      >
+                        <Text style={[styles.menePointText, currentMenePoints.teamA === pts && styles.menePointTextActive]}>{pts}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+                <View style={styles.meneDivider} />
+                <View style={styles.meneRow}>
+                  <Text style={styles.meneTeamLabel}>Adversaire</Text>
+                  <View style={styles.menePointsRow}>
+                    {Array.from({ length: maxPointsPerMene }, (_, i) => i + 1).map(pts => (
+                      <Pressable
+                        key={`B-${pts}`}
+                        style={[styles.menePointBtn, currentMenePoints.teamB === pts && styles.menePointBtnActiveB]}
+                        onPress={() => handleMenePoint('teamB', pts)}
+                      >
+                        <Text style={[styles.menePointText, currentMenePoints.teamB === pts && styles.menePointTextActive]}>{pts}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+                <Pressable style={[styles.nullMeneBtn, isNullMene && styles.nullMeneBtnActive]} onPress={handleNullMene}>
+                  <MaterialIcons name={isNullMene ? 'check-box' : 'check-box-outline-blank'} size={18} color={isNullMene ? theme.warning : theme.textMuted} />
+                  <Text style={[styles.nullMeneText, isNullMene && styles.nullMeneTextActive]}>Mène nulle</Text>
+                </Pressable>
+                <Pressable 
+                  style={[styles.addMeneBtn, (!isNullMene && !currentMenePoints.teamA && !currentMenePoints.teamB) && styles.addMeneBtnDisabled]}
+                  onPress={addMene}
+                >
+                  <MaterialIcons name="check" size={20} color="#FFF" />
+                  <Text style={styles.addMeneBtnText}>Valider mène {menes.length + 1}</Text>
+                </Pressable>
+              </View>
+
+              {menes.length > 0 && (
+                <View style={styles.menesHistory}>
+                  <View style={styles.menesHistoryHeader}>
+                    <Text style={styles.menesHistoryTitle}>Historique</Text>
+                    <Pressable onPress={undoLastMene}>
+                      <Text style={styles.undoText}>Annuler dernière</Text>
+                    </Pressable>
+                  </View>
+                  <View style={styles.menesHistoryList}>
+                    {menes.map(m => (
+                      <View key={m.id} style={styles.meneHistoryItem}>
+                        <Text style={styles.meneHistoryNum}>M{m.id}</Text>
+                        {m.isNull ? (
+                          <Text style={styles.meneHistoryNull}>⊘</Text>
+                        ) : (
+                          <>
+                            <Text style={[styles.meneHistoryScore, m.teamAPoints > 0 && styles.meneHistoryWin]}>
+                              {m.teamAPoints > 0 ? `+${m.teamAPoints}` : '-'}
+                            </Text>
+                            <Text style={styles.meneHistorySep}>/</Text>
+                            <Text style={[styles.meneHistoryScore, m.teamBPoints > 0 && styles.meneHistoryLoss]}>
+                              {m.teamBPoints > 0 ? `+${m.teamBPoints}` : '-'}
+                            </Text>
+                          </>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+
+            {/* Player Actions */}
+            {(teamAPlayers.length > 0 || teamBPlayers.length > 0) && (
+              <View style={styles.editorSection}>
+                <Text style={styles.editorSectionTitle}>Actions des joueurs</Text>
+                {[...teamAPlayers, ...teamBPlayers].map((p, idx) => {
+                  const isTeamA = idx < teamAPlayers.length;
+                  const stats = getPlayerActionStats(p.playerId);
+                  return (
+                    <View key={p.playerId} style={styles.playerActionRow}>
+                      <View style={[styles.playerActionDot, { backgroundColor: isTeamA ? theme.primary : theme.accent }]} />
+                      <Text style={styles.playerActionName}>{getPlayerName(p.playerId)}</Text>
+                      <View style={styles.playerActionStats}>
+                        <Text style={styles.playerActionStat}>T: {stats.tirsSuccess}/{stats.tirs}</Text>
+                        <Text style={styles.playerActionStat}>P: {stats.pointsSuccess}/{stats.points}</Text>
+                        <Text style={[styles.playerActionStat, { color: theme.carreauColor }]}>C: {stats.carreaux}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
 
       {/* Terrain Picker Modal */}
       <Modal
@@ -2316,26 +1511,13 @@ export default function NewMatchScreen() {
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>
             <Text style={styles.modalTitle}>Choisir un terrain</Text>
-            <Pressable 
-              style={styles.modalDoneBtn} 
-              onPress={() => {
-                setSelectedTerrainId(null);
-                setShowTerrainPicker(false);
-              }}
-            >
+            <Pressable style={styles.modalDoneBtn} onPress={() => { setSelectedTerrainId(null); setShowTerrainPicker(false); }}>
               <Text style={[styles.modalDoneText, { color: theme.textMuted }]}>Aucun</Text>
             </Pressable>
           </View>
 
           <ScrollView style={styles.playersList} contentContainerStyle={styles.playersListContent}>
-            {/* Create new terrain */}
-            <Pressable
-              style={styles.createPlayerBtn}
-              onPress={() => {
-                setShowTerrainPicker(false);
-                router.push('/terrain/new');
-              }}
-            >
+            <Pressable style={styles.createPlayerBtn} onPress={() => { setShowTerrainPicker(false); router.push('/terrain/new'); }}>
               <View style={[styles.createPlayerIcon, { backgroundColor: theme.primary + '20' }]}>
                 <MaterialIcons name="add-location" size={22} color={theme.primary} />
               </View>
@@ -2346,7 +1528,6 @@ export default function NewMatchScreen() {
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </Pressable>
 
-            {/* Terrain list */}
             {terrains.length === 0 ? (
               <View style={styles.emptySearch}>
                 <MaterialIcons name="location-off" size={40} color={theme.textMuted} />
@@ -2357,11 +1538,7 @@ export default function NewMatchScreen() {
                 <Pressable
                   key={terrain.id}
                   style={[styles.playerItem, selectedTerrainId === terrain.id && styles.playerItemSelected]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setSelectedTerrainId(terrain.id);
-                    setShowTerrainPicker(false);
-                  }}
+                  onPress={() => { Haptics.selectionAsync(); setSelectedTerrainId(terrain.id); setShowTerrainPicker(false); }}
                 >
                   <View style={[styles.playerAvatar, selectedTerrainId === terrain.id && styles.playerAvatarSelected]}>
                     <MaterialIcons name="place" size={22} color="#FFF" />
@@ -2387,19 +1564,14 @@ export default function NewMatchScreen() {
         visible={showPlayerPicker !== null}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => {
-          setShowPlayerPicker(null);
-          setPlayerSearch('');
-        }}
+        onRequestClose={() => { setShowPlayerPicker(null); setPlayerSearch(''); }}
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Pressable style={styles.modalCloseBtn} onPress={() => { setShowPlayerPicker(null); setPlayerSearch(''); }}>
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>
-            <Text style={styles.modalTitle}>
-              {showPlayerPicker === 'A' ? 'Mon équipe' : 'Adversaire'}
-            </Text>
+            <Text style={styles.modalTitle}>{showPlayerPicker === 'A' ? 'Mon équipe' : 'Adversaire'}</Text>
             <Pressable style={styles.modalDoneBtn} onPress={() => { setShowPlayerPicker(null); setPlayerSearch(''); }}>
               <Text style={styles.modalDoneText}>OK</Text>
             </Pressable>
@@ -2426,7 +1598,6 @@ export default function NewMatchScreen() {
           </Text>
 
           <ScrollView style={styles.playersList} contentContainerStyle={styles.playersListContent}>
-            {/* Self player for Team A */}
             {showPlayerPicker === 'A' && selfPlayer && (
               <Pressable
                 style={[styles.playerItem, teamAPlayers.some(p => p.playerId === selfPlayer.id) && styles.playerItemSelected]}
@@ -2450,31 +1621,20 @@ export default function NewMatchScreen() {
               </Pressable>
             )}
 
-            {/* Role Selection for selected players - Only show if format has roles */}
             {showPlayerPicker && availableRoles.length > 0 && (showPlayerPicker === 'A' ? teamAPlayers : teamBPlayers).length > 0 && (
               <View style={styles.roleSelectionSection}>
-                <Text style={styles.roleSelectionTitle}>Rôles des joueurs sélectionnés</Text>
+                <Text style={styles.roleSelectionTitle}>Rôles des joueurs</Text>
                 {(showPlayerPicker === 'A' ? teamAPlayers : teamBPlayers).map(p => (
                   <View key={p.playerId} style={styles.roleSelectionRow}>
-                    <Text style={styles.roleSelectionName} numberOfLines={1}>{getPlayerName(p.playerId)}</Text>
+                    <Text style={styles.roleSelectionName}>{getPlayerName(p.playerId)}</Text>
                     <View style={styles.roleButtonsRow}>
                       {availableRoles.map(role => (
                         <Pressable
                           key={role}
-                          style={[
-                            styles.roleButton,
-                            p.role === role && (showPlayerPicker === 'A' ? styles.roleButtonActiveA : styles.roleButtonActiveB)
-                          ]}
+                          style={[styles.roleButton, p.role === role && (showPlayerPicker === 'A' ? styles.roleButtonActiveA : styles.roleButtonActiveB)]}
                           onPress={() => updatePlayerRole(p.playerId, showPlayerPicker!, role)}
                         >
-                          <MaterialIcons 
-                            name={role === 'Tireur' ? 'gps-fixed' : role === 'Pointeur' ? 'radio-button-on' : 'swap-horiz'} 
-                            size={14} 
-                            color={p.role === role ? '#FFF' : theme.textSecondary} 
-                          />
-                          <Text style={[styles.roleButtonText, p.role === role && styles.roleButtonTextActive]}>
-                            {role.slice(0, 1)}
-                          </Text>
+                          <Text style={[styles.roleButtonText, p.role === role && styles.roleButtonTextActive]}>{role.slice(0, 1)}</Text>
                         </Pressable>
                       ))}
                     </View>
@@ -2483,16 +1643,8 @@ export default function NewMatchScreen() {
               </View>
             )}
 
-            {/* Create new opponent - Team B only */}
             {showPlayerPicker === 'B' && (
-              <Pressable
-                style={styles.createPlayerBtn}
-                onPress={() => {
-                  setShowPlayerPicker(null);
-                  setPlayerSearch('');
-                  router.push('/player/new');
-                }}
-              >
+              <Pressable style={styles.createPlayerBtn} onPress={() => { setShowPlayerPicker(null); setPlayerSearch(''); router.push('/player/new'); }}>
                 <View style={styles.createPlayerIcon}>
                   <MaterialIcons name="person-add" size={22} color={theme.accent} />
                 </View>
@@ -2504,7 +1656,6 @@ export default function NewMatchScreen() {
               </Pressable>
             )}
 
-            {/* Other players */}
             {filteredPlayers
               .filter(player => !(showPlayerPicker === 'A' && selfPlayer && player.id === selfPlayer.id))
               .map(player => {
@@ -2520,11 +1671,7 @@ export default function NewMatchScreen() {
                     onPress={() => !isInOtherTeam && togglePlayer(player.id, showPlayerPicker!)}
                     disabled={isInOtherTeam}
                   >
-                    <View style={[
-                      styles.playerAvatar,
-                      isSelected && (showPlayerPicker === 'A' ? styles.playerAvatarSelectedA : styles.playerAvatarSelectedB),
-                      isInOtherTeam && styles.playerAvatarDisabled
-                    ]}>
+                    <View style={[styles.playerAvatar, isSelected && (showPlayerPicker === 'A' ? styles.playerAvatarSelectedA : styles.playerAvatarSelectedB), isInOtherTeam && styles.playerAvatarDisabled]}>
                       <Text style={styles.playerAvatarText}>{player.name.split(' ').map(n => n[0]).join('')}</Text>
                     </View>
                     <View style={styles.playerInfo}>
@@ -2558,1972 +1705,244 @@ export default function NewMatchScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.backgroundSecondary,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: theme.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  closeButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: theme.textPrimary,
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    marginTop: 2,
-  },
-  // Step Indicator
-  stepContainer: {
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    backgroundColor: theme.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  stepIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  stepDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: theme.backgroundSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: theme.border,
-  },
-  stepDotCompleted: {
-    backgroundColor: theme.success,
-    borderColor: theme.success,
-  },
-  stepDotActive: {
-    borderColor: theme.primary,
-    backgroundColor: theme.primary + '15',
-  },
-  stepNumber: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textMuted,
-  },
-  stepNumberActive: {
-    color: theme.primary,
-  },
-  stepLine: {
-    width: 40,
-    height: 2,
-    backgroundColor: theme.border,
-    marginHorizontal: 4,
-  },
-  stepLineCompleted: {
-    backgroundColor: theme.success,
-  },
-  stepLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
-    paddingHorizontal: 8,
-  },
-  stepLabel: {
-    fontSize: 11,
-    color: theme.textMuted,
-    fontWeight: '500',
-  },
-  stepLabelActive: {
-    color: theme.textSecondary,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  // Mode Banner
-  trainingSetupCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.xl,
-    padding: 16,
-    marginBottom: 16,
-    ...theme.shadows.card,
-  },
-  // Series Panel Styles
-  seriesPanel: {
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: theme.accent + '30',
-  },
-  seriesPanelHeader: {
-    marginBottom: 16,
-  },
-  seriesPanelTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  seriesPanelTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: theme.accent,
-  },
-  seriesPanelTitleFinale: {
-    color: theme.carreauColor,
-  },
-  seriesPanelSubtitle: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    marginTop: 4,
-    marginLeft: 34,
-  },
-  seriesProgressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    marginBottom: 16,
-  },
-  seriesMatchIndicator: {
-    alignItems: 'center',
-    width: 60,
-  },
-  seriesMatchDot: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: theme.backgroundSecondary,
-    borderWidth: 2,
-    borderColor: theme.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  seriesMatchDotCurrent: {
-    borderColor: theme.primary,
-    backgroundColor: theme.primary + '15',
-  },
-  seriesMatchDotWinA: {
-    backgroundColor: theme.success,
-    borderColor: theme.success,
-  },
-  seriesMatchDotLossB: {
-    backgroundColor: theme.error,
-    borderColor: theme.error,
-  },
-  seriesMatchDotFinale: {
-    backgroundColor: theme.carreauColor,
-    borderColor: theme.carreauColor,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  seriesMatchDotFuture: {
-    opacity: 0.4,
-  },
-  seriesMatchDotText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: theme.primary,
-  },
-  seriesMatchDotTextFuture: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textMuted,
-  },
-  seriesMatchLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  seriesMatchLabelFinale: {
-    color: theme.carreauColor,
-    fontWeight: '700',
-  },
-  seriesConnector: {
-    flex: 1,
-    height: 3,
-    backgroundColor: theme.border,
-    marginHorizontal: -4,
-    marginTop: -20,
-  },
-  seriesConnectorPast: {
-    backgroundColor: theme.textMuted,
-  },
-  seriesConnectorFinale: {
-    backgroundColor: theme.carreauColor + '50',
-  },
-  seriesScoreDisplay: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: 12,
-  },
-  seriesScoreTeam: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  seriesScoreTeamLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: theme.textMuted,
-    marginBottom: 4,
-  },
-  seriesScoreTeamValue: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: theme.textSecondary,
-  },
-  seriesScoreTeamValueWin: {
-    color: theme.success,
-  },
-  seriesScoreTeamValueLoss: {
-    color: theme.error,
-  },
-  seriesScoreDivider: {
-    paddingHorizontal: 16,
-  },
-  seriesScoreDividerText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: theme.textMuted,
-    letterSpacing: 1,
-  },
-  finaleInfoBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    backgroundColor: theme.carreauColor + '15',
-    borderRadius: theme.borderRadius.md,
-  },
-  finaleInfoText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '500',
-    color: theme.carreauColor,
-  },
-  modeBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.primary + '10',
-    borderRadius: theme.borderRadius.lg,
-    padding: 14,
-    gap: 12,
-    marginBottom: 12,
-  },
-  modeBannerIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: theme.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modeBannerContent: {
-    flex: 1,
-  },
-  modeBannerText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  modeBannerSubtext: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    marginTop: 2,
-  },
-  terrainSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: theme.border,
-    gap: 10,
-  },
-  terrainSelectorIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: theme.backgroundSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  terrainSelectorContent: {
-    flex: 1,
-  },
-  terrainSelectorLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: theme.textMuted,
-    marginBottom: 2,
-  },
-  terrainSelectorValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: theme.textPrimary,
-  },
-  terrainSelectorPlaceholder: {
-    color: theme.textMuted,
-    fontStyle: 'italic',
-  },
-  // Phase Section
-  phaseSection: {
-    marginBottom: 16,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: theme.textMuted,
-    letterSpacing: 0.5,
-    marginBottom: 10,
-  },
-  phaseScroll: {
-    gap: 8,
-  },
-  phaseChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.full,
-    borderWidth: 1,
-    borderColor: theme.border,
-  },
-  phaseChipActive: {
-    backgroundColor: theme.carreauColor,
-    borderColor: theme.carreauColor,
-  },
-  phaseChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  phaseChipTextActive: {
-    color: '#FFF',
-  },
-  bracketRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-    gap: 10,
-  },
-  bracketLabel: {
-    fontSize: 13,
-    color: theme.textSecondary,
-  },
-  bracketChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: theme.border,
-  },
-  bracketChipActive: {
-    backgroundColor: theme.primary,
-    borderColor: theme.primary,
-  },
-  bracketChipText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: theme.textSecondary,
-  },
-  bracketChipTextActive: {
-    color: '#FFF',
-  },
-  // Format Section
-  formatSection: {
-    marginBottom: 16,
-  },
-  formatRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  formatChip: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  formatChipActive: {
-    backgroundColor: theme.primary,
-    borderColor: theme.primary,
-  },
-  formatChipDisabled: {
-    opacity: 0.4,
-  },
-  formatChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  formatChipTextActive: {
-    color: '#FFF',
-  },
-  formatChipTextDisabled: {
-    color: theme.textMuted,
-  },
-  // Main Score Section
-  scoreSection: {
-    marginBottom: 16,
-  },
-  scoreCard: {
-    flexDirection: 'row',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.xl,
-    padding: 16,
-    ...theme.shadows.card,
-  },
-  scoreTeam: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  scoreTeamHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
-  },
-  teamColorDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  scoreTeamLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  scoreTeamPlayers: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 4,
-    marginBottom: 12,
-    minHeight: 28,
-  },
-  playerMiniChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: theme.primary + '15',
-    borderRadius: theme.borderRadius.sm,
-  },
-  playerMiniChipB: {
-    backgroundColor: theme.accent + '15',
-  },
-  playerMiniName: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: theme.textPrimary,
-    maxWidth: 60,
-  },
-  roleMiniDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  noPlayersHint: {
-    fontSize: 12,
-    color: theme.textMuted,
-    fontStyle: 'italic',
-  },
-  scoreControlsVertical: {
-    alignItems: 'center',
-  },
-  scoreControlBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: 22,
-  },
-  scoreValueLarge: {
-    fontSize: 56,
-    fontWeight: '800',
-    color: theme.textPrimary,
-    marginVertical: 4,
-  },
-  scoreValueWinning: {
-    color: theme.success,
-  },
-  scoreValueLosing: {
-    color: theme.error,
-  },
-  // VS Divider
-  vsDivider: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-  },
-  vsLine: {
-    width: 1,
-    height: 40,
-    backgroundColor: theme.border,
-  },
-  vsCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: theme.backgroundSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 8,
-  },
-  vsText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: theme.textMuted,
-  },
-  // Quick Score
-  quickScoreRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-    gap: 8,
-  },
-  quickScoreLabel: {
-    fontSize: 12,
-    color: theme.textMuted,
-  },
-  quickScoreBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.sm,
-  },
-  quickScoreBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  // Winner Banner
-  winnerBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: theme.surface,
-    paddingVertical: 16,
-    borderRadius: theme.borderRadius.lg,
-    marginBottom: 16,
-    ...theme.shadows.card,
-  },
-  winnerText: {
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  // Advanced Toggle
-  advancedToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    marginBottom: 16,
-  },
-  advancedToggleText: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    fontWeight: '500',
-  },
-  // Scoring Mode Section
-  scoringModeSection: {
-    marginBottom: 16,
-  },
-  scoringModeRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  scoringModeBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 14,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  scoringModeBtnActive: {
-    backgroundColor: theme.primary,
-    borderColor: theme.primary,
-  },
-  scoringModeBtnActiveAlt: {
-    backgroundColor: theme.tirColor,
-    borderColor: theme.tirColor,
-  },
-  scoringModeBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  scoringModeBtnTextActive: {
-    color: '#FFF',
-  },
-  // Timer Section
-  timerSection: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    marginBottom: 16,
-  },
-  timerDisplay: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  timerMain: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  timerValue: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: theme.textMuted,
-    fontVariant: ['tabular-nums'],
-  },
-  timerValueActive: {
-    color: theme.primary,
-  },
-  timerControls: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  timerBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timerBtnStart: {
-    backgroundColor: theme.success,
-  },
-  timerBtnPause: {
-    backgroundColor: theme.warning,
-  },
-  timerBtnReset: {
-    backgroundColor: theme.backgroundSecondary,
-  },
-  // Mène Section
-  meneSection: {
-    marginBottom: 16,
-  },
-  meneCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-  },
-  meneRow: {
-    marginBottom: 12,
-  },
-  meneTeamLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textSecondary,
-    marginBottom: 8,
-  },
-  menePointsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  menePointBtn: {
-    flex: 1,
-    aspectRatio: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  menePointBtnActiveA: {
-    backgroundColor: theme.primary + '20',
-    borderColor: theme.primary,
-  },
-  menePointBtnActiveB: {
-    backgroundColor: theme.accent + '20',
-    borderColor: theme.accent,
-  },
-  menePointText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: theme.textSecondary,
-  },
-  menePointTextActive: {
-    color: theme.textPrimary,
-  },
-  meneDivider: {
-    height: 1,
-    backgroundColor: theme.border,
-    marginVertical: 8,
-  },
-  nullMeneBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.md,
-    marginTop: 8,
-  },
-  nullMeneBtnActive: {
-    backgroundColor: theme.warning + '15',
-  },
-  nullMeneText: {
-    fontSize: 13,
-    color: theme.textMuted,
-  },
-  nullMeneTextActive: {
-    color: theme.warning,
-    fontWeight: '600',
-  },
-  addMeneBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: theme.primary,
-    paddingVertical: 14,
-    borderRadius: theme.borderRadius.md,
-    marginTop: 12,
-  },
-  addMeneBtnDisabled: {
-    backgroundColor: theme.textMuted,
-  },
-  addMeneBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  // Mènes History
-  menesHistory: {
-    marginTop: 16,
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.md,
-    padding: 12,
-  },
-  menesHistoryTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textMuted,
-    marginBottom: 10,
-  },
-  menesHistoryList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  meneHistoryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: theme.surface,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: theme.borderRadius.sm,
-  },
-  meneHistoryNum: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: theme.textMuted,
-  },
-  meneHistoryScore: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  meneHistoryWin: {
-    color: theme.success,
-  },
-  meneHistoryLoss: {
-    color: theme.error,
-  },
-  meneHistorySep: {
-    fontSize: 10,
-    color: theme.textMuted,
-  },
-  meneHistoryNull: {
-    fontSize: 12,
-    color: theme.warning,
-  },
-  // Actions Section
-  actionsSection: {
-    marginBottom: 16,
-  },
-  actionModeToggle: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
-  },
-  actionModeBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-  },
-  actionModeBtnActive: {
-    backgroundColor: theme.primary,
-  },
-  actionModeBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  actionModeBtnTextActive: {
-    color: '#FFF',
-  },
-  actionsEmptyState: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: theme.surface,
-    paddingVertical: 24,
-    borderRadius: theme.borderRadius.lg,
-  },
-  actionsEmptyText: {
-    fontSize: 13,
-    color: theme.textMuted,
-  },
-  actionsGrid: {
-    gap: 12,
-  },
-  actionsTeam: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 12,
-  },
-  actionsTeamHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 10,
-  },
-  actionsTeamDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  actionsTeamTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  actionPlayerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.md,
-    padding: 10,
-    marginBottom: 6,
-  },
-  actionPlayerName: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: theme.textPrimary,
-    flex: 1,
-    marginRight: 8,
-  },
-  actionBtnsRow: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  actionBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionManualRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  actionManualGroup: {
-    alignItems: 'center',
-  },
-  actionManualLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: theme.textMuted,
-    marginBottom: 2,
-  },
-  actionManualValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  actionLegend: {
-    marginTop: 10,
-    paddingHorizontal: 4,
-  },
-  actionLegendText: {
-    fontSize: 11,
-    color: theme.textMuted,
-    lineHeight: 18,
-  },
-  // Footer
-  footer: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    backgroundColor: theme.backgroundSecondary,
-    borderTopWidth: 1,
-    borderTopColor: theme.border,
-  },
-  saveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: theme.primary,
-    paddingVertical: 18,
-    borderRadius: theme.borderRadius.lg,
-  },
-  saveButtonDisabled: {
-    backgroundColor: theme.textMuted,
-  },
-  saveButtonText: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  // Modal
-  modalContainer: {
-    flex: 1,
-    backgroundColor: theme.backgroundSecondary,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: theme.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  modalCloseBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  modalDoneBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  modalDoneText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.primary,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    marginHorizontal: 16,
-    marginVertical: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: theme.borderRadius.md,
-    gap: 10,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: theme.textPrimary,
-    padding: 0,
-  },
-  selectionCount: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    paddingHorizontal: 16,
-    marginBottom: 8,
-  },
-  playersList: {
-    flex: 1,
-  },
-  playersListContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 32,
-  },
-  playerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    padding: 12,
-    borderRadius: theme.borderRadius.lg,
-    marginBottom: 8,
-  },
-  playerItemSelected: {
-    borderWidth: 2,
-    borderColor: theme.primary,
-  },
-  playerItemDisabled: {
-    opacity: 0.5,
-  },
-  playerAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: theme.backgroundSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  playerAvatarSelected: {
-    backgroundColor: theme.primary,
-  },
-  playerAvatarSelectedA: {
-    backgroundColor: theme.primary,
-  },
-  playerAvatarSelectedB: {
-    backgroundColor: theme.accent,
-  },
-  playerAvatarDisabled: {
-    backgroundColor: theme.textMuted,
-  },
-  playerAvatarText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  playerInfo: {
-    flex: 1,
-  },
-  playerNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  playerName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  playerMeta: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    marginTop: 2,
-  },
-  moiBadge: {
-    backgroundColor: theme.primary,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  moiBadgeText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  otherTeamLabel: {
-    fontSize: 11,
-    color: theme.textMuted,
-    fontStyle: 'italic',
-  },
-  // Role Selection in Modal
-  roleSelectionSection: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 12,
-    marginBottom: 12,
-  },
-  roleSelectionTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textMuted,
-    marginBottom: 10,
-  },
-  roleSelectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  roleSelectionName: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: theme.textPrimary,
-    flex: 1,
-  },
-  roleButtonsRow: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  roleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.sm,
-  },
-  roleButtonActiveA: {
-    backgroundColor: theme.primary,
-  },
-  roleButtonActiveB: {
-    backgroundColor: theme.accent,
-  },
-  roleButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  roleButtonTextActive: {
-    color: '#FFF',
-  },
-  // Create Player
-  createPlayerBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.accent + '10',
-    padding: 14,
-    borderRadius: theme.borderRadius.lg,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: theme.accent + '30',
-    borderStyle: 'dashed',
-  },
-  createPlayerIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: theme.accent + '20',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  createPlayerInfo: {
-    flex: 1,
-  },
-  createPlayerTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.accent,
-  },
-  createPlayerSubtitle: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    marginTop: 2,
-  },
-  emptySearch: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  emptySearchText: {
-    fontSize: 14,
-    color: theme.textMuted,
-    marginTop: 10,
-  },
-  // Fullscreen Mode Styles - Completely Redesigned
-  fullscreenToggleBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fullscreenContainer: {
-    flex: 1,
-    backgroundColor: '#0A0F1A',
-  },
-  fullscreenSafeArea: {
-    flex: 1,
-  },
-  // FS Top Bar
-  fsTopBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  fsExitBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fsTopCenter: {
-    alignItems: 'center',
-  },
-  fsFormatBadge: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.5)',
-    letterSpacing: 1,
-  },
-  fsTerrainName: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.4)',
-    marginTop: 2,
-  },
-  fsTimerPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 22,
-  },
-  fsTimerPillActive: {
-    backgroundColor: 'rgba(74, 222, 128, 0.15)',
-  },
-  fsTimerText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.5)',
-    fontVariant: ['tabular-nums'],
-  },
-  fsTimerTextActive: {
-    color: '#4ADE80',
-  },
-  // FS Dual Timer Bar
-  fsDualTimerBar: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
-  fsDualTimerPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 16,
-    minWidth: 130,
-    flexShrink: 0,
-  },
-  fsDualTimerPillActive: {
-    backgroundColor: 'rgba(74, 222, 128, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(74, 222, 128, 0.3)',
-  },
-  fsDualTimerPillMene: {
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-  },
-  fsDualTimerContent: {
-    flex: 1,
-  },
-  fsDualTimerLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.4)',
-    letterSpacing: 0.5,
-  },
-  fsDualTimerValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: 'rgba(255,255,255,0.6)',
-    fontVariant: ['tabular-nums'],
-  },
-  fsDualTimerValueActive: {
-    color: '#4ADE80',
-  },
-  // FS Giant Score Area
-  fsGiantScoreArea: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 20,
-    gap: 12,
-  },
-  fsGiantScoreBlock: {
-    flex: 1,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 3,
-    borderColor: 'transparent',
-  },
-  fsGiantScoreBlockSelected: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  fsGiantScoreHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  fsGiantTeamDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  fsGiantTeamLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.6)',
-    letterSpacing: 1,
-  },
-  fsGiantPlayerNames: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.4)',
-    marginBottom: 8,
-  },
-  fsGiantScoreValue: {
-    fontSize: 100,
-    fontWeight: '900',
-    color: '#FFF',
-    textShadowColor: 'rgba(0,0,0,0.4)',
-    textShadowOffset: { width: 0, height: 4 },
-    textShadowRadius: 8,
-  },
-  fsGiantScoreWinning: {
-    color: '#4ADE80',
-  },
-  fsGiantScoreLosing: {
-    color: '#F87171',
-  },
-  fsSelectedIndicator: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  fsSelectedIndicatorText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  fsGiantVsBadge: {
-    alignItems: 'center',
-  },
-  fsGiantVsText: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: 'rgba(255,255,255,0.3)',
-  },
-  fsGiantMeneBadge: {
-    marginTop: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 10,
-  },
-  fsGiantMeneText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  // FS Point Selection
-  fsPointSelection: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  fsPointSelectionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.5)',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  fsPointButtonsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  fsPointButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  fsPointButtonActive: {
-    borderColor: 'transparent',
-  },
-  fsPointButtonDisabled: {
-    opacity: 0.4,
-  },
-  fsPointButtonText: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: 'rgba(255,255,255,0.6)',
-  },
-  fsPointButtonTextActive: {
-    color: '#FFF',
-  },
-  fsPointButtonTextDisabled: {
-    color: 'rgba(255,255,255,0.3)',
-  },
-  fsValidateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    marginTop: 16,
-  },
-  fsValidateMeneBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: theme.success,
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 28,
-  },
-  fsValidateMeneBtnDisabled: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
-  fsValidateMeneBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  fsNullMeneBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(251, 191, 36, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(251, 191, 36, 0.3)',
-  },
-  // FS Mène Timeline
-  fsMeneTimeline: {
-    flex: 1,
-    paddingVertical: 12,
-  },
-  fsMeneTimelineHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 12,
-  },
-  fsMeneTimelineTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.6)',
-  },
-  fsMeneUndoBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 12,
-  },
-  fsMeneUndoBtnText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.6)',
-  },
-  fsMeneEmptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 24,
-  },
-  fsMeneEmptyText: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.3)',
-    marginTop: 8,
-    fontStyle: 'italic',
-  },
-  fsMeneTimelineScroll: {
-    paddingHorizontal: 16,
-    gap: 10,
-  },
-  fsMeneCard: {
-    width: 80,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 16,
-    padding: 12,
-    alignItems: 'center',
-  },
-  fsMeneCardNumber: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.4)',
-    marginBottom: 8,
-  },
-  fsMeneCardNull: {
-    alignItems: 'center',
-  },
-  fsMeneCardNullText: {
-    fontSize: 10,
-    color: '#FBBF24',
-    marginTop: 4,
-  },
-  fsMeneCardScore: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  fsMeneCardDelta: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fsMeneCardDeltaA: {
-    backgroundColor: 'rgba(74, 222, 128, 0.25)',
-  },
-  fsMeneCardDeltaB: {
-    backgroundColor: 'rgba(248, 113, 113, 0.25)',
-  },
-  fsMeneCardDeltaText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  fsMeneCardRunning: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.5)',
-    marginTop: 8,
-  },
-  fsMeneCardDuration: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.3)',
-    marginTop: 4,
-  },
-  // FS Bottom Panel (Actions)
-  fsBottomPanel: {
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.08)',
-  },
-  fsBottomPanelHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-  },
-  fsBottomPanelHeaderActive: {
-    backgroundColor: 'rgba(255,255,255,0.04)',
-  },
-  fsBottomPanelTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.6)',
-  },
-  fsBottomPanelTitleActive: {
-    color: '#FFF',
-  },
-  fsActionsContent: {
-    paddingBottom: 12,
-  },
-  fsActionsScrollContent: {
-    paddingHorizontal: 12,
-    gap: 12,
-  },
-  fsPlayerActionCard: {
-    width: 160,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 2,
-  },
-  fsPlayerActionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  fsPlayerActionDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  fsPlayerActionName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#FFF',
-    flex: 1,
-  },
-  fsPlayerActionButtons: {
-    gap: 8,
-  },
-  fsPlayerActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  fsPlayerActionBtnWide: {
-    flex: 1,
-  },
-  fsPlayerActionBtnLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  fsPlayerActionStats: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.1)',
-  },
-  fsPlayerActionStatsText: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.5)',
-    textAlign: 'center',
-  },
-  fsActionsHint: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.3)',
-    textAlign: 'center',
-    marginTop: 8,
-    fontStyle: 'italic',
-  },
-  // FS Quick Notation Bar (Above Score)
-  fsQuickNotationBar: {
-    paddingVertical: 12,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
-  },
-  fsQuickNotationScroll: {
-    paddingHorizontal: 12,
-    gap: 12,
-  },
-  fsQuickNotationPlayer: {
-    width: 180,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 16,
-    padding: 12,
-  },
-  fsQuickNotationNameBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    marginBottom: 10,
-  },
-  fsQuickNotationDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  fsQuickNotationName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFF',
-    flex: 1,
-  },
-  fsQuickNotationStats: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.5)',
-  },
-  fsQuickNotationBtns: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  fsQuickNotationTirBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 14,
-    backgroundColor: theme.tirColor,
-    borderRadius: 12,
-  },
-  fsQuickNotationPointBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 14,
-    backgroundColor: theme.pointColor,
-    borderRadius: 12,
-  },
-  fsQuickNotationBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  // FS Winner Overlay
-  fsWinnerOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fsWinnerCard: {
-    alignItems: 'center',
-    padding: 40,
-  },
-  fsWinnerTitle: {
-    fontSize: 36,
-    fontWeight: '900',
-    color: '#FFF',
-    marginTop: 20,
-    letterSpacing: 3,
-  },
-  fsWinnerScore: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: 12,
-  },
-  fsWinnerMenes: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.5)',
-    marginTop: 8,
-  },
-  fsWinnerBtn: {
-    marginTop: 32,
-    paddingHorizontal: 40,
-    paddingVertical: 18,
-    backgroundColor: theme.primary,
-    borderRadius: 28,
-  },
-  fsWinnerBtnText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  fsRevancheBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    marginTop: 16,
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    backgroundColor: theme.accent,
-    borderRadius: 24,
-  },
-  fsRevancheBtnFinale: {
-    backgroundColor: theme.carreauColor,
-  },
-  fsSeriesScoreCard: {
-    alignItems: 'center',
-    marginTop: 20,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 16,
-  },
-  fsSeriesScoreTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.5)',
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-  fsSeriesScoreDisplay: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  fsSeriesScoreValue: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: 'rgba(255,255,255,0.6)',
-  },
-  fsSeriesScoreWin: {
-    color: '#4ADE80',
-  },
-  fsSeriesScoreLoss: {
-    color: '#F87171',
-  },
-  fsSeriesScoreSep: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.3)',
-  },
-  fsSeriesCompleteCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: 16,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 20,
-  },
-  fsSeriesCompleteText: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  fsRevancheBtnContent: {
-    marginLeft: 4,
-  },
-  fsRevancheBtnSubtext: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: 2,
-  },
-  fsRevancheBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  fsFinaleTerminerBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    marginTop: 12,
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  fsFinaleTerminerBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.9)',
-  },
-  fsNewSeriesBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    marginTop: 16,
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    backgroundColor: theme.accent,
-    borderRadius: 28,
-  },
-  fsNewSeriesBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  // FS New Mène Indicator
-  fsNewMeneOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 100,
-  },
-  fsNewMeneCard: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(74, 222, 128, 0.1)',
-    borderWidth: 2,
-    borderColor: 'rgba(74, 222, 128, 0.3)',
-    borderRadius: 32,
-    padding: 40,
-    minWidth: 240,
-  },
-  fsNewMeneTitle: {
-    fontSize: 42,
-    fontWeight: '900',
-    color: '#FFF',
-    marginTop: 16,
-    letterSpacing: 2,
-  },
-  fsNewMeneSubtitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.6)',
-    marginTop: 8,
-  },
-  fsNewMeneTimerIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(74, 222, 128, 0.15)',
-    borderRadius: 20,
-  },
-  fsNewMeneTimerText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#4ADE80',
-  },
+  container: { flex: 1, backgroundColor: theme.backgroundSecondary },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  closeButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerCenter: { flex: 1, alignItems: 'center' },
+  headerTitle: { fontSize: 17, fontWeight: '700', color: theme.textPrimary },
+  headerSubtitle: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
+  setupCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.xl, padding: 16, marginBottom: 16, ...theme.shadows.card },
+  modeBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.primary + '10', borderRadius: theme.borderRadius.lg, padding: 14, gap: 12, marginBottom: 12 },
+  modeBannerIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center' },
+  modeBannerContent: { flex: 1 },
+  modeBannerText: { fontSize: 16, fontWeight: '600', color: theme.textPrimary },
+  modeBannerSubtext: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  terrainSelector: { flexDirection: 'row', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border, gap: 10 },
+  terrainSelectorIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
+  terrainSelectorContent: { flex: 1 },
+  terrainSelectorLabel: { fontSize: 11, fontWeight: '600', color: theme.textMuted, marginBottom: 2 },
+  terrainSelectorValue: { fontSize: 14, fontWeight: '500', color: theme.textPrimary },
+  terrainSelectorPlaceholder: { color: theme.textMuted, fontStyle: 'italic' },
+  phaseSection: { marginBottom: 16 },
+  sectionLabel: { fontSize: 11, fontWeight: '700', color: theme.textMuted, letterSpacing: 0.5, marginBottom: 10 },
+  phaseScroll: { gap: 8 },
+  phaseChip: { paddingHorizontal: 16, paddingVertical: 10, backgroundColor: theme.surface, borderRadius: theme.borderRadius.full, borderWidth: 1, borderColor: theme.border },
+  phaseChipActive: { backgroundColor: theme.carreauColor, borderColor: theme.carreauColor },
+  phaseChipText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
+  phaseChipTextActive: { color: '#FFF' },
+  formatSection: { marginBottom: 16 },
+  formatRow: { flexDirection: 'row', gap: 10 },
+  formatChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, borderWidth: 2, borderColor: 'transparent' },
+  formatChipActive: { backgroundColor: theme.primary, borderColor: theme.primary },
+  formatChipDisabled: { opacity: 0.4 },
+  formatChipText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  formatChipTextActive: { color: '#FFF' },
+  formatChipTextDisabled: { color: theme.textMuted },
+  teamSelectionSection: { marginBottom: 16 },
+  teamCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 12, ...theme.shadows.card },
+  teamCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  teamColorDot: { width: 10, height: 10, borderRadius: 5 },
+  teamCardTitle: { flex: 1, fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  teamCardPlayers: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  teamCardPlaceholder: { fontSize: 14, color: theme.textMuted, fontStyle: 'italic' },
+  teamCardCount: { position: 'absolute', top: 16, right: 16, fontSize: 12, fontWeight: '600', color: theme.textMuted },
+  playerChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.full, borderWidth: 1 },
+  playerChipName: { fontSize: 13, fontWeight: '500', color: theme.textPrimary },
+  playerChipRole: { width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  playerChipRoleText: { fontSize: 10, fontWeight: '700', color: '#FFF' },
+  actionsEditorButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 16, gap: 12, ...theme.shadows.card },
+  actionsEditorContent: { flex: 1 },
+  actionsEditorTitle: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  actionsEditorSubtitle: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  summaryCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 16, ...theme.shadows.card },
+  summaryTitle: { fontSize: 13, fontWeight: '600', color: theme.textMuted, marginBottom: 12 },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-around' },
+  summaryItem: { alignItems: 'center' },
+  summaryValue: { fontSize: 18, fontWeight: '700', color: theme.textPrimary, marginTop: 4 },
+  summaryLabel: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
+  footer: { paddingHorizontal: 16, paddingTop: 16, backgroundColor: theme.backgroundSecondary, borderTopWidth: 1, borderTopColor: theme.border },
+  fullscreenButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.primary, paddingVertical: 18, borderRadius: theme.borderRadius.lg },
+  fullscreenButtonText: { fontSize: 17, fontWeight: '600', color: '#FFF' },
+  saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.success, paddingVertical: 18, borderRadius: theme.borderRadius.lg },
+  saveButtonText: { fontSize: 17, fontWeight: '600', color: '#FFF' },
+  modalContainer: { flex: 1, backgroundColor: theme.backgroundSecondary },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  modalCloseBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  modalTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
+  modalDoneBtn: { paddingHorizontal: 12, paddingVertical: 8 },
+  modalDoneText: { fontSize: 16, fontWeight: '600', color: theme.primary },
+  actionsEditorScroll: { flex: 1 },
+  actionsEditorContent: { padding: 16 },
+  editorSection: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 16, ...theme.shadows.card },
+  editorSectionTitle: { fontSize: 15, fontWeight: '700', color: theme.textPrimary, marginBottom: 16 },
+  timerDisplay: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  timerMain: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  timerValue: { fontSize: 36, fontWeight: '700', color: theme.textMuted, fontVariant: ['tabular-nums'] },
+  timerValueActive: { color: theme.primary },
+  timerControls: { flexDirection: 'row', gap: 10 },
+  timerBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  timerBtnStart: { backgroundColor: theme.success },
+  timerBtnPause: { backgroundColor: theme.warning },
+  timerBtnReset: { backgroundColor: theme.backgroundSecondary },
+  meneCard: { marginBottom: 0 },
+  meneRow: { marginBottom: 12 },
+  meneTeamLabel: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginBottom: 8 },
+  menePointsRow: { flexDirection: 'row', gap: 8 },
+  menePointBtn: { flex: 1, aspectRatio: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, borderWidth: 2, borderColor: 'transparent' },
+  menePointBtnActiveA: { backgroundColor: theme.primary + '20', borderColor: theme.primary },
+  menePointBtnActiveB: { backgroundColor: theme.accent + '20', borderColor: theme.accent },
+  menePointText: { fontSize: 18, fontWeight: '700', color: theme.textSecondary },
+  menePointTextActive: { color: theme.textPrimary },
+  meneDivider: { height: 1, backgroundColor: theme.border, marginVertical: 8 },
+  nullMeneBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 12, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, marginTop: 8 },
+  nullMeneBtnActive: { backgroundColor: theme.warning + '15' },
+  nullMeneText: { fontSize: 13, color: theme.textMuted },
+  nullMeneTextActive: { color: theme.warning, fontWeight: '600' },
+  addMeneBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.primary, paddingVertical: 14, borderRadius: theme.borderRadius.md, marginTop: 12 },
+  addMeneBtnDisabled: { backgroundColor: theme.textMuted },
+  addMeneBtnText: { fontSize: 14, fontWeight: '600', color: '#FFF' },
+  menesHistory: { marginTop: 16, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, padding: 12 },
+  menesHistoryHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  menesHistoryTitle: { fontSize: 12, fontWeight: '600', color: theme.textMuted },
+  undoText: { fontSize: 12, color: theme.error },
+  menesHistoryList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  meneHistoryItem: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.surface, paddingHorizontal: 10, paddingVertical: 6, borderRadius: theme.borderRadius.sm },
+  meneHistoryNum: { fontSize: 11, fontWeight: '600', color: theme.textMuted },
+  meneHistoryScore: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  meneHistoryWin: { color: theme.success },
+  meneHistoryLoss: { color: theme.error },
+  meneHistorySep: { fontSize: 10, color: theme.textMuted },
+  meneHistoryNull: { fontSize: 12, color: theme.warning },
+  playerActionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border },
+  playerActionDot: { width: 8, height: 8, borderRadius: 4, marginRight: 10 },
+  playerActionName: { flex: 1, fontSize: 14, fontWeight: '500', color: theme.textPrimary },
+  playerActionStats: { flexDirection: 'row', gap: 12 },
+  playerActionStat: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, marginHorizontal: 16, marginVertical: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: theme.borderRadius.md, gap: 10 },
+  searchInput: { flex: 1, fontSize: 16, color: theme.textPrimary, padding: 0 },
+  selectionCount: { fontSize: 13, color: theme.textSecondary, paddingHorizontal: 16, marginBottom: 8 },
+  playersList: { flex: 1 },
+  playersListContent: { paddingHorizontal: 16, paddingBottom: 32 },
+  playerItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, padding: 12, borderRadius: theme.borderRadius.lg, marginBottom: 8 },
+  playerItemSelected: { borderWidth: 2, borderColor: theme.primary },
+  playerItemDisabled: { opacity: 0.5 },
+  playerAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  playerAvatarSelected: { backgroundColor: theme.primary },
+  playerAvatarSelectedA: { backgroundColor: theme.primary },
+  playerAvatarSelectedB: { backgroundColor: theme.accent },
+  playerAvatarDisabled: { backgroundColor: theme.textMuted },
+  playerAvatarText: { fontSize: 16, fontWeight: '600', color: '#FFF' },
+  playerInfo: { flex: 1 },
+  playerNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  playerName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  playerMeta: { fontSize: 13, color: theme.textSecondary, marginTop: 2 },
+  moiBadge: { backgroundColor: theme.primary, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  moiBadgeText: { fontSize: 9, fontWeight: '700', color: '#FFF' },
+  otherTeamLabel: { fontSize: 11, color: theme.textMuted, fontStyle: 'italic' },
+  roleSelectionSection: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 12, marginBottom: 12 },
+  roleSelectionTitle: { fontSize: 12, fontWeight: '600', color: theme.textMuted, marginBottom: 10 },
+  roleSelectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: theme.border },
+  roleSelectionName: { fontSize: 14, fontWeight: '500', color: theme.textPrimary, flex: 1 },
+  roleButtonsRow: { flexDirection: 'row', gap: 6 },
+  roleButton: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.sm },
+  roleButtonActiveA: { backgroundColor: theme.primary },
+  roleButtonActiveB: { backgroundColor: theme.accent },
+  roleButtonText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  roleButtonTextActive: { color: '#FFF' },
+  createPlayerBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.accent + '10', padding: 14, borderRadius: theme.borderRadius.lg, marginBottom: 12, borderWidth: 2, borderColor: theme.accent + '30', borderStyle: 'dashed' },
+  createPlayerIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.accent + '20', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  createPlayerInfo: { flex: 1 },
+  createPlayerTitle: { fontSize: 15, fontWeight: '600', color: theme.accent },
+  createPlayerSubtitle: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  emptySearch: { alignItems: 'center', paddingVertical: 40 },
+  emptySearchText: { fontSize: 14, color: theme.textMuted, marginTop: 10 },
+  // Fullscreen styles
+  fullscreenContainer: { flex: 1, backgroundColor: '#0A0F1A' },
+  fullscreenSafeArea: { flex: 1 },
+  fsTopBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
+  fsExitBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
+  fsTopCenter: { alignItems: 'center' },
+  fsFormatBadge: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.5)', letterSpacing: 1 },
+  fsTerrainName: { fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 },
+  fsDualTimerBar: { flexDirection: 'row', justifyContent: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 8 },
+  fsDualTimerPill: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 16, minWidth: 130 },
+  fsDualTimerPillActive: { backgroundColor: 'rgba(74, 222, 128, 0.12)', borderWidth: 1, borderColor: 'rgba(74, 222, 128, 0.3)' },
+  fsDualTimerPillMene: { backgroundColor: 'rgba(139, 92, 246, 0.1)' },
+  fsDualTimerContent: { flex: 1 },
+  fsDualTimerLabel: { fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.4)', letterSpacing: 0.5 },
+  fsDualTimerValue: { fontSize: 20, fontWeight: '800', color: 'rgba(255,255,255,0.6)', fontVariant: ['tabular-nums'] },
+  fsDualTimerValueActive: { color: '#4ADE80' },
+  fsQuickNotationBar: { paddingVertical: 12, backgroundColor: 'rgba(255,255,255,0.03)', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
+  fsQuickNotationScroll: { paddingHorizontal: 12, gap: 12 },
+  fsQuickNotationPlayer: { width: 180, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 12 },
+  fsQuickNotationNameBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 10, marginBottom: 10 },
+  fsQuickNotationDot: { width: 8, height: 8, borderRadius: 4 },
+  fsQuickNotationName: { fontSize: 13, fontWeight: '700', color: '#FFF', flex: 1 },
+  fsQuickNotationStats: { fontSize: 10, fontWeight: '500', color: 'rgba(255,255,255,0.5)' },
+  fsQuickNotationBtns: { flexDirection: 'row', gap: 8 },
+  fsQuickNotationTirBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, backgroundColor: theme.tirColor, borderRadius: 12 },
+  fsQuickNotationPointBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, backgroundColor: theme.pointColor, borderRadius: 12 },
+  fsQuickNotationBtnText: { fontSize: 13, fontWeight: '700', color: '#FFF' },
+  fsGiantScoreArea: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 20, gap: 12 },
+  fsGiantScoreBlock: { flex: 1, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 24, padding: 20, borderWidth: 3, borderColor: 'transparent' },
+  fsGiantScoreBlockSelected: { backgroundColor: 'rgba(255,255,255,0.08)' },
+  fsGiantScoreHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  fsGiantTeamDot: { width: 12, height: 12, borderRadius: 6 },
+  fsGiantTeamLabel: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.6)', letterSpacing: 1 },
+  fsGiantPlayerNames: { fontSize: 11, color: 'rgba(255,255,255,0.4)', marginBottom: 8 },
+  fsGiantScoreValue: { fontSize: 100, fontWeight: '900', color: '#FFF', textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 4 }, textShadowRadius: 8 },
+  fsGiantScoreWinning: { color: '#4ADE80' },
+  fsGiantScoreLosing: { color: '#F87171' },
+  fsSelectedIndicator: { position: 'absolute', top: 12, right: 12, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  fsSelectedIndicatorText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
+  fsGiantVsBadge: { alignItems: 'center' },
+  fsGiantVsText: { fontSize: 16, fontWeight: '900', color: 'rgba(255,255,255,0.3)' },
+  fsGiantMeneBadge: { marginTop: 8, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 10 },
+  fsGiantMeneText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
+  fsPointSelection: { paddingHorizontal: 16, paddingVertical: 16, backgroundColor: 'rgba(255,255,255,0.03)', borderTopWidth: 1, borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  fsPointSelectionTitle: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginBottom: 16 },
+  fsPointButtonsRow: { flexDirection: 'row', justifyContent: 'center', gap: 10 },
+  fsPointButton: { width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'transparent' },
+  fsPointButtonActive: { borderColor: 'transparent' },
+  fsPointButtonDisabled: { opacity: 0.4 },
+  fsPointButtonText: { fontSize: 24, fontWeight: '800', color: 'rgba(255,255,255,0.6)' },
+  fsPointButtonTextActive: { color: '#FFF' },
+  fsPointButtonTextDisabled: { color: 'rgba(255,255,255,0.3)' },
+  fsValidateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 16 },
+  fsValidateMeneBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.success, paddingHorizontal: 32, paddingVertical: 16, borderRadius: 28 },
+  fsValidateMeneBtnDisabled: { backgroundColor: 'rgba(255,255,255,0.1)' },
+  fsValidateMeneBtnText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
+  fsNullMeneBtn: { width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(251, 191, 36, 0.15)', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(251, 191, 36, 0.3)' },
+  fsMeneTimeline: { flex: 1, paddingVertical: 12 },
+  fsMeneTimelineHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 12 },
+  fsMeneTimelineTitle: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.6)' },
+  fsMeneUndoBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 12 },
+  fsMeneUndoBtnText: { fontSize: 12, fontWeight: '500', color: 'rgba(255,255,255,0.6)' },
+  fsMeneEmptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 24 },
+  fsMeneEmptyText: { fontSize: 13, color: 'rgba(255,255,255,0.3)', marginTop: 8, fontStyle: 'italic' },
+  fsMeneTimelineScroll: { paddingHorizontal: 16, gap: 10 },
+  fsMeneCard: { width: 80, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 16, padding: 12, alignItems: 'center' },
+  fsMeneCardNumber: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.4)', marginBottom: 8 },
+  fsMeneCardNull: { alignItems: 'center' },
+  fsMeneCardNullText: { fontSize: 10, color: '#FBBF24', marginTop: 4 },
+  fsMeneCardScore: { flexDirection: 'row', gap: 8 },
+  fsMeneCardDelta: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
+  fsMeneCardDeltaA: { backgroundColor: 'rgba(74, 222, 128, 0.25)' },
+  fsMeneCardDeltaB: { backgroundColor: 'rgba(248, 113, 113, 0.25)' },
+  fsMeneCardDeltaText: { fontSize: 11, fontWeight: '700', color: '#FFF' },
+  fsMeneCardRunning: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.5)', marginTop: 8 },
+  fsMeneCardDuration: { fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 4 },
+  fsNewMeneOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center', zIndex: 100 },
+  fsNewMeneCard: { alignItems: 'center', backgroundColor: 'rgba(74, 222, 128, 0.1)', borderWidth: 2, borderColor: 'rgba(74, 222, 128, 0.3)', borderRadius: 32, padding: 40, minWidth: 240 },
+  fsNewMeneTitle: { fontSize: 42, fontWeight: '900', color: '#FFF', marginTop: 16, letterSpacing: 2 },
+  fsNewMeneSubtitle: { fontSize: 16, fontWeight: '500', color: 'rgba(255,255,255,0.6)', marginTop: 8 },
+  fsWinnerOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.9)', alignItems: 'center', justifyContent: 'center' },
+  fsWinnerCard: { alignItems: 'center', padding: 40 },
+  fsWinnerTitle: { fontSize: 36, fontWeight: '900', color: '#FFF', marginTop: 20, letterSpacing: 3 },
+  fsWinnerScore: { fontSize: 32, fontWeight: '700', color: 'rgba(255,255,255,0.7)', marginTop: 12 },
+  fsWinnerMenes: { fontSize: 14, color: 'rgba(255,255,255,0.5)', marginTop: 8 },
+  fsWinnerBtn: { marginTop: 32, paddingHorizontal: 40, paddingVertical: 18, backgroundColor: theme.primary, borderRadius: 28 },
+  fsWinnerBtnText: { fontSize: 18, fontWeight: '700', color: '#FFF' },
 });
