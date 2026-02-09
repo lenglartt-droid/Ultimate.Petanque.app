@@ -991,6 +991,54 @@ export default function NewMatchScreen() {
               </View>
             </View>
 
+            {/* Quick Shot Notation - Above Score */}
+            {(teamAPlayers.length > 0 || teamBPlayers.length > 0) && (
+              <View style={styles.fsQuickNotationBar}>
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.fsQuickNotationScroll}
+                >
+                  {[...teamAPlayers, ...teamBPlayers].map((p, idx) => {
+                    const isTeamA = idx < teamAPlayers.length;
+                    const stats = getPlayerActionStats(p.playerId);
+                    const teamColor = isTeamA ? theme.primary : theme.accent;
+                    const firstName = getPlayerName(p.playerId).split(' ')[0];
+                    
+                    return (
+                      <View key={p.playerId} style={styles.fsQuickNotationPlayer}>
+                        {/* Player Name Badge */}
+                        <View style={[styles.fsQuickNotationNameBadge, { backgroundColor: teamColor + '25' }]}>
+                          <View style={[styles.fsQuickNotationDot, { backgroundColor: teamColor }]} />
+                          <Text style={styles.fsQuickNotationName} numberOfLines={1}>{firstName}</Text>
+                          <Text style={styles.fsQuickNotationStats}>
+                            {stats.tirsSuccess}/{stats.tirs} • {stats.pointsSuccess}/{stats.points}
+                          </Text>
+                        </View>
+                        {/* Action Buttons */}
+                        <View style={styles.fsQuickNotationBtns}>
+                          <Pressable
+                            style={styles.fsQuickNotationTirBtn}
+                            onPress={() => openAdvancedNotation(p.playerId, getPlayerName(p.playerId), isTeamA ? 'A' : 'B', 'tir')}
+                          >
+                            <MaterialIcons name="gps-fixed" size={20} color="#FFF" />
+                            <Text style={styles.fsQuickNotationBtnText}>TIR</Text>
+                          </Pressable>
+                          <Pressable
+                            style={styles.fsQuickNotationPointBtn}
+                            onPress={() => openAdvancedNotation(p.playerId, getPlayerName(p.playerId), isTeamA ? 'A' : 'B', 'point')}
+                          >
+                            <MaterialIcons name="adjust" size={20} color="#FFF" />
+                            <Text style={styles.fsQuickNotationBtnText}>POINT</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+
             {/* Giant Score Display */}
             <View style={styles.fsGiantScoreArea}>
               {/* Team A Score */}
@@ -1198,84 +1246,7 @@ export default function NewMatchScreen() {
               )}
             </View>
 
-            {/* Shot Notation - Bottom Panel */}
-            {(teamAPlayers.length > 0 || teamBPlayers.length > 0) && (
-              <View style={styles.fsBottomPanel}>
-                <Pressable 
-                  style={[styles.fsBottomPanelHeader, fsShowActions && styles.fsBottomPanelHeaderActive]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setFsShowActions(!fsShowActions);
-                  }}
-                >
-                  <MaterialIcons 
-                    name="sports" 
-                    size={20} 
-                    color={fsShowActions ? '#FFF' : 'rgba(255,255,255,0.6)'} 
-                  />
-                  <Text style={[styles.fsBottomPanelTitle, fsShowActions && styles.fsBottomPanelTitleActive]}>
-                    Notation des coups
-                  </Text>
-                  <MaterialIcons 
-                    name={fsShowActions ? 'keyboard-arrow-down' : 'keyboard-arrow-up'} 
-                    size={24} 
-                    color="rgba(255,255,255,0.6)" 
-                  />
-                </Pressable>
-                
-                {fsShowActions && (
-                  <Animated.View entering={FadeInUp.duration(200)} style={styles.fsActionsContent}>
-                    <ScrollView 
-                      horizontal 
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.fsActionsScrollContent}
-                    >
-                      {/* All players in a row */}
-                      {[...teamAPlayers, ...teamBPlayers].map((p, idx) => {
-                        const isTeamA = idx < teamAPlayers.length;
-                        const stats = getPlayerActionStats(p.playerId);
-                        const teamColor = isTeamA ? theme.primary : theme.accent;
-                        
-                        return (
-                          <View key={p.playerId} style={[styles.fsPlayerActionCard, { borderColor: teamColor + '40' }]}>
-                            <View style={styles.fsPlayerActionHeader}>
-                              <View style={[styles.fsPlayerActionDot, { backgroundColor: teamColor }]} />
-                              <Text style={styles.fsPlayerActionName} numberOfLines={1}>
-                                {getPlayerName(p.playerId).split(' ')[0]}
-                              </Text>
-                            </View>
-                            
-                            <View style={styles.fsPlayerActionButtons}>
-                              <Pressable
-                                style={[styles.fsPlayerActionBtn, styles.fsPlayerActionBtnWide, { backgroundColor: theme.tirColor }]}
-                                onPress={() => openAdvancedNotation(p.playerId, getPlayerName(p.playerId), isTeamA ? 'A' : 'B', 'tir')}
-                              >
-                                <MaterialIcons name="gps-fixed" size={22} color="#FFF" />
-                                <Text style={styles.fsPlayerActionBtnLabel}>TIR</Text>
-                              </Pressable>
-                              <Pressable
-                                style={[styles.fsPlayerActionBtn, styles.fsPlayerActionBtnWide, { backgroundColor: theme.pointColor }]}
-                                onPress={() => openAdvancedNotation(p.playerId, getPlayerName(p.playerId), isTeamA ? 'A' : 'B', 'point')}
-                              >
-                                <MaterialIcons name="adjust" size={22} color="#FFF" />
-                                <Text style={styles.fsPlayerActionBtnLabel}>POINT</Text>
-                              </Pressable>
-                            </View>
-                            
-                            <View style={styles.fsPlayerActionStats}>
-                              <Text style={styles.fsPlayerActionStatsText}>
-                                T: {stats.tirsSuccess}/{stats.tirs} • P: {stats.pointsSuccess}/{stats.points} • C: {stats.carreaux}
-                              </Text>
-                            </View>
-                          </View>
-                        );
-                      })}
-                    </ScrollView>
-                    <Text style={styles.fsActionsHint}>Cliquez pour noter le coup (résultat → type → qualité)</Text>
-                  </Animated.View>
-                )}
-              </View>
-            )}
+
 
             {/* New Mène Indicator Overlay */}
             {fsNewMeneIndicator && !(teamAScore >= maxScore || teamBScore >= maxScore) && (
@@ -4286,6 +4257,77 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     fontStyle: 'italic',
+  },
+  // FS Quick Notation Bar (Above Score)
+  fsQuickNotationBar: {
+    paddingVertical: 12,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  fsQuickNotationScroll: {
+    paddingHorizontal: 12,
+    gap: 12,
+  },
+  fsQuickNotationPlayer: {
+    width: 180,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 16,
+    padding: 12,
+  },
+  fsQuickNotationNameBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  fsQuickNotationDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  fsQuickNotationName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFF',
+    flex: 1,
+  },
+  fsQuickNotationStats: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.5)',
+  },
+  fsQuickNotationBtns: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  fsQuickNotationTirBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 14,
+    backgroundColor: theme.tirColor,
+    borderRadius: 12,
+  },
+  fsQuickNotationPointBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 14,
+    backgroundColor: theme.pointColor,
+    borderRadius: 12,
+  },
+  fsQuickNotationBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFF',
   },
   // FS Winner Overlay
   fsWinnerOverlay: {
