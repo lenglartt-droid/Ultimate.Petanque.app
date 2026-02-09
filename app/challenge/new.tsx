@@ -1059,7 +1059,7 @@ export default function NewChallengeScreen() {
         </ScrollView>
 
         <View style={[styles.scoringButtons, { paddingBottom: insets.bottom + 16 }]}>
-          <Text style={styles.scoringButtonsTitle}>Résultat</Text>
+          <Text style={styles.scoringButtonsTitle}>Résultat du tir</Text>
           <View style={styles.scoringButtonsGrid}>
             {displayAtelier.scoringOptions.map((option, index) => {
               const colors: Record<number, string> = { 0: theme.error, 1: theme.warning, 3: theme.success, 5: theme.carreauColor };
@@ -1071,6 +1071,7 @@ export default function NewChallengeScreen() {
                 >
                   <Text style={styles.scoringBtnPoints}>{option.points}</Text>
                   <Text style={styles.scoringBtnLabel}>{option.label}</Text>
+                  <Text style={styles.scoringBtnDesc} numberOfLines={2}>{option.description}</Text>
                 </Pressable>
               );
             })}
@@ -1384,8 +1385,9 @@ const styles = StyleSheet.create({
   scoreCardMax: { fontSize: 14, color: theme.textMuted },
   scoringButtons: { paddingHorizontal: 16, paddingTop: 12, backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border },
   scoringButtonsTitle: { fontSize: 13, fontWeight: '600', color: theme.textSecondary, textAlign: 'center', marginBottom: 10 },
-  scoringButtonsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  scoringBtn: { width: (SCREEN_WIDTH - 42) / 2, alignItems: 'center', justifyContent: 'center', paddingVertical: 16, borderRadius: 14, ...theme.shadows.card },
-  scoringBtnPoints: { fontSize: 26, fontWeight: '800', color: '#FFF' },
-  scoringBtnLabel: { fontSize: 12, fontWeight: '600', color: '#FFF', marginTop: 2 },
+  scoringButtonsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  scoringBtn: { width: (SCREEN_WIDTH - 40) / 2, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, paddingHorizontal: 8, borderRadius: 14, minHeight: 100, ...theme.shadows.card },
+  scoringBtnPoints: { fontSize: 28, fontWeight: '800', color: '#FFF' },
+  scoringBtnLabel: { fontSize: 13, fontWeight: '700', color: '#FFF', marginTop: 4 },
+  scoringBtnDesc: { fontSize: 10, fontWeight: '500', color: 'rgba(255,255,255,0.85)', marginTop: 3, textAlign: 'center', lineHeight: 13, paddingHorizontal: 4 },
 });
