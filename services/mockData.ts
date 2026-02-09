@@ -241,6 +241,24 @@ export interface ShotAction {
   meneNumber: number;
 }
 
+// Detailed shot record for advanced notation
+export interface DetailedShotRecord {
+  id: string;
+  timestamp: string;
+  playerId: string;
+  playerName?: string;
+  team: 'A' | 'B';
+  actionType: 'tir' | 'point';
+  success: boolean;
+  carreau?: boolean;
+  // Tir details
+  shotType?: 'au_fer' | 'au_plomb' | 'en_rafle' | 'devant_boule' | 'carreau';
+  shotQuality?: 'gain_point' | 'sans_effet' | 'negatif' | 'decisif';
+  // Point details
+  pointType?: 'roule' | 'plombe' | 'demi_portee' | 'portee';
+  pointQuality?: 'excellent' | 'bon' | 'moyen' | 'rate' | 'crochete' | 'sorti';
+}
+
 export interface PlayerAction {
   playerId: string;
   playerName: string;
@@ -252,6 +270,7 @@ export interface PlayerAction {
     pointsSuccess: number;
     carreaux: number;
   };
+  detailedShots?: DetailedShotRecord[];
 }
 
 export type ChallengeType = '10_tirs' | '10_tirs_sautee' | 'precision';
@@ -653,6 +672,164 @@ export const mockTournaments: Tournament[] = [
 const generateSeriesId = (base: number) => `series-${base}`;
 
 export const mockMatches: Match[] = [
+  // MATCHS AVEC NOTATION DÉTAILLÉE (pour tester les statistiques)
+  { 
+    id: 'mdetail1', 
+    date: '2026-02-08T10:00:00', 
+    mode: 'Entraînement', 
+    format: 'Doublette', 
+    teamA: { players: ['1', '6'], playerNames: ['Jean-Pierre Martin', 'Emma Leroy'], score: 13 }, 
+    teamB: { players: ['2', '9'], playerNames: ['Marie Dupont', 'Antoine Lambert'], score: 9 }, 
+    winner: 'A', 
+    duration: 48, 
+    menes: [
+      { teamAPoints: 2, teamBPoints: 0, duration: 180 },
+      { teamAPoints: 0, teamBPoints: 3, duration: 210 },
+      { teamAPoints: 3, teamBPoints: 0, duration: 195 },
+      { teamAPoints: 2, teamBPoints: 0, duration: 165 },
+      { teamAPoints: 0, teamBPoints: 2, duration: 200 },
+      { teamAPoints: 0, teamBPoints: 4, duration: 240 },
+      { teamAPoints: 6, teamBPoints: 0, duration: 180 },
+    ],
+    playerActions: [
+      {
+        playerId: '1',
+        playerName: 'Jean-Pierre Martin',
+        team: 'A',
+        actions: { tirs: 12, tirsSuccess: 9, points: 8, pointsSuccess: 6, carreaux: 3 },
+        detailedShots: [
+          // Tirs détaillés - Jean-Pierre
+          { id: 'ds1', timestamp: '2026-02-08T10:05:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'au_fer', shotQuality: 'gain_point' },
+          { id: 'ds2', timestamp: '2026-02-08T10:08:00', playerId: '1', team: 'A', actionType: 'tir', success: true, carreau: true, shotType: 'carreau', shotQuality: 'gain_point' },
+          { id: 'ds3', timestamp: '2026-02-08T10:12:00', playerId: '1', team: 'A', actionType: 'tir', success: false, shotType: 'au_plomb', shotQuality: 'negatif' },
+          { id: 'ds4', timestamp: '2026-02-08T10:18:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'en_rafle', shotQuality: 'sans_effet' },
+          { id: 'ds5', timestamp: '2026-02-08T10:22:00', playerId: '1', team: 'A', actionType: 'tir', success: true, carreau: true, shotType: 'carreau', shotQuality: 'gain_point' },
+          { id: 'ds6', timestamp: '2026-02-08T10:28:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'au_fer', shotQuality: 'decisif' },
+          { id: 'ds7', timestamp: '2026-02-08T10:32:00', playerId: '1', team: 'A', actionType: 'tir', success: false, shotType: 'devant_boule', shotQuality: 'negatif' },
+          { id: 'ds8', timestamp: '2026-02-08T10:38:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'au_fer', shotQuality: 'gain_point' },
+          { id: 'ds9', timestamp: '2026-02-08T10:42:00', playerId: '1', team: 'A', actionType: 'tir', success: true, carreau: true, shotType: 'carreau', shotQuality: 'gain_point' },
+          { id: 'ds10', timestamp: '2026-02-08T10:45:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'au_plomb', shotQuality: 'sans_effet' },
+          { id: 'ds11', timestamp: '2026-02-08T10:48:00', playerId: '1', team: 'A', actionType: 'tir', success: false, shotType: 'en_rafle', shotQuality: 'negatif' },
+          { id: 'ds12', timestamp: '2026-02-08T10:52:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'au_fer', shotQuality: 'decisif' },
+          // Points détaillés - Jean-Pierre
+          { id: 'dp1', timestamp: '2026-02-08T10:06:00', playerId: '1', team: 'A', actionType: 'point', success: true, pointType: 'roule', pointQuality: 'excellent' },
+          { id: 'dp2', timestamp: '2026-02-08T10:10:00', playerId: '1', team: 'A', actionType: 'point', success: true, pointType: 'plombe', pointQuality: 'bon' },
+          { id: 'dp3', timestamp: '2026-02-08T10:15:00', playerId: '1', team: 'A', actionType: 'point', success: false, pointType: 'demi_portee', pointQuality: 'rate' },
+          { id: 'dp4', timestamp: '2026-02-08T10:20:00', playerId: '1', team: 'A', actionType: 'point', success: true, pointType: 'roule', pointQuality: 'moyen' },
+          { id: 'dp5', timestamp: '2026-02-08T10:25:00', playerId: '1', team: 'A', actionType: 'point', success: false, pointType: 'portee', pointQuality: 'crochete' },
+          { id: 'dp6', timestamp: '2026-02-08T10:30:00', playerId: '1', team: 'A', actionType: 'point', success: true, pointType: 'plombe', pointQuality: 'excellent' },
+          { id: 'dp7', timestamp: '2026-02-08T10:35:00', playerId: '1', team: 'A', actionType: 'point', success: true, pointType: 'roule', pointQuality: 'bon' },
+          { id: 'dp8', timestamp: '2026-02-08T10:40:00', playerId: '1', team: 'A', actionType: 'point', success: true, pointType: 'demi_portee', pointQuality: 'moyen' },
+        ],
+      },
+      {
+        playerId: '6',
+        playerName: 'Emma Leroy',
+        team: 'A',
+        actions: { tirs: 8, tirsSuccess: 5, points: 10, pointsSuccess: 7, carreaux: 1 },
+        detailedShots: [
+          // Tirs détaillés - Emma
+          { id: 'eds1', timestamp: '2026-02-08T10:07:00', playerId: '6', team: 'A', actionType: 'tir', success: true, shotType: 'au_fer', shotQuality: 'gain_point' },
+          { id: 'eds2', timestamp: '2026-02-08T10:13:00', playerId: '6', team: 'A', actionType: 'tir', success: false, shotType: 'au_plomb', shotQuality: 'sans_effet' },
+          { id: 'eds3', timestamp: '2026-02-08T10:19:00', playerId: '6', team: 'A', actionType: 'tir', success: true, shotType: 'devant_boule', shotQuality: 'gain_point' },
+          { id: 'eds4', timestamp: '2026-02-08T10:26:00', playerId: '6', team: 'A', actionType: 'tir', success: true, carreau: true, shotType: 'carreau', shotQuality: 'gain_point' },
+          { id: 'eds5', timestamp: '2026-02-08T10:33:00', playerId: '6', team: 'A', actionType: 'tir', success: false, shotType: 'en_rafle', shotQuality: 'negatif' },
+          { id: 'eds6', timestamp: '2026-02-08T10:39:00', playerId: '6', team: 'A', actionType: 'tir', success: true, shotType: 'au_fer', shotQuality: 'decisif' },
+          { id: 'eds7', timestamp: '2026-02-08T10:46:00', playerId: '6', team: 'A', actionType: 'tir', success: false, shotType: 'au_plomb', shotQuality: 'negatif' },
+          { id: 'eds8', timestamp: '2026-02-08T10:50:00', playerId: '6', team: 'A', actionType: 'tir', success: true, shotType: 'au_fer', shotQuality: 'sans_effet' },
+          // Points détaillés - Emma
+          { id: 'edp1', timestamp: '2026-02-08T10:04:00', playerId: '6', team: 'A', actionType: 'point', success: true, pointType: 'roule', pointQuality: 'bon' },
+          { id: 'edp2', timestamp: '2026-02-08T10:09:00', playerId: '6', team: 'A', actionType: 'point', success: true, pointType: 'plombe', pointQuality: 'excellent' },
+          { id: 'edp3', timestamp: '2026-02-08T10:14:00', playerId: '6', team: 'A', actionType: 'point', success: false, pointType: 'demi_portee', pointQuality: 'sorti' },
+          { id: 'edp4', timestamp: '2026-02-08T10:21:00', playerId: '6', team: 'A', actionType: 'point', success: true, pointType: 'portee', pointQuality: 'moyen' },
+          { id: 'edp5', timestamp: '2026-02-08T10:27:00', playerId: '6', team: 'A', actionType: 'point', success: false, pointType: 'roule', pointQuality: 'rate' },
+          { id: 'edp6', timestamp: '2026-02-08T10:34:00', playerId: '6', team: 'A', actionType: 'point', success: true, pointType: 'plombe', pointQuality: 'bon' },
+          { id: 'edp7', timestamp: '2026-02-08T10:41:00', playerId: '6', team: 'A', actionType: 'point', success: true, pointType: 'roule', pointQuality: 'excellent' },
+          { id: 'edp8', timestamp: '2026-02-08T10:47:00', playerId: '6', team: 'A', actionType: 'point', success: false, pointType: 'demi_portee', pointQuality: 'crochete' },
+          { id: 'edp9', timestamp: '2026-02-08T10:51:00', playerId: '6', team: 'A', actionType: 'point', success: true, pointType: 'portee', pointQuality: 'bon' },
+          { id: 'edp10', timestamp: '2026-02-08T10:54:00', playerId: '6', team: 'A', actionType: 'point', success: true, pointType: 'roule', pointQuality: 'moyen' },
+        ],
+      },
+      {
+        playerId: '2',
+        playerName: 'Marie Dupont',
+        team: 'B',
+        actions: { tirs: 6, tirsSuccess: 3, points: 12, pointsSuccess: 8, carreaux: 0 },
+      },
+      {
+        playerId: '9',
+        playerName: 'Antoine Lambert',
+        team: 'B',
+        actions: { tirs: 10, tirsSuccess: 6, points: 6, pointsSuccess: 4, carreaux: 1 },
+      },
+    ],
+  },
+  {
+    id: 'mdetail2', 
+    date: '2026-02-09T14:00:00', 
+    mode: 'Entraînement', 
+    format: 'Tête-à-tête', 
+    teamA: { players: ['1'], playerNames: ['Jean-Pierre Martin'], score: 13 }, 
+    teamB: { players: ['7'], playerNames: ['Thomas Garcia'], score: 11 }, 
+    winner: 'A', 
+    duration: 52, 
+    menes: [
+      { teamAPoints: 3, teamBPoints: 0, duration: 200 },
+      { teamAPoints: 0, teamBPoints: 2, duration: 180 },
+      { teamAPoints: 2, teamBPoints: 0, duration: 165 },
+      { teamAPoints: 0, teamBPoints: 3, duration: 210 },
+      { teamAPoints: 4, teamBPoints: 0, duration: 190 },
+      { teamAPoints: 0, teamBPoints: 3, duration: 205 },
+      { teamAPoints: 0, teamBPoints: 3, duration: 195 },
+      { teamAPoints: 4, teamBPoints: 0, duration: 220 },
+    ],
+    playerActions: [
+      {
+        playerId: '1',
+        playerName: 'Jean-Pierre Martin',
+        team: 'A',
+        actions: { tirs: 15, tirsSuccess: 11, points: 12, pointsSuccess: 9, carreaux: 4 },
+        detailedShots: [
+          // Tirs supplémentaires avec notation détaillée
+          { id: 'ds2_1', timestamp: '2026-02-09T14:05:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'au_fer', shotQuality: 'gain_point' },
+          { id: 'ds2_2', timestamp: '2026-02-09T14:10:00', playerId: '1', team: 'A', actionType: 'tir', success: true, carreau: true, shotType: 'carreau', shotQuality: 'gain_point' },
+          { id: 'ds2_3', timestamp: '2026-02-09T14:15:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'au_plomb', shotQuality: 'decisif' },
+          { id: 'ds2_4', timestamp: '2026-02-09T14:20:00', playerId: '1', team: 'A', actionType: 'tir', success: false, shotType: 'en_rafle', shotQuality: 'negatif' },
+          { id: 'ds2_5', timestamp: '2026-02-09T14:25:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'devant_boule', shotQuality: 'gain_point' },
+          { id: 'ds2_6', timestamp: '2026-02-09T14:30:00', playerId: '1', team: 'A', actionType: 'tir', success: true, carreau: true, shotType: 'carreau', shotQuality: 'gain_point' },
+          { id: 'ds2_7', timestamp: '2026-02-09T14:35:00', playerId: '1', team: 'A', actionType: 'tir', success: false, shotType: 'au_fer', shotQuality: 'sans_effet' },
+          { id: 'ds2_8', timestamp: '2026-02-09T14:40:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'au_fer', shotQuality: 'gain_point' },
+          { id: 'ds2_9', timestamp: '2026-02-09T14:45:00', playerId: '1', team: 'A', actionType: 'tir', success: true, carreau: true, shotType: 'carreau', shotQuality: 'gain_point' },
+          { id: 'ds2_10', timestamp: '2026-02-09T14:50:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'au_plomb', shotQuality: 'sans_effet' },
+          { id: 'ds2_11', timestamp: '2026-02-09T14:55:00', playerId: '1', team: 'A', actionType: 'tir', success: false, shotType: 'devant_boule', shotQuality: 'negatif' },
+          { id: 'ds2_12', timestamp: '2026-02-09T15:00:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'en_rafle', shotQuality: 'gain_point' },
+          { id: 'ds2_13', timestamp: '2026-02-09T15:05:00', playerId: '1', team: 'A', actionType: 'tir', success: true, carreau: true, shotType: 'carreau', shotQuality: 'gain_point' },
+          { id: 'ds2_14', timestamp: '2026-02-09T15:10:00', playerId: '1', team: 'A', actionType: 'tir', success: false, shotType: 'au_fer', shotQuality: 'negatif' },
+          { id: 'ds2_15', timestamp: '2026-02-09T15:15:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'au_fer', shotQuality: 'decisif' },
+          // Points supplémentaires
+          { id: 'dp2_1', timestamp: '2026-02-09T14:07:00', playerId: '1', team: 'A', actionType: 'point', success: true, pointType: 'roule', pointQuality: 'excellent' },
+          { id: 'dp2_2', timestamp: '2026-02-09T14:12:00', playerId: '1', team: 'A', actionType: 'point', success: true, pointType: 'plombe', pointQuality: 'bon' },
+          { id: 'dp2_3', timestamp: '2026-02-09T14:17:00', playerId: '1', team: 'A', actionType: 'point', success: false, pointType: 'demi_portee', pointQuality: 'rate' },
+          { id: 'dp2_4', timestamp: '2026-02-09T14:22:00', playerId: '1', team: 'A', actionType: 'point', success: true, pointType: 'roule', pointQuality: 'excellent' },
+          { id: 'dp2_5', timestamp: '2026-02-09T14:27:00', playerId: '1', team: 'A', actionType: 'point', success: true, pointType: 'portee', pointQuality: 'moyen' },
+          { id: 'dp2_6', timestamp: '2026-02-09T14:32:00', playerId: '1', team: 'A', actionType: 'point', success: false, pointType: 'plombe', pointQuality: 'crochete' },
+          { id: 'dp2_7', timestamp: '2026-02-09T14:37:00', playerId: '1', team: 'A', actionType: 'point', success: true, pointType: 'roule', pointQuality: 'bon' },
+          { id: 'dp2_8', timestamp: '2026-02-09T14:42:00', playerId: '1', team: 'A', actionType: 'point', success: true, pointType: 'demi_portee', pointQuality: 'moyen' },
+          { id: 'dp2_9', timestamp: '2026-02-09T14:47:00', playerId: '1', team: 'A', actionType: 'point', success: false, pointType: 'portee', pointQuality: 'sorti' },
+          { id: 'dp2_10', timestamp: '2026-02-09T14:52:00', playerId: '1', team: 'A', actionType: 'point', success: true, pointType: 'roule', pointQuality: 'excellent' },
+          { id: 'dp2_11', timestamp: '2026-02-09T14:57:00', playerId: '1', team: 'A', actionType: 'point', success: true, pointType: 'plombe', pointQuality: 'bon' },
+          { id: 'dp2_12', timestamp: '2026-02-09T15:02:00', playerId: '1', team: 'A', actionType: 'point', success: true, pointType: 'roule', pointQuality: 'moyen' },
+        ],
+      },
+      {
+        playerId: '7',
+        playerName: 'Thomas Garcia',
+        team: 'B',
+        actions: { tirs: 14, tirsSuccess: 10, points: 10, pointsSuccess: 7, carreaux: 2 },
+      },
+    ],
+  },
+
   // SÉRIE 1: 2-0 (2 matchs)
   { id: 'm1', date: '2026-02-07T10:00:00', mode: 'Entraînement', format: 'Doublette', teamA: { players: ['1', '6'], playerNames: ['Jean-Pierre Martin', 'Emma Leroy'], score: 13 }, teamB: { players: ['2', '9'], playerNames: ['Marie Dupont', 'Antoine Lambert'], score: 8 }, winner: 'A', duration: 42, menes: [], seriesInfo: { seriesId: generateSeriesId(1), matchNumber: 1, winsBeforeThisMatch: { teamA: 0, teamB: 0 }, isFinale: false, seriesComplete: false } },
   { id: 'm2', date: '2026-02-07T11:00:00', mode: 'Entraînement', format: 'Doublette', teamA: { players: ['1', '6'], playerNames: ['Jean-Pierre Martin', 'Emma Leroy'], score: 13 }, teamB: { players: ['2', '9'], playerNames: ['Marie Dupont', 'Antoine Lambert'], score: 11 }, winner: 'A', duration: 55, menes: [], seriesInfo: { seriesId: generateSeriesId(1), matchNumber: 2, winsBeforeThisMatch: { teamA: 1, teamB: 0 }, isFinale: false, seriesComplete: true, seriesWinner: 'A' } },
