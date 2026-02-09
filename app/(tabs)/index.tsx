@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -22,6 +23,21 @@ export default function HomeScreen() {
   const { userStats, tournaments, matches, challenges, selfPlayer } = useApp();
   const { user } = useAuth();
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'À venir' | 'En cours' | 'Terminé'>('all');
+
+  // Filtered tournaments by status
+  const filteredTournaments = useMemo(() => {
+    if (statusFilter === 'all') return tournaments;
+    return tournaments.filter(t => t.status === statusFilter);
+  }, [tournaments, statusFilter]);
+
+  // Status counts
+  const statusCounts = useMemo(() => ({
+    all: tournaments.length,
+    'À venir': tournaments.filter(t => t.status === 'À venir').length,
+    'En cours': tournaments.filter(t => t.status === 'En cours').length,
+    'Terminé': tournaments.filter(t => t.status === 'Terminé').length,
+  }), [tournaments]);
 
   // Get display name
   const displayName = user?.username || selfPlayer?.name || user?.email?.split('@')[0] || 'Joueur';
@@ -220,14 +236,66 @@ export default function HomeScreen() {
           >
             {tournaments.length > 0 ? (
               <>
-                <Text style={styles.modalSectionTitle}>CHOISIR UN TOURNOI</Text>
-                {tournaments.map((tournament) => {
+                {/* Status Filter */}
+                <View style={styles.statusFilterRow}>
+                  {(['all', 'À venir', 'En cours', 'Terminé'] as const).map((status) => {
+                    const isActive = statusFilter === status;
+                    const statusConfig: Record<string, { icon: keyof typeof MaterialIcons.glyphMap; color: string }> = {
+                      'all': { icon: 'layers', color: theme.textSecondary },
+                      'À venir': { icon: 'event', color: theme.primary },
+                      'En cours': { icon: 'play-circle-filled', color: theme.warning },
+                      'Terminé': { icon: 'check-circle', color: theme.success },
+                    };
+                    const cfg = statusConfig[status];
+                    
+                    return (
+                      <Pressable
+                        key={status}
+                        style={[
+                          styles.statusFilterChip,
+                          isActive && { backgroundColor: cfg.color, borderColor: cfg.color },
+                        ]}
+                        onPress={() => setStatusFilter(status)}
+                      >
+                        <MaterialIcons 
+                          name={cfg.icon} 
+                          size={14} 
+                          color={isActive ? '#FFF' : cfg.color} 
+                        />
+                        <Text style={[
+                          styles.statusFilterText,
+                          isActive && styles.statusFilterTextActive,
+                          !isActive && { color: cfg.color },
+                        ]}>
+                          {status === 'all' ? 'Tout' : status}
+                        </Text>
+                        <View style={[
+                          styles.statusFilterCount,
+                          isActive && styles.statusFilterCountActive,
+                        ]}>
+                          <Text style={[
+                            styles.statusFilterCountText,
+                            isActive && styles.statusFilterCountTextActive,
+                          ]}>
+                            {statusCounts[status]}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                {filteredTournaments.length > 0 ? (
+                  filteredTournaments.map((tournament) => {
                   const statusColors: Record<string, { bg: string; text: string }> = {
                     'À venir': { bg: theme.primary + '15', text: theme.primary },
                     'En cours': { bg: theme.warning + '15', text: theme.warning },
                     'Terminé': { bg: theme.success + '15', text: theme.success },
                   };
-                  const colors = statusColors[tournament.status] || statusColors['À venir'];
+                  // Add a default case or ensure tournament.status is always one of the keys.
+                  // For now, assuming it might be undefined or an unexpected string,
+                  // we'll default to 'À venir' colors if not found.
+                  const colors = statusColors[tournament.status as keyof typeof statusColors] || statusColors['À venir'];
                   
                   return (
                     <Pressable
@@ -269,7 +337,18 @@ export default function HomeScreen() {
                       <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
                     </Pressable>
                   );
-                })}
+                })) : ( // Added closing parenthesis for filteredTournaments.map
+                  <View style={styles.emptyFilterState}>
+                    <MaterialIcons name="filter-list-off" size={40} color={theme.textMuted} />
+                    <Text style={styles.emptyFilterText}>Aucun tournoi {statusFilter !== 'all' ? `"${statusFilter}"` : ''}</Text>
+                    <Pressable
+                      style={styles.resetFilterBtn}
+                      onPress={() => setStatusFilter('all')}
+                    >
+                      <Text style={styles.resetFilterBtnText}>Voir tous</Text>
+                    </Pressable>
+                  </View>
+                )}
               </>
             ) : (
               <View style={styles.emptyTournamentPicker}>
@@ -709,5 +788,71 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#FFF',
+  },
+  // Status filter styles
+  statusFilterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 20,
+  },
+  statusFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1.5,
+    borderColor: theme.border,
+  },
+  statusFilterText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  statusFilterTextActive: {
+    color: '#FFF',
+  },
+  statusFilterCount: {
+    backgroundColor: theme.backgroundSecondary,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    minWidth: 20,
+    alignItems: 'center',
+  },
+  statusFilterCountActive: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  statusFilterCountText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: theme.textSecondary,
+  },
+  statusFilterCountTextActive: {
+    color: '#FFF',
+  },
+  emptyFilterState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyFilterText: {
+    fontSize: 14,
+    color: theme.textMuted,
+    marginTop: 12,
+    marginBottom: 16,
+  },
+  resetFilterBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: theme.primary + '15',
+    borderRadius: theme.borderRadius.full,
+  },
+  resetFilterBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.primary,
   },
 });
