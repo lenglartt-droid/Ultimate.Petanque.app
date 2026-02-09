@@ -46,19 +46,20 @@ export type SimpleShotQuality =
   | 'negatif'         // Lost position
   | 'decisif';        // End of mène
 
-// Point Type - Simplified
+// Point Type - Simplified (no "autre")
 export type SimplePointType = 
   | 'roule'           // Rolled
   | 'plombe'          // Lobbed
-  | 'demi_portee'     // Half lob
-  | 'autre';          // Other
+  | 'demi_portee';    // Half lob
 
-// Point Quality - Distance based
+// Point Quality - Distance based for success, specific for failure
 export type SimplePointQuality = 
   | 'excellent'       // < 10cm
   | 'bon'             // < 30cm
   | 'moyen'           // < 50cm
-  | 'rate';           // Missed target zone
+  | 'rate'            // Missed target zone
+  | 'crochete'        // Deflected by another ball
+  | 'sorti';          // Out of bounds
 
 // Complete Shot Record
 export interface SimpleShotRecord {
@@ -111,15 +112,24 @@ const POINT_TYPES = [
   { id: 'roule' as SimplePointType, label: 'Roulé', icon: 'sports-baseball', desc: 'Boule roulée' },
   { id: 'plombe' as SimplePointType, label: 'Plombé', icon: 'flight-land', desc: 'Lancée en hauteur' },
   { id: 'demi_portee' as SimplePointType, label: 'Demi-portée', icon: 'height', desc: 'Entre les deux' },
-  { id: 'autre' as SimplePointType, label: 'Autre', icon: 'more-horiz', desc: 'Autre type' },
 ];
 
-const POINT_QUALITIES = [
+// Point qualities when SUCCESS (no "Raté" option)
+const POINT_QUALITIES_SUCCESS = [
   { id: 'excellent' as SimplePointQuality, label: 'Excellent', icon: 'stars', color: theme.carreauColor, desc: '< 10 cm' },
   { id: 'bon' as SimplePointQuality, label: 'Bon', icon: 'check-circle', color: theme.success, desc: '< 30 cm' },
   { id: 'moyen' as SimplePointQuality, label: 'Moyen', icon: 'radio-button-checked', color: theme.warning, desc: '< 50 cm' },
-  { id: 'rate' as SimplePointQuality, label: 'Raté', icon: 'cancel', color: theme.error, desc: 'Loin du but' },
 ];
+
+// Point qualities when FAILED (3 specific options)
+const POINT_QUALITIES_FAILED = [
+  { id: 'rate' as SimplePointQuality, label: 'Raté', icon: 'cancel', color: theme.error, desc: 'Trop loin du but' },
+  { id: 'crochete' as SimplePointQuality, label: 'Crocheté', icon: 'sync-problem', color: theme.warning, desc: 'Dévié par une boule' },
+  { id: 'sorti' as SimplePointQuality, label: 'Sorti du terrain', icon: 'logout', color: theme.error, desc: 'Boule hors jeu' },
+];
+
+// Combined for export (backward compatibility)
+const POINT_QUALITIES = [...POINT_QUALITIES_SUCCESS, ...POINT_QUALITIES_FAILED];
 
 // ============================================
 // QUICK OPTION BUTTON
@@ -589,7 +599,9 @@ export function SimplifiedShotNotation({
                   ? 'Le carreau entraîne automatiquement un gain de point'
                   : isTir 
                     ? 'Effet sur la mène' 
-                    : 'Précision par rapport au but'
+                    : success 
+                      ? 'Précision par rapport au but'
+                      : 'Qu\'est-ce qui s\'est passé ?'
                 }
               </Text>
 
@@ -605,7 +617,7 @@ export function SimplifiedShotNotation({
               <View style={styles.qualityList}>
                 {(isTir 
                   ? (isCarreau ? CARREAU_QUALITIES : SHOT_QUALITIES) 
-                  : POINT_QUALITIES
+                  : (success ? POINT_QUALITIES_SUCCESS : POINT_QUALITIES_FAILED)
                 ).map((quality, index) => (
                   <Animated.View key={quality.id} entering={FadeInDown.duration(200).delay(index * 40)}>
                     <Pressable
