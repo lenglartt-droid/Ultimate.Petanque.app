@@ -30,13 +30,17 @@ const { width: screenWidth } = Dimensions.get('window');
 // TYPES & DEFINITIONS
 // ============================================
 
-// Shot Type - Including carreau and devant la boule
+// Shot Type - Including carreau and various miss types
 export type SimpleShotType = 
   | 'au_fer'          // Direct hit
   | 'au_plomb'        // High arc
   | 'en_rafle'        // Rolling shot
-  | 'devant_boule'    // In front with rebound
+  | 'court_ramasse'   // Short, picked up (success)
   | 'carreau'         // Carreau - ball takes place
+  | 'court_droite'    // Short, to the right (miss)
+  | 'court_gauche'    // Short, to the left (miss)
+  | 'long'            // Long, behind target (miss)
+  | 'tir_bouchon'     // Hit the jack (miss)
   | 'autre';          // Other
 
 // Shot Quality - Contextual
@@ -58,8 +62,9 @@ export type SimplePointQuality =
   | 'excellent'       // < 10cm
   | 'bon'             // < 30cm
   | 'moyen'           // < 50cm
+  | 'au_bouchon'      // At the jack
   | 'rate'            // Missed target zone
-  | 'crochete'        // Deflected by another ball
+  | 'crochete'        // Bad hand release
   | 'sorti';          // Out of bounds
 
 // Complete Shot Record
@@ -88,13 +93,28 @@ export interface SimpleShotRecord {
 // SHOT TYPE CONFIGS
 // ============================================
 
-const SHOT_TYPES = [
+// Shot types when SUCCESS
+const SHOT_TYPES_SUCCESS = [
   { id: 'au_fer' as SimpleShotType, label: 'Tir tendu', icon: 'gps-fixed', desc: 'Direct, sans rebond' },
   { id: 'au_plomb' as SimpleShotType, label: 'Tir en cloche', icon: 'flight-takeoff', desc: 'Lancé en hauteur' },
   { id: 'en_rafle' as SimpleShotType, label: 'En rafle', icon: 'swap-horiz', desc: 'Tir rasant' },
-  { id: 'devant_boule' as SimpleShotType, label: 'Devant la boule', icon: 'redo', desc: 'Avec rebond' },
+  { id: 'court_ramasse' as SimpleShotType, label: 'Court, ramassé', icon: 'redo', desc: 'Rebond avant cible' },
   { id: 'carreau' as SimpleShotType, label: 'Carreau', icon: 'stars', desc: 'Prend la place', special: true },
 ];
+
+// Shot types when FAILED
+const SHOT_TYPES_FAILED = [
+  { id: 'au_fer' as SimpleShotType, label: 'Tir tendu', icon: 'gps-fixed', desc: 'Direct, sans rebond' },
+  { id: 'au_plomb' as SimpleShotType, label: 'Tir en cloche', icon: 'flight-takeoff', desc: 'Lancé en hauteur' },
+  { id: 'en_rafle' as SimpleShotType, label: 'En rafle', icon: 'swap-horiz', desc: 'Tir rasant' },
+  { id: 'court_droite' as SimpleShotType, label: 'Court, à droite', icon: 'subdirectory-arrow-right', desc: 'Trop court côté droit' },
+  { id: 'court_gauche' as SimpleShotType, label: 'Court, à gauche', icon: 'subdirectory-arrow-left', desc: 'Trop court côté gauche' },
+  { id: 'long' as SimpleShotType, label: 'Long', icon: 'arrow-upward', desc: 'Derrière la boule cible' },
+  { id: 'tir_bouchon' as SimpleShotType, label: 'Tir sur bouchon', icon: 'adjust', desc: 'A touché le cochonnet' },
+];
+
+// Combined for backward compatibility
+const SHOT_TYPES = SHOT_TYPES_SUCCESS;
 
 const SHOT_QUALITIES = [
   { id: 'gain_point' as SimpleShotQuality, label: 'Gain de point', icon: 'trending-up', color: theme.success },
@@ -120,12 +140,13 @@ const POINT_QUALITIES_SUCCESS = [
   { id: 'excellent' as SimplePointQuality, label: 'Excellent', icon: 'stars', color: theme.carreauColor, desc: '< 10 cm' },
   { id: 'bon' as SimplePointQuality, label: 'Bon', icon: 'check-circle', color: theme.success, desc: '< 30 cm' },
   { id: 'moyen' as SimplePointQuality, label: 'Moyen', icon: 'radio-button-checked', color: theme.warning, desc: '< 50 cm' },
+  { id: 'au_bouchon' as SimplePointQuality, label: 'Au bouchon', icon: 'adjust', color: theme.primary, desc: 'Collée au cochonnet' },
 ];
 
 // Point qualities when FAILED (3 specific options)
 const POINT_QUALITIES_FAILED = [
   { id: 'rate' as SimplePointQuality, label: 'Raté', icon: 'cancel', color: theme.error, desc: 'Trop loin du but' },
-  { id: 'crochete' as SimplePointQuality, label: 'Crocheté', icon: 'sync-problem', color: theme.warning, desc: 'Dévié par une boule' },
+  { id: 'crochete' as SimplePointQuality, label: 'Crocheté', icon: 'sync-problem', color: theme.warning, desc: 'Mauvaise ouverture de main' },
   { id: 'sorti' as SimplePointQuality, label: 'Sorti du terrain', icon: 'logout', color: theme.error, desc: 'Boule hors jeu' },
 ];
 
@@ -550,7 +571,7 @@ export function SimplifiedShotNotation({
 
               <View style={styles.typeGrid}>
                 {(isTir 
-                  ? (success ? SHOT_TYPES : SHOT_TYPES.filter(t => t.id !== 'carreau')) 
+                  ? (success ? SHOT_TYPES_SUCCESS : SHOT_TYPES_FAILED) 
                   : POINT_TYPES
                 ).map((type, index) => (
                   <Animated.View key={type.id} entering={FadeInDown.duration(200).delay(index * 50)}>
@@ -779,7 +800,7 @@ export function QuickShotBar({
 // EXPORTS
 // ============================================
 
-export { SHOT_TYPES, SHOT_QUALITIES, POINT_TYPES, POINT_QUALITIES };
+export { SHOT_TYPES, SHOT_TYPES_SUCCESS, SHOT_TYPES_FAILED, SHOT_QUALITIES, POINT_TYPES, POINT_QUALITIES, POINT_QUALITIES_SUCCESS };
 
 // ============================================
 // STYLES

@@ -430,13 +430,18 @@ export default function StatsScreen() {
     let totalTirs = 0, tirsSuccess = 0, carreaux = 0;
     
     // Detailed stats from simplified notation (matching SimplifiedShotNotation.tsx)
-    // Types: au_fer, au_plomb, en_rafle, devant_boule, carreau
+    // Types SUCCESS: au_fer, au_plomb, en_rafle, court_ramasse, carreau
+    // Types FAILED: au_fer, au_plomb, en_rafle, court_droite, court_gauche, long, tir_bouchon
     const shotTypeStats: Record<string, { total: number; success: number }> = {
       au_fer: { total: 0, success: 0 },
       au_plomb: { total: 0, success: 0 },
       en_rafle: { total: 0, success: 0 },
-      devant_boule: { total: 0, success: 0 },
+      court_ramasse: { total: 0, success: 0 },
       carreau: { total: 0, success: 0 },
+      court_droite: { total: 0, success: 0 },
+      court_gauche: { total: 0, success: 0 },
+      long: { total: 0, success: 0 },
+      tir_bouchon: { total: 0, success: 0 },
     };
     
     // Qualities: gain_point, sans_effet, negatif, decisif
@@ -531,12 +536,17 @@ export default function StatsScreen() {
       tirSansEffet: shotQualityStats.sans_effet,
       tirNegatif: shotQualityStats.negatif,
       tirsDecisifs: shotQualityStats.decisif,
-      // Type stats (au_fer, au_plomb, en_rafle, devant_boule, carreau)
+      // Type stats SUCCESS (au_fer, au_plomb, en_rafle, court_ramasse, carreau)
       tirAuFer: shotTypeStats.au_fer,
       tirAuPlomb: shotTypeStats.au_plomb,
       tirEnRafle: shotTypeStats.en_rafle,
-      tirDevantBoule: shotTypeStats.devant_boule,
+      tirCourtRamasse: shotTypeStats.court_ramasse,
       tirCarreau: shotTypeStats.carreau,
+      // Type stats FAILED (court_droite, court_gauche, long, tir_bouchon)
+      tirCourtDroite: shotTypeStats.court_droite,
+      tirCourtGauche: shotTypeStats.court_gauche,
+      tirLong: shotTypeStats.long,
+      tirBouchon: shotTypeStats.tir_bouchon,
     };
   }, [filteredMatches, filteredChallenges, performanceStats.totalMenes]);
 
@@ -555,16 +565,17 @@ export default function StatsScreen() {
       portee: { total: 0, success: 0 },
     };
     
-    // Qualities SUCCESS: excellent (<10cm), bon (<30cm), moyen (<50cm)
+    // Qualities SUCCESS: excellent (<10cm), bon (<30cm), moyen (<50cm), au_bouchon
     // Qualities FAILED: rate, crochete, sorti
     const pointQualityStats: Record<string, number> = {
       // Success qualities
       excellent: 0,   // < 10cm
       bon: 0,         // < 30cm
       moyen: 0,       // < 50cm
+      au_bouchon: 0,  // At the jack
       // Failure qualities
       rate: 0,        // Missed target zone
-      crochete: 0,    // Deflected by another ball
+      crochete: 0,    // Bad hand release
       sorti: 0,       // Out of bounds
     };
     
@@ -602,7 +613,7 @@ export default function StatsScreen() {
     const totalQualityTracked = Object.values(pointQualityStats).reduce((sum, v) => sum + v, 0);
     
     // Calculate totals for success/failure qualities
-    const successQualitiesTotal = pointQualityStats.excellent + pointQualityStats.bon + pointQualityStats.moyen;
+    const successQualitiesTotal = pointQualityStats.excellent + pointQualityStats.bon + pointQualityStats.moyen + pointQualityStats.au_bouchon;
     const failureQualitiesTotal = pointQualityStats.rate + pointQualityStats.crochete + pointQualityStats.sorti;
 
     return {
@@ -619,10 +630,11 @@ export default function StatsScreen() {
       pointPlombe: pointTypeStats.plombe,
       pointDemiPortee: pointTypeStats.demi_portee,
       pointPortee: pointTypeStats.portee,
-      // Success quality stats (excellent, bon, moyen)
+      // Success quality stats (excellent, bon, moyen, au_bouchon)
       pointExcellent: pointQualityStats.excellent,
       pointBon: pointQualityStats.bon,
       pointMoyen: pointQualityStats.moyen,
+      pointAuBouchon: pointQualityStats.au_bouchon,
       successQualitiesTotal,
       // Failure quality stats (rate, crochete, sorti)
       pointRate: pointQualityStats.rate,
@@ -1143,9 +1155,9 @@ export default function StatsScreen() {
                           color={theme.accent} 
                         />
                         <StatRow 
-                          label="Devant la boule" 
-                          value={`${tirStats.tirDevantBoule.success}/${tirStats.tirDevantBoule.total}`} 
-                          subValue={tirStats.tirDevantBoule.total > 0 ? `${Math.round((tirStats.tirDevantBoule.success / tirStats.tirDevantBoule.total) * 100)}% réussite` : 'Aucun'}
+                          label="Court, ramassé" 
+                          value={`${tirStats.tirCourtRamasse.success}/${tirStats.tirCourtRamasse.total}`} 
+                          subValue={tirStats.tirCourtRamasse.total > 0 ? `${Math.round((tirStats.tirCourtRamasse.success / tirStats.tirCourtRamasse.total) * 100)}% réussite` : 'Aucun'}
                           icon="redo" 
                           color={theme.primary} 
                         />
@@ -1157,6 +1169,46 @@ export default function StatsScreen() {
                           icon="stars" 
                           color={theme.carreauColor} 
                         />
+                        
+                        {/* Missed shot types */}
+                        {(tirStats.tirCourtDroite.total > 0 || tirStats.tirCourtGauche.total > 0 || tirStats.tirLong.total > 0 || tirStats.tirBouchon.total > 0) && (
+                          <>
+                            <View style={styles.divider} />
+                            <Text style={[styles.statRowLabel, { marginTop: 8, marginBottom: 4, fontWeight: '600', color: theme.error }]}>Types de tirs ratés</Text>
+                            {tirStats.tirCourtDroite.total > 0 && (
+                              <StatRow 
+                                label="Court, à droite" 
+                                value={tirStats.tirCourtDroite.total} 
+                                icon="subdirectory-arrow-right" 
+                                color={theme.error} 
+                              />
+                            )}
+                            {tirStats.tirCourtGauche.total > 0 && (
+                              <StatRow 
+                                label="Court, à gauche" 
+                                value={tirStats.tirCourtGauche.total} 
+                                icon="subdirectory-arrow-left" 
+                                color={theme.error} 
+                              />
+                            )}
+                            {tirStats.tirLong.total > 0 && (
+                              <StatRow 
+                                label="Long" 
+                                value={tirStats.tirLong.total} 
+                                icon="arrow-upward" 
+                                color={theme.error} 
+                              />
+                            )}
+                            {tirStats.tirBouchon.total > 0 && (
+                              <StatRow 
+                                label="Tir sur bouchon" 
+                                value={tirStats.tirBouchon.total} 
+                                icon="adjust" 
+                                color={theme.warning} 
+                              />
+                            )}
+                          </>
+                        )}
                       </>
                     ) : (
                       <NAPlaceholder message="Spécifiez le type de tir lors de l'enregistrement (étape 2 de la notation)" />
@@ -1287,11 +1339,19 @@ export default function StatsScreen() {
                           icon="radio-button-checked" 
                           color={theme.warning} 
                         />
+                        <StatRow 
+                          label="Au bouchon" 
+                          value={pointStats.pointAuBouchon} 
+                          subValue={pointStats.successQualitiesTotal > 0 ? `${Math.round((pointStats.pointAuBouchon / pointStats.successQualitiesTotal) * 100)}%` : ''}
+                          icon="adjust" 
+                          color={theme.primary} 
+                        />
                         <View style={styles.divider} />
                         <BreakdownBar items={[
                           { label: 'Excellent', value: pointStats.pointExcellent, color: theme.carreauColor },
                           { label: 'Bon', value: pointStats.pointBon, color: theme.success },
                           { label: 'Moyen', value: pointStats.pointMoyen, color: theme.warning },
+                          { label: 'Au bouchon', value: pointStats.pointAuBouchon, color: theme.primary },
                         ]} />
                       </>
                     ) : (
@@ -1319,7 +1379,7 @@ export default function StatsScreen() {
                           color={theme.error} 
                         />
                         <StatRow 
-                          label="Crocheté (dévié par une boule)" 
+                          label="Crocheté (mauvaise ouverture)" 
                           value={pointStats.pointCrochete} 
                           subValue={pointStats.failureQualitiesTotal > 0 ? `${Math.round((pointStats.pointCrochete / pointStats.failureQualitiesTotal) * 100)}%` : ''}
                           icon="sync-problem" 
