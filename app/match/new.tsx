@@ -192,6 +192,10 @@ export default function NewMatchScreen() {
   const [fullscreenMode, setFullscreenMode] = useState(false);
   const [hasExitedFullscreen, setHasExitedFullscreen] = useState(false);
   const [showActionsEditor, setShowActionsEditor] = useState(false);
+  const [showPauseOverlay, setShowPauseOverlay] = useState(false);
+  const [editorNotationPlayer, setEditorNotationPlayer] = useState<{ id: string; name: string; team: 'A' | 'B' } | null>(null);
+  const [editorNotationType, setEditorNotationType] = useState<'tir' | 'point'>('tir');
+  const [showEditorNotation, setShowEditorNotation] = useState(false);
   const [showAdvancedNotation, setShowAdvancedNotation] = useState(false);
   const [advancedNotationPlayer, setAdvancedNotationPlayer] = useState<{ id: string; name: string; team: 'A' | 'B' } | null>(null);
   const [advancedNotationType, setAdvancedNotationType] = useState<'tir' | 'point'>('tir');
@@ -783,11 +787,11 @@ export default function NewMatchScreen() {
                 style={styles.fsExitBtn}
                 onPress={() => {
                   Haptics.selectionAsync();
-                  setFullscreenMode(false);
-                  setHasExitedFullscreen(true);
+                  setShowPauseOverlay(true);
+                  if (isTimerRunning) pauseTimer();
                 }}
               >
-                <MaterialIcons name="close" size={24} color="rgba(255,255,255,0.8)" />
+                <MaterialIcons name="pause" size={24} color="rgba(255,255,255,0.8)" />
               </Pressable>
 
               <View style={styles.fsTopCenter}>
@@ -1093,6 +1097,68 @@ export default function NewMatchScreen() {
                   <Text style={styles.fsNewMeneTitle}>Mène {fsNewMeneIndicator}</Text>
                   <Text style={styles.fsNewMeneSubtitle}>C'est parti !</Text>
                 </Animated.View>
+              </Animated.View>
+            )}
+
+            {/* Pause Overlay */}
+            {showPauseOverlay && !(teamAScore >= maxScore || teamBScore >= maxScore) && (
+              <Animated.View entering={FadeIn.duration(200)} style={styles.fsPauseOverlay}>
+                <View style={styles.fsPauseCard}>
+                  <View style={styles.fsPauseHeader}>
+                    <MaterialIcons name="pause-circle-filled" size={56} color={theme.warning} />
+                    <Text style={styles.fsPauseTitle}>PAUSE</Text>
+                  </View>
+                  
+                  <View style={styles.fsPauseScoreDisplay}>
+                    <View style={styles.fsPauseScoreItem}>
+                      <Text style={styles.fsPauseScoreLabel}>MON ÉQUIPE</Text>
+                      <Text style={[styles.fsPauseScoreValue, { color: theme.primary }]}>{teamAScore}</Text>
+                    </View>
+                    <Text style={styles.fsPauseScoreSep}>-</Text>
+                    <View style={styles.fsPauseScoreItem}>
+                      <Text style={styles.fsPauseScoreLabel}>ADVERSAIRE</Text>
+                      <Text style={[styles.fsPauseScoreValue, { color: theme.accent }]}>{teamBScore}</Text>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.fsPauseInfo}>
+                    <View style={styles.fsPauseInfoRow}>
+                      <MaterialIcons name="timer" size={18} color="rgba(255,255,255,0.5)" />
+                      <Text style={styles.fsPauseInfoText}>{formatTime(matchTime)}</Text>
+                    </View>
+                    <View style={styles.fsPauseInfoRow}>
+                      <MaterialIcons name="sports" size={18} color="rgba(255,255,255,0.5)" />
+                      <Text style={styles.fsPauseInfoText}>{menes.length} mène{menes.length > 1 ? 's' : ''}</Text>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.fsPauseButtons}>
+                    <Pressable 
+                      style={styles.fsPauseResumeBtn}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        setShowPauseOverlay(false);
+                        startTimer();
+                      }}
+                    >
+                      <MaterialIcons name="play-arrow" size={28} color="#FFF" />
+                      <Text style={styles.fsPauseResumeBtnText}>Reprendre le match</Text>
+                    </Pressable>
+                    
+                    <Pressable 
+                      style={styles.fsPauseExitBtn}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setShowPauseOverlay(false);
+                        setFullscreenMode(false);
+                        setHasExitedFullscreen(true);
+                      }}
+                    >
+                      <MaterialIcons name="logout" size={20} color="rgba(255,255,255,0.7)" />
+                      <Text style={styles.fsPauseExitBtnText}>Quitter le plein écran</Text>
+                    </Pressable>
+                  </View>
+                </View>
               </Animated.View>
             )}
 
@@ -1497,18 +1563,72 @@ export default function NewMatchScreen() {
                   const isTeamA = idx < teamAPlayers.length;
                   const stats = getPlayerActionStats(p.playerId);
                   return (
-                    <View key={p.playerId} style={styles.playerActionRow}>
-                      <View style={[styles.playerActionDot, { backgroundColor: isTeamA ? theme.primary : theme.accent }]} />
-                      <Text style={styles.playerActionName}>{getPlayerName(p.playerId)}</Text>
-                      <View style={styles.playerActionStats}>
-                        <Text style={styles.playerActionStat}>T: {stats.tirsSuccess}/{stats.tirs}</Text>
-                        <Text style={styles.playerActionStat}>P: {stats.pointsSuccess}/{stats.points}</Text>
-                        <Text style={[styles.playerActionStat, { color: theme.carreauColor }]}>C: {stats.carreaux}</Text>
+                    <View key={p.playerId} style={styles.playerActionCard}>
+                      <View style={styles.playerActionHeader}>
+                        <View style={[styles.playerActionDot, { backgroundColor: isTeamA ? theme.primary : theme.accent }]} />
+                        <Text style={styles.playerActionName}>{getPlayerName(p.playerId)}</Text>
+                        <View style={styles.playerActionStats}>
+                          <Text style={styles.playerActionStat}>T: {stats.tirsSuccess}/{stats.tirs}</Text>
+                          <Text style={styles.playerActionStat}>P: {stats.pointsSuccess}/{stats.points}</Text>
+                          <Text style={[styles.playerActionStat, { color: theme.carreauColor }]}>C: {stats.carreaux}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.playerNotationBtns}>
+                        <Pressable
+                          style={[styles.playerNotationBtn, { backgroundColor: theme.tirColor }]}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            setEditorNotationPlayer({ id: p.playerId, name: getPlayerName(p.playerId), team: isTeamA ? 'A' : 'B' });
+                            setEditorNotationType('tir');
+                            setShowEditorNotation(true);
+                          }}
+                        >
+                          <MaterialIcons name="gps-fixed" size={18} color="#FFF" />
+                          <Text style={styles.playerNotationBtnText}>+ Tir</Text>
+                        </Pressable>
+                        <Pressable
+                          style={[styles.playerNotationBtn, { backgroundColor: theme.pointColor }]}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            setEditorNotationPlayer({ id: p.playerId, name: getPlayerName(p.playerId), team: isTeamA ? 'A' : 'B' });
+                            setEditorNotationType('point');
+                            setShowEditorNotation(true);
+                          }}
+                        >
+                          <MaterialIcons name="adjust" size={18} color="#FFF" />
+                          <Text style={styles.playerNotationBtnText}>+ Point</Text>
+                        </Pressable>
+                        <Pressable
+                          style={[styles.playerNotationBtn, { backgroundColor: theme.carreauColor }]}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                            recordAction(p.playerId, 'carreau', true);
+                          }}
+                        >
+                          <MaterialIcons name="stars" size={18} color="#FFF" />
+                          <Text style={styles.playerNotationBtnText}>Carreau</Text>
+                        </Pressable>
                       </View>
                     </View>
                   );
                 })}
               </View>
+            )}
+
+            {/* Editor Notation Modal */}
+            {editorNotationPlayer && (
+              <SimplifiedShotNotation
+                visible={showEditorNotation}
+                onClose={() => {
+                  setShowEditorNotation(false);
+                  setEditorNotationPlayer(null);
+                }}
+                actionType={editorNotationType}
+                playerId={editorNotationPlayer.id}
+                playerName={editorNotationPlayer.name}
+                team={editorNotationPlayer.team}
+                onSubmit={handleAdvancedShotSubmit}
+              />
             )}
           </ScrollView>
         </SafeAreaView>
@@ -1834,11 +1954,15 @@ const styles = StyleSheet.create({
   meneHistoryLoss: { color: theme.error },
   meneHistorySep: { fontSize: 10, color: theme.textMuted },
   meneHistoryNull: { fontSize: 12, color: theme.warning },
-  playerActionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border },
+  playerActionCard: { backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, padding: 12, marginBottom: 10 },
+  playerActionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   playerActionDot: { width: 8, height: 8, borderRadius: 4, marginRight: 10 },
   playerActionName: { flex: 1, fontSize: 14, fontWeight: '500', color: theme.textPrimary },
   playerActionStats: { flexDirection: 'row', gap: 12 },
   playerActionStat: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  playerNotationBtns: { flexDirection: 'row', gap: 8 },
+  playerNotationBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: theme.borderRadius.sm },
+  playerNotationBtnText: { fontSize: 12, fontWeight: '600', color: '#FFF' },
   searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, marginHorizontal: 16, marginVertical: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: theme.borderRadius.md, gap: 10 },
   searchInput: { flex: 1, fontSize: 16, color: theme.textPrimary, padding: 0 },
   selectionCount: { fontSize: 13, color: theme.textSecondary, paddingHorizontal: 16, marginBottom: 8 },
@@ -1964,4 +2088,22 @@ const styles = StyleSheet.create({
   fsWinnerMenes: { fontSize: 14, color: 'rgba(255,255,255,0.5)', marginTop: 8 },
   fsWinnerBtn: { marginTop: 32, paddingHorizontal: 40, paddingVertical: 18, backgroundColor: theme.primary, borderRadius: 28 },
   fsWinnerBtnText: { fontSize: 18, fontWeight: '700', color: '#FFF' },
+  // Pause Overlay styles
+  fsPauseOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center', zIndex: 200 },
+  fsPauseCard: { width: '85%', maxWidth: 360, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 28, padding: 32, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
+  fsPauseHeader: { alignItems: 'center', marginBottom: 24 },
+  fsPauseTitle: { fontSize: 28, fontWeight: '900', color: '#FFF', letterSpacing: 4, marginTop: 12 },
+  fsPauseScoreDisplay: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  fsPauseScoreItem: { alignItems: 'center', minWidth: 100 },
+  fsPauseScoreLabel: { fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.5)', letterSpacing: 1, marginBottom: 4 },
+  fsPauseScoreValue: { fontSize: 48, fontWeight: '800' },
+  fsPauseScoreSep: { fontSize: 32, fontWeight: '300', color: 'rgba(255,255,255,0.3)', marginHorizontal: 16 },
+  fsPauseInfo: { flexDirection: 'row', justifyContent: 'center', gap: 24, marginBottom: 28, paddingVertical: 12, paddingHorizontal: 20, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12 },
+  fsPauseInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  fsPauseInfoText: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.7)' },
+  fsPauseButtons: { width: '100%', gap: 12 },
+  fsPauseResumeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.success, paddingVertical: 18, borderRadius: 16 },
+  fsPauseResumeBtnText: { fontSize: 17, fontWeight: '700', color: '#FFF' },
+  fsPauseExitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  fsPauseExitBtnText: { fontSize: 14, fontWeight: '500', color: 'rgba(255,255,255,0.7)' },
 });

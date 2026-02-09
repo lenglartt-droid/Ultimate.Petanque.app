@@ -491,7 +491,7 @@ export default function StatsScreen() {
     };
     
     const pointQualityStats: Record<string, number> = {
-      excellent: 0, bon: 0, moyen: 0, au_bouchon: 0, rate: 0, crochete: 0, sorti: 0,
+      excellent: 0, bon: 0, moyen: 0, au_bouchon: 0, devant_boule: 0, rate: 0, crochete: 0, sorti: 0,
     };
     
     filteredMatches.forEach(match => {
@@ -521,7 +521,7 @@ export default function StatsScreen() {
     const hasDetailedData = Object.values(pointTypeStats).some(s => s.total > 0) || Object.values(pointQualityStats).some(v => v > 0);
     const totalDetailedPoints = Object.values(pointTypeStats).reduce((sum, s) => sum + s.total, 0);
     const totalQualityTracked = Object.values(pointQualityStats).reduce((sum, v) => sum + v, 0);
-    const successQualitiesTotal = pointQualityStats.excellent + pointQualityStats.bon + pointQualityStats.moyen + pointQualityStats.au_bouchon;
+    const successQualitiesTotal = pointQualityStats.excellent + pointQualityStats.bon + pointQualityStats.moyen + pointQualityStats.au_bouchon + pointQualityStats.devant_boule;
     const failureQualitiesTotal = pointQualityStats.rate + pointQualityStats.crochete + pointQualityStats.sorti;
 
     return {
@@ -531,7 +531,7 @@ export default function StatsScreen() {
       pointDemiPortee: pointTypeStats.demi_portee, pointPortee: pointTypeStats.portee,
       pointExcellent: pointQualityStats.excellent, pointBon: pointQualityStats.bon,
       pointMoyen: pointQualityStats.moyen, pointAuBouchon: pointQualityStats.au_bouchon,
-      successQualitiesTotal, pointRate: pointQualityStats.rate,
+      pointDevantBoule: pointQualityStats.devant_boule, successQualitiesTotal, pointRate: pointQualityStats.rate,
       pointCrochete: pointQualityStats.crochete, pointSorti: pointQualityStats.sorti,
       failureQualitiesTotal,
     };
@@ -1096,6 +1096,7 @@ export default function StatsScreen() {
                       <StatRow label="Excellent (< 10 cm)" value={pointStats.pointExcellent} subValue={`${Math.round((pointStats.pointExcellent / pointStats.successQualitiesTotal) * 100)}%`} icon="stars" color={theme.carreauColor} />
                       <StatRow label="Bon (< 30 cm)" value={pointStats.pointBon} subValue={`${Math.round((pointStats.pointBon / pointStats.successQualitiesTotal) * 100)}%`} icon="check-circle" color={theme.success} />
                       <StatRow label="Moyen (< 50 cm)" value={pointStats.pointMoyen} subValue={`${Math.round((pointStats.pointMoyen / pointStats.successQualitiesTotal) * 100)}%`} icon="radio-button-checked" color={theme.warning} />
+                      <StatRow label="Devant de boule" value={pointStats.pointDevantBoule} subValue={`${Math.round((pointStats.pointDevantBoule / pointStats.successQualitiesTotal) * 100)}%`} icon="sports-baseball" color={theme.accent} />
                     </View>
                   </Animated.View>
                 )}

@@ -63,6 +63,7 @@ export type SimplePointQuality =
   | 'bon'             // < 30cm
   | 'moyen'           // < 50cm
   | 'au_bouchon'      // At the jack
+  | 'devant_boule'    // In front of opponent's ball
   | 'rate'            // Missed target zone
   | 'crochete'        // Bad hand release
   | 'sorti';          // Out of bounds
@@ -141,6 +142,7 @@ const POINT_QUALITIES_SUCCESS = [
   { id: 'bon' as SimplePointQuality, label: 'Bon', icon: 'check-circle', color: theme.success, desc: '< 30 cm' },
   { id: 'moyen' as SimplePointQuality, label: 'Moyen', icon: 'radio-button-checked', color: theme.warning, desc: '< 50 cm' },
   { id: 'au_bouchon' as SimplePointQuality, label: 'Au bouchon', icon: 'adjust', color: theme.primary, desc: 'Collée au cochonnet' },
+  { id: 'devant_boule' as SimplePointQuality, label: 'Devant de boule', icon: 'sports-baseball', color: theme.accent, desc: 'Devant la boule adverse' },
 ];
 
 // Point qualities when FAILED (3 specific options)
