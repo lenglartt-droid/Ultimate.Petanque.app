@@ -50,7 +50,8 @@ export type SimpleShotQuality =
 export type SimplePointType = 
   | 'roule'           // Rolled
   | 'plombe'          // Lobbed
-  | 'demi_portee';    // Half lob
+  | 'demi_portee'     // Half lob
+  | 'portee';         // High lob
 
 // Point Quality - Distance based for success, specific for failure
 export type SimplePointQuality = 
@@ -93,7 +94,6 @@ const SHOT_TYPES = [
   { id: 'en_rafle' as SimpleShotType, label: 'En rafle', icon: 'swap-horiz', desc: 'Tir rasant' },
   { id: 'devant_boule' as SimpleShotType, label: 'Devant la boule', icon: 'redo', desc: 'Avec rebond' },
   { id: 'carreau' as SimpleShotType, label: 'Carreau', icon: 'stars', desc: 'Prend la place', special: true },
-  { id: 'autre' as SimpleShotType, label: 'Autre', icon: 'more-horiz', desc: 'Autre type' },
 ];
 
 const SHOT_QUALITIES = [
@@ -112,6 +112,7 @@ const POINT_TYPES = [
   { id: 'roule' as SimplePointType, label: 'Roulé', icon: 'sports-baseball', desc: 'Boule roulée' },
   { id: 'plombe' as SimplePointType, label: 'Plombé', icon: 'flight-land', desc: 'Lancée en hauteur' },
   { id: 'demi_portee' as SimplePointType, label: 'Demi-portée', icon: 'height', desc: 'Entre les deux' },
+  { id: 'portee' as SimplePointType, label: 'Portée', icon: 'flight', desc: 'Lancée haute' },
 ];
 
 // Point qualities when SUCCESS (no "Raté" option)
@@ -548,7 +549,10 @@ export function SimplifiedShotNotation({
               </Text>
 
               <View style={styles.typeGrid}>
-                {(isTir ? SHOT_TYPES : POINT_TYPES).map((type, index) => (
+                {(isTir 
+                  ? (success ? SHOT_TYPES : SHOT_TYPES.filter(t => t.id !== 'carreau')) 
+                  : POINT_TYPES
+                ).map((type, index) => (
                   <Animated.View key={type.id} entering={FadeInDown.duration(200).delay(index * 50)}>
                     <QuickOption
                       icon={type.icon}

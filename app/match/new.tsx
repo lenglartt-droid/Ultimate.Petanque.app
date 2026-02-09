@@ -1247,27 +1247,18 @@ export default function NewMatchScreen() {
                             
                             <View style={styles.fsPlayerActionButtons}>
                               <Pressable
-                                style={[styles.fsPlayerActionBtn, { backgroundColor: theme.tirColor }]}
-                                onPress={() => recordAction(p.playerId, 'tir', true)}
-                                onLongPress={() => openAdvancedNotation(p.playerId, getPlayerName(p.playerId), isTeamA ? 'A' : 'B', 'tir')}
+                                style={[styles.fsPlayerActionBtn, styles.fsPlayerActionBtnWide, { backgroundColor: theme.tirColor }]}
+                                onPress={() => openAdvancedNotation(p.playerId, getPlayerName(p.playerId), isTeamA ? 'A' : 'B', 'tir')}
                               >
                                 <MaterialIcons name="gps-fixed" size={22} color="#FFF" />
                                 <Text style={styles.fsPlayerActionBtnLabel}>TIR</Text>
                               </Pressable>
                               <Pressable
-                                style={[styles.fsPlayerActionBtn, { backgroundColor: theme.pointColor }]}
-                                onPress={() => recordAction(p.playerId, 'point', true)}
-                                onLongPress={() => openAdvancedNotation(p.playerId, getPlayerName(p.playerId), isTeamA ? 'A' : 'B', 'point')}
+                                style={[styles.fsPlayerActionBtn, styles.fsPlayerActionBtnWide, { backgroundColor: theme.pointColor }]}
+                                onPress={() => openAdvancedNotation(p.playerId, getPlayerName(p.playerId), isTeamA ? 'A' : 'B', 'point')}
                               >
                                 <MaterialIcons name="adjust" size={22} color="#FFF" />
                                 <Text style={styles.fsPlayerActionBtnLabel}>POINT</Text>
-                              </Pressable>
-                              <Pressable
-                                style={[styles.fsPlayerActionBtn, { backgroundColor: theme.carreauColor }]}
-                                onPress={() => recordAction(p.playerId, 'carreau', true)}
-                              >
-                                <MaterialIcons name="stars" size={22} color="#FFF" />
-                                <Text style={styles.fsPlayerActionBtnLabel}>CARREAU</Text>
                               </Pressable>
                             </View>
                             
@@ -1280,7 +1271,7 @@ export default function NewMatchScreen() {
                         );
                       })}
                     </ScrollView>
-                    <Text style={styles.fsActionsHint}>Appui long = notation détaillée (type + qualité)</Text>
+                    <Text style={styles.fsActionsHint}>Cliquez pour noter le coup (résultat → type → qualité)</Text>
                   </Animated.View>
                 )}
               </View>
@@ -4269,6 +4260,9 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 12,
     borderRadius: 12,
+  },
+  fsPlayerActionBtnWide: {
+    flex: 1,
   },
   fsPlayerActionBtnLabel: {
     fontSize: 12,
