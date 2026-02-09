@@ -24,7 +24,7 @@ const CHALLENGE_CONFIG = {
 };
 
 type ContentFilter = 'all' | 'training' | 'tournament' | 'challenges';
-type PeriodOption = 'all' | 'today' | 'week' | 'month' | 'custom';
+type PeriodOption = 'all' | 'today' | 'week' | 'month' | '6months' | 'year' | 'custom';
 
 interface DateRange {
   start: Date | null;
@@ -36,6 +36,8 @@ const PERIOD_OPTIONS: { id: PeriodOption; label: string; icon: keyof typeof Mate
   { id: 'today', label: "Aujourd'hui", icon: 'today' },
   { id: 'week', label: 'Cette semaine', icon: 'date-range' },
   { id: 'month', label: 'Ce mois', icon: 'calendar-today' },
+  { id: '6months', label: '6 derniers mois', icon: 'history' },
+  { id: 'year', label: 'Cette année', icon: 'event-note' },
 ];
 
 const CONTENT_FILTERS: { id: ContentFilter; label: string; icon: keyof typeof MaterialIcons.glyphMap }[] = [
@@ -58,13 +60,19 @@ function getDateRange(period: PeriodOption): DateRange {
     case 'today':
       return { start: startOfDay, end: now };
     case 'week':
-      const dayOfWeek = now.getDay();
-      const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
       const weekStart = new Date(startOfDay);
-      weekStart.setDate(weekStart.getDate() - diff);
+      weekStart.setDate(weekStart.getDate() - 7);
       return { start: weekStart, end: now };
     case 'month':
-      return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: now };
+      const monthStart = new Date(startOfDay);
+      monthStart.setDate(monthStart.getDate() - 30);
+      return { start: monthStart, end: now };
+    case '6months':
+      const sixMonthsStart = new Date(startOfDay);
+      sixMonthsStart.setMonth(sixMonthsStart.getMonth() - 6);
+      return { start: sixMonthsStart, end: now };
+    case 'year':
+      return { start: new Date(now.getFullYear(), 0, 1), end: now };
     default:
       return { start: null, end: null };
   }

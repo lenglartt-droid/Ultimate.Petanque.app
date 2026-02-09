@@ -185,23 +185,35 @@ export default function PlayerDetailScreen() {
           
           {/* Preferred Role from Match History */}
           {roleAnalysis.totalWithRoles > 0 && (
-            <View style={styles.preferredRoleSection}>
-              <Text style={styles.preferredRoleLabel}>Rôle préféré (basé sur {roleAnalysis.totalWithRoles} matchs)</Text>
-              <View style={styles.roleDistribution}>
+            <View style={styles.preferredRoleCard}>
+              <Text style={styles.preferredRoleTitle}>Rôle préféré</Text>
+              <View style={styles.preferredRoleContent}>
+                <View style={[styles.preferredRoleIcon, { backgroundColor: roleIcons[roleAnalysis.preferredRole]?.color || theme.primary }]}>
+                  <MaterialIcons 
+                    name={(roleIcons[roleAnalysis.preferredRole]?.icon || 'person') as any} 
+                    size={20} 
+                    color="#FFF" 
+                  />
+                </View>
+                <View style={styles.preferredRoleInfo}>
+                  <Text style={styles.preferredRoleName}>{roleAnalysis.preferredRole}</Text>
+                  <Text style={styles.preferredRoleStats}>
+                    {roleAnalysis.roleCounts[roleAnalysis.preferredRole]} sur {roleAnalysis.totalWithRoles} matchs
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.roleBreakdown}>
                 {Object.entries(roleAnalysis.roleCounts).map(([role, count]) => {
-                  const config = roleIcons[role] || roleIcons['Milieu'];
-                  const percentage = roleAnalysis.totalWithRoles > 0 
-                    ? Math.round((count / roleAnalysis.totalWithRoles) * 100) 
-                    : 0;
-                  const isPreferred = role === roleAnalysis.preferredRole;
+                  const config = roleIcons[role];
+                  const pct = roleAnalysis.totalWithRoles > 0 ? Math.round((count / roleAnalysis.totalWithRoles) * 100) : 0;
                   return (
-                    <View key={role} style={[styles.roleDistItem, isPreferred && styles.roleDistItemActive]}>
-                      <View style={[styles.roleDistIcon, { backgroundColor: config.color + (isPreferred ? '' : '30') }]}>
-                        <MaterialIcons name={config.icon as any} size={16} color={isPreferred ? '#FFF' : config.color} />
+                    <View key={role} style={styles.roleBreakdownItem}>
+                      <MaterialIcons name={config?.icon as any || 'person'} size={14} color={config?.color || theme.textMuted} />
+                      <Text style={styles.roleBreakdownLabel}>{role.charAt(0)}</Text>
+                      <View style={styles.roleBreakdownBarBg}>
+                        <View style={[styles.roleBreakdownBar, { width: `${pct}%`, backgroundColor: config?.color || theme.primary }]} />
                       </View>
-                      <Text style={[styles.roleDistName, isPreferred && { fontWeight: '700', color: config.color }]}>{role}</Text>
-                      <Text style={styles.roleDistCount}>{count}</Text>
-                      <View style={[styles.roleDistBar, { width: `${percentage}%`, backgroundColor: config.color }]} />
+                      <Text style={styles.roleBreakdownPct}>{pct}%</Text>
                     </View>
                   );
                 })}
@@ -500,14 +512,14 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: theme.textSecondary,
   },
-  preferredRoleSection: {
+  preferredRoleCard: {
     width: '100%',
     marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: theme.border,
   },
-  preferredRoleLabel: {
+  preferredRoleTitle: {
     fontSize: 11,
     fontWeight: '600',
     color: theme.textMuted,
@@ -516,48 +528,69 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     textAlign: 'center',
   },
-  roleDistribution: {
-    gap: 8,
-  },
-  roleDistItem: {
+  preferredRoleContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.md,
-    position: 'relative',
-    overflow: 'hidden',
+    justifyContent: 'center',
+    gap: 12,
+    marginBottom: 12,
   },
-  roleDistItemActive: {
-    borderWidth: 2,
-    borderColor: theme.primary,
-  },
-  roleDistIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+  preferredRoleIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
   },
-  roleDistName: {
-    fontSize: 14,
-    color: theme.textPrimary,
-    flex: 1,
+  preferredRoleInfo: {
+    alignItems: 'flex-start',
   },
-  roleDistCount: {
-    fontSize: 16,
+  preferredRoleName: {
+    fontSize: 18,
     fontWeight: '700',
     color: theme.textPrimary,
-    marginRight: 8,
   },
-  roleDistBar: {
-    position: 'absolute',
-    left: 0,
-    bottom: 0,
-    height: 3,
+  preferredRoleStats: {
+    fontSize: 12,
+    color: theme.textSecondary,
+  },
+  roleBreakdown: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  roleBreakdownItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: theme.backgroundSecondary,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: theme.borderRadius.md,
+  },
+  roleBreakdownLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textSecondary,
+    width: 12,
+  },
+  roleBreakdownBarBg: {
+    flex: 1,
+    height: 4,
+    backgroundColor: theme.border,
     borderRadius: 2,
+    overflow: 'hidden',
+  },
+  roleBreakdownBar: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  roleBreakdownPct: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textPrimary,
+    minWidth: 28,
+    textAlign: 'right',
   },
   playerNickname: {
     fontSize: 15,
