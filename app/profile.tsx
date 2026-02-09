@@ -664,13 +664,19 @@ export default function ProfileScreen() {
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </Pressable>
 
-            <Pressable style={styles.menuItem}>
+            <Pressable 
+              style={styles.menuItem}
+              onPress={() => {
+                Haptics.selectionAsync();
+                router.push('/notifications');
+              }}
+            >
               <View style={[styles.menuIcon, { backgroundColor: theme.success + '15' }]}>
                 <MaterialIcons name="notifications" size={20} color={theme.success} />
               </View>
               <View style={styles.menuItemContent}>
                 <Text style={styles.menuItemText}>Notifications</Text>
-                <Text style={styles.menuItemSubtext}>Gérer les alertes</Text>
+                <Text style={styles.menuItemSubtext}>Rappels de tournois</Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </Pressable>
