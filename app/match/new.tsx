@@ -1177,18 +1177,106 @@ export default function NewMatchScreen() {
                   <Text style={styles.fsWinnerScore}>{teamAScore} - {teamBScore}</Text>
                   <Text style={styles.fsWinnerMenes}>{menes.length} mène{menes.length > 1 ? 's' : ''} • {formatTime(matchTime)}</Text>
                   
-                  <Pressable 
-                    style={styles.fsWinnerBtn}
-                    onPress={() => {
-                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                      setFullscreenMode(false);
-                      setHasExitedFullscreen(true);
-                      handleSaveMatch();
-                      setTimeout(() => router.replace('/(tabs)'), 100);
-                    }}
-                  >
-                    <Text style={styles.fsWinnerBtnText}>Enregistrer et terminer</Text>
-                  </Pressable>
+                  {/* Series Info */}
+                  {seriesId && (
+                    <View style={styles.fsWinnerSeriesInfo}>
+                      <Text style={styles.fsWinnerSeriesText}>
+                        Série: {seriesWinsA + (teamAScore > teamBScore ? 1 : 0)} - {seriesWinsB + (teamBScore > teamAScore ? 1 : 0)}
+                      </Text>
+                    </View>
+                  )}
+                  
+                  <View style={styles.fsWinnerButtons}>
+                    <Pressable 
+                      style={styles.fsWinnerBtnPrimary}
+                      onPress={() => {
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                        setFullscreenMode(false);
+                        setHasExitedFullscreen(true);
+                        handleSaveMatch();
+                        setTimeout(() => router.replace('/(tabs)'), 100);
+                      }}
+                    >
+                      <MaterialIcons name="check" size={22} color="#FFF" />
+                      <Text style={styles.fsWinnerBtnText}>Enregistrer et terminer</Text>
+                    </Pressable>
+                    
+                    {!isTournamentMode && (
+                      <Pressable 
+                        style={styles.fsWinnerBtnRevanche}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                          
+                          // Calculate new series state
+                          const winner = teamAScore > teamBScore ? 'A' : 'B';
+                          const newSeriesId = seriesId || `series-${Date.now()}`;
+                          const newWinsA = (seriesId ? seriesWinsA : 0) + (winner === 'A' ? 1 : 0);
+                          const newWinsB = (seriesId ? seriesWinsB : 0) + (winner === 'B' ? 1 : 0);
+                          const newMatchNumber = seriesId ? currentMatchNumber : 1;
+                          
+                          // Check if series is already complete (2 wins)
+                          if (newWinsA >= 2 || newWinsB >= 2) {
+                            // Series complete, save and end
+                            handleSaveMatch();
+                            Alert.alert(
+                              'Série terminée !', 
+                              `${newWinsA >= 2 ? 'Vous avez' : 'Adversaire a'} remporté la série ${newWinsA}-${newWinsB}`,
+                              [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
+                            );
+                            return;
+                          }
+                          
+                          // Save current match with series context
+                          const overrideContext = {
+                            seriesId: newSeriesId,
+                            matchNumber: newMatchNumber,
+                            winsBeforeThisMatch: { teamA: seriesId ? seriesWinsA : 0, teamB: seriesId ? seriesWinsB : 0 },
+                            isFinale: newWinsA === 1 && newWinsB === 1,
+                          };
+                          handleSaveMatch(overrideContext);
+                          
+                          // Prepare team names for revanche
+                          const teamANames = teamAPlayers.map(p => getPlayerName(p.playerId)).join(',');
+                          const teamBNames = teamBPlayers.map(p => getPlayerName(p.playerId)).join(',');
+                          
+                          // Navigate to new match with revanche params
+                          setTimeout(() => {
+                            router.replace({
+                              pathname: '/match/new',
+                              params: {
+                                revanche: 'true',
+                                format: format,
+                                teamA: encodeURIComponent(teamANames),
+                                teamB: encodeURIComponent(teamBNames),
+                                seriesWinsA: newWinsA.toString(),
+                                seriesWinsB: newWinsB.toString(),
+                                seriesId: newSeriesId,
+                              },
+                            });
+                          }, 100);
+                        }}
+                      >
+                        <MaterialIcons name="replay" size={22} color={theme.warning} />
+                        <Text style={styles.fsWinnerBtnRevancheText}>
+                          {seriesId 
+                            ? (seriesWinsA === 1 && seriesWinsB === 0) || (seriesWinsA === 0 && seriesWinsB === 1)
+                              ? 'Match retour'
+                              : (seriesWinsA === 1 && seriesWinsB === 1) 
+                                ? 'Finale !'
+                                : 'Revanche'
+                            : 'Revanche'
+                          }
+                        </Text>
+                        {seriesId && (
+                          <View style={styles.fsWinnerSeriesBadge}>
+                            <Text style={styles.fsWinnerSeriesBadgeText}>
+                              {seriesWinsA + (teamAScore > teamBScore ? 1 : 0)}-{seriesWinsB + (teamBScore > teamAScore ? 1 : 0)}
+                            </Text>
+                          </View>
+                        )}
+                      </Pressable>
+                    )}
+                  </View>
                 </View>
               </Animated.View>
             )}
@@ -2086,8 +2174,15 @@ const styles = StyleSheet.create({
   fsWinnerTitle: { fontSize: 36, fontWeight: '900', color: '#FFF', marginTop: 20, letterSpacing: 3 },
   fsWinnerScore: { fontSize: 32, fontWeight: '700', color: 'rgba(255,255,255,0.7)', marginTop: 12 },
   fsWinnerMenes: { fontSize: 14, color: 'rgba(255,255,255,0.5)', marginTop: 8 },
-  fsWinnerBtn: { marginTop: 32, paddingHorizontal: 40, paddingVertical: 18, backgroundColor: theme.primary, borderRadius: 28 },
-  fsWinnerBtnText: { fontSize: 18, fontWeight: '700', color: '#FFF' },
+  fsWinnerButtons: { marginTop: 28, width: '100%', gap: 12 },
+  fsWinnerBtnPrimary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 32, paddingVertical: 18, backgroundColor: theme.success, borderRadius: 20 },
+  fsWinnerBtnText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
+  fsWinnerBtnRevanche: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 32, paddingVertical: 16, backgroundColor: 'rgba(251, 191, 36, 0.15)', borderRadius: 20, borderWidth: 2, borderColor: 'rgba(251, 191, 36, 0.4)' },
+  fsWinnerBtnRevancheText: { fontSize: 16, fontWeight: '700', color: theme.warning },
+  fsWinnerSeriesInfo: { marginTop: 12, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12 },
+  fsWinnerSeriesText: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.7)' },
+  fsWinnerSeriesBadge: { marginLeft: 8, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: theme.warning, borderRadius: 10 },
+  fsWinnerSeriesBadgeText: { fontSize: 12, fontWeight: '700', color: '#000' },
   // Pause Overlay styles
   fsPauseOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center', zIndex: 200 },
   fsPauseCard: { width: '85%', maxWidth: 360, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 28, padding: 32, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
