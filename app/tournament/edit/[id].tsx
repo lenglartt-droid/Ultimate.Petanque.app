@@ -79,6 +79,8 @@ export default function EditTournamentScreen() {
   const [name, setName] = useState('');
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [type, setType] = useState<TournamentType>('Poules');
   const [format, setFormat] = useState<GameFormat>('Doublette');
   const [status, setStatus] = useState<TournamentStatus>('À venir');
@@ -137,6 +139,10 @@ export default function EditTournamentScreen() {
       setTournamentCategory(tournament.tournamentCategory);
       setRegistrationType(tournament.registrationType);
       setTournamentScope(tournament.tournamentScope);
+      // Load end date
+      if (tournament.endDate) {
+        setEndDate(new Date(tournament.endDate));
+      }
     }
   }, [tournament]);
 
@@ -178,8 +184,18 @@ export default function EditTournamentScreen() {
     setShowDatePicker(false);
     if (selectedDate) {
       setDate(selectedDate);
-      // Auto-determine status based on selected date
-      const newStatus = getStatusFromDate(selectedDate, tournament?.endDate ? new Date(tournament.endDate) : undefined);
+      if (endDate && selectedDate > endDate) setEndDate(null);
+      const newStatus = getStatusFromDate(selectedDate, endDate && selectedDate <= endDate ? endDate : undefined);
+      setStatus(newStatus);
+      Haptics.selectionAsync();
+    }
+  };
+
+  const handleEndDateChange = (event: any, selectedDate?: Date) => {
+    setShowEndDatePicker(false);
+    if (selectedDate) {
+      setEndDate(selectedDate);
+      const newStatus = getStatusFromDate(date, selectedDate);
       setStatus(newStatus);
       Haptics.selectionAsync();
     }
@@ -200,6 +216,7 @@ export default function EditTournamentScreen() {
     updateTournament(id!, {
       name: name.trim(),
       date: date.toISOString(),
+      endDate: endDate ? endDate.toISOString() : undefined,
       type,
       format,
       status,
@@ -350,6 +367,47 @@ export default function EditTournamentScreen() {
                 onChange={handleDateChange}
               />
             )}
+
+            {/* End Date */}
+            <View style={{ marginTop: 12 }}>
+              <Text style={[styles.sectionTitle, { marginBottom: 8 }]}>DATE DE FIN (optionnel)</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Pressable
+                  style={[styles.dateButton, { flex: 1 }]}
+                  onPress={() => setShowEndDatePicker(true)}
+                >
+                  <MaterialIcons name="event" size={20} color={endDate ? theme.accent : theme.textMuted} />
+                  <Text style={[styles.dateText, !endDate && { color: theme.textMuted }]}>
+                    {endDate
+                      ? endDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+                      : 'Tournoi sur un seul jour'
+                    }
+                  </Text>
+                </Pressable>
+                {endDate && (
+                  <Pressable
+                    style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.error + '15', borderRadius: theme.borderRadius.md }}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setEndDate(null);
+                      const newStatus = getStatusFromDate(date);
+                      setStatus(newStatus);
+                    }}
+                  >
+                    <MaterialIcons name="close" size={18} color={theme.error} />
+                  </Pressable>
+                )}
+              </View>
+              {showEndDatePicker && (
+                <DateTimePicker
+                  value={endDate || date}
+                  mode="date"
+                  display="default"
+                  onChange={handleEndDateChange}
+                  minimumDate={date}
+                />
+              )}
+            </View>
           </Animated.View>
 
           {/* Type */}

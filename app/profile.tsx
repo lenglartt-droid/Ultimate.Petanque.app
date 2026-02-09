@@ -29,7 +29,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, logout, operationLoading } = useAuth();
   const { showAlert } = useAlert();
-  const { clubs, addClub, updatePlayer, selfPlayer, userStats, matches, challenges, refreshData } = useApp();
+  const { clubs, addClub, updatePlayer, selfPlayer, userStats, matches, challenges, tournaments, refreshData } = useApp();
   const supabase = getSupabaseClient();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -629,9 +629,81 @@ export default function ProfileScreen() {
           </Animated.View>
         )}
 
-        {/* View Mode - My Player Card Link */}
+        {/* Financial Stats Section */}
         {!isEditing && (
           <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+            <Text style={styles.sectionTitle}>BILAN FINANCIER</Text>
+            {(() => {
+              // Calculate financial stats
+              const myClub = selfPlayer?.clubId ? clubs.find(c => c.id === selfPlayer.clubId) : null;
+              const membershipCost = myClub?.membershipCost || 0;
+              
+              const totalRegistrationCosts = tournaments.reduce((sum, t) => sum + (t.registrationCost || 0), 0);
+              const totalPrizesWon = tournaments.reduce((sum, t) => sum + (t.prizeWon || 0), 0);
+              
+              const totalCosts = membershipCost + totalRegistrationCosts;
+              const balance = totalPrizesWon - totalCosts;
+              
+              return (
+                <View style={styles.financialCard}>
+                  {/* Balance */}
+                  <View style={styles.financialBalanceRow}>
+                    <View style={styles.financialBalanceIcon}>
+                      <MaterialIcons name="account-balance-wallet" size={28} color={balance >= 0 ? theme.success : theme.error} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.financialBalanceLabel}>Bilan net</Text>
+                      <Text style={[styles.financialBalanceValue, { color: balance >= 0 ? theme.success : theme.error }]}>
+                        {balance >= 0 ? '+' : ''}{balance.toFixed(0)} €
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.financialDivider} />
+                  
+                  {/* Gains */}
+                  <View style={styles.financialRow}>
+                    <View style={[styles.financialRowIcon, { backgroundColor: theme.success + '15' }]}>
+                      <MaterialIcons name="trending-up" size={18} color={theme.success} />
+                    </View>
+                    <Text style={styles.financialRowLabel}>Gains tournois</Text>
+                    <Text style={[styles.financialRowValue, { color: theme.success }]}>+{totalPrizesWon.toFixed(0)} €</Text>
+                  </View>
+                  
+                  {/* Costs breakdown */}
+                  <View style={styles.financialRow}>
+                    <View style={[styles.financialRowIcon, { backgroundColor: theme.error + '15' }]}>
+                      <MaterialIcons name="event" size={18} color={theme.error} />
+                    </View>
+                    <Text style={styles.financialRowLabel}>Inscriptions tournois</Text>
+                    <Text style={[styles.financialRowValue, { color: theme.error }]}>-{totalRegistrationCosts.toFixed(0)} €</Text>
+                  </View>
+                  
+                  {membershipCost > 0 && (
+                    <View style={styles.financialRow}>
+                      <View style={[styles.financialRowIcon, { backgroundColor: theme.error + '15' }]}>
+                        <MaterialIcons name="card-membership" size={18} color={theme.error} />
+                      </View>
+                      <Text style={styles.financialRowLabel}>Cotisation {myClub?.name}</Text>
+                      <Text style={[styles.financialRowValue, { color: theme.error }]}>-{membershipCost.toFixed(0)} €</Text>
+                    </View>
+                  )}
+                  
+                  <View style={styles.financialDivider} />
+                  
+                  <View style={styles.financialTotalRow}>
+                    <Text style={styles.financialTotalLabel}>Total des dépenses</Text>
+                    <Text style={styles.financialTotalValue}>{totalCosts.toFixed(0)} €</Text>
+                  </View>
+                </View>
+              );
+            })()}
+          </Animated.View>
+        )}
+
+        {/* View Mode - My Player Card Link */}
+        {!isEditing && (
+          <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
             <Pressable 
               style={styles.playerCardLink}
               onPress={() => router.push('/player/me')}
@@ -650,7 +722,7 @@ export default function ProfileScreen() {
 
         {/* Account Section */}
         {!isEditing && (
-          <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
+          <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
             <Text style={styles.sectionTitle}>PARAMÈTRES</Text>
 
             <Pressable style={styles.menuItem}>
@@ -702,7 +774,7 @@ export default function ProfileScreen() {
 
         {/* Logout Button */}
         {!isEditing && (
-          <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.logoutSection}>
+          <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.logoutSection}>
             <Pressable 
               style={styles.logoutButton}
               onPress={handleLogout}
@@ -1316,6 +1388,78 @@ const styles = StyleSheet.create({
     color: theme.textMuted,
     textAlign: 'center',
     marginTop: 24,
+  },
+  // Financial stats
+  financialCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    ...theme.shadows.card,
+  },
+  financialBalanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginBottom: 4,
+  },
+  financialBalanceIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  financialBalanceLabel: {
+    fontSize: 13,
+    color: theme.textSecondary,
+  },
+  financialBalanceValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  financialDivider: {
+    height: 1,
+    backgroundColor: theme.border,
+    marginVertical: 14,
+  },
+  financialRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 8,
+  },
+  financialRowIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  financialRowLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: theme.textPrimary,
+  },
+  financialRowValue: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  financialTotalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  financialTotalLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  financialTotalValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.textPrimary,
   },
   // Modal styles
   modalContainer: {

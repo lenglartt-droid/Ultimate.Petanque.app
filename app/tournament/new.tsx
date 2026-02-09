@@ -74,6 +74,8 @@ export default function NewTournamentScreen() {
   const [name, setName] = useState('');
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [type, setType] = useState<TournamentType>('Poules');
   const [format, setFormat] = useState<GameFormat>('Doublette');
   const [terrainId, setTerrainId] = useState<string | undefined>();
@@ -100,10 +102,36 @@ export default function NewTournamentScreen() {
   // Get selected terrain for display
   const selectedTerrain = terrains.find(t => t.id === terrainId);
 
+  // Helper function to determine status based on date
+  const getStatusFromDate = (startDate: Date, end?: Date | null): 'À venir' | 'En cours' | 'Terminé' => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    if (start > today) return 'À venir';
+    if (end) {
+      const endD = new Date(end);
+      endD.setHours(23, 59, 59, 999);
+      if (endD < today) return 'Terminé';
+      return 'En cours';
+    }
+    if (start.getTime() === today.getTime()) return 'En cours';
+    return 'Terminé';
+  };
+
   const handleDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(false);
     if (selectedDate) {
       setDate(selectedDate);
+      // If end date is before start date, reset it
+      if (endDate && selectedDate > endDate) setEndDate(null);
+    }
+  };
+
+  const handleEndDateChange = (event: any, selectedDate?: Date) => {
+    setShowEndDatePicker(false);
+    if (selectedDate) {
+      setEndDate(selectedDate);
     }
   };
 
@@ -136,7 +164,8 @@ export default function NewTournamentScreen() {
       terrainType: terrain?.type,
       clubId,
       clubName: selectedClub?.name,
-      status: 'À venir',
+      status: getStatusFromDate(date, endDate),
+      endDate: endDate ? endDate.toISOString() : undefined,
       participants: 0,
       maxParticipants: parseInt(maxParticipants) || 32,
       prize: prize.trim() || undefined,
@@ -220,6 +249,42 @@ export default function NewTournamentScreen() {
                 minimumDate={new Date()}
               />
             )}
+
+            {/* End Date */}
+            <View style={{ marginTop: 12 }}>
+              <Text style={[styles.sectionTitle, { marginBottom: 8 }]}>DATE DE FIN (optionnel)</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Pressable
+                  style={[styles.dateButton, { flex: 1 }]}
+                  onPress={() => setShowEndDatePicker(true)}
+                >
+                  <MaterialIcons name="event" size={20} color={endDate ? theme.accent : theme.textMuted} />
+                  <Text style={[styles.dateText, !endDate && { color: theme.textMuted }]}>
+                    {endDate
+                      ? endDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+                      : 'Tournoi sur un seul jour'
+                    }
+                  </Text>
+                </Pressable>
+                {endDate && (
+                  <Pressable
+                    style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.error + '15', borderRadius: theme.borderRadius.md }}
+                    onPress={() => { Haptics.selectionAsync(); setEndDate(null); }}
+                  >
+                    <MaterialIcons name="close" size={18} color={theme.error} />
+                  </Pressable>
+                )}
+              </View>
+              {showEndDatePicker && (
+                <DateTimePicker
+                  value={endDate || date}
+                  mode="date"
+                  display="default"
+                  onChange={handleEndDateChange}
+                  minimumDate={date}
+                />
+              )}
+            </View>
           </Animated.View>
 
           {/* Type */}

@@ -52,6 +52,7 @@ export default function EditClubScreen() {
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [selectedFacilities, setSelectedFacilities] = useState<string[]>([]);
+  const [membershipCost, setMembershipCost] = useState('');
   
   const [selectedTerrainId, setSelectedTerrainId] = useState<string | undefined>();
   
@@ -82,6 +83,7 @@ export default function EditClubScreen() {
         .map(f => f.id);
       setSelectedFacilities(facilityIds);
       setSelectedTerrainId(club.terrainId);
+      setMembershipCost(club.membershipCost ? String(club.membershipCost) : '');
       
     }
   }, [club]);
@@ -128,6 +130,7 @@ export default function EditClubScreen() {
         facilities: facilityLabels,
         contactEmail: contactEmail.trim() || undefined,
         contactPhone: contactPhone.trim() || undefined,
+        membershipCost: membershipCost ? parseFloat(membershipCost) : undefined,
         terrainId: selectedTerrainId,
         terrainName: selectedTerrain?.name,
       });
@@ -269,6 +272,19 @@ export default function EditClubScreen() {
           </Animated.View>
 
 
+
+          {/* Membership Cost */}
+          <Animated.View entering={FadeInDown.duration(400).delay(270)} style={styles.section}>
+            <Text style={styles.sectionTitle}>COÛT CARTE MEMBRE (€/an)</Text>
+            <TextInput
+              style={styles.textInput}
+              value={membershipCost}
+              onChangeText={setMembershipCost}
+              placeholder="Ex: 50"
+              placeholderTextColor={theme.textMuted}
+              keyboardType="numeric"
+            />
+          </Animated.View>
 
           {/* Terrain Association */}
           <Animated.View entering={FadeInDown.duration(400).delay(290)} style={styles.section}>

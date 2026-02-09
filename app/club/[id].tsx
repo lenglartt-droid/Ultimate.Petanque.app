@@ -103,9 +103,13 @@ export default function ClubDetailScreen() {
             <Text style={styles.quickStatValue}>{club.foundedYear}</Text>
             <Text style={styles.quickStatLabel}>Fondé</Text>
           </View>
-          <View style={styles.quickStatItem}>
+          <View style={[styles.quickStatItem, styles.quickStatBorder]}>
             <Text style={styles.quickStatValue}>{clubTournaments.length}</Text>
             <Text style={styles.quickStatLabel}>Tournois</Text>
+          </View>
+          <View style={styles.quickStatItem}>
+            <Text style={styles.quickStatValue}>{club.membershipCost ? `${club.membershipCost}€` : '-'}</Text>
+            <Text style={styles.quickStatLabel}>Cotisation</Text>
           </View>
         </Animated.View>
 

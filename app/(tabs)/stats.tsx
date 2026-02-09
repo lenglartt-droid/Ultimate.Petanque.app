@@ -1040,6 +1040,29 @@ export default function StatsScreen() {
                       <StatRow label="Tir tendu" value={`${tirStats.tirAuFer.success}/${tirStats.tirAuFer.total}`} subValue={tirStats.tirAuFer.total > 0 ? `${Math.round((tirStats.tirAuFer.success / tirStats.tirAuFer.total) * 100)}%` : ''} icon="gps-fixed" color={theme.tirColor} />
                       <StatRow label="Tir en cloche" value={`${tirStats.tirAuPlomb.success}/${tirStats.tirAuPlomb.total}`} subValue={tirStats.tirAuPlomb.total > 0 ? `${Math.round((tirStats.tirAuPlomb.success / tirStats.tirAuPlomb.total) * 100)}%` : ''} icon="flight-takeoff" color={theme.pointColor} />
                       <StatRow label="En rafle" value={`${tirStats.tirEnRafle.success}/${tirStats.tirEnRafle.total}`} subValue={tirStats.tirEnRafle.total > 0 ? `${Math.round((tirStats.tirEnRafle.success / tirStats.tirEnRafle.total) * 100)}%` : ''} icon="swap-horiz" color={theme.accent} />
+                      {tirStats.tirCourtRamasse.total > 0 && (
+                        <StatRow label="Court ramassé" value={`${tirStats.tirCourtRamasse.success}/${tirStats.tirCourtRamasse.total}`} subValue={tirStats.tirCourtRamasse.total > 0 ? `${Math.round((tirStats.tirCourtRamasse.success / tirStats.tirCourtRamasse.total) * 100)}%` : ''} icon="sports-handball" color={theme.carreauColor} />
+                      )}
+                    </View>
+                  </Animated.View>
+                )}
+
+                {/* Impact du tir */}
+                {tirStats.totalQualityTracked > 0 && (
+                  <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
+                    <SectionHeader title="Impact du tir" subtitle={`${tirStats.totalQualityTracked} tirs qualifiés`} icon="flash-on" color={theme.carreauColor} />
+                    <View style={styles.card}>
+                      <StatRow label="Gain de point" value={tirStats.tirGainPoint} subValue={tirStats.totalQualityTracked > 0 ? `${Math.round((tirStats.tirGainPoint / tirStats.totalQualityTracked) * 100)}%` : ''} icon="add-circle" color={theme.success} />
+                      <StatRow label="Décisif" value={tirStats.tirsDecisifs} subValue={tirStats.totalQualityTracked > 0 ? `${Math.round((tirStats.tirsDecisifs / tirStats.totalQualityTracked) * 100)}%` : ''} icon="whatshot" color={theme.carreauColor} />
+                      <StatRow label="Sans effet" value={tirStats.tirSansEffet} subValue={tirStats.totalQualityTracked > 0 ? `${Math.round((tirStats.tirSansEffet / tirStats.totalQualityTracked) * 100)}%` : ''} icon="remove-circle-outline" color={theme.textMuted} />
+                      <StatRow label="Négatif" value={tirStats.tirNegatif} subValue={tirStats.totalQualityTracked > 0 ? `${Math.round((tirStats.tirNegatif / tirStats.totalQualityTracked) * 100)}%` : ''} icon="trending-down" color={theme.error} />
+                      <View style={{ height: 8 }} />
+                      <BreakdownBar items={[
+                        { label: 'Gain', value: tirStats.tirGainPoint, color: theme.success },
+                        { label: 'Décisif', value: tirStats.tirsDecisifs, color: theme.carreauColor },
+                        { label: 'Sans effet', value: tirStats.tirSansEffet, color: theme.textMuted },
+                        { label: 'Négatif', value: tirStats.tirNegatif, color: theme.error },
+                      ].filter(i => i.value > 0)} />
                     </View>
                   </Animated.View>
                 )}

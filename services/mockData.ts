@@ -66,6 +66,7 @@ export interface Club {
   contactPhone?: string;
   terrainId?: string;
   terrainName?: string;
+  membershipCost?: number;
 }
 
 export interface TournamentNotification {

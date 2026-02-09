@@ -46,6 +46,7 @@ export default function NewClubScreen() {
   const [foundedYear, setFoundedYear] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
+  const [membershipCost, setMembershipCost] = useState('');
   const [selectedFacilities, setSelectedFacilities] = useState<string[]>([]);
 
   const toggleFacility = (id: string) => {
@@ -84,6 +85,7 @@ export default function NewClubScreen() {
       facilities: facilityLabels,
       contactEmail: contactEmail.trim() || undefined,
       contactPhone: contactPhone.trim() || undefined,
+      membershipCost: membershipCost ? parseFloat(membershipCost) : undefined,
     });
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -200,6 +202,19 @@ export default function NewClubScreen() {
                 </Pressable>
               ))}
             </View>
+          </Animated.View>
+
+          {/* Membership Cost */}
+          <Animated.View entering={FadeInDown.duration(400).delay(325)} style={styles.section}>
+            <Text style={styles.sectionTitle}>COÛT CARTE MEMBRE (€/an)</Text>
+            <TextInput
+              style={styles.textInput}
+              value={membershipCost}
+              onChangeText={setMembershipCost}
+              placeholder="Ex: 50"
+              placeholderTextColor={theme.textMuted}
+              keyboardType="numeric"
+            />
           </Animated.View>
 
           {/* Contact */}

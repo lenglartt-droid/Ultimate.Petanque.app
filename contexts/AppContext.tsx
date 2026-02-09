@@ -313,6 +313,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           contactPhone: c.contact_phone,
           terrainId: c.terrain_id,
           terrainName: c.terrain_name,
+          membershipCost: c.membership_cost ? parseFloat(c.membership_cost) : undefined,
         }));
         setClubs(dbClubs.length > 0 ? dbClubs : mockClubs);
       }
@@ -365,6 +366,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           tournamentCategory: t.tournament_category,
           registrationType: t.registration_type,
           tournamentScope: t.tournament_scope,
+          registrationCost: t.registration_cost ? parseFloat(t.registration_cost) : undefined,
+          prizeWon: t.prize_won ? parseFloat(t.prize_won) : undefined,
+          finalResult: t.final_result,
         }));
         setTournaments(dbTournaments.length > 0 ? dbTournaments : mockTournaments);
       }
@@ -581,6 +585,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         contact_phone: club.contactPhone,
         terrain_id: club.terrainId,
         terrain_name: club.terrainName,
+        membership_cost: club.membershipCost,
       }).select().single();
 
       if (error) throw error;
@@ -602,6 +607,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           contactPhone: data.contact_phone,
           terrainId: data.terrain_id,
           terrainName: data.terrain_name,
+          membershipCost: data.membership_cost ? parseFloat(data.membership_cost) : undefined,
         };
         setClubs(prev => [...prev, newClub]);
       }
@@ -645,6 +651,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         tournament_category: tournament.tournamentCategory,
         registration_type: tournament.registrationType,
         tournament_scope: tournament.tournamentScope,
+        registration_cost: tournament.registrationCost,
+        prize_won: tournament.prizeWon,
       }).select().single();
 
       if (error) throw error;
@@ -675,8 +683,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           tournamentCategory: data.tournament_category,
           registrationType: data.registration_type,
           tournamentScope: data.tournament_scope,
-          registrationCost: tournament.registrationCost, // Preserve from input
-          prizeWon: tournament.prizeWon,
+          registrationCost: data.registration_cost ? parseFloat(data.registration_cost) : tournament.registrationCost,
+          prizeWon: data.prize_won ? parseFloat(data.prize_won) : tournament.prizeWon,
         };
         setTournaments(prev => [...prev, newTournament]);
       }
@@ -895,6 +903,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.contactPhone !== undefined) dbUpdates.contact_phone = updates.contactPhone;
       if (updates.terrainId !== undefined) dbUpdates.terrain_id = updates.terrainId;
       if (updates.terrainName !== undefined) dbUpdates.terrain_name = updates.terrainName;
+      if (updates.membershipCost !== undefined) dbUpdates.membership_cost = updates.membershipCost;
       dbUpdates.updated_at = new Date().toISOString();
 
       await supabase.from('clubs').update(dbUpdates).eq('id', id);
