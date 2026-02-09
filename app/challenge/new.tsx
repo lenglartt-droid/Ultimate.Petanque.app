@@ -749,14 +749,21 @@ export default function NewChallengeScreen() {
     return (
       <SafeAreaView edges={['top']} style={styles.container}>
         <View style={styles.header}>
-          <Pressable style={styles.closeButton} onPress={() => setSelectedType(null)}>
+          <Pressable style={styles.closeButton} onPress={() => {
+            setSelectedType(null);
+            setSelectedOpponent(null);
+          }}>
             <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
           <Text style={styles.headerTitle}>{config?.name}</Text>
           <View style={{ width: 40 }} />
         </View>
 
-        <View style={styles.modeSelectionContainer}>
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.modeSelectionScrollContent}
+          showsVerticalScrollIndicator={false}
+        >
           {/* Challenge type badge */}
           <Animated.View entering={FadeInDown.duration(400)} style={styles.modeHeaderBadge}>
             <View style={[styles.modeHeaderIcon, { backgroundColor: config?.color + '20' }]}>
@@ -848,7 +855,7 @@ export default function NewChallengeScreen() {
               Les scores sont enregistrés et comptabilisés dans vos statistiques
             </Text>
           </Animated.View>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -858,7 +865,10 @@ export default function NewChallengeScreen() {
     return (
       <SafeAreaView edges={['top']} style={styles.container}>
         <View style={styles.header}>
-          <Pressable style={styles.closeButton} onPress={() => setChallengeMode(null)}>
+          <Pressable style={styles.closeButton} onPress={() => {
+            setChallengeMode(null);
+            setOpponentSearch('');
+          }}>
             <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
           <Text style={styles.headerTitle}>Choisir adversaire</Text>
@@ -970,8 +980,11 @@ export default function NewChallengeScreen() {
       <SafeAreaView edges={['top']} style={styles.container}>
         <View style={styles.header}>
           <Pressable style={styles.closeButton} onPress={() => {
-            if (challengeMode === '1v1') setSelectedOpponent(null);
-            else setChallengeMode(null);
+            if (challengeMode === '1v1' && selectedOpponent) {
+              setSelectedOpponent(null);
+            } else {
+              setChallengeMode(null);
+            }
           }}>
             <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
@@ -1080,8 +1093,11 @@ export default function NewChallengeScreen() {
       <SafeAreaView edges={['top']} style={styles.container}>
         <View style={styles.header}>
           <Pressable style={styles.closeButton} onPress={() => {
-            if (challengeMode === '1v1') setSelectedOpponent(null);
-            else setChallengeMode(null);
+            if (challengeMode === '1v1' && selectedOpponent) {
+              setSelectedOpponent(null);
+            } else {
+              setChallengeMode(null);
+            }
           }}>
             <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
@@ -1089,7 +1105,11 @@ export default function NewChallengeScreen() {
           <View style={{ width: 40 }} />
         </View>
 
-        <View style={styles.readyContainer}>
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={[styles.readyScrollContent, { paddingBottom: insets.bottom + 100 }]}
+          showsVerticalScrollIndicator={false}
+        >
           <Animated.View entering={ZoomIn.duration(400)} style={styles.readyContent}>
             <View style={[styles.readyIcon, { backgroundColor: config?.color + '20' }]}>
               <MaterialIcons name={config?.icon || 'sports'} size={64} color={config?.color} />
@@ -1111,21 +1131,39 @@ export default function NewChallengeScreen() {
             
             <View style={styles.readyStats}>
               <View style={styles.readyStatItem}>
-                <Text style={styles.readyStatValue}>{config?.totalShots}</Text>
+                <Text style={[styles.readyStatValue, { color: config?.color }]}>{config?.totalShots}</Text>
                 <Text style={styles.readyStatLabel}>Tirs</Text>
               </View>
               {challengeMode === '1v1' && (
                 <View style={styles.readyStatItem}>
-                  <Text style={styles.readyStatValue}>2</Text>
+                  <Text style={[styles.readyStatValue, { color: theme.accent }]}>2</Text>
                   <Text style={styles.readyStatLabel}>Joueurs</Text>
                 </View>
               )}
             </View>
-          </Animated.View>
 
-          <Pressable style={styles.startButton} onPress={startChallenge}>
+            {/* Challenge Info */}
+            <View style={styles.challengeInfoCard}>
+              <View style={styles.challengeInfoRow}>
+                <MaterialIcons name="timer" size={18} color={theme.textSecondary} />
+                <Text style={styles.challengeInfoText}>Chronométré automatiquement</Text>
+              </View>
+              <View style={styles.challengeInfoRow}>
+                <MaterialIcons name="stars" size={18} color={theme.carreauColor} />
+                <Text style={styles.challengeInfoText}>Carreaux comptabilisés</Text>
+              </View>
+              <View style={styles.challengeInfoRow}>
+                <MaterialIcons name="save" size={18} color={theme.primary} />
+                <Text style={styles.challengeInfoText}>Résultats enregistrés dans vos stats</Text>
+              </View>
+            </View>
+          </Animated.View>
+        </ScrollView>
+
+        <View style={[styles.bottomAction, { paddingBottom: insets.bottom + 16 }]}>
+          <Pressable style={[styles.startButton, { backgroundColor: config?.color }]} onPress={startChallenge}>
             <MaterialIcons name="play-arrow" size={28} color="#FFF" />
-            <Text style={styles.startButtonText}>Commencer</Text>
+            <Text style={styles.startButtonText}>Commencer le défi</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -1724,7 +1762,7 @@ const styles = StyleSheet.create({
   modeBadge1v1: { backgroundColor: theme.accent + '15' },
   modeBadgeText: { fontSize: 14, fontWeight: '600', color: theme.primary },
   modeBadgeText1v1: { color: theme.accent },
-  modeSelectionContainer: { flex: 1, paddingHorizontal: 16, paddingTop: 20 },
+  modeSelectionScrollContent: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 40 },
   modeHeaderBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'center', gap: 10, backgroundColor: theme.surface, paddingHorizontal: 16, paddingVertical: 10, borderRadius: theme.borderRadius.full, marginBottom: 20, ...theme.shadows.card },
   modeHeaderIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   modeHeaderText: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
@@ -1808,8 +1846,8 @@ const styles = StyleSheet.create({
   scoringPoints: { fontSize: 20, fontWeight: '700', color: '#FFF' },
   scoringLabel: { fontSize: 12, color: theme.textSecondary },
   bottomAction: { paddingHorizontal: 16, paddingTop: 12, backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border },
-  readyContainer: { flex: 1, justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 32 },
-  readyContent: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  readyScrollContent: { flexGrow: 1, paddingHorizontal: 16, paddingTop: 40, alignItems: 'center', justifyContent: 'center', minHeight: 400 },
+  readyContent: { alignItems: 'center', width: '100%' },
   readyIcon: { width: 120, height: 120, borderRadius: 60, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
   readyTitle: { fontSize: 28, fontWeight: '700', color: theme.textPrimary, marginBottom: 8 },
   readyDescription: { fontSize: 16, color: theme.textSecondary, textAlign: 'center', marginBottom: 16, lineHeight: 24 },
@@ -1817,6 +1855,9 @@ const styles = StyleSheet.create({
   readyStatItem: { alignItems: 'center' },
   readyStatValue: { fontSize: 36, fontWeight: '700', color: theme.primary },
   readyStatLabel: { fontSize: 14, color: theme.textSecondary },
+  challengeInfoCard: { width: '100%', backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginTop: 24, gap: 12, ...theme.shadows.card },
+  challengeInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  challengeInfoText: { fontSize: 14, color: theme.textSecondary, flex: 1 },
   startButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.primary, paddingVertical: 18, borderRadius: theme.borderRadius.md, ...theme.shadows.card },
   startButtonText: { fontSize: 18, fontWeight: '600', color: '#FFF' },
   progressContainer: { paddingHorizontal: 16, paddingVertical: 16 },
