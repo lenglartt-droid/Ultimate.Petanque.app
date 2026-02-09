@@ -1335,17 +1335,33 @@ export default function NewMatchScreen() {
         {/* Footer Button */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
           {hasExitedFullscreen && isMatchReady ? (
-            <Pressable style={styles.saveButton} onPress={() => handleSaveMatch()}>
-              <MaterialIcons name="check" size={24} color="#FFF" />
-              <Text style={styles.saveButtonText}>Enregistrer le match</Text>
-            </Pressable>
+            <View style={styles.footerButtonsRow}>
+              <Pressable 
+                style={styles.returnToMatchButton} 
+                onPress={() => { 
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); 
+                  setFullscreenMode(true); 
+                }}
+              >
+                <MaterialIcons name="fullscreen" size={22} color={theme.primary} />
+                <Text style={styles.returnToMatchButtonText}>Revenir au Match</Text>
+              </Pressable>
+              <Pressable style={styles.saveButton} onPress={() => handleSaveMatch()}>
+                <MaterialIcons name="check" size={22} color="#FFF" />
+                <Text style={styles.saveButtonText}>Enregistrer et clore</Text>
+              </Pressable>
+            </View>
           ) : (
             <Pressable 
               style={styles.fullscreenButton}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setFullscreenMode(true); }}
+              onPress={() => { 
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); 
+                setFullscreenMode(true); 
+                setIsTimerRunning(true);
+              }}
             >
-              <MaterialIcons name="fullscreen" size={24} color="#FFF" />
-              <Text style={styles.fullscreenButtonText}>Plein Écran</Text>
+              <MaterialIcons name="play-arrow" size={24} color="#FFF" />
+              <Text style={styles.fullscreenButtonText}>Commencer le match</Text>
             </Pressable>
           )}
         </View>
@@ -1763,10 +1779,13 @@ const styles = StyleSheet.create({
   summaryValue: { fontSize: 18, fontWeight: '700', color: theme.textPrimary, marginTop: 4 },
   summaryLabel: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
   footer: { paddingHorizontal: 16, paddingTop: 16, backgroundColor: theme.backgroundSecondary, borderTopWidth: 1, borderTopColor: theme.border },
-  fullscreenButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.primary, paddingVertical: 18, borderRadius: theme.borderRadius.lg },
+  fullscreenButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.success, paddingVertical: 18, borderRadius: theme.borderRadius.lg },
   fullscreenButtonText: { fontSize: 17, fontWeight: '600', color: '#FFF' },
-  saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.success, paddingVertical: 18, borderRadius: theme.borderRadius.lg },
-  saveButtonText: { fontSize: 17, fontWeight: '600', color: '#FFF' },
+  footerButtonsRow: { flexDirection: 'row', gap: 12 },
+  returnToMatchButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.primary + '15', paddingVertical: 16, borderRadius: theme.borderRadius.lg, borderWidth: 2, borderColor: theme.primary },
+  returnToMatchButtonText: { fontSize: 14, fontWeight: '600', color: theme.primary },
+  saveButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.success, paddingVertical: 16, borderRadius: theme.borderRadius.lg },
+  saveButtonText: { fontSize: 14, fontWeight: '600', color: '#FFF' },
   modalContainer: { flex: 1, backgroundColor: theme.backgroundSecondary },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
   modalCloseBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
