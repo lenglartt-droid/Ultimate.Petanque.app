@@ -1122,14 +1122,14 @@ export default function StatsScreen() {
                     {tirStats.totalDetailedTirs > 0 ? (
                       <>
                         <StatRow 
-                          label="Au fer" 
+                          label="Tir tendu" 
                           value={`${tirStats.tirAuFer.success}/${tirStats.tirAuFer.total}`} 
                           subValue={tirStats.tirAuFer.total > 0 ? `${Math.round((tirStats.tirAuFer.success / tirStats.tirAuFer.total) * 100)}% réussite` : 'Aucun'}
                           icon="gps-fixed" 
                           color={theme.tirColor} 
                         />
                         <StatRow 
-                          label="Au plomb" 
+                          label="Tir en cloche" 
                           value={`${tirStats.tirAuPlomb.success}/${tirStats.tirAuPlomb.total}`} 
                           subValue={tirStats.tirAuPlomb.total > 0 ? `${Math.round((tirStats.tirAuPlomb.success / tirStats.tirAuPlomb.total) * 100)}% réussite` : 'Aucun'}
                           icon="flight-takeoff" 

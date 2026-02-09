@@ -89,8 +89,8 @@ export interface SimpleShotRecord {
 // ============================================
 
 const SHOT_TYPES = [
-  { id: 'au_fer' as SimpleShotType, label: 'Au fer', icon: 'gps-fixed', desc: 'Direct, sans rebond' },
-  { id: 'au_plomb' as SimpleShotType, label: 'Au plomb', icon: 'flight-takeoff', desc: 'Tir en cloche' },
+  { id: 'au_fer' as SimpleShotType, label: 'Tir tendu', icon: 'gps-fixed', desc: 'Direct, sans rebond' },
+  { id: 'au_plomb' as SimpleShotType, label: 'Tir en cloche', icon: 'flight-takeoff', desc: 'Lancé en hauteur' },
   { id: 'en_rafle' as SimpleShotType, label: 'En rafle', icon: 'swap-horiz', desc: 'Tir rasant' },
   { id: 'devant_boule' as SimpleShotType, label: 'Devant la boule', icon: 'redo', desc: 'Avec rebond' },
   { id: 'carreau' as SimpleShotType, label: 'Carreau', icon: 'stars', desc: 'Prend la place', special: true },
