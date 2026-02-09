@@ -17,7 +17,7 @@ import Animated, { FadeInDown, FadeIn, ZoomIn, useAnimatedStyle, useSharedValue,
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
-import { AdvancedShotNotation, AdvancedShotRecord } from '@/components';
+import { SimplifiedShotNotation, SimpleShotRecord } from '@/components';
 import { 
   ChallengeType, 
   ChallengeShot,
@@ -202,9 +202,10 @@ export default function NewChallengeScreen() {
   const [opponentAtelierIndex, setOpponentAtelierIndex] = useState(0);
   const [opponentDistanceIndex, setOpponentDistanceIndex] = useState(0);
 
-  // Advanced notation state
-  const [showAdvancedNotation, setShowAdvancedNotation] = useState(false);
-  const [advancedShotRecords, setAdvancedShotRecords] = useState<AdvancedShotRecord[]>([]);
+  // Simplified notation state
+  const [showNotation, setShowNotation] = useState(false);
+  const [notationRecords, setNotationRecords] = useState<SimpleShotRecord[]>([]);
+  const [pendingNotationIsOpponent, setPendingNotationIsOpponent] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -529,16 +530,21 @@ export default function NewChallengeScreen() {
     recordPrecisionShot(0, currentTurn === 'opponent');
   }, [recordPrecisionShot, currentTurn]);
 
-  // Handle advanced notation for 10 tirs challenge
-  const handleAdvancedShotSubmit = useCallback((record: AdvancedShotRecord) => {
-    setAdvancedShotRecords(prev => [...prev, record]);
+  // Handle simplified notation for 10 tirs challenge
+  const openNotationModal = useCallback((isOpponent: boolean) => {
+    setPendingNotationIsOpponent(isOpponent);
+    setShowNotation(true);
+  }, []);
+
+  const handleNotationSubmit = useCallback((record: SimpleShotRecord) => {
+    setNotationRecords(prev => [...prev, record]);
     
     // Record the shot in the normal flow
-    const isOpponent = currentTurn === 'opponent';
-    recordShot(record.success, record.carreau || false, isOpponent);
+    recordShot(record.success, record.carreau || false, pendingNotationIsOpponent);
     
-    setShowAdvancedNotation(false);
-  }, [currentTurn, recordShot]);
+    setShowNotation(false);
+    setPendingNotationIsOpponent(false);
+  }, [pendingNotationIsOpponent, recordShot]);
 
   // Determine winner for 1v1
   const getWinner = (): 'player' | 'opponent' | 'draw' => {
@@ -574,6 +580,19 @@ export default function NewChallengeScreen() {
 
     const winner = challengeMode === '1v1' ? getWinner() : undefined;
 
+    // Convert notation records to challenge detailed shots format
+    const detailedShots = notationRecords.map((record, idx) => ({
+      id: `shot-${idx}-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      actionType: record.actionType,
+      success: record.success,
+      carreau: record.carreau,
+      shotType: record.shotType,
+      shotQuality: record.shotQuality,
+      pointType: record.pointType,
+      pointQuality: record.pointQuality,
+    }));
+
     if (selectedType === 'precision') {
       addChallenge({
         type: selectedType,
@@ -608,6 +627,7 @@ export default function NewChallengeScreen() {
         carreauCount,
         successRate,
         duration: elapsedTime,
+        detailedShots: detailedShots.length > 0 ? detailedShots : undefined,
       });
     }
 
@@ -1617,49 +1637,61 @@ export default function NewChallengeScreen() {
           {challengeMode === '1v1' ? (isOpponentTurn ? `Tir de ${selectedOpponent?.name}` : 'Votre tir') : 'Ce tir est...'}
         </Text>
         
+        {/* Main action buttons - TIR opens notation modal */}
         <View style={styles.shotButtonsRow}>
           <Pressable
-            style={[styles.shotButton, styles.shotButtonFail]}
-            onPress={() => recordShot(false, false, isOpponentTurn)}
+            style={[styles.shotButton, styles.shotButtonNotation]}
+            onPress={() => openNotationModal(isOpponentTurn)}
           >
-            <MaterialIcons name="close" size={48} color="#FFF" />
-            <Text style={styles.shotButtonText}>Raté</Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.shotButton, styles.shotButtonSuccess]}
-            onPress={() => recordShot(true, false, isOpponentTurn)}
-            onLongPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-              setShowAdvancedNotation(true);
-            }}
-          >
-            <MaterialIcons name="check" size={48} color="#FFF" />
-            <Text style={styles.shotButtonText}>Réussi</Text>
+            <MaterialIcons name="gps-fixed" size={48} color="#FFF" />
+            <Text style={styles.shotButtonText}>TIR</Text>
+            <Text style={styles.shotButtonSubtext}>Notation détaillée</Text>
           </Pressable>
         </View>
 
-        <Pressable
-          style={[styles.carreauButton]}
-          onPress={() => recordShot(true, true, isOpponentTurn)}
-        >
-          <MaterialIcons name="stars" size={24} color={theme.carreauColor} />
-          <Text style={styles.carreauButtonText}>Carreau !</Text>
-        </Pressable>
+        {/* Quick buttons for fast recording */}
+        <View style={styles.quickButtonsRow}>
+          <Text style={styles.quickButtonsLabel}>Enregistrement rapide :</Text>
+          <View style={styles.quickButtonsContainer}>
+            <Pressable
+              style={[styles.quickButton, styles.quickButtonFail]}
+              onPress={() => recordShot(false, false, isOpponentTurn)}
+            >
+              <MaterialIcons name="close" size={24} color="#FFF" />
+              <Text style={styles.quickButtonText}>Raté</Text>
+            </Pressable>
 
-        {/* Hint for advanced notation */}
-        <Text style={styles.advancedHintText}>Appui long sur "Réussi" = notation détaillée</Text>
+            <Pressable
+              style={[styles.quickButton, styles.quickButtonSuccess]}
+              onPress={() => recordShot(true, false, isOpponentTurn)}
+            >
+              <MaterialIcons name="check" size={24} color="#FFF" />
+              <Text style={styles.quickButtonText}>Réussi</Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.quickButton, styles.quickButtonCarreau]}
+              onPress={() => recordShot(true, true, isOpponentTurn)}
+            >
+              <MaterialIcons name="stars" size={24} color="#FFF" />
+              <Text style={styles.quickButtonText}>Carreau</Text>
+            </Pressable>
+          </View>
+        </View>
       </View>
 
-      {/* Advanced Shot Notation Modal */}
-      <AdvancedShotNotation
-        visible={showAdvancedNotation}
-        onClose={() => setShowAdvancedNotation(false)}
+      {/* Simplified Shot Notation Modal */}
+      <SimplifiedShotNotation
+        visible={showNotation}
+        onClose={() => {
+          setShowNotation(false);
+          setPendingNotationIsOpponent(false);
+        }}
         actionType="tir"
-        playerId={isOpponentTurn ? (selectedOpponent?.id || '') : (selfPlayer?.id || userStats.playerId)}
-        playerName={isOpponentTurn ? (selectedOpponent?.name || 'Adversaire') : (selfPlayer?.name || userStats.playerName)}
-        team={isOpponentTurn ? 'B' : 'A'}
-        onSubmit={handleAdvancedShotSubmit}
+        playerId={pendingNotationIsOpponent ? (selectedOpponent?.id || '') : (selfPlayer?.id || userStats.playerId)}
+        playerName={pendingNotationIsOpponent ? (selectedOpponent?.name || 'Adversaire') : (selfPlayer?.name || userStats.playerName)}
+        team={pendingNotationIsOpponent ? 'B' : 'A'}
+        onSubmit={handleNotationSubmit}
       />
     </SafeAreaView>
   );
@@ -1802,12 +1834,17 @@ const styles = StyleSheet.create({
   shotButtonsTitle: { fontSize: 18, fontWeight: '600', color: theme.textPrimary, textAlign: 'center', marginBottom: 20 },
   shotButtonsRow: { flexDirection: 'row', gap: 16, marginBottom: 16 },
   shotButton: { flex: 1, aspectRatio: 1, alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadius.lg, ...theme.shadows.cardElevated },
-  shotButtonFail: { backgroundColor: theme.error },
-  shotButtonSuccess: { backgroundColor: theme.success },
+  shotButtonNotation: { backgroundColor: theme.tirColor, flex: 1 },
   shotButtonText: { fontSize: 18, fontWeight: '600', color: '#FFF', marginTop: 8 },
-  carreauButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.carreauColor + '15', paddingVertical: 16, borderRadius: theme.borderRadius.md, borderWidth: 2, borderColor: theme.carreauColor },
-  carreauButtonText: { fontSize: 16, fontWeight: '600', color: theme.carreauColor },
-  advancedHintText: { fontSize: 11, color: theme.textMuted, textAlign: 'center', marginTop: 16, fontStyle: 'italic' },
+  shotButtonSubtext: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 4 },
+  quickButtonsRow: { marginTop: 20 },
+  quickButtonsLabel: { fontSize: 13, color: theme.textSecondary, textAlign: 'center', marginBottom: 12 },
+  quickButtonsContainer: { flexDirection: 'row', gap: 10 },
+  quickButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, borderRadius: theme.borderRadius.md },
+  quickButtonFail: { backgroundColor: theme.error },
+  quickButtonSuccess: { backgroundColor: theme.success },
+  quickButtonCarreau: { backgroundColor: theme.carreauColor },
+  quickButtonText: { fontSize: 13, fontWeight: '600', color: '#FFF' },
   precisionGameContent: { paddingHorizontal: 16, paddingTop: 16 },
   currentAtelierCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 16, ...theme.shadows.card },
   currentAtelierHeader: { flexDirection: 'row', alignItems: 'center' },

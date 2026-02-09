@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
@@ -232,10 +232,12 @@ function groupByDate(items: HistoryItem[], seriesGroups: Map<string, SeriesGroup
 
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
-  const { matches, challenges } = useApp();
+  const { matches, challenges, updateChallenge, deleteChallenge } = useApp();
   const [contentFilter, setContentFilter] = useState<ContentFilter>('all');
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodOption>('all');
   const [showPeriodModal, setShowPeriodModal] = useState(false);
+  const [editingChallenge, setEditingChallenge] = useState<Challenge | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   const dateRange = useMemo(() => getDateRange(selectedPeriod), [selectedPeriod]);
 
@@ -737,6 +739,19 @@ export default function HistoryScreen() {
     );
   };
 
+  const handleEditChallenge = (challenge: Challenge) => {
+    Haptics.selectionAsync();
+    setEditingChallenge(challenge);
+    setShowEditModal(true);
+  };
+
+  const handleDeleteChallenge = (challengeId: string) => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    deleteChallenge(challengeId);
+    setShowEditModal(false);
+    setEditingChallenge(null);
+  };
+
   const renderChallengeCard = (challenge: Challenge) => {
     const config = CHALLENGE_CONFIG[challenge.type];
     const score = challenge.type === 'precision' 
@@ -744,27 +759,50 @@ export default function HistoryScreen() {
       : challenge.successRate || 0;
     const maxScore = challenge.type === 'precision' ? 100 : 100;
     const percentage = Math.min(100, (score / maxScore) * 100);
+    const is1v1 = challenge.mode === '1v1';
     
     return (
-      <Pressable style={styles.card}>
+      <Pressable 
+        style={styles.card}
+        onPress={() => handleEditChallenge(challenge)}
+        onLongPress={() => handleEditChallenge(challenge)}
+      >
         <View style={[styles.cardIndicator, { backgroundColor: config.color }]} />
         
         <View style={styles.cardContent}>
           <View style={styles.cardHeader}>
-            <View style={[styles.typeBadge, { backgroundColor: config.color + '15' }]}>
-              <MaterialIcons name={config.icon} size={14} color={config.color} />
-              <Text style={[styles.typeBadgeText, { color: config.color }]}>Défi</Text>
+            <View style={styles.cardHeaderLeft}>
+              <View style={[styles.typeBadge, { backgroundColor: config.color + '15' }]}>
+                <MaterialIcons name={config.icon} size={14} color={config.color} />
+                <Text style={[styles.typeBadgeText, { color: config.color }]}>Défi</Text>
+              </View>
+              {is1v1 && (
+                <View style={[styles.typeBadge, { backgroundColor: theme.accent + '15' }]}>
+                  <MaterialIcons name="people" size={14} color={theme.accent} />
+                  <Text style={[styles.typeBadgeText, { color: theme.accent }]}>1v1</Text>
+                </View>
+              )}
             </View>
-            <Text style={styles.cardTime}>
-              {new Date(challenge.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-            </Text>
+            <View style={styles.cardHeaderRight}>
+              <Text style={styles.cardTime}>
+                {new Date(challenge.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+              <Pressable 
+                style={styles.editIconBtn}
+                onPress={() => handleEditChallenge(challenge)}
+              >
+                <MaterialIcons name="edit" size={16} color={theme.textMuted} />
+              </Pressable>
+            </View>
           </View>
 
           <View style={styles.challengeBody}>
             <View style={styles.challengeInfo}>
               <Text style={styles.challengeName}>{config.name}</Text>
               {challenge.playerName && (
-                <Text style={styles.challengePlayer}>{challenge.playerName}</Text>
+                <Text style={styles.challengePlayer}>
+                  {is1v1 ? `${challenge.playerName} vs ${challenge.opponentName}` : challenge.playerName}
+                </Text>
               )}
             </View>
             
@@ -777,6 +815,25 @@ export default function HistoryScreen() {
               </Text>
             </View>
           </View>
+
+          {/* 1v1 Winner Display */}
+          {is1v1 && challenge.winner && (
+            <View style={[
+              styles.challengeWinnerBadge,
+              challenge.winner === 'player' && styles.challengeWinnerBadgeWin,
+              challenge.winner === 'opponent' && styles.challengeWinnerBadgeLoss,
+              challenge.winner === 'draw' && styles.challengeWinnerBadgeDraw,
+            ]}>
+              <MaterialIcons 
+                name={challenge.winner === 'draw' ? 'handshake' : challenge.winner === 'player' ? 'emoji-events' : 'sentiment-dissatisfied'} 
+                size={14} 
+                color="#FFF" 
+              />
+              <Text style={styles.challengeWinnerText}>
+                {challenge.winner === 'draw' ? 'Égalité' : challenge.winner === 'player' ? 'Victoire' : 'Défaite'}
+              </Text>
+            </View>
+          )}
 
           <View style={styles.progressContainer}>
             <View style={styles.progressBar}>
@@ -924,6 +981,206 @@ export default function HistoryScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Challenge Edit Modal */}
+      <Modal
+        visible={showEditModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => {
+          setShowEditModal(false);
+          setEditingChallenge(null);
+        }}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Détails du défi</Text>
+            <Pressable
+              style={styles.modalCloseBtn}
+              onPress={() => {
+                setShowEditModal(false);
+                setEditingChallenge(null);
+              }}
+            >
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+          </View>
+
+          {editingChallenge && (
+            <ScrollView style={styles.modalContent} contentContainerStyle={styles.editModalContent}>
+              {/* Challenge Header */}
+              <View style={styles.editChallengeHeader}>
+                <View style={[
+                  styles.editChallengeIcon,
+                  { backgroundColor: CHALLENGE_CONFIG[editingChallenge.type].color + '20' }
+                ]}>
+                  <MaterialIcons 
+                    name={CHALLENGE_CONFIG[editingChallenge.type].icon} 
+                    size={32} 
+                    color={CHALLENGE_CONFIG[editingChallenge.type].color} 
+                  />
+                </View>
+                <View style={styles.editChallengeInfo}>
+                  <Text style={styles.editChallengeName}>
+                    {CHALLENGE_CONFIG[editingChallenge.type].name}
+                  </Text>
+                  <Text style={styles.editChallengeDate}>
+                    {new Date(editingChallenge.date).toLocaleDateString('fr-FR', {
+                      weekday: 'long',
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Mode Badge */}
+              <View style={styles.editModeBadge}>
+                <MaterialIcons 
+                  name={editingChallenge.mode === 'solo' ? 'person' : 'people'} 
+                  size={18} 
+                  color={editingChallenge.mode === 'solo' ? theme.primary : theme.accent} 
+                />
+                <Text style={[
+                  styles.editModeBadgeText,
+                  { color: editingChallenge.mode === 'solo' ? theme.primary : theme.accent }
+                ]}>
+                  {editingChallenge.mode === 'solo' ? 'Mode Solo' : `1v1 vs ${editingChallenge.opponentName}`}
+                </Text>
+              </View>
+
+              {/* Score Display */}
+              <View style={styles.editScoreCard}>
+                <Text style={styles.editScoreLabel}>Score</Text>
+                <Text style={[
+                  styles.editScoreValue,
+                  { color: CHALLENGE_CONFIG[editingChallenge.type].color }
+                ]}>
+                  {editingChallenge.type === 'precision' 
+                    ? `${editingChallenge.totalPoints || 0} / 100 pts`
+                    : `${editingChallenge.successRate || 0}%`
+                  }
+                </Text>
+                {editingChallenge.type !== 'precision' && (
+                  <Text style={styles.editScoreSubtext}>
+                    {editingChallenge.successCount || 0} réussis sur {editingChallenge.totalShots || 0} tirs
+                  </Text>
+                )}
+              </View>
+
+              {/* Stats Grid */}
+              <View style={styles.editStatsGrid}>
+                {editingChallenge.carreauCount !== undefined && editingChallenge.carreauCount > 0 && (
+                  <View style={styles.editStatItem}>
+                    <MaterialIcons name="stars" size={24} color={theme.carreauColor} />
+                    <Text style={styles.editStatValue}>{editingChallenge.carreauCount}</Text>
+                    <Text style={styles.editStatLabel}>Carreaux</Text>
+                  </View>
+                )}
+                {editingChallenge.duration && (
+                  <View style={styles.editStatItem}>
+                    <MaterialIcons name="timer" size={24} color={theme.primary} />
+                    <Text style={styles.editStatValue}>
+                      {Math.floor(editingChallenge.duration / 60)}:{(editingChallenge.duration % 60).toString().padStart(2, '0')}
+                    </Text>
+                    <Text style={styles.editStatLabel}>Durée</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* 1v1 Opponent Results */}
+              {editingChallenge.mode === '1v1' && editingChallenge.opponentResult && (
+                <View style={styles.editOpponentCard}>
+                  <Text style={styles.editOpponentTitle}>Résultat adversaire</Text>
+                  <View style={styles.editOpponentRow}>
+                    <Text style={styles.editOpponentName}>{editingChallenge.opponentName}</Text>
+                    <Text style={styles.editOpponentScore}>
+                      {editingChallenge.type === 'precision'
+                        ? `${editingChallenge.opponentResult.totalPoints || 0} pts`
+                        : `${editingChallenge.opponentResult.successRate || 0}%`
+                      }
+                    </Text>
+                  </View>
+                  {editingChallenge.winner && (
+                    <View style={[
+                      styles.editWinnerBadge,
+                      editingChallenge.winner === 'player' && { backgroundColor: theme.success },
+                      editingChallenge.winner === 'opponent' && { backgroundColor: theme.error },
+                      editingChallenge.winner === 'draw' && { backgroundColor: theme.warning },
+                    ]}>
+                      <MaterialIcons 
+                        name={editingChallenge.winner === 'draw' ? 'handshake' : editingChallenge.winner === 'player' ? 'emoji-events' : 'sentiment-dissatisfied'} 
+                        size={16} 
+                        color="#FFF" 
+                      />
+                      <Text style={styles.editWinnerText}>
+                        {editingChallenge.winner === 'draw' ? 'Match nul' : editingChallenge.winner === 'player' ? 'Vous avez gagné !' : `${editingChallenge.opponentName} a gagné`}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Shot by shot display */}
+              {editingChallenge.shots && editingChallenge.shots.length > 0 && (
+                <View style={styles.editShotsSection}>
+                  <Text style={styles.editSectionTitle}>Détail des tirs</Text>
+                  <View style={styles.editShotsGrid}>
+                    {editingChallenge.shots.map((shot, idx) => (
+                      <View 
+                        key={idx} 
+                        style={[
+                          styles.editShotDot,
+                          shot.success && styles.editShotDotSuccess,
+                          !shot.success && styles.editShotDotFail,
+                          shot.carreau && styles.editShotDotCarreau,
+                        ]}
+                      >
+                        <Text style={styles.editShotDotText}>{idx + 1}</Text>
+                        {shot.carreau && <MaterialIcons name="star" size={8} color="#FFF" style={styles.editShotStar} />}
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Notes */}
+              {editingChallenge.notes && (
+                <View style={styles.editNotesSection}>
+                  <Text style={styles.editSectionTitle}>Notes</Text>
+                  <Text style={styles.editNotesText}>{editingChallenge.notes}</Text>
+                </View>
+              )}
+
+              {/* Actions */}
+              <View style={styles.editActionsRow}>
+                <Pressable 
+                  style={styles.editDeleteBtn}
+                  onPress={() => {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                    handleDeleteChallenge(editingChallenge.id);
+                  }}
+                >
+                  <MaterialIcons name="delete" size={20} color={theme.error} />
+                  <Text style={styles.editDeleteBtnText}>Supprimer</Text>
+                </Pressable>
+                <Pressable 
+                  style={styles.editCloseBtn}
+                  onPress={() => {
+                    setShowEditModal(false);
+                    setEditingChallenge(null);
+                  }}
+                >
+                  <Text style={styles.editCloseBtnText}>Fermer</Text>
+                </Pressable>
+              </View>
+            </ScrollView>
+          )}
+        </SafeAreaView>
+      </Modal>
 
       {/* Period Selection Modal */}
       <Modal
@@ -1791,5 +2048,262 @@ const styles = StyleSheet.create({
   periodOptionTextActive: {
     fontWeight: '600',
     color: theme.primary,
+  },
+  // Card header right
+  cardHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  editIconBtn: {
+    padding: 4,
+  },
+  // Challenge winner badge
+  challengeWinnerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: 12,
+  },
+  challengeWinnerBadgeWin: {
+    backgroundColor: theme.success,
+  },
+  challengeWinnerBadgeLoss: {
+    backgroundColor: theme.error,
+  },
+  challengeWinnerBadgeDraw: {
+    backgroundColor: theme.warning,
+  },
+  challengeWinnerText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  // Edit Modal Styles
+  editModalContent: {
+    paddingBottom: 32,
+  },
+  editChallengeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 20,
+  },
+  editChallengeIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editChallengeInfo: {
+    flex: 1,
+  },
+  editChallengeName: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: theme.textPrimary,
+    marginBottom: 4,
+  },
+  editChallengeDate: {
+    fontSize: 13,
+    color: theme.textSecondary,
+  },
+  editModeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.full,
+    marginBottom: 20,
+  },
+  editModeBadgeText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  editScoreCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  editScoreLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  editScoreValue: {
+    fontSize: 48,
+    fontWeight: '800',
+  },
+  editScoreSubtext: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    marginTop: 4,
+  },
+  editStatsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 32,
+    marginBottom: 20,
+  },
+  editStatItem: {
+    alignItems: 'center',
+  },
+  editStatValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: theme.textPrimary,
+    marginTop: 8,
+  },
+  editStatLabel: {
+    fontSize: 12,
+    color: theme.textMuted,
+    marginTop: 2,
+  },
+  editOpponentCard: {
+    backgroundColor: theme.accent + '10',
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: theme.accent + '30',
+  },
+  editOpponentTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.accent,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 12,
+  },
+  editOpponentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  editOpponentName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  editOpponentScore: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.accent,
+  },
+  editWinnerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    borderRadius: theme.borderRadius.md,
+  },
+  editWinnerText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  editShotsSection: {
+    marginBottom: 20,
+  },
+  editSectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textSecondary,
+    marginBottom: 12,
+  },
+  editShotsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  editShotDot: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  editShotDotSuccess: {
+    backgroundColor: theme.success,
+  },
+  editShotDotFail: {
+    backgroundColor: theme.error,
+  },
+  editShotDotCarreau: {
+    backgroundColor: theme.carreauColor,
+  },
+  editShotDotText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  editShotStar: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+  },
+  editNotesSection: {
+    marginBottom: 20,
+  },
+  editNotesText: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    lineHeight: 22,
+    backgroundColor: theme.backgroundSecondary,
+    padding: 14,
+    borderRadius: theme.borderRadius.md,
+  },
+  editActionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  editDeleteBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    backgroundColor: theme.error + '15',
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.error + '30',
+  },
+  editDeleteBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.error,
+  },
+  editCloseBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    backgroundColor: theme.primary,
+    borderRadius: theme.borderRadius.md,
+  },
+  editCloseBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFF',
   },
 });

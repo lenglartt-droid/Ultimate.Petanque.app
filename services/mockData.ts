@@ -399,6 +399,23 @@ export interface ChallengePlayerResult {
   atelierScores?: { [key in PrecisionAtelier]?: number };
 }
 
+// Detailed shot record for challenge notation
+export interface ChallengeDetailedShot {
+  id: string;
+  timestamp: string;
+  actionType: 'tir' | 'point';
+  success: boolean;
+  carreau?: boolean;
+  // Tir details - success
+  shotType?: 'au_fer' | 'au_plomb' | 'en_rafle' | 'court_ramasse' | 'carreau';
+  // Tir details - failure
+  failedShotType?: 'court_droite' | 'court_gauche' | 'long' | 'tir_bouchon';
+  shotQuality?: 'gain_point' | 'sans_effet' | 'negatif' | 'decisif';
+  // Point details
+  pointType?: 'roule' | 'plombe' | 'demi_portee' | 'portee';
+  pointQuality?: 'excellent' | 'bon' | 'moyen' | 'au_bouchon' | 'rate' | 'crochete' | 'sorti';
+}
+
 export interface Challenge {
   id: string;
   type: ChallengeType;
@@ -421,6 +438,7 @@ export interface Challenge {
   atelierScores?: { [key in PrecisionAtelier]?: number };
   duration?: number;
   notes?: string;
+  detailedShots?: ChallengeDetailedShot[];
 }
 
 export interface ChallengeStats {
