@@ -1096,6 +1096,7 @@ export default function StatsScreen() {
                       <StatRow label="Excellent (< 10 cm)" value={pointStats.pointExcellent} subValue={`${Math.round((pointStats.pointExcellent / pointStats.successQualitiesTotal) * 100)}%`} icon="stars" color={theme.carreauColor} />
                       <StatRow label="Bon (< 30 cm)" value={pointStats.pointBon} subValue={`${Math.round((pointStats.pointBon / pointStats.successQualitiesTotal) * 100)}%`} icon="check-circle" color={theme.success} />
                       <StatRow label="Moyen (< 50 cm)" value={pointStats.pointMoyen} subValue={`${Math.round((pointStats.pointMoyen / pointStats.successQualitiesTotal) * 100)}%`} icon="radio-button-checked" color={theme.warning} />
+                      <StatRow label="Au bouchon" value={pointStats.pointAuBouchon} subValue={`${Math.round((pointStats.pointAuBouchon / pointStats.successQualitiesTotal) * 100)}%`} icon="adjust" color={theme.primary} />
                       <StatRow label="Devant de boule" value={pointStats.pointDevantBoule} subValue={`${Math.round((pointStats.pointDevantBoule / pointStats.successQualitiesTotal) * 100)}%`} icon="sports-baseball" color={theme.accent} />
                     </View>
                   </Animated.View>

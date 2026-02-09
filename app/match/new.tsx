@@ -1260,9 +1260,9 @@ export default function NewMatchScreen() {
                         <Text style={styles.fsWinnerBtnRevancheText}>
                           {seriesId 
                             ? (seriesWinsA === 1 && seriesWinsB === 0) || (seriesWinsA === 0 && seriesWinsB === 1)
-                              ? 'Match retour'
+                              ? 'Mène 2'
                               : (seriesWinsA === 1 && seriesWinsB === 1) 
-                                ? 'Finale !'
+                                ? 'Finale'
                                 : 'Revanche'
                             : 'Revanche'
                           }
@@ -1297,7 +1297,7 @@ export default function NewMatchScreen() {
         </Pressable>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>
-            {isTournamentMode ? 'Match Tournoi' : isFinale ? 'FINALE' : isRevanche ? 'Revanche' : 'Nouveau Match'}
+            {isTournamentMode ? 'Match Tournoi' : isFinale ? 'Finale' : isRevanche ? `Mène ${currentMatchNumber}` : 'Nouveau Match'}
           </Text>
           {isTournamentMode && linkedTournament && (
             <Text style={styles.headerSubtitle} numberOfLines={1}>{linkedTournament.name}</Text>
