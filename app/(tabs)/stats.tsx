@@ -14,7 +14,7 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
-import Svg, { Circle, Line, Path, G, Text as SvgText, Rect } from 'react-native-svg';
+import Svg, { Circle, Line, G, Text as SvgText, Rect } from 'react-native-svg';
 import { router } from 'expo-router';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -23,7 +23,8 @@ const { width: screenWidth } = Dimensions.get('window');
 // TYPES & CONSTANTS
 // ============================================
 type TimeFilter = 'week' | 'month' | 'year' | 'all';
-type StatsCategory = 'performance' | 'tir' | 'point';
+type ProgressionFilter = '4weeks' | '8weeks' | '3months' | '6months' | 'year';
+type StatsCategory = 'performance' | 'tir' | 'point' | 'errors';
 
 const TIME_FILTERS: { id: TimeFilter; label: string }[] = [
   { id: 'week', label: '7j' },
@@ -32,10 +33,19 @@ const TIME_FILTERS: { id: TimeFilter; label: string }[] = [
   { id: 'all', label: 'Tout' },
 ];
 
+const PROGRESSION_FILTERS: { id: ProgressionFilter; label: string; weeks: number }[] = [
+  { id: '4weeks', label: '4 sem.', weeks: 4 },
+  { id: '8weeks', label: '8 sem.', weeks: 8 },
+  { id: '3months', label: '3 mois', weeks: 13 },
+  { id: '6months', label: '6 mois', weeks: 26 },
+  { id: 'year', label: '1 an', weeks: 52 },
+];
+
 const CATEGORY_TABS: { id: StatsCategory; label: string; icon: string; color: string }[] = [
-  { id: 'performance', label: 'Performance', icon: 'emoji-events', color: theme.primary },
+  { id: 'performance', label: 'Perf.', icon: 'emoji-events', color: theme.primary },
   { id: 'tir', label: 'Tir', icon: 'gps-fixed', color: theme.tirColor },
-  { id: 'point', label: 'Pointage', icon: 'adjust', color: theme.pointColor },
+  { id: 'point', label: 'Point', icon: 'adjust', color: theme.pointColor },
+  { id: 'errors', label: 'Erreurs', icon: 'error-outline', color: theme.error },
 ];
 
 // ============================================
@@ -123,47 +133,6 @@ function ProgressRing({
   );
 }
 
-// Stat Card Component
-function StatCard({ 
-  title, 
-  value, 
-  subtitle, 
-  icon, 
-  color = theme.primary,
-  trend,
-  small = false,
-}: { 
-  title: string; 
-  value: string | number; 
-  subtitle?: string;
-  icon?: string;
-  color?: string;
-  trend?: 'up' | 'down' | 'neutral';
-  small?: boolean;
-}) {
-  return (
-    <View style={[styles.statCard, small && styles.statCardSmall]}>
-      {icon && (
-        <View style={[styles.statCardIcon, { backgroundColor: color + '15' }]}>
-          <MaterialIcons name={icon as any} size={small ? 16 : 20} color={color} />
-        </View>
-      )}
-      <Text style={[styles.statCardTitle, small && styles.statCardTitleSmall]}>{title}</Text>
-      <View style={styles.statCardValueRow}>
-        <Text style={[styles.statCardValue, small && styles.statCardValueSmall, { color }]}>{value}</Text>
-        {trend && (
-          <MaterialIcons 
-            name={trend === 'up' ? 'trending-up' : trend === 'down' ? 'trending-down' : 'remove'} 
-            size={14} 
-            color={trend === 'up' ? theme.success : trend === 'down' ? theme.error : theme.textMuted} 
-          />
-        )}
-      </View>
-      {subtitle && <Text style={styles.statCardSubtitle}>{subtitle}</Text>}
-    </View>
-  );
-}
-
 // Stat Row Component
 function StatRow({ 
   label, 
@@ -235,7 +204,7 @@ function ProgressBar({ value, color, showValue = true }: { value: number; color:
   );
 }
 
-// Breakdown Bar (for showing distribution)
+// Breakdown Bar
 function BreakdownBar({ items }: { items: { label: string; value: number; color: string }[] }) {
   const total = items.reduce((sum, item) => sum + item.value, 0);
   
@@ -291,6 +260,8 @@ export default function StatsScreen() {
   
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
   const [category, setCategory] = useState<StatsCategory>('performance');
+  const [showProgressionModal, setShowProgressionModal] = useState(false);
+  const [progressionFilter, setProgressionFilter] = useState<ProgressionFilter>('8weeks');
 
   // Filter data
   const filteredMatches = filterByTime(matches, timeFilter);
@@ -347,17 +318,13 @@ export default function StatsScreen() {
     const pointDiff = totalPointsFor - totalPointsAgainst;
     const avgPointDiff = total > 0 ? (pointDiff / total).toFixed(1) : '0';
     
-    // Mène stats
     const meneWinRate = totalMenes > 0 ? Math.round((menesWon / totalMenes) * 100) : 0;
     const avgMenePointsFor = totalMenes > 0 ? (totalMenePointsFor / totalMenes).toFixed(1) : '0';
     const avgMenePointsAgainst = totalMenes > 0 ? (totalMenePointsAgainst / totalMenes).toFixed(1) : '0';
     
-    // Streaks calculation
-    let currentStreak = 0;
-    let maxWinStreak = 0;
-    let maxLossStreak = 0;
-    let tempWinStreak = 0;
-    let tempLossStreak = 0;
+    // Streaks
+    let currentStreak = 0, maxWinStreak = 0, maxLossStreak = 0;
+    let tempWinStreak = 0, tempLossStreak = 0;
     
     const sortedMatches = [...filteredMatches].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     sortedMatches.forEach((m, i) => {
@@ -378,9 +345,7 @@ export default function StatsScreen() {
     const seriesMap: Record<string, { wins: number; seriesWinner?: 'A' | 'B' }> = {};
     filteredMatches.forEach(m => {
       if (m.seriesInfo?.seriesId) {
-        if (!seriesMap[m.seriesInfo.seriesId]) {
-          seriesMap[m.seriesInfo.seriesId] = { wins: 0 };
-        }
+        if (!seriesMap[m.seriesInfo.seriesId]) seriesMap[m.seriesInfo.seriesId] = { wins: 0 };
         if (m.winner === 'A') seriesMap[m.seriesInfo.seriesId].wins++;
         if (m.seriesInfo.seriesComplete && m.seriesInfo.seriesWinner) {
           seriesMap[m.seriesInfo.seriesId].seriesWinner = m.seriesInfo.seriesWinner;
@@ -394,26 +359,21 @@ export default function StatsScreen() {
     const fannyWins = filteredMatches.filter(m => m.winner === 'A' && m.teamA.score === 13 && m.teamB.score === 0).length;
     const fannyLosses = filteredMatches.filter(m => m.winner === 'B' && m.teamB.score === 13 && m.teamA.score === 0).length;
 
-    // Duration stats (chronomètre)
+    // Duration stats
     const matchesWithDuration = filteredMatches.filter(m => m.duration && m.duration > 0);
     const totalDuration = matchesWithDuration.reduce((sum, m) => sum + (m.duration || 0), 0);
     const avgDuration = matchesWithDuration.length > 0 ? Math.round(totalDuration / matchesWithDuration.length) : 0;
     const minDuration = matchesWithDuration.length > 0 ? Math.min(...matchesWithDuration.map(m => m.duration || 0)) : 0;
     const maxDuration = matchesWithDuration.length > 0 ? Math.max(...matchesWithDuration.map(m => m.duration || 0)) : 0;
     
-    // Avg duration by format
     const durationByFormat: Record<string, { total: number; count: number }> = {};
     matchesWithDuration.forEach(m => {
-      if (!durationByFormat[m.format]) {
-        durationByFormat[m.format] = { total: 0, count: 0 };
-      }
+      if (!durationByFormat[m.format]) durationByFormat[m.format] = { total: 0, count: 0 };
       durationByFormat[m.format].total += m.duration || 0;
       durationByFormat[m.format].count++;
     });
     
-    // Avg mène duration
-    let totalMeneDuration = 0;
-    let menesWithDuration = 0;
+    let totalMeneDuration = 0, menesWithDuration = 0;
     filteredMatches.forEach(match => {
       if (match.menes) {
         match.menes.forEach(mene => {
@@ -427,74 +387,36 @@ export default function StatsScreen() {
     const avgMeneDuration = menesWithDuration > 0 ? Math.round(totalMeneDuration / menesWithDuration) : 0;
 
     return {
-      total,
-      trainingCount: trainingMatches.length,
-      tournamentCount: tournamentMatches.length,
-      wins,
-      losses,
-      winRate,
+      total, trainingCount: trainingMatches.length, tournamentCount: tournamentMatches.length,
+      wins, losses, winRate,
       trainingWinRate: trainingMatches.length > 0 ? Math.round((trainingMatches.filter(m => m.winner === 'A').length / trainingMatches.length) * 100) : 0,
       tournamentWinRate: tournamentMatches.length > 0 ? Math.round((tournamentMatches.filter(m => m.winner === 'A').length / tournamentMatches.length) * 100) : 0,
-      byFormat,
-      avgScoreFor,
-      avgScoreAgainst,
-      pointDiff,
-      avgPointDiff,
-      totalMenes,
-      menesWon,
-      meneWinRate,
-      avgMenePointsFor,
-      avgMenePointsAgainst,
-      currentStreak,
-      maxWinStreak,
-      maxLossStreak,
-      seriesPlayed: Object.keys(seriesMap).length,
-      seriesWon,
-      seriesLost: seriesComplete.length - seriesWon,
-      fannyWins,
-      fannyLosses,
-      // Duration stats
-      totalDuration,
-      avgDuration,
-      minDuration,
-      maxDuration,
-      matchesWithDuration: matchesWithDuration.length,
-      durationByFormat,
-      avgMeneDuration,
-      menesWithDuration,
+      byFormat, avgScoreFor, avgScoreAgainst, pointDiff, avgPointDiff,
+      totalMenes, menesWon, meneWinRate, avgMenePointsFor, avgMenePointsAgainst,
+      currentStreak, maxWinStreak, maxLossStreak,
+      seriesPlayed: Object.keys(seriesMap).length, seriesWon, seriesLost: seriesComplete.length - seriesWon,
+      fannyWins, fannyLosses,
+      totalDuration, avgDuration, minDuration, maxDuration,
+      matchesWithDuration: matchesWithDuration.length, durationByFormat, avgMeneDuration, menesWithDuration,
     };
   }, [filteredMatches]);
 
   // ============================================
-  // TIR (SHOOTING) STATS CALCULATION
+  // TIR STATS
   // ============================================
   const tirStats = useMemo(() => {
     let totalTirs = 0, tirsSuccess = 0, carreaux = 0;
     
-    // Detailed stats from simplified notation (matching SimplifiedShotNotation.tsx)
-    // Types SUCCESS: au_fer, au_plomb, en_rafle, court_ramasse, carreau
-    // Types FAILED: au_fer, au_plomb, en_rafle, court_droite, court_gauche, long, tir_bouchon
     const shotTypeStats: Record<string, { total: number; success: number }> = {
-      au_fer: { total: 0, success: 0 },
-      au_plomb: { total: 0, success: 0 },
-      en_rafle: { total: 0, success: 0 },
-      court_ramasse: { total: 0, success: 0 },
-      carreau: { total: 0, success: 0 },
-      court_droite: { total: 0, success: 0 },
-      court_gauche: { total: 0, success: 0 },
-      long: { total: 0, success: 0 },
+      au_fer: { total: 0, success: 0 }, au_plomb: { total: 0, success: 0 },
+      en_rafle: { total: 0, success: 0 }, court_ramasse: { total: 0, success: 0 },
+      carreau: { total: 0, success: 0 }, court_droite: { total: 0, success: 0 },
+      court_gauche: { total: 0, success: 0 }, long: { total: 0, success: 0 },
       tir_bouchon: { total: 0, success: 0 },
     };
     
-    // Qualities: gain_point, sans_effet, negatif, decisif
-    const shotQualityStats: Record<string, number> = {
-      gain_point: 0,
-      sans_effet: 0,
-      negatif: 0,
-      decisif: 0,
-    };
+    const shotQualityStats: Record<string, number> = { gain_point: 0, sans_effet: 0, negatif: 0, decisif: 0 };
     
-    // From matches
     filteredMatches.forEach(match => {
       if (match.playerActions) {
         match.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
@@ -502,20 +424,13 @@ export default function StatsScreen() {
           tirsSuccess += pa.actions.tirsSuccess;
           carreaux += pa.actions.carreaux;
           
-          // Process detailed shot records if available
           if ((pa as any).detailedShots) {
             (pa as any).detailedShots.filter((s: any) => s.actionType === 'tir').forEach((shot: any) => {
-              // Track shot type
               if (shot.shotType && shotTypeStats[shot.shotType]) {
                 shotTypeStats[shot.shotType].total++;
                 if (shot.success) shotTypeStats[shot.shotType].success++;
               }
-              // Track carreau separately (it's both a type and a result)
-              if (shot.carreau) {
-                shotTypeStats.carreau.total++;
-                shotTypeStats.carreau.success++;
-              }
-              // Track shot quality
+              if (shot.carreau) { shotTypeStats.carreau.total++; shotTypeStats.carreau.success++; }
               if (shot.shotQuality && shotQualityStats[shot.shotQuality] !== undefined) {
                 shotQualityStats[shot.shotQuality]++;
               }
@@ -525,7 +440,6 @@ export default function StatsScreen() {
       }
     });
     
-    // From challenges (10_tirs and 10_tirs_sautee)
     let challengeTirs = 0, challengeSuccess = 0, challengeCarreaux = 0;
     filteredChallenges.forEach(c => {
       if (c.type === '10_tirs' || c.type === '10_tirs_sautee') {
@@ -542,83 +456,42 @@ export default function StatsScreen() {
     const successRate = combinedTirs > 0 ? Math.round((combinedSuccess / combinedTirs) * 100) : 0;
     const carreauRate = combinedTirs > 0 ? Math.round((combinedCarreaux / combinedTirs) * 100) : 0;
     const missedRate = combinedTirs > 0 ? Math.round(((combinedTirs - combinedSuccess) / combinedTirs) * 100) : 0;
-    
-    // Tirs per match/mène
     const tirsPerMatch = filteredMatches.length > 0 ? (totalTirs / filteredMatches.length).toFixed(1) : '0';
     const tirsPerMene = performanceStats.totalMenes > 0 ? (totalTirs / performanceStats.totalMenes).toFixed(1) : '0';
-    
-    // Demi-tirs estimation (touches without carreau)
     const demiTirs = combinedSuccess - combinedCarreaux;
     const demiTirRate = combinedTirs > 0 ? Math.round((demiTirs / combinedTirs) * 100) : 0;
     
-    // Calculate detailed stats - check if we have any detailed tracking data
-    const hasDetailedData = Object.values(shotTypeStats).some(s => s.total > 0) || 
-                            Object.values(shotQualityStats).some(v => v > 0);
+    const hasDetailedData = Object.values(shotTypeStats).some(s => s.total > 0) || Object.values(shotQualityStats).some(v => v > 0);
     const totalDetailedTirs = Object.values(shotTypeStats).reduce((sum, s) => sum + s.total, 0);
     const totalQualityTracked = Object.values(shotQualityStats).reduce((sum, v) => sum + v, 0);
 
     return {
-      totalTirs: combinedTirs,
-      tirsSuccess: combinedSuccess,
-      carreaux: combinedCarreaux,
-      successRate,
-      carreauRate,
-      demiTirRate,
-      missedRate,
-      tirsPerMatch,
-      tirsPerMene,
-      matchTirs: totalTirs,
-      challengeTirs,
-      // Data availability
-      hasDetailedData,
-      totalDetailedTirs,
-      totalQualityTracked,
-      // Quality stats (gain_point, sans_effet, negatif, decisif)
-      tirGainPoint: shotQualityStats.gain_point,
-      tirSansEffet: shotQualityStats.sans_effet,
-      tirNegatif: shotQualityStats.negatif,
-      tirsDecisifs: shotQualityStats.decisif,
-      // Type stats SUCCESS (au_fer, au_plomb, en_rafle, court_ramasse, carreau)
-      tirAuFer: shotTypeStats.au_fer,
-      tirAuPlomb: shotTypeStats.au_plomb,
-      tirEnRafle: shotTypeStats.en_rafle,
-      tirCourtRamasse: shotTypeStats.court_ramasse,
-      tirCarreau: shotTypeStats.carreau,
-      // Type stats FAILED (court_droite, court_gauche, long, tir_bouchon)
-      tirCourtDroite: shotTypeStats.court_droite,
-      tirCourtGauche: shotTypeStats.court_gauche,
-      tirLong: shotTypeStats.long,
+      totalTirs: combinedTirs, tirsSuccess: combinedSuccess, carreaux: combinedCarreaux,
+      successRate, carreauRate, demiTirRate, missedRate, tirsPerMatch, tirsPerMene,
+      matchTirs: totalTirs, challengeTirs, hasDetailedData, totalDetailedTirs, totalQualityTracked,
+      tirGainPoint: shotQualityStats.gain_point, tirSansEffet: shotQualityStats.sans_effet,
+      tirNegatif: shotQualityStats.negatif, tirsDecisifs: shotQualityStats.decisif,
+      tirAuFer: shotTypeStats.au_fer, tirAuPlomb: shotTypeStats.au_plomb,
+      tirEnRafle: shotTypeStats.en_rafle, tirCourtRamasse: shotTypeStats.court_ramasse,
+      tirCarreau: shotTypeStats.carreau, tirCourtDroite: shotTypeStats.court_droite,
+      tirCourtGauche: shotTypeStats.court_gauche, tirLong: shotTypeStats.long,
       tirBouchon: shotTypeStats.tir_bouchon,
     };
   }, [filteredMatches, filteredChallenges, performanceStats.totalMenes]);
 
   // ============================================
-  // POINT (POINTING) STATS CALCULATION
+  // POINT STATS
   // ============================================
   const pointStats = useMemo(() => {
     let totalPoints = 0, pointsSuccess = 0;
     
-    // Detailed stats from simplified notation (matching SimplifiedShotNotation.tsx)
-    // Types: roule, plombe, demi_portee, portee
     const pointTypeStats: Record<string, { total: number; success: number }> = {
-      roule: { total: 0, success: 0 },
-      plombe: { total: 0, success: 0 },
-      demi_portee: { total: 0, success: 0 },
-      portee: { total: 0, success: 0 },
+      roule: { total: 0, success: 0 }, plombe: { total: 0, success: 0 },
+      demi_portee: { total: 0, success: 0 }, portee: { total: 0, success: 0 },
     };
     
-    // Qualities SUCCESS: excellent (<10cm), bon (<30cm), moyen (<50cm), au_bouchon
-    // Qualities FAILED: rate, crochete, sorti
     const pointQualityStats: Record<string, number> = {
-      // Success qualities
-      excellent: 0,   // < 10cm
-      bon: 0,         // < 30cm
-      moyen: 0,       // < 50cm
-      au_bouchon: 0,  // At the jack
-      // Failure qualities
-      rate: 0,        // Missed target zone
-      crochete: 0,    // Bad hand release
-      sorti: 0,       // Out of bounds
+      excellent: 0, bon: 0, moyen: 0, au_bouchon: 0, rate: 0, crochete: 0, sorti: 0,
     };
     
     filteredMatches.forEach(match => {
@@ -627,15 +500,12 @@ export default function StatsScreen() {
           totalPoints += pa.actions.points;
           pointsSuccess += pa.actions.pointsSuccess;
           
-          // Process detailed point records if available
           if ((pa as any).detailedShots) {
             (pa as any).detailedShots.filter((s: any) => s.actionType === 'point').forEach((shot: any) => {
-              // Track point type
               if (shot.pointType && pointTypeStats[shot.pointType]) {
                 pointTypeStats[shot.pointType].total++;
                 if (shot.success) pointTypeStats[shot.pointType].success++;
               }
-              // Track point quality
               if (shot.pointQuality && pointQualityStats[shot.pointQuality] !== undefined) {
                 pointQualityStats[shot.pointQuality]++;
               }
@@ -648,81 +518,187 @@ export default function StatsScreen() {
     const successRate = totalPoints > 0 ? Math.round((pointsSuccess / totalPoints) * 100) : 0;
     const pointsPerMene = performanceStats.totalMenes > 0 ? (totalPoints / performanceStats.totalMenes).toFixed(1) : '0';
     
-    // Calculate detailed stats - check if we have any detailed tracking data
-    const hasDetailedData = Object.values(pointTypeStats).some(s => s.total > 0) || 
-                            Object.values(pointQualityStats).some(v => v > 0);
+    const hasDetailedData = Object.values(pointTypeStats).some(s => s.total > 0) || Object.values(pointQualityStats).some(v => v > 0);
     const totalDetailedPoints = Object.values(pointTypeStats).reduce((sum, s) => sum + s.total, 0);
     const totalQualityTracked = Object.values(pointQualityStats).reduce((sum, v) => sum + v, 0);
-    
-    // Calculate totals for success/failure qualities
     const successQualitiesTotal = pointQualityStats.excellent + pointQualityStats.bon + pointQualityStats.moyen + pointQualityStats.au_bouchon;
     const failureQualitiesTotal = pointQualityStats.rate + pointQualityStats.crochete + pointQualityStats.sorti;
 
     return {
-      totalPoints,
-      pointsSuccess,
-      successRate,
-      pointsPerMene,
-      // Data availability
-      hasDetailedData,
-      totalDetailedPoints,
-      totalQualityTracked,
-      // Type stats (roule, plombe, demi_portee, portee)
-      pointRoule: pointTypeStats.roule,
-      pointPlombe: pointTypeStats.plombe,
-      pointDemiPortee: pointTypeStats.demi_portee,
-      pointPortee: pointTypeStats.portee,
-      // Success quality stats (excellent, bon, moyen, au_bouchon)
-      pointExcellent: pointQualityStats.excellent,
-      pointBon: pointQualityStats.bon,
-      pointMoyen: pointQualityStats.moyen,
-      pointAuBouchon: pointQualityStats.au_bouchon,
-      successQualitiesTotal,
-      // Failure quality stats (rate, crochete, sorti)
-      pointRate: pointQualityStats.rate,
-      pointCrochete: pointQualityStats.crochete,
-      pointSorti: pointQualityStats.sorti,
+      totalPoints, pointsSuccess, successRate, pointsPerMene,
+      hasDetailedData, totalDetailedPoints, totalQualityTracked,
+      pointRoule: pointTypeStats.roule, pointPlombe: pointTypeStats.plombe,
+      pointDemiPortee: pointTypeStats.demi_portee, pointPortee: pointTypeStats.portee,
+      pointExcellent: pointQualityStats.excellent, pointBon: pointQualityStats.bon,
+      pointMoyen: pointQualityStats.moyen, pointAuBouchon: pointQualityStats.au_bouchon,
+      successQualitiesTotal, pointRate: pointQualityStats.rate,
+      pointCrochete: pointQualityStats.crochete, pointSorti: pointQualityStats.sorti,
       failureQualitiesTotal,
     };
   }, [filteredMatches, performanceStats.totalMenes]);
 
-  const hasData = performanceStats.total > 0;
+  // ============================================
+  // ERROR ANALYSIS STATS
+  // ============================================
+  const errorStats = useMemo(() => {
+    // Total errors
+    const totalTirErrors = tirStats.totalTirs - tirStats.tirsSuccess;
+    const totalPointErrors = pointStats.totalPoints - pointStats.pointsSuccess;
+    const totalErrors = totalTirErrors + totalPointErrors;
+    
+    // Error rate by match duration
+    const shortMatches = filteredMatches.filter(m => m.duration && m.duration < 30);
+    const mediumMatches = filteredMatches.filter(m => m.duration && m.duration >= 30 && m.duration < 60);
+    const longMatches = filteredMatches.filter(m => m.duration && m.duration >= 60);
+    
+    const getErrorRate = (matchList: typeof filteredMatches) => {
+      let tirs = 0, tirsSuccess = 0, points = 0, pointsSuccess = 0;
+      matchList.forEach(m => {
+        if (m.playerActions) {
+          m.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
+            tirs += pa.actions.tirs;
+            tirsSuccess += pa.actions.tirsSuccess;
+            points += pa.actions.points;
+            pointsSuccess += pa.actions.pointsSuccess;
+          });
+        }
+      });
+      const totalAttempts = tirs + points;
+      const totalSuccess = tirsSuccess + pointsSuccess;
+      return totalAttempts > 0 ? Math.round(((totalAttempts - totalSuccess) / totalAttempts) * 100) : 0;
+    };
+    
+    const shortMatchErrorRate = getErrorRate(shortMatches);
+    const mediumMatchErrorRate = getErrorRate(mediumMatches);
+    const longMatchErrorRate = getErrorRate(longMatches);
+    
+    // Error by format
+    const errorByFormat: Record<string, { errors: number; total: number; rate: number }> = {};
+    ['Tête-à-tête', 'Doublette', 'Triplette'].forEach(format => {
+      const formatMatches = filteredMatches.filter(m => m.format === format);
+      let tirs = 0, tirsSuccess = 0, points = 0, pointsSuccess = 0;
+      formatMatches.forEach(m => {
+        if (m.playerActions) {
+          m.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
+            tirs += pa.actions.tirs;
+            tirsSuccess += pa.actions.tirsSuccess;
+            points += pa.actions.points;
+            pointsSuccess += pa.actions.pointsSuccess;
+          });
+        }
+      });
+      const total = tirs + points;
+      const errors = total - (tirsSuccess + pointsSuccess);
+      errorByFormat[format] = {
+        errors, total, rate: total > 0 ? Math.round((errors / total) * 100) : 0,
+      };
+    });
+    
+    // Error by mode
+    const trainingMatches = filteredMatches.filter(m => m.mode === 'Entraînement');
+    const tournamentMatches = filteredMatches.filter(m => m.mode === 'Tournoi');
+    const trainingErrorRate = getErrorRate(trainingMatches);
+    const tournamentErrorRate = getErrorRate(tournamentMatches);
+    
+    // Consecutive errors analysis (streaks of failures)
+    let maxConsecutiveErrors = 0;
+    let currentConsecutiveErrors = 0;
+    let totalErrorStreaks = 0;
+    
+    filteredMatches.forEach(match => {
+      if (match.playerActions) {
+        match.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
+          if ((pa as any).detailedShots) {
+            (pa as any).detailedShots.forEach((shot: any) => {
+              if (!shot.success) {
+                currentConsecutiveErrors++;
+                maxConsecutiveErrors = Math.max(maxConsecutiveErrors, currentConsecutiveErrors);
+              } else {
+                if (currentConsecutiveErrors >= 3) totalErrorStreaks++;
+                currentConsecutiveErrors = 0;
+              }
+            });
+          }
+        });
+      }
+    });
+    
+    // Detailed tir error types
+    const tirErrorTypes = {
+      courtDroite: tirStats.tirCourtDroite.total,
+      courtGauche: tirStats.tirCourtGauche.total,
+      long: tirStats.tirLong.total,
+      tirBouchon: tirStats.tirBouchon.total,
+      auFerRate: tirStats.tirAuFer.total - tirStats.tirAuFer.success,
+      auPlombRate: tirStats.tirAuPlomb.total - tirStats.tirAuPlomb.success,
+      enRafleRate: tirStats.tirEnRafle.total - tirStats.tirEnRafle.success,
+    };
+    const totalTirErrorTyped = Object.values(tirErrorTypes).reduce((a, b) => a + b, 0);
+    
+    // Detailed point error types
+    const pointErrorTypes = {
+      rate: pointStats.pointRate,
+      crochete: pointStats.pointCrochete,
+      sorti: pointStats.pointSorti,
+      rouleRate: pointStats.pointRoule.total - pointStats.pointRoule.success,
+      plombeRate: pointStats.pointPlombe.total - pointStats.pointPlombe.success,
+      demiPorteeRate: pointStats.pointDemiPortee.total - pointStats.pointDemiPortee.success,
+      porteeRate: pointStats.pointPortee.total - pointStats.pointPortee.success,
+    };
+    const totalPointErrorTyped = Object.values(pointErrorTypes).reduce((a, b) => a + b, 0);
+    
+    // Most common error
+    const allErrors = [
+      { type: 'Court à droite', count: tirErrorTypes.courtDroite, category: 'tir' },
+      { type: 'Court à gauche', count: tirErrorTypes.courtGauche, category: 'tir' },
+      { type: 'Long', count: tirErrorTypes.long, category: 'tir' },
+      { type: 'Tir sur bouchon', count: tirErrorTypes.tirBouchon, category: 'tir' },
+      { type: 'Point raté', count: pointErrorTypes.rate, category: 'point' },
+      { type: 'Point crocheté', count: pointErrorTypes.crochete, category: 'point' },
+      { type: 'Point sorti', count: pointErrorTypes.sorti, category: 'point' },
+    ].filter(e => e.count > 0).sort((a, b) => b.count - a.count);
+    
+    const mostCommonError = allErrors.length > 0 ? allErrors[0] : null;
+    
+    return {
+      totalErrors, totalTirErrors, totalPointErrors,
+      tirErrorRate: tirStats.missedRate, pointErrorRate: 100 - pointStats.successRate,
+      shortMatchErrorRate, mediumMatchErrorRate, longMatchErrorRate,
+      shortMatchCount: shortMatches.length, mediumMatchCount: mediumMatches.length, longMatchCount: longMatches.length,
+      errorByFormat, trainingErrorRate, tournamentErrorRate,
+      maxConsecutiveErrors, totalErrorStreaks,
+      tirErrorTypes, totalTirErrorTyped,
+      pointErrorTypes, totalPointErrorTyped,
+      mostCommonError, allErrors,
+    };
+  }, [filteredMatches, tirStats, pointStats]);
 
   // ============================================
-  // PROGRESSION DATA (Evolution over time)
+  // PROGRESSION DATA
   // ============================================
-  const [showProgressionModal, setShowProgressionModal] = useState(false);
-  
   const progressionData = useMemo(() => {
-    // Group matches by week for evolution graphs
+    const selectedFilter = PROGRESSION_FILTERS.find(f => f.id === progressionFilter) || PROGRESSION_FILTERS[1];
+    const weeksToShow = selectedFilter.weeks;
+    
     const sortedMatches = [...matches].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
-    // Create weekly buckets
     const weeklyData: { 
-      week: string; 
-      matches: number; 
-      wins: number; 
-      winRate: number;
-      tirSuccess: number;
-      tirTotal: number;
-      tirRate: number;
-      pointSuccess: number;
-      pointTotal: number;
-      pointRate: number;
-      carreaux: number;
+      week: string; weekDate: Date; matches: number; wins: number; winRate: number;
+      tirSuccess: number; tirTotal: number; tirRate: number;
+      pointSuccess: number; pointTotal: number; pointRate: number;
+      carreaux: number; errors: number; errorRate: number;
     }[] = [];
     
-    if (sortedMatches.length === 0) return { weeklyData };
+    if (sortedMatches.length === 0) return { weeklyData, weeksToShow };
     
-    // Get date range
-    const firstDate = new Date(sortedMatches[0].date);
-    const lastDate = new Date(sortedMatches[sortedMatches.length - 1].date);
+    const now = new Date();
+    const startDate = new Date(now);
+    startDate.setDate(startDate.getDate() - (weeksToShow * 7));
+    startDate.setDate(startDate.getDate() - startDate.getDay());
     
-    // Generate weekly buckets
-    const currentDate = new Date(firstDate);
-    currentDate.setDate(currentDate.getDate() - currentDate.getDay()); // Start of week
+    const currentDate = new Date(startDate);
     
-    while (currentDate <= lastDate) {
+    while (currentDate <= now) {
       const weekStart = new Date(currentDate);
       const weekEnd = new Date(currentDate);
       weekEnd.setDate(weekEnd.getDate() + 6);
@@ -746,31 +722,61 @@ export default function StatsScreen() {
       });
       
       const wins = weekMatches.filter(m => m.winner === 'A').length;
+      const totalAttempts = tirTotal + pointTotal;
+      const totalSuccess = tirSuccess + pointSuccess;
+      const errors = totalAttempts - totalSuccess;
       
       weeklyData.push({
         week: `${weekStart.getDate()}/${weekStart.getMonth() + 1}`,
+        weekDate: new Date(weekStart),
         matches: weekMatches.length,
         wins,
         winRate: weekMatches.length > 0 ? Math.round((wins / weekMatches.length) * 100) : 0,
-        tirSuccess,
-        tirTotal,
+        tirSuccess, tirTotal,
         tirRate: tirTotal > 0 ? Math.round((tirSuccess / tirTotal) * 100) : 0,
-        pointSuccess,
-        pointTotal,
+        pointSuccess, pointTotal,
         pointRate: pointTotal > 0 ? Math.round((pointSuccess / pointTotal) * 100) : 0,
-        carreaux,
+        carreaux, errors,
+        errorRate: totalAttempts > 0 ? Math.round((errors / totalAttempts) * 100) : 0,
       });
       
       currentDate.setDate(currentDate.getDate() + 7);
     }
     
-    // Keep last 8 weeks for display
-    const displayData = weeklyData.slice(-8);
-    
-    return { weeklyData: displayData };
-  }, [matches]);
+    return { weeklyData, weeksToShow };
+  }, [matches, progressionFilter]);
 
-  // Helper to format duration
+  // Calculate trends
+  const trends = useMemo(() => {
+    const data = progressionData.weeklyData;
+    if (data.length < 2) return { winRate: 'neutral', tirRate: 'neutral', pointRate: 'neutral', errorRate: 'neutral' };
+    
+    const recentWeeks = data.slice(-4);
+    const olderWeeks = data.slice(-8, -4);
+    
+    const getAvg = (weeks: typeof data, field: 'winRate' | 'tirRate' | 'pointRate' | 'errorRate') => {
+      const validWeeks = weeks.filter(w => w.matches > 0);
+      if (validWeeks.length === 0) return 0;
+      return validWeeks.reduce((sum, w) => sum + w[field], 0) / validWeeks.length;
+    };
+    
+    const getTrend = (recent: number, older: number, isError = false) => {
+      const diff = recent - older;
+      if (Math.abs(diff) < 5) return 'neutral' as const;
+      if (isError) return diff > 0 ? 'down' as const : 'up' as const;
+      return diff > 0 ? 'up' as const : 'down' as const;
+    };
+    
+    return {
+      winRate: getTrend(getAvg(recentWeeks, 'winRate'), getAvg(olderWeeks, 'winRate')),
+      tirRate: getTrend(getAvg(recentWeeks, 'tirRate'), getAvg(olderWeeks, 'tirRate')),
+      pointRate: getTrend(getAvg(recentWeeks, 'pointRate'), getAvg(olderWeeks, 'pointRate')),
+      errorRate: getTrend(getAvg(recentWeeks, 'errorRate'), getAvg(olderWeeks, 'errorRate'), true),
+    };
+  }, [progressionData]);
+
+  const hasData = performanceStats.total > 0;
+
   const formatDuration = (minutes: number) => {
     if (minutes < 60) return `${minutes}min`;
     const hours = Math.floor(minutes / 60);
@@ -797,21 +803,14 @@ export default function StatsScreen() {
               <MaterialIcons name="trending-up" size={18} color={theme.primary} />
               <Text style={styles.progressionButtonText}>Progression</Text>
             </Pressable>
-            <Pressable 
-              style={styles.historyButton}
-              onPress={() => router.push('/history')}
-            >
+            <Pressable style={styles.historyButton} onPress={() => router.push('/history')}>
               <MaterialIcons name="history" size={22} color={theme.textSecondary} />
             </Pressable>
           </View>
         </View>
 
         {/* Time Filter */}
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterBar}
-        >
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterBar}>
           {TIME_FILTERS.map(filter => (
             <Pressable
               key={filter.id}
@@ -833,15 +832,8 @@ export default function StatsScreen() {
               style={[styles.categoryTab, category === tab.id && styles.categoryTabActive]}
               onPress={() => { Haptics.selectionAsync(); setCategory(tab.id); }}
             >
-              <MaterialIcons 
-                name={tab.icon as any} 
-                size={20} 
-                color={category === tab.id ? tab.color : theme.textMuted} 
-              />
-              <Text style={[
-                styles.categoryTabText, 
-                category === tab.id && [styles.categoryTabTextActive, { color: tab.color }]
-              ]}>
+              <MaterialIcons name={tab.icon as any} size={18} color={category === tab.id ? tab.color : theme.textMuted} />
+              <Text style={[styles.categoryTabText, category === tab.id && [styles.categoryTabTextActive, { color: tab.color }]]}>
                 {tab.label}
               </Text>
             </Pressable>
@@ -858,9 +850,7 @@ export default function StatsScreen() {
           <View style={styles.emptyState}>
             <MaterialIcons name="bar-chart" size={64} color={theme.textMuted} />
             <Text style={styles.emptyTitle}>Pas encore de statistiques</Text>
-            <Text style={styles.emptyText}>
-              Jouez des matchs pour voir vos statistiques évoluer
-            </Text>
+            <Text style={styles.emptyText}>Jouez des matchs pour voir vos statistiques évoluer</Text>
             <Pressable style={styles.emptyButton} onPress={() => router.push('/match/new')}>
               <MaterialIcons name="add" size={20} color="#FFF" />
               <Text style={styles.emptyButtonText}>Nouveau match</Text>
@@ -868,21 +858,12 @@ export default function StatsScreen() {
           </View>
         ) : (
           <>
-            {/* ========================================
-                PERFORMANCE GÉNÉRALE
-            ======================================== */}
+            {/* PERFORMANCE */}
             {category === 'performance' && (
               <>
-                {/* Hero Stats */}
                 <Animated.View entering={FadeInDown.duration(400)} style={styles.heroCard}>
                   <View style={styles.heroContent}>
-                    <ProgressRing 
-                      value={performanceStats.winRate} 
-                      size={110} 
-                      strokeWidth={9} 
-                      color={theme.primary}
-                      label="Victoires"
-                    />
+                    <ProgressRing value={performanceStats.winRate} size={110} strokeWidth={9} color={theme.primary} label="Victoires" />
                     <View style={styles.heroStats}>
                       <View style={styles.heroStatItem}>
                         <Text style={[styles.heroStatValue, { color: theme.success }]}>{performanceStats.wins}</Text>
@@ -900,28 +881,17 @@ export default function StatsScreen() {
                   </View>
                 </Animated.View>
 
-                {/* Parties jouées */}
                 <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
                   <SectionHeader title="Parties jouées" icon="sports" color={theme.primary} />
                   <View style={styles.card}>
                     <View style={styles.statsGrid3}>
-                      <View style={styles.gridItem}>
-                        <Text style={styles.gridValue}>{performanceStats.total}</Text>
-                        <Text style={styles.gridLabel}>Total</Text>
-                      </View>
-                      <View style={styles.gridItem}>
-                        <Text style={styles.gridValue}>{performanceStats.trainingCount}</Text>
-                        <Text style={styles.gridLabel}>Entraînement</Text>
-                      </View>
-                      <View style={styles.gridItem}>
-                        <Text style={styles.gridValue}>{performanceStats.tournamentCount}</Text>
-                        <Text style={styles.gridLabel}>Tournoi</Text>
-                      </View>
+                      <View style={styles.gridItem}><Text style={styles.gridValue}>{performanceStats.total}</Text><Text style={styles.gridLabel}>Total</Text></View>
+                      <View style={styles.gridItem}><Text style={styles.gridValue}>{performanceStats.trainingCount}</Text><Text style={styles.gridLabel}>Entraînement</Text></View>
+                      <View style={styles.gridItem}><Text style={styles.gridValue}>{performanceStats.tournamentCount}</Text><Text style={styles.gridLabel}>Tournoi</Text></View>
                     </View>
                   </View>
                 </Animated.View>
 
-                {/* Taux de victoire par mode */}
                 <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
                   <SectionHeader title="Taux de victoire par mode" icon="emoji-events" color={theme.carreauColor} />
                   <View style={styles.card}>
@@ -938,7 +908,6 @@ export default function StatsScreen() {
                   </View>
                 </Animated.View>
 
-                {/* Taux de victoire par format */}
                 <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
                   <SectionHeader title="Taux de victoire par format" icon="group" color={theme.accent} />
                   <View style={styles.card}>
@@ -951,10 +920,7 @@ export default function StatsScreen() {
                             <Text style={styles.formatRecord}>{data.wins}V - {data.total - data.wins}D ({data.total})</Text>
                           </View>
                           <View style={styles.formatBarContainer}>
-                            <ProgressBar value={rate} color={
-                              format === 'Tête-à-tête' ? theme.tirColor : 
-                              format === 'Doublette' ? theme.primary : theme.accent
-                            } />
+                            <ProgressBar value={rate} color={format === 'Tête-à-tête' ? theme.tirColor : format === 'Doublette' ? theme.primary : theme.accent} />
                           </View>
                         </View>
                       );
@@ -962,7 +928,6 @@ export default function StatsScreen() {
                   </View>
                 </Animated.View>
 
-                {/* Score & Points */}
                 <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
                   <SectionHeader title="Score moyen par partie" icon="scoreboard" color={theme.success} />
                   <View style={styles.card}>
@@ -973,14 +938,8 @@ export default function StatsScreen() {
                         <Text style={styles.scoreLabel}>Marqués</Text>
                       </View>
                       <View style={styles.scoreDiff}>
-                        <View style={[
-                          styles.scoreDiffBadge,
-                          { backgroundColor: performanceStats.pointDiff >= 0 ? theme.success + '15' : theme.error + '15' }
-                        ]}>
-                          <Text style={[
-                            styles.scoreDiffText,
-                            { color: performanceStats.pointDiff >= 0 ? theme.success : theme.error }
-                          ]}>
+                        <View style={[styles.scoreDiffBadge, { backgroundColor: performanceStats.pointDiff >= 0 ? theme.success + '15' : theme.error + '15' }]}>
+                          <Text style={[styles.scoreDiffText, { color: performanceStats.pointDiff >= 0 ? theme.success : theme.error }]}>
                             {performanceStats.avgPointDiff > '0' ? '+' : ''}{performanceStats.avgPointDiff}
                           </Text>
                           <Text style={styles.scoreDiffLabel}>moy./partie</Text>
@@ -992,151 +951,13 @@ export default function StatsScreen() {
                         <Text style={styles.scoreLabel}>Encaissés</Text>
                       </View>
                     </View>
-                    <View style={styles.totalDiff}>
-                      <Text style={styles.totalDiffLabel}>Différentiel total:</Text>
-                      <Text style={[
-                        styles.totalDiffValue,
-                        { color: performanceStats.pointDiff >= 0 ? theme.success : theme.error }
-                      ]}>
-                        {performanceStats.pointDiff > 0 ? '+' : ''}{performanceStats.pointDiff} pts
-                      </Text>
-                    </View>
                   </View>
                 </Animated.View>
 
-                {/* Statistiques de mènes */}
-                {performanceStats.totalMenes > 0 && (
-                  <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-                    <SectionHeader title="Statistiques de mènes" icon="timeline" color={theme.pointColor} />
-                    <View style={styles.card}>
-                      <View style={styles.meneStats}>
-                        <View style={styles.meneStatMain}>
-                          <ProgressRing 
-                            value={performanceStats.meneWinRate} 
-                            size={80} 
-                            strokeWidth={7} 
-                            color={theme.pointColor}
-                            label="gagnées"
-                          />
-                        </View>
-                        <View style={styles.meneStatDetails}>
-                          <StatRow 
-                            label="Mènes jouées" 
-                            value={performanceStats.totalMenes} 
-                            icon="format-list-numbered" 
-                            color={theme.textSecondary}
-                          />
-                          <StatRow 
-                            label="Points marqués/mène" 
-                            value={performanceStats.avgMenePointsFor} 
-                            icon="add" 
-                            color={theme.success}
-                          />
-                          <StatRow 
-                            label="Points encaissés/mène" 
-                            value={performanceStats.avgMenePointsAgainst} 
-                            icon="remove" 
-                            color={theme.error}
-                          />
-                        </View>
-                      </View>
-                    </View>
-                  </Animated.View>
-                )}
-
-                {/* Séries */}
-                <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-                  <SectionHeader title="Séries de victoires / défaites" icon="show-chart" color={theme.primary} />
-                  <View style={styles.card}>
-                    <View style={styles.streaksGrid}>
-                      <View style={styles.streakItem}>
-                        <Text style={styles.streakLabel}>Série actuelle</Text>
-                        <Text style={[
-                          styles.streakValue,
-                          { color: performanceStats.currentStreak >= 0 ? theme.success : theme.error }
-                        ]}>
-                          {performanceStats.currentStreak > 0 ? '+' : ''}{performanceStats.currentStreak}
-                        </Text>
-                        <Text style={styles.streakType}>
-                          {performanceStats.currentStreak > 0 ? 'Victoires' : performanceStats.currentStreak < 0 ? 'Défaites' : '-'}
-                        </Text>
-                      </View>
-                      <View style={styles.streakItem}>
-                        <Text style={styles.streakLabel}>Meilleure série V</Text>
-                        <Text style={[styles.streakValue, { color: theme.success }]}>
-                          {performanceStats.maxWinStreak}
-                        </Text>
-                        <Text style={styles.streakType}>Victoires</Text>
-                      </View>
-                      <View style={styles.streakItem}>
-                        <Text style={styles.streakLabel}>Pire série D</Text>
-                        <Text style={[styles.streakValue, { color: theme.error }]}>
-                          {performanceStats.maxLossStreak}
-                        </Text>
-                        <Text style={styles.streakType}>Défaites</Text>
-                      </View>
-                    </View>
-                  </View>
-                </Animated.View>
-
-                {/* Séries Best of 3 */}
-                {performanceStats.seriesPlayed > 0 && (
-                  <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
-                    <SectionHeader title="Séries (Best of 3)" icon="military-tech" color={theme.accent} />
-                    <View style={styles.card}>
-                      <View style={styles.seriesStats}>
-                        <View style={styles.seriesMain}>
-                          <Text style={styles.seriesPlayed}>{performanceStats.seriesPlayed}</Text>
-                          <Text style={styles.seriesPlayedLabel}>séries jouées</Text>
-                        </View>
-                        <View style={styles.seriesResults}>
-                          <View style={styles.seriesResult}>
-                            <Text style={[styles.seriesResultValue, { color: theme.success }]}>{performanceStats.seriesWon}</Text>
-                            <Text style={styles.seriesResultLabel}>Gagnées</Text>
-                          </View>
-                          <View style={styles.seriesResult}>
-                            <Text style={[styles.seriesResultValue, { color: theme.error }]}>{performanceStats.seriesLost}</Text>
-                            <Text style={styles.seriesResultLabel}>Perdues</Text>
-                          </View>
-                        </View>
-                      </View>
-                    </View>
-                  </Animated.View>
-                )}
-
-                {/* Fanny */}
-                {(performanceStats.fannyWins > 0 || performanceStats.fannyLosses > 0) && (
-                  <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
-                    <SectionHeader title="Fanny (13-0)" icon="celebration" color={theme.carreauColor} />
-                    <View style={styles.card}>
-                      <View style={styles.fannyStats}>
-                        <View style={styles.fannyItem}>
-                          <Svg width={32} height={32} viewBox="0 0 24 24">
-                            <Circle cx="9" cy="14" r="5" fill={theme.success} opacity={0.9} />
-                            <Circle cx="15" cy="14" r="5" fill={theme.success} opacity={0.9} />
-                          </Svg>
-                          <Text style={[styles.fannyValue, { color: theme.success }]}>{performanceStats.fannyWins}</Text>
-                          <Text style={styles.fannyLabel}>Infligées</Text>
-                        </View>
-                        <View style={styles.fannyItem}>
-                          <Svg width={32} height={32} viewBox="0 0 24 24">
-                            <Circle cx="9" cy="14" r="5" fill={theme.error} opacity={0.9} />
-                            <Circle cx="15" cy="14" r="5" fill={theme.error} opacity={0.9} />
-                          </Svg>
-                          <Text style={[styles.fannyValue, { color: theme.error }]}>{performanceStats.fannyLosses}</Text>
-                          <Text style={styles.fannyLabel}>Subies</Text>
-                        </View>
-                      </View>
-                    </View>
-                  </Animated.View>
-                )}
-
-                {/* Statistiques de durée (Chronomètre) */}
                 {performanceStats.matchesWithDuration > 0 && (
-                  <Animated.View entering={FadeInDown.duration(400).delay(450)} style={styles.section}>
+                  <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
                     <SectionHeader title="Durée des parties" icon="timer" color={theme.accent} />
                     <View style={styles.card}>
-                      {/* Main duration stats */}
                       <View style={styles.durationHero}>
                         <View style={styles.durationMain}>
                           <MaterialIcons name="schedule" size={28} color={theme.accent} />
@@ -1156,64 +977,24 @@ export default function StatsScreen() {
                           </View>
                         </View>
                       </View>
-                      
                       <View style={styles.divider} />
-                      
-                      {/* Total time played */}
                       <View style={styles.totalTimeRow}>
                         <MaterialIcons name="access-time" size={18} color={theme.textSecondary} />
                         <Text style={styles.totalTimeLabel}>Temps total de jeu</Text>
                         <Text style={styles.totalTimeValue}>{formatDuration(performanceStats.totalDuration)}</Text>
                       </View>
-                      
-                      {/* Avg mène duration */}
-                      {performanceStats.menesWithDuration > 0 && (
-                        <View style={styles.totalTimeRow}>
-                          <MaterialIcons name="timer" size={18} color={theme.pointColor} />
-                          <Text style={styles.totalTimeLabel}>Durée moyenne par mène</Text>
-                          <Text style={styles.totalTimeValue}>
-                            {performanceStats.avgMeneDuration < 60 
-                              ? `${performanceStats.avgMeneDuration}s` 
-                              : `${Math.floor(performanceStats.avgMeneDuration / 60)}m${performanceStats.avgMeneDuration % 60}s`}
-                          </Text>
-                        </View>
-                      )}
-                      
-                      <View style={styles.divider} />
-                      
-                      {/* Duration by format */}
-                      <Text style={styles.durationFormatTitle}>Durée par format</Text>
-                      {Object.entries(performanceStats.durationByFormat).map(([format, data]) => {
-                        const avgFormat = data.count > 0 ? Math.round(data.total / data.count) : 0;
-                        return (
-                          <View key={format} style={styles.durationFormatRow}>
-                            <Text style={styles.durationFormatName}>{format}</Text>
-                            <Text style={styles.durationFormatCount}>{data.count} parties</Text>
-                            <Text style={styles.durationFormatValue}>{formatDuration(avgFormat)}</Text>
-                          </View>
-                        );
-                      })}
                     </View>
                   </Animated.View>
                 )}
               </>
             )}
 
-            {/* ========================================
-                STATISTIQUES DE TIR
-            ======================================== */}
+            {/* TIR */}
             {category === 'tir' && (
               <>
-                {/* Hero Tir */}
                 <Animated.View entering={FadeInDown.duration(400)} style={styles.heroCard}>
                   <View style={styles.heroContent}>
-                    <ProgressRing 
-                      value={tirStats.successRate} 
-                      size={110} 
-                      strokeWidth={9} 
-                      color={theme.tirColor}
-                      label="Réussite"
-                    />
+                    <ProgressRing value={tirStats.successRate} size={110} strokeWidth={9} color={theme.tirColor} label="Réussite" />
                     <View style={styles.heroStats}>
                       <View style={styles.heroStatItem}>
                         <Text style={[styles.heroStatValue, { color: theme.success }]}>{tirStats.tirsSuccess}</Text>
@@ -1231,20 +1012,16 @@ export default function StatsScreen() {
                   </View>
                 </Animated.View>
 
-                {/* Volume & Réussite */}
                 <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
                   <SectionHeader title="Volume & Réussite" icon="gps-fixed" color={theme.tirColor} />
                   <View style={styles.card}>
                     <StatRow label="Tirs tentés" value={tirStats.totalTirs} icon="radio-button-unchecked" color={theme.textSecondary} />
-                    <StatRow label="Tirs réussis" value={tirStats.tirsSuccess} icon="check-circle" color={theme.success} />
-                    <StatRow label="% de réussite global" value={`${tirStats.successRate}%`} icon="percent" color={theme.tirColor} />
+                    <StatRow label="% de réussite" value={`${tirStats.successRate}%`} icon="percent" color={theme.tirColor} />
                     <StatRow label="% de carreaux" value={`${tirStats.carreauRate}%`} icon="stars" color={theme.carreauColor} />
-                    <StatRow label="% de demi-tirs" value={`${tirStats.demiTirRate}%`} icon="radio-button-checked" color={theme.pointColor} />
-                    <StatRow label="% de tirs manqués" value={`${tirStats.missedRate}%`} icon="cancel" color={theme.error} />
+                    <StatRow label="Tirs par partie" value={tirStats.tirsPerMatch} icon="sports" color={theme.primary} />
                   </View>
                 </Animated.View>
 
-                {/* Répartition des tirs */}
                 <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
                   <SectionHeader title="Répartition des résultats" icon="pie-chart" color={theme.primary} />
                   <View style={styles.card}>
@@ -1256,190 +1033,25 @@ export default function StatsScreen() {
                   </View>
                 </Animated.View>
 
-                {/* Tirs par partie/mène */}
-                <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
-                  <SectionHeader title="Fréquence" icon="speed" color={theme.accent} />
-                  <View style={styles.card}>
-                    <StatRow label="Tirs par partie" value={tirStats.tirsPerMatch} icon="sports" color={theme.primary} />
-                    <StatRow label="Tirs par mène" value={tirStats.tirsPerMene} icon="timeline" color={theme.accent} />
-                  </View>
-                </Animated.View>
-
-                {/* Source des tirs */}
-                {tirStats.challengeTirs > 0 && (
-                  <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-                    <SectionHeader title="Source des tirs" icon="source" color={theme.textSecondary} />
+                {tirStats.hasDetailedData && (
+                  <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
+                    <SectionHeader title="Types de tir" subtitle={`${tirStats.totalDetailedTirs} tirs analysés`} icon="category" color={theme.tirColor} />
                     <View style={styles.card}>
-                      <StatRow label="Tirs en match" value={tirStats.matchTirs} icon="sports" color={theme.primary} />
-                      <StatRow label="Tirs en défi" value={tirStats.challengeTirs} icon="emoji-events" color={theme.carreauColor} />
+                      <StatRow label="Tir tendu" value={`${tirStats.tirAuFer.success}/${tirStats.tirAuFer.total}`} subValue={tirStats.tirAuFer.total > 0 ? `${Math.round((tirStats.tirAuFer.success / tirStats.tirAuFer.total) * 100)}%` : ''} icon="gps-fixed" color={theme.tirColor} />
+                      <StatRow label="Tir en cloche" value={`${tirStats.tirAuPlomb.success}/${tirStats.tirAuPlomb.total}`} subValue={tirStats.tirAuPlomb.total > 0 ? `${Math.round((tirStats.tirAuPlomb.success / tirStats.tirAuPlomb.total) * 100)}%` : ''} icon="flight-takeoff" color={theme.pointColor} />
+                      <StatRow label="En rafle" value={`${tirStats.tirEnRafle.success}/${tirStats.tirEnRafle.total}`} subValue={tirStats.tirEnRafle.total > 0 ? `${Math.round((tirStats.tirEnRafle.success / tirStats.tirEnRafle.total) * 100)}%` : ''} icon="swap-horiz" color={theme.accent} />
                     </View>
                   </Animated.View>
                 )}
-
-                {/* Impact du tir (Qualité) - Basé sur SimplifiedShotNotation */}
-                <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-                  <SectionHeader 
-                    title="Impact du tir" 
-                    subtitle={tirStats.totalQualityTracked > 0 ? `${tirStats.totalQualityTracked} impacts analysés` : 'Effet sur la mène'} 
-                    icon="insights" 
-                    color={theme.primary} 
-                  />
-                  <View style={styles.card}>
-                    {tirStats.totalQualityTracked > 0 ? (
-                      <>
-                        <StatRow 
-                          label="Gain de point" 
-                          value={tirStats.tirGainPoint} 
-                          subValue={tirStats.totalQualityTracked > 0 ? `${Math.round((tirStats.tirGainPoint / tirStats.totalQualityTracked) * 100)}%` : ''}
-                          icon="trending-up" 
-                          color={theme.success} 
-                        />
-                        <StatRow 
-                          label="Sans effet" 
-                          value={tirStats.tirSansEffet} 
-                          subValue={tirStats.totalQualityTracked > 0 ? `${Math.round((tirStats.tirSansEffet / tirStats.totalQualityTracked) * 100)}%` : ''}
-                          icon="remove" 
-                          color={theme.warning} 
-                        />
-                        <StatRow 
-                          label="Négatif" 
-                          value={tirStats.tirNegatif} 
-                          subValue={tirStats.totalQualityTracked > 0 ? `${Math.round((tirStats.tirNegatif / tirStats.totalQualityTracked) * 100)}%` : ''}
-                          icon="trending-down" 
-                          color={theme.error} 
-                        />
-                        <StatRow 
-                          label="Décisif (fin de mène)" 
-                          value={tirStats.tirsDecisifs} 
-                          subValue={tirStats.totalQualityTracked > 0 ? `${Math.round((tirStats.tirsDecisifs / tirStats.totalQualityTracked) * 100)}%` : ''}
-                          icon="flag" 
-                          color={theme.carreauColor} 
-                        />
-                        <View style={styles.divider} />
-                        <BreakdownBar items={[
-                          { label: 'Gain', value: tirStats.tirGainPoint, color: theme.success },
-                          { label: 'Sans effet', value: tirStats.tirSansEffet, color: theme.warning },
-                          { label: 'Négatif', value: tirStats.tirNegatif, color: theme.error },
-                          { label: 'Décisif', value: tirStats.tirsDecisifs, color: theme.carreauColor },
-                        ]} />
-                      </>
-                    ) : (
-                      <NAPlaceholder message="Utilisez la notation détaillée pendant les matchs (cliquez sur TIR puis complétez les 3 étapes)" />
-                    )}
-                  </View>
-                </Animated.View>
-
-                {/* Types de tir - Basé sur SimplifiedShotNotation */}
-                <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-                  <SectionHeader 
-                    title="Types de tir" 
-                    subtitle={tirStats.totalDetailedTirs > 0 ? `${tirStats.totalDetailedTirs} tirs analysés` : 'Technique utilisée'} 
-                    icon="category" 
-                    color={theme.tirColor} 
-                  />
-                  <View style={styles.card}>
-                    {tirStats.totalDetailedTirs > 0 ? (
-                      <>
-                        <StatRow 
-                          label="Tir tendu" 
-                          value={`${tirStats.tirAuFer.success}/${tirStats.tirAuFer.total}`} 
-                          subValue={tirStats.tirAuFer.total > 0 ? `${Math.round((tirStats.tirAuFer.success / tirStats.tirAuFer.total) * 100)}% réussite` : 'Aucun'}
-                          icon="gps-fixed" 
-                          color={theme.tirColor} 
-                        />
-                        <StatRow 
-                          label="Tir en cloche" 
-                          value={`${tirStats.tirAuPlomb.success}/${tirStats.tirAuPlomb.total}`} 
-                          subValue={tirStats.tirAuPlomb.total > 0 ? `${Math.round((tirStats.tirAuPlomb.success / tirStats.tirAuPlomb.total) * 100)}% réussite` : 'Aucun'}
-                          icon="flight-takeoff" 
-                          color={theme.pointColor} 
-                        />
-                        <StatRow 
-                          label="En rafle" 
-                          value={`${tirStats.tirEnRafle.success}/${tirStats.tirEnRafle.total}`} 
-                          subValue={tirStats.tirEnRafle.total > 0 ? `${Math.round((tirStats.tirEnRafle.success / tirStats.tirEnRafle.total) * 100)}% réussite` : 'Aucun'}
-                          icon="swap-horiz" 
-                          color={theme.accent} 
-                        />
-                        <StatRow 
-                          label="Court, ramassé" 
-                          value={`${tirStats.tirCourtRamasse.success}/${tirStats.tirCourtRamasse.total}`} 
-                          subValue={tirStats.tirCourtRamasse.total > 0 ? `${Math.round((tirStats.tirCourtRamasse.success / tirStats.tirCourtRamasse.total) * 100)}% réussite` : 'Aucun'}
-                          icon="redo" 
-                          color={theme.primary} 
-                        />
-                        <View style={styles.divider} />
-                        <StatRow 
-                          label="Carreaux" 
-                          value={`${tirStats.tirCarreau.success}`} 
-                          subValue={tirStats.totalDetailedTirs > 0 ? `${Math.round((tirStats.tirCarreau.total / tirStats.totalDetailedTirs) * 100)}% des tirs` : ''}
-                          icon="stars" 
-                          color={theme.carreauColor} 
-                        />
-                        
-                        {/* Missed shot types */}
-                        {(tirStats.tirCourtDroite.total > 0 || tirStats.tirCourtGauche.total > 0 || tirStats.tirLong.total > 0 || tirStats.tirBouchon.total > 0) && (
-                          <>
-                            <View style={styles.divider} />
-                            <Text style={[styles.statRowLabel, { marginTop: 8, marginBottom: 4, fontWeight: '600', color: theme.error }]}>Types de tirs ratés</Text>
-                            {tirStats.tirCourtDroite.total > 0 && (
-                              <StatRow 
-                                label="Court, à droite" 
-                                value={tirStats.tirCourtDroite.total} 
-                                icon="subdirectory-arrow-right" 
-                                color={theme.error} 
-                              />
-                            )}
-                            {tirStats.tirCourtGauche.total > 0 && (
-                              <StatRow 
-                                label="Court, à gauche" 
-                                value={tirStats.tirCourtGauche.total} 
-                                icon="subdirectory-arrow-left" 
-                                color={theme.error} 
-                              />
-                            )}
-                            {tirStats.tirLong.total > 0 && (
-                              <StatRow 
-                                label="Long" 
-                                value={tirStats.tirLong.total} 
-                                icon="arrow-upward" 
-                                color={theme.error} 
-                              />
-                            )}
-                            {tirStats.tirBouchon.total > 0 && (
-                              <StatRow 
-                                label="Tir sur bouchon" 
-                                value={tirStats.tirBouchon.total} 
-                                icon="adjust" 
-                                color={theme.warning} 
-                              />
-                            )}
-                          </>
-                        )}
-                      </>
-                    ) : (
-                      <NAPlaceholder message="Spécifiez le type de tir lors de l'enregistrement (étape 2 de la notation)" />
-                    )}
-                  </View>
-                </Animated.View>
               </>
             )}
 
-            {/* ========================================
-                STATISTIQUES DE POINTAGE
-            ======================================== */}
+            {/* POINT */}
             {category === 'point' && (
               <>
-                {/* Hero Point */}
                 <Animated.View entering={FadeInDown.duration(400)} style={styles.heroCard}>
                   <View style={styles.heroContent}>
-                    <ProgressRing 
-                      value={pointStats.successRate} 
-                      size={110} 
-                      strokeWidth={9} 
-                      color={theme.pointColor}
-                      label="Réussite"
-                    />
+                    <ProgressRing value={pointStats.successRate} size={110} strokeWidth={9} color={theme.pointColor} label="Réussite" />
                     <View style={styles.heroStats}>
                       <View style={styles.heroStatItem}>
                         <Text style={[styles.heroStatValue, { color: theme.success }]}>{pointStats.pointsSuccess}</Text>
@@ -1457,526 +1069,503 @@ export default function StatsScreen() {
                   </View>
                 </Animated.View>
 
-                {/* Réussite */}
                 <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
                   <SectionHeader title="Réussite" icon="adjust" color={theme.pointColor} />
                   <View style={styles.card}>
                     <StatRow label="Points tentés" value={pointStats.totalPoints} icon="radio-button-unchecked" color={theme.textSecondary} />
-                    <StatRow label="Points réussis" value={pointStats.pointsSuccess} icon="check-circle" color={theme.success} />
-                    <StatRow label="% de points réussis" value={`${pointStats.successRate}%`} icon="percent" color={theme.pointColor} />
+                    <StatRow label="% de réussite" value={`${pointStats.successRate}%`} icon="percent" color={theme.pointColor} />
                     <StatRow label="Points par mène" value={pointStats.pointsPerMene} icon="timeline" color={theme.accent} />
                   </View>
                 </Animated.View>
 
-                {/* Types de points - Basé sur SimplifiedShotNotation */}
-                <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-                  <SectionHeader 
-                    title="Types de points" 
-                    subtitle={pointStats.totalDetailedPoints > 0 ? `${pointStats.totalDetailedPoints} points analysés` : 'Technique utilisée'} 
-                    icon="category" 
-                    color={theme.primary} 
-                  />
+                {pointStats.hasDetailedData && (
+                  <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+                    <SectionHeader title="Types de points" subtitle={`${pointStats.totalDetailedPoints} analysés`} icon="category" color={theme.primary} />
+                    <View style={styles.card}>
+                      <StatRow label="Point roulé" value={`${pointStats.pointRoule.success}/${pointStats.pointRoule.total}`} icon="sports-baseball" color={theme.pointColor} />
+                      <StatRow label="Point plombé" value={`${pointStats.pointPlombe.success}/${pointStats.pointPlombe.total}`} icon="flight-land" color={theme.tirColor} />
+                      <StatRow label="Point portée" value={`${pointStats.pointPortee.success}/${pointStats.pointPortee.total}`} icon="flight" color={theme.accent} />
+                    </View>
+                  </Animated.View>
+                )}
+
+                {pointStats.successQualitiesTotal > 0 && (
+                  <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
+                    <SectionHeader title="Qualité des points réussis" subtitle={`${pointStats.successQualitiesTotal} qualifiés`} icon="straighten" color={theme.success} />
+                    <View style={styles.card}>
+                      <StatRow label="Excellent (< 10 cm)" value={pointStats.pointExcellent} subValue={`${Math.round((pointStats.pointExcellent / pointStats.successQualitiesTotal) * 100)}%`} icon="stars" color={theme.carreauColor} />
+                      <StatRow label="Bon (< 30 cm)" value={pointStats.pointBon} subValue={`${Math.round((pointStats.pointBon / pointStats.successQualitiesTotal) * 100)}%`} icon="check-circle" color={theme.success} />
+                      <StatRow label="Moyen (< 50 cm)" value={pointStats.pointMoyen} subValue={`${Math.round((pointStats.pointMoyen / pointStats.successQualitiesTotal) * 100)}%`} icon="radio-button-checked" color={theme.warning} />
+                    </View>
+                  </Animated.View>
+                )}
+              </>
+            )}
+
+            {/* ERRORS ANALYSIS */}
+            {category === 'errors' && (
+              <>
+                {/* Hero Errors */}
+                <Animated.View entering={FadeInDown.duration(400)} style={[styles.heroCard, { borderLeftWidth: 4, borderLeftColor: theme.error }]}>
+                  <View style={styles.errorHeroContent}>
+                    <View style={styles.errorHeroMain}>
+                      <MaterialIcons name="error-outline" size={48} color={theme.error} />
+                      <Text style={styles.errorHeroValue}>{errorStats.totalErrors}</Text>
+                      <Text style={styles.errorHeroLabel}>erreurs totales</Text>
+                    </View>
+                    <View style={styles.errorHeroBreakdown}>
+                      <View style={styles.errorHeroItem}>
+                        <MaterialIcons name="gps-fixed" size={20} color={theme.tirColor} />
+                        <Text style={styles.errorHeroItemValue}>{errorStats.totalTirErrors}</Text>
+                        <Text style={styles.errorHeroItemLabel}>Tirs ratés</Text>
+                      </View>
+                      <View style={styles.errorHeroItem}>
+                        <MaterialIcons name="adjust" size={20} color={theme.pointColor} />
+                        <Text style={styles.errorHeroItemValue}>{errorStats.totalPointErrors}</Text>
+                        <Text style={styles.errorHeroItemLabel}>Points ratés</Text>
+                      </View>
+                    </View>
+                  </View>
+                  {errorStats.mostCommonError && (
+                    <View style={styles.mostCommonError}>
+                      <MaterialIcons name="warning" size={16} color={theme.warning} />
+                      <Text style={styles.mostCommonErrorText}>
+                        Erreur la plus fréquente: <Text style={styles.mostCommonErrorHighlight}>{errorStats.mostCommonError.type}</Text> ({errorStats.mostCommonError.count}x)
+                      </Text>
+                    </View>
+                  )}
+                </Animated.View>
+
+                {/* Error rates */}
+                <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
+                  <SectionHeader title="Taux d'erreur global" icon="analytics" color={theme.error} />
                   <View style={styles.card}>
-                    {pointStats.totalDetailedPoints > 0 ? (
-                      <>
-                        <StatRow 
-                          label="Point roulé" 
-                          value={`${pointStats.pointRoule.success}/${pointStats.pointRoule.total}`} 
-                          subValue={pointStats.pointRoule.total > 0 ? `${Math.round((pointStats.pointRoule.success / pointStats.pointRoule.total) * 100)}% réussite` : 'Aucun'}
-                          icon="sports-baseball" 
-                          color={theme.pointColor} 
-                        />
-                        <StatRow 
-                          label="Point plombé" 
-                          value={`${pointStats.pointPlombe.success}/${pointStats.pointPlombe.total}`} 
-                          subValue={pointStats.pointPlombe.total > 0 ? `${Math.round((pointStats.pointPlombe.success / pointStats.pointPlombe.total) * 100)}% réussite` : 'Aucun'}
-                          icon="flight-land" 
-                          color={theme.tirColor} 
-                        />
-                        <StatRow 
-                          label="Point demi-portée" 
-                          value={`${pointStats.pointDemiPortee.success}/${pointStats.pointDemiPortee.total}`} 
-                          subValue={pointStats.pointDemiPortee.total > 0 ? `${Math.round((pointStats.pointDemiPortee.success / pointStats.pointDemiPortee.total) * 100)}% réussite` : 'Aucun'}
-                          icon="height" 
-                          color={theme.primary} 
-                        />
-                        <StatRow 
-                          label="Point portée" 
-                          value={`${pointStats.pointPortee.success}/${pointStats.pointPortee.total}`} 
-                          subValue={pointStats.pointPortee.total > 0 ? `${Math.round((pointStats.pointPortee.success / pointStats.pointPortee.total) * 100)}% réussite` : 'Aucun'}
-                          icon="flight" 
-                          color={theme.accent} 
-                        />
-                      </>
-                    ) : (
-                      <NAPlaceholder message="Spécifiez le type de point lors de l'enregistrement (étape 2 de la notation)" />
-                    )}
+                    <View style={styles.errorRatesGrid}>
+                      <View style={[styles.errorRateCard, { borderColor: theme.tirColor }]}>
+                        <MaterialIcons name="gps-fixed" size={24} color={theme.tirColor} />
+                        <Text style={[styles.errorRateValue, { color: theme.tirColor }]}>{errorStats.tirErrorRate}%</Text>
+                        <Text style={styles.errorRateLabel}>Tirs ratés</Text>
+                      </View>
+                      <View style={[styles.errorRateCard, { borderColor: theme.pointColor }]}>
+                        <MaterialIcons name="adjust" size={24} color={theme.pointColor} />
+                        <Text style={[styles.errorRateValue, { color: theme.pointColor }]}>{errorStats.pointErrorRate}%</Text>
+                        <Text style={styles.errorRateLabel}>Points ratés</Text>
+                      </View>
+                    </View>
                   </View>
                 </Animated.View>
 
-                {/* Qualité du point (Réussis) - Basé sur SimplifiedShotNotation */}
+                {/* Error by duration */}
+                {(errorStats.shortMatchCount > 0 || errorStats.mediumMatchCount > 0 || errorStats.longMatchCount > 0) && (
+                  <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+                    <SectionHeader title="Erreurs selon durée de partie" subtitle="Impact de la fatigue" icon="timer" color={theme.warning} />
+                    <View style={styles.card}>
+                      <StatRow label="Parties courtes (< 30 min)" value={`${errorStats.shortMatchErrorRate}%`} subValue={`${errorStats.shortMatchCount} parties`} icon="fast-forward" color={theme.success} />
+                      <StatRow label="Parties moyennes (30-60 min)" value={`${errorStats.mediumMatchErrorRate}%`} subValue={`${errorStats.mediumMatchCount} parties`} icon="schedule" color={theme.warning} />
+                      <StatRow label="Parties longues (> 60 min)" value={`${errorStats.longMatchErrorRate}%`} subValue={`${errorStats.longMatchCount} parties`} icon="hourglass-full" color={theme.error} />
+                      {errorStats.longMatchErrorRate > errorStats.shortMatchErrorRate + 10 && (
+                        <View style={styles.insightBox}>
+                          <MaterialIcons name="lightbulb" size={16} color={theme.warning} />
+                          <Text style={styles.insightText}>Vos erreurs augmentent de {errorStats.longMatchErrorRate - errorStats.shortMatchErrorRate}% dans les parties longues. Pensez à travailler votre endurance.</Text>
+                        </View>
+                      )}
+                    </View>
+                  </Animated.View>
+                )}
+
+                {/* Error by format */}
                 <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
-                  <SectionHeader 
-                    title="Qualité des points réussis" 
-                    subtitle={pointStats.successQualitiesTotal > 0 ? `${pointStats.successQualitiesTotal} points qualifiés` : 'Précision par rapport au but'} 
-                    icon="straighten" 
-                    color={theme.success} 
-                  />
+                  <SectionHeader title="Erreurs par format" icon="group" color={theme.accent} />
                   <View style={styles.card}>
-                    {pointStats.successQualitiesTotal > 0 ? (
-                      <>
-                        <StatRow 
-                          label="Excellent (< 10 cm)" 
-                          value={pointStats.pointExcellent} 
-                          subValue={pointStats.successQualitiesTotal > 0 ? `${Math.round((pointStats.pointExcellent / pointStats.successQualitiesTotal) * 100)}%` : ''}
-                          icon="stars" 
-                          color={theme.carreauColor} 
-                        />
-                        <StatRow 
-                          label="Bon (< 30 cm)" 
-                          value={pointStats.pointBon} 
-                          subValue={pointStats.successQualitiesTotal > 0 ? `${Math.round((pointStats.pointBon / pointStats.successQualitiesTotal) * 100)}%` : ''}
-                          icon="check-circle" 
-                          color={theme.success} 
-                        />
-                        <StatRow 
-                          label="Moyen (< 50 cm)" 
-                          value={pointStats.pointMoyen} 
-                          subValue={pointStats.successQualitiesTotal > 0 ? `${Math.round((pointStats.pointMoyen / pointStats.successQualitiesTotal) * 100)}%` : ''}
-                          icon="radio-button-checked" 
-                          color={theme.warning} 
-                        />
-                        <StatRow 
-                          label="Au bouchon" 
-                          value={pointStats.pointAuBouchon} 
-                          subValue={pointStats.successQualitiesTotal > 0 ? `${Math.round((pointStats.pointAuBouchon / pointStats.successQualitiesTotal) * 100)}%` : ''}
-                          icon="adjust" 
-                          color={theme.primary} 
-                        />
-                        <View style={styles.divider} />
-                        <BreakdownBar items={[
-                          { label: 'Excellent', value: pointStats.pointExcellent, color: theme.carreauColor },
-                          { label: 'Bon', value: pointStats.pointBon, color: theme.success },
-                          { label: 'Moyen', value: pointStats.pointMoyen, color: theme.warning },
-                          { label: 'Au bouchon', value: pointStats.pointAuBouchon, color: theme.primary },
-                        ]} />
-                      </>
-                    ) : (
-                      <NAPlaceholder message="Qualifiez vos points réussis lors de l'enregistrement (étape 3 de la notation)" />
+                    {Object.entries(errorStats.errorByFormat).map(([format, data]) => (
+                      <View key={format} style={styles.formatRow}>
+                        <View style={styles.formatInfo}>
+                          <Text style={styles.formatName}>{format}</Text>
+                          <Text style={styles.formatRecord}>{data.errors} erreurs / {data.total} actions</Text>
+                        </View>
+                        <View style={styles.formatBarContainer}>
+                          <ProgressBar value={data.rate} color={data.rate > 40 ? theme.error : data.rate > 25 ? theme.warning : theme.success} />
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </Animated.View>
+
+                {/* Error by mode */}
+                <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
+                  <SectionHeader title="Erreurs par contexte" subtitle="Entraînement vs Tournoi" icon="psychology" color={theme.primary} />
+                  <View style={styles.card}>
+                    <View style={styles.contextComparison}>
+                      <View style={styles.contextItem}>
+                        <Text style={styles.contextLabel}>Entraînement</Text>
+                        <Text style={[styles.contextValue, { color: errorStats.trainingErrorRate > errorStats.tournamentErrorRate ? theme.error : theme.success }]}>
+                          {errorStats.trainingErrorRate}%
+                        </Text>
+                        <Text style={styles.contextSubLabel}>d'erreurs</Text>
+                      </View>
+                      <View style={styles.contextDivider}>
+                        <MaterialIcons name="compare-arrows" size={24} color={theme.textMuted} />
+                      </View>
+                      <View style={styles.contextItem}>
+                        <Text style={styles.contextLabel}>Tournoi</Text>
+                        <Text style={[styles.contextValue, { color: errorStats.tournamentErrorRate > errorStats.trainingErrorRate ? theme.error : theme.success }]}>
+                          {errorStats.tournamentErrorRate}%
+                        </Text>
+                        <Text style={styles.contextSubLabel}>d'erreurs</Text>
+                      </View>
+                    </View>
+                    {Math.abs(errorStats.trainingErrorRate - errorStats.tournamentErrorRate) > 10 && (
+                      <View style={styles.insightBox}>
+                        <MaterialIcons name="psychology" size={16} color={theme.primary} />
+                        <Text style={styles.insightText}>
+                          {errorStats.tournamentErrorRate > errorStats.trainingErrorRate 
+                            ? 'La pression des tournois semble vous affecter. Travaillez votre mental.'
+                            : 'Vous êtes plus concentré en tournoi. Reproduisez cette intensité à l\'entraînement.'}
+                        </Text>
+                      </View>
                     )}
                   </View>
                 </Animated.View>
 
-                {/* Analyse des échecs - Basé sur SimplifiedShotNotation */}
-                <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-                  <SectionHeader 
-                    title="Analyse des échecs" 
-                    subtitle={pointStats.failureQualitiesTotal > 0 ? `${pointStats.failureQualitiesTotal} échecs analysés` : 'Comprendre les erreurs'} 
-                    icon="error-outline" 
-                    color={theme.error} 
-                  />
-                  <View style={styles.card}>
-                    {pointStats.failureQualitiesTotal > 0 ? (
-                      <>
-                        <StatRow 
-                          label="Raté (trop loin du but)" 
-                          value={pointStats.pointRate} 
-                          subValue={pointStats.failureQualitiesTotal > 0 ? `${Math.round((pointStats.pointRate / pointStats.failureQualitiesTotal) * 100)}%` : ''}
-                          icon="cancel" 
-                          color={theme.error} 
-                        />
-                        <StatRow 
-                          label="Crocheté (mauvaise ouverture)" 
-                          value={pointStats.pointCrochete} 
-                          subValue={pointStats.failureQualitiesTotal > 0 ? `${Math.round((pointStats.pointCrochete / pointStats.failureQualitiesTotal) * 100)}%` : ''}
-                          icon="sync-problem" 
-                          color={theme.warning} 
-                        />
-                        <StatRow 
-                          label="Sorti du terrain" 
-                          value={pointStats.pointSorti} 
-                          subValue={pointStats.failureQualitiesTotal > 0 ? `${Math.round((pointStats.pointSorti / pointStats.failureQualitiesTotal) * 100)}%` : ''}
-                          icon="logout" 
-                          color={theme.error} 
-                        />
-                        <View style={styles.divider} />
-                        <BreakdownBar items={[
-                          { label: 'Raté', value: pointStats.pointRate, color: theme.error },
-                          { label: 'Crocheté', value: pointStats.pointCrochete, color: theme.warning },
-                          { label: 'Sorti', value: pointStats.pointSorti, color: '#8B0000' },
-                        ]} />
-                      </>
-                    ) : (
-                      <NAPlaceholder message="Analysez vos échecs lors de l'enregistrement (étape 3 quand le point est raté)" />
-                    )}
-                  </View>
-                </Animated.View>
+                {/* Detailed tir errors */}
+                {errorStats.totalTirErrorTyped > 0 && (
+                  <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
+                    <SectionHeader title="Types de tirs ratés" subtitle={`${errorStats.totalTirErrorTyped} erreurs analysées`} icon="gps-off" color={theme.tirColor} />
+                    <View style={styles.card}>
+                      {errorStats.tirErrorTypes.courtDroite > 0 && (
+                        <StatRow label="Court, à droite" value={errorStats.tirErrorTypes.courtDroite} subValue={`${Math.round((errorStats.tirErrorTypes.courtDroite / errorStats.totalTirErrorTyped) * 100)}%`} icon="subdirectory-arrow-right" color={theme.error} />
+                      )}
+                      {errorStats.tirErrorTypes.courtGauche > 0 && (
+                        <StatRow label="Court, à gauche" value={errorStats.tirErrorTypes.courtGauche} subValue={`${Math.round((errorStats.tirErrorTypes.courtGauche / errorStats.totalTirErrorTyped) * 100)}%`} icon="subdirectory-arrow-left" color={theme.error} />
+                      )}
+                      {errorStats.tirErrorTypes.long > 0 && (
+                        <StatRow label="Long" value={errorStats.tirErrorTypes.long} subValue={`${Math.round((errorStats.tirErrorTypes.long / errorStats.totalTirErrorTyped) * 100)}%`} icon="arrow-upward" color={theme.error} />
+                      )}
+                      {errorStats.tirErrorTypes.tirBouchon > 0 && (
+                        <StatRow label="Tir sur bouchon" value={errorStats.tirErrorTypes.tirBouchon} subValue={`${Math.round((errorStats.tirErrorTypes.tirBouchon / errorStats.totalTirErrorTyped) * 100)}%`} icon="adjust" color={theme.warning} />
+                      )}
+                      <View style={styles.divider} />
+                      <BreakdownBar items={[
+                        { label: 'Court D', value: errorStats.tirErrorTypes.courtDroite, color: '#E57373' },
+                        { label: 'Court G', value: errorStats.tirErrorTypes.courtGauche, color: '#EF5350' },
+                        { label: 'Long', value: errorStats.tirErrorTypes.long, color: '#F44336' },
+                        { label: 'Bouchon', value: errorStats.tirErrorTypes.tirBouchon, color: theme.warning },
+                      ].filter(i => i.value > 0)} />
+                      {(errorStats.tirErrorTypes.courtDroite + errorStats.tirErrorTypes.courtGauche) > errorStats.tirErrorTypes.long && (
+                        <View style={styles.insightBox}>
+                          <MaterialIcons name="lightbulb" size={16} color={theme.tirColor} />
+                          <Text style={styles.insightText}>Vos tirs sont majoritairement courts. Travaillez la puissance de votre lancer.</Text>
+                        </View>
+                      )}
+                    </View>
+                  </Animated.View>
+                )}
+
+                {/* Detailed point errors */}
+                {errorStats.totalPointErrorTyped > 0 && (
+                  <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
+                    <SectionHeader title="Analyse des échecs (Points)" subtitle={`${errorStats.totalPointErrorTyped} erreurs analysées`} icon="highlight-off" color={theme.pointColor} />
+                    <View style={styles.card}>
+                      {errorStats.pointErrorTypes.rate > 0 && (
+                        <StatRow label="Raté (trop loin du but)" value={errorStats.pointErrorTypes.rate} subValue={`${Math.round((errorStats.pointErrorTypes.rate / errorStats.totalPointErrorTyped) * 100)}%`} icon="cancel" color={theme.error} />
+                      )}
+                      {errorStats.pointErrorTypes.crochete > 0 && (
+                        <StatRow label="Crocheté (mauvaise ouverture)" value={errorStats.pointErrorTypes.crochete} subValue={`${Math.round((errorStats.pointErrorTypes.crochete / errorStats.totalPointErrorTyped) * 100)}%`} icon="sync-problem" color={theme.warning} />
+                      )}
+                      {errorStats.pointErrorTypes.sorti > 0 && (
+                        <StatRow label="Sorti du terrain" value={errorStats.pointErrorTypes.sorti} subValue={`${Math.round((errorStats.pointErrorTypes.sorti / errorStats.totalPointErrorTyped) * 100)}%`} icon="logout" color={theme.error} />
+                      )}
+                      <View style={styles.divider} />
+                      <Text style={styles.errorSubsectionTitle}>Échecs par type de point</Text>
+                      {errorStats.pointErrorTypes.rouleRate > 0 && (
+                        <StatRow label="Points roulés ratés" value={errorStats.pointErrorTypes.rouleRate} icon="sports-baseball" color={theme.textMuted} />
+                      )}
+                      {errorStats.pointErrorTypes.plombeRate > 0 && (
+                        <StatRow label="Points plombés ratés" value={errorStats.pointErrorTypes.plombeRate} icon="flight-land" color={theme.textMuted} />
+                      )}
+                      {errorStats.pointErrorTypes.porteeRate > 0 && (
+                        <StatRow label="Points portée ratés" value={errorStats.pointErrorTypes.porteeRate} icon="flight" color={theme.textMuted} />
+                      )}
+                      <View style={styles.divider} />
+                      <BreakdownBar items={[
+                        { label: 'Raté', value: errorStats.pointErrorTypes.rate, color: theme.error },
+                        { label: 'Crocheté', value: errorStats.pointErrorTypes.crochete, color: theme.warning },
+                        { label: 'Sorti', value: errorStats.pointErrorTypes.sorti, color: '#8B0000' },
+                      ].filter(i => i.value > 0)} />
+                      {errorStats.pointErrorTypes.crochete > errorStats.pointErrorTypes.rate && (
+                        <View style={styles.insightBox}>
+                          <MaterialIcons name="lightbulb" size={16} color={theme.pointColor} />
+                          <Text style={styles.insightText}>Vos erreurs viennent principalement du lâcher. Concentrez-vous sur l'ouverture de main.</Text>
+                        </View>
+                      )}
+                    </View>
+                  </Animated.View>
+                )}
+
+                {/* Consecutive errors */}
+                {errorStats.maxConsecutiveErrors > 0 && (
+                  <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
+                    <SectionHeader title="Séries d'erreurs" subtitle="Analyse des passages difficiles" icon="trending-down" color={theme.error} />
+                    <View style={styles.card}>
+                      <View style={styles.consecutiveErrorsGrid}>
+                        <View style={styles.consecutiveErrorItem}>
+                          <Text style={styles.consecutiveErrorValue}>{errorStats.maxConsecutiveErrors}</Text>
+                          <Text style={styles.consecutiveErrorLabel}>erreurs consécutives max</Text>
+                        </View>
+                        <View style={styles.consecutiveErrorItem}>
+                          <Text style={styles.consecutiveErrorValue}>{errorStats.totalErrorStreaks}</Text>
+                          <Text style={styles.consecutiveErrorLabel}>séries de 3+ erreurs</Text>
+                        </View>
+                      </View>
+                      {errorStats.maxConsecutiveErrors >= 5 && (
+                        <View style={styles.insightBox}>
+                          <MaterialIcons name="warning" size={16} color={theme.error} />
+                          <Text style={styles.insightText}>Vous avez eu des passages très difficiles. Prenez le temps de vous recentrer après 2-3 erreurs consécutives.</Text>
+                        </View>
+                      )}
+                    </View>
+                  </Animated.View>
+                )}
+
+                {/* No detailed data */}
+                {errorStats.totalTirErrorTyped === 0 && errorStats.totalPointErrorTyped === 0 && (
+                  <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
+                    <View style={styles.card}>
+                      <NAPlaceholder message="Utilisez la notation détaillée pendant vos matchs pour obtenir une analyse approfondie de vos erreurs" />
+                    </View>
+                  </Animated.View>
+                )}
               </>
             )}
           </>
         )}
       </ScrollView>
 
-      {/* Progression Modal */}
-      <Modal
-        visible={showProgressionModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowProgressionModal(false)}
-      >
+      {/* Enhanced Progression Modal */}
+      <Modal visible={showProgressionModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowProgressionModal(false)}>
         <SafeAreaView edges={['top']} style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Progression</Text>
-            <Pressable 
-              style={styles.modalCloseButton}
-              onPress={() => setShowProgressionModal(false)}
-            >
+            <View>
+              <Text style={styles.modalTitle}>Progression</Text>
+              <Text style={styles.modalSubtitle}>Évolution de vos performances</Text>
+            </View>
+            <Pressable style={styles.modalCloseButton} onPress={() => setShowProgressionModal(false)}>
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>
           </View>
+
+          {/* Progression Time Filter */}
+          <View style={styles.progressionFilterContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.progressionFilterScroll}>
+              {PROGRESSION_FILTERS.map(filter => (
+                <Pressable
+                  key={filter.id}
+                  style={[styles.progressionFilterPill, progressionFilter === filter.id && styles.progressionFilterPillActive]}
+                  onPress={() => { Haptics.selectionAsync(); setProgressionFilter(filter.id); }}
+                >
+                  <Text style={[styles.progressionFilterText, progressionFilter === filter.id && styles.progressionFilterTextActive]}>
+                    {filter.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
           
-          <ScrollView 
-            style={styles.modalContent}
-            contentContainerStyle={styles.modalScrollContent}
-            showsVerticalScrollIndicator={false}
-          >
+          <ScrollView style={styles.modalContent} contentContainerStyle={styles.modalScrollContent} showsVerticalScrollIndicator={false}>
             {progressionData.weeklyData.length > 0 ? (
               <>
+                {/* Trend Summary Cards */}
+                <View style={styles.trendCardsRow}>
+                  <View style={[styles.trendCard, { borderLeftColor: theme.primary }]}>
+                    <View style={styles.trendCardHeader}>
+                      <MaterialIcons name="emoji-events" size={18} color={theme.primary} />
+                      <MaterialIcons name={trends.winRate === 'up' ? 'trending-up' : trends.winRate === 'down' ? 'trending-down' : 'remove'} size={16} color={trends.winRate === 'up' ? theme.success : trends.winRate === 'down' ? theme.error : theme.textMuted} />
+                    </View>
+                    <Text style={styles.trendCardValue}>{performanceStats.winRate}%</Text>
+                    <Text style={styles.trendCardLabel}>Victoires</Text>
+                  </View>
+                  <View style={[styles.trendCard, { borderLeftColor: theme.tirColor }]}>
+                    <View style={styles.trendCardHeader}>
+                      <MaterialIcons name="gps-fixed" size={18} color={theme.tirColor} />
+                      <MaterialIcons name={trends.tirRate === 'up' ? 'trending-up' : trends.tirRate === 'down' ? 'trending-down' : 'remove'} size={16} color={trends.tirRate === 'up' ? theme.success : trends.tirRate === 'down' ? theme.error : theme.textMuted} />
+                    </View>
+                    <Text style={styles.trendCardValue}>{tirStats.successRate}%</Text>
+                    <Text style={styles.trendCardLabel}>Tir</Text>
+                  </View>
+                  <View style={[styles.trendCard, { borderLeftColor: theme.pointColor }]}>
+                    <View style={styles.trendCardHeader}>
+                      <MaterialIcons name="adjust" size={18} color={theme.pointColor} />
+                      <MaterialIcons name={trends.pointRate === 'up' ? 'trending-up' : trends.pointRate === 'down' ? 'trending-down' : 'remove'} size={16} color={trends.pointRate === 'up' ? theme.success : trends.pointRate === 'down' ? theme.error : theme.textMuted} />
+                    </View>
+                    <Text style={styles.trendCardValue}>{pointStats.successRate}%</Text>
+                    <Text style={styles.trendCardLabel}>Pointage</Text>
+                  </View>
+                </View>
+
                 {/* Win Rate Evolution */}
                 <View style={styles.progressionSection}>
-                  <View style={styles.progressionHeader}>
-                    <MaterialIcons name="emoji-events" size={20} color={theme.primary} />
-                    <Text style={styles.progressionTitle}>Évolution du taux de victoire</Text>
-                  </View>
-                  <View style={styles.chartContainer}>
-                    <Svg width={screenWidth - 64} height={180}>
-                      {/* Grid lines */}
-                      {[0, 25, 50, 75, 100].map((v, i) => (
-                        <G key={i}>
-                          <Line
-                            x1="40"
-                            y1={160 - (v / 100) * 140}
-                            x2={screenWidth - 64}
-                            y2={160 - (v / 100) * 140}
-                            stroke={theme.border}
-                            strokeWidth="1"
-                            strokeDasharray="4,4"
-                          />
-                          <SvgText
-                            x="35"
-                            y={165 - (v / 100) * 140}
-                            fontSize="10"
-                            fill={theme.textMuted}
-                            textAnchor="end"
-                          >
-                            {v}%
-                          </SvgText>
-                        </G>
-                      ))}
-                      
-                      {/* Data points and lines */}
-                      {progressionData.weeklyData.map((data, i) => {
-                        const x = 50 + (i * ((screenWidth - 114) / Math.max(progressionData.weeklyData.length - 1, 1)));
-                        const y = 160 - (data.winRate / 100) * 140;
-                        const prevData = progressionData.weeklyData[i - 1];
-                        const prevX = prevData ? 50 + ((i - 1) * ((screenWidth - 114) / Math.max(progressionData.weeklyData.length - 1, 1))) : x;
-                        const prevY = prevData ? 160 - (prevData.winRate / 100) * 140 : y;
-                        
-                        return (
-                          <G key={i}>
-                            {i > 0 && (
-                              <Line
-                                x1={prevX}
-                                y1={prevY}
-                                x2={x}
-                                y2={y}
-                                stroke={theme.primary}
-                                strokeWidth="2"
-                              />
-                            )}
-                            <Circle cx={x} cy={y} r="5" fill={theme.primary} />
-                            {data.matches > 0 && (
-                              <SvgText
-                                x={x}
-                                y={y - 10}
-                                fontSize="10"
-                                fill={theme.textPrimary}
-                                textAnchor="middle"
-                                fontWeight="600"
-                              >
-                                {data.winRate}%
-                              </SvgText>
-                            )}
-                            <SvgText
-                              x={x}
-                              y={175}
-                              fontSize="9"
-                              fill={theme.textMuted}
-                              textAnchor="middle"
-                            >
-                              {data.week}
-                            </SvgText>
-                          </G>
-                        );
-                      })}
-                    </Svg>
-                  </View>
-                  <View style={styles.chartLegend}>
-                    <Text style={styles.chartLegendText}>
-                      {progressionData.weeklyData.reduce((sum, d) => sum + d.matches, 0)} parties sur les dernières semaines
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Tir Success Rate Evolution */}
-                <View style={styles.progressionSection}>
-                  <View style={styles.progressionHeader}>
-                    <MaterialIcons name="gps-fixed" size={20} color={theme.tirColor} />
-                    <Text style={styles.progressionTitle}>Évolution du taux de tir</Text>
-                  </View>
-                  <View style={styles.chartContainer}>
-                    <Svg width={screenWidth - 64} height={180}>
-                      {/* Grid lines */}
-                      {[0, 25, 50, 75, 100].map((v, i) => (
-                        <G key={i}>
-                          <Line
-                            x1="40"
-                            y1={160 - (v / 100) * 140}
-                            x2={screenWidth - 64}
-                            y2={160 - (v / 100) * 140}
-                            stroke={theme.border}
-                            strokeWidth="1"
-                            strokeDasharray="4,4"
-                          />
-                          <SvgText
-                            x="35"
-                            y={165 - (v / 100) * 140}
-                            fontSize="10"
-                            fill={theme.textMuted}
-                            textAnchor="end"
-                          >
-                            {v}%
-                          </SvgText>
-                        </G>
-                      ))}
-                      
-                      {/* Data points and lines */}
-                      {progressionData.weeklyData.map((data, i) => {
-                        const x = 50 + (i * ((screenWidth - 114) / Math.max(progressionData.weeklyData.length - 1, 1)));
-                        const y = 160 - (data.tirRate / 100) * 140;
-                        const prevData = progressionData.weeklyData[i - 1];
-                        const prevX = prevData ? 50 + ((i - 1) * ((screenWidth - 114) / Math.max(progressionData.weeklyData.length - 1, 1))) : x;
-                        const prevY = prevData ? 160 - (prevData.tirRate / 100) * 140 : y;
-                        
-                        return (
-                          <G key={i}>
-                            {i > 0 && (
-                              <Line
-                                x1={prevX}
-                                y1={prevY}
-                                x2={x}
-                                y2={y}
-                                stroke={theme.tirColor}
-                                strokeWidth="2"
-                              />
-                            )}
-                            <Circle cx={x} cy={y} r="5" fill={theme.tirColor} />
-                            {data.tirTotal > 0 && (
-                              <SvgText
-                                x={x}
-                                y={y - 10}
-                                fontSize="10"
-                                fill={theme.textPrimary}
-                                textAnchor="middle"
-                                fontWeight="600"
-                              >
-                                {data.tirRate}%
-                              </SvgText>
-                            )}
-                            <SvgText
-                              x={x}
-                              y={175}
-                              fontSize="9"
-                              fill={theme.textMuted}
-                              textAnchor="middle"
-                            >
-                              {data.week}
-                            </SvgText>
-                          </G>
-                        );
-                      })}
-                    </Svg>
-                  </View>
-                  <View style={styles.chartLegend}>
-                    <Text style={styles.chartLegendText}>
-                      {progressionData.weeklyData.reduce((sum, d) => sum + d.tirTotal, 0)} tirs analysés
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Point Success Rate Evolution */}
-                <View style={styles.progressionSection}>
-                  <View style={styles.progressionHeader}>
-                    <MaterialIcons name="adjust" size={20} color={theme.pointColor} />
-                    <Text style={styles.progressionTitle}>Évolution du taux de pointage</Text>
-                  </View>
-                  <View style={styles.chartContainer}>
-                    <Svg width={screenWidth - 64} height={180}>
-                      {/* Grid lines */}
-                      {[0, 25, 50, 75, 100].map((v, i) => (
-                        <G key={i}>
-                          <Line
-                            x1="40"
-                            y1={160 - (v / 100) * 140}
-                            x2={screenWidth - 64}
-                            y2={160 - (v / 100) * 140}
-                            stroke={theme.border}
-                            strokeWidth="1"
-                            strokeDasharray="4,4"
-                          />
-                          <SvgText
-                            x="35"
-                            y={165 - (v / 100) * 140}
-                            fontSize="10"
-                            fill={theme.textMuted}
-                            textAnchor="end"
-                          >
-                            {v}%
-                          </SvgText>
-                        </G>
-                      ))}
-                      
-                      {/* Data points and lines */}
-                      {progressionData.weeklyData.map((data, i) => {
-                        const x = 50 + (i * ((screenWidth - 114) / Math.max(progressionData.weeklyData.length - 1, 1)));
-                        const y = 160 - (data.pointRate / 100) * 140;
-                        const prevData = progressionData.weeklyData[i - 1];
-                        const prevX = prevData ? 50 + ((i - 1) * ((screenWidth - 114) / Math.max(progressionData.weeklyData.length - 1, 1))) : x;
-                        const prevY = prevData ? 160 - (prevData.pointRate / 100) * 140 : y;
-                        
-                        return (
-                          <G key={i}>
-                            {i > 0 && (
-                              <Line
-                                x1={prevX}
-                                y1={prevY}
-                                x2={x}
-                                y2={y}
-                                stroke={theme.pointColor}
-                                strokeWidth="2"
-                              />
-                            )}
-                            <Circle cx={x} cy={y} r="5" fill={theme.pointColor} />
-                            {data.pointTotal > 0 && (
-                              <SvgText
-                                x={x}
-                                y={y - 10}
-                                fontSize="10"
-                                fill={theme.textPrimary}
-                                textAnchor="middle"
-                                fontWeight="600"
-                              >
-                                {data.pointRate}%
-                              </SvgText>
-                            )}
-                            <SvgText
-                              x={x}
-                              y={175}
-                              fontSize="9"
-                              fill={theme.textMuted}
-                              textAnchor="middle"
-                            >
-                              {data.week}
-                            </SvgText>
-                          </G>
-                        );
-                      })}
-                    </Svg>
-                  </View>
-                  <View style={styles.chartLegend}>
-                    <Text style={styles.chartLegendText}>
-                      {progressionData.weeklyData.reduce((sum, d) => sum + d.pointTotal, 0)} points analysés
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Carreaux Evolution */}
-                <View style={styles.progressionSection}>
-                  <View style={styles.progressionHeader}>
-                    <MaterialIcons name="stars" size={20} color={theme.carreauColor} />
-                    <Text style={styles.progressionTitle}>Évolution des carreaux</Text>
+                  <View style={styles.progressionSectionHeader}>
+                    <View style={[styles.progressionSectionIcon, { backgroundColor: theme.primary + '15' }]}>
+                      <MaterialIcons name="emoji-events" size={20} color={theme.primary} />
+                    </View>
+                    <View>
+                      <Text style={styles.progressionSectionTitle}>Taux de victoire</Text>
+                      <Text style={styles.progressionSectionSubtitle}>{progressionData.weeklyData.reduce((sum, d) => sum + d.matches, 0)} parties</Text>
+                    </View>
                   </View>
                   <View style={styles.chartContainer}>
                     <Svg width={screenWidth - 64} height={160}>
-                      {/* Bars */}
+                      {[0, 50, 100].map((v, i) => (
+                        <G key={i}>
+                          <Line x1="35" y1={140 - (v / 100) * 120} x2={screenWidth - 64} y2={140 - (v / 100) * 120} stroke={theme.border} strokeWidth="1" strokeDasharray="4,4" />
+                          <SvgText x="30" y={145 - (v / 100) * 120} fontSize="10" fill={theme.textMuted} textAnchor="end">{v}%</SvgText>
+                        </G>
+                      ))}
                       {progressionData.weeklyData.map((data, i) => {
-                        const barWidth = (screenWidth - 104) / progressionData.weeklyData.length - 8;
-                        const x = 50 + (i * ((screenWidth - 104) / progressionData.weeklyData.length));
-                        const maxCarreaux = Math.max(...progressionData.weeklyData.map(d => d.carreaux), 1);
-                        const barHeight = (data.carreaux / maxCarreaux) * 100;
-                        
+                        const x = 45 + (i * ((screenWidth - 109) / Math.max(progressionData.weeklyData.length - 1, 1)));
+                        const y = 140 - (data.winRate / 100) * 120;
+                        const prevData = progressionData.weeklyData[i - 1];
+                        const prevX = prevData ? 45 + ((i - 1) * ((screenWidth - 109) / Math.max(progressionData.weeklyData.length - 1, 1))) : x;
+                        const prevY = prevData ? 140 - (prevData.winRate / 100) * 120 : y;
                         return (
                           <G key={i}>
-                            <Rect
-                              x={x}
-                              y={130 - barHeight}
-                              width={barWidth}
-                              height={barHeight}
-                              fill={theme.carreauColor}
-                              rx="4"
-                            />
-                            <SvgText
-                              x={x + barWidth / 2}
-                              y={125 - barHeight}
-                              fontSize="10"
-                              fill={theme.textPrimary}
-                              textAnchor="middle"
-                              fontWeight="600"
-                            >
-                              {data.carreaux}
-                            </SvgText>
-                            <SvgText
-                              x={x + barWidth / 2}
-                              y={150}
-                              fontSize="9"
-                              fill={theme.textMuted}
-                              textAnchor="middle"
-                            >
-                              {data.week}
-                            </SvgText>
+                            {i > 0 && <Line x1={prevX} y1={prevY} x2={x} y2={y} stroke={theme.primary} strokeWidth="2.5" />}
+                            <Circle cx={x} cy={y} r="5" fill={theme.primary} />
+                            {data.matches > 0 && <SvgText x={x} y={y - 10} fontSize="9" fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.winRate}%</SvgText>}
                           </G>
                         );
                       })}
                     </Svg>
                   </View>
-                  <View style={styles.chartLegend}>
-                    <Text style={styles.chartLegendText}>
-                      {progressionData.weeklyData.reduce((sum, d) => sum + d.carreaux, 0)} carreaux au total
-                    </Text>
+                </View>
+
+                {/* Tir Evolution */}
+                <View style={styles.progressionSection}>
+                  <View style={styles.progressionSectionHeader}>
+                    <View style={[styles.progressionSectionIcon, { backgroundColor: theme.tirColor + '15' }]}>
+                      <MaterialIcons name="gps-fixed" size={20} color={theme.tirColor} />
+                    </View>
+                    <View>
+                      <Text style={styles.progressionSectionTitle}>Taux de tir</Text>
+                      <Text style={styles.progressionSectionSubtitle}>{progressionData.weeklyData.reduce((sum, d) => sum + d.tirTotal, 0)} tirs</Text>
+                    </View>
+                  </View>
+                  <View style={styles.chartContainer}>
+                    <Svg width={screenWidth - 64} height={160}>
+                      {[0, 50, 100].map((v, i) => (
+                        <G key={i}>
+                          <Line x1="35" y1={140 - (v / 100) * 120} x2={screenWidth - 64} y2={140 - (v / 100) * 120} stroke={theme.border} strokeWidth="1" strokeDasharray="4,4" />
+                          <SvgText x="30" y={145 - (v / 100) * 120} fontSize="10" fill={theme.textMuted} textAnchor="end">{v}%</SvgText>
+                        </G>
+                      ))}
+                      {progressionData.weeklyData.map((data, i) => {
+                        const x = 45 + (i * ((screenWidth - 109) / Math.max(progressionData.weeklyData.length - 1, 1)));
+                        const y = 140 - (data.tirRate / 100) * 120;
+                        const prevData = progressionData.weeklyData[i - 1];
+                        const prevX = prevData ? 45 + ((i - 1) * ((screenWidth - 109) / Math.max(progressionData.weeklyData.length - 1, 1))) : x;
+                        const prevY = prevData ? 140 - (prevData.tirRate / 100) * 120 : y;
+                        return (
+                          <G key={i}>
+                            {i > 0 && <Line x1={prevX} y1={prevY} x2={x} y2={y} stroke={theme.tirColor} strokeWidth="2.5" />}
+                            <Circle cx={x} cy={y} r="5" fill={theme.tirColor} />
+                            {data.tirTotal > 0 && <SvgText x={x} y={y - 10} fontSize="9" fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.tirRate}%</SvgText>}
+                          </G>
+                        );
+                      })}
+                    </Svg>
                   </View>
                 </View>
 
-                {/* Weekly Summary Table */}
+                {/* Point Evolution */}
                 <View style={styles.progressionSection}>
-                  <View style={styles.progressionHeader}>
-                    <MaterialIcons name="table-chart" size={20} color={theme.textSecondary} />
-                    <Text style={styles.progressionTitle}>Résumé hebdomadaire</Text>
+                  <View style={styles.progressionSectionHeader}>
+                    <View style={[styles.progressionSectionIcon, { backgroundColor: theme.pointColor + '15' }]}>
+                      <MaterialIcons name="adjust" size={20} color={theme.pointColor} />
+                    </View>
+                    <View>
+                      <Text style={styles.progressionSectionTitle}>Taux de pointage</Text>
+                      <Text style={styles.progressionSectionSubtitle}>{progressionData.weeklyData.reduce((sum, d) => sum + d.pointTotal, 0)} points</Text>
+                    </View>
+                  </View>
+                  <View style={styles.chartContainer}>
+                    <Svg width={screenWidth - 64} height={160}>
+                      {[0, 50, 100].map((v, i) => (
+                        <G key={i}>
+                          <Line x1="35" y1={140 - (v / 100) * 120} x2={screenWidth - 64} y2={140 - (v / 100) * 120} stroke={theme.border} strokeWidth="1" strokeDasharray="4,4" />
+                          <SvgText x="30" y={145 - (v / 100) * 120} fontSize="10" fill={theme.textMuted} textAnchor="end">{v}%</SvgText>
+                        </G>
+                      ))}
+                      {progressionData.weeklyData.map((data, i) => {
+                        const x = 45 + (i * ((screenWidth - 109) / Math.max(progressionData.weeklyData.length - 1, 1)));
+                        const y = 140 - (data.pointRate / 100) * 120;
+                        const prevData = progressionData.weeklyData[i - 1];
+                        const prevX = prevData ? 45 + ((i - 1) * ((screenWidth - 109) / Math.max(progressionData.weeklyData.length - 1, 1))) : x;
+                        const prevY = prevData ? 140 - (prevData.pointRate / 100) * 120 : y;
+                        return (
+                          <G key={i}>
+                            {i > 0 && <Line x1={prevX} y1={prevY} x2={x} y2={y} stroke={theme.pointColor} strokeWidth="2.5" />}
+                            <Circle cx={x} cy={y} r="5" fill={theme.pointColor} />
+                            {data.pointTotal > 0 && <SvgText x={x} y={y - 10} fontSize="9" fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.pointRate}%</SvgText>}
+                          </G>
+                        );
+                      })}
+                    </Svg>
+                  </View>
+                </View>
+
+                {/* Carreaux Bar Chart */}
+                <View style={styles.progressionSection}>
+                  <View style={styles.progressionSectionHeader}>
+                    <View style={[styles.progressionSectionIcon, { backgroundColor: theme.carreauColor + '15' }]}>
+                      <MaterialIcons name="stars" size={20} color={theme.carreauColor} />
+                    </View>
+                    <View>
+                      <Text style={styles.progressionSectionTitle}>Carreaux</Text>
+                      <Text style={styles.progressionSectionSubtitle}>{progressionData.weeklyData.reduce((sum, d) => sum + d.carreaux, 0)} au total</Text>
+                    </View>
+                  </View>
+                  <View style={styles.chartContainer}>
+                    <Svg width={screenWidth - 64} height={140}>
+                      {progressionData.weeklyData.map((data, i) => {
+                        const barWidth = Math.max((screenWidth - 104) / progressionData.weeklyData.length - 6, 8);
+                        const x = 40 + (i * ((screenWidth - 80) / progressionData.weeklyData.length));
+                        const maxCarreaux = Math.max(...progressionData.weeklyData.map(d => d.carreaux), 1);
+                        const barHeight = Math.max((data.carreaux / maxCarreaux) * 90, data.carreaux > 0 ? 4 : 0);
+                        return (
+                          <G key={i}>
+                            <Rect x={x} y={110 - barHeight} width={barWidth} height={barHeight} fill={theme.carreauColor} rx="3" />
+                            {data.carreaux > 0 && <SvgText x={x + barWidth / 2} y={105 - barHeight} fontSize="10" fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.carreaux}</SvgText>}
+                            <SvgText x={x + barWidth / 2} y={130} fontSize="8" fill={theme.textMuted} textAnchor="middle">{data.week}</SvgText>
+                          </G>
+                        );
+                      })}
+                    </Svg>
+                  </View>
+                </View>
+
+                {/* Summary Table */}
+                <View style={styles.progressionSection}>
+                  <View style={styles.progressionSectionHeader}>
+                    <View style={[styles.progressionSectionIcon, { backgroundColor: theme.textSecondary + '15' }]}>
+                      <MaterialIcons name="table-chart" size={20} color={theme.textSecondary} />
+                    </View>
+                    <Text style={styles.progressionSectionTitle}>Résumé</Text>
                   </View>
                   <View style={styles.summaryTable}>
                     <View style={styles.summaryHeader}>
-                      <Text style={[styles.summaryCell, styles.summaryCellHeader, { flex: 1 }]}>Sem.</Text>
+                      <Text style={[styles.summaryCell, styles.summaryCellHeader, { flex: 1.2 }]}>Sem.</Text>
                       <Text style={[styles.summaryCell, styles.summaryCellHeader, { flex: 1 }]}>Parties</Text>
                       <Text style={[styles.summaryCell, styles.summaryCellHeader, { flex: 1 }]}>Vict.</Text>
                       <Text style={[styles.summaryCell, styles.summaryCellHeader, { flex: 1 }]}>Tir</Text>
                       <Text style={[styles.summaryCell, styles.summaryCellHeader, { flex: 1 }]}>Point</Text>
                     </View>
-                    {progressionData.weeklyData.map((data, i) => (
+                    {progressionData.weeklyData.slice(-8).map((data, i) => (
                       <View key={i} style={[styles.summaryRow, i % 2 === 0 && styles.summaryRowAlt]}>
-                        <Text style={[styles.summaryCell, { flex: 1 }]}>{data.week}</Text>
+                        <Text style={[styles.summaryCell, { flex: 1.2 }]}>{data.week}</Text>
                         <Text style={[styles.summaryCell, { flex: 1 }]}>{data.matches}</Text>
-                        <Text style={[styles.summaryCell, { flex: 1, color: theme.primary }]}>{data.winRate}%</Text>
-                        <Text style={[styles.summaryCell, { flex: 1, color: theme.tirColor }]}>{data.tirRate}%</Text>
-                        <Text style={[styles.summaryCell, { flex: 1, color: theme.pointColor }]}>{data.pointRate}%</Text>
+                        <Text style={[styles.summaryCell, { flex: 1, color: theme.primary, fontWeight: '600' }]}>{data.winRate}%</Text>
+                        <Text style={[styles.summaryCell, { flex: 1, color: theme.tirColor, fontWeight: '600' }]}>{data.tirRate}%</Text>
+                        <Text style={[styles.summaryCell, { flex: 1, color: theme.pointColor, fontWeight: '600' }]}>{data.pointRate}%</Text>
                       </View>
                     ))}
                   </View>
@@ -1986,9 +1575,7 @@ export default function StatsScreen() {
               <View style={styles.noProgressionData}>
                 <MaterialIcons name="show-chart" size={64} color={theme.textMuted} />
                 <Text style={styles.noProgressionTitle}>Pas assez de données</Text>
-                <Text style={styles.noProgressionText}>
-                  Jouez plus de matchs pour voir votre progression dans le temps
-                </Text>
+                <Text style={styles.noProgressionText}>Jouez plus de matchs pour voir votre progression</Text>
               </View>
             )}
           </ScrollView>
@@ -2003,8 +1590,6 @@ export default function StatsScreen() {
 // ============================================
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.backgroundSecondary },
-  
-  // Header
   header: { backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border, paddingBottom: 12 },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 16, paddingTop: 12, marginBottom: 12 },
   headerTitle: { fontSize: 26, fontWeight: '700', color: theme.textPrimary },
@@ -2013,73 +1598,49 @@ const styles = StyleSheet.create({
   progressionButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: theme.primary + '15', borderRadius: theme.borderRadius.md },
   progressionButtonText: { fontSize: 12, fontWeight: '600', color: theme.primary },
   historyButton: { padding: 8, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md },
-  
-  // Filter Bar
   filterBar: { paddingHorizontal: 16, gap: 8, marginBottom: 12 },
   filterPill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: theme.borderRadius.full, backgroundColor: theme.backgroundSecondary },
   filterPillActive: { backgroundColor: theme.primary },
   filterPillText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
   filterPillTextActive: { color: '#FFF' },
-  
-  // Category Tabs
-  categoryTabs: { flexDirection: 'row', paddingHorizontal: 16, gap: 8 },
-  categoryTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: theme.borderRadius.md, backgroundColor: theme.backgroundSecondary },
+  categoryTabs: { flexDirection: 'row', paddingHorizontal: 12, gap: 6 },
+  categoryTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 10, borderRadius: theme.borderRadius.md, backgroundColor: theme.backgroundSecondary },
   categoryTabActive: { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border },
-  categoryTabText: { fontSize: 12, fontWeight: '600', color: theme.textMuted },
+  categoryTabText: { fontSize: 11, fontWeight: '600', color: theme.textMuted },
   categoryTabTextActive: { fontWeight: '700' },
-  
-  // Scroll
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 20 },
-  
-  // Section
   section: { marginBottom: 16 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 10 },
   sectionIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   sectionHeaderText: { flex: 1 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: theme.textPrimary },
   sectionSubtitle: { fontSize: 11, color: theme.textMuted, marginTop: 1 },
-  
-  // Card
   card: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, ...theme.shadows.card },
-  
-  // Hero Card
   heroCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 20, marginBottom: 20, ...theme.shadows.card },
   heroContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' },
   heroStats: { gap: 16 },
   heroStatItem: { alignItems: 'center' },
   heroStatValue: { fontSize: 24, fontWeight: '700', color: theme.textPrimary },
   heroStatLabel: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
-  
-  // Ring
   ringValue: { fontWeight: '700' },
   ringLabel: { color: theme.textSecondary, marginTop: -2 },
-  
-  // Stats Grid
   statsGrid3: { flexDirection: 'row', justifyContent: 'space-around' },
   gridItem: { alignItems: 'center' },
   gridValue: { fontSize: 28, fontWeight: '700', color: theme.textPrimary },
   gridLabel: { fontSize: 11, color: theme.textMuted, marginTop: 4 },
-  
-  // Mode Win Rates
   modeWinRates: { gap: 16 },
   modeWinRateItem: { gap: 8 },
   modeLabel: { fontSize: 13, fontWeight: '600', color: theme.textPrimary },
-  
-  // Progress Bar
   progressBarContainer: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   progressBarTrack: { flex: 1, height: 8, backgroundColor: theme.backgroundSecondary, borderRadius: 4, overflow: 'hidden' },
   progressBarFill: { height: '100%', borderRadius: 4 },
   progressBarValue: { fontSize: 14, fontWeight: '700', minWidth: 45, textAlign: 'right' },
-  
-  // Format Row
   formatRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border },
   formatInfo: { width: 100 },
   formatName: { fontSize: 13, fontWeight: '600', color: theme.textPrimary },
   formatRecord: { fontSize: 10, color: theme.textMuted, marginTop: 2 },
   formatBarContainer: { flex: 1, marginLeft: 12 },
-  
-  // Score Comparison
   scoreComparison: { flexDirection: 'row', alignItems: 'center', paddingBottom: 16 },
   scoreItem: { flex: 1, alignItems: 'center' },
   scoreValue: { fontSize: 32, fontWeight: '700', marginTop: 8 },
@@ -2088,39 +1649,6 @@ const styles = StyleSheet.create({
   scoreDiffBadge: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: theme.borderRadius.md, alignItems: 'center' },
   scoreDiffText: { fontSize: 20, fontWeight: '700' },
   scoreDiffLabel: { fontSize: 9, color: theme.textMuted, marginTop: 2 },
-  totalDiff: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border, gap: 8 },
-  totalDiffLabel: { fontSize: 12, color: theme.textMuted },
-  totalDiffValue: { fontSize: 14, fontWeight: '700' },
-  
-  // Mène Stats
-  meneStats: { flexDirection: 'row', alignItems: 'center', gap: 20 },
-  meneStatMain: {},
-  meneStatDetails: { flex: 1 },
-  
-  // Streaks
-  streaksGrid: { flexDirection: 'row', justifyContent: 'space-around' },
-  streakItem: { alignItems: 'center', flex: 1 },
-  streakLabel: { fontSize: 10, color: theme.textMuted, textAlign: 'center' },
-  streakValue: { fontSize: 28, fontWeight: '700', marginVertical: 4 },
-  streakType: { fontSize: 11, color: theme.textSecondary },
-  
-  // Series Stats
-  seriesStats: { flexDirection: 'row', alignItems: 'center' },
-  seriesMain: { flex: 1, alignItems: 'center' },
-  seriesPlayed: { fontSize: 36, fontWeight: '700', color: theme.textPrimary },
-  seriesPlayedLabel: { fontSize: 12, color: theme.textMuted },
-  seriesResults: { flexDirection: 'row', gap: 24 },
-  seriesResult: { alignItems: 'center' },
-  seriesResultValue: { fontSize: 24, fontWeight: '700' },
-  seriesResultLabel: { fontSize: 11, color: theme.textMuted },
-  
-  // Fanny
-  fannyStats: { flexDirection: 'row', justifyContent: 'space-around' },
-  fannyItem: { alignItems: 'center' },
-  fannyValue: { fontSize: 28, fontWeight: '700', marginTop: 8 },
-  fannyLabel: { fontSize: 11, color: theme.textMuted, marginTop: 4 },
-  
-  // Stat Row
   statRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border },
   statRowIcon: { width: 28, height: 28, borderRadius: 6, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   statRowContent: { flex: 1 },
@@ -2128,43 +1656,22 @@ const styles = StyleSheet.create({
   statRowSubValue: { fontSize: 10, color: theme.textMuted },
   statRowValue: { fontSize: 15, fontWeight: '700', color: theme.textPrimary },
   statRowValueNA: { color: theme.textMuted, fontWeight: '500', fontStyle: 'italic' },
-  
-  // Stat Card
-  statCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 14, alignItems: 'center', ...theme.shadows.card },
-  statCardSmall: { padding: 10 },
-  statCardIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  statCardTitle: { fontSize: 11, color: theme.textMuted, textAlign: 'center' },
-  statCardTitleSmall: { fontSize: 10 },
-  statCardValueRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  statCardValue: { fontSize: 20, fontWeight: '700' },
-  statCardValueSmall: { fontSize: 16 },
-  statCardSubtitle: { fontSize: 10, color: theme.textMuted, marginTop: 2 },
-  
-  // Breakdown
   breakdownContainer: { gap: 12 },
   breakdownBar: { flexDirection: 'row', height: 12, borderRadius: 6, overflow: 'hidden', backgroundColor: theme.backgroundSecondary },
   breakdownSegment: { height: '100%' },
-  breakdownLegend: { flexDirection: 'row', justifyContent: 'center', gap: 16 },
+  breakdownLegend: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 12 },
   breakdownLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   breakdownDot: { width: 8, height: 8, borderRadius: 4 },
   breakdownLegendText: { fontSize: 11, color: theme.textSecondary },
   breakdownLegendValue: { fontSize: 11, fontWeight: '600', color: theme.textPrimary },
-  
-  // NA Placeholder
   naPlaceholder: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 8, marginTop: 8, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.sm },
   naText: { fontSize: 11, color: theme.textMuted, flex: 1 },
-  
-  // Divider
-  divider: { height: 1, backgroundColor: theme.border, marginVertical: 8 },
-  
-  // Empty State
+  divider: { height: 1, backgroundColor: theme.border, marginVertical: 12 },
   emptyState: { alignItems: 'center', paddingVertical: 48 },
   emptyTitle: { fontSize: 18, fontWeight: '600', color: theme.textPrimary, marginTop: 16 },
   emptyText: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginTop: 8, marginBottom: 24, maxWidth: 260 },
   emptyButton: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.primary, paddingHorizontal: 24, paddingVertical: 14, borderRadius: theme.borderRadius.md },
   emptyButtonText: { fontSize: 15, fontWeight: '600', color: '#FFF' },
-  
-  // Duration Stats
   durationHero: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   durationMain: { flex: 1, alignItems: 'center' },
   durationMainValue: { fontSize: 32, fontWeight: '700', color: theme.accent, marginTop: 4 },
@@ -2176,37 +1683,66 @@ const styles = StyleSheet.create({
   totalTimeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 10 },
   totalTimeLabel: { flex: 1, fontSize: 13, color: theme.textPrimary },
   totalTimeValue: { fontSize: 15, fontWeight: '700', color: theme.accent },
-  durationFormatTitle: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginTop: 8, marginBottom: 8 },
-  durationFormatRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: theme.border },
-  durationFormatName: { flex: 1, fontSize: 13, color: theme.textPrimary },
-  durationFormatCount: { fontSize: 11, color: theme.textMuted, marginRight: 12 },
-  durationFormatValue: { fontSize: 14, fontWeight: '600', color: theme.accent },
-  
-  // Modal
+  // Error Analysis Styles
+  errorHeroContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' },
+  errorHeroMain: { alignItems: 'center' },
+  errorHeroValue: { fontSize: 48, fontWeight: '700', color: theme.error, marginTop: 8 },
+  errorHeroLabel: { fontSize: 12, color: theme.textMuted },
+  errorHeroBreakdown: { gap: 16 },
+  errorHeroItem: { alignItems: 'center' },
+  errorHeroItemValue: { fontSize: 20, fontWeight: '700', color: theme.textPrimary, marginTop: 4 },
+  errorHeroItemLabel: { fontSize: 10, color: theme.textMuted },
+  mostCommonError: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: theme.border },
+  mostCommonErrorText: { flex: 1, fontSize: 12, color: theme.textSecondary },
+  mostCommonErrorHighlight: { fontWeight: '700', color: theme.warning },
+  errorRatesGrid: { flexDirection: 'row', gap: 12 },
+  errorRateCard: { flex: 1, alignItems: 'center', padding: 16, borderRadius: theme.borderRadius.md, borderWidth: 2, backgroundColor: theme.backgroundSecondary },
+  errorRateValue: { fontSize: 28, fontWeight: '700', marginTop: 8 },
+  errorRateLabel: { fontSize: 11, color: theme.textMuted, marginTop: 4 },
+  insightBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 12, padding: 12, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, borderLeftWidth: 3, borderLeftColor: theme.warning },
+  insightText: { flex: 1, fontSize: 12, color: theme.textSecondary, lineHeight: 18 },
+  contextComparison: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingVertical: 8 },
+  contextItem: { alignItems: 'center' },
+  contextLabel: { fontSize: 12, color: theme.textMuted, marginBottom: 4 },
+  contextValue: { fontSize: 32, fontWeight: '700' },
+  contextSubLabel: { fontSize: 10, color: theme.textMuted },
+  contextDivider: { paddingHorizontal: 16 },
+  errorSubsectionTitle: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginTop: 8, marginBottom: 4 },
+  consecutiveErrorsGrid: { flexDirection: 'row', justifyContent: 'space-around' },
+  consecutiveErrorItem: { alignItems: 'center' },
+  consecutiveErrorValue: { fontSize: 36, fontWeight: '700', color: theme.error },
+  consecutiveErrorLabel: { fontSize: 11, color: theme.textMuted, textAlign: 'center', marginTop: 4 },
+  // Modal Styles
   modalContainer: { flex: 1, backgroundColor: theme.backgroundSecondary },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
   modalTitle: { fontSize: 20, fontWeight: '700', color: theme.textPrimary },
+  modalSubtitle: { fontSize: 12, color: theme.textMuted, marginTop: 2 },
   modalCloseButton: { padding: 8 },
   modalContent: { flex: 1 },
   modalScrollContent: { padding: 16, paddingBottom: 32 },
-  
-  // Progression
+  progressionFilterContainer: { backgroundColor: theme.surface, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
+  progressionFilterScroll: { paddingHorizontal: 16, gap: 8 },
+  progressionFilterPill: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: theme.borderRadius.full, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
+  progressionFilterPillActive: { backgroundColor: theme.primary, borderColor: theme.primary },
+  progressionFilterText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
+  progressionFilterTextActive: { color: '#FFF' },
+  trendCardsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  trendCard: { flex: 1, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 12, borderLeftWidth: 3, ...theme.shadows.card },
+  trendCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  trendCardValue: { fontSize: 22, fontWeight: '700', color: theme.textPrimary },
+  trendCardLabel: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
   progressionSection: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 16, ...theme.shadows.card },
-  progressionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
-  progressionTitle: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  progressionSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
+  progressionSectionIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  progressionSectionTitle: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  progressionSectionSubtitle: { fontSize: 11, color: theme.textMuted },
   chartContainer: { alignItems: 'center', marginBottom: 8 },
-  chartLegend: { alignItems: 'center' },
-  chartLegendText: { fontSize: 11, color: theme.textMuted },
-  
-  // Summary Table
   summaryTable: { borderRadius: theme.borderRadius.md, overflow: 'hidden', borderWidth: 1, borderColor: theme.border },
   summaryHeader: { flexDirection: 'row', backgroundColor: theme.backgroundSecondary, paddingVertical: 10 },
   summaryRow: { flexDirection: 'row', paddingVertical: 10, borderTopWidth: 1, borderTopColor: theme.border },
   summaryRowAlt: { backgroundColor: theme.backgroundSecondary + '50' },
   summaryCell: { fontSize: 12, color: theme.textPrimary, textAlign: 'center', fontWeight: '500' },
   summaryCellHeader: { fontWeight: '700', color: theme.textSecondary, fontSize: 11 },
-  
-  // No Data
   noProgressionData: { alignItems: 'center', paddingVertical: 48 },
   noProgressionTitle: { fontSize: 18, fontWeight: '600', color: theme.textPrimary, marginTop: 16 },
   noProgressionText: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginTop: 8, maxWidth: 260 },
