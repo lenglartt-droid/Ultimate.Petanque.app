@@ -140,10 +140,48 @@ export default function EditTournamentScreen() {
     }
   }, [tournament]);
 
+  // Helper function to determine status based on date
+  const getStatusFromDate = (selectedDate: Date, endDate?: Date): TournamentStatus => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const startDate = new Date(selectedDate);
+    startDate.setHours(0, 0, 0, 0);
+    
+    const end = endDate ? new Date(endDate) : null;
+    if (end) end.setHours(23, 59, 59, 999);
+    
+    // If start date is in the future → "À venir"
+    if (startDate > today) {
+      return 'À venir';
+    }
+    
+    // If end date exists and is in the past → "Terminé"
+    // If no end date and start date is in the past → "Terminé"
+    if (end) {
+      if (end < today) {
+        return 'Terminé';
+      }
+      // Start date is today or past, end date is today or future → "En cours"
+      return 'En cours';
+    }
+    
+    // No end date: if start date is today → "En cours", if past → "Terminé"
+    if (startDate.getTime() === today.getTime()) {
+      return 'En cours';
+    }
+    
+    return 'Terminé';
+  };
+
   const handleDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(false);
     if (selectedDate) {
       setDate(selectedDate);
+      // Auto-determine status based on selected date
+      const newStatus = getStatusFromDate(selectedDate, tournament?.endDate ? new Date(tournament.endDate) : undefined);
+      setStatus(newStatus);
+      Haptics.selectionAsync();
     }
   };
 
