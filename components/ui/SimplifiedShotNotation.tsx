@@ -30,11 +30,13 @@ const { width: screenWidth } = Dimensions.get('window');
 // TYPES & DEFINITIONS
 // ============================================
 
-// Shot Type - Simplified to most common
+// Shot Type - Including carreau and devant la boule
 export type SimpleShotType = 
   | 'au_fer'          // Direct hit
   | 'au_plomb'        // High arc
   | 'en_rafle'        // Rolling shot
+  | 'devant_boule'    // In front with rebound
+  | 'carreau'         // Carreau - ball takes place
   | 'autre';          // Other
 
 // Shot Quality - Contextual
@@ -88,6 +90,8 @@ const SHOT_TYPES = [
   { id: 'au_fer' as SimpleShotType, label: 'Au fer', icon: 'gps-fixed', desc: 'Direct, sans rebond' },
   { id: 'au_plomb' as SimpleShotType, label: 'Au plomb', icon: 'flight-takeoff', desc: 'Tir en cloche' },
   { id: 'en_rafle' as SimpleShotType, label: 'En rafle', icon: 'swap-horiz', desc: 'Tir rasant' },
+  { id: 'devant_boule' as SimpleShotType, label: 'Devant la boule', icon: 'redo', desc: 'Avec rebond' },
+  { id: 'carreau' as SimpleShotType, label: 'Carreau', icon: 'stars', desc: 'Prend la place', special: true },
   { id: 'autre' as SimpleShotType, label: 'Autre', icon: 'more-horiz', desc: 'Autre type' },
 ];
 
@@ -96,6 +100,11 @@ const SHOT_QUALITIES = [
   { id: 'sans_effet' as SimpleShotQuality, label: 'Sans effet', icon: 'remove', color: theme.warning },
   { id: 'negatif' as SimpleShotQuality, label: 'Négatif', icon: 'trending-down', color: theme.error },
   { id: 'decisif' as SimpleShotQuality, label: 'Décisif', icon: 'flag', color: theme.carreauColor },
+];
+
+// Filtered qualities for carreau (only gain_point)
+const CARREAU_QUALITIES = [
+  { id: 'gain_point' as SimpleShotQuality, label: 'Gain de point', icon: 'trending-up', color: theme.success },
 ];
 
 const POINT_TYPES = [
@@ -124,9 +133,10 @@ interface QuickOptionProps {
   selected?: boolean;
   onPress: () => void;
   size?: 'small' | 'medium' | 'large';
+  special?: boolean;
 }
 
-function QuickOption({ icon, label, sublabel, color, selected, onPress, size = 'medium' }: QuickOptionProps) {
+function QuickOption({ icon, label, sublabel, color, selected, onPress, size = 'medium', special }: QuickOptionProps) {
   const scale = useSharedValue(1);
 
   const handlePressIn = () => {
@@ -141,7 +151,7 @@ function QuickOption({ icon, label, sublabel, color, selected, onPress, size = '
     transform: [{ scale: scale.value }],
   }));
 
-  const buttonColor = color || theme.primary;
+  const buttonColor = special ? theme.carreauColor : (color || theme.primary);
   const isSmall = size === 'small';
   const isLarge = size === 'large';
 
@@ -156,6 +166,7 @@ function QuickOption({ icon, label, sublabel, color, selected, onPress, size = '
           styles.quickOption,
           isSmall && styles.quickOptionSmall,
           isLarge && styles.quickOptionLarge,
+          special && styles.quickOptionSpecial,
           selected && { backgroundColor: buttonColor, borderColor: buttonColor },
           animatedStyle,
         ]}
@@ -165,6 +176,7 @@ function QuickOption({ icon, label, sublabel, color, selected, onPress, size = '
           isSmall && styles.quickOptionIconSmall,
           isLarge && styles.quickOptionIconLarge,
           { backgroundColor: selected ? 'rgba(255,255,255,0.25)' : buttonColor + '15' },
+          special && !selected && { backgroundColor: theme.carreauColor + '20' },
         ]}>
           <MaterialIcons 
             name={icon as any} 
@@ -175,12 +187,17 @@ function QuickOption({ icon, label, sublabel, color, selected, onPress, size = '
         <Text style={[
           styles.quickOptionLabel, 
           isSmall && styles.quickOptionLabelSmall,
+          special && !selected && { color: theme.carreauColor },
           selected && styles.quickOptionLabelSelected
         ]}>
           {label}
         </Text>
         {sublabel && (
-          <Text style={[styles.quickOptionSublabel, selected && styles.quickOptionSublabelSelected]}>
+          <Text style={[
+            styles.quickOptionSublabel, 
+            selected && styles.quickOptionSublabelSelected,
+            special && !selected && { color: theme.carreauColor + 'AA' }
+          ]}>
             {sublabel}
           </Text>
         )}
@@ -221,7 +238,6 @@ export function SimplifiedShotNotation({
 }: SimplifiedShotNotationProps) {
   // State
   const [success, setSuccess] = useState<boolean | null>(null);
-  const [carreau, setCarreau] = useState(false);
   const [shotType, setShotType] = useState<SimpleShotType | null>(null);
   const [shotQuality, setShotQuality] = useState<SimpleShotQuality | null>(null);
   const [pointType, setPointType] = useState<SimplePointType | null>(null);
@@ -230,6 +246,20 @@ export function SimplifiedShotNotation({
   // Animation
   const progressWidth = useSharedValue(0);
 
+  // Determine current step based on state
+  const getCurrentStep = useCallback(() => {
+    if (success === null) return 1;
+    if (actionType === 'tir') {
+      if (!shotType) return 2;
+      if (!shotQuality) return 3;
+      return 3;
+    } else {
+      if (!pointType) return 2;
+      if (!pointQuality) return 3;
+      return 3;
+    }
+  }, [success, actionType, shotType, shotQuality, pointType, pointQuality]);
+
   useEffect(() => {
     if (visible) {
       progressWidth.value = withTiming(0, { duration: 0 });
@@ -237,12 +267,17 @@ export function SimplifiedShotNotation({
   }, [visible, progressWidth]);
 
   useEffect(() => {
+    const currentStep = getCurrentStep();
     let progress = 0;
-    if (success !== null) progress = 33;
-    if (shotType || pointType) progress = 66;
+    if (currentStep === 1) progress = 0;
+    else if (currentStep === 2) progress = 33;
+    else if (currentStep === 3) progress = 66;
+    
+    // If we have quality selected, progress is 100
     if (shotQuality || pointQuality) progress = 100;
+    
     progressWidth.value = withTiming(progress, { duration: 300, easing: Easing.out(Easing.cubic) });
-  }, [success, shotType, pointType, shotQuality, pointQuality, progressWidth]);
+  }, [success, shotType, pointType, shotQuality, pointQuality, getCurrentStep, progressWidth]);
 
   const progressStyle = useAnimatedStyle(() => ({
     width: `${progressWidth.value}%`,
@@ -251,7 +286,6 @@ export function SimplifiedShotNotation({
   // Reset on close
   const resetState = useCallback(() => {
     setSuccess(null);
-    setCarreau(false);
     setShotType(null);
     setShotQuality(null);
     setPointType(null);
@@ -264,7 +298,7 @@ export function SimplifiedShotNotation({
   }, [onClose, resetState]);
 
   // Quick result (Réussi / Raté)
-  const handleQuickResult = useCallback((isSuccess: boolean, isCarreau: boolean = false) => {
+  const handleQuickResult = useCallback((isSuccess: boolean) => {
     Haptics.impactAsync(isSuccess ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light);
     
     if (quickMode) {
@@ -277,13 +311,12 @@ export function SimplifiedShotNotation({
         team,
         actionType,
         success: isSuccess,
-        carreau: isCarreau,
+        carreau: false,
       };
       onSubmit(record);
       handleClose();
     } else {
       setSuccess(isSuccess);
-      setCarreau(isCarreau);
     }
   }, [quickMode, playerId, playerName, team, actionType, onSubmit, handleClose]);
 
@@ -292,6 +325,10 @@ export function SimplifiedShotNotation({
     Haptics.selectionAsync();
     if (actionType === 'tir') {
       setShotType(type as SimpleShotType);
+      // If carreau is selected, auto-select gain_point quality and submit
+      if (type === 'carreau') {
+        // Don't auto-submit, let user confirm with gain_point
+      }
     } else {
       setPointType(type as SimplePointType);
     }
@@ -301,6 +338,8 @@ export function SimplifiedShotNotation({
   const handleQualitySelect = useCallback((quality: SimpleShotQuality | SimplePointQuality | null) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
+    const isCarreau = shotType === 'carreau';
+    
     const record: SimpleShotRecord = {
       id: Date.now().toString(),
       timestamp: new Date().toISOString(),
@@ -309,7 +348,7 @@ export function SimplifiedShotNotation({
       team,
       actionType,
       success: success!,
-      carreau: actionType === 'tir' ? carreau : undefined,
+      carreau: isCarreau,
       shotType: actionType === 'tir' ? shotType || undefined : undefined,
       shotQuality: actionType === 'tir' ? (quality as SimpleShotQuality) || undefined : undefined,
       pointType: actionType === 'point' ? pointType || undefined : undefined,
@@ -318,7 +357,7 @@ export function SimplifiedShotNotation({
     
     onSubmit(record);
     handleClose();
-  }, [playerId, playerName, team, actionType, success, carreau, shotType, pointType, onSubmit, handleClose]);
+  }, [playerId, playerName, team, actionType, success, shotType, pointType, onSubmit, handleClose]);
 
   // Skip detailed selection
   const handleSkip = useCallback(() => {
@@ -338,14 +377,19 @@ export function SimplifiedShotNotation({
       setPointType(null);
     } else if (success !== null) {
       setSuccess(null);
-      setCarreau(false);
     }
   }, [shotQuality, pointQuality, shotType, pointType, success]);
 
   const isTir = actionType === 'tir';
   const teamColor = team === 'A' ? theme.primary : theme.accent;
-  const currentStep = success === null ? 1 : (shotType || pointType) ? 3 : 2;
+  const currentStep = getCurrentStep();
   const canGoBack = success !== null;
+  const isCarreau = shotType === 'carreau';
+
+  // Get step labels based on action type
+  const stepLabels = isTir 
+    ? ['Résultat', 'Type', 'Impact'] 
+    : ['Résultat', 'Type', 'Qualité'];
 
   return (
     <Modal
@@ -394,28 +438,35 @@ export function SimplifiedShotNotation({
             <Animated.View style={[styles.progressFill, { backgroundColor: teamColor }, progressStyle]} />
           </View>
           <View style={styles.progressSteps}>
-            {['Résultat', 'Type', 'Qualité'].map((label, i) => (
-              <View key={label} style={styles.progressStep}>
-                <View style={[
-                  styles.progressDot,
-                  currentStep > i + 1 && styles.progressDotDone,
-                  currentStep === i + 1 && [styles.progressDotActive, { borderColor: teamColor }],
-                ]}>
-                  {currentStep > i + 1 ? (
-                    <MaterialIcons name="check" size={10} color="#FFF" />
-                  ) : (
-                    <Text style={[
-                      styles.progressDotText,
-                      currentStep === i + 1 && { color: teamColor }
-                    ]}>{i + 1}</Text>
-                  )}
+            {stepLabels.map((label, i) => {
+              const stepNumber = i + 1;
+              const isCompleted = currentStep > stepNumber || 
+                (stepNumber === 3 && (shotQuality || pointQuality));
+              const isActive = currentStep === stepNumber;
+              
+              return (
+                <View key={label} style={styles.progressStep}>
+                  <View style={[
+                    styles.progressDot,
+                    isCompleted && styles.progressDotDone,
+                    isActive && [styles.progressDotActive, { borderColor: teamColor, backgroundColor: teamColor + '20' }],
+                  ]}>
+                    {isCompleted ? (
+                      <MaterialIcons name="check" size={10} color="#FFF" />
+                    ) : (
+                      <Text style={[
+                        styles.progressDotText,
+                        isActive && { color: teamColor, fontWeight: '700' }
+                      ]}>{stepNumber}</Text>
+                    )}
+                  </View>
+                  <Text style={[
+                    styles.progressLabel,
+                    isActive && { color: teamColor, fontWeight: '600' }
+                  ]}>{label}</Text>
                 </View>
-                <Text style={[
-                  styles.progressLabel,
-                  currentStep === i + 1 && { color: teamColor, fontWeight: '600' }
-                ]}>{label}</Text>
-              </View>
-            ))}
+              );
+            })}
           </View>
         </View>
 
@@ -437,7 +488,7 @@ export function SimplifiedShotNotation({
               <View style={styles.resultGrid}>
                 <Pressable
                   style={[styles.resultCard, styles.resultCardSuccess]}
-                  onPress={() => handleQuickResult(true, false)}
+                  onPress={() => handleQuickResult(true)}
                 >
                   <Animated.View entering={ZoomIn.duration(200).delay(100)}>
                     <MaterialIcons name="check" size={48} color="#FFF" />
@@ -447,7 +498,7 @@ export function SimplifiedShotNotation({
 
                 <Pressable
                   style={[styles.resultCard, styles.resultCardFail]}
-                  onPress={() => handleQuickResult(false, false)}
+                  onPress={() => handleQuickResult(false)}
                 >
                   <Animated.View entering={ZoomIn.duration(200).delay(150)}>
                     <MaterialIcons name="close" size={48} color="#FFF" />
@@ -455,24 +506,6 @@ export function SimplifiedShotNotation({
                   <Text style={styles.resultCardLabel}>Raté</Text>
                 </Pressable>
               </View>
-
-              {isTir && (
-                <Animated.View entering={FadeInDown.duration(200).delay(200)}>
-                  <Pressable
-                    style={styles.carreauBtn}
-                    onPress={() => handleQuickResult(true, true)}
-                  >
-                    <View style={styles.carreauBtnIcon}>
-                      <MaterialIcons name="stars" size={28} color={theme.carreauColor} />
-                    </View>
-                    <View style={styles.carreauBtnContent}>
-                      <Text style={styles.carreauBtnTitle}>CARREAU</Text>
-                      <Text style={styles.carreauBtnDesc}>La boule tirée prend la place</Text>
-                    </View>
-                    <MaterialIcons name="chevron-right" size={24} color={theme.carreauColor} />
-                  </Pressable>
-                </Animated.View>
-              )}
 
               <View style={styles.quickModeHint}>
                 <MaterialIcons name="info-outline" size={16} color={theme.textMuted} />
@@ -488,12 +521,12 @@ export function SimplifiedShotNotation({
             <Animated.View entering={FadeIn.duration(200)}>
               <View style={styles.resultSummary}>
                 <MaterialIcons 
-                  name={success ? (carreau ? 'stars' : 'check-circle') : 'cancel'} 
+                  name={success ? 'check-circle' : 'cancel'} 
                   size={20} 
-                  color={success ? (carreau ? theme.carreauColor : theme.success) : theme.error} 
+                  color={success ? theme.success : theme.error} 
                 />
                 <Text style={styles.resultSummaryText}>
-                  {success ? (carreau ? 'Carreau' : 'Réussi') : 'Raté'}
+                  {success ? 'Réussi' : 'Raté'}
                 </Text>
               </View>
 
@@ -514,6 +547,7 @@ export function SimplifiedShotNotation({
                       color={isTir ? theme.tirColor : theme.pointColor}
                       onPress={() => handleTypeSelect(type.id)}
                       size="medium"
+                      special={'special' in type ? type.special : false}
                     />
                   </Animated.View>
                 ))}
@@ -526,20 +560,23 @@ export function SimplifiedShotNotation({
             <Animated.View entering={FadeIn.duration(200)}>
               <View style={styles.resultSummary}>
                 <MaterialIcons 
-                  name={success ? (carreau ? 'stars' : 'check-circle') : 'cancel'} 
+                  name={success ? (isCarreau ? 'stars' : 'check-circle') : 'cancel'} 
                   size={18} 
-                  color={success ? (carreau ? theme.carreauColor : theme.success) : theme.error} 
+                  color={success ? (isCarreau ? theme.carreauColor : theme.success) : theme.error} 
                 />
                 <Text style={styles.resultSummaryText}>
-                  {success ? (carreau ? 'Carreau' : 'Réussi') : 'Raté'}
+                  {success ? (isCarreau ? 'Carreau' : 'Réussi') : 'Raté'}
                 </Text>
                 <View style={styles.resultSummaryDivider} />
                 <MaterialIcons 
                   name={(isTir ? SHOT_TYPES : POINT_TYPES).find(t => t.id === (shotType || pointType))?.icon as any} 
                   size={18} 
-                  color={theme.textSecondary} 
+                  color={isCarreau ? theme.carreauColor : theme.textSecondary} 
                 />
-                <Text style={styles.resultSummaryText}>
+                <Text style={[
+                  styles.resultSummaryText,
+                  isCarreau && { color: theme.carreauColor, fontWeight: '600' }
+                ]}>
                   {(isTir ? SHOT_TYPES : POINT_TYPES).find(t => t.id === (shotType || pointType))?.label}
                 </Text>
               </View>
@@ -548,11 +585,28 @@ export function SimplifiedShotNotation({
                 {isTir ? 'Impact du tir' : 'Qualité du point'}
               </Text>
               <Text style={styles.stepSubtitle}>
-                {isTir ? 'Effet sur la mène' : 'Précision par rapport au but'}
+                {isCarreau 
+                  ? 'Le carreau entraîne automatiquement un gain de point'
+                  : isTir 
+                    ? 'Effet sur la mène' 
+                    : 'Précision par rapport au but'
+                }
               </Text>
 
+              {isCarreau && (
+                <Animated.View entering={FadeInDown.duration(200)} style={styles.carreauInfo}>
+                  <MaterialIcons name="info" size={20} color={theme.carreauColor} />
+                  <Text style={styles.carreauInfoText}>
+                    Un carreau est toujours un gain de point
+                  </Text>
+                </Animated.View>
+              )}
+
               <View style={styles.qualityList}>
-                {(isTir ? SHOT_QUALITIES : POINT_QUALITIES).map((quality, index) => (
+                {(isTir 
+                  ? (isCarreau ? CARREAU_QUALITIES : SHOT_QUALITIES) 
+                  : POINT_QUALITIES
+                ).map((quality, index) => (
                   <Animated.View key={quality.id} entering={FadeInDown.duration(200).delay(index * 40)}>
                     <Pressable
                       style={[styles.qualityItem, { borderLeftColor: quality.color }]}
@@ -802,7 +856,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   progressDotActive: {
-    backgroundColor: 'transparent',
+    borderWidth: 2,
   },
   progressDotDone: {
     backgroundColor: theme.success,
@@ -887,37 +941,24 @@ const styles = StyleSheet.create({
     color: '#FFF',
     marginTop: 10,
   },
-  // Carreau Button
-  carreauBtn: {
+  // Carreau Info
+  carreauInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.carreauColor + '12',
-    padding: 16,
-    borderRadius: theme.borderRadius.lg,
-    borderWidth: 2,
-    borderColor: theme.carreauColor + '40',
-    gap: 14,
+    backgroundColor: theme.carreauColor + '15',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: 16,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: theme.carreauColor + '30',
   },
-  carreauBtnIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: theme.carreauColor + '20',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  carreauBtnContent: {
+  carreauInfoText: {
     flex: 1,
-  },
-  carreauBtnTitle: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 13,
     color: theme.carreauColor,
-    marginBottom: 2,
-  },
-  carreauBtnDesc: {
-    fontSize: 12,
-    color: theme.textSecondary,
+    fontWeight: '500',
   },
   // Quick Mode Hint
   quickModeHint: {
@@ -964,6 +1005,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-start',
     gap: 14,
+  },
+  quickOptionSpecial: {
+    borderColor: theme.carreauColor + '50',
+    backgroundColor: theme.carreauColor + '08',
   },
   quickOptionIcon: {
     width: 48,
