@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,9 @@ import {
   Modal,
   Alert,
   Switch,
+  ActivityIndicator,
+  Linking,
+  Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -18,6 +21,13 @@ import theme from '@/constants/theme';
 import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { TournamentType } from '@/constants/config';
+import {
+  requestNotificationPermissions,
+  areNotificationsEnabled,
+  scheduleTournamentNotifications,
+  cancelTournamentNotifications,
+  sendTestNotification,
+} from '@/services/notificationService';
 
 // Base tournament phases
 const BASE_PHASES = [
@@ -77,15 +87,12 @@ const PHASES_BY_CADRAGE: Record<TournamentType, { id: string; label: string; sho
   'Autre': BASE_PHASES,
 };
 
-const BRACKETS = ['A', 'B', 'C', 'D'] as const;
-
 export default function TournamentDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getTournamentById, getClubById, getTerrainById, getMatchesByTournament, addMatch, players, tournamentNotifications, toggleTournamentNotification, isTournamentNotificationEnabled } = useApp();
+  const { getTournamentById, getClubById, getTerrainById, getMatchesByTournament, tournamentNotifications, toggleTournamentNotification, isTournamentNotificationEnabled } = useApp();
 
   const tournament = getTournamentById(id!);
-  const club = tournament?.clubId ? getClubById(tournament.clubId) : null;
   const terrain = tournament?.terrainId ? getTerrainById(tournament.terrainId) : null;
   const tournamentMatches = getMatchesByTournament(id!);
   
@@ -101,11 +108,12 @@ export default function TournamentDetailScreen() {
   // Notification modal state
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [notificationSettings, setNotificationSettings] = useState({
-    enabled: false,
     oneWeek: true,
     threeDays: true,
     oneDayBefore: true,
   });
+  const [isScheduling, setIsScheduling] = useState(false);
+  const [permissionStatus, setPermissionStatus] = useState<'unknown' | 'granted' | 'denied'>('unknown');
   
   // Notification state
   const isNotificationEnabled = tournament ? isTournamentNotificationEnabled(tournament.id) : false;
@@ -115,8 +123,17 @@ export default function TournamentDetailScreen() {
   const tournamentDate = tournament ? new Date(tournament.date) : new Date();
   const daysUntilTournament = Math.ceil((tournamentDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
 
+  // Check notification permission on mount
+  useEffect(() => {
+    const checkPermission = async () => {
+      const enabled = await areNotificationsEnabled();
+      setPermissionStatus(enabled ? 'granted' : 'denied');
+    };
+    checkPermission();
+  }, []);
+
   // Handle notification toggle
-  const handleNotificationPress = useCallback(() => {
+  const handleNotificationPress = useCallback(async () => {
     if (!tournament) return;
     Haptics.selectionAsync();
     
@@ -128,36 +145,98 @@ export default function TournamentDetailScreen() {
       return;
     }
     
-    setNotificationSettings(prev => ({ ...prev, enabled: isNotificationEnabled }));
+    // Check permission status
+    const enabled = await areNotificationsEnabled();
+    setPermissionStatus(enabled ? 'granted' : 'denied');
+    
     setShowNotificationModal(true);
-  }, [tournament, isUpcoming, isNotificationEnabled]);
+  }, [tournament, isUpcoming]);
 
-  const handleSaveNotifications = useCallback(() => {
+  // Request permission
+  const handleRequestPermission = useCallback(async () => {
+    Haptics.selectionAsync();
+    const granted = await requestNotificationPermissions();
+    setPermissionStatus(granted ? 'granted' : 'denied');
+    
+    if (!granted) {
+      Alert.alert(
+        'Autorisation requise',
+        'Pour recevoir des rappels, activez les notifications dans les paramètres de votre téléphone.',
+        [
+          { text: 'Annuler', style: 'cancel' },
+          { 
+            text: 'Ouvrir Paramètres', 
+            onPress: () => {
+              if (Platform.OS === 'ios') {
+                Linking.openURL('app-settings:');
+              } else {
+                Linking.openSettings();
+              }
+            }
+          },
+        ]
+      );
+    }
+  }, []);
+
+  // Send test notification
+  const handleTestNotification = useCallback(async () => {
+    Haptics.selectionAsync();
+    await sendTestNotification();
+    Alert.alert('Test envoyé', 'Vous devriez recevoir une notification de test.');
+  }, []);
+
+  // Save notification settings
+  const handleSaveNotifications = useCallback(async () => {
     if (!tournament) return;
     
-    // Toggle the notification state
-    const willEnable = !isNotificationEnabled;
-    toggleTournamentNotification(tournament.id);
+    setIsScheduling(true);
     
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setShowNotificationModal(false);
-    
-    if (willEnable) {
-      const reminders = [];
-      if (notificationSettings.oneWeek && daysUntilTournament >= 7) reminders.push('1 semaine avant');
-      if (notificationSettings.threeDays && daysUntilTournament >= 3) reminders.push('3 jours avant');
-      if (notificationSettings.oneDayBefore && daysUntilTournament >= 1) reminders.push('la veille');
-      
-      Alert.alert(
-        'Notifications activées',
-        reminders.length > 0 
-          ? `Vous recevrez des rappels : ${reminders.join(', ')}.`
-          : 'Le tournoi est très proche, vous recevrez un rappel très bientôt.'
-      );
-    } else {
-      Alert.alert('Notifications désactivées', 'Vous ne recevrez plus de rappel pour ce tournoi.');
+    try {
+      if (isNotificationEnabled) {
+        // Disable - cancel notifications
+        await cancelTournamentNotifications(tournament.id);
+        toggleTournamentNotification(tournament.id);
+        
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setShowNotificationModal(false);
+        Alert.alert('Notifications désactivées', 'Vous ne recevrez plus de rappel pour ce tournoi.');
+      } else {
+        // Enable - schedule notifications
+        const scheduledIds = await scheduleTournamentNotifications({
+          tournamentId: tournament.id,
+          tournamentName: tournament.name,
+          tournamentDate: tournamentDate,
+          oneWeekBefore: notificationSettings.oneWeek && daysUntilTournament >= 7,
+          threeDaysBefore: notificationSettings.threeDays && daysUntilTournament >= 3,
+          oneDayBefore: notificationSettings.oneDayBefore && daysUntilTournament >= 1,
+        });
+        
+        toggleTournamentNotification(tournament.id);
+        
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setShowNotificationModal(false);
+        
+        // Build reminder message
+        const reminders = [];
+        if (notificationSettings.oneWeek && daysUntilTournament >= 7) reminders.push('1 semaine avant');
+        if (notificationSettings.threeDays && daysUntilTournament >= 3) reminders.push('3 jours avant');
+        if (notificationSettings.oneDayBefore && daysUntilTournament >= 1) reminders.push('la veille');
+        
+        Alert.alert(
+          'Notifications programmées',
+          scheduledIds.length > 0 
+            ? `${scheduledIds.length} rappel(s) programmé(s) : ${reminders.join(', ')}.`
+            : 'Le tournoi est très proche, aucun rappel programmé.'
+        );
+      }
+    } catch (error) {
+      console.log('Error scheduling notifications:', error);
+      Alert.alert('Erreur', 'Impossible de programmer les notifications.');
+    } finally {
+      setIsScheduling(false);
     }
-  }, [tournament, isNotificationEnabled, notificationSettings, daysUntilTournament, toggleTournamentNotification]);
+  }, [tournament, isNotificationEnabled, notificationSettings, daysUntilTournament, tournamentDate, toggleTournamentNotification]);
 
   // Filter and sort matches
   const myMatches = useMemo(() => {
@@ -197,30 +276,6 @@ export default function TournamentDetailScreen() {
     };
   }, [myMatches]);
 
-  // Determine suggested next phase
-  const suggestedNextPhase = useMemo(() => {
-    if (myMatches.length === 0) return tournamentPhases[0]?.id || 'Poules';
-    
-    const lastMatch = myMatches[myMatches.length - 1];
-    const lastPhase = lastMatch.tournamentPhase;
-    const lastWon = lastMatch.winner === 'A';
-    
-    if (!lastWon) return lastPhase; // If lost, might replay same phase or eliminated
-    
-    const phaseIndex = tournamentPhases.findIndex(p => p.id === lastPhase);
-    if (phaseIndex < tournamentPhases.length - 1) {
-      return tournamentPhases[phaseIndex + 1].id;
-    }
-    return lastPhase;
-  }, [myMatches, tournamentPhases]);
-
-  // Determine bracket from last match
-  const suggestedBracket = useMemo(() => {
-    if (myMatches.length === 0) return null;
-    const lastMatch = myMatches[myMatches.length - 1];
-    return lastMatch.tournamentBracket || null;
-  }, [myMatches]);
-
   // Journey status
   const journeyStatus = useMemo(() => {
     if (myMatches.length === 0) return { status: 'not_started', label: 'En attente', color: theme.textMuted, icon: 'hourglass-empty' };
@@ -231,22 +286,18 @@ export default function TournamentDetailScreen() {
     const lastPhaseIndex = tournamentPhases.findIndex(p => p.id === lastMatch.tournamentPhase);
     const isLastPhase = lastPhaseIndex === tournamentPhases.length - 1;
     
-    // Check for champion status (won the last phase)
     if (isLastPhase && lastMatchWon) {
       return { status: 'champion', label: 'Champion !', color: theme.carreauColor, icon: 'emoji-events' };
     }
-    // Check for finalist (lost in finale)
     if ((phase.includes('finale') || isLastPhase) && !lastMatchWon) {
       return { status: 'finalist', label: phase === 'finale' ? 'Finaliste' : 'Parcours terminé', color: theme.accent, icon: 'workspace-premium' };
     }
-    // For Swiss/Poules systems, check if all rounds completed
     if ((tournament?.type === 'Suisse' || tournament?.type === 'Poules') && phase.includes('classement')) {
       return { status: 'completed', label: 'Classé', color: theme.success, icon: 'emoji-events' };
     }
     if (lastMatchWon) {
       return { status: 'advancing', label: 'En course', color: theme.success, icon: 'trending-up' };
     }
-    // For elimination formats
     if (tournament?.type === 'Élimination directe' || tournament?.type === 'Tirage intégral') {
       return { status: 'eliminated', label: 'Éliminé', color: theme.error, icon: 'block' };
     }
@@ -263,9 +314,7 @@ export default function TournamentDetailScreen() {
 
   // End tournament handler
   const handleEndTournament = (finalStatus: 'Champion' | 'Finaliste' | 'Éliminé') => {
-    // Update tournament status to finished
     if (tournament) {
-      // Could update tournament status here if needed
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
     setShowEndTournament(false);
@@ -437,8 +486,6 @@ export default function TournamentDetailScreen() {
                 const hasMatchInPhase = matchesInPhase.length > 0;
                 const lastMatchInPhase = matchesInPhase[matchesInPhase.length - 1];
                 const wonPhase = lastMatchInPhase?.winner === 'A';
-                
-                // For Swiss/Poules, show number of matches in phase
                 const showMatchCount = (tournament.type === 'Suisse' || tournament.type === 'Poules') && matchesInPhase.length > 0;
                 
                 return (
@@ -456,17 +503,11 @@ export default function TournamentDetailScreen() {
                           color="#FFF" 
                         />
                       ) : showMatchCount ? (
-                        <Text style={[
-                          styles.phaseNumber,
-                          isCurrent && styles.phaseNumberCurrent
-                        ]}>
+                        <Text style={[styles.phaseNumber, isCurrent && styles.phaseNumberCurrent]}>
                           {matchesInPhase.length}
                         </Text>
                       ) : (
-                        <Text style={[
-                          styles.phaseNumber,
-                          isCurrent && styles.phaseNumberCurrent
-                        ]}>
+                        <Text style={[styles.phaseNumber, isCurrent && styles.phaseNumberCurrent]}>
                           {index + 1}
                         </Text>
                       )}
@@ -479,17 +520,13 @@ export default function TournamentDetailScreen() {
                       {phase.short}
                     </Text>
                     {index < tournamentPhases.length - 1 && (
-                      <View style={[
-                        styles.phaseLine,
-                        isCompleted && wonPhase && styles.phaseLineCompleted
-                      ]} />
+                      <View style={[styles.phaseLine, isCompleted && wonPhase && styles.phaseLineCompleted]} />
                     )}
                   </View>
                 );
               })}
             </ScrollView>
             
-            {/* Cadrage description */}
             <View style={styles.cadrageDescription}>
               <MaterialIcons name="info-outline" size={14} color={theme.textMuted} />
               <Text style={styles.cadrageDescriptionText}>
@@ -514,7 +551,7 @@ export default function TournamentDetailScreen() {
           
           {myMatches.length > 0 ? (
             <View style={styles.matchList}>
-              {myMatches.map((match, index) => {
+              {myMatches.map((match) => {
                 const isWin = match.winner === 'A';
                 
                 return (
@@ -620,12 +657,17 @@ export default function TournamentDetailScreen() {
             </Pressable>
             <Text style={styles.modalTitle}>Notifications</Text>
             <Pressable 
-              style={styles.modalSave}
+              style={[styles.modalSave, (isScheduling || permissionStatus !== 'granted') && styles.modalSaveDisabled]}
               onPress={handleSaveNotifications}
+              disabled={isScheduling || permissionStatus !== 'granted'}
             >
-              <Text style={styles.modalSaveText}>
-                {isNotificationEnabled ? 'Désactiver' : 'Activer'}
-              </Text>
+              {isScheduling ? (
+                <ActivityIndicator size="small" color={theme.primary} />
+              ) : (
+                <Text style={[styles.modalSaveText, permissionStatus !== 'granted' && styles.modalSaveTextDisabled]}>
+                  {isNotificationEnabled ? 'Désactiver' : 'Activer'}
+                </Text>
+              )}
             </Pressable>
           </View>
 
@@ -669,6 +711,24 @@ export default function TournamentDetailScreen() {
               </View>
             </View>
 
+            {/* Permission Status */}
+            {permissionStatus !== 'granted' && (
+              <View style={styles.permissionBanner}>
+                <View style={styles.permissionBannerIcon}>
+                  <MaterialIcons name="notifications-off" size={24} color={theme.warning} />
+                </View>
+                <View style={styles.permissionBannerContent}>
+                  <Text style={styles.permissionBannerTitle}>Autorisations requises</Text>
+                  <Text style={styles.permissionBannerDesc}>
+                    Activez les notifications pour recevoir des rappels
+                  </Text>
+                </View>
+                <Pressable style={styles.permissionBannerBtn} onPress={handleRequestPermission}>
+                  <Text style={styles.permissionBannerBtnText}>Autoriser</Text>
+                </Pressable>
+              </View>
+            )}
+
             {/* Current Status */}
             <View style={[
               styles.notificationStatusBanner,
@@ -684,11 +744,11 @@ export default function TournamentDetailScreen() {
                   styles.notificationStatusTitle,
                   { color: isNotificationEnabled ? theme.success : theme.textSecondary }
                 ]}>
-                  {isNotificationEnabled ? 'Notifications activées' : 'Notifications désactivées'}
+                  {isNotificationEnabled ? 'Rappels programmés' : 'Rappels désactivés'}
                 </Text>
                 <Text style={styles.notificationStatusDesc}>
                   {isNotificationEnabled 
-                    ? 'Vous recevrez des rappels avant le tournoi'
+                    ? 'Vous recevrez des notifications push'
                     : 'Activez pour recevoir des rappels'
                   }
                 </Text>
@@ -697,9 +757,9 @@ export default function TournamentDetailScreen() {
 
             {/* Reminder Options */}
             <View style={styles.notificationSection}>
-              <Text style={styles.notificationSectionTitle}>RAPPELS À ENVOYER</Text>
+              <Text style={styles.notificationSectionTitle}>RAPPELS À PROGRAMMER</Text>
               <Text style={styles.notificationSectionSubtitle}>
-                Choisissez quand vous souhaitez être notifié
+                Choisissez quand recevoir une notification
               </Text>
 
               {/* 1 Week Before */}
@@ -714,7 +774,7 @@ export default function TournamentDetailScreen() {
                   <Text style={styles.notificationOptionTitle}>1 semaine avant</Text>
                   <Text style={styles.notificationOptionDesc}>
                     {daysUntilTournament >= 7 
-                      ? `Le ${new Date(tournamentDate.getTime() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`
+                      ? `Le ${new Date(tournamentDate.getTime() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} à 9h00`
                       : 'Délai dépassé'
                     }
                   </Text>
@@ -740,7 +800,7 @@ export default function TournamentDetailScreen() {
                   <Text style={styles.notificationOptionTitle}>3 jours avant</Text>
                   <Text style={styles.notificationOptionDesc}>
                     {daysUntilTournament >= 3 
-                      ? `Le ${new Date(tournamentDate.getTime() - 3 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`
+                      ? `Le ${new Date(tournamentDate.getTime() - 3 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} à 9h00`
                       : 'Délai dépassé'
                     }
                   </Text>
@@ -766,7 +826,7 @@ export default function TournamentDetailScreen() {
                   <Text style={styles.notificationOptionTitle}>La veille</Text>
                   <Text style={styles.notificationOptionDesc}>
                     {daysUntilTournament >= 1 
-                      ? `Le ${new Date(tournamentDate.getTime() - 1 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`
+                      ? `Le ${new Date(tournamentDate.getTime() - 1 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} à 18h00`
                       : 'Délai dépassé'
                     }
                   </Text>
@@ -781,11 +841,19 @@ export default function TournamentDetailScreen() {
               </View>
             </View>
 
+            {/* Test notification */}
+            {permissionStatus === 'granted' && (
+              <Pressable style={styles.testNotificationBtn} onPress={handleTestNotification}>
+                <MaterialIcons name="send" size={18} color={theme.primary} />
+                <Text style={styles.testNotificationBtnText}>Envoyer une notification test</Text>
+              </Pressable>
+            )}
+
             {/* Info */}
             <View style={styles.notificationInfoCard}>
               <MaterialIcons name="info-outline" size={20} color={theme.textMuted} />
               <Text style={styles.notificationInfoText}>
-                Les rappels seront envoyés sous forme de notifications push. Assurez-vous que les notifications sont activées dans les paramètres de votre téléphone.
+                Les rappels seront envoyés sous forme de notifications push locales. Ils fonctionnent même sans connexion internet.
               </Text>
             </View>
           </ScrollView>
@@ -813,7 +881,6 @@ export default function TournamentDetailScreen() {
             contentContainerStyle={styles.modalScroll}
             showsVerticalScrollIndicator={false}
           >
-            {/* Tournament Info */}
             <View style={styles.quickTournamentInfo}>
               <MaterialIcons name="emoji-events" size={20} color={theme.carreauColor} />
               <Text style={styles.quickTournamentName}>{tournament.name}</Text>
@@ -821,7 +888,6 @@ export default function TournamentDetailScreen() {
 
             <Text style={styles.endTournamentQuestion}>Comment s'est terminé votre parcours ?</Text>
 
-            {/* Status Options */}
             <View style={styles.endTournamentOptions}>
               <Pressable 
                 style={[styles.endTournamentOption, styles.endTournamentOptionChampion]}
@@ -857,7 +923,6 @@ export default function TournamentDetailScreen() {
               </Pressable>
             </View>
 
-            {/* Stats Summary */}
             <View style={styles.endTournamentStats}>
               <Text style={styles.endTournamentStatsTitle}>Résumé du parcours</Text>
               <View style={styles.endTournamentStatsRow}>
@@ -952,7 +1017,6 @@ const styles = StyleSheet.create({
     color: theme.textMuted,
     marginTop: 12,
   },
-  // Tournament card
   tournamentCard: {
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg,
@@ -1049,7 +1113,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.textMuted,
     marginHorizontal: 6,
   },
-  // Status card
   statusCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1093,7 +1156,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: theme.textMuted,
   },
-  // Section
   section: {
     marginBottom: 20,
   },
@@ -1138,7 +1200,6 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 10,
   },
-  // Progress
   progressCard: {
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg,
@@ -1221,7 +1282,6 @@ const styles = StyleSheet.create({
     color: theme.textMuted,
     flex: 1,
   },
-  // Match list
   matchList: {
     gap: 12,
   },
@@ -1311,7 +1371,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  // Empty matches
   emptyMatches: {
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg,
@@ -1332,7 +1391,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     lineHeight: 18,
   },
-  // FAB
   fabContainer: {
     position: 'absolute',
     right: 16,
@@ -1366,7 +1424,6 @@ const styles = StyleSheet.create({
     borderColor: theme.primary,
     ...theme.shadows.card,
   },
-  // Modal
   modalContainer: {
     flex: 1,
     backgroundColor: theme.backgroundSecondary,
@@ -1413,7 +1470,6 @@ const styles = StyleSheet.create({
   modalScroll: {
     padding: 16,
   },
-  // Quick match styles
   quickTournamentInfo: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1429,65 +1485,6 @@ const styles = StyleSheet.create({
     color: theme.textPrimary,
     flex: 1,
   },
-  quickSection: {
-    marginBottom: 24,
-  },
-  quickLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textSecondary,
-    marginBottom: 10,
-  },
-  quickPhasesScroll: {
-    gap: 8,
-  },
-  quickPhaseChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.full,
-    borderWidth: 1,
-    borderColor: theme.border,
-  },
-  quickPhaseChipActive: {
-    backgroundColor: theme.primary,
-    borderColor: theme.primary,
-  },
-  quickPhaseChipText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: theme.textSecondary,
-  },
-  quickPhaseChipTextActive: {
-    color: '#FFF',
-    fontWeight: '600',
-  },
-  quickBracketRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  quickBracketBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: theme.border,
-  },
-  quickBracketBtnActive: {
-    backgroundColor: theme.primary,
-    borderColor: theme.primary,
-  },
-  quickBracketBtnText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: theme.textSecondary,
-  },
-  quickBracketBtnTextActive: {
-    color: '#FFF',
-  },
-  // End tournament modal styles
   endTournamentQuestion: {
     fontSize: 18,
     fontWeight: '600',
@@ -1565,7 +1562,6 @@ const styles = StyleSheet.create({
     color: theme.textMuted,
     marginTop: 2,
   },
-  // Notification Modal Styles
   notificationModalScroll: {
     padding: 16,
     paddingBottom: 40,
@@ -1616,6 +1612,49 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: theme.primary,
+  },
+  permissionBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.warning + '15',
+    borderRadius: theme.borderRadius.lg,
+    padding: 14,
+    marginBottom: 16,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: theme.warning + '30',
+  },
+  permissionBannerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: theme.warning + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  permissionBannerContent: {
+    flex: 1,
+  },
+  permissionBannerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  permissionBannerDesc: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 2,
+  },
+  permissionBannerBtn: {
+    backgroundColor: theme.warning,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: theme.borderRadius.md,
+  },
+  permissionBannerBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFF',
   },
   notificationStatusBanner: {
     flexDirection: 'row',
@@ -1694,6 +1733,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: theme.textSecondary,
     marginTop: 2,
+  },
+  testNotificationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: theme.primary + '15',
+    paddingVertical: 14,
+    borderRadius: theme.borderRadius.lg,
+    marginBottom: 16,
+  },
+  testNotificationBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.primary,
   },
   notificationInfoCard: {
     flexDirection: 'row',
