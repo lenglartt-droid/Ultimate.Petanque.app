@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   Dimensions,
+  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -393,6 +394,38 @@ export default function StatsScreen() {
     const fannyWins = filteredMatches.filter(m => m.winner === 'A' && m.teamA.score === 13 && m.teamB.score === 0).length;
     const fannyLosses = filteredMatches.filter(m => m.winner === 'B' && m.teamB.score === 13 && m.teamA.score === 0).length;
 
+    // Duration stats (chronomètre)
+    const matchesWithDuration = filteredMatches.filter(m => m.duration && m.duration > 0);
+    const totalDuration = matchesWithDuration.reduce((sum, m) => sum + (m.duration || 0), 0);
+    const avgDuration = matchesWithDuration.length > 0 ? Math.round(totalDuration / matchesWithDuration.length) : 0;
+    const minDuration = matchesWithDuration.length > 0 ? Math.min(...matchesWithDuration.map(m => m.duration || 0)) : 0;
+    const maxDuration = matchesWithDuration.length > 0 ? Math.max(...matchesWithDuration.map(m => m.duration || 0)) : 0;
+    
+    // Avg duration by format
+    const durationByFormat: Record<string, { total: number; count: number }> = {};
+    matchesWithDuration.forEach(m => {
+      if (!durationByFormat[m.format]) {
+        durationByFormat[m.format] = { total: 0, count: 0 };
+      }
+      durationByFormat[m.format].total += m.duration || 0;
+      durationByFormat[m.format].count++;
+    });
+    
+    // Avg mène duration
+    let totalMeneDuration = 0;
+    let menesWithDuration = 0;
+    filteredMatches.forEach(match => {
+      if (match.menes) {
+        match.menes.forEach(mene => {
+          if (mene.duration && mene.duration > 0) {
+            totalMeneDuration += mene.duration;
+            menesWithDuration++;
+          }
+        });
+      }
+    });
+    const avgMeneDuration = menesWithDuration > 0 ? Math.round(totalMeneDuration / menesWithDuration) : 0;
+
     return {
       total,
       trainingCount: trainingMatches.length,
@@ -420,6 +453,15 @@ export default function StatsScreen() {
       seriesLost: seriesComplete.length - seriesWon,
       fannyWins,
       fannyLosses,
+      // Duration stats
+      totalDuration,
+      avgDuration,
+      minDuration,
+      maxDuration,
+      matchesWithDuration: matchesWithDuration.length,
+      durationByFormat,
+      avgMeneDuration,
+      menesWithDuration,
     };
   }, [filteredMatches]);
 
@@ -646,6 +688,96 @@ export default function StatsScreen() {
 
   const hasData = performanceStats.total > 0;
 
+  // ============================================
+  // PROGRESSION DATA (Evolution over time)
+  // ============================================
+  const [showProgressionModal, setShowProgressionModal] = useState(false);
+  
+  const progressionData = useMemo(() => {
+    // Group matches by week for evolution graphs
+    const sortedMatches = [...matches].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    // Create weekly buckets
+    const weeklyData: { 
+      week: string; 
+      matches: number; 
+      wins: number; 
+      winRate: number;
+      tirSuccess: number;
+      tirTotal: number;
+      tirRate: number;
+      pointSuccess: number;
+      pointTotal: number;
+      pointRate: number;
+      carreaux: number;
+    }[] = [];
+    
+    if (sortedMatches.length === 0) return { weeklyData };
+    
+    // Get date range
+    const firstDate = new Date(sortedMatches[0].date);
+    const lastDate = new Date(sortedMatches[sortedMatches.length - 1].date);
+    
+    // Generate weekly buckets
+    const currentDate = new Date(firstDate);
+    currentDate.setDate(currentDate.getDate() - currentDate.getDay()); // Start of week
+    
+    while (currentDate <= lastDate) {
+      const weekStart = new Date(currentDate);
+      const weekEnd = new Date(currentDate);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      
+      const weekMatches = sortedMatches.filter(m => {
+        const matchDate = new Date(m.date);
+        return matchDate >= weekStart && matchDate <= weekEnd;
+      });
+      
+      let tirSuccess = 0, tirTotal = 0, pointSuccess = 0, pointTotal = 0, carreaux = 0;
+      weekMatches.forEach(match => {
+        if (match.playerActions) {
+          match.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
+            tirTotal += pa.actions.tirs;
+            tirSuccess += pa.actions.tirsSuccess;
+            pointTotal += pa.actions.points;
+            pointSuccess += pa.actions.pointsSuccess;
+            carreaux += pa.actions.carreaux;
+          });
+        }
+      });
+      
+      const wins = weekMatches.filter(m => m.winner === 'A').length;
+      
+      weeklyData.push({
+        week: `${weekStart.getDate()}/${weekStart.getMonth() + 1}`,
+        matches: weekMatches.length,
+        wins,
+        winRate: weekMatches.length > 0 ? Math.round((wins / weekMatches.length) * 100) : 0,
+        tirSuccess,
+        tirTotal,
+        tirRate: tirTotal > 0 ? Math.round((tirSuccess / tirTotal) * 100) : 0,
+        pointSuccess,
+        pointTotal,
+        pointRate: pointTotal > 0 ? Math.round((pointSuccess / pointTotal) * 100) : 0,
+        carreaux,
+      });
+      
+      currentDate.setDate(currentDate.getDate() + 7);
+    }
+    
+    // Keep last 8 weeks for display
+    const displayData = weeklyData.slice(-8);
+    
+    return { weeklyData: displayData };
+  }, [matches]);
+
+  // Helper to format duration
+  const formatDuration = (minutes: number) => {
+    if (minutes < 60) return `${minutes}min`;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins > 0 ? `${hours}h${mins}` : `${hours}h`;
+  };
+
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
       {/* Header */}
@@ -657,12 +789,21 @@ export default function StatsScreen() {
               {performanceStats.total} parties • {performanceStats.winRate}% victoires
             </Text>
           </View>
-          <Pressable 
-            style={styles.historyButton}
-            onPress={() => router.push('/history')}
-          >
-            <MaterialIcons name="history" size={22} color={theme.textSecondary} />
-          </Pressable>
+          <View style={styles.headerButtons}>
+            <Pressable 
+              style={styles.progressionButton}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowProgressionModal(true); }}
+            >
+              <MaterialIcons name="trending-up" size={18} color={theme.primary} />
+              <Text style={styles.progressionButtonText}>Progression</Text>
+            </Pressable>
+            <Pressable 
+              style={styles.historyButton}
+              onPress={() => router.push('/history')}
+            >
+              <MaterialIcons name="history" size={22} color={theme.textSecondary} />
+            </Pressable>
+          </View>
         </View>
 
         {/* Time Filter */}
@@ -986,6 +1127,72 @@ export default function StatsScreen() {
                           <Text style={styles.fannyLabel}>Subies</Text>
                         </View>
                       </View>
+                    </View>
+                  </Animated.View>
+                )}
+
+                {/* Statistiques de durée (Chronomètre) */}
+                {performanceStats.matchesWithDuration > 0 && (
+                  <Animated.View entering={FadeInDown.duration(400).delay(450)} style={styles.section}>
+                    <SectionHeader title="Durée des parties" icon="timer" color={theme.accent} />
+                    <View style={styles.card}>
+                      {/* Main duration stats */}
+                      <View style={styles.durationHero}>
+                        <View style={styles.durationMain}>
+                          <MaterialIcons name="schedule" size={28} color={theme.accent} />
+                          <Text style={styles.durationMainValue}>{formatDuration(performanceStats.avgDuration)}</Text>
+                          <Text style={styles.durationMainLabel}>durée moyenne</Text>
+                        </View>
+                        <View style={styles.durationMinMax}>
+                          <View style={styles.durationMinMaxItem}>
+                            <MaterialIcons name="fast-forward" size={16} color={theme.success} />
+                            <Text style={styles.durationMinMaxValue}>{formatDuration(performanceStats.minDuration)}</Text>
+                            <Text style={styles.durationMinMaxLabel}>plus rapide</Text>
+                          </View>
+                          <View style={styles.durationMinMaxItem}>
+                            <MaterialIcons name="hourglass-full" size={16} color={theme.warning} />
+                            <Text style={styles.durationMinMaxValue}>{formatDuration(performanceStats.maxDuration)}</Text>
+                            <Text style={styles.durationMinMaxLabel}>plus longue</Text>
+                          </View>
+                        </View>
+                      </View>
+                      
+                      <View style={styles.divider} />
+                      
+                      {/* Total time played */}
+                      <View style={styles.totalTimeRow}>
+                        <MaterialIcons name="access-time" size={18} color={theme.textSecondary} />
+                        <Text style={styles.totalTimeLabel}>Temps total de jeu</Text>
+                        <Text style={styles.totalTimeValue}>{formatDuration(performanceStats.totalDuration)}</Text>
+                      </View>
+                      
+                      {/* Avg mène duration */}
+                      {performanceStats.menesWithDuration > 0 && (
+                        <View style={styles.totalTimeRow}>
+                          <MaterialIcons name="timer" size={18} color={theme.pointColor} />
+                          <Text style={styles.totalTimeLabel}>Durée moyenne par mène</Text>
+                          <Text style={styles.totalTimeValue}>
+                            {performanceStats.avgMeneDuration < 60 
+                              ? `${performanceStats.avgMeneDuration}s` 
+                              : `${Math.floor(performanceStats.avgMeneDuration / 60)}m${performanceStats.avgMeneDuration % 60}s`}
+                          </Text>
+                        </View>
+                      )}
+                      
+                      <View style={styles.divider} />
+                      
+                      {/* Duration by format */}
+                      <Text style={styles.durationFormatTitle}>Durée par format</Text>
+                      {Object.entries(performanceStats.durationByFormat).map(([format, data]) => {
+                        const avgFormat = data.count > 0 ? Math.round(data.total / data.count) : 0;
+                        return (
+                          <View key={format} style={styles.durationFormatRow}>
+                            <Text style={styles.durationFormatName}>{format}</Text>
+                            <Text style={styles.durationFormatCount}>{data.count} parties</Text>
+                            <Text style={styles.durationFormatValue}>{formatDuration(avgFormat)}</Text>
+                          </View>
+                        );
+                      })}
                     </View>
                   </Animated.View>
                 )}
@@ -1409,6 +1616,384 @@ export default function StatsScreen() {
           </>
         )}
       </ScrollView>
+
+      {/* Progression Modal */}
+      <Modal
+        visible={showProgressionModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowProgressionModal(false)}
+      >
+        <SafeAreaView edges={['top']} style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Progression</Text>
+            <Pressable 
+              style={styles.modalCloseButton}
+              onPress={() => setShowProgressionModal(false)}
+            >
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+          </View>
+          
+          <ScrollView 
+            style={styles.modalContent}
+            contentContainerStyle={styles.modalScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {progressionData.weeklyData.length > 0 ? (
+              <>
+                {/* Win Rate Evolution */}
+                <View style={styles.progressionSection}>
+                  <View style={styles.progressionHeader}>
+                    <MaterialIcons name="emoji-events" size={20} color={theme.primary} />
+                    <Text style={styles.progressionTitle}>Évolution du taux de victoire</Text>
+                  </View>
+                  <View style={styles.chartContainer}>
+                    <Svg width={screenWidth - 64} height={180}>
+                      {/* Grid lines */}
+                      {[0, 25, 50, 75, 100].map((v, i) => (
+                        <G key={i}>
+                          <Line
+                            x1="40"
+                            y1={160 - (v / 100) * 140}
+                            x2={screenWidth - 64}
+                            y2={160 - (v / 100) * 140}
+                            stroke={theme.border}
+                            strokeWidth="1"
+                            strokeDasharray="4,4"
+                          />
+                          <SvgText
+                            x="35"
+                            y={165 - (v / 100) * 140}
+                            fontSize="10"
+                            fill={theme.textMuted}
+                            textAnchor="end"
+                          >
+                            {v}%
+                          </SvgText>
+                        </G>
+                      ))}
+                      
+                      {/* Data points and lines */}
+                      {progressionData.weeklyData.map((data, i) => {
+                        const x = 50 + (i * ((screenWidth - 114) / Math.max(progressionData.weeklyData.length - 1, 1)));
+                        const y = 160 - (data.winRate / 100) * 140;
+                        const prevData = progressionData.weeklyData[i - 1];
+                        const prevX = prevData ? 50 + ((i - 1) * ((screenWidth - 114) / Math.max(progressionData.weeklyData.length - 1, 1))) : x;
+                        const prevY = prevData ? 160 - (prevData.winRate / 100) * 140 : y;
+                        
+                        return (
+                          <G key={i}>
+                            {i > 0 && (
+                              <Line
+                                x1={prevX}
+                                y1={prevY}
+                                x2={x}
+                                y2={y}
+                                stroke={theme.primary}
+                                strokeWidth="2"
+                              />
+                            )}
+                            <Circle cx={x} cy={y} r="5" fill={theme.primary} />
+                            {data.matches > 0 && (
+                              <SvgText
+                                x={x}
+                                y={y - 10}
+                                fontSize="10"
+                                fill={theme.textPrimary}
+                                textAnchor="middle"
+                                fontWeight="600"
+                              >
+                                {data.winRate}%
+                              </SvgText>
+                            )}
+                            <SvgText
+                              x={x}
+                              y={175}
+                              fontSize="9"
+                              fill={theme.textMuted}
+                              textAnchor="middle"
+                            >
+                              {data.week}
+                            </SvgText>
+                          </G>
+                        );
+                      })}
+                    </Svg>
+                  </View>
+                  <View style={styles.chartLegend}>
+                    <Text style={styles.chartLegendText}>
+                      {progressionData.weeklyData.reduce((sum, d) => sum + d.matches, 0)} parties sur les dernières semaines
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Tir Success Rate Evolution */}
+                <View style={styles.progressionSection}>
+                  <View style={styles.progressionHeader}>
+                    <MaterialIcons name="gps-fixed" size={20} color={theme.tirColor} />
+                    <Text style={styles.progressionTitle}>Évolution du taux de tir</Text>
+                  </View>
+                  <View style={styles.chartContainer}>
+                    <Svg width={screenWidth - 64} height={180}>
+                      {/* Grid lines */}
+                      {[0, 25, 50, 75, 100].map((v, i) => (
+                        <G key={i}>
+                          <Line
+                            x1="40"
+                            y1={160 - (v / 100) * 140}
+                            x2={screenWidth - 64}
+                            y2={160 - (v / 100) * 140}
+                            stroke={theme.border}
+                            strokeWidth="1"
+                            strokeDasharray="4,4"
+                          />
+                          <SvgText
+                            x="35"
+                            y={165 - (v / 100) * 140}
+                            fontSize="10"
+                            fill={theme.textMuted}
+                            textAnchor="end"
+                          >
+                            {v}%
+                          </SvgText>
+                        </G>
+                      ))}
+                      
+                      {/* Data points and lines */}
+                      {progressionData.weeklyData.map((data, i) => {
+                        const x = 50 + (i * ((screenWidth - 114) / Math.max(progressionData.weeklyData.length - 1, 1)));
+                        const y = 160 - (data.tirRate / 100) * 140;
+                        const prevData = progressionData.weeklyData[i - 1];
+                        const prevX = prevData ? 50 + ((i - 1) * ((screenWidth - 114) / Math.max(progressionData.weeklyData.length - 1, 1))) : x;
+                        const prevY = prevData ? 160 - (prevData.tirRate / 100) * 140 : y;
+                        
+                        return (
+                          <G key={i}>
+                            {i > 0 && (
+                              <Line
+                                x1={prevX}
+                                y1={prevY}
+                                x2={x}
+                                y2={y}
+                                stroke={theme.tirColor}
+                                strokeWidth="2"
+                              />
+                            )}
+                            <Circle cx={x} cy={y} r="5" fill={theme.tirColor} />
+                            {data.tirTotal > 0 && (
+                              <SvgText
+                                x={x}
+                                y={y - 10}
+                                fontSize="10"
+                                fill={theme.textPrimary}
+                                textAnchor="middle"
+                                fontWeight="600"
+                              >
+                                {data.tirRate}%
+                              </SvgText>
+                            )}
+                            <SvgText
+                              x={x}
+                              y={175}
+                              fontSize="9"
+                              fill={theme.textMuted}
+                              textAnchor="middle"
+                            >
+                              {data.week}
+                            </SvgText>
+                          </G>
+                        );
+                      })}
+                    </Svg>
+                  </View>
+                  <View style={styles.chartLegend}>
+                    <Text style={styles.chartLegendText}>
+                      {progressionData.weeklyData.reduce((sum, d) => sum + d.tirTotal, 0)} tirs analysés
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Point Success Rate Evolution */}
+                <View style={styles.progressionSection}>
+                  <View style={styles.progressionHeader}>
+                    <MaterialIcons name="adjust" size={20} color={theme.pointColor} />
+                    <Text style={styles.progressionTitle}>Évolution du taux de pointage</Text>
+                  </View>
+                  <View style={styles.chartContainer}>
+                    <Svg width={screenWidth - 64} height={180}>
+                      {/* Grid lines */}
+                      {[0, 25, 50, 75, 100].map((v, i) => (
+                        <G key={i}>
+                          <Line
+                            x1="40"
+                            y1={160 - (v / 100) * 140}
+                            x2={screenWidth - 64}
+                            y2={160 - (v / 100) * 140}
+                            stroke={theme.border}
+                            strokeWidth="1"
+                            strokeDasharray="4,4"
+                          />
+                          <SvgText
+                            x="35"
+                            y={165 - (v / 100) * 140}
+                            fontSize="10"
+                            fill={theme.textMuted}
+                            textAnchor="end"
+                          >
+                            {v}%
+                          </SvgText>
+                        </G>
+                      ))}
+                      
+                      {/* Data points and lines */}
+                      {progressionData.weeklyData.map((data, i) => {
+                        const x = 50 + (i * ((screenWidth - 114) / Math.max(progressionData.weeklyData.length - 1, 1)));
+                        const y = 160 - (data.pointRate / 100) * 140;
+                        const prevData = progressionData.weeklyData[i - 1];
+                        const prevX = prevData ? 50 + ((i - 1) * ((screenWidth - 114) / Math.max(progressionData.weeklyData.length - 1, 1))) : x;
+                        const prevY = prevData ? 160 - (prevData.pointRate / 100) * 140 : y;
+                        
+                        return (
+                          <G key={i}>
+                            {i > 0 && (
+                              <Line
+                                x1={prevX}
+                                y1={prevY}
+                                x2={x}
+                                y2={y}
+                                stroke={theme.pointColor}
+                                strokeWidth="2"
+                              />
+                            )}
+                            <Circle cx={x} cy={y} r="5" fill={theme.pointColor} />
+                            {data.pointTotal > 0 && (
+                              <SvgText
+                                x={x}
+                                y={y - 10}
+                                fontSize="10"
+                                fill={theme.textPrimary}
+                                textAnchor="middle"
+                                fontWeight="600"
+                              >
+                                {data.pointRate}%
+                              </SvgText>
+                            )}
+                            <SvgText
+                              x={x}
+                              y={175}
+                              fontSize="9"
+                              fill={theme.textMuted}
+                              textAnchor="middle"
+                            >
+                              {data.week}
+                            </SvgText>
+                          </G>
+                        );
+                      })}
+                    </Svg>
+                  </View>
+                  <View style={styles.chartLegend}>
+                    <Text style={styles.chartLegendText}>
+                      {progressionData.weeklyData.reduce((sum, d) => sum + d.pointTotal, 0)} points analysés
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Carreaux Evolution */}
+                <View style={styles.progressionSection}>
+                  <View style={styles.progressionHeader}>
+                    <MaterialIcons name="stars" size={20} color={theme.carreauColor} />
+                    <Text style={styles.progressionTitle}>Évolution des carreaux</Text>
+                  </View>
+                  <View style={styles.chartContainer}>
+                    <Svg width={screenWidth - 64} height={160}>
+                      {/* Bars */}
+                      {progressionData.weeklyData.map((data, i) => {
+                        const barWidth = (screenWidth - 104) / progressionData.weeklyData.length - 8;
+                        const x = 50 + (i * ((screenWidth - 104) / progressionData.weeklyData.length));
+                        const maxCarreaux = Math.max(...progressionData.weeklyData.map(d => d.carreaux), 1);
+                        const barHeight = (data.carreaux / maxCarreaux) * 100;
+                        
+                        return (
+                          <G key={i}>
+                            <Rect
+                              x={x}
+                              y={130 - barHeight}
+                              width={barWidth}
+                              height={barHeight}
+                              fill={theme.carreauColor}
+                              rx="4"
+                            />
+                            <SvgText
+                              x={x + barWidth / 2}
+                              y={125 - barHeight}
+                              fontSize="10"
+                              fill={theme.textPrimary}
+                              textAnchor="middle"
+                              fontWeight="600"
+                            >
+                              {data.carreaux}
+                            </SvgText>
+                            <SvgText
+                              x={x + barWidth / 2}
+                              y={150}
+                              fontSize="9"
+                              fill={theme.textMuted}
+                              textAnchor="middle"
+                            >
+                              {data.week}
+                            </SvgText>
+                          </G>
+                        );
+                      })}
+                    </Svg>
+                  </View>
+                  <View style={styles.chartLegend}>
+                    <Text style={styles.chartLegendText}>
+                      {progressionData.weeklyData.reduce((sum, d) => sum + d.carreaux, 0)} carreaux au total
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Weekly Summary Table */}
+                <View style={styles.progressionSection}>
+                  <View style={styles.progressionHeader}>
+                    <MaterialIcons name="table-chart" size={20} color={theme.textSecondary} />
+                    <Text style={styles.progressionTitle}>Résumé hebdomadaire</Text>
+                  </View>
+                  <View style={styles.summaryTable}>
+                    <View style={styles.summaryHeader}>
+                      <Text style={[styles.summaryCell, styles.summaryCellHeader, { flex: 1 }]}>Sem.</Text>
+                      <Text style={[styles.summaryCell, styles.summaryCellHeader, { flex: 1 }]}>Parties</Text>
+                      <Text style={[styles.summaryCell, styles.summaryCellHeader, { flex: 1 }]}>Vict.</Text>
+                      <Text style={[styles.summaryCell, styles.summaryCellHeader, { flex: 1 }]}>Tir</Text>
+                      <Text style={[styles.summaryCell, styles.summaryCellHeader, { flex: 1 }]}>Point</Text>
+                    </View>
+                    {progressionData.weeklyData.map((data, i) => (
+                      <View key={i} style={[styles.summaryRow, i % 2 === 0 && styles.summaryRowAlt]}>
+                        <Text style={[styles.summaryCell, { flex: 1 }]}>{data.week}</Text>
+                        <Text style={[styles.summaryCell, { flex: 1 }]}>{data.matches}</Text>
+                        <Text style={[styles.summaryCell, { flex: 1, color: theme.primary }]}>{data.winRate}%</Text>
+                        <Text style={[styles.summaryCell, { flex: 1, color: theme.tirColor }]}>{data.tirRate}%</Text>
+                        <Text style={[styles.summaryCell, { flex: 1, color: theme.pointColor }]}>{data.pointRate}%</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              </>
+            ) : (
+              <View style={styles.noProgressionData}>
+                <MaterialIcons name="show-chart" size={64} color={theme.textMuted} />
+                <Text style={styles.noProgressionTitle}>Pas assez de données</Text>
+                <Text style={styles.noProgressionText}>
+                  Jouez plus de matchs pour voir votre progression dans le temps
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1424,6 +2009,9 @@ const styles = StyleSheet.create({
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 16, paddingTop: 12, marginBottom: 12 },
   headerTitle: { fontSize: 26, fontWeight: '700', color: theme.textPrimary },
   headerSubtitle: { fontSize: 13, color: theme.textSecondary, marginTop: 2 },
+  headerButtons: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  progressionButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: theme.primary + '15', borderRadius: theme.borderRadius.md },
+  progressionButtonText: { fontSize: 12, fontWeight: '600', color: theme.primary },
   historyButton: { padding: 8, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md },
   
   // Filter Bar
@@ -1575,4 +2163,51 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginTop: 8, marginBottom: 24, maxWidth: 260 },
   emptyButton: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.primary, paddingHorizontal: 24, paddingVertical: 14, borderRadius: theme.borderRadius.md },
   emptyButtonText: { fontSize: 15, fontWeight: '600', color: '#FFF' },
+  
+  // Duration Stats
+  durationHero: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  durationMain: { flex: 1, alignItems: 'center' },
+  durationMainValue: { fontSize: 32, fontWeight: '700', color: theme.accent, marginTop: 4 },
+  durationMainLabel: { fontSize: 12, color: theme.textMuted },
+  durationMinMax: { flexDirection: 'row', gap: 16 },
+  durationMinMaxItem: { alignItems: 'center' },
+  durationMinMaxValue: { fontSize: 16, fontWeight: '600', color: theme.textPrimary, marginTop: 4 },
+  durationMinMaxLabel: { fontSize: 10, color: theme.textMuted },
+  totalTimeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 10 },
+  totalTimeLabel: { flex: 1, fontSize: 13, color: theme.textPrimary },
+  totalTimeValue: { fontSize: 15, fontWeight: '700', color: theme.accent },
+  durationFormatTitle: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginTop: 8, marginBottom: 8 },
+  durationFormatRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: theme.border },
+  durationFormatName: { flex: 1, fontSize: 13, color: theme.textPrimary },
+  durationFormatCount: { fontSize: 11, color: theme.textMuted, marginRight: 12 },
+  durationFormatValue: { fontSize: 14, fontWeight: '600', color: theme.accent },
+  
+  // Modal
+  modalContainer: { flex: 1, backgroundColor: theme.backgroundSecondary },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  modalTitle: { fontSize: 20, fontWeight: '700', color: theme.textPrimary },
+  modalCloseButton: { padding: 8 },
+  modalContent: { flex: 1 },
+  modalScrollContent: { padding: 16, paddingBottom: 32 },
+  
+  // Progression
+  progressionSection: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 16, ...theme.shadows.card },
+  progressionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
+  progressionTitle: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  chartContainer: { alignItems: 'center', marginBottom: 8 },
+  chartLegend: { alignItems: 'center' },
+  chartLegendText: { fontSize: 11, color: theme.textMuted },
+  
+  // Summary Table
+  summaryTable: { borderRadius: theme.borderRadius.md, overflow: 'hidden', borderWidth: 1, borderColor: theme.border },
+  summaryHeader: { flexDirection: 'row', backgroundColor: theme.backgroundSecondary, paddingVertical: 10 },
+  summaryRow: { flexDirection: 'row', paddingVertical: 10, borderTopWidth: 1, borderTopColor: theme.border },
+  summaryRowAlt: { backgroundColor: theme.backgroundSecondary + '50' },
+  summaryCell: { fontSize: 12, color: theme.textPrimary, textAlign: 'center', fontWeight: '500' },
+  summaryCellHeader: { fontWeight: '700', color: theme.textSecondary, fontSize: 11 },
+  
+  // No Data
+  noProgressionData: { alignItems: 'center', paddingVertical: 48 },
+  noProgressionTitle: { fontSize: 18, fontWeight: '600', color: theme.textPrimary, marginTop: 16 },
+  noProgressionText: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginTop: 8, maxWidth: 260 },
 });
