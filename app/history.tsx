@@ -10,11 +10,11 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn, useAnimatedStyle, withTiming, useSharedValue } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
-import { Match, Challenge } from '@/services/mockData';
+import { Match, Challenge, SeriesInfo } from '@/services/mockData';
 
 // Constants
 const CHALLENGE_CONFIG = {
@@ -44,8 +44,22 @@ const CONTENT_FILTERS: { id: ContentFilter; label: string; icon: keyof typeof Ma
 ];
 
 // Types
+interface SeriesGroup {
+  seriesId: string;
+  matches: Match[];
+  teamAWins: number;
+  teamBWins: number;
+  seriesWinner: 'A' | 'B' | null;
+  isComplete: boolean;
+  format: string;
+  teamANames: string[];
+  teamBNames: string[];
+  date: string;
+}
+
 type HistoryItem = 
   | { type: 'match'; data: Match; date: string }
+  | { type: 'series'; data: SeriesGroup; date: string }
   | { type: 'challenge'; data: Challenge; date: string }
   | { type: 'header'; title: string; date: string };
 
@@ -71,9 +85,32 @@ const filterByPeriod = <T extends { date: string }>(items: T[], days: number): T
 };
 
 // Components
-const MatchCard = React.memo(({ match, onPress }: { match: Match; onPress: () => void }) => {
+const MatchCard = React.memo(({ match, onPress, compact = false }: { match: Match; onPress: () => void; compact?: boolean }) => {
   const isWin = match.winner === 'A';
   const isTournament = match.mode === 'Tournoi';
+
+  if (compact) {
+    return (
+      <Pressable style={styles.compactMatchCard} onPress={onPress}>
+        <View style={[styles.compactIndicator, { backgroundColor: isWin ? theme.success : theme.error }]} />
+        <View style={styles.compactMatchContent}>
+          <Text style={styles.compactMatchLabel}>
+            {match.seriesInfo?.isFinale ? 'Finale' : `Match ${match.seriesInfo?.matchNumber}`}
+          </Text>
+          <View style={styles.compactScoreRow}>
+            <Text style={[styles.compactScore, isWin && styles.compactScoreWin]}>{match.teamA.score}</Text>
+            <Text style={styles.compactScoreSep}>-</Text>
+            <Text style={[styles.compactScore, !isWin && styles.compactScoreLoss]}>{match.teamB.score}</Text>
+          </View>
+        </View>
+        <MaterialIcons 
+          name={isWin ? 'check-circle' : 'cancel'} 
+          size={16} 
+          color={isWin ? theme.success : theme.error} 
+        />
+      </Pressable>
+    );
+  }
 
   return (
     <Pressable style={styles.card} onPress={onPress}>
@@ -132,6 +169,125 @@ const MatchCard = React.memo(({ match, onPress }: { match: Match; onPress: () =>
         </View>
       </View>
     </Pressable>
+  );
+});
+
+// Series Card Component
+const SeriesCard = React.memo(({ series, onMatchPress }: { series: SeriesGroup; onMatchPress: (match: Match) => void }) => {
+  const [expanded, setExpanded] = useState(false);
+  const rotateAnim = useSharedValue(0);
+  
+  const isWin = series.seriesWinner === 'A';
+  const seriesScore = `${series.teamAWins}-${series.teamBWins}`;
+  
+  const handleToggle = useCallback(() => {
+    Haptics.selectionAsync();
+    rotateAnim.value = withTiming(expanded ? 0 : 1, { duration: 200 });
+    setExpanded(!expanded);
+  }, [expanded, rotateAnim]);
+
+  const chevronStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotateAnim.value * 180}deg` }],
+  }));
+
+  // Determine series result text
+  const getResultText = () => {
+    if (!series.isComplete) return 'En cours';
+    if (isWin) return 'Série gagnée';
+    return 'Série perdue';
+  };
+
+  return (
+    <View style={styles.seriesCard}>
+      {/* Series Header - Always visible */}
+      <Pressable style={styles.seriesHeader} onPress={handleToggle}>
+        <View style={[styles.seriesIndicator, { backgroundColor: isWin ? theme.success : series.isComplete ? theme.error : theme.warning }]} />
+        
+        <View style={styles.seriesHeaderContent}>
+          <View style={styles.seriesHeaderTop}>
+            <View style={styles.seriesBadgeContainer}>
+              <View style={[styles.seriesBadge, { backgroundColor: theme.accent + '15' }]}>
+                <MaterialIcons name="replay" size={12} color={theme.accent} />
+                <Text style={[styles.badgeText, { color: theme.accent }]}>Best of 3</Text>
+              </View>
+              <View style={[styles.badge, { backgroundColor: theme.primary + '15' }]}>
+                <MaterialIcons name="fitness-center" size={12} color={theme.primary} />
+                <Text style={[styles.badgeText, { color: theme.primary }]}>{series.format}</Text>
+              </View>
+            </View>
+            <Text style={styles.timeText}>
+              {new Date(series.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+          </View>
+
+          <View style={styles.seriesTeamsRow}>
+            <View style={styles.seriesTeamCol}>
+              <Text style={styles.seriesTeamLabel}>MOI</Text>
+              <Text style={styles.seriesTeamNames} numberOfLines={1}>
+                {series.teamANames.slice(0, 2).join(' • ')}
+              </Text>
+            </View>
+            
+            <View style={styles.seriesScoreContainer}>
+              <View style={[
+                styles.seriesScoreBadge,
+                { backgroundColor: isWin ? theme.success : series.isComplete ? theme.error : theme.warning }
+              ]}>
+                <Text style={styles.seriesScoreText}>{seriesScore}</Text>
+              </View>
+              <Text style={[
+                styles.seriesResultLabel,
+                { color: isWin ? theme.success : series.isComplete ? theme.error : theme.warning }
+              ]}>
+                {getResultText()}
+              </Text>
+            </View>
+            
+            <View style={[styles.seriesTeamCol, styles.teamRight]}>
+              <Text style={styles.seriesTeamLabel}>ADV</Text>
+              <Text style={styles.seriesTeamNames} numberOfLines={1}>
+                {series.teamBNames.slice(0, 2).join(' • ')}
+              </Text>
+            </View>
+          </View>
+
+          {/* Match count indicator */}
+          <View style={styles.seriesFooter}>
+            <View style={styles.matchCountRow}>
+              {series.matches.map((match, idx) => (
+                <View
+                  key={match.id}
+                  style={[
+                    styles.matchDot,
+                    { backgroundColor: match.winner === 'A' ? theme.success : theme.error }
+                  ]}
+                />
+              ))}
+            </View>
+            <View style={styles.expandButton}>
+              <Text style={styles.expandText}>{expanded ? 'Réduire' : 'Voir les matchs'}</Text>
+              <Animated.View style={chevronStyle}>
+                <MaterialIcons name="expand-more" size={18} color={theme.primary} />
+              </Animated.View>
+            </View>
+          </View>
+        </View>
+      </Pressable>
+
+      {/* Expanded Match List */}
+      {expanded && (
+        <Animated.View entering={FadeIn.duration(200)} style={styles.seriesMatchList}>
+          {series.matches.map((match) => (
+            <MatchCard 
+              key={match.id} 
+              match={match} 
+              onPress={() => onMatchPress(match)} 
+              compact 
+            />
+          ))}
+        </Animated.View>
+      )}
+    </View>
   );
 });
 
@@ -228,6 +384,50 @@ export default function HistoryScreen() {
   const [showPeriodModal, setShowPeriodModal] = useState(false);
   const [editingChallenge, setEditingChallenge] = useState<Challenge | null>(null);
 
+  // Group matches by series
+  const groupMatchesBySeries = useCallback((matchList: Match[]): (Match | SeriesGroup)[] => {
+    const seriesMap = new Map<string, Match[]>();
+    const standaloneMatches: Match[] = [];
+    
+    matchList.forEach(match => {
+      if (match.seriesInfo?.seriesId) {
+        const existing = seriesMap.get(match.seriesInfo.seriesId) || [];
+        existing.push(match);
+        seriesMap.set(match.seriesInfo.seriesId, existing);
+      } else {
+        standaloneMatches.push(match);
+      }
+    });
+
+    const result: (Match | SeriesGroup)[] = [...standaloneMatches];
+
+    seriesMap.forEach((seriesMatches, seriesId) => {
+      // Sort matches by match number
+      seriesMatches.sort((a, b) => (a.seriesInfo?.matchNumber || 0) - (b.seriesInfo?.matchNumber || 0));
+      
+      const lastMatch = seriesMatches[seriesMatches.length - 1];
+      const teamAWins = seriesMatches.filter(m => m.winner === 'A').length;
+      const teamBWins = seriesMatches.filter(m => m.winner === 'B').length;
+      
+      const seriesGroup: SeriesGroup = {
+        seriesId,
+        matches: seriesMatches,
+        teamAWins,
+        teamBWins,
+        seriesWinner: lastMatch.seriesInfo?.seriesWinner || null,
+        isComplete: lastMatch.seriesInfo?.seriesComplete || false,
+        format: lastMatch.format,
+        teamANames: lastMatch.teamA.playerNames,
+        teamBNames: lastMatch.teamB.playerNames,
+        date: seriesMatches[0].date, // Use first match date for sorting
+      };
+      
+      result.push(seriesGroup);
+    });
+
+    return result;
+  }, []);
+
   // Filtered and grouped data
   const { listData, stats } = useMemo(() => {
     const periodDays = PERIOD_OPTIONS.find(p => p.id === selectedPeriod)?.days || 0;
@@ -235,33 +435,55 @@ export default function HistoryScreen() {
     const filteredChallenges = filterByPeriod(challenges, periodDays);
 
     // Calculate stats
-    const trainingCount = filteredMatches.filter(m => m.mode === 'Entraînement').length;
-    const tournamentCount = filteredMatches.filter(m => m.mode === 'Tournoi').length;
+    const trainingMatches = filteredMatches.filter(m => m.mode === 'Entraînement');
+    const tournamentMatches = filteredMatches.filter(m => m.mode === 'Tournoi');
+    const trainingCount = trainingMatches.length;
+    const tournamentCount = tournamentMatches.length;
     const challengeCount = filteredChallenges.length;
 
     // Build items based on filter
-    let items: { type: 'match' | 'challenge'; data: Match | Challenge; date: string }[] = [];
+    let items: { type: 'match' | 'series' | 'challenge'; data: Match | SeriesGroup | Challenge; date: string }[] = [];
     
     if (contentFilter === 'all' || contentFilter === 'training') {
-      const training = filteredMatches.filter(m => m.mode === 'Entraînement');
-      items.push(...training.map(m => ({ type: 'match' as const, data: m, date: m.date })));
+      const groupedTraining = groupMatchesBySeries(trainingMatches);
+      groupedTraining.forEach(item => {
+        if ('seriesId' in item) {
+          items.push({ type: 'series', data: item as SeriesGroup, date: item.date });
+        } else {
+          items.push({ type: 'match', data: item as Match, date: item.date });
+        }
+      });
     }
     if (contentFilter === 'all' || contentFilter === 'tournament') {
-      const tournaments = filteredMatches.filter(m => m.mode === 'Tournoi');
-      items.push(...tournaments.map(m => ({ type: 'match' as const, data: m, date: m.date })));
+      // Tournament matches are not grouped into series
+      tournamentMatches.forEach(m => {
+        items.push({ type: 'match', data: m, date: m.date });
+      });
     }
     if (contentFilter === 'all' || contentFilter === 'challenges') {
-      items.push(...filteredChallenges.map(c => ({ type: 'challenge' as const, data: c, date: c.date })));
+      filteredChallenges.forEach(c => {
+        items.push({ type: 'challenge', data: c, date: c.date });
+      });
     }
 
-    // Remove duplicates and sort
+    // Sort by date descending
+    items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // Remove duplicates (in case training filter adds them twice)
     const uniqueIds = new Set<string>();
     items = items.filter(item => {
-      const id = item.type === 'match' ? (item.data as Match).id : (item.data as Challenge).id;
+      let id: string;
+      if (item.type === 'series') {
+        id = `series-${(item.data as SeriesGroup).seriesId}`;
+      } else if (item.type === 'match') {
+        id = `match-${(item.data as Match).id}`;
+      } else {
+        id = `challenge-${(item.data as Challenge).id}`;
+      }
       if (uniqueIds.has(id)) return false;
       uniqueIds.add(id);
       return true;
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    });
 
     // Group by date with headers
     const listData: HistoryItem[] = [];
@@ -273,14 +495,14 @@ export default function HistoryScreen() {
         currentDateKey = dateKey;
         listData.push({ type: 'header', title: dateKey, date: item.date });
       }
-      listData.push(item);
+      listData.push(item as HistoryItem);
     });
 
     return {
       listData,
       stats: { trainingCount, tournamentCount, challengeCount, total: trainingCount + tournamentCount + challengeCount }
     };
-  }, [matches, challenges, contentFilter, selectedPeriod]);
+  }, [matches, challenges, contentFilter, selectedPeriod, groupMatchesBySeries]);
 
   // Handlers
   const handleMatchPress = useCallback((match: Match) => {
@@ -321,6 +543,14 @@ export default function HistoryScreen() {
       );
     }
     
+    if (item.type === 'series') {
+      return (
+        <Animated.View entering={FadeIn.duration(200).delay(Math.min(index * 20, 100))}>
+          <SeriesCard series={item.data as SeriesGroup} onMatchPress={handleMatchPress} />
+        </Animated.View>
+      );
+    }
+    
     if (item.type === 'match') {
       return (
         <Animated.View entering={FadeIn.duration(200).delay(Math.min(index * 20, 100))}>
@@ -338,6 +568,7 @@ export default function HistoryScreen() {
 
   const keyExtractor = useCallback((item: HistoryItem) => {
     if (item.type === 'header') return `header-${item.title}`;
+    if (item.type === 'series') return `series-${(item.data as SeriesGroup).seriesId}`;
     if (item.type === 'match') return `match-${(item.data as Match).id}`;
     return `challenge-${(item.data as Challenge).id}`;
   }, []);
@@ -718,6 +949,74 @@ const styles = StyleSheet.create({
   },
   resultText: { fontSize: 11, fontWeight: '600' },
   formatText: { fontSize: 11, color: theme.textMuted },
+  
+  // Series Card
+  seriesCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: 10,
+    overflow: 'hidden',
+    ...theme.shadows.card,
+  },
+  seriesHeader: {
+    flexDirection: 'row',
+  },
+  seriesIndicator: { width: 4 },
+  seriesHeaderContent: { flex: 1, padding: 12 },
+  seriesHeaderTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  seriesBadgeContainer: { flexDirection: 'row', gap: 6 },
+  seriesBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: theme.borderRadius.full,
+  },
+  seriesTeamsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  seriesTeamCol: { flex: 1 },
+  seriesTeamLabel: { fontSize: 9, fontWeight: '700', color: theme.textMuted, letterSpacing: 0.5, marginBottom: 2 },
+  seriesTeamNames: { fontSize: 12, fontWeight: '500', color: theme.textPrimary },
+  seriesScoreContainer: { alignItems: 'center', paddingHorizontal: 12 },
+  seriesScoreBadge: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: 4,
+  },
+  seriesScoreText: { fontSize: 18, fontWeight: '800', color: '#FFF' },
+  seriesResultLabel: { fontSize: 10, fontWeight: '600' },
+  seriesFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  matchCountRow: { flexDirection: 'row', gap: 6 },
+  matchDot: { width: 10, height: 10, borderRadius: 5 },
+  expandButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  expandText: { fontSize: 12, fontWeight: '600', color: theme.primary },
+  seriesMatchList: {
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+    paddingTop: 10,
+  },
+  
+  // Compact Match Card (for series expansion)
+  compactMatchCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.sm,
+    padding: 10,
+    gap: 10,
+  },
+  compactIndicator: { width: 3, height: 28, borderRadius: 2 },
+  compactMatchContent: { flex: 1 },
+  compactMatchLabel: { fontSize: 11, fontWeight: '600', color: theme.textSecondary, marginBottom: 2 },
+  compactScoreRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  compactScore: { fontSize: 16, fontWeight: '700', color: theme.textSecondary },
+  compactScoreWin: { color: theme.success },
+  compactScoreLoss: { color: theme.error },
+  compactScoreSep: { fontSize: 12, color: theme.textMuted },
   
   // Challenge Card
   challengeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
