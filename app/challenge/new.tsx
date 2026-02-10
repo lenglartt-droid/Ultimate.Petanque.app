@@ -536,6 +536,16 @@ export default function NewChallengeScreen() {
       opponentStats, opponentAtelierScores, getWinner, notationRecords, precisionShots,
       playerStats, atelierScores, elapsedTime, shots, addChallenge, selfPlayer, userStats]);
 
+  const cancelChallenge = useCallback(() => {
+    Alert.alert('Quitter le défi ?', 'Le défi en cours sera perdu.', [
+      { text: 'Continuer', style: 'cancel' },
+      { text: 'Quitter', style: 'destructive', onPress: () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+        router.back();
+      }},
+    ]);
+  }, []);
+
   const resetChallenge = useCallback(() => {
     Alert.alert('Recommencer', 'Voulez-vous recommencer ce défi ?', [
       { text: 'Annuler', style: 'cancel' },
@@ -990,8 +1000,8 @@ export default function NewChallengeScreen() {
     return (
       <SafeAreaView edges={['top']} style={styles.container}>
         <View style={styles.header}>
-          <Pressable style={styles.headerBtn} onPress={resetChallenge}>
-            <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+          <Pressable style={styles.cancelHeaderBtn} onPress={cancelChallenge}>
+            <Text style={styles.cancelHeaderBtnText}>Annuler</Text>
           </Pressable>
           <Text style={styles.headerTitle}>Tir de Précision</Text>
           <View style={styles.timerBadge}>
@@ -1097,8 +1107,8 @@ export default function NewChallengeScreen() {
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
       <View style={styles.header}>
-        <Pressable style={styles.headerBtn} onPress={resetChallenge}>
-          <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+        <Pressable style={styles.cancelHeaderBtn} onPress={cancelChallenge}>
+          <Text style={styles.cancelHeaderBtnText}>Annuler</Text>
         </Pressable>
         <Text style={styles.headerTitle}>{config?.name}</Text>
         <View style={styles.timerBadge}>
@@ -1228,6 +1238,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
   headerBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
+  cancelHeaderBtn: { paddingHorizontal: 14, paddingVertical: 8, backgroundColor: theme.error + '15', borderRadius: 10 },
+  cancelHeaderBtnText: { fontSize: 14, fontWeight: '600', color: theme.error },
   timerBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.primary + '15', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20 },
   timerText: { fontSize: 14, fontWeight: '600', color: theme.primary, fontVariant: ['tabular-nums'] },
   
@@ -1252,7 +1264,7 @@ const styles = StyleSheet.create({
   metaBadgeText: { fontSize: 11, fontWeight: '600' },
   
   // Mode Selection
-  modeContent: { paddingHorizontal: 16, paddingTop: 24, paddingBottom: 40 },
+  modeContent: { paddingHorizontal: 16, paddingTop: 24, paddingBottom: 40, flexGrow: 1, justifyContent: 'center' },
   modeHeader: { alignItems: 'center', marginBottom: 28 },
   modeHeaderIcon: { width: 64, height: 64, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   modeHeaderTitle: { fontSize: 22, fontWeight: '700', color: theme.textPrimary },
