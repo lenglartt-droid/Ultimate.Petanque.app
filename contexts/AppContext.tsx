@@ -420,6 +420,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           atelierScores: c.atelier_scores,
           duration: c.duration,
           notes: c.notes,
+          detailedShots: c.detailed_shots,
         }));
         setChallenges(dbChallenges.length > 0 ? dbChallenges : mockChallenges);
       }
@@ -791,6 +792,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         atelier_scores: challenge.atelierScores,
         duration: challenge.duration,
         notes: challenge.notes,
+        detailed_shots: challenge.detailedShots,
       }).select().single();
 
       if (error) throw error;
@@ -818,6 +820,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           atelierScores: data.atelier_scores,
           duration: data.duration,
           notes: data.notes,
+          detailedShots: data.detailed_shots,
         };
         setChallenges(prev => [newChallenge, ...prev]);
       }

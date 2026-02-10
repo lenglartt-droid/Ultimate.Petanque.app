@@ -711,17 +711,26 @@ export default function StatsScreen() {
       }
     });
     
-    // Detailed tir error types
-    const tirErrorTypes = {
+    // Detailed tir error types - shot result (where the shot went)
+    const tirErrorResults = {
       courtDroite: tirStats.tirCourtDroite,
       courtGauche: tirStats.tirCourtGauche,
       long: tirStats.tirLong,
       tirBouchon: tirStats.tirBouchon,
+    };
+    const totalTirErrorResults = Object.values(tirErrorResults).reduce((a, b) => a + b, 0);
+    
+    // Technique failure rates (separate from results to avoid double counting)
+    const tirErrorByTechnique = {
       auFerRate: tirStats.tirAuFer.total - tirStats.tirAuFer.success,
       auPlombRate: tirStats.tirAuPlomb.total - tirStats.tirAuPlomb.success,
       enRafleRate: tirStats.tirEnRafle.total - tirStats.tirEnRafle.success,
     };
-    const totalTirErrorTyped = Object.values(tirErrorTypes).reduce((a, b) => a + b, 0);
+    const totalTirErrorByTechnique = Object.values(tirErrorByTechnique).reduce((a, b) => a + b, 0);
+    
+    // Combined for backward compat - use results as primary, technique as secondary
+    const tirErrorTypes = { ...tirErrorResults };
+    const totalTirErrorTyped = totalTirErrorResults > 0 ? totalTirErrorResults : totalTirErrorByTechnique;
     
     // Detailed point error types
     const pointErrorTypes = {
@@ -737,10 +746,10 @@ export default function StatsScreen() {
     
     // Most common error
     const allErrors = [
-      { type: 'Court à droite', count: tirErrorTypes.courtDroite, category: 'tir' },
-      { type: 'Court à gauche', count: tirErrorTypes.courtGauche, category: 'tir' },
-      { type: 'Long', count: tirErrorTypes.long, category: 'tir' },
-      { type: 'Tir sur bouchon', count: tirErrorTypes.tirBouchon, category: 'tir' },
+      { type: 'Court à droite', count: tirErrorResults.courtDroite, category: 'tir' },
+      { type: 'Court à gauche', count: tirErrorResults.courtGauche, category: 'tir' },
+      { type: 'Long', count: tirErrorResults.long, category: 'tir' },
+      { type: 'Tir sur bouchon', count: tirErrorResults.tirBouchon, category: 'tir' },
       { type: 'Point raté', count: pointErrorTypes.rate, category: 'point' },
       { type: 'Point crocheté', count: pointErrorTypes.crochete, category: 'point' },
       { type: 'Point sorti', count: pointErrorTypes.sorti, category: 'point' },
@@ -756,6 +765,8 @@ export default function StatsScreen() {
       errorByFormat, trainingErrorRate, tournamentErrorRate,
       maxConsecutiveErrors, totalErrorStreaks,
       tirErrorTypes, totalTirErrorTyped,
+      tirErrorResults, totalTirErrorResults,
+      tirErrorByTechnique, totalTirErrorByTechnique,
       pointErrorTypes, totalPointErrorTyped,
       mostCommonError, allErrors,
     };
@@ -1597,34 +1608,53 @@ export default function StatsScreen() {
                 </Animated.View>
 
                 {/* Detailed tir errors */}
-                {errorStats.totalTirErrorTyped > 0 && (
+                {(errorStats.totalTirErrorResults > 0 || errorStats.totalTirErrorByTechnique > 0) && (
                   <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-                    <SectionHeader title="Types de tirs ratés" subtitle={`${errorStats.totalTirErrorTyped} erreurs analysées`} icon="gps-off" color={theme.tirColor} />
+                    <SectionHeader title="Types de tirs ratés" subtitle={`${errorStats.totalTirErrorResults > 0 ? errorStats.totalTirErrorResults : errorStats.totalTirErrorByTechnique} erreurs analysées`} icon="gps-off" color={theme.tirColor} />
                     <View style={styles.card}>
-                      {errorStats.tirErrorTypes.courtDroite > 0 && (
-                        <StatRow label="Court, à droite" value={errorStats.tirErrorTypes.courtDroite} subValue={`${Math.round((errorStats.tirErrorTypes.courtDroite / errorStats.totalTirErrorTyped) * 100)}%`} icon="subdirectory-arrow-right" color={theme.error} />
+                      {/* Shot results (where the shot went) */}
+                      {errorStats.totalTirErrorResults > 0 && (
+                        <>
+                          {errorStats.tirErrorResults.courtDroite > 0 && (
+                            <StatRow label="Court, à droite" value={errorStats.tirErrorResults.courtDroite} subValue={`${Math.round((errorStats.tirErrorResults.courtDroite / errorStats.totalTirErrorResults) * 100)}%`} icon="subdirectory-arrow-right" color={theme.error} />
+                          )}
+                          {errorStats.tirErrorResults.courtGauche > 0 && (
+                            <StatRow label="Court, à gauche" value={errorStats.tirErrorResults.courtGauche} subValue={`${Math.round((errorStats.tirErrorResults.courtGauche / errorStats.totalTirErrorResults) * 100)}%`} icon="subdirectory-arrow-left" color={theme.error} />
+                          )}
+                          {errorStats.tirErrorResults.long > 0 && (
+                            <StatRow label="Long" value={errorStats.tirErrorResults.long} subValue={`${Math.round((errorStats.tirErrorResults.long / errorStats.totalTirErrorResults) * 100)}%`} icon="arrow-upward" color={theme.error} />
+                          )}
+                          {errorStats.tirErrorResults.tirBouchon > 0 && (
+                            <StatRow label="Tir sur bouchon" value={errorStats.tirErrorResults.tirBouchon} subValue={`${Math.round((errorStats.tirErrorResults.tirBouchon / errorStats.totalTirErrorResults) * 100)}%`} icon="adjust" color={theme.warning} />
+                          )}
+                          <View style={styles.divider} />
+                          <BreakdownBar items={[
+                            { label: 'Court D', value: errorStats.tirErrorResults.courtDroite, color: '#E57373' },
+                            { label: 'Court G', value: errorStats.tirErrorResults.courtGauche, color: '#EF5350' },
+                            { label: 'Long', value: errorStats.tirErrorResults.long, color: '#F44336' },
+                            { label: 'Bouchon', value: errorStats.tirErrorResults.tirBouchon, color: theme.warning },
+                          ].filter(i => i.value > 0)} />
+                          {(errorStats.tirErrorResults.courtDroite + errorStats.tirErrorResults.courtGauche) > errorStats.tirErrorResults.long && (
+                            <View style={styles.insightBox}>
+                              <MaterialIcons name="lightbulb" size={16} color={theme.tirColor} />
+                              <Text style={styles.insightText}>Vos tirs sont majoritairement courts. Travaillez la puissance de votre lancer.</Text>
+                            </View>
+                          )}
+                        </>
                       )}
-                      {errorStats.tirErrorTypes.courtGauche > 0 && (
-                        <StatRow label="Court, à gauche" value={errorStats.tirErrorTypes.courtGauche} subValue={`${Math.round((errorStats.tirErrorTypes.courtGauche / errorStats.totalTirErrorTyped) * 100)}%`} icon="subdirectory-arrow-left" color={theme.error} />
-                      )}
-                      {errorStats.tirErrorTypes.long > 0 && (
-                        <StatRow label="Long" value={errorStats.tirErrorTypes.long} subValue={`${Math.round((errorStats.tirErrorTypes.long / errorStats.totalTirErrorTyped) * 100)}%`} icon="arrow-upward" color={theme.error} />
-                      )}
-                      {errorStats.tirErrorTypes.tirBouchon > 0 && (
-                        <StatRow label="Tir sur bouchon" value={errorStats.tirErrorTypes.tirBouchon} subValue={`${Math.round((errorStats.tirErrorTypes.tirBouchon / errorStats.totalTirErrorTyped) * 100)}%`} icon="adjust" color={theme.warning} />
-                      )}
-                      <View style={styles.divider} />
-                      <BreakdownBar items={[
-                        { label: 'Court D', value: errorStats.tirErrorTypes.courtDroite, color: '#E57373' },
-                        { label: 'Court G', value: errorStats.tirErrorTypes.courtGauche, color: '#EF5350' },
-                        { label: 'Long', value: errorStats.tirErrorTypes.long, color: '#F44336' },
-                        { label: 'Bouchon', value: errorStats.tirErrorTypes.tirBouchon, color: theme.warning },
-                      ].filter(i => i.value > 0)} />
-                      {(errorStats.tirErrorTypes.courtDroite + errorStats.tirErrorTypes.courtGauche) > errorStats.tirErrorTypes.long && (
-                        <View style={styles.insightBox}>
-                          <MaterialIcons name="lightbulb" size={16} color={theme.tirColor} />
-                          <Text style={styles.insightText}>Vos tirs sont majoritairement courts. Travaillez la puissance de votre lancer.</Text>
-                        </View>
+                      {/* Technique failure rates (only if no shot results available) */}
+                      {errorStats.totalTirErrorResults === 0 && errorStats.totalTirErrorByTechnique > 0 && (
+                        <>
+                          {errorStats.tirErrorByTechnique.auFerRate > 0 && (
+                            <StatRow label="Tirs tendus ratés" value={errorStats.tirErrorByTechnique.auFerRate} subValue={`${Math.round((errorStats.tirErrorByTechnique.auFerRate / errorStats.totalTirErrorByTechnique) * 100)}%`} icon="gps-fixed" color={theme.tirColor} />
+                          )}
+                          {errorStats.tirErrorByTechnique.auPlombRate > 0 && (
+                            <StatRow label="Tirs en cloche ratés" value={errorStats.tirErrorByTechnique.auPlombRate} subValue={`${Math.round((errorStats.tirErrorByTechnique.auPlombRate / errorStats.totalTirErrorByTechnique) * 100)}%`} icon="flight-takeoff" color={theme.pointColor} />
+                          )}
+                          {errorStats.tirErrorByTechnique.enRafleRate > 0 && (
+                            <StatRow label="En rafle ratés" value={errorStats.tirErrorByTechnique.enRafleRate} subValue={`${Math.round((errorStats.tirErrorByTechnique.enRafleRate / errorStats.totalTirErrorByTechnique) * 100)}%`} icon="swap-horiz" color={theme.accent} />
+                          )}
+                        </>
                       )}
                     </View>
                   </Animated.View>
