@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,85 +13,111 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import theme from '@/constants/theme';
-import config, { GameFormat, TournamentType, TerrainType, TournamentLevel, TournamentCategory, RegistrationType, TournamentScope } from '@/constants/config';
+import config, { GameFormat, TournamentType, TournamentLevel, TournamentCategory, RegistrationType, TournamentScope } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 
-// Cadrage rules configuration
-const CADRAGE_RULES: Record<TournamentType, { description: string; matches: string; points: string; specifics: string[] }> = {
-  'Poules': {
-    description: 'Phase de qualification en groupes',
-    matches: '2-3 matchs par équipe',
-    points: '13 points',
-    specifics: ['3-4 équipes par poule', 'Tous contre tous', 'Top 1-2 qualifiés'],
-  },
-  'Élimination directe': {
-    description: 'Tableau à élimination simple',
-    matches: '1 match = 1 chance',
-    points: '13 points',
-    specifics: ['Perdant éliminé', 'Pas de repêchage', 'Avancement direct'],
-  },
-  'Mixte': {
-    description: 'Poules + Élimination directe',
-    matches: '3-5 matchs minimum',
-    points: '13 points',
-    specifics: ['Phase poules puis tableau', 'Qualifiés selon classement', 'Format le plus courant'],
-  },
-  'Suisse': {
-    description: 'Système suisse par rondes',
-    matches: '5-7 rondes fixes',
-    points: '13 points',
-    specifics: ['Adversaires de niveau similaire', 'Pas d\'élimination', 'Classement par points'],
-  },
-  'A/B/C': {
-    description: 'Tableaux multiples avec repêchage',
-    matches: '4-6 matchs garantis',
-    points: '13 points',
-    specifics: ['Tableau A (principal)', 'Tableaux B/C (consolante)', 'Perdants repêchés'],
-  },
-  'Tirage intégral': {
-    description: 'Tirage au sort complet dès le départ',
-    matches: 'Variable selon place',
-    points: '13 points',
-    specifics: ['Tableau fixé au départ', 'Parcours aléatoire', 'Format rapide'],
-  },
-  'Autre': {
-    description: 'Format personnalisé',
-    matches: 'À définir',
-    points: 'À définir',
-    specifics: ['Règles libres', 'Adaptable selon besoin'],
-  },
+// ============================================
+// CONFIGURATION
+// ============================================
+const CADRAGE_CONFIG: Record<TournamentType, { icon: string; description: string; matches: string; points: string; specifics: string[] }> = {
+  'Poules': { icon: 'grid-view', description: 'Phase de qualification en groupes', matches: '2-3 matchs par équipe', points: '13 pts', specifics: ['3-4 équipes par poule', 'Tous contre tous', 'Top 1-2 qualifiés'] },
+  'Élimination directe': { icon: 'call-split', description: 'Tableau à élimination simple', matches: '1 match = 1 chance', points: '13 pts', specifics: ['Perdant éliminé', 'Pas de repêchage', 'Avancement direct'] },
+  'Mixte': { icon: 'merge-type', description: 'Poules + Élimination directe', matches: '3-5 matchs min.', points: '13 pts', specifics: ['Phase poules puis tableau', 'Qualifiés selon classement', 'Format le plus courant'] },
+  'Suisse': { icon: 'sync-alt', description: 'Système suisse par rondes', matches: '5-7 rondes fixes', points: '13 pts', specifics: ['Adversaires de niveau similaire', 'Pas d\'élimination', 'Classement par points'] },
+  'A/B/C': { icon: 'account-tree', description: 'Tableaux multiples avec repêchage', matches: '4-6 matchs garantis', points: '13 pts', specifics: ['Tableau A (principal)', 'Tableaux B/C (consolante)', 'Perdants repêchés'] },
+  'Tirage intégral': { icon: 'shuffle', description: 'Tirage au sort complet', matches: 'Variable', points: '13 pts', specifics: ['Tableau fixé au départ', 'Parcours aléatoire', 'Format rapide'] },
+  'Autre': { icon: 'tune', description: 'Format personnalisé', matches: 'À définir', points: 'À définir', specifics: ['Règles libres', 'Adaptable'] },
 };
 
+const FORMAT_CONFIG: Record<string, { icon: string; players: string; boules: string }> = {
+  'Tête-à-tête': { icon: 'person', players: '1 vs 1', boules: '3 boules' },
+  'Doublette': { icon: 'people', players: '2 vs 2', boules: '3 boules' },
+  'Triplette': { icon: 'groups', players: '3 vs 3', boules: '2 boules' },
+};
+
+const LEVEL_ICONS: Record<string, string> = {
+  'Loisir / Amical': 'sentiment-satisfied',
+  'Promotion': 'trending-up',
+  'Honneur': 'shield',
+  'Élite': 'diamond',
+  'Vétérans': 'elderly',
+  'Jeunes (Minimes)': 'child-care',
+  'Jeunes (Cadets)': 'school',
+  'Jeunes (Juniors)': 'sports',
+};
+
+// ============================================
+// SUB-COMPONENTS
+// ============================================
+function SectionCard({ children, title, subtitle, icon, color, delay = 0, required = false }: {
+  children: React.ReactNode;
+  title: string;
+  subtitle?: string;
+  icon: string;
+  color: string;
+  delay?: number;
+  required?: boolean;
+}) {
+  return (
+    <Animated.View entering={FadeInDown.duration(350).delay(delay)} style={styles.sectionCard}>
+      <View style={styles.sectionCardHeader}>
+        <View style={[styles.sectionCardIcon, { backgroundColor: color + '15' }]}>
+          <MaterialIcons name={icon as any} size={18} color={color} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={styles.sectionCardTitle}>{title}</Text>
+            {required && <View style={styles.requiredDot} />}
+          </View>
+          {subtitle ? <Text style={styles.sectionCardSubtitle}>{subtitle}</Text> : null}
+        </View>
+      </View>
+      {children}
+    </Animated.View>
+  );
+}
+
+function StepIndicator({ step, total, label }: { step: number; total: number; label: string }) {
+  const pct = Math.round((step / total) * 100);
+  return (
+    <View style={styles.stepIndicator}>
+      <View style={styles.stepBarTrack}>
+        <Animated.View entering={FadeIn.duration(600)} style={[styles.stepBarFill, { width: `${pct}%` }]} />
+      </View>
+      <Text style={styles.stepLabel}>{label}</Text>
+    </View>
+  );
+}
+
+// ============================================
+// MAIN COMPONENT
+// ============================================
 export default function NewTournamentScreen() {
   const insets = useSafeAreaInsets();
   const { addTournament, clubs, terrains } = useApp();
 
+  // Form state
   const [name, setName] = useState('');
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
-  const [type, setType] = useState<TournamentType>('Poules');
+  const [type, setType] = useState<TournamentType>('Mixte');
   const [format, setFormat] = useState<GameFormat>('Doublette');
   const [terrainId, setTerrainId] = useState<string | undefined>();
   const [manualLocation, setManualLocation] = useState<LocationData>({
-    address: '',
-    city: '',
-    country: 'France',
-    latitude: 0,
-    longitude: 0,
+    address: '', city: '', country: 'France', latitude: 0, longitude: 0,
   });
   const [clubId, setClubId] = useState<string | undefined>();
   const [maxParticipants, setMaxParticipants] = useState('32');
   const [prize, setPrize] = useState('');
   const [description, setDescription] = useState('');
   const [registrationCost, setRegistrationCost] = useState('');
-  // New tournament classification fields
   const [tournamentLevel, setTournamentLevel] = useState<TournamentLevel | string | undefined>();
   const [customLevel, setCustomLevel] = useState('');
   const [showCustomLevelInput, setShowCustomLevelInput] = useState(false);
@@ -99,10 +125,28 @@ export default function NewTournamentScreen() {
   const [registrationType, setRegistrationType] = useState<RegistrationType | undefined>();
   const [tournamentScope, setTournamentScope] = useState<TournamentScope | undefined>();
 
-  // Get selected terrain for display
   const selectedTerrain = terrains.find(t => t.id === terrainId);
 
-  // Helper function to determine status based on date
+  // Progress calculation
+  const progress = useMemo(() => {
+    let filled = 0;
+    const total = 4; // name, date, location, format
+    if (name.trim()) filled++;
+    filled++; // date always filled
+    if (terrainId || manualLocation.city.trim()) filled++;
+    filled++; // format always filled
+    return { filled, total };
+  }, [name, terrainId, manualLocation.city]);
+
+  const progressLabel = useMemo(() => {
+    if (!name.trim()) return 'Commencez par le nom du tournoi';
+    if (!terrainId && !manualLocation.city.trim()) return 'Choisissez un lieu';
+    return 'Prêt à créer le tournoi';
+  }, [name, terrainId, manualLocation.city]);
+
+  const canSave = name.trim() && (terrainId || manualLocation.city.trim());
+
+  // Status calculation
   const getStatusFromDate = (startDate: Date, end?: Date | null): 'À venir' | 'En cours' | 'Terminé' => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -123,16 +167,13 @@ export default function NewTournamentScreen() {
     setShowDatePicker(false);
     if (selectedDate) {
       setDate(selectedDate);
-      // If end date is before start date, reset it
       if (endDate && selectedDate > endDate) setEndDate(null);
     }
   };
 
   const handleEndDateChange = (event: any, selectedDate?: Date) => {
     setShowEndDatePicker(false);
-    if (selectedDate) {
-      setEndDate(selectedDate);
-    }
+    if (selectedDate) setEndDate(selectedDate);
   };
 
   const handleSave = () => {
@@ -185,33 +226,30 @@ export default function NewTournamentScreen() {
     <SafeAreaView edges={['top']} style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
+        <Pressable style={styles.headerBtn} onPress={() => router.back()}>
           <MaterialIcons name="close" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Nouveau tournoi</Text>
-        <View style={{ width: 40 }} />
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Nouveau tournoi</Text>
+        </View>
+        <View style={styles.headerBtn} />
       </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      {/* Progress */}
+      <StepIndicator step={progress.filled} total={progress.total} label={progressLabel} />
+
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Icon Preview */}
-          <Animated.View entering={FadeInDown.duration(400)} style={styles.iconSection}>
-            <View style={styles.tournamentIcon}>
-              <MaterialIcons name="emoji-events" size={48} color="#FFF" />
-            </View>
-          </Animated.View>
+
+          {/* =================== ESSENTIEL =================== */}
 
           {/* Name */}
-          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-            <Text style={styles.sectionTitle}>NOM DU TOURNOI *</Text>
+          <SectionCard title="Nom du tournoi" icon="emoji-events" color={theme.carreauColor} delay={50} required>
             <TextInput
               style={styles.textInput}
               value={name}
@@ -221,409 +259,192 @@ export default function NewTournamentScreen() {
               autoCapitalize="words"
               autoFocus
             />
-          </Animated.View>
+          </SectionCard>
 
           {/* Date */}
-          <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
-            <Text style={styles.sectionTitle}>DATE *</Text>
-            <Pressable 
-              style={styles.dateButton}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <MaterialIcons name="event" size={20} color={theme.primary} />
-              <Text style={styles.dateText}>
-                {date.toLocaleDateString('fr-FR', { 
-                  weekday: 'long',
-                  day: 'numeric', 
-                  month: 'long', 
-                  year: 'numeric' 
-                })}
-              </Text>
-            </Pressable>
-            {showDatePicker && (
-              <DateTimePicker
-                value={date}
-                mode="date"
-                display="default"
-                onChange={handleDateChange}
-                minimumDate={new Date()}
-              />
-            )}
+          <SectionCard title="Dates" subtitle={endDate ? 'Tournoi multi-jours' : 'Tournoi sur un jour'} icon="event" color={theme.primary} delay={100} required>
+            <View style={styles.dateRow}>
+              <Pressable style={[styles.dateCard, styles.dateCardStart]} onPress={() => setShowDatePicker(true)}>
+                <View style={styles.dateCardLabel}>
+                  <MaterialIcons name="today" size={14} color={theme.primary} />
+                  <Text style={styles.dateCardLabelText}>Début</Text>
+                </View>
+                <Text style={styles.dateCardDay}>{date.getDate()}</Text>
+                <Text style={styles.dateCardMonth}>
+                  {date.toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' })}
+                </Text>
+                <Text style={styles.dateCardWeekday}>
+                  {date.toLocaleDateString('fr-FR', { weekday: 'long' })}
+                </Text>
+              </Pressable>
 
-            {/* End Date */}
-            <View style={{ marginTop: 12 }}>
-              <Text style={[styles.sectionTitle, { marginBottom: 8 }]}>DATE DE FIN (optionnel)</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Pressable
-                  style={[styles.dateButton, { flex: 1 }]}
-                  onPress={() => setShowEndDatePicker(true)}
-                >
-                  <MaterialIcons name="event" size={20} color={endDate ? theme.accent : theme.textMuted} />
-                  <Text style={[styles.dateText, !endDate && { color: theme.textMuted }]}>
-                    {endDate
-                      ? endDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-                      : 'Tournoi sur un seul jour'
-                    }
-                  </Text>
-                </Pressable>
-                {endDate && (
-                  <Pressable
-                    style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.error + '15', borderRadius: theme.borderRadius.md }}
-                    onPress={() => { Haptics.selectionAsync(); setEndDate(null); }}
-                  >
-                    <MaterialIcons name="close" size={18} color={theme.error} />
-                  </Pressable>
+              <Pressable
+                style={[styles.dateCard, endDate ? styles.dateCardEnd : styles.dateCardAdd]}
+                onPress={() => setShowEndDatePicker(true)}
+              >
+                {endDate ? (
+                  <>
+                    <View style={styles.dateCardLabel}>
+                      <MaterialIcons name="event" size={14} color={theme.accent} />
+                      <Text style={[styles.dateCardLabelText, { color: theme.accent }]}>Fin</Text>
+                      <Pressable
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        onPress={(e) => { e.stopPropagation(); Haptics.selectionAsync(); setEndDate(null); }}
+                        style={styles.dateRemoveBtn}
+                      >
+                        <MaterialIcons name="close" size={12} color={theme.error} />
+                      </Pressable>
+                    </View>
+                    <Text style={[styles.dateCardDay, { color: theme.accent }]}>{endDate.getDate()}</Text>
+                    <Text style={styles.dateCardMonth}>
+                      {endDate.toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' })}
+                    </Text>
+                    <Text style={styles.dateCardWeekday}>
+                      {endDate.toLocaleDateString('fr-FR', { weekday: 'long' })}
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.addEndDateIcon}>
+                      <MaterialIcons name="add" size={24} color={theme.textMuted} />
+                    </View>
+                    <Text style={styles.addEndDateText}>Date de fin</Text>
+                    <Text style={styles.addEndDateHint}>Multi-jours</Text>
+                  </>
                 )}
-              </View>
-              {showEndDatePicker && (
-                <DateTimePicker
-                  value={endDate || date}
-                  mode="date"
-                  display="default"
-                  onChange={handleEndDateChange}
-                  minimumDate={date}
-                />
-              )}
+              </Pressable>
             </View>
-          </Animated.View>
+            {showDatePicker && (
+              <DateTimePicker value={date} mode="date" display="default" onChange={handleDateChange} minimumDate={new Date()} />
+            )}
+            {showEndDatePicker && (
+              <DateTimePicker value={endDate || date} mode="date" display="default" onChange={handleEndDateChange} minimumDate={date} />
+            )}
+          </SectionCard>
 
-          {/* Type */}
-          <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-            <Text style={styles.sectionTitle}>CADRAGE</Text>
-            <View style={styles.typeContainer}>
-              {config.tournamentTypes.map(t => (
-                <Pressable
-                  key={t}
-                  style={[
-                    styles.typeChip,
-                    type === t && styles.typeChipActive
-                  ]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setType(t);
-                  }}
-                >
-                  <Text style={[
-                    styles.typeText,
-                    type === t && styles.typeTextActive
-                  ]}>
-                    {t}
-                  </Text>
-                </Pressable>
-              ))}
+          {/* Format */}
+          <SectionCard title="Format de jeu" icon="groups" color={theme.accent} delay={150} required>
+            <View style={styles.formatGrid}>
+              {config.game.formats.map(f => {
+                const cfg = FORMAT_CONFIG[f];
+                const isActive = format === f;
+                return (
+                  <Pressable
+                    key={f}
+                    style={[styles.formatCard, isActive && styles.formatCardActive]}
+                    onPress={() => { Haptics.selectionAsync(); setFormat(f); }}
+                  >
+                    <View style={[styles.formatCardIconBox, isActive && styles.formatCardIconBoxActive]}>
+                      <MaterialIcons name={cfg.icon as any} size={22} color={isActive ? '#FFF' : theme.textSecondary} />
+                    </View>
+                    <Text style={[styles.formatCardName, isActive && styles.formatCardNameActive]}>{f}</Text>
+                    <Text style={styles.formatCardMeta}>{cfg.players}</Text>
+                    <Text style={styles.formatCardMeta}>{cfg.boules}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
+          </SectionCard>
 
-            {/* Cadrage Rules Info */}
-            {type && CADRAGE_RULES[type] && (
-              <Animated.View entering={FadeInDown.duration(300)} style={styles.cadrageRulesCard}>
-                <View style={styles.cadrageRulesHeader}>
-                  <MaterialIcons name="info-outline" size={20} color={theme.primary} />
-                  <Text style={styles.cadrageRulesTitle}>{CADRAGE_RULES[type].description}</Text>
+          {/* Cadrage */}
+          <SectionCard title="Cadrage" subtitle="Type de compétition" icon="account-tree" color={theme.tirColor} delay={200}>
+            <View style={styles.cadrageGrid}>
+              {config.tournamentTypes.map(t => {
+                const cfg = CADRAGE_CONFIG[t];
+                const isActive = type === t;
+                return (
+                  <Pressable
+                    key={t}
+                    style={[styles.cadrageChip, isActive && styles.cadrageChipActive]}
+                    onPress={() => { Haptics.selectionAsync(); setType(t); }}
+                  >
+                    <MaterialIcons name={cfg.icon as any} size={16} color={isActive ? theme.tirColor : theme.textMuted} />
+                    <Text style={[styles.cadrageChipText, isActive && styles.cadrageChipTextActive]}>{t}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {/* Cadrage Info */}
+            {type && CADRAGE_CONFIG[type] && (
+              <Animated.View entering={FadeIn.duration(250)} style={styles.cadrageInfo}>
+                <View style={styles.cadrageInfoHeader}>
+                  <MaterialIcons name="info-outline" size={16} color={theme.tirColor} />
+                  <Text style={styles.cadrageInfoTitle}>{CADRAGE_CONFIG[type].description}</Text>
                 </View>
-                <View style={styles.cadrageRulesStats}>
-                  <View style={styles.cadrageRulesStat}>
-                    <MaterialIcons name="sports" size={16} color={theme.textSecondary} />
-                    <Text style={styles.cadrageRulesStatText}>{CADRAGE_RULES[type].matches}</Text>
+                <View style={styles.cadrageInfoStats}>
+                  <View style={styles.cadrageInfoStat}>
+                    <MaterialIcons name="sports" size={13} color={theme.textMuted} />
+                    <Text style={styles.cadrageInfoStatText}>{CADRAGE_CONFIG[type].matches}</Text>
                   </View>
-                  <View style={styles.cadrageRulesStat}>
-                    <MaterialIcons name="flag" size={16} color={theme.textSecondary} />
-                    <Text style={styles.cadrageRulesStatText}>{CADRAGE_RULES[type].points}</Text>
+                  <View style={styles.cadrageInfoStat}>
+                    <MaterialIcons name="flag" size={13} color={theme.textMuted} />
+                    <Text style={styles.cadrageInfoStatText}>{CADRAGE_CONFIG[type].points}</Text>
                   </View>
                 </View>
-                <View style={styles.cadrageRulesSpecifics}>
-                  {CADRAGE_RULES[type].specifics.map((spec, index) => (
-                    <View key={index} style={styles.cadrageRulesSpecificItem}>
-                      <View style={styles.cadrageRulesSpecificDot} />
-                      <Text style={styles.cadrageRulesSpecificText}>{spec}</Text>
+                <View style={styles.cadrageInfoBullets}>
+                  {CADRAGE_CONFIG[type].specifics.map((s, i) => (
+                    <View key={i} style={styles.cadrageInfoBullet}>
+                      <View style={styles.bulletDot} />
+                      <Text style={styles.bulletText}>{s}</Text>
                     </View>
                   ))}
                 </View>
               </Animated.View>
             )}
-          </Animated.View>
+          </SectionCard>
 
-          {/* Tournament Level */}
-          <Animated.View entering={FadeInDown.duration(400).delay(225)} style={styles.section}>
-            <Text style={styles.sectionTitle}>NIVEAU DU TOURNOI</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
-              {config.tournamentLevels.map(level => (
-                <Pressable
-                  key={level}
-                  style={[
-                    styles.levelChip,
-                    tournamentLevel === level && !showCustomLevelInput && styles.levelChipActive
-                  ]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setShowCustomLevelInput(false);
-                    setCustomLevel('');
-                    setTournamentLevel(tournamentLevel === level ? undefined : level);
-                  }}
-                >
-                  <Text style={[
-                    styles.levelChipText,
-                    tournamentLevel === level && !showCustomLevelInput && styles.levelChipTextActive
-                  ]}>
-                    {level}
-                  </Text>
-                </Pressable>
-              ))}
-              {/* Custom Level Option */}
-              <Pressable
-                style={[
-                  styles.levelChip,
-                  styles.customLevelChip,
-                  showCustomLevelInput && styles.levelChipActive
-                ]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setShowCustomLevelInput(!showCustomLevelInput);
-                  if (!showCustomLevelInput) {
-                    setTournamentLevel(undefined);
-                  }
-                }}
-              >
-                <MaterialIcons 
-                  name="add" 
-                  size={16} 
-                  color={showCustomLevelInput ? theme.success : theme.textSecondary} 
-                />
-                <Text style={[
-                  styles.levelChipText,
-                  showCustomLevelInput && styles.levelChipTextActive
-                ]}>
-                  Autre
-                </Text>
-              </Pressable>
-            </ScrollView>
-            
-            {/* Custom Level Input */}
-            {showCustomLevelInput && (
-              <Animated.View entering={FadeInDown.duration(300)} style={styles.customLevelInputContainer}>
-                <TextInput
-                  style={styles.customLevelInput}
-                  value={customLevel}
-                  onChangeText={(text) => {
-                    setCustomLevel(text);
-                    setTournamentLevel(text.trim() || undefined);
-                  }}
-                  placeholder="Saisir un niveau personnalisé..."
-                  placeholderTextColor={theme.textMuted}
-                  autoFocus
-                />
-                {customLevel.trim() && (
-                  <View style={styles.customLevelBadge}>
-                    <MaterialIcons name="check" size={14} color={theme.success} />
-                  </View>
-                )}
-              </Animated.View>
-            )}
-          </Animated.View>
-
-          {/* Tournament Category */}
-          <Animated.View entering={FadeInDown.duration(400).delay(235)} style={styles.section}>
-            <Text style={styles.sectionTitle}>TYPE DE TOURNOI</Text>
-            <View style={styles.categoryContainer}>
-              {config.tournamentCategories.map(cat => (
-                <Pressable
-                  key={cat}
-                  style={[
-                    styles.categoryChip,
-                    tournamentCategory === cat && styles.categoryChipActive
-                  ]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setTournamentCategory(tournamentCategory === cat ? undefined : cat);
-                  }}
-                >
-                  <Text style={[
-                    styles.categoryChipText,
-                    tournamentCategory === cat && styles.categoryChipTextActive
-                  ]}>
-                    {cat}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </Animated.View>
-
-          {/* Registration Type */}
-          <Animated.View entering={FadeInDown.duration(400).delay(245)} style={styles.section}>
-            <Text style={styles.sectionTitle}>TYPE D'INSCRIPTION</Text>
-            <View style={styles.registrationContainer}>
-              {config.registrationTypes.map(reg => (
-                <Pressable
-                  key={reg}
-                  style={[
-                    styles.registrationChip,
-                    registrationType === reg && styles.registrationChipActive
-                  ]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setRegistrationType(registrationType === reg ? undefined : reg);
-                  }}
-                >
-                  <Text style={[
-                    styles.registrationChipText,
-                    registrationType === reg && styles.registrationChipTextActive
-                  ]}>
-                    {reg}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </Animated.View>
-
-          {/* Tournament Scope */}
-          <Animated.View entering={FadeInDown.duration(400).delay(248)} style={styles.section}>
-            <Text style={styles.sectionTitle}>CADRE</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
-              {config.tournamentScopes.map(scope => (
-                <Pressable
-                  key={scope}
-                  style={[
-                    styles.scopeChip,
-                    tournamentScope === scope && styles.scopeChipActive
-                  ]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setTournamentScope(tournamentScope === scope ? undefined : scope);
-                  }}
-                >
-                  <Text style={[
-                    styles.scopeChipText,
-                    tournamentScope === scope && styles.scopeChipTextActive
-                  ]}>
-                    {scope}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </Animated.View>
-
-          {/* Format */}
-          <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-            <Text style={styles.sectionTitle}>FORMAT</Text>
-            <View style={styles.formatContainer}>
-              {config.game.formats.map(f => (
-                <Pressable
-                  key={f}
-                  style={[
-                    styles.formatChip,
-                    format === f && styles.formatChipActive
-                  ]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setFormat(f);
-                  }}
-                >
-                  <Text style={[
-                    styles.formatText,
-                    format === f && styles.formatTextActive
-                  ]}>
-                    {f}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </Animated.View>
+          {/* =================== LIEU =================== */}
 
           {/* Terrain */}
-          <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>TERRAIN *</Text>
-              <Pressable 
-                style={styles.addTerrainButton}
-                onPress={() => router.push('/terrain/new')}
-              >
-                <MaterialIcons name="add" size={16} color={theme.primary} />
-                <Text style={styles.addTerrainText}>Ajouter</Text>
+          <SectionCard title="Lieu" icon="place" color={theme.success} delay={250} required>
+            <View style={styles.terrainHeaderRow}>
+              <Text style={styles.fieldHint}>Sélectionnez un terrain enregistré ou saisissez une adresse</Text>
+              <Pressable style={styles.addTerrainBtn} onPress={() => router.push('/terrain/new')}>
+                <MaterialIcons name="add" size={14} color={theme.primary} />
+                <Text style={styles.addTerrainBtnText}>Terrain</Text>
               </Pressable>
             </View>
-            
+
             {terrains.length > 0 ? (
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.terrainsScroll}
-              >
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.terrainsScroll}>
                 <Pressable
-                  style={[
-                    styles.terrainChip,
-                    !terrainId && styles.terrainChipActive
-                  ]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setTerrainId(undefined);
-                  }}
+                  style={[styles.terrainOption, !terrainId && styles.terrainOptionActive]}
+                  onPress={() => { Haptics.selectionAsync(); setTerrainId(undefined); }}
                 >
-                  <MaterialIcons 
-                    name="edit-location" 
-                    size={18} 
-                    color={!terrainId ? theme.primary : theme.textSecondary} 
-                  />
-                  <Text style={[
-                    styles.terrainChipText,
-                    !terrainId && styles.terrainChipTextActive
-                  ]}>
-                    Autre lieu
-                  </Text>
+                  <MaterialIcons name="edit-location" size={20} color={!terrainId ? theme.success : theme.textMuted} />
+                  <Text style={[styles.terrainOptionText, !terrainId && styles.terrainOptionTextActive]}>Autre lieu</Text>
                 </Pressable>
                 {terrains.map(terrain => {
-                  const typeConfig = config.terrainTypes.find(t => t.id === terrain.type);
+                  const tc = config.terrainTypes.find(t => t.id === terrain.type);
+                  const isActive = terrainId === terrain.id;
                   return (
                     <Pressable
                       key={terrain.id}
-                      style={[
-                        styles.terrainCard,
-                        terrainId === terrain.id && styles.terrainCardActive
-                      ]}
-                      onPress={() => {
-                        Haptics.selectionAsync();
-                        setTerrainId(terrain.id);
-                      }}
+                      style={[styles.terrainCardNew, isActive && styles.terrainCardNewActive]}
+                      onPress={() => { Haptics.selectionAsync(); setTerrainId(terrain.id); }}
                     >
-                      <View style={[
-                        styles.terrainCardIcon,
-                        terrainId === terrain.id && styles.terrainCardIconActive
-                      ]}>
-                        <MaterialIcons 
-                          name={typeConfig?.icon as any || 'landscape'} 
-                          size={20} 
-                          color={terrainId === terrain.id ? '#FFF' : theme.textSecondary} 
-                        />
+                      <View style={[styles.terrainCardNewIcon, isActive && styles.terrainCardNewIconActive]}>
+                        <MaterialIcons name={(tc?.icon as any) || 'landscape'} size={18} color={isActive ? '#FFF' : theme.textSecondary} />
                       </View>
-                      <Text style={[
-                        styles.terrainCardName,
-                        terrainId === terrain.id && styles.terrainCardNameActive
-                      ]} numberOfLines={1}>
-                        {terrain.name}
-                      </Text>
-                      <Text style={styles.terrainCardCity}>{terrain.city}</Text>
-                      <View style={styles.terrainCardType}>
-                        <Text style={styles.terrainCardTypeText}>{terrain.type}</Text>
-                      </View>
+                      <Text style={[styles.terrainCardNewName, isActive && styles.terrainCardNewNameActive]} numberOfLines={1}>{terrain.name}</Text>
+                      <Text style={styles.terrainCardNewCity}>{terrain.city}</Text>
                     </Pressable>
                   );
                 })}
               </ScrollView>
             ) : (
-              <View style={styles.noTerrainsContainer}>
-                <MaterialIcons name="sports-soccer" size={40} color={theme.textMuted} />
+              <View style={styles.noTerrainsBox}>
+                <MaterialIcons name="landscape" size={32} color={theme.textMuted} />
                 <Text style={styles.noTerrainsText}>Aucun terrain enregistré</Text>
-                <Pressable 
-                  style={styles.createTerrainButton}
-                  onPress={() => router.push('/terrain/new')}
-                >
-                  <MaterialIcons name="add" size={18} color={theme.primary} />
-                  <Text style={styles.createTerrainButtonText}>Créer un terrain</Text>
+                <Pressable style={styles.createTerrainBtn} onPress={() => router.push('/terrain/new')}>
+                  <MaterialIcons name="add" size={16} color={theme.primary} />
+                  <Text style={styles.createTerrainBtnText}>Créer un terrain</Text>
                 </Pressable>
               </View>
             )}
 
-            {/* Show manual location fields only if no terrain selected */}
             {!terrainId && (
-              <Animated.View entering={FadeInDown.duration(300)} style={styles.manualLocationContainer}>
+              <Animated.View entering={FadeInDown.duration(250)} style={{ marginTop: 16 }}>
                 <LocationPicker
                   label="LIEU DU TOURNOI"
                   value={manualLocation}
@@ -635,140 +456,205 @@ export default function NewTournamentScreen() {
               </Animated.View>
             )}
 
-            {/* Show selected terrain info */}
-            {selectedTerrain && (
-              <Animated.View entering={FadeInDown.duration(300)} style={styles.selectedTerrainInfo}>
-                <MaterialIcons name="place" size={18} color={theme.success} />
-                <Text style={styles.selectedTerrainText}>
-                  {selectedTerrain.address}, {selectedTerrain.city}
+            {selectedTerrain ? (
+              <Animated.View entering={FadeIn.duration(200)} style={styles.selectedTerrainBanner}>
+                <MaterialIcons name="check-circle" size={16} color={theme.success} />
+                <Text style={styles.selectedTerrainBannerText}>
+                  {selectedTerrain.name} — {selectedTerrain.address}, {selectedTerrain.city}
                 </Text>
               </Animated.View>
-            )}
-          </Animated.View>
+            ) : null}
+          </SectionCard>
 
-          {/* Organizing Club */}
-          <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
-            <Text style={styles.sectionTitle}>CLUB ORGANISATEUR</Text>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.clubsScroll}
-            >
+          {/* Club */}
+          <SectionCard title="Club organisateur" icon="home-work" color={theme.primaryLight} delay={300}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
               <Pressable
-                style={[
-                  styles.clubChip,
-                  !clubId && styles.clubChipActive
-                ]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setClubId(undefined);
-                }}
+                style={[styles.chipBtn, !clubId && styles.chipBtnActive]}
+                onPress={() => { Haptics.selectionAsync(); setClubId(undefined); }}
               >
-                <Text style={[
-                  styles.clubChipText,
-                  !clubId && styles.clubChipTextActive
-                ]}>
-                  Aucun
-                </Text>
+                <Text style={[styles.chipBtnText, !clubId && styles.chipBtnTextActive]}>Aucun</Text>
               </Pressable>
               {clubs.map(club => (
                 <Pressable
                   key={club.id}
-                  style={[
-                    styles.clubChip,
-                    clubId === club.id && styles.clubChipActive
-                  ]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setClubId(club.id);
-                  }}
+                  style={[styles.chipBtn, clubId === club.id && styles.chipBtnActive]}
+                  onPress={() => { Haptics.selectionAsync(); setClubId(club.id); }}
                 >
-                  <Text style={[
-                    styles.clubChipText,
-                    clubId === club.id && styles.clubChipTextActive
-                  ]}>
-                    {club.name}
-                  </Text>
+                  <Text style={[styles.chipBtnText, clubId === club.id && styles.chipBtnTextActive]}>{club.name}</Text>
                 </Pressable>
               ))}
             </ScrollView>
-          </Animated.View>
+          </SectionCard>
 
-          {/* Max Participants */}
-          <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
-            <Text style={styles.sectionTitle}>NOMBRE MAX DE PARTICIPANTS</Text>
-            <View style={styles.participantsContainer}>
-              {['16', '24', '32', '48', '64'].map(num => (
-                <Pressable
-                  key={num}
-                  style={[
-                    styles.participantChip,
-                    maxParticipants === num && styles.participantChipActive
-                  ]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setMaxParticipants(num);
-                  }}
-                >
-                  <Text style={[
-                    styles.participantText,
-                    maxParticipants === num && styles.participantTextActive
-                  ]}>
-                    {num}
-                  </Text>
-                </Pressable>
-              ))}
+          {/* =================== CLASSIFICATION =================== */}
+
+          {/* Tournament Level */}
+          <SectionCard title="Niveau" subtitle="Classement du tournoi" icon="signal-cellular-alt" color={theme.success} delay={350}>
+            <View style={styles.levelGrid}>
+              {config.tournamentLevels.map(level => {
+                const isActive = tournamentLevel === level && !showCustomLevelInput;
+                const ico = LEVEL_ICONS[level] || 'star';
+                return (
+                  <Pressable
+                    key={level}
+                    style={[styles.levelChip, isActive && styles.levelChipActive]}
+                    onPress={() => { Haptics.selectionAsync(); setShowCustomLevelInput(false); setCustomLevel(''); setTournamentLevel(tournamentLevel === level ? undefined : level); }}
+                  >
+                    <MaterialIcons name={ico as any} size={14} color={isActive ? theme.success : theme.textMuted} />
+                    <Text style={[styles.levelChipText, isActive && styles.levelChipTextActive]} numberOfLines={1}>{level}</Text>
+                  </Pressable>
+                );
+              })}
+              <Pressable
+                style={[styles.levelChip, showCustomLevelInput && styles.levelChipActive]}
+                onPress={() => { Haptics.selectionAsync(); setShowCustomLevelInput(!showCustomLevelInput); if (!showCustomLevelInput) setTournamentLevel(undefined); }}
+              >
+                <MaterialIcons name="add" size={14} color={showCustomLevelInput ? theme.success : theme.textMuted} />
+                <Text style={[styles.levelChipText, showCustomLevelInput && styles.levelChipTextActive]}>Autre</Text>
+              </Pressable>
             </View>
-          </Animated.View>
+            {showCustomLevelInput && (
+              <Animated.View entering={FadeInDown.duration(250)} style={styles.customInput}>
+                <TextInput
+                  style={styles.customInputField}
+                  value={customLevel}
+                  onChangeText={(text) => { setCustomLevel(text); setTournamentLevel(text.trim() || undefined); }}
+                  placeholder="Niveau personnalisé..."
+                  placeholderTextColor={theme.textMuted}
+                  autoFocus
+                />
+                {customLevel.trim() ? <MaterialIcons name="check-circle" size={18} color={theme.success} /> : null}
+              </Animated.View>
+            )}
+          </SectionCard>
 
-          {/* Registration Cost */}
-          <Animated.View entering={FadeInDown.duration(400).delay(450)} style={styles.section}>
-            <Text style={styles.sectionTitle}>COÛT D'INSCRIPTION (€)</Text>
-            <TextInput
-              style={styles.textInput}
-              value={registrationCost}
-              onChangeText={setRegistrationCost}
-              placeholder="Ex: 15"
-              placeholderTextColor={theme.textMuted}
-              keyboardType="numeric"
-            />
-          </Animated.View>
+          {/* Tournament Category */}
+          <SectionCard title="Type de tournoi" icon="verified" color={theme.warning} delay={375}>
+            <View style={styles.chipGrid}>
+              {config.tournamentCategories.map(cat => {
+                const isActive = tournamentCategory === cat;
+                return (
+                  <Pressable
+                    key={cat}
+                    style={[styles.chipOutline, isActive && styles.chipOutlineActiveWarn]}
+                    onPress={() => { Haptics.selectionAsync(); setTournamentCategory(tournamentCategory === cat ? undefined : cat); }}
+                  >
+                    <Text style={[styles.chipOutlineText, isActive && styles.chipOutlineTextWarn]}>{cat}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </SectionCard>
 
-          {/* Prize */}
-          <Animated.View entering={FadeInDown.duration(400).delay(475)} style={styles.section}>
-            <Text style={styles.sectionTitle}>DOTATION</Text>
-            <TextInput
-              style={styles.textInput}
-              value={prize}
-              onChangeText={setPrize}
-              placeholder="Ex: 500€, Trophées..."
-              placeholderTextColor={theme.textMuted}
-            />
-          </Animated.View>
+          {/* Registration & Scope in one row */}
+          <View style={styles.twoColRow}>
+            <SectionCard title="Inscription" icon="how-to-reg" color={theme.primary} delay={400}>
+              <View style={styles.chipGrid}>
+                {config.registrationTypes.map(reg => {
+                  const isActive = registrationType === reg;
+                  return (
+                    <Pressable
+                      key={reg}
+                      style={[styles.chipOutline, isActive && styles.chipOutlineActivePrimary]}
+                      onPress={() => { Haptics.selectionAsync(); setRegistrationType(registrationType === reg ? undefined : reg); }}
+                    >
+                      <Text style={[styles.chipOutlineText, isActive && styles.chipOutlineTextPrimary]}>{reg}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </SectionCard>
+          </View>
+
+          <SectionCard title="Cadre" subtitle="Niveau de compétition" icon="public" color={theme.accent} delay={425}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
+              {config.tournamentScopes.map(scope => {
+                const isActive = tournamentScope === scope;
+                return (
+                  <Pressable
+                    key={scope}
+                    style={[styles.chipBtn, isActive && styles.chipBtnActiveAccent]}
+                    onPress={() => { Haptics.selectionAsync(); setTournamentScope(tournamentScope === scope ? undefined : scope); }}
+                  >
+                    <Text style={[styles.chipBtnText, isActive && styles.chipBtnTextAccent]}>{scope}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </SectionCard>
+
+          {/* =================== DÉTAILS =================== */}
+
+          {/* Participants */}
+          <SectionCard title="Participants max" icon="people-outline" color={theme.carreauColor} delay={450}>
+            <View style={styles.participantsRow}>
+              {['8', '16', '24', '32', '48', '64', '128'].map(num => {
+                const isActive = maxParticipants === num;
+                return (
+                  <Pressable
+                    key={num}
+                    style={[styles.participantPill, isActive && styles.participantPillActive]}
+                    onPress={() => { Haptics.selectionAsync(); setMaxParticipants(num); }}
+                  >
+                    <Text style={[styles.participantPillText, isActive && styles.participantPillTextActive]}>{num}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </SectionCard>
+
+          {/* Financial & Prize */}
+          <SectionCard title="Finances" subtitle="Inscription et dotation" icon="payments" color={theme.carreauColor} delay={475}>
+            <View style={styles.financeRow}>
+              <View style={styles.financeField}>
+                <Text style={styles.financeLabel}>Inscription (€)</Text>
+                <TextInput
+                  style={styles.financeInput}
+                  value={registrationCost}
+                  onChangeText={setRegistrationCost}
+                  placeholder="0"
+                  placeholderTextColor={theme.textMuted}
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={styles.financeField}>
+                <Text style={styles.financeLabel}>Dotation</Text>
+                <TextInput
+                  style={styles.financeInput}
+                  value={prize}
+                  onChangeText={setPrize}
+                  placeholder="Trophées..."
+                  placeholderTextColor={theme.textMuted}
+                />
+              </View>
+            </View>
+          </SectionCard>
 
           {/* Description */}
-          <Animated.View entering={FadeInDown.duration(400).delay(525)} style={styles.section}>
-            <Text style={styles.sectionTitle}>DESCRIPTION</Text>
+          <SectionCard title="Description" subtitle="Informations complémentaires" icon="description" color={theme.textSecondary} delay={500}>
             <TextInput
               style={[styles.textInput, styles.textArea]}
               value={description}
               onChangeText={setDescription}
-              placeholder="Informations complémentaires..."
+              placeholder="Règlement, horaires, remarques..."
               placeholderTextColor={theme.textMuted}
               multiline
               numberOfLines={4}
               textAlignVertical="top"
             />
-          </Animated.View>
+          </SectionCard>
+
         </ScrollView>
 
         {/* Save Button */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-          <Pressable 
-            style={[styles.saveButton, (!name.trim() || (!terrainId && !manualLocation.city.trim())) && styles.saveButtonDisabled]} 
+          <Pressable
+            style={({ pressed }) => [styles.saveButton, !canSave && styles.saveButtonDisabled, pressed && canSave && styles.saveButtonPressed]}
             onPress={handleSave}
+            disabled={!canSave}
           >
-            <MaterialIcons name="check" size={24} color="#FFF" />
+            <MaterialIcons name="emoji-events" size={22} color="#FFF" />
             <Text style={styles.saveButtonText}>Créer le tournoi</Text>
           </Pressable>
         </View>
@@ -777,547 +663,233 @@ export default function NewTournamentScreen() {
   );
 }
 
+// ============================================
+// STYLES
+// ============================================
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.backgroundSecondary,
-  },
+  container: { flex: 1, backgroundColor: theme.backgroundSecondary },
+
+  // Header
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: theme.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 12, paddingVertical: 10,
+    backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+  headerBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerCenter: { flex: 1, alignItems: 'center' },
+  headerTitle: { fontSize: 17, fontWeight: '700', color: theme.textPrimary },
+
+  // Progress
+  stepIndicator: { paddingHorizontal: 16, paddingVertical: 10, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  stepBarTrack: { height: 4, backgroundColor: theme.border, borderRadius: 2, overflow: 'hidden', marginBottom: 6 },
+  stepBarFill: { height: '100%', backgroundColor: theme.carreauColor, borderRadius: 2 },
+  stepLabel: { fontSize: 11, color: theme.textSecondary, fontWeight: '500' },
+
+  // Scroll
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
+
+  // Section Card
+  sectionCard: {
+    backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg,
+    padding: 16, marginBottom: 14, ...theme.shadows.card,
   },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 24,
-  },
-  iconSection: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  tournamentIcon: {
-    width: 100,
-    height: 100,
-    borderRadius: 20,
-    backgroundColor: theme.carreauColor,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textSecondary,
-    letterSpacing: 1,
-    marginBottom: 12,
-  },
+  sectionCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+  sectionCardIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  sectionCardTitle: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
+  sectionCardSubtitle: { fontSize: 11, color: theme.textMuted, marginTop: 1 },
+  requiredDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.error },
+
+  // Text Input
   textInput: {
-    backgroundColor: theme.surface,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: theme.borderRadius.md,
-    fontSize: 16,
-    color: theme.textPrimary,
-    ...theme.shadows.card,
+    backgroundColor: theme.backgroundSecondary, paddingHorizontal: 14, paddingVertical: 13,
+    borderRadius: theme.borderRadius.md, fontSize: 15, color: theme.textPrimary,
+    borderWidth: 1, borderColor: theme.border,
   },
-  textArea: {
-    minHeight: 100,
-    paddingTop: 14,
+  textArea: { minHeight: 90, paddingTop: 13 },
+
+  // Date Cards
+  dateRow: { flexDirection: 'row', gap: 12 },
+  dateCard: {
+    flex: 1, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md,
+    padding: 14, alignItems: 'center', borderWidth: 2, borderColor: 'transparent',
   },
-  dateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: theme.surface,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: theme.borderRadius.md,
-    ...theme.shadows.card,
+  dateCardStart: { borderColor: theme.primary + '40' },
+  dateCardEnd: { borderColor: theme.accent + '40' },
+  dateCardAdd: { borderStyle: 'dashed' as any, borderColor: theme.textMuted + '40', justifyContent: 'center' },
+  dateCardLabel: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6, alignSelf: 'flex-start' },
+  dateCardLabelText: { fontSize: 10, fontWeight: '600', color: theme.primary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  dateCardDay: { fontSize: 32, fontWeight: '800', color: theme.primary },
+  dateCardMonth: { fontSize: 12, color: theme.textSecondary, fontWeight: '500', marginTop: 2, textTransform: 'capitalize' },
+  dateCardWeekday: { fontSize: 11, color: theme.textMuted, textTransform: 'capitalize', marginTop: 1 },
+  dateRemoveBtn: { marginLeft: 'auto', width: 20, height: 20, borderRadius: 10, backgroundColor: theme.error + '15', alignItems: 'center', justifyContent: 'center' },
+  addEndDateIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.textMuted + '15', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  addEndDateText: { fontSize: 12, fontWeight: '600', color: theme.textMuted },
+  addEndDateHint: { fontSize: 10, color: theme.textMuted + 'AA', marginTop: 2 },
+
+  // Format Cards
+  formatGrid: { flexDirection: 'row', gap: 10 },
+  formatCard: {
+    flex: 1, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md,
+    padding: 14, alignItems: 'center', borderWidth: 2, borderColor: 'transparent',
   },
-  dateText: {
-    fontSize: 16,
-    color: theme.textPrimary,
-    textTransform: 'capitalize',
+  formatCardActive: { borderColor: theme.accent, backgroundColor: theme.accent + '08' },
+  formatCardIconBox: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: theme.textMuted + '15',
+    alignItems: 'center', justifyContent: 'center', marginBottom: 10,
   },
-  typeContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
+  formatCardIconBoxActive: { backgroundColor: theme.accent },
+  formatCardName: { fontSize: 13, fontWeight: '700', color: theme.textPrimary, marginBottom: 4 },
+  formatCardNameActive: { color: theme.accent },
+  formatCardMeta: { fontSize: 10, color: theme.textMuted },
+
+  // Cadrage
+  cadrageGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  cadrageChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 10,
+    backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md,
+    borderWidth: 1.5, borderColor: 'transparent',
   },
-  typeChip: {
-    minWidth: '30%',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    ...theme.shadows.card,
+  cadrageChipActive: { borderColor: theme.tirColor, backgroundColor: theme.tirColor + '08' },
+  cadrageChipText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  cadrageChipTextActive: { color: theme.tirColor },
+  cadrageInfo: {
+    marginTop: 12, padding: 12, backgroundColor: theme.tirColor + '06',
+    borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.tirColor + '15',
   },
-  typeChipActive: {
-    borderColor: theme.primary,
-    backgroundColor: theme.primary + '10',
+  cadrageInfoHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  cadrageInfoTitle: { fontSize: 13, fontWeight: '600', color: theme.tirColor, flex: 1 },
+  cadrageInfoStats: { flexDirection: 'row', gap: 16, marginBottom: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: theme.tirColor + '10' },
+  cadrageInfoStat: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  cadrageInfoStatText: { fontSize: 12, color: theme.textSecondary, fontWeight: '500' },
+  cadrageInfoBullets: { gap: 5 },
+  cadrageInfoBullet: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  bulletDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: theme.tirColor },
+  bulletText: { fontSize: 12, color: theme.textSecondary },
+
+  // Terrain
+  terrainHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  fieldHint: { flex: 1, fontSize: 11, color: theme.textMuted },
+  addTerrainBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 5, backgroundColor: theme.primary + '12', borderRadius: theme.borderRadius.sm,
   },
-  typeText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textSecondary,
+  addTerrainBtnText: { fontSize: 11, fontWeight: '600', color: theme.primary },
+  terrainsScroll: { gap: 10, paddingBottom: 2 },
+  terrainOption: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 14, paddingVertical: 12,
+    backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md,
+    borderWidth: 1.5, borderColor: 'transparent',
   },
-  typeTextActive: {
-    color: theme.primary,
+  terrainOptionActive: { borderColor: theme.success, backgroundColor: theme.success + '08' },
+  terrainOptionText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
+  terrainOptionTextActive: { color: theme.success },
+  terrainCardNew: {
+    width: 130, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md,
+    padding: 12, alignItems: 'center', borderWidth: 1.5, borderColor: 'transparent',
   },
-  formatContainer: {
-    flexDirection: 'row',
-    gap: 10,
+  terrainCardNewActive: { borderColor: theme.success, backgroundColor: theme.success + '08' },
+  terrainCardNewIcon: {
+    width: 36, height: 36, borderRadius: 10, backgroundColor: theme.textMuted + '15',
+    alignItems: 'center', justifyContent: 'center', marginBottom: 6,
   },
-  formatChip: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 12,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    ...theme.shadows.card,
+  terrainCardNewIconActive: { backgroundColor: theme.success },
+  terrainCardNewName: { fontSize: 12, fontWeight: '600', color: theme.textPrimary, textAlign: 'center', marginBottom: 2 },
+  terrainCardNewNameActive: { color: theme.success },
+  terrainCardNewCity: { fontSize: 10, color: theme.textMuted },
+  noTerrainsBox: {
+    backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md,
+    padding: 20, alignItems: 'center', gap: 8, borderWidth: 1, borderColor: theme.border, borderStyle: 'dashed' as any,
   },
-  formatChipActive: {
-    borderColor: theme.accent,
-    backgroundColor: theme.accent + '10',
+  noTerrainsText: { fontSize: 13, color: theme.textMuted },
+  createTerrainBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 14, paddingVertical: 8, backgroundColor: theme.primary + '15', borderRadius: theme.borderRadius.md,
   },
-  formatText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textSecondary,
+  createTerrainBtnText: { fontSize: 13, fontWeight: '600', color: theme.primary },
+  selectedTerrainBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12,
+    paddingHorizontal: 12, paddingVertical: 10, backgroundColor: theme.success + '08',
+    borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.success + '20',
   },
-  formatTextActive: {
-    color: theme.accent,
+  selectedTerrainBannerText: { fontSize: 12, color: theme.success, flex: 1, fontWeight: '500' },
+
+  // Chips (generic)
+  chipScroll: { gap: 8 },
+  chipBtn: {
+    paddingHorizontal: 14, paddingVertical: 10, backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.full, borderWidth: 1.5, borderColor: 'transparent',
   },
-  clubsScroll: {
-    gap: 10,
+  chipBtnActive: { borderColor: theme.primary, backgroundColor: theme.primary + '08' },
+  chipBtnActiveAccent: { borderColor: theme.accent, backgroundColor: theme.accent + '08' },
+  chipBtnText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  chipBtnTextActive: { color: theme.primary },
+  chipBtnTextAccent: { color: theme.accent },
+  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chipOutline: {
+    paddingHorizontal: 12, paddingVertical: 9, backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.md, borderWidth: 1.5, borderColor: 'transparent',
   },
-  clubChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    ...theme.shadows.card,
+  chipOutlineActiveWarn: { borderColor: theme.warning, backgroundColor: theme.warning + '08' },
+  chipOutlineActivePrimary: { borderColor: theme.primary, backgroundColor: theme.primary + '08' },
+  chipOutlineText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  chipOutlineTextWarn: { color: theme.warning },
+  chipOutlineTextPrimary: { color: theme.primary },
+
+  // Level
+  levelGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  levelChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 12, paddingVertical: 9, backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.md, borderWidth: 1.5, borderColor: 'transparent',
   },
-  clubChipActive: {
-    borderColor: theme.primary,
-    backgroundColor: theme.primary + '10',
+  levelChipActive: { borderColor: theme.success, backgroundColor: theme.success + '08' },
+  levelChipText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  levelChipTextActive: { color: theme.success },
+  customInput: {
+    flexDirection: 'row', alignItems: 'center', marginTop: 10,
+    backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md,
+    borderWidth: 1.5, borderColor: theme.success, paddingRight: 12,
   },
-  clubChipText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.textSecondary,
+  customInputField: { flex: 1, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: theme.textPrimary },
+
+  // Participants
+  participantsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  participantPill: {
+    minWidth: 44, alignItems: 'center', paddingVertical: 10, paddingHorizontal: 14,
+    backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.full,
+    borderWidth: 1.5, borderColor: 'transparent',
   },
-  clubChipTextActive: {
-    color: theme.primary,
+  participantPillActive: { borderColor: theme.carreauColor, backgroundColor: theme.carreauColor + '10' },
+  participantPillText: { fontSize: 14, fontWeight: '700', color: theme.textSecondary },
+  participantPillTextActive: { color: theme.carreauColor },
+
+  // Finance
+  financeRow: { flexDirection: 'row', gap: 12 },
+  financeField: { flex: 1 },
+  financeLabel: { fontSize: 11, fontWeight: '600', color: theme.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
+  financeInput: {
+    backgroundColor: theme.backgroundSecondary, paddingHorizontal: 14, paddingVertical: 12,
+    borderRadius: theme.borderRadius.md, fontSize: 15, color: theme.textPrimary,
+    borderWidth: 1, borderColor: theme.border,
   },
-  participantsContainer: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  participantChip: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 12,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    ...theme.shadows.card,
-  },
-  participantChipActive: {
-    borderColor: theme.carreauColor,
-    backgroundColor: theme.carreauColor + '10',
-  },
-  participantText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  participantTextActive: {
-    color: theme.carreauColor,
-  },
+
+  // Two col
+  twoColRow: {},
+
+  // Footer
   footer: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    backgroundColor: theme.backgroundSecondary,
-    borderTopWidth: 1,
-    borderTopColor: theme.border,
+    paddingHorizontal: 16, paddingTop: 12,
+    backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border,
   },
   saveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: theme.carreauColor,
-    paddingVertical: 18,
-    borderRadius: theme.borderRadius.md,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: theme.carreauColor, paddingVertical: 16, borderRadius: theme.borderRadius.md,
+    ...theme.shadows.cardElevated,
   },
-  saveButtonDisabled: {
-    backgroundColor: theme.textMuted,
-  },
-  saveButtonText: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  // Cadrage rules styles
-  cadrageRulesCard: {
-    backgroundColor: theme.primary + '08',
-    borderRadius: theme.borderRadius.md,
-    padding: 14,
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: theme.primary + '20',
-  },
-  cadrageRulesHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 12,
-  },
-  cadrageRulesTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.primary,
-    flex: 1,
-  },
-  cadrageRulesStats: {
-    flexDirection: 'row',
-    gap: 20,
-    marginBottom: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.primary + '15',
-  },
-  cadrageRulesStat: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  cadrageRulesStatText: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    fontWeight: '500',
-  },
-  cadrageRulesSpecifics: {
-    gap: 6,
-  },
-  cadrageRulesSpecificItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  cadrageRulesSpecificDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: theme.primary,
-  },
-  cadrageRulesSpecificText: {
-    fontSize: 13,
-    color: theme.textSecondary,
-  },
-  // Terrain selection styles
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  addTerrainButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: theme.primary + '15',
-    borderRadius: theme.borderRadius.sm,
-  },
-  addTerrainText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.primary,
-  },
-  terrainsScroll: {
-    gap: 12,
-    paddingBottom: 4,
-  },
-  terrainChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    ...theme.shadows.card,
-  },
-  terrainChipActive: {
-    borderColor: theme.primary,
-    backgroundColor: theme.primary + '10',
-  },
-  terrainChipText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  terrainChipTextActive: {
-    color: theme.primary,
-  },
-  terrainCard: {
-    width: 140,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: 14,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    alignItems: 'center',
-    ...theme.shadows.card,
-  },
-  terrainCardActive: {
-    borderColor: theme.accent,
-    backgroundColor: theme.accent + '08',
-  },
-  terrainCardIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: theme.backgroundSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  terrainCardIconActive: {
-    backgroundColor: theme.accent,
-  },
-  terrainCardName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textPrimary,
-    textAlign: 'center',
-    marginBottom: 2,
-  },
-  terrainCardNameActive: {
-    color: theme.accent,
-  },
-  terrainCardCity: {
-    fontSize: 11,
-    color: theme.textSecondary,
-    marginBottom: 6,
-  },
-  terrainCardType: {
-    backgroundColor: theme.backgroundSecondary,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: theme.borderRadius.sm,
-  },
-  terrainCardTypeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  noTerrainsContainer: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 24,
-    alignItems: 'center',
-    gap: 12,
-    ...theme.shadows.card,
-  },
-  noTerrainsText: {
-    fontSize: 14,
-    color: theme.textMuted,
-  },
-  createTerrainButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: theme.primary + '15',
-    borderRadius: theme.borderRadius.md,
-  },
-  createTerrainButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.primary,
-  },
-  manualLocationContainer: {
-    marginTop: 16,
-  },
-  selectedTerrainInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: theme.success + '10',
-    borderRadius: theme.borderRadius.md,
-  },
-  selectedTerrainText: {
-    fontSize: 13,
-    color: theme.success,
-    flex: 1,
-  },
-  // New tournament classification styles
-  horizontalScroll: {
-    gap: 10,
-    paddingRight: 16,
-  },
-  levelChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    ...theme.shadows.card,
-  },
-  levelChipActive: {
-    borderColor: theme.success,
-    backgroundColor: theme.success + '10',
-  },
-  levelChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  levelChipTextActive: {
-    color: theme.success,
-  },
-  customLevelChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  customLevelInputContainer: {
-    marginTop: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 2,
-    borderColor: theme.success,
-    ...theme.shadows.card,
-  },
-  customLevelInput: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: theme.textPrimary,
-  },
-  customLevelBadge: {
-    marginRight: 12,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: theme.success + '20',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  categoryContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  categoryChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    ...theme.shadows.card,
-  },
-  categoryChipActive: {
-    borderColor: theme.warning,
-    backgroundColor: theme.warning + '10',
-  },
-  categoryChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  categoryChipTextActive: {
-    color: theme.warning,
-  },
-  registrationContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  registrationChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    ...theme.shadows.card,
-  },
-  registrationChipActive: {
-    borderColor: theme.primary,
-    backgroundColor: theme.primary + '10',
-  },
-  registrationChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  registrationChipTextActive: {
-    color: theme.primary,
-  },
-  scopeChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    ...theme.shadows.card,
-  },
-  scopeChipActive: {
-    borderColor: theme.accent,
-    backgroundColor: theme.accent + '10',
-  },
-  scopeChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  scopeChipTextActive: {
-    color: theme.accent,
-  },
+  saveButtonDisabled: { backgroundColor: theme.textMuted, opacity: 0.6 },
+  saveButtonPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+  saveButtonText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
 });
