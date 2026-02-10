@@ -174,7 +174,7 @@ export interface Tournament {
   tournamentScope?: TournamentScope;
   registrationCost?: number;
   prizeWon?: number;
-  finalResult?: 'Champion' | 'Finaliste' | 'Éliminé';
+  finalResult?: string;
 }
 
 export interface MatchPlayerRole {

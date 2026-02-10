@@ -544,9 +544,41 @@ export default function StatsScreen() {
     const successQualitiesTotal = pointQualityStats.excellent + pointQualityStats.bon + pointQualityStats.moyen + pointQualityStats.au_bouchon + pointQualityStats.devant_boule;
     const failureQualitiesTotal = pointQualityStats.rate + pointQualityStats.crochete + pointQualityStats.sorti;
 
+    // Cross-reference: pointType -> quality distribution
+    const crossTypeQuality: Record<string, { excellent: number; bon: number; moyen: number; au_bouchon: number; devant_boule: number; rate: number; crochete: number; sorti: number; total: number; successTotal: number; failTotal: number }> = {
+      roule: { excellent: 0, bon: 0, moyen: 0, au_bouchon: 0, devant_boule: 0, rate: 0, crochete: 0, sorti: 0, total: 0, successTotal: 0, failTotal: 0 },
+      plombe: { excellent: 0, bon: 0, moyen: 0, au_bouchon: 0, devant_boule: 0, rate: 0, crochete: 0, sorti: 0, total: 0, successTotal: 0, failTotal: 0 },
+      portee: { excellent: 0, bon: 0, moyen: 0, au_bouchon: 0, devant_boule: 0, rate: 0, crochete: 0, sorti: 0, total: 0, successTotal: 0, failTotal: 0 },
+    };
+
+    filteredMatches.forEach(match => {
+      if (match.playerActions) {
+        match.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
+          if ((pa as any).detailedShots) {
+            (pa as any).detailedShots.filter((s: any) => s.actionType === 'point').forEach((shot: any) => {
+              if (shot.pointType && crossTypeQuality[shot.pointType] && shot.pointQuality) {
+                const entry = crossTypeQuality[shot.pointType];
+                const qKey = shot.pointQuality as keyof typeof entry;
+                if (qKey !== 'total' && qKey !== 'successTotal' && qKey !== 'failTotal' && entry[qKey] !== undefined) {
+                  (entry as any)[qKey]++;
+                  entry.total++;
+                  if (shot.success) entry.successTotal++;
+                  else entry.failTotal++;
+                }
+              }
+            });
+          }
+        });
+      }
+    });
+
+    const hasCrossData = Object.values(crossTypeQuality).some(v => v.total > 0);
+    const totalCrossTracked = Object.values(crossTypeQuality).reduce((sum, v) => sum + v.total, 0);
+
     return {
       totalPoints, pointsSuccess, successRate, pointsPerMene,
       hasDetailedData, totalDetailedPoints, totalQualityTracked,
+      crossTypeQuality, hasCrossData, totalCrossTracked,
       pointRoule: pointTypeStats.roule, pointPlombe: pointTypeStats.plombe,
       pointDemiPortee: pointTypeStats.demi_portee, pointPortee: pointTypeStats.portee,
       pointExcellent: pointQualityStats.excellent, pointBon: pointQualityStats.bon,
@@ -1225,6 +1257,89 @@ export default function StatsScreen() {
                       <StatRow label="Moyen (< 50 cm)" value={pointStats.pointMoyen} subValue={`${Math.round((pointStats.pointMoyen / pointStats.successQualitiesTotal) * 100)}%`} icon="radio-button-checked" color={theme.warning} />
                       <StatRow label="Au bouchon" value={pointStats.pointAuBouchon} subValue={`${Math.round((pointStats.pointAuBouchon / pointStats.successQualitiesTotal) * 100)}%`} icon="adjust" color={theme.primary} />
                       <StatRow label="Devant de boule" value={pointStats.pointDevantBoule} subValue={`${Math.round((pointStats.pointDevantBoule / pointStats.successQualitiesTotal) * 100)}%`} icon="sports-baseball" color={theme.accent} />
+                    </View>
+                  </Animated.View>
+                )}
+
+                {/* Cross-reference: Type x Quality */}
+                {pointStats.hasCrossData && (
+                  <Animated.View entering={FadeInDown.duration(400).delay(175)} style={styles.section}>
+                    <SectionHeader title="Type de point × Qualité" subtitle={`${pointStats.totalCrossTracked} points croisés`} icon="grid-on" color={theme.accent} />
+                    <View style={styles.card}>
+                      {/* Table Header */}
+                      <View style={styles.crossTableHeader}>
+                        <View style={styles.crossTableHeaderLabel}>
+                          <Text style={styles.crossTableHeaderText}>Type</Text>
+                        </View>
+                        <View style={styles.crossTableHeaderCell}>
+                          <MaterialIcons name="stars" size={12} color={theme.carreauColor} />
+                          <Text style={[styles.crossTableHeaderCellText, { color: theme.carreauColor }]}>Exc.</Text>
+                        </View>
+                        <View style={styles.crossTableHeaderCell}>
+                          <MaterialIcons name="check-circle" size={12} color={theme.success} />
+                          <Text style={[styles.crossTableHeaderCellText, { color: theme.success }]}>Bon</Text>
+                        </View>
+                        <View style={styles.crossTableHeaderCell}>
+                          <MaterialIcons name="radio-button-checked" size={12} color={theme.warning} />
+                          <Text style={[styles.crossTableHeaderCellText, { color: theme.warning }]}>Moy.</Text>
+                        </View>
+                        <View style={styles.crossTableHeaderCell}>
+                          <MaterialIcons name="cancel" size={12} color={theme.error} />
+                          <Text style={[styles.crossTableHeaderCellText, { color: theme.error }]}>Raté</Text>
+                        </View>
+                      </View>
+                      {/* Table Rows */}
+                      {[
+                        { key: 'roule', label: 'Roulé', icon: 'sports-baseball', color: theme.pointColor },
+                        { key: 'plombe', label: 'Plombé', icon: 'flight-land', color: theme.tirColor },
+                        { key: 'portee', label: 'Portée', icon: 'flight', color: theme.accent },
+                      ].filter(row => pointStats.crossTypeQuality[row.key]?.total > 0).map((row, idx) => {
+                        const data = pointStats.crossTypeQuality[row.key];
+                        return (
+                          <View key={row.key} style={[styles.crossTableRow, idx % 2 === 0 && styles.crossTableRowAlt]}>
+                            <View style={styles.crossTableRowLabel}>
+                              <MaterialIcons name={row.icon as any} size={14} color={row.color} />
+                              <Text style={styles.crossTableRowLabelText} numberOfLines={1}>{row.label}</Text>
+                            </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={[styles.crossTableCellValue, { color: theme.carreauColor }]}>{data.excellent}</Text>
+                              <Text style={styles.crossTableCellPct}>{data.total > 0 ? `${Math.round((data.excellent / data.total) * 100)}%` : '-'}</Text>
+                            </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={[styles.crossTableCellValue, { color: theme.success }]}>{data.bon}</Text>
+                              <Text style={styles.crossTableCellPct}>{data.total > 0 ? `${Math.round((data.bon / data.total) * 100)}%` : '-'}</Text>
+                            </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={[styles.crossTableCellValue, { color: theme.warning }]}>{data.moyen}</Text>
+                              <Text style={styles.crossTableCellPct}>{data.total > 0 ? `${Math.round((data.moyen / data.total) * 100)}%` : '-'}</Text>
+                            </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={[styles.crossTableCellValue, { color: theme.error }]}>{data.rate + data.crochete + data.sorti}</Text>
+                              <Text style={styles.crossTableCellPct}>{data.total > 0 ? `${Math.round(((data.rate + data.crochete + data.sorti) / data.total) * 100)}%` : '-'}</Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                      {/* Best/Worst insight */}
+                      {(() => {
+                        const entries = Object.entries(pointStats.crossTypeQuality).filter(([, v]) => v.total >= 3);
+                        if (entries.length < 2) return null;
+                        const labels: Record<string, string> = { roule: 'Point roulé', plombe: 'Point plombé', portee: 'Point portée' };
+                        const successRates = entries.map(([key, v]) => ({ key, rate: v.total > 0 ? (v.successTotal / v.total) * 100 : 0 }));
+                        successRates.sort((a, b) => b.rate - a.rate);
+                        const best = successRates[0];
+                        const worst = successRates[successRates.length - 1];
+                        if (best.rate - worst.rate < 10) return null;
+                        return (
+                          <View style={styles.insightBox}>
+                            <MaterialIcons name="lightbulb" size={16} color={theme.accent} />
+                            <Text style={styles.insightText}>
+                              Votre <Text style={{ fontWeight: '700', color: theme.success }}>{labels[best.key]}</Text> a la meilleure qualité ({Math.round(best.rate)}% réussi). 
+                              Le <Text style={{ fontWeight: '700', color: theme.error }}>{labels[worst.key]}</Text> est le moins fiable ({Math.round(worst.rate)}%).
+                            </Text>
+                          </View>
+                        );
+                      })()}
                     </View>
                   </Animated.View>
                 )}

@@ -97,6 +97,7 @@ export default function EditTournamentScreen() {
   const [description, setDescription] = useState('');
   const [registrationCost, setRegistrationCost] = useState('');
   const [prizeWon, setPrizeWon] = useState('');
+  const [finalResult, setFinalResult] = useState<string | undefined>();
   // Tournament classification fields
   const [tournamentLevel, setTournamentLevel] = useState<TournamentLevel | string | undefined>();
   const [customLevel, setCustomLevel] = useState('');
@@ -127,6 +128,7 @@ export default function EditTournamentScreen() {
       // Load financial fields
       setRegistrationCost(tournament.registrationCost?.toString() || '');
       setPrizeWon(tournament.prizeWon?.toString() || '');
+      setFinalResult(tournament.finalResult);
       // Load classification fields
       if (tournament.tournamentLevel) {
         const isCustom = !config.tournamentLevels.includes(tournament.tournamentLevel as TournamentLevel);
@@ -237,6 +239,7 @@ export default function EditTournamentScreen() {
       tournamentScope,
       registrationCost: registrationCost ? parseFloat(registrationCost) : undefined,
       prizeWon: prizeWon ? parseFloat(prizeWon) : undefined,
+      finalResult,
     });
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -763,19 +766,56 @@ export default function EditTournamentScreen() {
             />
           </Animated.View>
 
-          {/* Prize Won (only for finished tournaments) */}
+          {/* Final Result & Prize Won (only for finished tournaments) */}
           {status === 'Terminé' && (
-            <Animated.View entering={FadeInDown.duration(400).delay(490)} style={styles.section}>
-              <Text style={styles.sectionTitle}>GAIN OBTENU (€)</Text>
-              <TextInput
-                style={styles.textInput}
-                value={prizeWon}
-                onChangeText={setPrizeWon}
-                placeholder="Ex: 50"
-                placeholderTextColor={theme.textMuted}
-                keyboardType="numeric"
-              />
-            </Animated.View>
+            <>
+              <Animated.View entering={FadeInDown.duration(400).delay(488)} style={styles.section}>
+                <Text style={styles.sectionTitle}>RÉSULTAT FINAL</Text>
+                <View style={styles.finalResultContainer}>
+                  {['1er', '2ème', '3ème', 'Demi-finale', 'Quart de finale', '1/8 finale', 'Poules', 'Autre'].map(result => {
+                    const resultConfig: Record<string, { icon: string; color: string }> = {
+                      '1er': { icon: 'emoji-events', color: theme.carreauColor },
+                      '2ème': { icon: 'workspace-premium', color: theme.accent },
+                      '3ème': { icon: 'military-tech', color: '#CD7F32' },
+                      'Demi-finale': { icon: 'trending-up', color: theme.primary },
+                      'Quart de finale': { icon: 'trending-flat', color: theme.warning },
+                      '1/8 finale': { icon: 'sports', color: theme.textSecondary },
+                      'Poules': { icon: 'group', color: theme.textSecondary },
+                      'Autre': { icon: 'more-horiz', color: theme.textMuted },
+                    };
+                    const cfg = resultConfig[result] || { icon: 'help', color: theme.textMuted };
+                    const isSelected = finalResult === result;
+                    return (
+                      <Pressable
+                        key={result}
+                        style={[
+                          styles.finalResultChip,
+                          isSelected && [styles.finalResultChipActive, { borderColor: cfg.color }]
+                        ]}
+                        onPress={() => {
+                          Haptics.selectionAsync();
+                          setFinalResult(finalResult === result ? undefined : result);
+                        }}
+                      >
+                        <MaterialIcons name={cfg.icon as any} size={18} color={isSelected ? cfg.color : theme.textSecondary} />
+                        <Text style={[styles.finalResultText, isSelected && { color: cfg.color }]}>{result}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </Animated.View>
+              <Animated.View entering={FadeInDown.duration(400).delay(490)} style={styles.section}>
+                <Text style={styles.sectionTitle}>GAIN OBTENU (€)</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={prizeWon}
+                  onChangeText={setPrizeWon}
+                  placeholder="Ex: 50"
+                  placeholderTextColor={theme.textMuted}
+                  keyboardType="numeric"
+                />
+              </Animated.View>
+            </>
           )}
 
           {/* Description */}
@@ -1242,5 +1282,30 @@ const styles = StyleSheet.create({
   },
   scopeChipTextActive: {
     color: theme.accent,
+  },
+  finalResultContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  finalResultChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    ...theme.shadows.card,
+  },
+  finalResultChipActive: {
+    backgroundColor: theme.surface,
+  },
+  finalResultText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textSecondary,
   },
 });

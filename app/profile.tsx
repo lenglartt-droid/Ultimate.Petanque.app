@@ -675,7 +675,7 @@ export default function ProfileScreen() {
                     <View style={[styles.financialRowIcon, { backgroundColor: theme.error + '15' }]}>
                       <MaterialIcons name="event" size={18} color={theme.error} />
                     </View>
-                    <Text style={styles.financialRowLabel}>Inscriptions tournois</Text>
+                    <Text style={styles.financialRowLabel}>Inscriptions tournois ({tournaments.filter(t => t.registrationCost).length})</Text>
                     <Text style={[styles.financialRowValue, { color: theme.error }]}>-{totalRegistrationCosts.toFixed(0)} €</Text>
                   </View>
                   
@@ -695,6 +695,31 @@ export default function ProfileScreen() {
                     <Text style={styles.financialTotalLabel}>Total des dépenses</Text>
                     <Text style={styles.financialTotalValue}>{totalCosts.toFixed(0)} €</Text>
                   </View>
+                  
+                  {/* Tournament results summary */}
+                  {tournaments.filter(t => t.finalResult).length > 0 && (
+                    <>
+                      <View style={styles.financialDivider} />
+                      <Text style={[styles.financialTotalLabel, { marginBottom: 10 }]}>Palmarès</Text>
+                      {tournaments.filter(t => t.finalResult).map(t => {
+                        const resultConfig: Record<string, { icon: string; color: string }> = {
+                          '1er': { icon: 'emoji-events', color: theme.carreauColor },
+                          '2ème': { icon: 'workspace-premium', color: theme.accent },
+                          '3ème': { icon: 'military-tech', color: '#CD7F32' },
+                        };
+                        const cfg = resultConfig[t.finalResult || ''] || { icon: 'sports', color: theme.textSecondary };
+                        return (
+                          <View key={t.id} style={styles.financialRow}>
+                            <View style={[styles.financialRowIcon, { backgroundColor: cfg.color + '15' }]}>
+                              <MaterialIcons name={cfg.icon as any} size={18} color={cfg.color} />
+                            </View>
+                            <Text style={styles.financialRowLabel} numberOfLines={1}>{t.name}</Text>
+                            <Text style={[styles.financialRowValue, { color: cfg.color }]}>{t.finalResult}</Text>
+                          </View>
+                        );
+                      })}
+                    </>
+                  )}
                 </View>
               );
             })()}

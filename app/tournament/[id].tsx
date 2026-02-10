@@ -393,6 +393,23 @@ export default function TournamentDetailScreen() {
             </View>
           </View>
           
+          {/* Final Result Badge */}
+          {tournament.finalResult && tournament.status === 'Terminé' && (
+            <View style={styles.finalResultBanner}>
+              <MaterialIcons 
+                name={tournament.finalResult === '1er' ? 'emoji-events' : tournament.finalResult === '2ème' ? 'workspace-premium' : 'military-tech'} 
+                size={20} 
+                color={tournament.finalResult === '1er' ? theme.carreauColor : tournament.finalResult === '2ème' ? theme.accent : theme.warning} 
+              />
+              <Text style={[
+                styles.finalResultBannerText,
+                { color: tournament.finalResult === '1er' ? theme.carreauColor : tournament.finalResult === '2ème' ? theme.accent : theme.textPrimary }
+              ]}>
+                {tournament.finalResult}
+              </Text>
+            </View>
+          )}
+          
           {/* Tournament Classification Badges */}
           {(tournament.tournamentLevel || tournament.tournamentCategory || tournament.registrationType || tournament.tournamentScope) && (
             <View style={styles.classificationBadgesContainer}>
@@ -1105,6 +1122,19 @@ const styles = StyleSheet.create({
   terrainInfoType: {
     fontSize: 12,
     color: theme.textSecondary,
+  },
+  finalResultBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  finalResultBannerText: {
+    fontSize: 16,
+    fontWeight: '700',
   },
   dot: {
     width: 3,
