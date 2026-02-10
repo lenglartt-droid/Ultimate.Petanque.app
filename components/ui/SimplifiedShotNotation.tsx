@@ -68,6 +68,13 @@ export type SimplePointQuality =
   | 'crochete'        // Bad hand release
   | 'sorti';          // Out of bounds
 
+// Shot Result Types (for failed tir - describes WHERE the shot went wrong)
+export type SimpleShotResult = 
+  | 'court_droite'    // Short, to the right
+  | 'court_gauche'    // Short, to the left
+  | 'long'            // Long, behind target
+  | 'tir_bouchon';    // Hit the jack
+
 // Complete Shot Record
 export interface SimpleShotRecord {
   id: string;
@@ -82,6 +89,7 @@ export interface SimpleShotRecord {
   carreau?: boolean;
   
   // Advanced - Tir
+  shotResult?: SimpleShotResult;  // Where the failed shot went (only for failed tirs)
   shotType?: SimpleShotType;
   shotQuality?: SimpleShotQuality;
   
@@ -103,15 +111,19 @@ const SHOT_TYPES_SUCCESS = [
   { id: 'carreau' as SimpleShotType, label: 'Carreau', icon: 'stars', desc: 'Prend la place', special: true },
 ];
 
-// Shot types when FAILED
+// Shot types when FAILED (technique types only - result is tracked separately)
 const SHOT_TYPES_FAILED = [
   { id: 'au_fer' as SimpleShotType, label: 'Tir tendu', icon: 'gps-fixed', desc: 'Direct, sans rebond' },
   { id: 'au_plomb' as SimpleShotType, label: 'Tir en cloche', icon: 'flight-takeoff', desc: 'Lancé en hauteur' },
   { id: 'en_rafle' as SimpleShotType, label: 'En rafle', icon: 'swap-horiz', desc: 'Tir rasant' },
-  { id: 'court_droite' as SimpleShotType, label: 'Court, à droite', icon: 'subdirectory-arrow-right', desc: 'Trop court côté droit' },
-  { id: 'court_gauche' as SimpleShotType, label: 'Court, à gauche', icon: 'subdirectory-arrow-left', desc: 'Trop court côté gauche' },
-  { id: 'long' as SimpleShotType, label: 'Long', icon: 'arrow-upward', desc: 'Derrière la boule cible' },
-  { id: 'tir_bouchon' as SimpleShotType, label: 'Tir sur bouchon', icon: 'adjust', desc: 'A touché le cochonnet' },
+];
+
+// Shot results for failed tirs (WHERE the shot went wrong)
+const SHOT_RESULTS_FAILED: { id: SimpleShotResult; label: string; icon: string; desc: string; color: string }[] = [
+  { id: 'court_droite', label: 'Court, à droite', icon: 'subdirectory-arrow-right', desc: 'Trop court côté droit', color: '#E57373' },
+  { id: 'court_gauche', label: 'Court, à gauche', icon: 'subdirectory-arrow-left', desc: 'Trop court côté gauche', color: '#EF5350' },
+  { id: 'long', label: 'Long', icon: 'arrow-upward', desc: 'Derrière la boule cible', color: '#F44336' },
+  { id: 'tir_bouchon', label: 'Tir sur bouchon', icon: 'adjust', desc: 'A touché le cochonnet', color: theme.warning },
 ];
 
 // Combined for backward compatibility
@@ -272,6 +284,7 @@ export function SimplifiedShotNotation({
 }: SimplifiedShotNotationProps) {
   // State
   const [success, setSuccess] = useState<boolean | null>(null);
+  const [shotResult, setShotResult] = useState<SimpleShotResult | null>(null);
   const [shotType, setShotType] = useState<SimpleShotType | null>(null);
   const [shotQuality, setShotQuality] = useState<SimpleShotQuality | null>(null);
   const [pointType, setPointType] = useState<SimplePointType | null>(null);
@@ -280,19 +293,34 @@ export function SimplifiedShotNotation({
   // Animation
   const progressWidth = useSharedValue(0);
 
+  // For failed tirs, we have 4 steps: Result -> Shot Result -> Type -> Impact
+  // For successful tirs: 3 steps: Result -> Type -> Impact  
+  // For points: 3 steps: Result -> Type -> Quality
+  const isFailedTir = actionType === 'tir' && success === false;
+  const totalSteps = isFailedTir ? 4 : 3;
+
   // Determine current step based on state
   const getCurrentStep = useCallback(() => {
     if (success === null) return 1;
     if (actionType === 'tir') {
-      if (!shotType) return 2;
-      if (!shotQuality) return 3;
-      return 3;
+      if (success === false) {
+        // Failed tir: Result(1) -> ShotResult(2) -> Type(3) -> Impact(4)
+        if (!shotResult) return 2;
+        if (!shotType) return 3;
+        if (!shotQuality) return 4;
+        return 4;
+      } else {
+        // Success tir: Result(1) -> Type(2) -> Impact(3)
+        if (!shotType) return 2;
+        if (!shotQuality) return 3;
+        return 3;
+      }
     } else {
       if (!pointType) return 2;
       if (!pointQuality) return 3;
       return 3;
     }
-  }, [success, actionType, shotType, shotQuality, pointType, pointQuality]);
+  }, [success, actionType, shotResult, shotType, shotQuality, pointType, pointQuality]);
 
   useEffect(() => {
     if (visible) {
@@ -303,15 +331,23 @@ export function SimplifiedShotNotation({
   useEffect(() => {
     const currentStep = getCurrentStep();
     let progress = 0;
-    if (currentStep === 1) progress = 0;
-    else if (currentStep === 2) progress = 33;
-    else if (currentStep === 3) progress = 66;
-    
-    // If we have quality selected, progress is 100
-    if (shotQuality || pointQuality) progress = 100;
+    if (totalSteps === 4) {
+      // 4-step flow for failed tirs
+      if (currentStep === 1) progress = 0;
+      else if (currentStep === 2) progress = 25;
+      else if (currentStep === 3) progress = 50;
+      else if (currentStep === 4) progress = 75;
+      if (shotQuality) progress = 100;
+    } else {
+      // 3-step flow
+      if (currentStep === 1) progress = 0;
+      else if (currentStep === 2) progress = 33;
+      else if (currentStep === 3) progress = 66;
+      if (shotQuality || pointQuality) progress = 100;
+    }
     
     progressWidth.value = withTiming(progress, { duration: 300, easing: Easing.out(Easing.cubic) });
-  }, [success, shotType, pointType, shotQuality, pointQuality, getCurrentStep, progressWidth]);
+  }, [success, shotResult, shotType, pointType, shotQuality, pointQuality, getCurrentStep, progressWidth, totalSteps]);
 
   const progressStyle = useAnimatedStyle(() => ({
     width: `${progressWidth.value}%`,
@@ -320,6 +356,7 @@ export function SimplifiedShotNotation({
   // Reset on close
   const resetState = useCallback(() => {
     setSuccess(null);
+    setShotResult(null);
     setShotType(null);
     setShotQuality(null);
     setPointType(null);
@@ -354,15 +391,17 @@ export function SimplifiedShotNotation({
     }
   }, [quickMode, playerId, playerName, team, actionType, onSubmit, handleClose]);
 
+  // Select shot result (for failed tirs)
+  const handleShotResultSelect = useCallback((result: SimpleShotResult) => {
+    Haptics.selectionAsync();
+    setShotResult(result);
+  }, []);
+
   // Select type
   const handleTypeSelect = useCallback((type: SimpleShotType | SimplePointType) => {
     Haptics.selectionAsync();
     if (actionType === 'tir') {
       setShotType(type as SimpleShotType);
-      // If carreau is selected, auto-select gain_point quality and submit
-      if (type === 'carreau') {
-        // Don't auto-submit, let user confirm with gain_point
-      }
     } else {
       setPointType(type as SimplePointType);
     }
@@ -383,6 +422,7 @@ export function SimplifiedShotNotation({
       actionType,
       success: success!,
       carreau: isCarreau,
+      shotResult: actionType === 'tir' && !success ? shotResult || undefined : undefined,
       shotType: actionType === 'tir' ? shotType || undefined : undefined,
       shotQuality: actionType === 'tir' ? (quality as SimpleShotQuality) || undefined : undefined,
       pointType: actionType === 'point' ? pointType || undefined : undefined,
@@ -409,10 +449,13 @@ export function SimplifiedShotNotation({
     } else if (shotType || pointType) {
       setShotType(null);
       setPointType(null);
+    } else if (shotResult) {
+      setShotResult(null);
     } else if (success !== null) {
       setSuccess(null);
+      setShotResult(null);
     }
-  }, [shotQuality, pointQuality, shotType, pointType, success]);
+  }, [shotQuality, pointQuality, shotType, pointType, shotResult, success]);
 
   const isTir = actionType === 'tir';
   const teamColor = team === 'A' ? theme.primary : theme.accent;
@@ -420,9 +463,9 @@ export function SimplifiedShotNotation({
   const canGoBack = success !== null;
   const isCarreau = shotType === 'carreau';
 
-  // Get step labels based on action type
+  // Get step labels based on action type and success/fail
   const stepLabels = isTir 
-    ? ['Résultat', 'Type', 'Impact'] 
+    ? (isFailedTir ? ['Résultat', 'Résultat détaillé', 'Type', 'Impact'] : ['Résultat', 'Type', 'Impact'])
     : ['Résultat', 'Type', 'Qualité'];
 
   return (
@@ -550,8 +593,41 @@ export function SimplifiedShotNotation({
             </Animated.View>
           )}
 
-          {/* STEP 2: Type */}
-          {success !== null && !shotType && !pointType && (
+          {/* STEP 2 for failed tir: Shot Result (where the shot went) */}
+          {isTir && success === false && !shotResult && (
+            <Animated.View entering={FadeIn.duration(200)}>
+              <View style={styles.resultSummary}>
+                <MaterialIcons name="cancel" size={20} color={theme.error} />
+                <Text style={styles.resultSummaryText}>Raté</Text>
+              </View>
+
+              <Text style={styles.stepTitle}>Résultat du tir</Text>
+              <Text style={styles.stepSubtitle}>Où est allée la boule ?</Text>
+
+              <View style={styles.qualityList}>
+                {SHOT_RESULTS_FAILED.map((result, index) => (
+                  <Animated.View key={result.id} entering={FadeInDown.duration(200).delay(index * 50)}>
+                    <Pressable
+                      style={[styles.qualityItem, { borderLeftColor: result.color }]}
+                      onPress={() => handleShotResultSelect(result.id)}
+                    >
+                      <View style={[styles.qualityItemIcon, { backgroundColor: result.color + '15' }]}>
+                        <MaterialIcons name={result.icon as any} size={22} color={result.color} />
+                      </View>
+                      <View style={styles.qualityItemContent}>
+                        <Text style={styles.qualityItemLabel}>{result.label}</Text>
+                        <Text style={styles.qualityItemDesc}>{result.desc}</Text>
+                      </View>
+                      <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                    </Pressable>
+                  </Animated.View>
+                ))}
+              </View>
+            </Animated.View>
+          )}
+
+          {/* STEP: Type selection (step 2 for success tir & points, step 3 for failed tir) */}
+          {success !== null && !shotType && !pointType && (isFailedTir ? shotResult !== null : true) && !(isTir && success === false && !shotResult) && (
             <Animated.View entering={FadeIn.duration(200)}>
               <View style={styles.resultSummary}>
                 <MaterialIcons 
@@ -562,6 +638,19 @@ export function SimplifiedShotNotation({
                 <Text style={styles.resultSummaryText}>
                   {success ? 'Réussi' : 'Raté'}
                 </Text>
+                {shotResult && (
+                  <>
+                    <View style={styles.resultSummaryDivider} />
+                    <MaterialIcons 
+                      name={SHOT_RESULTS_FAILED.find(r => r.id === shotResult)?.icon as any} 
+                      size={18} 
+                      color={theme.error} 
+                    />
+                    <Text style={[styles.resultSummaryText, { color: theme.error }]}>
+                      {SHOT_RESULTS_FAILED.find(r => r.id === shotResult)?.label}
+                    </Text>
+                  </>
+                )}
               </View>
 
               <Text style={styles.stepTitle}>
@@ -604,6 +693,14 @@ export function SimplifiedShotNotation({
                 <Text style={styles.resultSummaryText}>
                   {success ? (isCarreau ? 'Carreau' : 'Réussi') : 'Raté'}
                 </Text>
+                {shotResult && (
+                  <>
+                    <View style={styles.resultSummaryDivider} />
+                    <Text style={[styles.resultSummaryText, { color: theme.error }]}>
+                      {SHOT_RESULTS_FAILED.find(r => r.id === shotResult)?.label}
+                    </Text>
+                  </>
+                )}
                 <View style={styles.resultSummaryDivider} />
                 <MaterialIcons 
                   name={(isTir ? SHOT_TYPES : POINT_TYPES).find(t => t.id === (shotType || pointType))?.icon as any} 
@@ -802,7 +899,7 @@ export function QuickShotBar({
 // EXPORTS
 // ============================================
 
-export { SHOT_TYPES, SHOT_TYPES_SUCCESS, SHOT_TYPES_FAILED, SHOT_QUALITIES, POINT_TYPES, POINT_QUALITIES, POINT_QUALITIES_SUCCESS };
+export { SHOT_TYPES, SHOT_TYPES_SUCCESS, SHOT_TYPES_FAILED, SHOT_RESULTS_FAILED, SHOT_QUALITIES, POINT_TYPES, POINT_QUALITIES, POINT_QUALITIES_SUCCESS };
 
 // ============================================
 // STYLES

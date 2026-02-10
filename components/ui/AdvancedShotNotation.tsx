@@ -82,6 +82,13 @@ export type PointQuality =
   | 'trop_droite'     // Point trop à droite
   | 'trop_gauche';    // Point trop à gauche
 
+// Shot Result Types (for failed tir - describes WHERE the shot went wrong)
+export type AdvancedShotResult = 
+  | 'court_droite'    // Short, to the right
+  | 'court_gauche'    // Short, to the left
+  | 'long'            // Long, behind target
+  | 'tir_bouchon';    // Hit the jack
+
 // Complete Shot Record
 export interface AdvancedShotRecord {
   id: string;
@@ -96,6 +103,7 @@ export interface AdvancedShotRecord {
   carreau?: boolean;  // Only for tir
   
   // Advanced - Tir
+  shotResult?: AdvancedShotResult;  // Where the failed shot went (only for failed tirs)
   shotType?: ShotType;
   shotQuality?: ShotQuality;
   
@@ -114,6 +122,14 @@ const SHOT_QUALITIES: { id: ShotQuality; label: string; icon: string; color: str
   { id: 'sous_pression', label: 'Sous pression', icon: 'psychology', color: theme.accent, description: 'Score serré ou fin de match' },
   { id: 'equipe_menee', label: 'Équipe menée', icon: 'arrow-downward', color: '#EF4444', description: 'Score en retard' },
   { id: 'equipe_mene', label: 'Équipe mène', icon: 'arrow-upward', color: '#10B981', description: 'Score en avance' },
+];
+
+// Shot results for failed tirs (WHERE the shot went wrong)
+const SHOT_RESULTS_FAILED: { id: AdvancedShotResult; label: string; icon: string; color: string; description: string }[] = [
+  { id: 'court_droite', label: 'Court, à droite', icon: 'subdirectory-arrow-right', color: '#E57373', description: 'Trop court côté droit' },
+  { id: 'court_gauche', label: 'Court, à gauche', icon: 'subdirectory-arrow-left', color: '#EF5350', description: 'Trop court côté gauche' },
+  { id: 'long', label: 'Long', icon: 'arrow-upward', color: '#F44336', description: 'Derrière la boule cible' },
+  { id: 'tir_bouchon', label: 'Tir sur bouchon', icon: 'adjust', color: theme.warning, description: 'A touché le cochonnet' },
 ];
 
 // Config for shot types
@@ -720,9 +736,10 @@ export function AdvancedShotNotation({
   quickMode = false,
   useGestures = true,
 }: AdvancedShotNotationProps) {
-  const [step, setStep] = useState<'result' | 'type' | 'quality'>('result');
+  const [step, setStep] = useState<'result' | 'shotResult' | 'type' | 'quality'>('result');
   const [success, setSuccess] = useState<boolean | null>(null);
   const [carreau, setCarreau] = useState(false);
+  const [shotResult, setShotResult] = useState<AdvancedShotResult | null>(null);
   const [shotType, setShotType] = useState<ShotType | null>(null);
   const [shotQuality, setShotQuality] = useState<ShotQuality | null>(null);
   const [pointType, setPointType] = useState<PointType | null>(null);
@@ -731,22 +748,30 @@ export function AdvancedShotNotation({
   const progressWidth = useSharedValue(0);
   const stepTransition = useSharedValue(0);
 
+  const isFailedTir = actionType === 'tir' && success === false;
+  const totalSteps = isFailedTir ? 4 : 3;
+
   useEffect(() => {
     if (visible) {
-      progressWidth.value = withTiming(33.33, { duration: 400, easing: Easing.out(Easing.cubic) });
+      progressWidth.value = withTiming(totalSteps === 4 ? 25 : 33.33, { duration: 400, easing: Easing.out(Easing.cubic) });
     } else {
       progressWidth.value = 0;
     }
-  }, [visible, progressWidth]);
+  }, [visible, progressWidth, totalSteps]);
 
   useEffect(() => {
-    const targetProgress = step === 'result' ? 33.33 : step === 'type' ? 66.66 : 100;
+    let targetProgress: number;
+    if (totalSteps === 4) {
+      targetProgress = step === 'result' ? 25 : step === 'shotResult' ? 50 : step === 'type' ? 75 : 100;
+    } else {
+      targetProgress = step === 'result' ? 33.33 : step === 'type' ? 66.66 : 100;
+    }
     progressWidth.value = withSpring(targetProgress, { damping: 15 });
     stepTransition.value = withSequence(
       withTiming(0.95, { duration: 100 }),
       withSpring(1, { damping: 12 })
     );
-  }, [step, progressWidth, stepTransition]);
+  }, [step, progressWidth, stepTransition, totalSteps]);
 
   const progressStyle = useAnimatedStyle(() => ({
     width: `${progressWidth.value}%`,
@@ -760,6 +785,7 @@ export function AdvancedShotNotation({
     setStep('result');
     setSuccess(null);
     setCarreau(false);
+    setShotResult(null);
     setShotType(null);
     setShotQuality(null);
     setPointType(null);
@@ -790,9 +816,20 @@ export function AdvancedShotNotation({
       onSubmit(record);
       handleClose();
     } else {
-      setStep('type');
+      // For failed tirs, go to shotResult step first
+      if (actionType === 'tir' && !isSuccess && !isCarreau) {
+        setStep('shotResult');
+      } else {
+        setStep('type');
+      }
     }
   }, [quickMode, playerId, playerName, team, actionType, onSubmit, handleClose]);
+
+  const handleShotResultSelect = useCallback((result: AdvancedShotResult) => {
+    Haptics.selectionAsync();
+    setShotResult(result);
+    setStep('type');
+  }, []);
 
   const handleTypeSelect = useCallback((type: ShotType | PointType) => {
     Haptics.selectionAsync();
@@ -816,6 +853,7 @@ export function AdvancedShotNotation({
       actionType,
       success: success!,
       carreau: actionType === 'tir' ? carreau : undefined,
+      shotResult: actionType === 'tir' && !success ? shotResult || undefined : undefined,
       shotType: actionType === 'tir' ? shotType || undefined : undefined,
       shotQuality: actionType === 'tir' ? (quality as ShotQuality) || undefined : undefined,
       pointType: actionType === 'point' ? pointType || undefined : undefined,
@@ -824,7 +862,7 @@ export function AdvancedShotNotation({
     
     onSubmit(record);
     handleClose();
-  }, [playerId, playerName, team, actionType, success, carreau, shotType, pointType, onSubmit, handleClose]);
+  }, [playerId, playerName, team, actionType, success, carreau, shotResult, shotType, pointType, onSubmit, handleClose]);
 
   const skipToSubmit = useCallback(() => {
     handleQualitySelect(null);
@@ -840,13 +878,22 @@ export function AdvancedShotNotation({
         setPointQuality(null);
       }
     } else if (step === 'type') {
-      setStep('result');
-      setSuccess(null);
-      setCarreau(false);
       setShotType(null);
       setPointType(null);
+      // If failed tir, go back to shotResult step
+      if (actionType === 'tir' && success === false) {
+        setStep('shotResult');
+      } else {
+        setStep('result');
+        setSuccess(null);
+        setCarreau(false);
+      }
+    } else if (step === 'shotResult') {
+      setShotResult(null);
+      setStep('result');
+      setSuccess(null);
     }
-  }, [step, actionType]);
+  }, [step, actionType, success]);
 
   const isTir = actionType === 'tir';
   const teamColor = team === 'A' ? theme.primary : theme.accent;
@@ -897,27 +944,26 @@ export function AdvancedShotNotation({
             <Animated.View style={[styles.progressBarFill, { backgroundColor: teamColor }, progressStyle]} />
           </View>
           <View style={styles.progressStepsRow}>
-            <View style={[styles.progressStepDot, step !== 'result' && styles.progressStepDotDone]}>
-              {step !== 'result' ? (
-                <MaterialIcons name="check" size={10} color="#FFF" />
-              ) : (
-                <Text style={styles.progressStepNum}>1</Text>
-              )}
-            </View>
-            <View style={[
-              styles.progressStepDot, 
-              step === 'type' && styles.progressStepDotActive,
-              step === 'quality' && styles.progressStepDotDone
-            ]}>
-              {step === 'quality' ? (
-                <MaterialIcons name="check" size={10} color="#FFF" />
-              ) : (
-                <Text style={[styles.progressStepNum, step === 'type' && { color: teamColor }]}>2</Text>
-              )}
-            </View>
-            <View style={[styles.progressStepDot, step === 'quality' && styles.progressStepDotActive]}>
-              <Text style={[styles.progressStepNum, step === 'quality' && { color: teamColor }]}>3</Text>
-            </View>
+            {(isFailedTir ? ['result', 'shotResult', 'type', 'quality'] : ['result', 'type', 'quality']).map((s, idx) => {
+              const stepNum = idx + 1;
+              const steps = isFailedTir ? ['result', 'shotResult', 'type', 'quality'] : ['result', 'type', 'quality'];
+              const currentIdx = steps.indexOf(step);
+              const isDone = idx < currentIdx;
+              const isActive = idx === currentIdx;
+              return (
+                <View key={s} style={[
+                  styles.progressStepDot,
+                  isDone && styles.progressStepDotDone,
+                  isActive && styles.progressStepDotActive,
+                ]}>
+                  {isDone ? (
+                    <MaterialIcons name="check" size={10} color="#FFF" />
+                  ) : (
+                    <Text style={[styles.progressStepNum, isActive && { color: teamColor }]}>{stepNum}</Text>
+                  )}
+                </View>
+              );
+            })}
           </View>
         </View>
 
@@ -1003,6 +1049,42 @@ export function AdvancedShotNotation({
               </Animated.View>
             )}
 
+            {/* Step: Shot Result for failed tirs */}
+            {step === 'shotResult' && (
+              <Animated.View entering={FadeIn.duration(300)}>
+                <Text style={styles.stepTitle}>Résultat du tir</Text>
+                <Text style={styles.stepSubtitle}>Où est allée la boule ?</Text>
+
+                <View style={styles.resultSummary}>
+                  <MaterialIcons name="cancel" size={24} color={theme.error} />
+                  <Text style={styles.resultSummaryText}>Tir raté</Text>
+                </View>
+
+                <View style={styles.qualityGrid}>
+                  {SHOT_RESULTS_FAILED.map((option, index) => (
+                    <Animated.View 
+                      key={option.id}
+                      entering={FadeInDown.duration(250).delay(index * 40).springify()}
+                    >
+                      <Pressable
+                        style={[styles.qualityCard, { borderLeftColor: option.color }]}
+                        onPress={() => handleShotResultSelect(option.id)}
+                      >
+                        <View style={[styles.qualityCardIcon, { backgroundColor: option.color + '15' }]}>
+                          <MaterialIcons name={option.icon as any} size={22} color={option.color} />
+                        </View>
+                        <View style={styles.qualityCardContent}>
+                          <Text style={styles.qualityCardLabel}>{option.label}</Text>
+                          <Text style={styles.qualityCardDesc} numberOfLines={1}>{option.description}</Text>
+                        </View>
+                        <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                      </Pressable>
+                    </Animated.View>
+                  ))}
+                </View>
+              </Animated.View>
+            )}
+
             {/* Step 2: Type Selection */}
             {step === 'type' && (
               <Animated.View entering={FadeIn.duration(300)}>
@@ -1020,6 +1102,19 @@ export function AdvancedShotNotation({
                   <Text style={styles.resultSummaryText}>
                     {success ? (carreau ? 'Carreau' : (isTir ? 'Tir réussi' : 'Bon point')) : 'Raté'}
                   </Text>
+                  {shotResult && (
+                    <>
+                      <View style={styles.resultSummaryDivider} />
+                      <MaterialIcons 
+                        name={SHOT_RESULTS_FAILED.find(r => r.id === shotResult)?.icon as any}
+                        size={20}
+                        color={theme.error}
+                      />
+                      <Text style={[styles.resultSummaryText, { color: theme.error }]}>
+                        {SHOT_RESULTS_FAILED.find(r => r.id === shotResult)?.label}
+                      </Text>
+                    </>
+                  )}
                 </View>
 
                 <View style={styles.optionsGrid}>

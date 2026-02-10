@@ -410,9 +410,12 @@ export default function StatsScreen() {
     const shotTypeStats: Record<string, { total: number; success: number }> = {
       au_fer: { total: 0, success: 0 }, au_plomb: { total: 0, success: 0 },
       en_rafle: { total: 0, success: 0 }, court_ramasse: { total: 0, success: 0 },
-      carreau: { total: 0, success: 0 }, court_droite: { total: 0, success: 0 },
-      court_gauche: { total: 0, success: 0 }, long: { total: 0, success: 0 },
-      tir_bouchon: { total: 0, success: 0 },
+      carreau: { total: 0, success: 0 },
+    };
+    
+    // Shot result stats (for failed tirs - where the shot went)
+    const shotResultStats: Record<string, number> = {
+      court_droite: 0, court_gauche: 0, long: 0, tir_bouchon: 0,
     };
     
     const shotQualityStats: Record<string, number> = { gain_point: 0, sans_effet: 0, negatif: 0, decisif: 0 };
@@ -437,6 +440,16 @@ export default function StatsScreen() {
               if (shot.shotType && shotTypeStats[shot.shotType]) {
                 shotTypeStats[shot.shotType].total++;
                 if (shot.success) shotTypeStats[shot.shotType].success++;
+              }
+              // Track shot result (for failed tirs - new field)
+              if (shot.shotResult && shotResultStats[shot.shotResult] !== undefined) {
+                shotResultStats[shot.shotResult]++;
+              }
+              // Backward compatibility: also check shotType for legacy data
+              if (!shot.shotResult && !shot.success && shot.shotType) {
+                if (shotResultStats[shot.shotType] !== undefined) {
+                  shotResultStats[shot.shotType]++;
+                }
               }
               if (shot.carreau) { shotTypeStats.carreau.total++; shotTypeStats.carreau.success++; }
               if (shot.shotQuality && shotQualityStats[shot.shotQuality] !== undefined) {
@@ -493,9 +506,11 @@ export default function StatsScreen() {
       tirNegatif: shotQualityStats.negatif, tirsDecisifs: shotQualityStats.decisif,
       tirAuFer: shotTypeStats.au_fer, tirAuPlomb: shotTypeStats.au_plomb,
       tirEnRafle: shotTypeStats.en_rafle, tirCourtRamasse: shotTypeStats.court_ramasse,
-      tirCarreau: shotTypeStats.carreau, tirCourtDroite: shotTypeStats.court_droite,
-      tirCourtGauche: shotTypeStats.court_gauche, tirLong: shotTypeStats.long,
-      tirBouchon: shotTypeStats.tir_bouchon,
+      tirCarreau: shotTypeStats.carreau,
+      tirCourtDroite: shotResultStats.court_droite,
+      tirCourtGauche: shotResultStats.court_gauche,
+      tirLong: shotResultStats.long,
+      tirBouchon: shotResultStats.tir_bouchon,
     };
   }, [filteredMatches, filteredChallenges, performanceStats.totalMenes]);
 
@@ -678,10 +693,10 @@ export default function StatsScreen() {
     
     // Detailed tir error types
     const tirErrorTypes = {
-      courtDroite: tirStats.tirCourtDroite.total,
-      courtGauche: tirStats.tirCourtGauche.total,
-      long: tirStats.tirLong.total,
-      tirBouchon: tirStats.tirBouchon.total,
+      courtDroite: tirStats.tirCourtDroite,
+      courtGauche: tirStats.tirCourtGauche,
+      long: tirStats.tirLong,
+      tirBouchon: tirStats.tirBouchon,
       auFerRate: tirStats.tirAuFer.total - tirStats.tirAuFer.success,
       auPlombRate: tirStats.tirAuPlomb.total - tirStats.tirAuPlomb.success,
       enRafleRate: tirStats.tirEnRafle.total - tirStats.tirEnRafle.success,
