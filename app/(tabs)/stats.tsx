@@ -1376,9 +1376,12 @@ export default function StatsScreen() {
                   <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
                     <SectionHeader title="Types de points" subtitle={`${pointStats.totalDetailedPoints} analysés`} icon="category" color={theme.primary} />
                     <View style={styles.card}>
-                      <StatRow label="Point roulé" value={`${pointStats.pointRoule.success}/${pointStats.pointRoule.total}`} icon="sports-baseball" color={theme.pointColor} />
-                      <StatRow label="Point plombé" value={`${pointStats.pointPlombe.success}/${pointStats.pointPlombe.total}`} icon="flight-land" color={theme.tirColor} />
-                      <StatRow label="Point portée" value={`${pointStats.pointPortee.success}/${pointStats.pointPortee.total}`} icon="flight" color={theme.accent} />
+                      <StatRow label="Point roulé" value={`${pointStats.pointRoule.success}/${pointStats.pointRoule.total}`} subValue={pointStats.pointRoule.total > 0 ? `${Math.round((pointStats.pointRoule.success / pointStats.pointRoule.total) * 100)}%` : ''} icon="sports-baseball" color={theme.pointColor} />
+                      <StatRow label="Point plombé" value={`${pointStats.pointPlombe.success}/${pointStats.pointPlombe.total}`} subValue={pointStats.pointPlombe.total > 0 ? `${Math.round((pointStats.pointPlombe.success / pointStats.pointPlombe.total) * 100)}%` : ''} icon="flight-land" color={theme.tirColor} />
+                      {pointStats.pointDemiPortee.total > 0 && (
+                        <StatRow label="Demi-portée" value={`${pointStats.pointDemiPortee.success}/${pointStats.pointDemiPortee.total}`} subValue={pointStats.pointDemiPortee.total > 0 ? `${Math.round((pointStats.pointDemiPortee.success / pointStats.pointDemiPortee.total) * 100)}%` : ''} icon="height" color={theme.primary} />
+                      )}
+                      <StatRow label="Point portée" value={`${pointStats.pointPortee.success}/${pointStats.pointPortee.total}`} subValue={pointStats.pointPortee.total > 0 ? `${Math.round((pointStats.pointPortee.success / pointStats.pointPortee.total) * 100)}%` : ''} icon="flight" color={theme.accent} />
                     </View>
                   </Animated.View>
                 )}
@@ -1768,6 +1771,9 @@ export default function StatsScreen() {
                       )}
                       {errorStats.pointErrorTypes.plombeRate > 0 && (
                         <StatRow label="Points plombés ratés" value={errorStats.pointErrorTypes.plombeRate} icon="flight-land" color={theme.textMuted} />
+                      )}
+                      {errorStats.pointErrorTypes.demiPorteeRate > 0 && (
+                        <StatRow label="Demi-portée ratés" value={errorStats.pointErrorTypes.demiPorteeRate} icon="height" color={theme.textMuted} />
                       )}
                       {errorStats.pointErrorTypes.porteeRate > 0 && (
                         <StatRow label="Points portée ratés" value={errorStats.pointErrorTypes.porteeRate} icon="flight" color={theme.textMuted} />
