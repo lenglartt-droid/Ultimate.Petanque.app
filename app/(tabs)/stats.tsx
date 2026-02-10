@@ -1230,71 +1230,49 @@ export default function StatsScreen() {
                   </Animated.View>
                 )}
 
-                {/* Cross-reference: Type x Résultat (failed tirs) */}
+                {/* Analyse des échecs par technique (Tir) */}
                 {tirStats.hasCrossResultData && (
                   <Animated.View entering={FadeInDown.duration(400).delay(185)} style={styles.section}>
-                    <SectionHeader title="Type de tir × Résultat raté" subtitle={`${tirStats.totalCrossResultTracked} tirs ratés croisés`} icon="grid-on" color={theme.error} />
+                    <SectionHeader title="Analyse des échecs (Tir)" subtitle={`${tirStats.totalCrossResultTracked} tirs ratés analysés`} icon="highlight-off" color={theme.tirColor} />
                     <View style={styles.card}>
-                      {/* Table Header */}
-                      <View style={styles.crossTableHeader}>
-                        <View style={styles.crossTableHeaderLabel}>
-                          <Text style={styles.crossTableHeaderText}>Type</Text>
-                        </View>
-                        <View style={styles.crossTableHeaderCell}>
-                          <MaterialIcons name="subdirectory-arrow-right" size={12} color={'#E57373'} />
-                          <Text style={[styles.crossTableHeaderCellText, { color: '#E57373' }]}>Ct. D</Text>
-                        </View>
-                        <View style={styles.crossTableHeaderCell}>
-                          <MaterialIcons name="subdirectory-arrow-left" size={12} color={'#EF5350'} />
-                          <Text style={[styles.crossTableHeaderCellText, { color: '#EF5350' }]}>Ct. G</Text>
-                        </View>
-                        <View style={styles.crossTableHeaderCell}>
-                          <MaterialIcons name="arrow-upward" size={12} color={'#F44336'} />
-                          <Text style={[styles.crossTableHeaderCellText, { color: '#F44336' }]}>Long</Text>
-                        </View>
-                        <View style={styles.crossTableHeaderCell}>
-                          <MaterialIcons name="adjust" size={12} color={theme.warning} />
-                          <Text style={[styles.crossTableHeaderCellText, { color: theme.warning }]}>Bouch.</Text>
-                        </View>
-                      </View>
-                      {/* Table Rows */}
                       {[
-                        { key: 'au_fer', label: 'Tir tendu', icon: 'gps-fixed', color: theme.tirColor },
-                        { key: 'au_plomb', label: 'En cloche', icon: 'flight-takeoff', color: theme.pointColor },
-                        { key: 'en_rafle', label: 'En rafle', icon: 'swap-horiz', color: theme.accent },
-                      ].filter(row => tirStats.crossTypeResult[row.key]?.total > 0).map((row, idx) => {
+                        { key: 'au_fer', label: 'Tirs tendus ratés', icon: 'gps-fixed', color: theme.tirColor },
+                        { key: 'au_plomb', label: 'Tirs en cloche ratés', icon: 'flight-takeoff', color: theme.pointColor },
+                        { key: 'en_rafle', label: 'En rafle ratés', icon: 'swap-horiz', color: theme.accent },
+                      ].filter(row => tirStats.crossTypeResult[row.key]?.total > 0).map((row, idx, arr) => {
                         const data = tirStats.crossTypeResult[row.key];
+                        const resultItems = [
+                          { label: 'Court droite', short: 'Ct. D', value: data.court_droite, color: '#E57373' },
+                          { label: 'Court gauche', short: 'Ct. G', value: data.court_gauche, color: '#EF5350' },
+                          { label: 'Long', short: 'Long', value: data.long, color: '#F44336' },
+                          { label: 'Bouchon', short: 'Bouch.', value: data.tir_bouchon, color: theme.warning },
+                        ];
+                        const dominant = resultItems.reduce((max, r) => r.value > max.value ? r : max, resultItems[0]);
+                        const dominantPct = data.total > 0 ? Math.round((dominant.value / data.total) * 100) : 0;
                         return (
-                          <View key={row.key} style={[styles.crossTableRow, idx % 2 === 0 && styles.crossTableRowAlt]}>
-                            <View style={styles.crossTableRowLabel}>
-                              <MaterialIcons name={row.icon as any} size={14} color={row.color} />
-                              <Text style={styles.crossTableRowLabelText} numberOfLines={1}>{row.label}</Text>
-                            </View>
-                            <View style={styles.crossTableCell}>
-                              <Text style={[styles.crossTableCellValue, { color: '#E57373' }]}>{data.court_droite}</Text>
-                              <Text style={styles.crossTableCellPct}>{data.total > 0 ? `${Math.round((data.court_droite / data.total) * 100)}%` : '-'}</Text>
-                            </View>
-                            <View style={styles.crossTableCell}>
-                              <Text style={[styles.crossTableCellValue, { color: '#EF5350' }]}>{data.court_gauche}</Text>
-                              <Text style={styles.crossTableCellPct}>{data.total > 0 ? `${Math.round((data.court_gauche / data.total) * 100)}%` : '-'}</Text>
-                            </View>
-                            <View style={styles.crossTableCell}>
-                              <Text style={[styles.crossTableCellValue, { color: '#F44336' }]}>{data.long}</Text>
-                              <Text style={styles.crossTableCellPct}>{data.total > 0 ? `${Math.round((data.long / data.total) * 100)}%` : '-'}</Text>
-                            </View>
-                            <View style={styles.crossTableCell}>
-                              <Text style={[styles.crossTableCellValue, { color: theme.warning }]}>{data.tir_bouchon}</Text>
-                              <Text style={styles.crossTableCellPct}>{data.total > 0 ? `${Math.round((data.tir_bouchon / data.total) * 100)}%` : '-'}</Text>
-                            </View>
+                          <View key={row.key}>
+                            <StatRow
+                              label={row.label}
+                              value={data.total}
+                              subValue={dominant.value > 0 ? `Surtout ${dominant.label.toLowerCase()} (${dominantPct}%)` : ''}
+                              icon={row.icon}
+                              color={row.color}
+                            />
+                            {data.total > 1 && (
+                              <View style={{ paddingLeft: 38, paddingRight: 8, paddingBottom: 8, paddingTop: 4 }}>
+                                <BreakdownBar items={resultItems.filter(r => r.value > 0).map(r => ({
+                                  label: r.short, value: r.value, color: r.color,
+                                }))} />
+                              </View>
+                            )}
+                            {idx < arr.length - 1 && <View style={styles.divider} />}
                           </View>
                         );
                       })}
-                      {/* Insight */}
                       {(() => {
                         const entries = Object.entries(tirStats.crossTypeResult).filter(([, v]) => v.total >= 2);
                         if (entries.length < 2) return null;
                         const labels: Record<string, string> = { au_fer: 'Tir tendu', au_plomb: 'Tir en cloche', en_rafle: 'En rafle' };
-                        // Find which type has highest court (droite+gauche) ratio
                         const courtRates = entries.map(([key, v]) => ({ key, rate: v.total > 0 ? ((v.court_droite + v.court_gauche) / v.total) * 100 : 0 }));
                         const longRates = entries.map(([key, v]) => ({ key, rate: v.total > 0 ? (v.long / v.total) * 100 : 0 }));
                         courtRates.sort((a, b) => b.rate - a.rate);
@@ -1306,10 +1284,10 @@ export default function StatsScreen() {
                         const issueType = worstCourt.rate >= worstLong.rate ? 'courts' : 'longs';
                         return (
                           <View style={styles.insightBox}>
-                            <MaterialIcons name="lightbulb" size={16} color={theme.error} />
+                            <MaterialIcons name="lightbulb" size={16} color={theme.tirColor} />
                             <Text style={styles.insightText}>
-                              Vos <Text style={{ fontWeight: '700', color: theme.error }}>{labels[mainIssue.key]}</Text> sont principalement {issueType} ({Math.round(mainIssue.rate)}%). 
-                              {issueType === 'courts' ? 'Travaillez la puissance sur ce type de tir.' : 'Réduisez la force sur ce type de tir.'}
+                              Vos <Text style={{ fontWeight: '700', color: theme.error }}>{labels[mainIssue.key]}</Text> sont principalement {issueType} ({Math.round(mainIssue.rate)}%).
+                              {issueType === 'courts' ? ' Travaillez la puissance sur ce type de tir.' : ' Réduisez la force sur ce type de tir.'}
                             </Text>
                           </View>
                         );
@@ -1663,66 +1641,45 @@ export default function StatsScreen() {
                   </Animated.View>
                 )}
 
-                {/* Cross-reference: Type x Résultat raté (in errors context) */}
+                {/* Analyse des échecs par technique (Erreurs) */}
                 {tirStats.hasCrossResultData && (
                   <Animated.View entering={FadeInDown.duration(400).delay(275)} style={styles.section}>
-                    <SectionHeader title="Type de tir × Résultat raté" subtitle={`${tirStats.totalCrossResultTracked} tirs ratés croisés`} icon="grid-on" color={theme.error} />
+                    <SectionHeader title="Analyse des échecs (Tir)" subtitle={`${tirStats.totalCrossResultTracked} tirs ratés analysés`} icon="highlight-off" color={theme.tirColor} />
                     <View style={styles.card}>
-                      {/* Table Header */}
-                      <View style={styles.crossTableHeader}>
-                        <View style={styles.crossTableHeaderLabel}>
-                          <Text style={styles.crossTableHeaderText}>Type</Text>
-                        </View>
-                        <View style={styles.crossTableHeaderCell}>
-                          <MaterialIcons name="subdirectory-arrow-right" size={12} color={'#E57373'} />
-                          <Text style={[styles.crossTableHeaderCellText, { color: '#E57373' }]}>Ct. D</Text>
-                        </View>
-                        <View style={styles.crossTableHeaderCell}>
-                          <MaterialIcons name="subdirectory-arrow-left" size={12} color={'#EF5350'} />
-                          <Text style={[styles.crossTableHeaderCellText, { color: '#EF5350' }]}>Ct. G</Text>
-                        </View>
-                        <View style={styles.crossTableHeaderCell}>
-                          <MaterialIcons name="arrow-upward" size={12} color={'#F44336'} />
-                          <Text style={[styles.crossTableHeaderCellText, { color: '#F44336' }]}>Long</Text>
-                        </View>
-                        <View style={styles.crossTableHeaderCell}>
-                          <MaterialIcons name="adjust" size={12} color={theme.warning} />
-                          <Text style={[styles.crossTableHeaderCellText, { color: theme.warning }]}>Bouch.</Text>
-                        </View>
-                      </View>
-                      {/* Table Rows */}
                       {[
-                        { key: 'au_fer', label: 'Tir tendu', icon: 'gps-fixed', color: theme.tirColor },
-                        { key: 'au_plomb', label: 'En cloche', icon: 'flight-takeoff', color: theme.pointColor },
-                        { key: 'en_rafle', label: 'En rafle', icon: 'swap-horiz', color: theme.accent },
-                      ].filter(row => tirStats.crossTypeResult[row.key]?.total > 0).map((row, idx) => {
+                        { key: 'au_fer', label: 'Tirs tendus ratés', icon: 'gps-fixed', color: theme.tirColor },
+                        { key: 'au_plomb', label: 'Tirs en cloche ratés', icon: 'flight-takeoff', color: theme.pointColor },
+                        { key: 'en_rafle', label: 'En rafle ratés', icon: 'swap-horiz', color: theme.accent },
+                      ].filter(row => tirStats.crossTypeResult[row.key]?.total > 0).map((row, idx, arr) => {
                         const data = tirStats.crossTypeResult[row.key];
+                        const resultItems = [
+                          { label: 'Court droite', short: 'Ct. D', value: data.court_droite, color: '#E57373' },
+                          { label: 'Court gauche', short: 'Ct. G', value: data.court_gauche, color: '#EF5350' },
+                          { label: 'Long', short: 'Long', value: data.long, color: '#F44336' },
+                          { label: 'Bouchon', short: 'Bouch.', value: data.tir_bouchon, color: theme.warning },
+                        ];
+                        const dominant = resultItems.reduce((max, r) => r.value > max.value ? r : max, resultItems[0]);
+                        const dominantPct = data.total > 0 ? Math.round((dominant.value / data.total) * 100) : 0;
                         return (
-                          <View key={row.key} style={[styles.crossTableRow, idx % 2 === 0 && styles.crossTableRowAlt]}>
-                            <View style={styles.crossTableRowLabel}>
-                              <MaterialIcons name={row.icon as any} size={14} color={row.color} />
-                              <Text style={styles.crossTableRowLabelText} numberOfLines={1}>{row.label}</Text>
-                            </View>
-                            <View style={styles.crossTableCell}>
-                              <Text style={[styles.crossTableCellValue, { color: '#E57373' }]}>{data.court_droite}</Text>
-                              <Text style={styles.crossTableCellPct}>{data.total > 0 ? `${Math.round((data.court_droite / data.total) * 100)}%` : '-'}</Text>
-                            </View>
-                            <View style={styles.crossTableCell}>
-                              <Text style={[styles.crossTableCellValue, { color: '#EF5350' }]}>{data.court_gauche}</Text>
-                              <Text style={styles.crossTableCellPct}>{data.total > 0 ? `${Math.round((data.court_gauche / data.total) * 100)}%` : '-'}</Text>
-                            </View>
-                            <View style={styles.crossTableCell}>
-                              <Text style={[styles.crossTableCellValue, { color: '#F44336' }]}>{data.long}</Text>
-                              <Text style={styles.crossTableCellPct}>{data.total > 0 ? `${Math.round((data.long / data.total) * 100)}%` : '-'}</Text>
-                            </View>
-                            <View style={styles.crossTableCell}>
-                              <Text style={[styles.crossTableCellValue, { color: theme.warning }]}>{data.tir_bouchon}</Text>
-                              <Text style={styles.crossTableCellPct}>{data.total > 0 ? `${Math.round((data.tir_bouchon / data.total) * 100)}%` : '-'}</Text>
-                            </View>
+                          <View key={row.key}>
+                            <StatRow
+                              label={row.label}
+                              value={data.total}
+                              subValue={dominant.value > 0 ? `Surtout ${dominant.label.toLowerCase()} (${dominantPct}%)` : ''}
+                              icon={row.icon}
+                              color={row.color}
+                            />
+                            {data.total > 1 && (
+                              <View style={{ paddingLeft: 38, paddingRight: 8, paddingBottom: 8, paddingTop: 4 }}>
+                                <BreakdownBar items={resultItems.filter(r => r.value > 0).map(r => ({
+                                  label: r.short, value: r.value, color: r.color,
+                                }))} />
+                              </View>
+                            )}
+                            {idx < arr.length - 1 && <View style={styles.divider} />}
                           </View>
                         );
                       })}
-                      {/* Insight */}
                       {(() => {
                         const entries = Object.entries(tirStats.crossTypeResult).filter(([, v]) => v.total >= 2);
                         if (entries.length < 2) return null;
@@ -1738,10 +1695,10 @@ export default function StatsScreen() {
                         const issueType = worstCourt.rate >= worstLong.rate ? 'courts' : 'longs';
                         return (
                           <View style={styles.insightBox}>
-                            <MaterialIcons name="lightbulb" size={16} color={theme.error} />
+                            <MaterialIcons name="lightbulb" size={16} color={theme.tirColor} />
                             <Text style={styles.insightText}>
-                              Vos <Text style={{ fontWeight: '700', color: theme.error }}>{labels[mainIssue.key]}</Text> sont principalement {issueType} ({Math.round(mainIssue.rate)}%). 
-                              {issueType === 'courts' ? 'Travaillez la puissance sur ce type de tir.' : 'Réduisez la force sur ce type de tir.'}
+                              Vos <Text style={{ fontWeight: '700', color: theme.error }}>{labels[mainIssue.key]}</Text> sont principalement {issueType} ({Math.round(mainIssue.rate)}%).
+                              {issueType === 'courts' ? ' Travaillez la puissance sur ce type de tir.' : ' Réduisez la force sur ce type de tir.'}
                             </Text>
                           </View>
                         );
