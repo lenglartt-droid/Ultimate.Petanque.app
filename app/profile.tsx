@@ -643,7 +643,7 @@ export default function ProfileScreen() {
               return (
                 <Pressable
                   style={styles.financialButton}
-                  onPress={() => router.push('/palmares')}
+                  onPress={() => router.push('/financial')}
                 >
                   <View style={[styles.financialButtonIcon, { backgroundColor: (balance >= 0 ? theme.success : theme.error) + '15' }]}>
                     <MaterialIcons name="account-balance-wallet" size={24} color={balance >= 0 ? theme.success : theme.error} />
