@@ -254,6 +254,7 @@ export interface DetailedShotRecord {
   carreau?: boolean;
   // Tir details
   shotType?: 'au_fer' | 'au_plomb' | 'en_rafle' | 'court_ramasse' | 'carreau';
+  shotResult?: 'court_droite' | 'court_gauche' | 'long' | 'tir_bouchon';
   shotQuality?: 'gain_point' | 'sans_effet' | 'negatif' | 'decisif';
   // Point details
   pointType?: 'roule' | 'plombe' | 'demi_portee' | 'portee';
@@ -409,7 +410,9 @@ export interface ChallengeDetailedShot {
   carreau?: boolean;
   // Tir details - success
   shotType?: 'au_fer' | 'au_plomb' | 'en_rafle' | 'court_ramasse' | 'carreau';
-  // Tir details - failure
+  // Tir details - failure result (where the shot went)
+  shotResult?: 'court_droite' | 'court_gauche' | 'long' | 'tir_bouchon';
+  /** @deprecated Use shotResult instead */
   failedShotType?: 'court_droite' | 'court_gauche' | 'long' | 'tir_bouchon';
   shotQuality?: 'gain_point' | 'sans_effet' | 'negatif' | 'decisif';
   // Point details
@@ -720,15 +723,15 @@ export const mockMatches: Match[] = [
           // Tirs détaillés - Jean-Pierre
           { id: 'ds1', timestamp: '2026-02-08T10:05:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'au_fer', shotQuality: 'gain_point' },
           { id: 'ds2', timestamp: '2026-02-08T10:08:00', playerId: '1', team: 'A', actionType: 'tir', success: true, carreau: true, shotType: 'carreau', shotQuality: 'gain_point' },
-          { id: 'ds3', timestamp: '2026-02-08T10:12:00', playerId: '1', team: 'A', actionType: 'tir', success: false, shotType: 'au_plomb', shotQuality: 'negatif' },
+          { id: 'ds3', timestamp: '2026-02-08T10:12:00', playerId: '1', team: 'A', actionType: 'tir', success: false, shotType: 'au_plomb', shotResult: 'court_droite', shotQuality: 'negatif' },
           { id: 'ds4', timestamp: '2026-02-08T10:18:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'en_rafle', shotQuality: 'sans_effet' },
           { id: 'ds5', timestamp: '2026-02-08T10:22:00', playerId: '1', team: 'A', actionType: 'tir', success: true, carreau: true, shotType: 'carreau', shotQuality: 'gain_point' },
           { id: 'ds6', timestamp: '2026-02-08T10:28:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'au_fer', shotQuality: 'decisif' },
-          { id: 'ds7', timestamp: '2026-02-08T10:32:00', playerId: '1', team: 'A', actionType: 'tir', success: false, shotType: 'au_fer', shotQuality: 'negatif' },
+          { id: 'ds7', timestamp: '2026-02-08T10:32:00', playerId: '1', team: 'A', actionType: 'tir', success: false, shotType: 'au_fer', shotResult: 'long', shotQuality: 'negatif' },
           { id: 'ds8', timestamp: '2026-02-08T10:38:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'au_fer', shotQuality: 'gain_point' },
           { id: 'ds9', timestamp: '2026-02-08T10:42:00', playerId: '1', team: 'A', actionType: 'tir', success: true, carreau: true, shotType: 'carreau', shotQuality: 'gain_point' },
           { id: 'ds10', timestamp: '2026-02-08T10:45:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'au_plomb', shotQuality: 'sans_effet' },
-          { id: 'ds11', timestamp: '2026-02-08T10:48:00', playerId: '1', team: 'A', actionType: 'tir', success: false, shotType: 'en_rafle', shotQuality: 'negatif' },
+          { id: 'ds11', timestamp: '2026-02-08T10:48:00', playerId: '1', team: 'A', actionType: 'tir', success: false, shotType: 'en_rafle', shotResult: 'court_gauche', shotQuality: 'negatif' },
           { id: 'ds12', timestamp: '2026-02-08T10:52:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'au_fer', shotQuality: 'decisif' },
           // Points détaillés - Jean-Pierre
           { id: 'dp1', timestamp: '2026-02-08T10:06:00', playerId: '1', team: 'A', actionType: 'point', success: true, pointType: 'roule', pointQuality: 'excellent' },
@@ -749,12 +752,12 @@ export const mockMatches: Match[] = [
         detailedShots: [
           // Tirs détaillés - Emma
           { id: 'eds1', timestamp: '2026-02-08T10:07:00', playerId: '6', team: 'A', actionType: 'tir', success: true, shotType: 'au_fer', shotQuality: 'gain_point' },
-          { id: 'eds2', timestamp: '2026-02-08T10:13:00', playerId: '6', team: 'A', actionType: 'tir', success: false, shotType: 'au_plomb', shotQuality: 'sans_effet' },
+          { id: 'eds2', timestamp: '2026-02-08T10:13:00', playerId: '6', team: 'A', actionType: 'tir', success: false, shotType: 'au_plomb', shotResult: 'long', shotQuality: 'sans_effet' },
           { id: 'eds3', timestamp: '2026-02-08T10:19:00', playerId: '6', team: 'A', actionType: 'tir', success: true, shotType: 'court_ramasse', shotQuality: 'gain_point' },
           { id: 'eds4', timestamp: '2026-02-08T10:26:00', playerId: '6', team: 'A', actionType: 'tir', success: true, carreau: true, shotType: 'carreau', shotQuality: 'gain_point' },
-          { id: 'eds5', timestamp: '2026-02-08T10:33:00', playerId: '6', team: 'A', actionType: 'tir', success: false, shotType: 'en_rafle', shotQuality: 'negatif' },
+          { id: 'eds5', timestamp: '2026-02-08T10:33:00', playerId: '6', team: 'A', actionType: 'tir', success: false, shotType: 'en_rafle', shotResult: 'court_droite', shotQuality: 'negatif' },
           { id: 'eds6', timestamp: '2026-02-08T10:39:00', playerId: '6', team: 'A', actionType: 'tir', success: true, shotType: 'au_fer', shotQuality: 'decisif' },
-          { id: 'eds7', timestamp: '2026-02-08T10:46:00', playerId: '6', team: 'A', actionType: 'tir', success: false, shotType: 'au_plomb', shotQuality: 'negatif' },
+          { id: 'eds7', timestamp: '2026-02-08T10:46:00', playerId: '6', team: 'A', actionType: 'tir', success: false, shotType: 'au_plomb', shotResult: 'tir_bouchon', shotQuality: 'negatif' },
           { id: 'eds8', timestamp: '2026-02-08T10:50:00', playerId: '6', team: 'A', actionType: 'tir', success: true, shotType: 'au_fer', shotQuality: 'sans_effet' },
           // Points détaillés - Emma
           { id: 'edp1', timestamp: '2026-02-08T10:04:00', playerId: '6', team: 'A', actionType: 'point', success: true, pointType: 'roule', pointQuality: 'bon' },
@@ -813,17 +816,17 @@ export const mockMatches: Match[] = [
           { id: 'ds2_1', timestamp: '2026-02-09T14:05:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'au_fer', shotQuality: 'gain_point' },
           { id: 'ds2_2', timestamp: '2026-02-09T14:10:00', playerId: '1', team: 'A', actionType: 'tir', success: true, carreau: true, shotType: 'carreau', shotQuality: 'gain_point' },
           { id: 'ds2_3', timestamp: '2026-02-09T14:15:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'au_plomb', shotQuality: 'decisif' },
-          { id: 'ds2_4', timestamp: '2026-02-09T14:20:00', playerId: '1', team: 'A', actionType: 'tir', success: false, shotType: 'en_rafle', shotQuality: 'negatif' },
+          { id: 'ds2_4', timestamp: '2026-02-09T14:20:00', playerId: '1', team: 'A', actionType: 'tir', success: false, shotType: 'en_rafle', shotResult: 'court_gauche', shotQuality: 'negatif' },
           { id: 'ds2_5', timestamp: '2026-02-09T14:25:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'court_ramasse', shotQuality: 'gain_point' },
           { id: 'ds2_6', timestamp: '2026-02-09T14:30:00', playerId: '1', team: 'A', actionType: 'tir', success: true, carreau: true, shotType: 'carreau', shotQuality: 'gain_point' },
-          { id: 'ds2_7', timestamp: '2026-02-09T14:35:00', playerId: '1', team: 'A', actionType: 'tir', success: false, shotType: 'au_fer', shotQuality: 'sans_effet' },
+          { id: 'ds2_7', timestamp: '2026-02-09T14:35:00', playerId: '1', team: 'A', actionType: 'tir', success: false, shotType: 'au_fer', shotResult: 'court_droite', shotQuality: 'sans_effet' },
           { id: 'ds2_8', timestamp: '2026-02-09T14:40:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'au_fer', shotQuality: 'gain_point' },
           { id: 'ds2_9', timestamp: '2026-02-09T14:45:00', playerId: '1', team: 'A', actionType: 'tir', success: true, carreau: true, shotType: 'carreau', shotQuality: 'gain_point' },
           { id: 'ds2_10', timestamp: '2026-02-09T14:50:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'au_plomb', shotQuality: 'sans_effet' },
-          { id: 'ds2_11', timestamp: '2026-02-09T14:55:00', playerId: '1', team: 'A', actionType: 'tir', success: false, shotType: 'au_plomb', shotQuality: 'negatif' },
+          { id: 'ds2_11', timestamp: '2026-02-09T14:55:00', playerId: '1', team: 'A', actionType: 'tir', success: false, shotType: 'au_plomb', shotResult: 'long', shotQuality: 'negatif' },
           { id: 'ds2_12', timestamp: '2026-02-09T15:00:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'en_rafle', shotQuality: 'gain_point' },
           { id: 'ds2_13', timestamp: '2026-02-09T15:05:00', playerId: '1', team: 'A', actionType: 'tir', success: true, carreau: true, shotType: 'carreau', shotQuality: 'gain_point' },
-          { id: 'ds2_14', timestamp: '2026-02-09T15:10:00', playerId: '1', team: 'A', actionType: 'tir', success: false, shotType: 'au_fer', shotQuality: 'negatif' },
+          { id: 'ds2_14', timestamp: '2026-02-09T15:10:00', playerId: '1', team: 'A', actionType: 'tir', success: false, shotType: 'au_fer', shotResult: 'court_gauche', shotQuality: 'negatif' },
           { id: 'ds2_15', timestamp: '2026-02-09T15:15:00', playerId: '1', team: 'A', actionType: 'tir', success: true, shotType: 'au_fer', shotQuality: 'decisif' },
           // Points supplémentaires
           { id: 'dp2_1', timestamp: '2026-02-09T14:07:00', playerId: '1', team: 'A', actionType: 'point', success: true, pointType: 'roule', pointQuality: 'excellent' },

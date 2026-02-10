@@ -486,6 +486,7 @@ export default function NewChallengeScreen() {
       success: record.success,
       carreau: record.carreau,
       shotType: record.shotType,
+      shotResult: record.shotResult,
       shotQuality: record.shotQuality,
       pointType: record.pointType,
       pointQuality: record.pointQuality,
