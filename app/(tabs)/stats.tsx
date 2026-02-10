@@ -428,6 +428,13 @@ export default function StatsScreen() {
       court_ramasse: { gain_point: 0, sans_effet: 0, negatif: 0, decisif: 0, total: 0 },
     };
     
+    // Cross-reference: shotType -> shotResult distribution (failed tirs only)
+    const crossTypeResult: Record<string, { court_droite: number; court_gauche: number; long: number; tir_bouchon: number; total: number }> = {
+      au_fer: { court_droite: 0, court_gauche: 0, long: 0, tir_bouchon: 0, total: 0 },
+      au_plomb: { court_droite: 0, court_gauche: 0, long: 0, tir_bouchon: 0, total: 0 },
+      en_rafle: { court_droite: 0, court_gauche: 0, long: 0, tir_bouchon: 0, total: 0 },
+    };
+    
     filteredMatches.forEach(match => {
       if (match.playerActions) {
         match.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
@@ -461,6 +468,15 @@ export default function StatsScreen() {
                     crossTypeImpact[shot.shotType][impactKey]++;
                     crossTypeImpact[shot.shotType].total++;
                   }
+                }
+              }
+              // Cross-reference: track shotResult per shot type (failed tirs only)
+              if (!shot.success && shot.shotType && crossTypeResult[shot.shotType]) {
+                const resultKey = shot.shotResult || shot.shotType; // backward compat
+                if (resultKey && crossTypeResult[shot.shotType][resultKey as keyof typeof crossTypeResult['au_fer']] !== undefined) {
+                  const rk = resultKey as 'court_droite' | 'court_gauche' | 'long' | 'tir_bouchon';
+                  crossTypeResult[shot.shotType][rk]++;
+                  crossTypeResult[shot.shotType].total++;
                 }
               }
             });
@@ -497,11 +513,15 @@ export default function StatsScreen() {
     const hasCrossData = Object.values(crossTypeImpact).some(v => v.total > 0);
     const totalCrossTracked = Object.values(crossTypeImpact).reduce((sum, v) => sum + v.total, 0);
 
+    const hasCrossResultData = Object.values(crossTypeResult).some(v => v.total > 0);
+    const totalCrossResultTracked = Object.values(crossTypeResult).reduce((sum, v) => sum + v.total, 0);
+
     return {
       totalTirs: combinedTirs, tirsSuccess: combinedSuccess, carreaux: combinedCarreaux,
       successRate, carreauRate, demiTirRate, missedRate, tirsPerMatch, tirsPerMene,
       matchTirs: totalTirs, challengeTirs, hasDetailedData, totalDetailedTirs, totalQualityTracked,
       crossTypeImpact, hasCrossData, totalCrossTracked,
+      crossTypeResult, hasCrossResultData, totalCrossResultTracked,
       tirGainPoint: shotQualityStats.gain_point, tirSansEffet: shotQualityStats.sans_effet,
       tirNegatif: shotQualityStats.negatif, tirsDecisifs: shotQualityStats.decisif,
       tirAuFer: shotTypeStats.au_fer, tirAuPlomb: shotTypeStats.au_plomb,
@@ -1191,6 +1211,94 @@ export default function StatsScreen() {
                             <Text style={styles.insightText}>
                               Votre <Text style={{ fontWeight: '700', color: theme.success }}>{labels[best.key]}</Text> a le meilleur impact positif ({Math.round(best.rate)}%). 
                               Le <Text style={{ fontWeight: '700', color: theme.error }}>{labels[worst.key]}</Text> est le moins efficace ({Math.round(worst.rate)}%).
+                            </Text>
+                          </View>
+                        );
+                      })()}
+                    </View>
+                  </Animated.View>
+                )}
+
+                {/* Cross-reference: Type x Résultat (failed tirs) */}
+                {tirStats.hasCrossResultData && (
+                  <Animated.View entering={FadeInDown.duration(400).delay(185)} style={styles.section}>
+                    <SectionHeader title="Type de tir × Résultat raté" subtitle={`${tirStats.totalCrossResultTracked} tirs ratés croisés`} icon="grid-on" color={theme.error} />
+                    <View style={styles.card}>
+                      {/* Table Header */}
+                      <View style={styles.crossTableHeader}>
+                        <View style={styles.crossTableHeaderLabel}>
+                          <Text style={styles.crossTableHeaderText}>Type</Text>
+                        </View>
+                        <View style={styles.crossTableHeaderCell}>
+                          <MaterialIcons name="subdirectory-arrow-right" size={12} color={'#E57373'} />
+                          <Text style={[styles.crossTableHeaderCellText, { color: '#E57373' }]}>Ct. D</Text>
+                        </View>
+                        <View style={styles.crossTableHeaderCell}>
+                          <MaterialIcons name="subdirectory-arrow-left" size={12} color={'#EF5350'} />
+                          <Text style={[styles.crossTableHeaderCellText, { color: '#EF5350' }]}>Ct. G</Text>
+                        </View>
+                        <View style={styles.crossTableHeaderCell}>
+                          <MaterialIcons name="arrow-upward" size={12} color={'#F44336'} />
+                          <Text style={[styles.crossTableHeaderCellText, { color: '#F44336' }]}>Long</Text>
+                        </View>
+                        <View style={styles.crossTableHeaderCell}>
+                          <MaterialIcons name="adjust" size={12} color={theme.warning} />
+                          <Text style={[styles.crossTableHeaderCellText, { color: theme.warning }]}>Bouch.</Text>
+                        </View>
+                      </View>
+                      {/* Table Rows */}
+                      {[
+                        { key: 'au_fer', label: 'Tir tendu', icon: 'gps-fixed', color: theme.tirColor },
+                        { key: 'au_plomb', label: 'En cloche', icon: 'flight-takeoff', color: theme.pointColor },
+                        { key: 'en_rafle', label: 'En rafle', icon: 'swap-horiz', color: theme.accent },
+                      ].filter(row => tirStats.crossTypeResult[row.key]?.total > 0).map((row, idx) => {
+                        const data = tirStats.crossTypeResult[row.key];
+                        return (
+                          <View key={row.key} style={[styles.crossTableRow, idx % 2 === 0 && styles.crossTableRowAlt]}>
+                            <View style={styles.crossTableRowLabel}>
+                              <MaterialIcons name={row.icon as any} size={14} color={row.color} />
+                              <Text style={styles.crossTableRowLabelText} numberOfLines={1}>{row.label}</Text>
+                            </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={[styles.crossTableCellValue, { color: '#E57373' }]}>{data.court_droite}</Text>
+                              <Text style={styles.crossTableCellPct}>{data.total > 0 ? `${Math.round((data.court_droite / data.total) * 100)}%` : '-'}</Text>
+                            </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={[styles.crossTableCellValue, { color: '#EF5350' }]}>{data.court_gauche}</Text>
+                              <Text style={styles.crossTableCellPct}>{data.total > 0 ? `${Math.round((data.court_gauche / data.total) * 100)}%` : '-'}</Text>
+                            </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={[styles.crossTableCellValue, { color: '#F44336' }]}>{data.long}</Text>
+                              <Text style={styles.crossTableCellPct}>{data.total > 0 ? `${Math.round((data.long / data.total) * 100)}%` : '-'}</Text>
+                            </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={[styles.crossTableCellValue, { color: theme.warning }]}>{data.tir_bouchon}</Text>
+                              <Text style={styles.crossTableCellPct}>{data.total > 0 ? `${Math.round((data.tir_bouchon / data.total) * 100)}%` : '-'}</Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                      {/* Insight */}
+                      {(() => {
+                        const entries = Object.entries(tirStats.crossTypeResult).filter(([, v]) => v.total >= 2);
+                        if (entries.length < 2) return null;
+                        const labels: Record<string, string> = { au_fer: 'Tir tendu', au_plomb: 'Tir en cloche', en_rafle: 'En rafle' };
+                        // Find which type has highest court (droite+gauche) ratio
+                        const courtRates = entries.map(([key, v]) => ({ key, rate: v.total > 0 ? ((v.court_droite + v.court_gauche) / v.total) * 100 : 0 }));
+                        const longRates = entries.map(([key, v]) => ({ key, rate: v.total > 0 ? (v.long / v.total) * 100 : 0 }));
+                        courtRates.sort((a, b) => b.rate - a.rate);
+                        longRates.sort((a, b) => b.rate - a.rate);
+                        const worstCourt = courtRates[0];
+                        const worstLong = longRates[0];
+                        if (worstCourt.rate < 30 && worstLong.rate < 30) return null;
+                        const mainIssue = worstCourt.rate >= worstLong.rate ? worstCourt : worstLong;
+                        const issueType = worstCourt.rate >= worstLong.rate ? 'courts' : 'longs';
+                        return (
+                          <View style={styles.insightBox}>
+                            <MaterialIcons name="lightbulb" size={16} color={theme.error} />
+                            <Text style={styles.insightText}>
+                              Vos <Text style={{ fontWeight: '700', color: theme.error }}>{labels[mainIssue.key]}</Text> sont principalement {issueType} ({Math.round(mainIssue.rate)}%). 
+                              {issueType === 'courts' ? 'Travaillez la puissance sur ce type de tir.' : 'Réduisez la force sur ce type de tir.'}
                             </Text>
                           </View>
                         );
