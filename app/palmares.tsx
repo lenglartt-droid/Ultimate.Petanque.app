@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -6,15 +6,19 @@ import {
   Pressable,
   StyleSheet,
   FlatList,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import Svg, { Circle, Line, G, Text as SvgText, Rect } from 'react-native-svg';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { Tournament, Match } from '@/services/mockData';
+
+const { width: screenWidth } = Dimensions.get('window');
 
 interface TournamentPalmaresItem {
   tournament: Tournament;
@@ -165,12 +169,96 @@ function TournamentCard({ item, index }: { item: TournamentPalmaresItem; index: 
   );
 }
 
+type YearFilter = 'all' | string;
+type FormatFilter = 'all' | 'Tête-à-tête' | 'Doublette' | 'Triplette';
+type ResultFilter = 'all' | 'podium';
+
+const FORMAT_FILTERS: { id: FormatFilter; label: string }[] = [
+  { id: 'all', label: 'Tous' },
+  { id: 'Tête-à-tête', label: 'TàT' },
+  { id: 'Doublette', label: 'Doublette' },
+  { id: 'Triplette', label: 'Triplette' },
+];
+
 export default function PalmaresScreen() {
   const insets = useSafeAreaInsets();
   const { tournaments, matches } = useApp();
 
-  // Build palmares data
+  const [yearFilter, setYearFilter] = useState<YearFilter>('all');
+  const [formatFilter, setFormatFilter] = useState<FormatFilter>('all');
+  const [resultFilter, setResultFilter] = useState<ResultFilter>('all');
+  const [showChart, setShowChart] = useState(false);
+
+  // Build palmares data (unfiltered for summary)
+  const allPalmaresData = useMemo(() => {
+    const finishedTournaments = tournaments.filter(t => t.status === 'Terminé');
+
+    const items: TournamentPalmaresItem[] = finishedTournaments.map(tournament => {
+      const tournamentMatches = matches.filter(m => m.tournamentId === tournament.id);
+      const wins = tournamentMatches.filter(m => m.winner === 'A').length;
+      const losses = tournamentMatches.length - wins;
+      const pointsFor = tournamentMatches.reduce((sum, m) => sum + (m.teamA?.score || 0), 0);
+      const pointsAgainst = tournamentMatches.reduce((sum, m) => sum + (m.teamB?.score || 0), 0);
+
+      let totalTirs = 0, totalTirsSuccess = 0, totalCarreaux = 0;
+      tournamentMatches.forEach(m => {
+        if (m.playerActions) {
+          m.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
+            totalTirs += pa.actions.tirs;
+            totalTirsSuccess += pa.actions.tirsSuccess;
+            totalCarreaux += pa.actions.carreaux;
+          });
+        }
+      });
+
+      return {
+        tournament,
+        matches: tournamentMatches,
+        stats: {
+          played: tournamentMatches.length,
+          wins,
+          losses,
+          winRate: tournamentMatches.length > 0 ? Math.round((wins / tournamentMatches.length) * 100) : 0,
+          pointsFor,
+          pointsAgainst,
+          pointDiff: pointsFor - pointsAgainst,
+          tirRate: totalTirs > 0 ? Math.round((totalTirsSuccess / totalTirs) * 100) : null,
+          carreaux: totalCarreaux,
+        },
+      };
+    });
+
+    items.sort((a, b) => {
+      const rankA = RESULT_CONFIG[a.tournament.finalResult || '']?.rank || 99;
+      const rankB = RESULT_CONFIG[b.tournament.finalResult || '']?.rank || 99;
+      if (rankA !== rankB) return rankA - rankB;
+      return new Date(b.tournament.date).getTime() - new Date(a.tournament.date).getTime();
+    });
+
+    return items;
+  }, [tournaments, matches]);
+
+  // Extract available years
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    allPalmaresData.forEach(item => {
+      years.add(new Date(item.tournament.date).getFullYear().toString());
+    });
+    return Array.from(years).sort((a, b) => parseInt(b) - parseInt(a));
+  }, [allPalmaresData]);
+
+  // Filtered palmares data
   const palmaresData = useMemo(() => {
+    return allPalmaresData.filter(item => {
+      if (yearFilter !== 'all' && new Date(item.tournament.date).getFullYear().toString() !== yearFilter) return false;
+      if (formatFilter !== 'all' && item.tournament.format !== formatFilter) return false;
+      if (resultFilter === 'podium' && !['1er', '2ème', '3ème'].includes(item.tournament.finalResult || '')) return false;
+      return true;
+    });
+  }, [allPalmaresData, yearFilter, formatFilter, resultFilter]);
+
+  // Build palmares data - KEPT for backward compat but now uses filtered
+  const _palmaresDataLegacy = useMemo(() => {
     const finishedTournaments = tournaments.filter(t => t.status === 'Terminé');
 
     const items: TournamentPalmaresItem[] = finishedTournaments.map(tournament => {
@@ -219,7 +307,7 @@ export default function PalmaresScreen() {
     return items;
   }, [tournaments, matches]);
 
-  // Summary stats
+  // Summary stats (from filtered data)
   const summary = useMemo(() => {
     const totalTournaments = palmaresData.length;
     const totalWins = palmaresData.reduce((sum, item) => sum + item.stats.wins, 0);
@@ -231,6 +319,24 @@ export default function PalmaresScreen() {
 
     return { totalTournaments, totalWins, totalMatches, totalGains, totalCosts, podiums, titles };
   }, [palmaresData]);
+
+  // Chart data: evolution over time (sorted by date, all finished tournaments)
+  const chartData = useMemo(() => {
+    const sorted = [...palmaresData].sort((a, b) => new Date(a.tournament.date).getTime() - new Date(b.tournament.date).getTime());
+    return sorted.map((item, index) => {
+      const cumulativeWins = sorted.slice(0, index + 1).reduce((sum, i) => sum + i.stats.wins, 0);
+      const cumulativeMatches = sorted.slice(0, index + 1).reduce((sum, i) => sum + i.stats.played, 0);
+      return {
+        label: new Date(item.tournament.date).toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }),
+        shortName: item.tournament.name.substring(0, 10),
+        winRate: cumulativeMatches > 0 ? Math.round((cumulativeWins / cumulativeMatches) * 100) : 0,
+        tournamentWinRate: item.stats.winRate,
+        pointDiff: item.stats.pointDiff,
+      };
+    });
+  }, [palmaresData]);
+
+  const hasFilters = yearFilter !== 'all' || formatFilter !== 'all' || resultFilter !== 'podium';
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
@@ -286,8 +392,127 @@ export default function PalmaresScreen() {
               </View>
             </Animated.View>
 
+            {/* Filters */}
+            <View style={styles.filtersSection}>
+              {/* Year Filter */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+                <Pressable
+                  style={[styles.filterChip, yearFilter === 'all' && styles.filterChipActive]}
+                  onPress={() => { Haptics.selectionAsync(); setYearFilter('all'); }}
+                >
+                  <Text style={[styles.filterChipText, yearFilter === 'all' && styles.filterChipTextActive]}>Toutes</Text>
+                </Pressable>
+                {availableYears.map(year => (
+                  <Pressable
+                    key={year}
+                    style={[styles.filterChip, yearFilter === year && styles.filterChipActive]}
+                    onPress={() => { Haptics.selectionAsync(); setYearFilter(yearFilter === year ? 'all' : year); }}
+                  >
+                    <Text style={[styles.filterChipText, yearFilter === year && styles.filterChipTextActive]}>{year}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+
+              {/* Format & Result Filters */}
+              <View style={styles.filterRowWrap}>
+                {FORMAT_FILTERS.map(f => (
+                  <Pressable
+                    key={f.id}
+                    style={[styles.filterChipSmall, formatFilter === f.id && styles.filterChipSmallActive]}
+                    onPress={() => { Haptics.selectionAsync(); setFormatFilter(f.id); }}
+                  >
+                    <Text style={[styles.filterChipSmallText, formatFilter === f.id && styles.filterChipSmallTextActive]}>{f.label}</Text>
+                  </Pressable>
+                ))}
+                <View style={styles.filterSeparator} />
+                <Pressable
+                  style={[styles.filterChipSmall, resultFilter === 'podium' && styles.filterChipPodiumActive]}
+                  onPress={() => { Haptics.selectionAsync(); setResultFilter(resultFilter === 'podium' ? 'all' : 'podium'); }}
+                >
+                  <MaterialIcons name="emoji-events" size={14} color={resultFilter === 'podium' ? theme.carreauColor : theme.textMuted} />
+                  <Text style={[styles.filterChipSmallText, resultFilter === 'podium' && { color: theme.carreauColor }]}>Podiums</Text>
+                </Pressable>
+              </View>
+            </View>
+
+            {/* Evolution Chart Toggle */}
+            {palmaresData.length >= 2 && (
+              <Pressable
+                style={styles.chartToggle}
+                onPress={() => { Haptics.selectionAsync(); setShowChart(!showChart); }}
+              >
+                <MaterialIcons name="show-chart" size={18} color={theme.primary} />
+                <Text style={styles.chartToggleText}>{showChart ? 'Masquer le graphique' : 'Voir la progression'}</Text>
+                <MaterialIcons name={showChart ? 'expand-less' : 'expand-more'} size={20} color={theme.primary} />
+              </Pressable>
+            )}
+
+            {/* Evolution Chart */}
+            {showChart && chartData.length >= 2 && (
+              <Animated.View entering={FadeIn.duration(400)} style={styles.chartCard}>
+                <View style={styles.chartHeader}>
+                  <MaterialIcons name="trending-up" size={18} color={theme.primary} />
+                  <Text style={styles.chartTitle}>Évolution en tournoi</Text>
+                </View>
+                <Text style={styles.chartSubtitle}>Taux de victoire par tournoi</Text>
+                <View style={styles.chartContainer}>
+                  <Svg width={screenWidth - 80} height={180}>
+                    {/* Grid lines */}
+                    {[0, 25, 50, 75, 100].map((v, i) => (
+                      <G key={i}>
+                        <Line x1="35" y1={160 - (v / 100) * 130} x2={screenWidth - 80} y2={160 - (v / 100) * 130} stroke={theme.border} strokeWidth="1" strokeDasharray="4,4" />
+                        <SvgText x="30" y={165 - (v / 100) * 130} fontSize="9" fill={theme.textMuted} textAnchor="end">{v}%</SvgText>
+                      </G>
+                    ))}
+                    {/* Data points & lines */}
+                    {chartData.map((data, i) => {
+                      const chartWidth = screenWidth - 115;
+                      const x = 45 + (i * (chartWidth / Math.max(chartData.length - 1, 1)));
+                      const y = 160 - (data.tournamentWinRate / 100) * 130;
+                      const prevData = chartData[i - 1];
+                      const prevX = prevData ? 45 + ((i - 1) * (chartWidth / Math.max(chartData.length - 1, 1))) : x;
+                      const prevY = prevData ? 160 - (prevData.tournamentWinRate / 100) * 130 : y;
+                      return (
+                        <G key={i}>
+                          {i > 0 && <Line x1={prevX} y1={prevY} x2={x} y2={y} stroke={theme.primary} strokeWidth="2.5" />}
+                          <Circle cx={x} cy={y} r="5" fill={data.tournamentWinRate >= 50 ? theme.success : theme.error} />
+                          <SvgText x={x} y={y - 10} fontSize="9" fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.tournamentWinRate}%</SvgText>
+                        </G>
+                      );
+                    })}
+                  </Svg>
+                </View>
+
+                {/* Point Diff bar chart */}
+                <View style={styles.chartDivider} />
+                <Text style={styles.chartSubtitle}>Différence de points par tournoi</Text>
+                <View style={styles.chartContainer}>
+                  <Svg width={screenWidth - 80} height={120}>
+                    {chartData.map((data, i) => {
+                      const barWidth = Math.max((screenWidth - 120) / chartData.length - 8, 12);
+                      const x = 40 + (i * ((screenWidth - 100) / chartData.length));
+                      const maxDiff = Math.max(...chartData.map(d => Math.abs(d.pointDiff)), 1);
+                      const barHeight = Math.abs(data.pointDiff) / maxDiff * 35;
+                      const isPositive = data.pointDiff >= 0;
+                      const barY = isPositive ? 55 - barHeight : 55;
+                      return (
+                        <G key={i}>
+                          <Rect x={x} y={barY} width={barWidth} height={Math.max(barHeight, 2)} fill={isPositive ? theme.success : theme.error} rx="3" />
+                          <SvgText x={x + barWidth / 2} y={isPositive ? barY - 6 : barY + barHeight + 12} fontSize="9" fill={isPositive ? theme.success : theme.error} textAnchor="middle" fontWeight="600">
+                            {isPositive ? '+' : ''}{data.pointDiff}
+                          </SvgText>
+                          <SvgText x={x + barWidth / 2} y={105} fontSize="7" fill={theme.textMuted} textAnchor="middle">{data.label}</SvgText>
+                        </G>
+                      );
+                    })}
+                    <Line x1="35" y1="55" x2={screenWidth - 80} y2="55" stroke={theme.border} strokeWidth="1" />
+                  </Svg>
+                </View>
+              </Animated.View>
+            )}
+
             {palmaresData.length > 0 && (
-              <Text style={styles.listSectionTitle}>DÉTAIL PAR TOURNOI</Text>
+              <Text style={styles.listSectionTitle}>DÉTAIL PAR TOURNOI ({palmaresData.length})</Text>
             )}
           </>
         )}
@@ -398,6 +623,45 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.sm,
   },
   carreauText: { fontSize: 11, color: theme.carreauColor, fontWeight: '600' },
+  // Filters
+  filtersSection: { marginBottom: 16, gap: 10 },
+  filterRow: { gap: 8, paddingBottom: 4 },
+  filterRowWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
+  filterChip: {
+    paddingHorizontal: 16, paddingVertical: 9,
+    borderRadius: theme.borderRadius.full, backgroundColor: theme.surface,
+    borderWidth: 1.5, borderColor: theme.border,
+  },
+  filterChipActive: { backgroundColor: theme.primary, borderColor: theme.primary },
+  filterChipText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
+  filterChipTextActive: { color: '#FFF' },
+  filterChipSmall: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 12, paddingVertical: 7,
+    borderRadius: theme.borderRadius.full, backgroundColor: theme.surface,
+    borderWidth: 1.5, borderColor: theme.border,
+  },
+  filterChipSmallActive: { borderColor: theme.primary, backgroundColor: theme.primary + '10' },
+  filterChipPodiumActive: { borderColor: theme.carreauColor, backgroundColor: theme.carreauColor + '10' },
+  filterChipSmallText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  filterChipSmallTextActive: { color: theme.primary },
+  filterSeparator: { width: 1, height: 20, backgroundColor: theme.border, marginHorizontal: 4 },
+  // Chart
+  chartToggle: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: theme.primary + '10', paddingVertical: 12,
+    borderRadius: theme.borderRadius.md, marginBottom: 16,
+  },
+  chartToggleText: { fontSize: 13, fontWeight: '600', color: theme.primary },
+  chartCard: {
+    backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg,
+    padding: 16, marginBottom: 20, ...theme.shadows.card,
+  },
+  chartHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  chartTitle: { fontSize: 15, fontWeight: '700', color: theme.textPrimary },
+  chartSubtitle: { fontSize: 11, color: theme.textMuted, marginBottom: 12 },
+  chartContainer: { alignItems: 'center', marginBottom: 8 },
+  chartDivider: { height: 1, backgroundColor: theme.border, marginVertical: 14 },
   // Empty
   emptyState: { alignItems: 'center', paddingVertical: 48 },
   emptyTitle: { fontSize: 18, fontWeight: '600', color: theme.textPrimary, marginTop: 16 },
