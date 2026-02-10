@@ -1588,22 +1588,49 @@ export default function StatsScreen() {
                   </View>
                 </Animated.View>
 
-                {/* Detailed tir errors */}
-                {(errorStats.totalTirErrorResults > 0 || errorStats.totalTirErrorByTechnique > 0) && (
+                {/* Analyse des échecs (Tir) - Unified */}
+                {(errorStats.totalTirErrorResults > 0 || errorStats.totalTirErrorByTechnique > 0 || tirStats.hasCrossResultData) && (
                   <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-                    <SectionHeader title="Types de tirs ratés" subtitle={`${errorStats.totalTirErrorResults > 0 ? errorStats.totalTirErrorResults : errorStats.totalTirErrorByTechnique} erreurs analysées`} icon="gps-off" color={theme.tirColor} />
+                    <SectionHeader title="Analyse des échecs (Tir)" subtitle={`${Math.max(errorStats.totalTirErrorResults, errorStats.totalTirErrorByTechnique, tirStats.totalCrossResultTracked)} tirs ratés analysés`} icon="highlight-off" color={theme.tirColor} />
                     <View style={styles.card}>
                       {/* Shot results (where the shot went) */}
                       {errorStats.totalTirErrorResults > 0 && (
                         <>
                           {errorStats.tirErrorResults.courtDroite > 0 && (
-                            <StatRow label="Court, à droite" value={errorStats.tirErrorResults.courtDroite} subValue={`${Math.round((errorStats.tirErrorResults.courtDroite / errorStats.totalTirErrorResults) * 100)}%`} icon="subdirectory-arrow-right" color={theme.error} />
+                            <>
+                              <StatRow label="Court, à droite" value={errorStats.tirErrorResults.courtDroite} subValue={`${Math.round((errorStats.tirErrorResults.courtDroite / errorStats.totalTirErrorResults) * 100)}%`} icon="subdirectory-arrow-right" color="#E57373" />
+                              <View style={styles.coachingTip}>
+                                <View style={styles.coachingTipHeader}>
+                                  <MaterialIcons name="psychology" size={14} color={theme.tirColor} />
+                                  <Text style={styles.coachingTipCause}>Pied trop ouvert / lâcher tardif</Text>
+                                </View>
+                                <Text style={styles.coachingTipAdvice}>Aligne mieux ton pied, relâche un peu plus tôt, accompagne droit.</Text>
+                              </View>
+                            </>
                           )}
                           {errorStats.tirErrorResults.courtGauche > 0 && (
-                            <StatRow label="Court, à gauche" value={errorStats.tirErrorResults.courtGauche} subValue={`${Math.round((errorStats.tirErrorResults.courtGauche / errorStats.totalTirErrorResults) * 100)}%`} icon="subdirectory-arrow-left" color={theme.error} />
+                            <>
+                              <StatRow label="Court, à gauche" value={errorStats.tirErrorResults.courtGauche} subValue={`${Math.round((errorStats.tirErrorResults.courtGauche / errorStats.totalTirErrorResults) * 100)}%`} icon="subdirectory-arrow-left" color="#EF5350" />
+                              <View style={styles.coachingTip}>
+                                <View style={styles.coachingTipHeader}>
+                                  <MaterialIcons name="psychology" size={14} color={theme.tirColor} />
+                                  <Text style={styles.coachingTipCause}>Épaule qui ferme / bras qui traverse</Text>
+                                </View>
+                                <Text style={styles.coachingTipAdvice}>Ouvre légèrement l'épaule, finis ton geste dans l'axe.</Text>
+                              </View>
+                            </>
                           )}
                           {errorStats.tirErrorResults.long > 0 && (
-                            <StatRow label="Long" value={errorStats.tirErrorResults.long} subValue={`${Math.round((errorStats.tirErrorResults.long / errorStats.totalTirErrorResults) * 100)}%`} icon="arrow-upward" color={theme.error} />
+                            <>
+                              <StatRow label="Long" value={errorStats.tirErrorResults.long} subValue={`${Math.round((errorStats.tirErrorResults.long / errorStats.totalTirErrorResults) * 100)}%`} icon="arrow-upward" color="#F44336" />
+                              <View style={styles.coachingTip}>
+                                <View style={styles.coachingTipHeader}>
+                                  <MaterialIcons name="psychology" size={14} color={theme.tirColor} />
+                                  <Text style={styles.coachingTipCause}>Trop de force / bras trop tendu</Text>
+                                </View>
+                                <Text style={styles.coachingTipAdvice}>Réduis l'amplitude, joue plus relâché, vise un posé plus haut.</Text>
+                              </View>
+                            </>
                           )}
                           {errorStats.tirErrorResults.tirBouchon > 0 && (
                             <StatRow label="Tir sur bouchon" value={errorStats.tirErrorResults.tirBouchon} subValue={`${Math.round((errorStats.tirErrorResults.tirBouchon / errorStats.totalTirErrorResults) * 100)}%`} icon="adjust" color={theme.warning} />
@@ -1615,12 +1642,6 @@ export default function StatsScreen() {
                             { label: 'Long', value: errorStats.tirErrorResults.long, color: '#F44336' },
                             { label: 'Bouchon', value: errorStats.tirErrorResults.tirBouchon, color: theme.warning },
                           ].filter(i => i.value > 0)} />
-                          {(errorStats.tirErrorResults.courtDroite + errorStats.tirErrorResults.courtGauche) > errorStats.tirErrorResults.long && (
-                            <View style={styles.insightBox}>
-                              <MaterialIcons name="lightbulb" size={16} color={theme.tirColor} />
-                              <Text style={styles.insightText}>Vos tirs sont majoritairement courts. Travaillez la puissance de votre lancer.</Text>
-                            </View>
-                          )}
                         </>
                       )}
                       {/* Technique failure rates (only if no shot results available) */}
@@ -1637,49 +1658,47 @@ export default function StatsScreen() {
                           )}
                         </>
                       )}
-                    </View>
-                  </Animated.View>
-                )}
-
-                {/* Analyse des échecs par technique (Erreurs) */}
-                {tirStats.hasCrossResultData && (
-                  <Animated.View entering={FadeInDown.duration(400).delay(275)} style={styles.section}>
-                    <SectionHeader title="Analyse des échecs (Tir)" subtitle={`${tirStats.totalCrossResultTracked} tirs ratés analysés`} icon="highlight-off" color={theme.tirColor} />
-                    <View style={styles.card}>
-                      {[
-                        { key: 'au_fer', label: 'Tirs tendus ratés', icon: 'gps-fixed', color: theme.tirColor },
-                        { key: 'au_plomb', label: 'Tirs en cloche ratés', icon: 'flight-takeoff', color: theme.pointColor },
-                        { key: 'en_rafle', label: 'En rafle ratés', icon: 'swap-horiz', color: theme.accent },
-                      ].filter(row => tirStats.crossTypeResult[row.key]?.total > 0).map((row, idx, arr) => {
-                        const data = tirStats.crossTypeResult[row.key];
-                        const resultItems = [
-                          { label: 'Court droite', short: 'Ct. D', value: data.court_droite, color: '#E57373' },
-                          { label: 'Court gauche', short: 'Ct. G', value: data.court_gauche, color: '#EF5350' },
-                          { label: 'Long', short: 'Long', value: data.long, color: '#F44336' },
-                          { label: 'Bouchon', short: 'Bouch.', value: data.tir_bouchon, color: theme.warning },
-                        ];
-                        const dominant = resultItems.reduce((max, r) => r.value > max.value ? r : max, resultItems[0]);
-                        const dominantPct = data.total > 0 ? Math.round((dominant.value / data.total) * 100) : 0;
-                        return (
-                          <View key={row.key}>
-                            <StatRow
-                              label={row.label}
-                              value={data.total}
-                              subValue={dominant.value > 0 ? `Surtout ${dominant.label.toLowerCase()} (${dominantPct}%)` : ''}
-                              icon={row.icon}
-                              color={row.color}
-                            />
-                            {data.total > 1 && (
-                              <View style={{ paddingLeft: 38, paddingRight: 8, paddingBottom: 8, paddingTop: 4 }}>
-                                <BreakdownBar items={resultItems.filter(r => r.value > 0).map(r => ({
-                                  label: r.short, value: r.value, color: r.color,
-                                }))} />
+                      {/* Technique breakdown with cross-reference */}
+                      {tirStats.hasCrossResultData && errorStats.totalTirErrorResults > 0 && (
+                        <>
+                          <View style={styles.divider} />
+                          <Text style={styles.errorSubsectionTitle}>Échecs par technique de tir</Text>
+                          {[
+                            { key: 'au_fer', label: 'Tirs tendus ratés', icon: 'gps-fixed', color: theme.tirColor },
+                            { key: 'au_plomb', label: 'Tirs en cloche ratés', icon: 'flight-takeoff', color: theme.pointColor },
+                            { key: 'en_rafle', label: 'En rafle ratés', icon: 'swap-horiz', color: theme.accent },
+                          ].filter(row => tirStats.crossTypeResult[row.key]?.total > 0).map((row, idx, arr) => {
+                            const data = tirStats.crossTypeResult[row.key];
+                            const resultItems = [
+                              { label: 'Court droite', short: 'Ct. D', value: data.court_droite, color: '#E57373' },
+                              { label: 'Court gauche', short: 'Ct. G', value: data.court_gauche, color: '#EF5350' },
+                              { label: 'Long', short: 'Long', value: data.long, color: '#F44336' },
+                              { label: 'Bouchon', short: 'Bouch.', value: data.tir_bouchon, color: theme.warning },
+                            ];
+                            const dominant = resultItems.reduce((max, r) => r.value > max.value ? r : max, resultItems[0]);
+                            const dominantPct = data.total > 0 ? Math.round((dominant.value / data.total) * 100) : 0;
+                            return (
+                              <View key={row.key}>
+                                <StatRow
+                                  label={row.label}
+                                  value={data.total}
+                                  subValue={dominant.value > 0 ? `Surtout ${dominant.label.toLowerCase()} (${dominantPct}%)` : ''}
+                                  icon={row.icon}
+                                  color={row.color}
+                                />
+                                {data.total > 1 && (
+                                  <View style={{ paddingLeft: 38, paddingRight: 8, paddingBottom: 8, paddingTop: 4 }}>
+                                    <BreakdownBar items={resultItems.filter(r => r.value > 0).map(r => ({
+                                      label: r.short, value: r.value, color: r.color,
+                                    }))} />
+                                  </View>
+                                )}
+                                {idx < arr.length - 1 && <View style={styles.divider} />}
                               </View>
-                            )}
-                            {idx < arr.length - 1 && <View style={styles.divider} />}
-                          </View>
-                        );
-                      })}
+                            );
+                          })}
+                        </>
+                      )}
                       {(() => {
                         const entries = Object.entries(tirStats.crossTypeResult).filter(([, v]) => v.total >= 2);
                         if (entries.length < 2) return null;
@@ -2157,6 +2176,10 @@ const styles = StyleSheet.create({
   contextSubLabel: { fontSize: 10, color: theme.textMuted },
   contextDivider: { paddingHorizontal: 16 },
   errorSubsectionTitle: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginTop: 8, marginBottom: 4 },
+  coachingTip: { marginLeft: 38, marginRight: 8, marginBottom: 8, marginTop: -4, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: theme.tirColor + '08', borderRadius: theme.borderRadius.sm, borderLeftWidth: 2, borderLeftColor: theme.tirColor + '40' },
+  coachingTipHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 },
+  coachingTipCause: { fontSize: 11, fontWeight: '600', color: theme.tirColor, fontStyle: 'italic' },
+  coachingTipAdvice: { fontSize: 11, color: theme.textSecondary, lineHeight: 16 },
   consecutiveErrorsGrid: { flexDirection: 'row', justifyContent: 'space-around' },
   consecutiveErrorItem: { alignItems: 'center' },
   consecutiveErrorValue: { fontSize: 36, fontWeight: '700', color: theme.error },
