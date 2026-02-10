@@ -156,6 +156,7 @@ export default function DirectoryScreen() {
   }, [terrains, searchQuery, filters]);
 
   const filteredTournaments = useMemo(() => {
+    const statusOrder: Record<string, number> = { 'En cours': 0, 'À venir': 1, 'Terminé': 2 };
     return tournaments.filter(t => {
       const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         t.location.city.toLowerCase().includes(searchQuery.toLowerCase());
@@ -167,7 +168,7 @@ export default function DirectoryScreen() {
       const matchesScope = filters.tournamentScope === 'all' || t.tournamentScope === filters.tournamentScope;
       const matchesCity = filters.tournamentCity === 'all' || (t.location?.city || t.terrainName) === filters.tournamentCity;
       return matchesSearch && matchesStatus && matchesFormat && matchesLevel && matchesCategory && matchesRegistration && matchesScope && matchesCity;
-    });
+    }).sort((a, b) => (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3));
   }, [tournaments, searchQuery, filters]);
 
   const clearFilters = useCallback(() => {

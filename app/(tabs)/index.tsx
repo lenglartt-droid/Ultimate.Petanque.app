@@ -25,10 +25,13 @@ export default function HomeScreen() {
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'À venir' | 'En cours' | 'Terminé'>('all');
 
-  // Filtered tournaments by status
+  // Status priority: En cours > À venir > Terminé
+  const statusOrder: Record<string, number> = { 'En cours': 0, 'À venir': 1, 'Terminé': 2 };
+
+  // Filtered tournaments by status, sorted by priority
   const filteredTournaments = useMemo(() => {
-    if (statusFilter === 'all') return tournaments;
-    return tournaments.filter(t => t.status === statusFilter);
+    const list = statusFilter === 'all' ? [...tournaments] : tournaments.filter(t => t.status === statusFilter);
+    return list.sort((a, b) => (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3));
   }, [tournaments, statusFilter]);
 
   // Status counts
