@@ -36,24 +36,15 @@ interface TournamentPalmaresItem {
   };
 }
 
-const PODIUM_RESULTS = ['1er', '2ème', '3ème', '1er Tableau A', '1er Tableau B', '1er Tableau C', 'Finaliste Tableau A', 'Finaliste Tableau B', 'Finaliste Tableau C'];
-const TITLE_RESULTS = ['1er', '1er Tableau A', '1er Tableau B', '1er Tableau C'];
-
 const RESULT_CONFIG: Record<string, { icon: string; color: string; rank: number }> = {
   '1er': { icon: 'emoji-events', color: '#FFD700', rank: 1 },
   '2ème': { icon: 'workspace-premium', color: '#C0C0C0', rank: 2 },
   '3ème': { icon: 'military-tech', color: '#CD7F32', rank: 3 },
-  '1er Tableau A': { icon: 'emoji-events', color: '#FFD700', rank: 4 },
-  'Finaliste Tableau A': { icon: 'workspace-premium', color: '#C0C0C0', rank: 5 },
-  '1er Tableau B': { icon: 'emoji-events', color: '#4A90D9', rank: 6 },
-  'Finaliste Tableau B': { icon: 'workspace-premium', color: '#4A90D9', rank: 7 },
-  '1er Tableau C': { icon: 'emoji-events', color: '#7B8794', rank: 8 },
-  'Finaliste Tableau C': { icon: 'workspace-premium', color: '#7B8794', rank: 9 },
-  'Demi-finale': { icon: 'trending-up', color: '#4A90D9', rank: 10 },
-  'Quart de finale': { icon: 'trending-flat', color: '#F5A623', rank: 11 },
-  '1/8 finale': { icon: 'sports', color: '#7B8794', rank: 12 },
-  'Poules': { icon: 'group', color: '#7B8794', rank: 13 },
-  'Autre': { icon: 'more-horiz', color: '#7B8794', rank: 14 },
+  'Demi-finale': { icon: 'trending-up', color: '#4A90D9', rank: 4 },
+  'Quart de finale': { icon: 'trending-flat', color: '#F5A623', rank: 5 },
+  '1/8 finale': { icon: 'sports', color: '#7B8794', rank: 6 },
+  'Poules': { icon: 'group', color: '#7B8794', rank: 7 },
+  'Autre': { icon: 'more-horiz', color: '#7B8794', rank: 8 },
 };
 
 function TournamentCard({ item, index }: { item: TournamentPalmaresItem; index: number }) {
@@ -267,7 +258,7 @@ export default function PalmaresScreen() {
     return allPalmaresData.filter(item => {
       if (yearFilter !== 'all' && new Date(item.tournament.date).getFullYear().toString() !== yearFilter) return false;
       if (formatFilter !== 'all' && item.tournament.format !== formatFilter) return false;
-      if (resultFilter === 'podium' && !PODIUM_RESULTS.includes(item.tournament.finalResult || '')) return false;
+      if (resultFilter === 'podium' && !['1er', '2ème', '3ème'].includes(item.tournament.finalResult || '')) return false;
       return true;
     });
   }, [allPalmaresData, yearFilter, formatFilter, resultFilter]);
@@ -279,8 +270,8 @@ export default function PalmaresScreen() {
     const totalMatches = palmaresData.reduce((sum, item) => sum + item.stats.played, 0);
     const totalGains = palmaresData.reduce((sum, item) => sum + (item.tournament.prizeWon || 0), 0);
     const totalCosts = palmaresData.reduce((sum, item) => sum + (item.tournament.registrationCost || 0), 0);
-    const podiums = palmaresData.filter(item => PODIUM_RESULTS.includes(item.tournament.finalResult || '')).length;
-    const titles = palmaresData.filter(item => TITLE_RESULTS.includes(item.tournament.finalResult || '')).length;
+    const podiums = palmaresData.filter(item => ['1er', '2ème', '3ème'].includes(item.tournament.finalResult || '')).length;
+    const titles = palmaresData.filter(item => item.tournament.finalResult === '1er').length;
 
     return { totalTournaments, totalWins, totalMatches, totalGains, totalCosts, podiums, titles };
   }, [palmaresData]);

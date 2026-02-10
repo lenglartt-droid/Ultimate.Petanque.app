@@ -253,7 +253,6 @@ export interface DetailedShotRecord {
   success: boolean;
   carreau?: boolean;
   // Tir details
-  shotResult?: 'court_droite' | 'court_gauche' | 'long' | 'tir_bouchon';
   shotType?: 'au_fer' | 'au_plomb' | 'en_rafle' | 'court_ramasse' | 'carreau';
   shotQuality?: 'gain_point' | 'sans_effet' | 'negatif' | 'decisif';
   // Point details
@@ -408,10 +407,10 @@ export interface ChallengeDetailedShot {
   actionType: 'tir' | 'point';
   success: boolean;
   carreau?: boolean;
-  // Tir details - result (fail descriptor)
-  shotResult?: 'court_droite' | 'court_gauche' | 'long' | 'tir_bouchon';
-  // Tir details - technique
+  // Tir details - success
   shotType?: 'au_fer' | 'au_plomb' | 'en_rafle' | 'court_ramasse' | 'carreau';
+  // Tir details - failure
+  failedShotType?: 'court_droite' | 'court_gauche' | 'long' | 'tir_bouchon';
   shotQuality?: 'gain_point' | 'sans_effet' | 'negatif' | 'decisif';
   // Point details
   pointType?: 'roule' | 'plombe' | 'demi_portee' | 'portee';

@@ -136,13 +136,6 @@ export default function TournamentDetailScreen() {
     checkPermission();
   }, []);
 
-  // Auto-open end tournament modal when tournament is finished but no final result
-  useEffect(() => {
-    if (tournament && tournament.status === 'Terminé' && !tournament.finalResult && endTournamentStep === 0) {
-      setEndTournamentStep(1);
-    }
-  }, [tournament?.status, tournament?.finalResult]);
-
   // Handle notification toggle
   const handleNotificationPress = useCallback(async () => {
     if (!tournament) return;
@@ -446,12 +439,6 @@ export default function TournamentDetailScreen() {
               '1er': { icon: 'emoji-events', color: theme.carreauColor },
               '2ème': { icon: 'workspace-premium', color: theme.accent },
               '3ème': { icon: 'military-tech', color: '#CD7F32' },
-              '1er Tableau A': { icon: 'emoji-events', color: theme.carreauColor },
-              '1er Tableau B': { icon: 'emoji-events', color: '#4A90D9' },
-              '1er Tableau C': { icon: 'emoji-events', color: '#7B8794' },
-              'Finaliste Tableau A': { icon: 'workspace-premium', color: theme.accent },
-              'Finaliste Tableau B': { icon: 'workspace-premium', color: '#4A90D9' },
-              'Finaliste Tableau C': { icon: 'workspace-premium', color: '#7B8794' },
               'Demi-finale': { icon: 'trending-up', color: theme.primary },
               'Quart de finale': { icon: 'trending-flat', color: theme.warning },
               '1/8 finale': { icon: 'sports', color: theme.textSecondary },
@@ -700,38 +687,24 @@ export default function TournamentDetailScreen() {
       </ScrollView>
 
       {/* Action Buttons */}
-      {!(tournament.status === 'Terminé' && tournament.finalResult) && (
-        <Animated.View 
-          entering={FadeIn.duration(300).delay(300)}
-          style={[styles.fabContainer, { bottom: insets.bottom + 24 }]}
+      <Animated.View 
+        entering={FadeIn.duration(300).delay(300)}
+        style={[styles.fabContainer, { bottom: insets.bottom + 24 }]}
+      >
+        <Pressable 
+          style={styles.fabSecondary}
+          onPress={() => setEndTournamentStep(1)}
         >
-          {tournament.status !== 'Terminé' && (
-            <Pressable 
-              style={styles.fabSecondary}
-              onPress={() => setEndTournamentStep(1)}
-            >
-              <MaterialIcons name="flag" size={22} color={theme.error} />
-            </Pressable>
-          )}
-          {tournament.status !== 'Terminé' ? (
-            <Pressable 
-              style={styles.fab} 
-              onPress={() => router.push(`/match/new?tournamentId=${tournament.id}`)}
-            >
-              <MaterialIcons name="add" size={28} color="#FFF" />
-              <Text style={styles.fabText}>Nouveau Match</Text>
-            </Pressable>
-          ) : (
-            <Pressable 
-              style={[styles.fab, { backgroundColor: theme.carreauColor }]} 
-              onPress={() => setEndTournamentStep(1)}
-            >
-              <MaterialIcons name="emoji-events" size={24} color="#FFF" />
-              <Text style={styles.fabText}>Classement final</Text>
-            </Pressable>
-          )}
-        </Animated.View>
-      )}
+          <MaterialIcons name="flag" size={22} color={theme.error} />
+        </Pressable>
+        <Pressable 
+          style={styles.fab} 
+          onPress={() => router.push(`/match/new?tournamentId=${tournament.id}`)}
+        >
+          <MaterialIcons name="add" size={28} color="#FFF" />
+          <Text style={styles.fabText}>Nouveau Match</Text>
+        </Pressable>
+      </Animated.View>
 
       {/* Notification Settings Modal */}
       <Modal
@@ -989,13 +962,7 @@ export default function TournamentDetailScreen() {
             {/* STEP 1: Result Selection with Podium */}
             {endTournamentStep === 1 && (
               <Animated.View entering={FadeInDown.duration(300)}>
-                <View style={styles.endQuestionHeader}>
-                  <View style={styles.endQuestionIcon}>
-                    <MaterialIcons name="emoji-events" size={36} color={theme.carreauColor} />
-                  </View>
-                  <Text style={styles.endTournamentQuestion}>Quel est votre classement final ?</Text>
-                  <Text style={styles.endTournamentQuestionSub}>{tournament.name}</Text>
-                </View>
+                <Text style={styles.endTournamentQuestion}>Quel est votre classement final ?</Text>
 
                 {/* Visual Podium - Top 3 */}
                 <View style={styles.podiumContainer}>
@@ -1051,35 +1018,6 @@ export default function TournamentDetailScreen() {
                     </Pressable>
                   ))}
                 </View>
-
-                {/* Tableau A/B/C results */}
-                {tournament.type === 'A/B/C' && (
-                  <>
-                    <Text style={[styles.endOtherResultsTitle, { marginTop: 20 }]}>Classement par Tableau</Text>
-                    <View style={styles.endOtherResults}>
-                      {[
-                        { id: '1er Tableau A', label: '1er Tableau A', icon: 'emoji-events', color: '#FFD700' },
-                        { id: 'Finaliste Tableau A', label: 'Finaliste Tableau A', icon: 'workspace-premium', color: '#C0C0C0' },
-                        { id: '1er Tableau B', label: '1er Tableau B', icon: 'emoji-events', color: '#4A90D9' },
-                        { id: 'Finaliste Tableau B', label: 'Finaliste Tableau B', icon: 'workspace-premium', color: '#4A90D9' },
-                        { id: '1er Tableau C', label: '1er Tableau C', icon: 'emoji-events', color: '#7B8794' },
-                        { id: 'Finaliste Tableau C', label: 'Finaliste Tableau C', icon: 'workspace-premium', color: '#7B8794' },
-                      ].map(item => (
-                        <Pressable
-                          key={item.id}
-                          style={styles.endOtherResultItem}
-                          onPress={() => handleSelectResult(item.id)}
-                        >
-                          <View style={[styles.endOtherResultIcon, { backgroundColor: item.color + '15' }]}>
-                            <MaterialIcons name={item.icon as any} size={20} color={item.color} />
-                          </View>
-                          <Text style={styles.endOtherResultLabel}>{item.label}</Text>
-                          <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-                        </Pressable>
-                      ))}
-                    </View>
-                  </>
-                )}
               </Animated.View>
             )}
 
@@ -1088,19 +1026,12 @@ export default function TournamentDetailScreen() {
               <Animated.View entering={FadeInDown.duration(300)}>
                 {/* Selected result badge */}
                 {(() => {
-                  const allCfg: Record<string, { icon: string; color: string; label: string }> = {
+                  const cfg = {
                     '1er': { icon: 'emoji-events', color: '#FFD700', label: 'Champion' },
                     '2ème': { icon: 'workspace-premium', color: '#C0C0C0', label: 'Finaliste' },
                     '3ème': { icon: 'military-tech', color: '#CD7F32', label: '3ème place' },
-                    '1er Tableau A': { icon: 'emoji-events', color: '#FFD700', label: 'Champion Tableau A' },
-                    '1er Tableau B': { icon: 'emoji-events', color: '#4A90D9', label: 'Champion Tableau B' },
-                    '1er Tableau C': { icon: 'emoji-events', color: '#7B8794', label: 'Champion Tableau C' },
-                    'Finaliste Tableau A': { icon: 'workspace-premium', color: '#C0C0C0', label: 'Finaliste Tableau A' },
-                    'Finaliste Tableau B': { icon: 'workspace-premium', color: '#4A90D9', label: 'Finaliste Tableau B' },
-                    'Finaliste Tableau C': { icon: 'workspace-premium', color: '#7B8794', label: 'Finaliste Tableau C' },
-                  };
-                  const cfg = allCfg[selectedFinalResult] || { icon: 'sports', color: theme.textSecondary, label: selectedFinalResult };
-                  const isPodium = ['1er', '2ème', '3ème', '1er Tableau A', '1er Tableau B', '1er Tableau C'].includes(selectedFinalResult);
+                  }[selectedFinalResult] || { icon: 'sports', color: theme.textSecondary, label: selectedFinalResult };
+                  const isPodium = ['1er', '2ème', '3ème'].includes(selectedFinalResult);
                   return (
                     <View style={[styles.endSelectedResultBadge, { backgroundColor: cfg.color + '15', borderColor: cfg.color + '40' }]}>
                       <MaterialIcons name={cfg.icon as any} size={32} color={cfg.color} />
@@ -1181,17 +1112,11 @@ export default function TournamentDetailScreen() {
             {endTournamentStep === 3 && selectedFinalResult && (
               <Animated.View entering={FadeInDown.duration(300)}>
                 {(() => {
-                  const isPodium = ['1er', '2ème', '3ème', '1er Tableau A', '1er Tableau B', '1er Tableau C'].includes(selectedFinalResult);
+                  const isPodium = ['1er', '2ème', '3ème'].includes(selectedFinalResult);
                   const resultCfg: Record<string, { icon: string; color: string }> = {
                     '1er': { icon: 'emoji-events', color: '#FFD700' },
                     '2ème': { icon: 'workspace-premium', color: '#C0C0C0' },
                     '3ème': { icon: 'military-tech', color: '#CD7F32' },
-                    '1er Tableau A': { icon: 'emoji-events', color: '#FFD700' },
-                    '1er Tableau B': { icon: 'emoji-events', color: '#4A90D9' },
-                    '1er Tableau C': { icon: 'emoji-events', color: '#7B8794' },
-                    'Finaliste Tableau A': { icon: 'workspace-premium', color: '#C0C0C0' },
-                    'Finaliste Tableau B': { icon: 'workspace-premium', color: '#4A90D9' },
-                    'Finaliste Tableau C': { icon: 'workspace-premium', color: '#7B8794' },
                   };
                   const cfg = resultCfg[selectedFinalResult] || { icon: 'sports', color: theme.textSecondary };
                   const prize = parseFloat(prizeWonInput) || 0;
@@ -1205,7 +1130,7 @@ export default function TournamentDetailScreen() {
                             <MaterialIcons name={cfg.icon as any} size={56} color={cfg.color} />
                           </View>
                           <Text style={[styles.endCelebrationTitle, { color: cfg.color }]}>
-                            {selectedFinalResult === '1er' || selectedFinalResult.startsWith('1er Tableau') ? 'Champion !' : selectedFinalResult === '2ème' ? 'Finaliste !' : selectedFinalResult === '3ème' ? 'Podium !' : 'Bravo !'}
+                            {selectedFinalResult === '1er' ? 'Champion !' : selectedFinalResult === '2ème' ? 'Finaliste !' : 'Podium !'}
                           </Text>
                           <Text style={styles.endCelebrationSub}>{tournament.name}</Text>
                         </Animated.View>
@@ -1845,29 +1770,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   endTournamentQuestion: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '600',
     color: theme.textPrimary,
     textAlign: 'center',
-    marginBottom: 4,
-  },
-  endTournamentQuestionSub: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    textAlign: 'center',
-  },
-  endQuestionHeader: {
-    alignItems: 'center',
-    marginBottom: 28,
-  },
-  endQuestionIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: theme.carreauColor + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
+    marginBottom: 24,
   },
   endStepIndicator: {
     width: 40,
@@ -1891,56 +1798,51 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'center',
-    gap: 14,
+    gap: 12,
     marginBottom: 28,
-    paddingHorizontal: 12,
-    paddingTop: 24,
-    paddingBottom: 0,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.xl,
-    ...theme.shadows.card,
+    paddingHorizontal: 16,
   },
   podiumSpot: {
     alignItems: 'center',
     flex: 1,
   },
   podiumIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   podiumBlock: {
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    borderTopLeftRadius: 10,
-    borderTopRightRadius: 10,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
     backgroundColor: theme.surface,
     borderWidth: 2,
     borderBottomWidth: 0,
     borderColor: theme.border,
   },
   podiumBlock1st: {
-    height: 80,
-    borderColor: '#FFD700' + '70',
-    backgroundColor: '#FFD700' + '12',
+    height: 64,
+    borderColor: '#FFD700' + '60',
+    backgroundColor: '#FFD700' + '10',
   },
   podiumBlock2nd: {
-    height: 60,
-    borderColor: '#C0C0C0' + '70',
-    backgroundColor: '#C0C0C0' + '12',
+    height: 48,
+    borderColor: '#C0C0C0' + '60',
+    backgroundColor: '#C0C0C0' + '10',
   },
   podiumBlock3rd: {
-    height: 44,
-    borderColor: '#CD7F32' + '70',
-    backgroundColor: '#CD7F32' + '12',
+    height: 36,
+    borderColor: '#CD7F32' + '60',
+    backgroundColor: '#CD7F32' + '10',
   },
   podiumLabel: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '700',
   },
   // Other results
   endOtherResultsTitle: {
@@ -2090,29 +1992,25 @@ const styles = StyleSheet.create({
   // Step 3: Summary & Confirmation
   endCelebration: {
     alignItems: 'center',
-    paddingVertical: 32,
-    marginBottom: 24,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.xl,
-    ...theme.shadows.cardElevated,
-  },
-  endCelebrationIcon: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: 24,
     marginBottom: 20,
   },
+  endCelebrationIcon: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
   endCelebrationTitle: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '800',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   endCelebrationSub: {
-    fontSize: 15,
+    fontSize: 14,
     color: theme.textSecondary,
-    fontWeight: '500',
   },
   endSummaryHeader: {
     alignItems: 'center',
