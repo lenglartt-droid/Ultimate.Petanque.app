@@ -548,6 +548,7 @@ export default function StatsScreen() {
     const crossTypeQuality: Record<string, { excellent: number; bon: number; moyen: number; au_bouchon: number; devant_boule: number; rate: number; crochete: number; sorti: number; total: number; successTotal: number; failTotal: number }> = {
       roule: { excellent: 0, bon: 0, moyen: 0, au_bouchon: 0, devant_boule: 0, rate: 0, crochete: 0, sorti: 0, total: 0, successTotal: 0, failTotal: 0 },
       plombe: { excellent: 0, bon: 0, moyen: 0, au_bouchon: 0, devant_boule: 0, rate: 0, crochete: 0, sorti: 0, total: 0, successTotal: 0, failTotal: 0 },
+      demi_portee: { excellent: 0, bon: 0, moyen: 0, au_bouchon: 0, devant_boule: 0, rate: 0, crochete: 0, sorti: 0, total: 0, successTotal: 0, failTotal: 0 },
       portee: { excellent: 0, bon: 0, moyen: 0, au_bouchon: 0, devant_boule: 0, rate: 0, crochete: 0, sorti: 0, total: 0, successTotal: 0, failTotal: 0 },
     };
 
@@ -1292,6 +1293,7 @@ export default function StatsScreen() {
                       {[
                         { key: 'roule', label: 'Roulé', icon: 'sports-baseball', color: theme.pointColor },
                         { key: 'plombe', label: 'Plombé', icon: 'flight-land', color: theme.tirColor },
+                        { key: 'demi_portee', label: 'Demi-portée', icon: 'height', color: theme.primary },
                         { key: 'portee', label: 'Portée', icon: 'flight', color: theme.accent },
                       ].filter(row => pointStats.crossTypeQuality[row.key]?.total > 0).map((row, idx) => {
                         const data = pointStats.crossTypeQuality[row.key];
@@ -1324,7 +1326,7 @@ export default function StatsScreen() {
                       {(() => {
                         const entries = Object.entries(pointStats.crossTypeQuality).filter(([, v]) => v.total >= 3);
                         if (entries.length < 2) return null;
-                        const labels: Record<string, string> = { roule: 'Point roulé', plombe: 'Point plombé', portee: 'Point portée' };
+                        const labels: Record<string, string> = { roule: 'Point roulé', plombe: 'Point plombé', demi_portee: 'Demi-portée', portee: 'Point portée' };
                         const successRates = entries.map(([key, v]) => ({ key, rate: v.total > 0 ? (v.successTotal / v.total) * 100 : 0 }));
                         successRates.sort((a, b) => b.rate - a.rate);
                         const best = successRates[0];

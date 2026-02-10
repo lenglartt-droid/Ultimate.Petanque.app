@@ -190,6 +190,11 @@ export default function PalmaresScreen() {
   const [showChart, setShowChart] = useState(false);
   const [selectedChartIndex, setSelectedChartIndex] = useState<number | null>(null);
 
+  // Reset chart selection when filters change
+  React.useEffect(() => {
+    setSelectedChartIndex(null);
+  }, [yearFilter, formatFilter, resultFilter]);
+
   // Build palmares data (unfiltered for summary)
   const allPalmaresData = useMemo(() => {
     const finishedTournaments = tournaments.filter(t => t.status === 'Terminé');
@@ -258,56 +263,6 @@ export default function PalmaresScreen() {
     });
   }, [allPalmaresData, yearFilter, formatFilter, resultFilter]);
 
-  // Build palmares data - KEPT for backward compat but now uses filtered
-  const _palmaresDataLegacy = useMemo(() => {
-    const finishedTournaments = tournaments.filter(t => t.status === 'Terminé');
-
-    const items: TournamentPalmaresItem[] = finishedTournaments.map(tournament => {
-      const tournamentMatches = matches.filter(m => m.tournamentId === tournament.id);
-      const wins = tournamentMatches.filter(m => m.winner === 'A').length;
-      const losses = tournamentMatches.length - wins;
-      const pointsFor = tournamentMatches.reduce((sum, m) => sum + (m.teamA?.score || 0), 0);
-      const pointsAgainst = tournamentMatches.reduce((sum, m) => sum + (m.teamB?.score || 0), 0);
-
-      let totalTirs = 0, totalTirsSuccess = 0, totalCarreaux = 0;
-      tournamentMatches.forEach(m => {
-        if (m.playerActions) {
-          m.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
-            totalTirs += pa.actions.tirs;
-            totalTirsSuccess += pa.actions.tirsSuccess;
-            totalCarreaux += pa.actions.carreaux;
-          });
-        }
-      });
-
-      return {
-        tournament,
-        matches: tournamentMatches,
-        stats: {
-          played: tournamentMatches.length,
-          wins,
-          losses,
-          winRate: tournamentMatches.length > 0 ? Math.round((wins / tournamentMatches.length) * 100) : 0,
-          pointsFor,
-          pointsAgainst,
-          pointDiff: pointsFor - pointsAgainst,
-          tirRate: totalTirs > 0 ? Math.round((totalTirsSuccess / totalTirs) * 100) : null,
-          carreaux: totalCarreaux,
-        },
-      };
-    });
-
-    // Sort: by result rank first, then by date descending
-    items.sort((a, b) => {
-      const rankA = RESULT_CONFIG[a.tournament.finalResult || '']?.rank || 99;
-      const rankB = RESULT_CONFIG[b.tournament.finalResult || '']?.rank || 99;
-      if (rankA !== rankB) return rankA - rankB;
-      return new Date(b.tournament.date).getTime() - new Date(a.tournament.date).getTime();
-    });
-
-    return items;
-  }, [tournaments, matches]);
-
   // Summary stats (from filtered data)
   const summary = useMemo(() => {
     const totalTournaments = palmaresData.length;
@@ -347,8 +302,6 @@ export default function PalmaresScreen() {
       };
     });
   }, [palmaresData]);
-
-  const hasFilters = yearFilter !== 'all' || formatFilter !== 'all' || resultFilter !== 'podium';
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>

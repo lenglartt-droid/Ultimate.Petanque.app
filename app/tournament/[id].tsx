@@ -394,21 +394,27 @@ export default function TournamentDetailScreen() {
           </View>
           
           {/* Final Result Badge */}
-          {tournament.finalResult && tournament.status === 'Terminé' && (
-            <View style={styles.finalResultBanner}>
-              <MaterialIcons 
-                name={tournament.finalResult === '1er' ? 'emoji-events' : tournament.finalResult === '2ème' ? 'workspace-premium' : 'military-tech'} 
-                size={20} 
-                color={tournament.finalResult === '1er' ? theme.carreauColor : tournament.finalResult === '2ème' ? theme.accent : theme.warning} 
-              />
-              <Text style={[
-                styles.finalResultBannerText,
-                { color: tournament.finalResult === '1er' ? theme.carreauColor : tournament.finalResult === '2ème' ? theme.accent : theme.textPrimary }
-              ]}>
-                {tournament.finalResult}
-              </Text>
-            </View>
-          )}
+          {tournament.finalResult && tournament.status === 'Terminé' && (() => {
+            const resultConfig: Record<string, { icon: string; color: string }> = {
+              '1er': { icon: 'emoji-events', color: theme.carreauColor },
+              '2ème': { icon: 'workspace-premium', color: theme.accent },
+              '3ème': { icon: 'military-tech', color: '#CD7F32' },
+              'Demi-finale': { icon: 'trending-up', color: theme.primary },
+              'Quart de finale': { icon: 'trending-flat', color: theme.warning },
+              '1/8 finale': { icon: 'sports', color: theme.textSecondary },
+              'Poules': { icon: 'group', color: theme.textSecondary },
+              'Autre': { icon: 'more-horiz', color: theme.textMuted },
+            };
+            const cfg = resultConfig[tournament.finalResult || ''] || { icon: 'sports', color: theme.textSecondary };
+            return (
+              <View style={styles.finalResultBanner}>
+                <MaterialIcons name={cfg.icon as any} size={20} color={cfg.color} />
+                <Text style={[styles.finalResultBannerText, { color: cfg.color }]}>
+                  {tournament.finalResult}
+                </Text>
+              </View>
+            );
+          })()}
           
           {/* Tournament Classification Badges */}
           {(tournament.tournamentLevel || tournament.tournamentCategory || tournament.registrationType || tournament.tournamentScope) && (

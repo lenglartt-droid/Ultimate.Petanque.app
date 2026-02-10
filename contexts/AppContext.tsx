@@ -16,6 +16,7 @@ import {
   HeadToHead,
   BracketMatch,
   Challenge,
+  ChallengeType,
   ChallengeStats,
   Terrain,
   TournamentNotification,
