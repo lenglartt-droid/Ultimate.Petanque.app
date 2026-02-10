@@ -417,6 +417,14 @@ export default function StatsScreen() {
     
     const shotQualityStats: Record<string, number> = { gain_point: 0, sans_effet: 0, negatif: 0, decisif: 0 };
     
+    // Cross-reference: shotType -> impact distribution
+    const crossTypeImpact: Record<string, { gain_point: number; sans_effet: number; negatif: number; decisif: number; total: number }> = {
+      au_fer: { gain_point: 0, sans_effet: 0, negatif: 0, decisif: 0, total: 0 },
+      au_plomb: { gain_point: 0, sans_effet: 0, negatif: 0, decisif: 0, total: 0 },
+      en_rafle: { gain_point: 0, sans_effet: 0, negatif: 0, decisif: 0, total: 0 },
+      court_ramasse: { gain_point: 0, sans_effet: 0, negatif: 0, decisif: 0, total: 0 },
+    };
+    
     filteredMatches.forEach(match => {
       if (match.playerActions) {
         match.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
@@ -433,6 +441,14 @@ export default function StatsScreen() {
               if (shot.carreau) { shotTypeStats.carreau.total++; shotTypeStats.carreau.success++; }
               if (shot.shotQuality && shotQualityStats[shot.shotQuality] !== undefined) {
                 shotQualityStats[shot.shotQuality]++;
+                // Cross-reference: track impact per shot type
+                if (shot.shotType && crossTypeImpact[shot.shotType]) {
+                  const impactKey = shot.shotQuality as keyof typeof crossTypeImpact['au_fer'];
+                  if (impactKey !== 'total' && crossTypeImpact[shot.shotType][impactKey] !== undefined) {
+                    crossTypeImpact[shot.shotType][impactKey]++;
+                    crossTypeImpact[shot.shotType].total++;
+                  }
+                }
               }
             });
           }
@@ -465,10 +481,14 @@ export default function StatsScreen() {
     const totalDetailedTirs = Object.values(shotTypeStats).reduce((sum, s) => sum + s.total, 0);
     const totalQualityTracked = Object.values(shotQualityStats).reduce((sum, v) => sum + v, 0);
 
+    const hasCrossData = Object.values(crossTypeImpact).some(v => v.total > 0);
+    const totalCrossTracked = Object.values(crossTypeImpact).reduce((sum, v) => sum + v.total, 0);
+
     return {
       totalTirs: combinedTirs, tirsSuccess: combinedSuccess, carreaux: combinedCarreaux,
       successRate, carreauRate, demiTirRate, missedRate, tirsPerMatch, tirsPerMene,
       matchTirs: totalTirs, challengeTirs, hasDetailedData, totalDetailedTirs, totalQualityTracked,
+      crossTypeImpact, hasCrossData, totalCrossTracked,
       tirGainPoint: shotQualityStats.gain_point, tirSansEffet: shotQualityStats.sans_effet,
       tirNegatif: shotQualityStats.negatif, tirsDecisifs: shotQualityStats.decisif,
       tirAuFer: shotTypeStats.au_fer, tirAuPlomb: shotTypeStats.au_plomb,
@@ -1043,6 +1063,90 @@ export default function StatsScreen() {
                       {tirStats.tirCourtRamasse.total > 0 && (
                         <StatRow label="Court ramassé" value={`${tirStats.tirCourtRamasse.success}/${tirStats.tirCourtRamasse.total}`} subValue={tirStats.tirCourtRamasse.total > 0 ? `${Math.round((tirStats.tirCourtRamasse.success / tirStats.tirCourtRamasse.total) * 100)}%` : ''} icon="sports-handball" color={theme.carreauColor} />
                       )}
+                    </View>
+                  </Animated.View>
+                )}
+
+                {/* Cross-reference: Type x Impact */}
+                {tirStats.hasCrossData && (
+                  <Animated.View entering={FadeInDown.duration(400).delay(175)} style={styles.section}>
+                    <SectionHeader title="Type de tir × Impact" subtitle={`${tirStats.totalCrossTracked} tirs croisés`} icon="grid-on" color={theme.accent} />
+                    <View style={styles.card}>
+                      {/* Table Header */}
+                      <View style={styles.crossTableHeader}>
+                        <View style={styles.crossTableHeaderLabel}>
+                          <Text style={styles.crossTableHeaderText}>Type</Text>
+                        </View>
+                        <View style={styles.crossTableHeaderCell}>
+                          <MaterialIcons name="add-circle" size={12} color={theme.success} />
+                          <Text style={[styles.crossTableHeaderCellText, { color: theme.success }]}>Gain</Text>
+                        </View>
+                        <View style={styles.crossTableHeaderCell}>
+                          <MaterialIcons name="whatshot" size={12} color={theme.carreauColor} />
+                          <Text style={[styles.crossTableHeaderCellText, { color: theme.carreauColor }]}>Décisif</Text>
+                        </View>
+                        <View style={styles.crossTableHeaderCell}>
+                          <MaterialIcons name="remove-circle-outline" size={12} color={theme.textMuted} />
+                          <Text style={[styles.crossTableHeaderCellText, { color: theme.textMuted }]}>Neutre</Text>
+                        </View>
+                        <View style={styles.crossTableHeaderCell}>
+                          <MaterialIcons name="trending-down" size={12} color={theme.error} />
+                          <Text style={[styles.crossTableHeaderCellText, { color: theme.error }]}>Négatif</Text>
+                        </View>
+                      </View>
+                      {/* Table Rows */}
+                      {[
+                        { key: 'au_fer', label: 'Tir tendu', icon: 'gps-fixed', color: theme.tirColor },
+                        { key: 'au_plomb', label: 'En cloche', icon: 'flight-takeoff', color: theme.pointColor },
+                        { key: 'en_rafle', label: 'En rafle', icon: 'swap-horiz', color: theme.accent },
+                        { key: 'court_ramasse', label: 'Court ramassé', icon: 'sports-handball', color: theme.carreauColor },
+                      ].filter(row => tirStats.crossTypeImpact[row.key]?.total > 0).map((row, idx) => {
+                        const data = tirStats.crossTypeImpact[row.key];
+                        return (
+                          <View key={row.key} style={[styles.crossTableRow, idx % 2 === 0 && styles.crossTableRowAlt]}>
+                            <View style={styles.crossTableRowLabel}>
+                              <MaterialIcons name={row.icon as any} size={14} color={row.color} />
+                              <Text style={styles.crossTableRowLabelText} numberOfLines={1}>{row.label}</Text>
+                            </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={[styles.crossTableCellValue, { color: theme.success }]}>{data.gain_point}</Text>
+                              <Text style={styles.crossTableCellPct}>{data.total > 0 ? `${Math.round((data.gain_point / data.total) * 100)}%` : '-'}</Text>
+                            </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={[styles.crossTableCellValue, { color: theme.carreauColor }]}>{data.decisif}</Text>
+                              <Text style={styles.crossTableCellPct}>{data.total > 0 ? `${Math.round((data.decisif / data.total) * 100)}%` : '-'}</Text>
+                            </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={[styles.crossTableCellValue, { color: theme.textMuted }]}>{data.sans_effet}</Text>
+                              <Text style={styles.crossTableCellPct}>{data.total > 0 ? `${Math.round((data.sans_effet / data.total) * 100)}%` : '-'}</Text>
+                            </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={[styles.crossTableCellValue, { color: theme.error }]}>{data.negatif}</Text>
+                              <Text style={styles.crossTableCellPct}>{data.total > 0 ? `${Math.round((data.negatif / data.total) * 100)}%` : '-'}</Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                      {/* Best/Worst insight */}
+                      {(() => {
+                        const entries = Object.entries(tirStats.crossTypeImpact).filter(([, v]) => v.total >= 3);
+                        if (entries.length < 2) return null;
+                        const labels: Record<string, string> = { au_fer: 'Tir tendu', au_plomb: 'Tir en cloche', en_rafle: 'En rafle', court_ramasse: 'Court ramassé' };
+                        const positiveRates = entries.map(([key, v]) => ({ key, rate: v.total > 0 ? ((v.gain_point + v.decisif) / v.total) * 100 : 0 }));
+                        positiveRates.sort((a, b) => b.rate - a.rate);
+                        const best = positiveRates[0];
+                        const worst = positiveRates[positiveRates.length - 1];
+                        if (best.rate - worst.rate < 10) return null;
+                        return (
+                          <View style={styles.insightBox}>
+                            <MaterialIcons name="lightbulb" size={16} color={theme.accent} />
+                            <Text style={styles.insightText}>
+                              Votre <Text style={{ fontWeight: '700', color: theme.success }}>{labels[best.key]}</Text> a le meilleur impact positif ({Math.round(best.rate)}%). 
+                              Le <Text style={{ fontWeight: '700', color: theme.error }}>{labels[worst.key]}</Text> est le moins efficace ({Math.round(worst.rate)}%).
+                            </Text>
+                          </View>
+                        );
+                      })()}
                     </View>
                   </Animated.View>
                 )}
@@ -1771,4 +1875,17 @@ const styles = StyleSheet.create({
   noProgressionData: { alignItems: 'center', paddingVertical: 48 },
   noProgressionTitle: { fontSize: 18, fontWeight: '600', color: theme.textPrimary, marginTop: 16 },
   noProgressionText: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginTop: 8, maxWidth: 260 },
+  // Cross-reference table styles
+  crossTableHeader: { flexDirection: 'row', alignItems: 'center', paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: theme.border, marginBottom: 4 },
+  crossTableHeaderLabel: { flex: 1.5, paddingLeft: 4 },
+  crossTableHeaderText: { fontSize: 11, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  crossTableHeaderCell: { flex: 1, alignItems: 'center', gap: 2 },
+  crossTableHeaderCellText: { fontSize: 9, fontWeight: '600' },
+  crossTableRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border + '50' },
+  crossTableRowAlt: { backgroundColor: theme.backgroundSecondary + '40' },
+  crossTableRowLabel: { flex: 1.5, flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 4 },
+  crossTableRowLabelText: { fontSize: 12, fontWeight: '600', color: theme.textPrimary },
+  crossTableCell: { flex: 1, alignItems: 'center' },
+  crossTableCellValue: { fontSize: 15, fontWeight: '700' },
+  crossTableCellPct: { fontSize: 9, color: theme.textMuted, marginTop: 1 },
 });
