@@ -20,6 +20,7 @@ import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
+import { TextInput } from 'react-native';
 import { TournamentType } from '@/constants/config';
 import {
   requestNotificationPermissions,
@@ -90,7 +91,7 @@ const PHASES_BY_CADRAGE: Record<TournamentType, { id: string; label: string; sho
 export default function TournamentDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getTournamentById, getClubById, getTerrainById, getMatchesByTournament, tournamentNotifications, toggleTournamentNotification, isTournamentNotificationEnabled } = useApp();
+  const { getTournamentById, getClubById, getTerrainById, getMatchesByTournament, updateTournament, tournamentNotifications, toggleTournamentNotification, isTournamentNotificationEnabled } = useApp();
 
   const tournament = getTournamentById(id!);
   const terrain = tournament?.terrainId ? getTerrainById(tournament.terrainId) : null;
@@ -103,7 +104,10 @@ export default function TournamentDetailScreen() {
   }, [tournament]);
 
   // End tournament modal state
-  const [showEndTournament, setShowEndTournament] = useState(false);
+  const [endTournamentStep, setEndTournamentStep] = useState(0); // 0=hidden, 1=result, 2=details, 3=summary
+  const [selectedFinalResult, setSelectedFinalResult] = useState<string | null>(null);
+  const [prizeWonInput, setPrizeWonInput] = useState('');
+  const [isSavingEnd, setIsSavingEnd] = useState(false);
   
   // Notification modal state
   const [showNotificationModal, setShowNotificationModal] = useState(false);
@@ -312,14 +316,50 @@ export default function TournamentDetailScreen() {
     return idx >= 0 ? idx + 1 : 0;
   }, [myMatches, tournamentPhases]);
 
-  // End tournament handler
-  const handleEndTournament = (finalStatus: 'Champion' | 'Finaliste' | 'Éliminé') => {
-    if (tournament) {
+  // End tournament: select result
+  const handleSelectResult = useCallback((result: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSelectedFinalResult(result);
+    // Pre-fill prize if tournament already has one
+    if (tournament?.prizeWon) setPrizeWonInput(tournament.prizeWon.toString());
+    setEndTournamentStep(2);
+  }, [tournament]);
+
+  // End tournament: go to summary
+  const handleGoToSummary = useCallback(() => {
+    Haptics.selectionAsync();
+    setEndTournamentStep(3);
+  }, []);
+
+  // End tournament: confirm and save
+  const handleConfirmEndTournament = useCallback(async () => {
+    if (!tournament || !selectedFinalResult) return;
+    setIsSavingEnd(true);
+    try {
+      const prizeValue = prizeWonInput ? parseFloat(prizeWonInput) : undefined;
+      await updateTournament(tournament.id, {
+        status: 'Terminé',
+        finalResult: selectedFinalResult,
+        prizeWon: prizeValue,
+      });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setEndTournamentStep(0);
+      setSelectedFinalResult(null);
+      setPrizeWonInput('');
+    } catch (e) {
+      console.log('Error ending tournament:', e);
+      Alert.alert('Erreur', 'Impossible de terminer le tournoi.');
+    } finally {
+      setIsSavingEnd(false);
     }
-    setShowEndTournament(false);
-    router.back();
-  };
+  }, [tournament, selectedFinalResult, prizeWonInput, updateTournament]);
+
+  // Reset end tournament modal
+  const handleCloseEndTournament = useCallback(() => {
+    setEndTournamentStep(0);
+    setSelectedFinalResult(null);
+    setPrizeWonInput('');
+  }, []);
 
   if (!tournament) {
     return (
@@ -653,7 +693,7 @@ export default function TournamentDetailScreen() {
       >
         <Pressable 
           style={styles.fabSecondary}
-          onPress={() => setShowEndTournament(true)}
+          onPress={() => setEndTournamentStep(1)}
         >
           <MaterialIcons name="flag" size={22} color={theme.error} />
         </Pressable>
@@ -883,20 +923,29 @@ export default function TournamentDetailScreen() {
         </SafeAreaView>
       </Modal>
 
-      {/* End Tournament Modal */}
+      {/* End Tournament Modal - Multi-Step */}
       <Modal
-        visible={showEndTournament}
+        visible={endTournamentStep > 0}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setShowEndTournament(false)}
+        onRequestClose={handleCloseEndTournament}
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Pressable style={styles.modalClose} onPress={() => setShowEndTournament(false)}>
-              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            <Pressable style={styles.modalClose} onPress={endTournamentStep > 1 ? () => setEndTournamentStep(endTournamentStep - 1) : handleCloseEndTournament}>
+              <MaterialIcons name={endTournamentStep > 1 ? 'arrow-back' : 'close'} size={24} color={theme.textPrimary} />
             </Pressable>
-            <Text style={styles.modalTitle}>Fin du Tournoi</Text>
-            <View style={{ width: 40 }} />
+            <Text style={styles.modalTitle}>
+              {endTournamentStep === 1 ? 'Classement final' : endTournamentStep === 2 ? 'Détails' : 'Confirmation'}
+            </Text>
+            <View style={styles.endStepIndicator}>
+              <Text style={styles.endStepText}>{endTournamentStep}/3</Text>
+            </View>
+          </View>
+
+          {/* Progress bar */}
+          <View style={styles.endProgressBar}>
+            <View style={[styles.endProgressFill, { width: `${(endTournamentStep / 3) * 100}%` }]} />
           </View>
 
           <ScrollView 
@@ -904,71 +953,270 @@ export default function TournamentDetailScreen() {
             contentContainerStyle={styles.modalScroll}
             showsVerticalScrollIndicator={false}
           >
+            {/* Tournament header in all steps */}
             <View style={styles.quickTournamentInfo}>
               <MaterialIcons name="emoji-events" size={20} color={theme.carreauColor} />
               <Text style={styles.quickTournamentName}>{tournament.name}</Text>
             </View>
 
-            <Text style={styles.endTournamentQuestion}>Comment s'est terminé votre parcours ?</Text>
+            {/* STEP 1: Result Selection with Podium */}
+            {endTournamentStep === 1 && (
+              <Animated.View entering={FadeInDown.duration(300)}>
+                <Text style={styles.endTournamentQuestion}>Quel est votre classement final ?</Text>
 
-            <View style={styles.endTournamentOptions}>
-              <Pressable 
-                style={[styles.endTournamentOption, styles.endTournamentOptionChampion]}
-                onPress={() => handleEndTournament('Champion')}
-              >
-                <View style={[styles.endTournamentIconBox, { backgroundColor: theme.carreauColor + '20' }]}>
-                  <MaterialIcons name="emoji-events" size={32} color={theme.carreauColor} />
+                {/* Visual Podium - Top 3 */}
+                <View style={styles.podiumContainer}>
+                  {/* 2nd place */}
+                  <Pressable style={styles.podiumSpot} onPress={() => handleSelectResult('2ème')}>
+                    <View style={[styles.podiumIcon, { backgroundColor: '#C0C0C0' + '25' }]}>
+                      <MaterialIcons name="workspace-premium" size={28} color="#C0C0C0" />
+                    </View>
+                    <View style={[styles.podiumBlock, styles.podiumBlock2nd]}>
+                      <Text style={[styles.podiumLabel, { color: '#C0C0C0' }]}>2ème</Text>
+                    </View>
+                  </Pressable>
+                  {/* 1st place */}
+                  <Pressable style={styles.podiumSpot} onPress={() => handleSelectResult('1er')}>
+                    <View style={[styles.podiumIcon, { backgroundColor: '#FFD700' + '25' }]}>
+                      <MaterialIcons name="emoji-events" size={36} color="#FFD700" />
+                    </View>
+                    <View style={[styles.podiumBlock, styles.podiumBlock1st]}>
+                      <Text style={[styles.podiumLabel, { color: '#FFD700' }]}>1er</Text>
+                    </View>
+                  </Pressable>
+                  {/* 3rd place */}
+                  <Pressable style={styles.podiumSpot} onPress={() => handleSelectResult('3ème')}>
+                    <View style={[styles.podiumIcon, { backgroundColor: '#CD7F32' + '25' }]}>
+                      <MaterialIcons name="military-tech" size={28} color="#CD7F32" />
+                    </View>
+                    <View style={[styles.podiumBlock, styles.podiumBlock3rd]}>
+                      <Text style={[styles.podiumLabel, { color: '#CD7F32' }]}>3ème</Text>
+                    </View>
+                  </Pressable>
                 </View>
-                <Text style={styles.endTournamentOptionTitle}>Champion !</Text>
-                <Text style={styles.endTournamentOptionDesc}>J'ai remporté le tournoi</Text>
-              </Pressable>
 
-              <Pressable 
-                style={[styles.endTournamentOption, styles.endTournamentOptionFinalist]}
-                onPress={() => handleEndTournament('Finaliste')}
-              >
-                <View style={[styles.endTournamentIconBox, { backgroundColor: theme.accent + '20' }]}>
-                  <MaterialIcons name="workspace-premium" size={32} color={theme.accent} />
+                {/* Other results */}
+                <Text style={styles.endOtherResultsTitle}>Autre classement</Text>
+                <View style={styles.endOtherResults}>
+                  {[
+                    { id: 'Demi-finale', label: 'Demi-finale', icon: 'trending-up', color: '#4A90D9' },
+                    { id: 'Quart de finale', label: 'Quart de finale', icon: 'trending-flat', color: '#F5A623' },
+                    { id: '1/8 finale', label: '1/8 de finale', icon: 'sports', color: '#7B8794' },
+                    { id: 'Poules', label: 'Éliminé en poules', icon: 'group', color: '#7B8794' },
+                    { id: 'Autre', label: 'Autre', icon: 'more-horiz', color: theme.textMuted },
+                  ].map(item => (
+                    <Pressable
+                      key={item.id}
+                      style={styles.endOtherResultItem}
+                      onPress={() => handleSelectResult(item.id)}
+                    >
+                      <View style={[styles.endOtherResultIcon, { backgroundColor: item.color + '15' }]}>
+                        <MaterialIcons name={item.icon as any} size={20} color={item.color} />
+                      </View>
+                      <Text style={styles.endOtherResultLabel}>{item.label}</Text>
+                      <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                    </Pressable>
+                  ))}
                 </View>
-                <Text style={styles.endTournamentOptionTitle}>Finaliste</Text>
-                <Text style={styles.endTournamentOptionDesc}>Perdu en finale</Text>
-              </Pressable>
+              </Animated.View>
+            )}
 
-              <Pressable 
-                style={[styles.endTournamentOption, styles.endTournamentOptionEliminated]}
-                onPress={() => handleEndTournament('Éliminé')}
-              >
-                <View style={[styles.endTournamentIconBox, { backgroundColor: theme.error + '20' }]}>
-                  <MaterialIcons name="block" size={32} color={theme.error} />
-                </View>
-                <Text style={styles.endTournamentOptionTitle}>Éliminé</Text>
-                <Text style={styles.endTournamentOptionDesc}>Parcours terminé</Text>
-              </Pressable>
-            </View>
+            {/* STEP 2: Prize & Details */}
+            {endTournamentStep === 2 && selectedFinalResult && (
+              <Animated.View entering={FadeInDown.duration(300)}>
+                {/* Selected result badge */}
+                {(() => {
+                  const cfg = {
+                    '1er': { icon: 'emoji-events', color: '#FFD700', label: 'Champion' },
+                    '2ème': { icon: 'workspace-premium', color: '#C0C0C0', label: 'Finaliste' },
+                    '3ème': { icon: 'military-tech', color: '#CD7F32', label: '3ème place' },
+                  }[selectedFinalResult] || { icon: 'sports', color: theme.textSecondary, label: selectedFinalResult };
+                  const isPodium = ['1er', '2ème', '3ème'].includes(selectedFinalResult);
+                  return (
+                    <View style={[styles.endSelectedResultBadge, { backgroundColor: cfg.color + '15', borderColor: cfg.color + '40' }]}>
+                      <MaterialIcons name={cfg.icon as any} size={32} color={cfg.color} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.endSelectedResultLabel, { color: cfg.color }]}>{cfg.label}</Text>
+                        {isPodium && <Text style={styles.endSelectedResultSub}>Classement final</Text>}
+                      </View>
+                      <Pressable style={styles.endChangeBtn} onPress={() => setEndTournamentStep(1)}>
+                        <Text style={styles.endChangeBtnText}>Modifier</Text>
+                      </Pressable>
+                    </View>
+                  );
+                })()}
 
-            <View style={styles.endTournamentStats}>
-              <Text style={styles.endTournamentStatsTitle}>Résumé du parcours</Text>
-              <View style={styles.endTournamentStatsRow}>
-                <View style={styles.endTournamentStatItem}>
-                  <Text style={styles.endTournamentStatValue}>{myStats.played}</Text>
-                  <Text style={styles.endTournamentStatLabel}>Matchs</Text>
-                </View>
-                <View style={styles.endTournamentStatItem}>
-                  <Text style={[styles.endTournamentStatValue, { color: theme.success }]}>{myStats.wins}</Text>
-                  <Text style={styles.endTournamentStatLabel}>Victoires</Text>
-                </View>
-                <View style={styles.endTournamentStatItem}>
-                  <Text style={[styles.endTournamentStatValue, { color: theme.error }]}>{myStats.losses}</Text>
-                  <Text style={styles.endTournamentStatLabel}>Défaites</Text>
-                </View>
-                {myStats.tirRate !== null && (
-                  <View style={styles.endTournamentStatItem}>
-                    <Text style={[styles.endTournamentStatValue, { color: theme.tirColor }]}>{myStats.tirRate}%</Text>
-                    <Text style={styles.endTournamentStatLabel}>Tir</Text>
+                {/* Prize input */}
+                <View style={styles.endDetailSection}>
+                  <Text style={styles.endDetailSectionTitle}>Gains du tournoi (optionnel)</Text>
+                  <View style={styles.endPrizeInputRow}>
+                    <MaterialIcons name="emoji-events" size={22} color={theme.success} />
+                    <TextInput
+                      style={styles.endPrizeInput}
+                      value={prizeWonInput}
+                      onChangeText={setPrizeWonInput}
+                      placeholder="0"
+                      placeholderTextColor={theme.textMuted}
+                      keyboardType="decimal-pad"
+                    />
+                    <Text style={styles.endPrizeUnit}>€</Text>
                   </View>
-                )}
-              </View>
-            </View>
+                  {tournament.registrationCost ? (
+                    <View style={styles.endCostInfo}>
+                      <MaterialIcons name="info-outline" size={14} color={theme.textMuted} />
+                      <Text style={styles.endCostInfoText}>
+                        Inscription : {tournament.registrationCost}€ — 
+                        Net : {((parseFloat(prizeWonInput) || 0) - tournament.registrationCost) >= 0 ? '+' : ''}
+                        {((parseFloat(prizeWonInput) || 0) - tournament.registrationCost).toFixed(0)}€
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                {/* Stats summary */}
+                <View style={styles.endDetailSection}>
+                  <Text style={styles.endDetailSectionTitle}>Résumé du parcours</Text>
+                  <View style={styles.endTournamentStats}>
+                    <View style={styles.endTournamentStatsRow}>
+                      <View style={styles.endTournamentStatItem}>
+                        <Text style={styles.endTournamentStatValue}>{myStats.played}</Text>
+                        <Text style={styles.endTournamentStatLabel}>Matchs</Text>
+                      </View>
+                      <View style={styles.endTournamentStatItem}>
+                        <Text style={[styles.endTournamentStatValue, { color: theme.success }]}>{myStats.wins}</Text>
+                        <Text style={styles.endTournamentStatLabel}>Victoires</Text>
+                      </View>
+                      <View style={styles.endTournamentStatItem}>
+                        <Text style={[styles.endTournamentStatValue, { color: theme.error }]}>{myStats.losses}</Text>
+                        <Text style={styles.endTournamentStatLabel}>Défaites</Text>
+                      </View>
+                      {myStats.tirRate !== null ? (
+                        <View style={styles.endTournamentStatItem}>
+                          <Text style={[styles.endTournamentStatValue, { color: theme.tirColor }]}>{myStats.tirRate}%</Text>
+                          <Text style={styles.endTournamentStatLabel}>Tir</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+                </View>
+
+                {/* Continue button */}
+                <Pressable style={styles.endContinueBtn} onPress={handleGoToSummary}>
+                  <Text style={styles.endContinueBtnText}>Continuer</Text>
+                  <MaterialIcons name="arrow-forward" size={20} color="#FFF" />
+                </Pressable>
+              </Animated.View>
+            )}
+
+            {/* STEP 3: Confirmation Summary */}
+            {endTournamentStep === 3 && selectedFinalResult && (
+              <Animated.View entering={FadeInDown.duration(300)}>
+                {(() => {
+                  const isPodium = ['1er', '2ème', '3ème'].includes(selectedFinalResult);
+                  const resultCfg: Record<string, { icon: string; color: string }> = {
+                    '1er': { icon: 'emoji-events', color: '#FFD700' },
+                    '2ème': { icon: 'workspace-premium', color: '#C0C0C0' },
+                    '3ème': { icon: 'military-tech', color: '#CD7F32' },
+                  };
+                  const cfg = resultCfg[selectedFinalResult] || { icon: 'sports', color: theme.textSecondary };
+                  const prize = parseFloat(prizeWonInput) || 0;
+
+                  return (
+                    <>
+                      {/* Celebration for podium */}
+                      {isPodium && (
+                        <Animated.View entering={FadeIn.duration(500)} style={styles.endCelebration}>
+                          <View style={[styles.endCelebrationIcon, { backgroundColor: cfg.color + '20' }]}>
+                            <MaterialIcons name={cfg.icon as any} size={56} color={cfg.color} />
+                          </View>
+                          <Text style={[styles.endCelebrationTitle, { color: cfg.color }]}>
+                            {selectedFinalResult === '1er' ? 'Champion !' : selectedFinalResult === '2ème' ? 'Finaliste !' : 'Podium !'}
+                          </Text>
+                          <Text style={styles.endCelebrationSub}>{tournament.name}</Text>
+                        </Animated.View>
+                      )}
+
+                      {!isPodium && (
+                        <View style={styles.endSummaryHeader}>
+                          <View style={[styles.endSummaryIcon, { backgroundColor: cfg.color + '20' }]}>
+                            <MaterialIcons name={cfg.icon as any} size={36} color={cfg.color} />
+                          </View>
+                          <Text style={styles.endSummaryResult}>{selectedFinalResult}</Text>
+                          <Text style={styles.endSummaryTournament}>{tournament.name}</Text>
+                        </View>
+                      )}
+
+                      {/* Summary card */}
+                      <View style={styles.endSummaryCard}>
+                        <View style={styles.endSummaryRow}>
+                          <MaterialIcons name="emoji-events" size={18} color={theme.textSecondary} />
+                          <Text style={styles.endSummaryRowLabel}>Classement</Text>
+                          <Text style={[styles.endSummaryRowValue, { color: cfg.color }]}>{selectedFinalResult}</Text>
+                        </View>
+                        <View style={styles.endSummaryDivider} />
+                        <View style={styles.endSummaryRow}>
+                          <MaterialIcons name="sports" size={18} color={theme.textSecondary} />
+                          <Text style={styles.endSummaryRowLabel}>Matchs joués</Text>
+                          <Text style={styles.endSummaryRowValue}>{myStats.played} ({myStats.wins}V-{myStats.losses}D)</Text>
+                        </View>
+                        <View style={styles.endSummaryDivider} />
+                        <View style={styles.endSummaryRow}>
+                          <MaterialIcons name="show-chart" size={18} color={theme.textSecondary} />
+                          <Text style={styles.endSummaryRowLabel}>Diff. points</Text>
+                          <Text style={[styles.endSummaryRowValue, { color: myStats.pointDiff >= 0 ? theme.success : theme.error }]}>
+                            {myStats.pointDiff > 0 ? '+' : ''}{myStats.pointDiff}
+                          </Text>
+                        </View>
+                        {prize > 0 && (
+                          <>
+                            <View style={styles.endSummaryDivider} />
+                            <View style={styles.endSummaryRow}>
+                              <MaterialIcons name="payments" size={18} color={theme.success} />
+                              <Text style={styles.endSummaryRowLabel}>Gains</Text>
+                              <Text style={[styles.endSummaryRowValue, { color: theme.success }]}>+{prize}€</Text>
+                            </View>
+                          </>
+                        )}
+                        {tournament.registrationCost ? (
+                          <>
+                            <View style={styles.endSummaryDivider} />
+                            <View style={styles.endSummaryRow}>
+                              <MaterialIcons name="receipt" size={18} color={theme.textMuted} />
+                              <Text style={styles.endSummaryRowLabel}>Inscription</Text>
+                              <Text style={[styles.endSummaryRowValue, { color: theme.error }]}>-{tournament.registrationCost}€</Text>
+                            </View>
+                          </>
+                        ) : null}
+                      </View>
+
+                      {/* Status change notice */}
+                      <View style={styles.endNotice}>
+                        <MaterialIcons name="info" size={18} color={theme.primary} />
+                        <Text style={styles.endNoticeText}>
+                          Le tournoi sera marqué comme « Terminé » et apparaîtra dans votre palmarès.
+                        </Text>
+                      </View>
+
+                      {/* Confirm button */}
+                      <Pressable
+                        style={[styles.endConfirmBtn, isSavingEnd && { opacity: 0.7 }]}
+                        onPress={handleConfirmEndTournament}
+                        disabled={isSavingEnd}
+                      >
+                        {isSavingEnd ? (
+                          <ActivityIndicator size="small" color="#FFF" />
+                        ) : (
+                          <>
+                            <MaterialIcons name="check" size={22} color="#FFF" />
+                            <Text style={styles.endConfirmBtnText}>Terminer le tournoi</Text>
+                          </>
+                        )}
+                      </Pressable>
+                    </>
+                  );
+                })()}
+              </Animated.View>
+            )}
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -1528,58 +1776,186 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 24,
   },
-  endTournamentOptions: {
-    gap: 12,
-    marginBottom: 24,
-  },
-  endTournamentOption: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 20,
+  endStepIndicator: {
+    width: 40,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
-    ...theme.shadows.card,
   },
-  endTournamentOptionChampion: {
-    borderColor: theme.carreauColor + '40',
+  endStepText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.textMuted,
   },
-  endTournamentOptionFinalist: {
-    borderColor: theme.accent + '40',
+  endProgressBar: {
+    height: 3,
+    backgroundColor: theme.border,
   },
-  endTournamentOptionEliminated: {
-    borderColor: theme.error + '40',
+  endProgressFill: {
+    height: '100%',
+    backgroundColor: theme.primary,
   },
-  endTournamentIconBox: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+  // Podium
+  podiumContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    gap: 12,
+    marginBottom: 28,
+    paddingHorizontal: 16,
+  },
+  podiumSpot: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  podiumIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
   },
-  endTournamentOptionTitle: {
+  podiumBlock: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    backgroundColor: theme.surface,
+    borderWidth: 2,
+    borderBottomWidth: 0,
+    borderColor: theme.border,
+  },
+  podiumBlock1st: {
+    height: 64,
+    borderColor: '#FFD700' + '60',
+    backgroundColor: '#FFD700' + '10',
+  },
+  podiumBlock2nd: {
+    height: 48,
+    borderColor: '#C0C0C0' + '60',
+    backgroundColor: '#C0C0C0' + '10',
+  },
+  podiumBlock3rd: {
+    height: 36,
+    borderColor: '#CD7F32' + '60',
+    backgroundColor: '#CD7F32' + '10',
+  },
+  podiumLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  // Other results
+  endOtherResultsTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.textSecondary,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 10,
+    paddingLeft: 4,
+  },
+  endOtherResults: {
+    gap: 8,
+  },
+  endOtherResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surface,
+    padding: 14,
+    borderRadius: theme.borderRadius.md,
+    gap: 12,
+    ...theme.shadows.card,
+  },
+  endOtherResultIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  endOtherResultLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  // Step 2: Details
+  endSelectedResultBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    padding: 16,
+    borderRadius: theme.borderRadius.lg,
+    borderWidth: 1.5,
+    marginBottom: 24,
+  },
+  endSelectedResultLabel: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.textPrimary,
-    marginBottom: 4,
   },
-  endTournamentOptionDesc: {
-    fontSize: 13,
+  endSelectedResultSub: {
+    fontSize: 12,
     color: theme.textSecondary,
+    marginTop: 2,
+  },
+  endChangeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.sm,
+    backgroundColor: theme.backgroundSecondary,
+  },
+  endChangeBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.primary,
+  },
+  endDetailSection: {
+    marginBottom: 20,
+  },
+  endDetailSectionTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textSecondary,
+    marginBottom: 10,
+  },
+  endPrizeInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 14,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  endPrizeInput: {
+    flex: 1,
+    fontSize: 24,
+    fontWeight: '700',
+    color: theme.textPrimary,
+    padding: 0,
+  },
+  endPrizeUnit: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  endCostInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingHorizontal: 4,
+  },
+  endCostInfoText: {
+    fontSize: 12,
+    color: theme.textMuted,
   },
   endTournamentStats: {
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg,
     padding: 16,
     ...theme.shadows.card,
-  },
-  endTournamentStatsTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textSecondary,
-    marginBottom: 12,
-    textAlign: 'center',
   },
   endTournamentStatsRow: {
     flexDirection: 'row',
@@ -1597,6 +1973,123 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: theme.textMuted,
     marginTop: 2,
+  },
+  endContinueBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: theme.primary,
+    paddingVertical: 16,
+    borderRadius: theme.borderRadius.lg,
+    marginTop: 8,
+  },
+  endContinueBtnText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  // Step 3: Summary & Confirmation
+  endCelebration: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    marginBottom: 20,
+  },
+  endCelebrationIcon: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  endCelebrationTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  endCelebrationSub: {
+    fontSize: 14,
+    color: theme.textSecondary,
+  },
+  endSummaryHeader: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    marginBottom: 16,
+  },
+  endSummaryIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  endSummaryResult: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: theme.textPrimary,
+    marginBottom: 4,
+  },
+  endSummaryTournament: {
+    fontSize: 14,
+    color: theme.textSecondary,
+  },
+  endSummaryCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    marginBottom: 16,
+    ...theme.shadows.card,
+  },
+  endSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+  },
+  endSummaryRowLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: theme.textSecondary,
+  },
+  endSummaryRowValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  endSummaryDivider: {
+    height: 1,
+    backgroundColor: theme.border,
+  },
+  endNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: theme.primary + '10',
+    padding: 14,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: 20,
+  },
+  endNoticeText: {
+    flex: 1,
+    fontSize: 12,
+    color: theme.primary,
+    lineHeight: 18,
+  },
+  endConfirmBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: theme.success,
+    paddingVertical: 16,
+    borderRadius: theme.borderRadius.lg,
+  },
+  endConfirmBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFF',
   },
   notificationModalScroll: {
     padding: 16,
