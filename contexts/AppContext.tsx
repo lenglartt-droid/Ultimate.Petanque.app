@@ -442,6 +442,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadData();
   }, [loadData]);
 
+  // Auto-refresh every 30 seconds when user is logged in
+  useEffect(() => {
+    if (!user?.id) return;
+    const interval = setInterval(() => {
+      loadData();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [user?.id, loadData]);
+
   // Refresh data function
   const refreshData = useCallback(async () => {
     await loadData();

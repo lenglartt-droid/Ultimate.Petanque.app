@@ -726,7 +726,7 @@ export default function ProfileScreen() {
           </Animated.View>
         )}
 
-        {/* View Mode - My Player Card Link */}
+        {/* View Mode - My Player Card & Palmares Links */}
         {!isEditing && (
           <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
             <Pressable 
@@ -739,6 +739,20 @@ export default function ProfileScreen() {
               <View style={styles.playerCardLinkInfo}>
                 <Text style={styles.playerCardLinkTitle}>Ma fiche joueur</Text>
                 <Text style={styles.playerCardLinkSubtitle}>Voir mes statistiques détaillées</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
+            </Pressable>
+
+            <Pressable 
+              style={[styles.playerCardLink, { marginTop: 10 }]}
+              onPress={() => router.push('/palmares')}
+            >
+              <View style={[styles.playerCardLinkIcon, { backgroundColor: theme.carreauColor + '15' }]}>
+                <MaterialIcons name="emoji-events" size={24} color={theme.carreauColor} />
+              </View>
+              <View style={styles.playerCardLinkInfo}>
+                <Text style={styles.playerCardLinkTitle}>Mon Palmarès</Text>
+                <Text style={styles.playerCardLinkSubtitle}>Tournois, résultats et gains</Text>
               </View>
               <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
             </Pressable>
