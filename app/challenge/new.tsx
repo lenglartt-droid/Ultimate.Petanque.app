@@ -547,8 +547,7 @@ export default function NewChallengeScreen() {
   }, []);
 
   const resetChallenge = useCallback(() => {
-    Alert.alert('Recommencer', 'Voulez-vous recommencer ce défi ?', [
-      { text: 'Annuler', style: 'cancel' },
+    Alert.alert('Défi terminé', 'Que souhaitez-vous faire ?', [
       {
         text: 'Recommencer',
         onPress: () => {
@@ -567,6 +566,14 @@ export default function NewChallengeScreen() {
           setIsFinished(false);
           setShotTimerRunning(false);
           setCurrentTurn('player');
+        },
+      },
+      {
+        text: 'Sortir des défis',
+        style: 'destructive',
+        onPress: () => {
+          if (timerRef.current) clearInterval(timerRef.current);
+          router.back();
         },
       },
     ]);
