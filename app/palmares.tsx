@@ -188,6 +188,7 @@ export default function PalmaresScreen() {
   const [formatFilter, setFormatFilter] = useState<FormatFilter>('all');
   const [resultFilter, setResultFilter] = useState<ResultFilter>('all');
   const [showChart, setShowChart] = useState(false);
+  const [selectedChartIndex, setSelectedChartIndex] = useState<number | null>(null);
 
   // Build palmares data (unfiltered for summary)
   const allPalmaresData = useMemo(() => {
@@ -332,6 +333,17 @@ export default function PalmaresScreen() {
         winRate: cumulativeMatches > 0 ? Math.round((cumulativeWins / cumulativeMatches) * 100) : 0,
         tournamentWinRate: item.stats.winRate,
         pointDiff: item.stats.pointDiff,
+        // Full tournament detail for tooltip
+        tournamentName: item.tournament.name,
+        tournamentDate: new Date(item.tournament.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
+        tournamentCity: item.tournament.location?.city || '',
+        tournamentFormat: item.tournament.format,
+        tournamentResult: item.tournament.finalResult,
+        tournamentId: item.tournament.id,
+        statsPlayed: item.stats.played,
+        statsWins: item.stats.wins,
+        statsLosses: item.stats.losses,
+        opponents: item.matches.map(m => m.teamB?.playerNames?.[0]).filter(Boolean).slice(0, 3),
       };
     });
   }, [palmaresData]);
@@ -454,7 +466,7 @@ export default function PalmaresScreen() {
                   <MaterialIcons name="trending-up" size={18} color={theme.primary} />
                   <Text style={styles.chartTitle}>Évolution en tournoi</Text>
                 </View>
-                <Text style={styles.chartSubtitle}>Taux de victoire par tournoi</Text>
+                <Text style={styles.chartSubtitle}>Taux de victoire par tournoi — touchez un point</Text>
                 <View style={styles.chartContainer}>
                   <Svg width={screenWidth - 80} height={180}>
                     {/* Grid lines */}
@@ -472,16 +484,85 @@ export default function PalmaresScreen() {
                       const prevData = chartData[i - 1];
                       const prevX = prevData ? 45 + ((i - 1) * (chartWidth / Math.max(chartData.length - 1, 1))) : x;
                       const prevY = prevData ? 160 - (prevData.tournamentWinRate / 100) * 130 : y;
+                      const isSelected = selectedChartIndex === i;
                       return (
                         <G key={i}>
                           {i > 0 && <Line x1={prevX} y1={prevY} x2={x} y2={y} stroke={theme.primary} strokeWidth="2.5" />}
-                          <Circle cx={x} cy={y} r="5" fill={data.tournamentWinRate >= 50 ? theme.success : theme.error} />
-                          <SvgText x={x} y={y - 10} fontSize="9" fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.tournamentWinRate}%</SvgText>
+                          {/* Invisible larger hit area */}
+                          <Circle cx={x} cy={y} r="18" fill="transparent" onPress={() => { Haptics.selectionAsync(); setSelectedChartIndex(isSelected ? null : i); }} />
+                          <Circle cx={x} cy={y} r={isSelected ? 8 : 5} fill={data.tournamentWinRate >= 50 ? theme.success : theme.error} stroke={isSelected ? theme.primary : 'transparent'} strokeWidth={isSelected ? 3 : 0} onPress={() => { Haptics.selectionAsync(); setSelectedChartIndex(isSelected ? null : i); }} />
+                          <SvgText x={x} y={y - 12} fontSize="9" fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.tournamentWinRate}%</SvgText>
                         </G>
                       );
                     })}
                   </Svg>
                 </View>
+
+                {/* Tooltip for selected tournament */}
+                {selectedChartIndex !== null && chartData[selectedChartIndex] && (
+                  <Animated.View entering={FadeIn.duration(250)} style={styles.tooltipCard}>
+                    <Pressable style={styles.tooltipClose} onPress={() => setSelectedChartIndex(null)}>
+                      <MaterialIcons name="close" size={16} color={theme.textMuted} />
+                    </Pressable>
+                    <View style={styles.tooltipHeader}>
+                      {(() => {
+                        const d = chartData[selectedChartIndex];
+                        const resultCfg = RESULT_CONFIG[d.tournamentResult || ''] || { icon: 'sports', color: theme.textMuted };
+                        return (
+                          <>
+                            <View style={[styles.tooltipResultIcon, { backgroundColor: resultCfg.color + '20' }]}>
+                              <MaterialIcons name={resultCfg.icon as any} size={20} color={resultCfg.color} />
+                            </View>
+                            <View style={styles.tooltipHeaderInfo}>
+                              <Text style={styles.tooltipName} numberOfLines={2}>{d.tournamentName}</Text>
+                              <Text style={styles.tooltipDate}>{d.tournamentDate} — {d.tournamentCity}</Text>
+                            </View>
+                          </>
+                        );
+                      })()}
+                    </View>
+                    <View style={styles.tooltipStatsRow}>
+                      <View style={styles.tooltipStatItem}>
+                        <Text style={styles.tooltipStatLabel}>Format</Text>
+                        <Text style={styles.tooltipStatValue}>{chartData[selectedChartIndex].tournamentFormat}</Text>
+                      </View>
+                      <View style={styles.tooltipStatDivider} />
+                      <View style={styles.tooltipStatItem}>
+                        <Text style={styles.tooltipStatLabel}>Résultat</Text>
+                        <Text style={[styles.tooltipStatValue, { color: RESULT_CONFIG[chartData[selectedChartIndex].tournamentResult || '']?.color || theme.textPrimary }]}>
+                          {chartData[selectedChartIndex].tournamentResult || '-'}
+                        </Text>
+                      </View>
+                      <View style={styles.tooltipStatDivider} />
+                      <View style={styles.tooltipStatItem}>
+                        <Text style={styles.tooltipStatLabel}>Matchs</Text>
+                        <Text style={styles.tooltipStatValue}>{chartData[selectedChartIndex].statsWins}V-{chartData[selectedChartIndex].statsLosses}D</Text>
+                      </View>
+                      <View style={styles.tooltipStatDivider} />
+                      <View style={styles.tooltipStatItem}>
+                        <Text style={styles.tooltipStatLabel}>Diff.</Text>
+                        <Text style={[styles.tooltipStatValue, { color: chartData[selectedChartIndex].pointDiff >= 0 ? theme.success : theme.error }]}>
+                          {chartData[selectedChartIndex].pointDiff > 0 ? '+' : ''}{chartData[selectedChartIndex].pointDiff}
+                        </Text>
+                      </View>
+                    </View>
+                    {chartData[selectedChartIndex].opponents.length > 0 && (
+                      <View style={styles.tooltipOpponents}>
+                        <MaterialIcons name="people" size={14} color={theme.textMuted} />
+                        <Text style={styles.tooltipOpponentsText} numberOfLines={1}>
+                          {chartData[selectedChartIndex].opponents.join(', ')}
+                        </Text>
+                      </View>
+                    )}
+                    <Pressable
+                      style={styles.tooltipDetailBtn}
+                      onPress={() => { setSelectedChartIndex(null); router.push(`/tournament/${chartData[selectedChartIndex!].tournamentId}`); }}
+                    >
+                      <Text style={styles.tooltipDetailBtnText}>Voir le parcours</Text>
+                      <MaterialIcons name="chevron-right" size={16} color={theme.primary} />
+                    </Pressable>
+                  </Animated.View>
+                )}
 
                 {/* Point Diff bar chart */}
                 <View style={styles.chartDivider} />
@@ -495,13 +576,16 @@ export default function PalmaresScreen() {
                       const barHeight = Math.abs(data.pointDiff) / maxDiff * 35;
                       const isPositive = data.pointDiff >= 0;
                       const barY = isPositive ? 55 - barHeight : 55;
+                      const isSelected = selectedChartIndex === i;
                       return (
                         <G key={i}>
-                          <Rect x={x} y={barY} width={barWidth} height={Math.max(barHeight, 2)} fill={isPositive ? theme.success : theme.error} rx="3" />
+                          <Rect x={x} y={barY} width={barWidth} height={Math.max(barHeight, 2)} fill={isPositive ? theme.success : theme.error} rx="3" opacity={isSelected ? 1 : 0.8} stroke={isSelected ? theme.primary : 'transparent'} strokeWidth={isSelected ? 2 : 0} onPress={() => { Haptics.selectionAsync(); setSelectedChartIndex(isSelected ? null : i); }} />
+                          {/* Invisible wider hit area */}
+                          <Rect x={x - 4} y={0} width={barWidth + 8} height={120} fill="transparent" onPress={() => { Haptics.selectionAsync(); setSelectedChartIndex(isSelected ? null : i); }} />
                           <SvgText x={x + barWidth / 2} y={isPositive ? barY - 6 : barY + barHeight + 12} fontSize="9" fill={isPositive ? theme.success : theme.error} textAnchor="middle" fontWeight="600">
                             {isPositive ? '+' : ''}{data.pointDiff}
                           </SvgText>
-                          <SvgText x={x + barWidth / 2} y={105} fontSize="7" fill={theme.textMuted} textAnchor="middle">{data.label}</SvgText>
+                          <SvgText x={x + barWidth / 2} y={105} fontSize="7" fill={isSelected ? theme.primary : theme.textMuted} textAnchor="middle" fontWeight={isSelected ? '700' : '400'}>{data.label}</SvgText>
                         </G>
                       );
                     })}
@@ -662,6 +746,44 @@ const styles = StyleSheet.create({
   chartSubtitle: { fontSize: 11, color: theme.textMuted, marginBottom: 12 },
   chartContainer: { alignItems: 'center', marginBottom: 8 },
   chartDivider: { height: 1, backgroundColor: theme.border, marginVertical: 14 },
+  // Tooltip
+  tooltipCard: {
+    backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.lg,
+    padding: 14, marginTop: 8, marginBottom: 4, borderWidth: 1, borderColor: theme.primary + '30',
+  },
+  tooltipClose: {
+    position: 'absolute', top: 8, right: 8, zIndex: 1,
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center',
+  },
+  tooltipHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingRight: 28 },
+  tooltipResultIcon: {
+    width: 40, height: 40, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center', marginRight: 12,
+  },
+  tooltipHeaderInfo: { flex: 1 },
+  tooltipName: { fontSize: 14, fontWeight: '700', color: theme.textPrimary, marginBottom: 2 },
+  tooltipDate: { fontSize: 11, color: theme.textSecondary },
+  tooltipStatsRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: theme.surface, borderRadius: theme.borderRadius.md,
+    paddingVertical: 10, paddingHorizontal: 4, marginBottom: 10,
+  },
+  tooltipStatItem: { flex: 1, alignItems: 'center' },
+  tooltipStatLabel: { fontSize: 9, color: theme.textMuted, marginBottom: 2 },
+  tooltipStatValue: { fontSize: 13, fontWeight: '700', color: theme.textPrimary },
+  tooltipStatDivider: { width: 1, height: 24, backgroundColor: theme.border },
+  tooltipOpponents: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingVertical: 8, borderTopWidth: 1, borderTopColor: theme.border, marginBottom: 8,
+  },
+  tooltipOpponentsText: { fontSize: 12, color: theme.textSecondary, flex: 1 },
+  tooltipDetailBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
+    paddingVertical: 10, backgroundColor: theme.primary + '10',
+    borderRadius: theme.borderRadius.md,
+  },
+  tooltipDetailBtnText: { fontSize: 13, fontWeight: '600', color: theme.primary },
   // Empty
   emptyState: { alignItems: 'center', paddingVertical: 48 },
   emptyTitle: { fontSize: 18, fontWeight: '600', color: theme.textPrimary, marginTop: 16 },
