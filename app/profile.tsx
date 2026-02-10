@@ -629,98 +629,42 @@ export default function ProfileScreen() {
           </Animated.View>
         )}
 
-        {/* Financial Stats Section */}
+        {/* Financial Summary Button */}
         {!isEditing && (
           <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-            <Text style={styles.sectionTitle}>BILAN FINANCIER</Text>
             {(() => {
-              // Calculate financial stats
               const myClub = selfPlayer?.clubId ? clubs.find(c => c.id === selfPlayer.clubId) : null;
               const membershipCost = myClub?.membershipCost || 0;
-              
               const totalRegistrationCosts = tournaments.reduce((sum, t) => sum + (t.registrationCost || 0), 0);
               const totalPrizesWon = tournaments.reduce((sum, t) => sum + (t.prizeWon || 0), 0);
-              
               const totalCosts = membershipCost + totalRegistrationCosts;
               const balance = totalPrizesWon - totalCosts;
-              
+              const podiums = tournaments.filter(t => ['1er', '2ème', '3ème'].includes(t.finalResult || '')).length;
               return (
-                <View style={styles.financialCard}>
-                  {/* Balance */}
-                  <View style={styles.financialBalanceRow}>
-                    <View style={styles.financialBalanceIcon}>
-                      <MaterialIcons name="account-balance-wallet" size={28} color={balance >= 0 ? theme.success : theme.error} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.financialBalanceLabel}>Bilan net</Text>
-                      <Text style={[styles.financialBalanceValue, { color: balance >= 0 ? theme.success : theme.error }]}>
+                <Pressable
+                  style={styles.financialButton}
+                  onPress={() => router.push('/palmares')}
+                >
+                  <View style={[styles.financialButtonIcon, { backgroundColor: (balance >= 0 ? theme.success : theme.error) + '15' }]}>
+                    <MaterialIcons name="account-balance-wallet" size={24} color={balance >= 0 ? theme.success : theme.error} />
+                  </View>
+                  <View style={styles.financialButtonInfo}>
+                    <Text style={styles.financialButtonTitle}>Bilan financier</Text>
+                    <View style={styles.financialButtonMeta}>
+                      <Text style={[styles.financialButtonBalance, { color: balance >= 0 ? theme.success : theme.error }]}>
                         {balance >= 0 ? '+' : ''}{balance.toFixed(0)} €
                       </Text>
+                      {podiums > 0 && (
+                        <>
+                          <View style={styles.financialButtonDot} />
+                          <MaterialIcons name="emoji-events" size={12} color={theme.carreauColor} />
+                          <Text style={styles.financialButtonPodiums}>{podiums} podium{podiums > 1 ? 's' : ''}</Text>
+                        </>
+                      )}
                     </View>
                   </View>
-                  
-                  <View style={styles.financialDivider} />
-                  
-                  {/* Gains */}
-                  <View style={styles.financialRow}>
-                    <View style={[styles.financialRowIcon, { backgroundColor: theme.success + '15' }]}>
-                      <MaterialIcons name="trending-up" size={18} color={theme.success} />
-                    </View>
-                    <Text style={styles.financialRowLabel}>Gains tournois</Text>
-                    <Text style={[styles.financialRowValue, { color: theme.success }]}>+{totalPrizesWon.toFixed(0)} €</Text>
-                  </View>
-                  
-                  {/* Costs breakdown */}
-                  <View style={styles.financialRow}>
-                    <View style={[styles.financialRowIcon, { backgroundColor: theme.error + '15' }]}>
-                      <MaterialIcons name="event" size={18} color={theme.error} />
-                    </View>
-                    <Text style={styles.financialRowLabel}>Inscriptions tournois ({tournaments.filter(t => t.registrationCost).length})</Text>
-                    <Text style={[styles.financialRowValue, { color: theme.error }]}>-{totalRegistrationCosts.toFixed(0)} €</Text>
-                  </View>
-                  
-                  {membershipCost > 0 && (
-                    <View style={styles.financialRow}>
-                      <View style={[styles.financialRowIcon, { backgroundColor: theme.error + '15' }]}>
-                        <MaterialIcons name="card-membership" size={18} color={theme.error} />
-                      </View>
-                      <Text style={styles.financialRowLabel}>Cotisation {myClub?.name}</Text>
-                      <Text style={[styles.financialRowValue, { color: theme.error }]}>-{membershipCost.toFixed(0)} €</Text>
-                    </View>
-                  )}
-                  
-                  <View style={styles.financialDivider} />
-                  
-                  <View style={styles.financialTotalRow}>
-                    <Text style={styles.financialTotalLabel}>Total des dépenses</Text>
-                    <Text style={styles.financialTotalValue}>{totalCosts.toFixed(0)} €</Text>
-                  </View>
-                  
-                  {/* Tournament results summary */}
-                  {tournaments.filter(t => t.finalResult).length > 0 && (
-                    <>
-                      <View style={styles.financialDivider} />
-                      <Text style={[styles.financialTotalLabel, { marginBottom: 10 }]}>Palmarès</Text>
-                      {tournaments.filter(t => t.finalResult).map(t => {
-                        const resultConfig: Record<string, { icon: string; color: string }> = {
-                          '1er': { icon: 'emoji-events', color: theme.carreauColor },
-                          '2ème': { icon: 'workspace-premium', color: theme.accent },
-                          '3ème': { icon: 'military-tech', color: '#CD7F32' },
-                        };
-                        const cfg = resultConfig[t.finalResult || ''] || { icon: 'sports', color: theme.textSecondary };
-                        return (
-                          <View key={t.id} style={styles.financialRow}>
-                            <View style={[styles.financialRowIcon, { backgroundColor: cfg.color + '15' }]}>
-                              <MaterialIcons name={cfg.icon as any} size={18} color={cfg.color} />
-                            </View>
-                            <Text style={styles.financialRowLabel} numberOfLines={1}>{t.name}</Text>
-                            <Text style={[styles.financialRowValue, { color: cfg.color }]}>{t.finalResult}</Text>
-                          </View>
-                        );
-                      })}
-                    </>
-                  )}
-                </View>
+                  <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
+                </Pressable>
               );
             })()}
           </Animated.View>
@@ -764,7 +708,13 @@ export default function ProfileScreen() {
           <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
             <Text style={styles.sectionTitle}>PARAMÈTRES</Text>
 
-            <Pressable style={styles.menuItem}>
+            <Pressable 
+              style={styles.menuItem}
+              onPress={() => {
+                Haptics.selectionAsync();
+                router.push('/password');
+              }}
+            >
               <View style={[styles.menuIcon, { backgroundColor: theme.primary + '15' }]}>
                 <MaterialIcons name="lock" size={20} color={theme.primary} />
               </View>
@@ -1428,77 +1378,52 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 24,
   },
-  // Financial stats
-  financialCard: {
+  // Financial button
+  financialButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg,
     padding: 16,
     ...theme.shadows.card,
   },
-  financialBalanceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    marginBottom: 4,
-  },
-  financialBalanceIcon: {
+  financialButtonIcon: {
     width: 52,
     height: 52,
     borderRadius: 14,
-    backgroundColor: theme.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 14,
   },
-  financialBalanceLabel: {
-    fontSize: 13,
-    color: theme.textSecondary,
+  financialButtonInfo: {
+    flex: 1,
   },
-  financialBalanceValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginTop: 2,
+  financialButtonTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.textPrimary,
+    marginBottom: 4,
   },
-  financialDivider: {
-    height: 1,
-    backgroundColor: theme.border,
-    marginVertical: 14,
-  },
-  financialRow: {
+  financialButtonMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 8,
   },
-  financialRowIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  financialRowLabel: {
-    flex: 1,
-    fontSize: 14,
-    color: theme.textPrimary,
-  },
-  financialRowValue: {
+  financialButtonBalance: {
     fontSize: 15,
     fontWeight: '700',
   },
-  financialTotalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  financialButtonDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.textMuted,
+    marginHorizontal: 8,
   },
-  financialTotalLabel: {
-    fontSize: 14,
+  financialButtonPodiums: {
+    fontSize: 13,
+    color: theme.carreauColor,
     fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  financialTotalValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: theme.textPrimary,
+    marginLeft: 3,
   },
   // Modal styles
   modalContainer: {
