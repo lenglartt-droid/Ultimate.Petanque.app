@@ -1633,7 +1633,16 @@ export default function StatsScreen() {
                             </>
                           )}
                           {errorStats.tirErrorResults.tirBouchon > 0 && (
-                            <StatRow label="Tir sur bouchon" value={errorStats.tirErrorResults.tirBouchon} subValue={`${Math.round((errorStats.tirErrorResults.tirBouchon / errorStats.totalTirErrorResults) * 100)}%`} icon="adjust" color={theme.warning} />
+                            <>
+                              <StatRow label="Tir sur bouchon" value={errorStats.tirErrorResults.tirBouchon} subValue={`${Math.round((errorStats.tirErrorResults.tirBouchon / errorStats.totalTirErrorResults) * 100)}%`} icon="adjust" color={theme.warning} />
+                              <View style={styles.coachingTip}>
+                                <View style={styles.coachingTipHeader}>
+                                  <MaterialIcons name="psychology" size={14} color={theme.tirColor} />
+                                  <Text style={styles.coachingTipCause}>Visée trop basse / trajectoire rasante</Text>
+                                </View>
+                                <Text style={styles.coachingTipAdvice}>Vise plus haut sur la boule, augmente légèrement l'arc du tir.</Text>
+                              </View>
+                            </>
                           )}
                           <View style={styles.divider} />
                           <BreakdownBar items={[
@@ -1732,13 +1741,40 @@ export default function StatsScreen() {
                     <SectionHeader title="Analyse des échecs (Points)" subtitle={`${errorStats.totalPointErrorTyped} erreurs analysées`} icon="highlight-off" color={theme.pointColor} />
                     <View style={styles.card}>
                       {errorStats.pointErrorTypes.rate > 0 && (
-                        <StatRow label="Raté (trop loin du but)" value={errorStats.pointErrorTypes.rate} subValue={`${Math.round((errorStats.pointErrorTypes.rate / errorStats.totalPointErrorTyped) * 100)}%`} icon="cancel" color={theme.error} />
+                        <>
+                          <StatRow label="Raté (trop loin du but)" value={errorStats.pointErrorTypes.rate} subValue={`${Math.round((errorStats.pointErrorTypes.rate / errorStats.totalPointErrorTyped) * 100)}%`} icon="cancel" color={theme.error} />
+                          <View style={styles.coachingTipPoint}>
+                            <View style={styles.coachingTipHeader}>
+                              <MaterialIcons name="psychology" size={14} color={theme.pointColor} />
+                              <Text style={[styles.coachingTipCause, { color: theme.pointColor }]}>Mauvaise lecture de distance / geste trop ample</Text>
+                            </View>
+                            <Text style={styles.coachingTipAdvice}>Rapproche-toi du but, raccourcis ton geste, concentre-toi sur le point de chute.</Text>
+                          </View>
+                        </>
                       )}
                       {errorStats.pointErrorTypes.crochete > 0 && (
-                        <StatRow label="Crocheté (mauvaise ouverture)" value={errorStats.pointErrorTypes.crochete} subValue={`${Math.round((errorStats.pointErrorTypes.crochete / errorStats.totalPointErrorTyped) * 100)}%`} icon="sync-problem" color={theme.warning} />
+                        <>
+                          <StatRow label="Crocheté (mauvaise ouverture)" value={errorStats.pointErrorTypes.crochete} subValue={`${Math.round((errorStats.pointErrorTypes.crochete / errorStats.totalPointErrorTyped) * 100)}%`} icon="sync-problem" color={theme.warning} />
+                          <View style={styles.coachingTipPoint}>
+                            <View style={styles.coachingTipHeader}>
+                              <MaterialIcons name="psychology" size={14} color={theme.pointColor} />
+                              <Text style={[styles.coachingTipCause, { color: theme.pointColor }]}>Main qui se ferme / lâcher crispé</Text>
+                            </View>
+                            <Text style={styles.coachingTipAdvice}>Ouvre bien les doigts au lâcher, détends ta main, accompagne le geste.</Text>
+                          </View>
+                        </>
                       )}
                       {errorStats.pointErrorTypes.sorti > 0 && (
-                        <StatRow label="Sorti du terrain" value={errorStats.pointErrorTypes.sorti} subValue={`${Math.round((errorStats.pointErrorTypes.sorti / errorStats.totalPointErrorTyped) * 100)}%`} icon="logout" color={theme.error} />
+                        <>
+                          <StatRow label="Sorti du terrain" value={errorStats.pointErrorTypes.sorti} subValue={`${Math.round((errorStats.pointErrorTypes.sorti / errorStats.totalPointErrorTyped) * 100)}%`} icon="logout" color={theme.error} />
+                          <View style={styles.coachingTipPoint}>
+                            <View style={styles.coachingTipHeader}>
+                              <MaterialIcons name="psychology" size={14} color={theme.pointColor} />
+                              <Text style={[styles.coachingTipCause, { color: theme.pointColor }]}>Trop de puissance / mauvais axe</Text>
+                            </View>
+                            <Text style={styles.coachingTipAdvice}>Réduis la force, vise plus court, contrôle ton axe de lancer.</Text>
+                          </View>
+                        </>
                       )}
                       <View style={styles.divider} />
                       <Text style={styles.errorSubsectionTitle}>Échecs par type de point</Text>
@@ -2180,6 +2216,7 @@ const styles = StyleSheet.create({
   coachingTipHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 },
   coachingTipCause: { fontSize: 11, fontWeight: '600', color: theme.tirColor, fontStyle: 'italic' },
   coachingTipAdvice: { fontSize: 11, color: theme.textSecondary, lineHeight: 16 },
+  coachingTipPoint: { marginLeft: 38, marginRight: 8, marginBottom: 8, marginTop: -4, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: theme.pointColor + '08', borderRadius: theme.borderRadius.sm, borderLeftWidth: 2, borderLeftColor: theme.pointColor + '40' },
   consecutiveErrorsGrid: { flexDirection: 'row', justifyContent: 'space-around' },
   consecutiveErrorItem: { alignItems: 'center' },
   consecutiveErrorValue: { fontSize: 36, fontWeight: '700', color: theme.error },
