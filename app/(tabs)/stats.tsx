@@ -438,6 +438,15 @@ export default function StatsScreen() {
                 shotTypeStats[shot.shotType].total++;
                 if (shot.success) shotTypeStats[shot.shotType].success++;
               }
+              // Also track shotResult (new model: fail descriptors in shotResult field)
+              if (shot.shotResult && shotTypeStats[shot.shotResult]) {
+                shotTypeStats[shot.shotResult].total++;
+                if (shot.success) shotTypeStats[shot.shotResult].success++;
+              }
+              // Legacy: failedShotType from old challenge data
+              if (shot.failedShotType && shotTypeStats[shot.failedShotType]) {
+                shotTypeStats[shot.failedShotType].total++;
+              }
               if (shot.carreau) { shotTypeStats.carreau.total++; shotTypeStats.carreau.success++; }
               if (shot.shotQuality && shotQualityStats[shot.shotQuality] !== undefined) {
                 shotQualityStats[shot.shotQuality]++;
