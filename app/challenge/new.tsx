@@ -1064,10 +1064,13 @@ export default function NewChallengeScreen() {
           <View style={styles.scoringButtonsGrid}>
             {displayAtelier.scoringOptions.map((option, index) => {
               const colors: Record<number, string> = { 0: theme.error, 1: theme.warning, 3: theme.success, 5: theme.carreauColor };
+              const isOddCount = displayAtelier.scoringOptions.length % 2 !== 0;
+              const isLastItem = index === displayAtelier.scoringOptions.length - 1;
+              const isFullWidth = isOddCount && isLastItem;
               return (
                 <Pressable 
                   key={index}
-                  style={[styles.scoringBtn, { backgroundColor: colors[option.points] }]}
+                  style={[styles.scoringBtn, { backgroundColor: colors[option.points] }, isFullWidth && styles.scoringBtnFullWidth]}
                   onPress={() => recordPrecisionShot(option.points, isOpponentTurn)}
                 >
                   <Text style={styles.scoringBtnPoints}>{option.points}</Text>
@@ -1391,4 +1394,5 @@ const styles = StyleSheet.create({
   scoringBtnPoints: { fontSize: 28, fontWeight: '800', color: '#FFF' },
   scoringBtnLabel: { fontSize: 13, fontWeight: '700', color: '#FFF', marginTop: 4 },
   scoringBtnDesc: { fontSize: 10, fontWeight: '500', color: 'rgba(255,255,255,0.85)', marginTop: 3, textAlign: 'center', lineHeight: 13, paddingHorizontal: 4 },
+  scoringBtnFullWidth: { width: SCREEN_WIDTH - 32 },
 });
