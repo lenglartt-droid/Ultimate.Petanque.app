@@ -13,11 +13,13 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import Svg, { Rect, G, Text as SvgText, Line } from 'react-native-svg';
 import theme from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { useApp } from '@/contexts/AppContext';
 import { Club } from '@/services/mockData';
 
 export default function FinancialScreen() {
   const insets = useSafeAreaInsets();
+  const { theme: t } = useTheme();
   const { tournaments, clubs, selfPlayer } = useApp();
 
   const financialData = useMemo(() => {
@@ -55,9 +57,9 @@ export default function FinancialScreen() {
   const balanceColor = balanceIsPositive ? theme.success : theme.error;
 
   return (
-    <SafeAreaView edges={['top']} style={styles.container}>
+    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: t.backgroundSecondary }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>

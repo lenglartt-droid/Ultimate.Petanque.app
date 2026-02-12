@@ -17,6 +17,7 @@ import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { useApp } from '@/contexts/AppContext';
 import {
   requestNotificationPermissions,
@@ -31,6 +32,7 @@ export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const { tournaments, tournamentNotifications, toggleTournamentNotification, isTournamentNotificationEnabled } = useApp();
   
+  const { theme: t } = useTheme();
   const [permissionStatus, setPermissionStatus] = useState<'unknown' | 'granted' | 'denied'>('unknown');
   const [loading, setLoading] = useState(true);
   const [scheduledCount, setScheduledCount] = useState(0);
@@ -169,12 +171,12 @@ export default function NotificationsScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
+      <SafeAreaView style={[styles.container, { backgroundColor: t.backgroundSecondary }]}>
+        <View style={[styles.header, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
           <Pressable style={styles.backButton} onPress={() => router.back()}>
-            <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
+            <MaterialIcons name="arrow-back" size={24} color={t.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Notifications</Text>
+          <Text style={[styles.headerTitle, { color: t.textPrimary }]}>Notifications</Text>
           <View style={{ width: 40 }} />
         </View>
         <View style={styles.loadingContainer}>
@@ -185,13 +187,13 @@ export default function NotificationsScreen() {
   }
 
   return (
-    <SafeAreaView edges={['top']} style={styles.container}>
+    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: t.backgroundSecondary }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
+          <MaterialIcons name="arrow-back" size={24} color={t.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Notifications</Text>
+        <Text style={[styles.headerTitle, { color: t.textPrimary }]}>Notifications</Text>
         <View style={{ width: 40 }} />
       </View>
 

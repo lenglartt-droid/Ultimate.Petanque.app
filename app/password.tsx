@@ -18,6 +18,7 @@ import * as Haptics from 'expo-haptics';
 import { useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import theme from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 export default function PasswordScreen() {
   const insets = useSafeAreaInsets();
@@ -25,6 +26,7 @@ export default function PasswordScreen() {
   const { showAlert } = useAlert();
   const supabase = getSupabaseClient();
 
+  const { theme: t } = useTheme();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -107,9 +109,9 @@ export default function PasswordScreen() {
   const canSubmit = newPassword.length >= 6 && passwordsMatch && !saving;
 
   return (
-    <SafeAreaView edges={['top']} style={styles.container}>
+    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: t.backgroundSecondary }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
