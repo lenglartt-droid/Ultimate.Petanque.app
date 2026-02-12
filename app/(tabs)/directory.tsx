@@ -16,7 +16,6 @@ import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
-import { useTheme } from '@/hooks/useTheme';
 import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { Terrain, Player, Club, Tournament } from '@/services/mockData';
@@ -37,7 +36,6 @@ const TABS: { id: DirectoryTab; label: string; icon: string; color: string }[] =
 
 export default function DirectoryScreen() {
   const insets = useSafeAreaInsets();
-  const { theme: t } = useTheme();
   const { players, clubs, tournaments, terrains, selfPlayer, favoriteTerrainIds } = useApp();
   const [activeTab, setActiveTab] = useState<DirectoryTab>('players');
   const [searchQuery, setSearchQuery] = useState('');
@@ -574,9 +572,9 @@ export default function DirectoryScreen() {
   const tabConfig = TABS.find(t => t.id === activeTab);
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: t.backgroundSecondary }]}>
+    <SafeAreaView edges={['top']} style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
+      <View style={styles.header}>
         <View style={styles.headerTop}>
           <Text style={styles.title}>Annuaire</Text>
           <View style={styles.headerStats}>
@@ -866,6 +864,7 @@ function ActiveFilterChip({ label, onRemove, icon }: { label: string; onRemove: 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: theme.backgroundSecondary,
   },
   header: {
     backgroundColor: theme.surface,
@@ -933,7 +932,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 4,
     right: 4,
-    backgroundColor: theme.surface,
+    backgroundColor: '#FFF',
     width: 16,
     height: 16,
     borderRadius: 8,
@@ -1103,7 +1102,7 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: theme.surface,
+    backgroundColor: '#FFF',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,

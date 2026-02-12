@@ -17,8 +17,7 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
-import themeStatic from '@/constants/theme';
-import { useTheme } from '@/hooks/useTheme';
+import theme from '@/constants/theme';
 import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { Club } from '@/services/mockData';
@@ -28,7 +27,6 @@ type Step = 1 | 2 | 3 | 4;
 export default function OnboardingScreen() {
   const { user } = useAuth();
   const { showAlert } = useAlert();
-  const { theme } = useTheme();
   const { clubs, addClub, updatePlayer, refreshData } = useApp();
   const supabase = getSupabaseClient();
 
@@ -190,7 +188,7 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.backgroundSecondary }]}>
+    <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -558,6 +556,7 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: theme.backgroundSecondary,
   },
   progressContainer: {
     paddingHorizontal: 24,
@@ -566,18 +565,18 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: 6,
-    backgroundColor: themeStatic.border,
+    backgroundColor: theme.border,
     borderRadius: 3,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: themeStatic.primary,
+    backgroundColor: theme.primary,
     borderRadius: 3,
   },
   progressText: {
     fontSize: 12,
-    color: themeStatic.textMuted,
+    color: theme.textMuted,
     textAlign: 'right',
     marginTop: 8,
   },
@@ -596,22 +595,22 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: themeStatic.surface,
+    backgroundColor: theme.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 24,
-    ...themeStatic.shadows.card,
+    ...theme.shadows.card,
   },
   stepTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: themeStatic.textPrimary,
+    color: theme.textPrimary,
     textAlign: 'center',
     marginBottom: 8,
   },
   stepDescription: {
     fontSize: 15,
-    color: themeStatic.textSecondary,
+    color: theme.textSecondary,
     textAlign: 'center',
     marginBottom: 32,
     lineHeight: 22,
@@ -622,16 +621,16 @@ const styles = StyleSheet.create({
   },
   nameInput: {
     width: '100%',
-    backgroundColor: themeStatic.surface,
-    borderRadius: themeStatic.borderRadius.lg,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
     paddingVertical: 18,
     paddingHorizontal: 20,
     paddingRight: 50,
     fontSize: 18,
     fontWeight: '500',
-    color: themeStatic.textPrimary,
+    color: theme.textPrimary,
     textAlign: 'center',
-    ...themeStatic.shadows.card,
+    ...theme.shadows.card,
   },
   inputCheck: {
     position: 'absolute',
@@ -641,7 +640,7 @@ const styles = StyleSheet.create({
   },
   inputHint: {
     fontSize: 13,
-    color: themeStatic.textMuted,
+    color: theme.textMuted,
     marginTop: 12,
   },
   optionsContainer: {
@@ -651,28 +650,28 @@ const styles = StyleSheet.create({
   optionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: themeStatic.surface,
-    borderRadius: themeStatic.borderRadius.lg,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
     padding: 16,
     borderWidth: 2,
     borderColor: 'transparent',
-    ...themeStatic.shadows.card,
+    ...theme.shadows.card,
   },
   optionCardActive: {
-    borderColor: themeStatic.primary,
-    backgroundColor: themeStatic.primary + '08',
+    borderColor: theme.primary,
+    backgroundColor: theme.primary + '08',
   },
   optionIcon: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: themeStatic.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
   },
   optionIconActive: {
-    backgroundColor: themeStatic.primary,
+    backgroundColor: theme.primary,
   },
   optionContent: {
     flex: 1,
@@ -680,15 +679,15 @@ const styles = StyleSheet.create({
   optionTitle: {
     fontSize: 17,
     fontWeight: '600',
-    color: themeStatic.textPrimary,
+    color: theme.textPrimary,
     marginBottom: 2,
   },
   optionTitleActive: {
-    color: themeStatic.primary,
+    color: theme.primary,
   },
   optionDescription: {
     fontSize: 13,
-    color: themeStatic.textSecondary,
+    color: theme.textSecondary,
   },
   levelGrid: {
     flexDirection: 'row',
@@ -700,41 +699,41 @@ const styles = StyleSheet.create({
     width: '48%',
   },
   levelCard: {
-    backgroundColor: themeStatic.surface,
-    borderRadius: themeStatic.borderRadius.lg,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
     padding: 16,
     alignItems: 'center',
     borderWidth: 2,
     borderColor: 'transparent',
     minHeight: 130,
-    ...themeStatic.shadows.card,
+    ...theme.shadows.card,
   },
   levelCardActive: {
-    borderColor: themeStatic.carreauColor,
-    backgroundColor: themeStatic.carreauColor + '08',
+    borderColor: theme.carreauColor,
+    backgroundColor: theme.carreauColor + '08',
   },
   levelTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: themeStatic.textPrimary,
+    color: theme.textPrimary,
     marginTop: 10,
     marginBottom: 4,
   },
   levelTitleActive: {
-    color: themeStatic.carreauColor,
+    color: theme.carreauColor,
   },
   levelDescription: {
     fontSize: 12,
-    color: themeStatic.textSecondary,
+    color: theme.textSecondary,
     textAlign: 'center',
     lineHeight: 16,
   },
   footer: {
     paddingHorizontal: 24,
     paddingVertical: 20,
-    backgroundColor: themeStatic.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderTopWidth: 1,
-    borderTopColor: themeStatic.border,
+    borderTopColor: theme.border,
   },
   footerButtons: {
     flexDirection: 'row',
@@ -749,7 +748,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 15,
-    color: themeStatic.textSecondary,
+    color: theme.textSecondary,
     fontWeight: '500',
   },
   skipButton: {
@@ -758,7 +757,7 @@ const styles = StyleSheet.create({
   },
   skipButtonText: {
     fontSize: 15,
-    color: themeStatic.textMuted,
+    color: theme.textMuted,
     fontWeight: '500',
   },
   nextButton: {
@@ -766,12 +765,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    backgroundColor: themeStatic.primary,
+    backgroundColor: theme.primary,
     paddingVertical: 18,
-    borderRadius: themeStatic.borderRadius.md,
+    borderRadius: theme.borderRadius.md,
   },
   nextButtonDisabled: {
-    backgroundColor: themeStatic.textMuted,
+    backgroundColor: theme.textMuted,
   },
   nextButtonText: {
     fontSize: 17,
@@ -782,18 +781,18 @@ const styles = StyleSheet.create({
   clubSearchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: themeStatic.surface,
-    borderRadius: themeStatic.borderRadius.lg,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
     paddingHorizontal: 16,
     paddingVertical: 14,
     width: '100%',
     gap: 10,
-    ...themeStatic.shadows.card,
+    ...theme.shadows.card,
   },
   clubSearchInput: {
     flex: 1,
     fontSize: 16,
-    color: themeStatic.textPrimary,
+    color: theme.textPrimary,
     padding: 0,
   },
   clubList: {
@@ -804,28 +803,28 @@ const styles = StyleSheet.create({
   clubItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: themeStatic.surface,
-    borderRadius: themeStatic.borderRadius.lg,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
     padding: 14,
     borderWidth: 2,
     borderColor: 'transparent',
-    ...themeStatic.shadows.card,
+    ...theme.shadows.card,
   },
   clubItemActive: {
-    borderColor: themeStatic.accent,
-    backgroundColor: themeStatic.accent + '08',
+    borderColor: theme.accent,
+    backgroundColor: theme.accent + '08',
   },
   clubItemIcon: {
     width: 48,
     height: 48,
     borderRadius: 12,
-    backgroundColor: themeStatic.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
   clubItemIconActive: {
-    backgroundColor: themeStatic.accent,
+    backgroundColor: theme.accent,
   },
   clubItemInfo: {
     flex: 1,
@@ -833,15 +832,15 @@ const styles = StyleSheet.create({
   clubItemName: {
     fontSize: 15,
     fontWeight: '600',
-    color: themeStatic.textPrimary,
+    color: theme.textPrimary,
     marginBottom: 2,
   },
   clubItemNameActive: {
-    color: themeStatic.accent,
+    color: theme.accent,
   },
   clubItemCity: {
     fontSize: 13,
-    color: themeStatic.textSecondary,
+    color: theme.textSecondary,
   },
   noClubsContainer: {
     alignItems: 'center',
@@ -849,7 +848,7 @@ const styles = StyleSheet.create({
   },
   noClubsText: {
     fontSize: 14,
-    color: themeStatic.textMuted,
+    color: theme.textMuted,
     marginTop: 8,
   },
   createClubButton: {
@@ -857,26 +856,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    backgroundColor: themeStatic.primary + '10',
+    backgroundColor: theme.primary + '10',
     paddingVertical: 16,
-    borderRadius: themeStatic.borderRadius.lg,
+    borderRadius: theme.borderRadius.lg,
     marginTop: 16,
     borderWidth: 2,
-    borderColor: themeStatic.primary + '30',
+    borderColor: theme.primary + '30',
     borderStyle: 'dashed',
     width: '100%',
   },
   createClubButtonText: {
     fontSize: 15,
     fontWeight: '600',
-    color: themeStatic.primary,
+    color: theme.primary,
   },
   createClubForm: {
     width: '100%',
-    backgroundColor: themeStatic.surface,
-    borderRadius: themeStatic.borderRadius.lg,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
     padding: 20,
-    ...themeStatic.shadows.card,
+    ...theme.shadows.card,
   },
   createClubHeader: {
     flexDirection: 'row',
@@ -887,7 +886,7 @@ const styles = StyleSheet.create({
   createClubTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: themeStatic.textPrimary,
+    color: theme.textPrimary,
   },
   createClubInputWrapper: {
     marginBottom: 16,
@@ -895,16 +894,16 @@ const styles = StyleSheet.create({
   createClubLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: themeStatic.textSecondary,
+    color: theme.textSecondary,
     marginBottom: 8,
   },
   createClubInput: {
-    backgroundColor: themeStatic.backgroundSecondary,
-    borderRadius: themeStatic.borderRadius.md,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.md,
     paddingVertical: 14,
     paddingHorizontal: 16,
     fontSize: 16,
-    color: themeStatic.textPrimary,
+    color: theme.textPrimary,
   },
   cancelCreateClubBtn: {
     flexDirection: 'row',
@@ -916,6 +915,6 @@ const styles = StyleSheet.create({
   },
   cancelCreateClubText: {
     fontSize: 14,
-    color: themeStatic.textSecondary,
+    color: theme.textSecondary,
   },
 });

@@ -15,7 +15,6 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import Svg, { Circle, Line, G, Text as SvgText, Rect } from 'react-native-svg';
 import theme from '@/constants/theme';
-import { useTheme } from '@/hooks/useTheme';
 import { useApp } from '@/contexts/AppContext';
 import { Tournament, Match } from '@/services/mockData';
 
@@ -228,7 +227,6 @@ const FORMAT_FILTERS: { id: FormatFilter; label: string }[] = [
 
 export default function PalmaresScreen() {
   const insets = useSafeAreaInsets();
-  const { theme: t } = useTheme();
   const { tournaments, matches } = useApp();
 
   const [yearFilter, setYearFilter] = useState<YearFilter>('all');
@@ -476,9 +474,9 @@ export default function PalmaresScreen() {
   }, [palmaresData, groupMode]);
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: t.backgroundSecondary }]}>
+    <SafeAreaView edges={['top']} style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
+      <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>

@@ -13,7 +13,6 @@ import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
-import { useTheme } from '@/hooks/useTheme';
 
 // FAQ Categories and Questions
 const FAQ_DATA = [
@@ -209,7 +208,6 @@ function AccordionItem({ question, answer, isOpen, onToggle }: {
 
 export default function FAQScreen() {
   const insets = useSafeAreaInsets();
-  const { theme: t } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [openQuestions, setOpenQuestions] = useState<Set<string>>(new Set());
@@ -243,9 +241,9 @@ export default function FAQScreen() {
   const totalQuestions = FAQ_DATA.reduce((sum, cat) => sum + cat.questions.length, 0);
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: t.backgroundSecondary }]}>
+    <SafeAreaView edges={['top']} style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
+      <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>

@@ -13,7 +13,6 @@ import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn, useAnimatedStyle, withTiming, useSharedValue } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
-import { useTheme } from '@/hooks/useTheme';
 import { useApp } from '@/contexts/AppContext';
 import { Match, Challenge, SeriesInfo } from '@/services/mockData';
 
@@ -438,7 +437,6 @@ const ChallengeStatsSummary = React.memo(({ challenges }: { challenges: Challeng
 
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
-  const { theme: t } = useTheme();
   const { matches, challenges, deleteChallenge } = useApp();
   
   const [contentFilter, setContentFilter] = useState<ContentFilter>('all');
@@ -692,9 +690,9 @@ export default function HistoryScreen() {
   }, [contentFilter, trainingSubFilter, filteredChallenges]);
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: t.backgroundSecondary }]}>
+    <SafeAreaView edges={['top']} style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
+      <View style={styles.header}>
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
@@ -712,7 +710,7 @@ export default function HistoryScreen() {
       </View>
 
       {/* Filter Chips */}
-      <View style={[styles.filtersRow, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
+      <View style={styles.filtersRow}>
         {CONTENT_FILTERS.map((filter) => {
           const isActive = contentFilter === filter.id;
           const count = filter.id === 'all' ? stats.total
@@ -738,7 +736,7 @@ export default function HistoryScreen() {
 
       {/* Training Sub-Filters */}
       {contentFilter === 'training' && (
-        <Animated.View entering={FadeInDown.duration(200)} style={[styles.subFiltersRow, { backgroundColor: t.backgroundSecondary, borderBottomColor: t.border }]}>
+        <Animated.View entering={FadeInDown.duration(200)} style={styles.subFiltersRow}>
           {TRAINING_SUB_FILTERS.map((filter) => {
             const isActive = trainingSubFilter === filter.id;
             const count = filter.id === 'all' ? (trainingStats.matchesCount + trainingStats.seriesCount + trainingStats.challengesCount)
@@ -802,9 +800,9 @@ export default function HistoryScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowPeriodModal(false)}
       >
-        <SafeAreaView style={[styles.modalContainer, { backgroundColor: t.backgroundSecondary }]}>
-          <View style={[styles.modalHeader, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
-            <Text style={[styles.modalTitle, { color: t.textPrimary }]}>Période</Text>
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Période</Text>
             <Pressable style={styles.modalClose} onPress={() => setShowPeriodModal(false)}>
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>
@@ -835,9 +833,9 @@ export default function HistoryScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setEditingChallenge(null)}
       >
-        <SafeAreaView style={[styles.modalContainer, { backgroundColor: t.backgroundSecondary }]}>
-          <View style={[styles.modalHeader, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
-            <Text style={[styles.modalTitle, { color: t.textPrimary }]}>Détails du défi</Text>
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Détails du défi</Text>
             <Pressable style={styles.modalClose} onPress={() => setEditingChallenge(null)}>
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>

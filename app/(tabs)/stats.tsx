@@ -13,7 +13,6 @@ import { MaterialIcons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
-import { useTheme } from '@/hooks/useTheme';
 import { useApp } from '@/contexts/AppContext';
 import Svg, { Circle, Line, G, Text as SvgText, Rect } from 'react-native-svg';
 import { router } from 'expo-router';
@@ -257,7 +256,6 @@ function NAPlaceholder({ message }: { message: string }) {
 // ============================================
 export default function StatsScreen() {
   const insets = useSafeAreaInsets();
-  const { theme: t } = useTheme();
   const { matches, challenges } = useApp();
   
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
@@ -886,9 +884,9 @@ export default function StatsScreen() {
   };
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: t.backgroundSecondary }]}>
+    <SafeAreaView edges={['top']} style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
+      <View style={styles.header}>
         <View style={styles.headerTop}>
           <View>
             <Text style={styles.headerTitle}>Statistiques</Text>
@@ -1224,6 +1222,72 @@ export default function StatsScreen() {
                             <Text style={styles.insightText}>
                               Votre <Text style={{ fontWeight: '700', color: theme.success }}>{labels[best.key]}</Text> a le meilleur impact positif ({Math.round(best.rate)}%). 
                               Le <Text style={{ fontWeight: '700', color: theme.error }}>{labels[worst.key]}</Text> est le moins efficace ({Math.round(worst.rate)}%).
+                            </Text>
+                          </View>
+                        );
+                      })()}
+                    </View>
+                  </Animated.View>
+                )}
+
+                {/* Analyse des échecs par technique (Tir) */}
+                {tirStats.hasCrossResultData && (
+                  <Animated.View entering={FadeInDown.duration(400).delay(185)} style={styles.section}>
+                    <SectionHeader title="Analyse des échecs (Tir)" subtitle={`${tirStats.totalCrossResultTracked} tirs ratés analysés`} icon="highlight-off" color={theme.tirColor} />
+                    <View style={styles.card}>
+                      {[
+                        { key: 'au_fer', label: 'Tirs tendus ratés', icon: 'gps-fixed', color: theme.tirColor },
+                        { key: 'au_plomb', label: 'Tirs en cloche ratés', icon: 'flight-takeoff', color: theme.pointColor },
+                        { key: 'en_rafle', label: 'En rafle ratés', icon: 'swap-horiz', color: theme.accent },
+                      ].filter(row => tirStats.crossTypeResult[row.key]?.total > 0).map((row, idx, arr) => {
+                        const data = tirStats.crossTypeResult[row.key];
+                        const resultItems = [
+                          { label: 'Court droite', short: 'Ct. D', value: data.court_droite, color: '#E57373' },
+                          { label: 'Court gauche', short: 'Ct. G', value: data.court_gauche, color: '#EF5350' },
+                          { label: 'Long', short: 'Long', value: data.long, color: '#F44336' },
+                          { label: 'Bouchon', short: 'Bouch.', value: data.tir_bouchon, color: theme.warning },
+                        ];
+                        const dominant = resultItems.reduce((max, r) => r.value > max.value ? r : max, resultItems[0]);
+                        const dominantPct = data.total > 0 ? Math.round((dominant.value / data.total) * 100) : 0;
+                        return (
+                          <View key={row.key}>
+                            <StatRow
+                              label={row.label}
+                              value={data.total}
+                              subValue={dominant.value > 0 ? `Surtout ${dominant.label.toLowerCase()} (${dominantPct}%)` : ''}
+                              icon={row.icon}
+                              color={row.color}
+                            />
+                            {data.total > 1 && (
+                              <View style={{ paddingLeft: 38, paddingRight: 8, paddingBottom: 8, paddingTop: 4 }}>
+                                <BreakdownBar items={resultItems.filter(r => r.value > 0).map(r => ({
+                                  label: r.short, value: r.value, color: r.color,
+                                }))} />
+                              </View>
+                            )}
+                            {idx < arr.length - 1 && <View style={styles.divider} />}
+                          </View>
+                        );
+                      })}
+                      {(() => {
+                        const entries = Object.entries(tirStats.crossTypeResult).filter(([, v]) => v.total >= 2);
+                        if (entries.length < 2) return null;
+                        const labels: Record<string, string> = { au_fer: 'Tir tendu', au_plomb: 'Tir en cloche', en_rafle: 'En rafle' };
+                        const courtRates = entries.map(([key, v]) => ({ key, rate: v.total > 0 ? ((v.court_droite + v.court_gauche) / v.total) * 100 : 0 }));
+                        const longRates = entries.map(([key, v]) => ({ key, rate: v.total > 0 ? (v.long / v.total) * 100 : 0 }));
+                        courtRates.sort((a, b) => b.rate - a.rate);
+                        longRates.sort((a, b) => b.rate - a.rate);
+                        const worstCourt = courtRates[0];
+                        const worstLong = longRates[0];
+                        if (worstCourt.rate < 30 && worstLong.rate < 30) return null;
+                        const mainIssue = worstCourt.rate >= worstLong.rate ? worstCourt : worstLong;
+                        const issueType = worstCourt.rate >= worstLong.rate ? 'courts' : 'longs';
+                        return (
+                          <View style={styles.insightBox}>
+                            <MaterialIcons name="lightbulb" size={16} color={theme.tirColor} />
+                            <Text style={styles.insightText}>
+                              Vos <Text style={{ fontWeight: '700', color: theme.error }}>{labels[mainIssue.key]}</Text> sont principalement {issueType} ({Math.round(mainIssue.rate)}%).
+                              {issueType === 'courts' ? ' Travaillez la puissance sur ce type de tir.' : ' Réduisez la force sur ce type de tir.'}
                             </Text>
                           </View>
                         );
@@ -1783,7 +1847,7 @@ export default function StatsScreen() {
 
       {/* Enhanced Progression Modal */}
       <Modal visible={showProgressionModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowProgressionModal(false)}>
-        <SafeAreaView edges={['top']} style={[styles.modalContainer, { backgroundColor: t.backgroundSecondary }]}>
+        <SafeAreaView edges={['top']} style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <View>
               <Text style={styles.modalTitle}>Progression</Text>
@@ -2029,7 +2093,7 @@ export default function StatsScreen() {
 // STYLES
 // ============================================
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: theme.backgroundSecondary },
   header: { backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border, paddingBottom: 12 },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 16, paddingTop: 12, marginBottom: 12 },
   headerTitle: { fontSize: 26, fontWeight: '700', color: theme.textPrimary },

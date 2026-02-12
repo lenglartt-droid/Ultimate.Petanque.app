@@ -15,13 +15,11 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import theme from '@/constants/theme';
-import { useTheme } from '@/hooks/useTheme';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/template';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { theme: t } = useTheme();
   const { userStats, tournaments, matches, challenges, selfPlayer } = useApp();
   const { user } = useAuth();
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
@@ -51,7 +49,7 @@ export default function HomeScreen() {
 
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: t.backgroundSecondary }]}>
+    <SafeAreaView edges={['top']} style={styles.container}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
@@ -66,13 +64,12 @@ export default function HomeScreen() {
             source={require('@/assets/images/banner-ppss.png')}
             style={styles.bannerImage}
             contentFit="cover"
-            transition={200}
           />
         </Animated.View>
 
         {/* Compact Header with Profile */}
         <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.header}>
-          <Pressable style={[styles.profileCardEnhanced, { backgroundColor: t.surface, borderColor: t.primary + '20' }]} onPress={() => router.push('/profile')}>
+          <Pressable style={styles.profileCardEnhanced} onPress={() => router.push('/profile')}>
             <View style={styles.profileAvatarEnhanced}>
               <Text style={styles.profileAvatarText}>
                 {displayName.charAt(0).toUpperCase()}
@@ -95,7 +92,7 @@ export default function HomeScreen() {
           
           <View style={styles.mainActionsRow}>
             <Pressable 
-              style={({ pressed }) => [styles.mainActionCard, { backgroundColor: t.surface }, pressed && styles.mainActionCardPressed]}
+              style={({ pressed }) => [styles.mainActionCard, pressed && styles.mainActionCardPressed]}
               onPress={() => router.push('/match/new')}
             >
               <View style={[styles.mainActionIcon, { backgroundColor: theme.primary }]}>
@@ -106,7 +103,7 @@ export default function HomeScreen() {
             </Pressable>
 
             <Pressable 
-              style={({ pressed }) => [styles.mainActionCard, { backgroundColor: t.surface }, pressed && styles.mainActionCardPressed]}
+              style={({ pressed }) => [styles.mainActionCard, pressed && styles.mainActionCardPressed]}
               onPress={() => router.push('/challenge/new')}
             >
               <View style={[styles.mainActionIcon, { backgroundColor: theme.accent }]}>
@@ -117,7 +114,7 @@ export default function HomeScreen() {
             </Pressable>
 
             <Pressable 
-              style={({ pressed }) => [styles.mainActionCard, { backgroundColor: t.surface }, pressed && styles.mainActionCardPressed]}
+              style={({ pressed }) => [styles.mainActionCard, pressed && styles.mainActionCardPressed]}
               onPress={() => setShowTournamentPicker(true)}
             >
               <View style={[styles.mainActionIcon, { backgroundColor: theme.carreauColor }]}>
@@ -215,7 +212,7 @@ export default function HomeScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowTournamentPicker(false)}
       >
-        <SafeAreaView style={[styles.modalContainer, { backgroundColor: t.backgroundSecondary }]}>
+        <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Pressable
               style={styles.modalCloseBtn}
@@ -387,6 +384,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: theme.backgroundSecondary,
   },
   scrollView: {
     flex: 1,
@@ -406,7 +404,7 @@ const styles = StyleSheet.create({
   },
   bannerImage: {
     width: '100%',
-    height: 160,
+    height: 140,
   },
   // Header
   header: {

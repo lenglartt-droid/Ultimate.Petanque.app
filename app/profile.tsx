@@ -21,7 +21,6 @@ import { decode } from 'base64-arraybuffer';
 import { useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import theme from '@/constants/theme';
-import { useTheme } from '@/hooks/useTheme';
 import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { Club } from '@/services/mockData';
@@ -30,7 +29,6 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, logout, operationLoading } = useAuth();
   const { showAlert } = useAlert();
-  const { theme: t, isDark, toggleTheme } = useTheme();
   const { clubs, addClub, updatePlayer, selfPlayer, userStats, matches, challenges, tournaments, refreshData } = useApp();
   const supabase = getSupabaseClient();
 
@@ -388,13 +386,13 @@ export default function ProfileScreen() {
   }
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: t.backgroundSecondary }]}>
+    <SafeAreaView edges={['top']} style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
+      <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: t.textPrimary }]}>Mon Profil</Text>
+        <Text style={styles.headerTitle}>Mon Profil</Text>
         {isEditing ? (
           <View style={styles.headerActions}>
             <Pressable 
@@ -431,7 +429,7 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Profile Hero Section */}
-        <Animated.View entering={FadeInDown.duration(400)} style={[styles.heroSection, { backgroundColor: t.surface }]}>
+        <Animated.View entering={FadeInDown.duration(400)} style={styles.heroSection}>
           {/* Avatar with photo picker */}
           <Pressable 
             style={styles.avatarContainer}
@@ -491,7 +489,7 @@ export default function ProfileScreen() {
           </View>
 
           {/* Quick Stats */}
-          <View style={[styles.quickStats, { backgroundColor: t.backgroundSecondary }]}>
+          <View style={styles.quickStats}>
             <View style={styles.quickStatItem}>
               <Text style={styles.quickStatValue}>{matches.length}</Text>
               <Text style={styles.quickStatLabel}>Matchs</Text>
@@ -710,30 +708,8 @@ export default function ProfileScreen() {
           <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
             <Text style={styles.sectionTitle}>PARAMÈTRES</Text>
 
-            {/* Theme Toggle */}
             <Pressable 
-              style={[styles.menuItem, { backgroundColor: t.surface, borderWidth: 1, borderColor: t.accent + '30' }]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                toggleTheme();
-              }}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: t.accent + '15' }]}>
-                <MaterialIcons name={isDark ? 'dark-mode' : 'light-mode'} size={20} color={t.accent} />
-              </View>
-              <View style={styles.menuItemContent}>
-                <Text style={[styles.menuItemText, { color: t.textPrimary }]}>Apparence</Text>
-                <Text style={[styles.menuItemSubtext, { color: t.textSecondary }]}>{isDark ? 'Mode sombre' : 'Mode clair'}</Text>
-              </View>
-              <View style={[styles.themeToggle, isDark ? styles.themeToggleDark : styles.themeToggleLight]}>
-                <View style={[styles.themeToggleKnob, isDark ? styles.themeToggleKnobDark : styles.themeToggleKnobLight]}>
-                  <MaterialIcons name={isDark ? 'nightlight-round' : 'wb-sunny'} size={14} color={isDark ? '#1A2030' : '#FFF'} />
-                </View>
-              </View>
-            </Pressable>
-
-            <Pressable 
-              style={[styles.menuItem, { backgroundColor: t.surface }]}
+              style={styles.menuItem}
               onPress={() => {
                 Haptics.selectionAsync();
                 router.push('/password');
@@ -972,34 +948,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  themeToggle: {
-    width: 52,
-    height: 30,
-    borderRadius: 15,
-    padding: 3,
-    justifyContent: 'center',
-  },
-  themeToggleDark: {
-    backgroundColor: '#3B7DD8',
-  },
-  themeToggleLight: {
-    backgroundColor: '#E88528',
-  },
-  themeToggleKnob: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  themeToggleKnobDark: {
-    backgroundColor: '#F2F5F8',
-    alignSelf: 'flex-end',
-  },
-  themeToggleKnobLight: {
-    backgroundColor: '#1A2030',
-    alignSelf: 'flex-start',
+    backgroundColor: theme.backgroundSecondary,
   },
   loadingContainer: {
     flex: 1,
