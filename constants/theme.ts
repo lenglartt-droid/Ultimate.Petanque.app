@@ -1,42 +1,47 @@
-// PetanqueScore Theme - Sport Tracking Design System
+// Ultimate Petanque Theme - Dark Navy, Orange/Gold, Metallic Gray
 
 export const theme = {
-  // Primary Colors - Trustworthy Blue
-  primary: '#2563EB',
-  primaryLight: '#60A5FA',
-  primaryDark: '#1D4ED8',
+  // Primary Colors - Deep Navy Blue
+  primary: '#1B3A5C',
+  primaryLight: '#2D5A8E',
+  primaryDark: '#0F2440',
   
-  // Accent Colors - Energetic Orange
-  accent: '#F59E0B',
-  accentLight: '#FCD34D',
-  accentDark: '#D97706',
+  // Accent Colors - Orange/Gold (from banner flame trail)
+  accent: '#E8862A',
+  accentLight: '#F5A623',
+  accentDark: '#C46A10',
   
-  // Backgrounds
-  background: '#FFFFFF',
-  backgroundSecondary: '#F8FAFC',
-  surface: '#FFFFFF',
+  // Backgrounds - Dark Navy tinted
+  background: '#0D1B2A',
+  backgroundSecondary: '#132233',
+  surface: '#1A2D42',
   
-  // Text
-  textPrimary: '#0F172A',
-  textSecondary: '#64748B',
-  textMuted: '#94A3B8',
+  // Text - Light on dark
+  textPrimary: '#ECF0F4',
+  textSecondary: '#8DA4BE',
+  textMuted: '#506A84',
   
-  // Borders
-  border: '#E2E8F0',
-  borderLight: '#F1F5F9',
+  // Borders - Subtle navy tones
+  border: '#253D56',
+  borderLight: '#1E3348',
   
   // Status
-  success: '#10B981',
-  successLight: '#D1FAE5',
-  error: '#EF4444',
-  errorLight: '#FEE2E2',
-  warning: '#F59E0B',
-  warningLight: '#FEF3C7',
+  success: '#2ECC71',
+  successLight: '#1A3D2B',
+  error: '#E74C3C',
+  errorLight: '#3D1A1A',
+  warning: '#F5A623',
+  warningLight: '#3D2E10',
   
-  // Game specific
-  pointColor: '#10B981',
-  tirColor: '#3B82F6',
-  carreauColor: '#F59E0B',
+  // Game specific - Adapted to branding
+  pointColor: '#2ECC71',
+  tirColor: '#4A9BF5',
+  carreauColor: '#F5A623',
+  
+  // Metallic accent (for special highlights)
+  metallic: '#A8B8C8',
+  metallicLight: '#C8D6E5',
+  metallicDark: '#7A8FA4',
   
   // Spacing
   spacing: {
@@ -98,21 +103,21 @@ export const theme = {
     },
   },
   
-  // Shadows
+  // Shadows - Adapted for dark theme
   shadows: {
     card: {
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.08,
-      shadowRadius: 4,
-      elevation: 2,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 6,
+      elevation: 3,
     },
     cardElevated: {
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.12,
-      shadowRadius: 8,
-      elevation: 4,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.35,
+      shadowRadius: 10,
+      elevation: 6,
     },
   },
 };

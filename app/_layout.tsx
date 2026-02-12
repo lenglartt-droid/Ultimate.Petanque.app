@@ -10,7 +10,7 @@ export default function RootLayout() {
       <AuthProvider>
         <SafeAreaProvider>
           <AppProvider>
-            <StatusBar style="dark" />
+            <StatusBar style="light" />
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" options={{ headerShown: false }} />
               <Stack.Screen name="(tabs)" />
