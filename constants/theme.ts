@@ -1,46 +1,47 @@
 // Ultimate Petanque Theme - Dark Navy, Orange/Gold, Metallic Gray
+// Optimized for readability with high contrast text
 
 export const theme = {
-  // Primary Colors - Deep Navy Blue
-  primary: '#1B3A5C',
-  primaryLight: '#2D5A8E',
-  primaryDark: '#0F2440',
+  // Primary Colors - Brighter Navy Blue for better visibility
+  primary: '#3B7DD8',
+  primaryLight: '#5A9AEF',
+  primaryDark: '#1B4F8A',
   
   // Accent Colors - Orange/Gold (from banner flame trail)
-  accent: '#E8862A',
+  accent: '#F09030',
   accentLight: '#F5A623',
   accentDark: '#C46A10',
   
-  // Backgrounds - Dark Navy tinted
-  background: '#0D1B2A',
-  backgroundSecondary: '#132233',
-  surface: '#1A2D42',
+  // Backgrounds - Dark Navy tinted with more separation
+  background: '#0B1520',
+  backgroundSecondary: '#111E2E',
+  surface: '#182A3E',
   
-  // Text - Light on dark
-  textPrimary: '#ECF0F4',
-  textSecondary: '#8DA4BE',
-  textMuted: '#506A84',
+  // Text - High contrast for readability
+  textPrimary: '#F2F5F8',
+  textSecondary: '#A0B8D0',
+  textMuted: '#607A94',
   
-  // Borders - Subtle navy tones
-  border: '#253D56',
-  borderLight: '#1E3348',
+  // Borders - More visible separation
+  border: '#2A4562',
+  borderLight: '#1E3550',
   
-  // Status
-  success: '#2ECC71',
+  // Status - Brighter for dark backgrounds
+  success: '#34D97C',
   successLight: '#1A3D2B',
-  error: '#E74C3C',
+  error: '#F25A4A',
   errorLight: '#3D1A1A',
   warning: '#F5A623',
   warningLight: '#3D2E10',
   
-  // Game specific - Adapted to branding
-  pointColor: '#2ECC71',
-  tirColor: '#4A9BF5',
+  // Game specific - Higher saturation for dark theme
+  pointColor: '#34D97C',
+  tirColor: '#5AA8FF',
   carreauColor: '#F5A623',
   
   // Metallic accent (for special highlights)
-  metallic: '#A8B8C8',
-  metallicLight: '#C8D6E5',
+  metallic: '#B0C4D8',
+  metallicLight: '#D0DEE8',
   metallicDark: '#7A8FA4',
   
   // Spacing
