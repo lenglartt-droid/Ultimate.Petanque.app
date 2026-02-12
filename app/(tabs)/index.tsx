@@ -66,6 +66,7 @@ export default function HomeScreen() {
             source={require('@/assets/images/banner-ppss.png')}
             style={styles.bannerImage}
             contentFit="cover"
+            transition={200}
           />
         </Animated.View>
 
@@ -405,7 +406,7 @@ const styles = StyleSheet.create({
   },
   bannerImage: {
     width: '100%',
-    height: 140,
+    height: 160,
   },
   // Header
   header: {

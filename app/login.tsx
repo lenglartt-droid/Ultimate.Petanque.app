@@ -13,9 +13,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { useAuth, useAlert } from '@/template';
-import theme from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 type AuthMode = 'login' | 'register';
 type RegisterStep = 'email' | 'otp';
@@ -23,6 +24,7 @@ type RegisterStep = 'email' | 'otp';
 export default function LoginScreen() {
   const { sendOTP, verifyOTPAndLogin, signInWithPassword, signInWithGoogle, operationLoading } = useAuth();
   const { showAlert } = useAlert();
+  const { theme, isDark } = useTheme();
 
   const [mode, setMode] = useState<AuthMode>('login');
   const [registerStep, setRegisterStep] = useState<RegisterStep>('email');
@@ -87,11 +89,10 @@ export default function LoginScreen() {
         return;
       }
 
-      // Update state first, then show confirmation
       setRegisterStep('otp');
       showAlert('Code envoyé', 'Un code de vérification a été envoyé à votre email');
     } catch (err: any) {
-      showAlert('Erreur', err.message || 'Une erreur est survenue lors de l\'envoi du code');
+      showAlert('Erreur', err.message || "Une erreur est survenue lors de l'envoi du code");
     }
   };
 
@@ -108,7 +109,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -119,34 +120,37 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header */}
+          {/* Hero Header with Logo */}
           <Animated.View entering={FadeInDown.duration(500)} style={styles.header}>
-            <Image
-              source={require('@/assets/images/app-logo.png')}
-              style={styles.logo}
-              contentFit="contain"
-            />
-            <Text style={styles.appName}>Ultimate Petanque</Text>
-            <Text style={styles.tagline}>
+            <View style={[styles.logoContainer, { backgroundColor: isDark ? theme.surface : '#F0EDE8' }]}>
+              <Image
+                source={require('@/assets/images/app-logo.png')}
+                style={styles.logo}
+                contentFit="contain"
+                transition={300}
+              />
+            </View>
+            <Text style={[styles.appName, { color: theme.accent }]}>Ultimate Petanque</Text>
+            <Text style={[styles.tagline, { color: theme.textSecondary }]}>
               {mode === 'login' ? 'Content de vous revoir !' : 'Créez votre compte'}
             </Text>
           </Animated.View>
 
           {/* Mode Tabs */}
-          <Animated.View entering={FadeInDown.duration(500).delay(100)} style={styles.modeTabs}>
+          <Animated.View entering={FadeInDown.duration(500).delay(100)} style={[styles.modeTabs, { backgroundColor: theme.surface, ...theme.shadows.card }]}>
             <Pressable
-              style={[styles.modeTab, mode === 'login' && styles.modeTabActive]}
+              style={[styles.modeTab, mode === 'login' && { backgroundColor: theme.primary }]}
               onPress={() => handleModeSwitch('login')}
             >
-              <Text style={[styles.modeTabText, mode === 'login' && styles.modeTabTextActive]}>
+              <Text style={[styles.modeTabText, { color: theme.textSecondary }, mode === 'login' && styles.modeTabTextActive]}>
                 Connexion
               </Text>
             </Pressable>
             <Pressable
-              style={[styles.modeTab, mode === 'register' && styles.modeTabActive]}
+              style={[styles.modeTab, mode === 'register' && { backgroundColor: theme.primary }]}
               onPress={() => handleModeSwitch('register')}
             >
-              <Text style={[styles.modeTabText, mode === 'register' && styles.modeTabTextActive]}>
+              <Text style={[styles.modeTabText, { color: theme.textSecondary }, mode === 'register' && styles.modeTabTextActive]}>
                 Inscription
               </Text>
             </Pressable>
@@ -155,10 +159,10 @@ export default function LoginScreen() {
           {/* Login Form */}
           {mode === 'login' && (
             <Animated.View entering={FadeIn.duration(300)} style={styles.form}>
-              <View style={styles.inputContainer}>
+              <View style={[styles.inputContainer, { backgroundColor: theme.surface, ...theme.shadows.card }]}>
                 <MaterialIcons name="email" size={20} color={theme.textSecondary} style={styles.inputIcon} />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { color: theme.textPrimary }]}
                   placeholder="Email"
                   placeholderTextColor={theme.textMuted}
                   value={email}
@@ -169,10 +173,10 @@ export default function LoginScreen() {
                 />
               </View>
 
-              <View style={styles.inputContainer}>
+              <View style={[styles.inputContainer, { backgroundColor: theme.surface, ...theme.shadows.card }]}>
                 <MaterialIcons name="lock" size={20} color={theme.textSecondary} style={styles.inputIcon} />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { color: theme.textPrimary }]}
                   placeholder="Mot de passe"
                   placeholderTextColor={theme.textMuted}
                   value={password}
@@ -189,7 +193,7 @@ export default function LoginScreen() {
               </View>
 
               <Pressable
-                style={[styles.submitButton, operationLoading && styles.submitButtonDisabled]}
+                style={[styles.submitButton, { backgroundColor: theme.accent }, operationLoading && styles.submitButtonDisabled]}
                 onPress={handleLogin}
                 disabled={operationLoading}
               >
@@ -205,19 +209,19 @@ export default function LoginScreen() {
 
               {/* Divider */}
               <View style={styles.dividerContainer}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>ou</Text>
-                <View style={styles.dividerLine} />
+                <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
+                <Text style={[styles.dividerText, { color: theme.textMuted }]}>ou</Text>
+                <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
               </View>
 
               {/* Google Sign-In */}
               <Pressable
-                style={[styles.googleButton, operationLoading && styles.googleButtonDisabled]}
+                style={[styles.googleButton, { backgroundColor: theme.surface, borderColor: theme.border, ...theme.shadows.card }, operationLoading && styles.googleButtonDisabled]}
                 onPress={handleGoogleLogin}
                 disabled={operationLoading}
               >
                 <MaterialIcons name="login" size={20} color={theme.textPrimary} />
-                <Text style={styles.googleButtonText}>Continuer avec Google</Text>
+                <Text style={[styles.googleButtonText, { color: theme.textPrimary }]}>Continuer avec Google</Text>
               </Pressable>
             </Animated.View>
           )}
@@ -225,10 +229,10 @@ export default function LoginScreen() {
           {/* Register Form - Step 1: Email & Password */}
           {mode === 'register' && registerStep === 'email' && (
             <Animated.View entering={FadeIn.duration(300)} style={styles.form}>
-              <View style={styles.inputContainer}>
+              <View style={[styles.inputContainer, { backgroundColor: theme.surface, ...theme.shadows.card }]}>
                 <MaterialIcons name="email" size={20} color={theme.textSecondary} style={styles.inputIcon} />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { color: theme.textPrimary }]}
                   placeholder="Email"
                   placeholderTextColor={theme.textMuted}
                   value={email}
@@ -239,10 +243,10 @@ export default function LoginScreen() {
                 />
               </View>
 
-              <View style={styles.inputContainer}>
+              <View style={[styles.inputContainer, { backgroundColor: theme.surface, ...theme.shadows.card }]}>
                 <MaterialIcons name="lock" size={20} color={theme.textSecondary} style={styles.inputIcon} />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { color: theme.textPrimary }]}
                   placeholder="Mot de passe (min. 6 caractères)"
                   placeholderTextColor={theme.textMuted}
                   value={password}
@@ -258,10 +262,10 @@ export default function LoginScreen() {
                 </Pressable>
               </View>
 
-              <View style={styles.inputContainer}>
+              <View style={[styles.inputContainer, { backgroundColor: theme.surface, ...theme.shadows.card }]}>
                 <MaterialIcons name="lock" size={20} color={theme.textSecondary} style={styles.inputIcon} />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { color: theme.textPrimary }]}
                   placeholder="Confirmer le mot de passe"
                   placeholderTextColor={theme.textMuted}
                   value={confirmPassword}
@@ -271,7 +275,7 @@ export default function LoginScreen() {
               </View>
 
               <Pressable
-                style={[styles.submitButton, operationLoading && styles.submitButtonDisabled]}
+                style={[styles.submitButton, { backgroundColor: theme.accent }, operationLoading && styles.submitButtonDisabled]}
                 onPress={handleSendOTP}
                 disabled={operationLoading}
               >
@@ -292,16 +296,16 @@ export default function LoginScreen() {
             <Animated.View entering={FadeIn.duration(300)} style={styles.form}>
               <View style={styles.otpInfo}>
                 <MaterialIcons name="mark-email-read" size={48} color={theme.primary} />
-                <Text style={styles.otpInfoTitle}>Vérifiez votre email</Text>
-                <Text style={styles.otpInfoText}>
+                <Text style={[styles.otpInfoTitle, { color: theme.textPrimary }]}>Vérifiez votre email</Text>
+                <Text style={[styles.otpInfoText, { color: theme.textSecondary }]}>
                   Un code à 4 chiffres a été envoyé à {email}
                 </Text>
               </View>
 
-              <View style={styles.inputContainer}>
+              <View style={[styles.inputContainer, { backgroundColor: theme.surface, ...theme.shadows.card }]}>
                 <MaterialIcons name="pin" size={20} color={theme.textSecondary} style={styles.inputIcon} />
                 <TextInput
-                  style={[styles.input, styles.otpInput]}
+                  style={[styles.input, styles.otpInput, { color: theme.textPrimary }]}
                   placeholder="Code de vérification"
                   placeholderTextColor={theme.textMuted}
                   value={otp}
@@ -312,7 +316,7 @@ export default function LoginScreen() {
               </View>
 
               <Pressable
-                style={[styles.submitButton, operationLoading && styles.submitButtonDisabled]}
+                style={[styles.submitButton, { backgroundColor: theme.accent }, operationLoading && styles.submitButtonDisabled]}
                 onPress={handleVerifyOTP}
                 disabled={operationLoading}
               >
@@ -331,14 +335,14 @@ export default function LoginScreen() {
                 onPress={() => setRegisterStep('email')}
               >
                 <MaterialIcons name="arrow-back" size={18} color={theme.textSecondary} />
-                <Text style={styles.backButtonText}>Modifier l'email</Text>
+                <Text style={[styles.backButtonText, { color: theme.textSecondary }]}>Modifier l'email</Text>
               </Pressable>
             </Animated.View>
           )}
 
           {/* Footer */}
           <Animated.View entering={FadeInDown.duration(500).delay(300)} style={styles.footer}>
-            <Text style={styles.footerText}>
+            <Text style={[styles.footerText, { color: theme.textMuted }]}>
               En continuant, vous acceptez nos conditions d'utilisation
             </Text>
           </Animated.View>
@@ -351,7 +355,6 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.backgroundSecondary,
   },
   scrollView: {
     flex: 1,
@@ -363,46 +366,47 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 36,
+  },
+  logoContainer: {
+    width: 140,
+    height: 140,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    overflow: 'hidden',
   },
   logo: {
-    width: 120,
-    height: 120,
-    marginBottom: 16,
-    borderRadius: 24,
+    width: 130,
+    height: 130,
+    borderRadius: 28,
   },
   appName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: theme.textPrimary,
+    fontSize: 26,
+    fontWeight: '800',
     marginBottom: 8,
     textAlign: 'center',
+    letterSpacing: 0.5,
   },
   tagline: {
     fontSize: 16,
-    color: theme.textSecondary,
   },
   modeTabs: {
     flexDirection: 'row',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 16,
     padding: 4,
     marginBottom: 24,
-    ...theme.shadows.card,
   },
   modeTab: {
     flex: 1,
     paddingVertical: 14,
     alignItems: 'center',
-    borderRadius: theme.borderRadius.md,
-  },
-  modeTabActive: {
-    backgroundColor: theme.primary,
+    borderRadius: 12,
   },
   modeTabText: {
     fontSize: 15,
     fontWeight: '600',
-    color: theme.textSecondary,
   },
   modeTabTextActive: {
     color: '#FFF',
@@ -413,10 +417,8 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 12,
     paddingHorizontal: 14,
-    ...theme.shadows.card,
   },
   inputIcon: {
     marginRight: 10,
@@ -425,7 +427,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 16,
     fontSize: 16,
-    color: theme.textPrimary,
   },
   otpInput: {
     letterSpacing: 8,
@@ -441,13 +442,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    backgroundColor: theme.primary,
     paddingVertical: 18,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 12,
     marginTop: 8,
   },
   submitButtonDisabled: {
-    backgroundColor: theme.textMuted,
+    opacity: 0.6,
   },
   submitButtonText: {
     fontSize: 17,
@@ -461,13 +461,11 @@ const styles = StyleSheet.create({
   otpInfoTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: theme.textPrimary,
     marginTop: 16,
     marginBottom: 8,
   },
   otpInfoText: {
     fontSize: 14,
-    color: theme.textSecondary,
     textAlign: 'center',
   },
   backButton: {
@@ -479,7 +477,6 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 14,
-    color: theme.textSecondary,
   },
   footer: {
     marginTop: 'auto',
@@ -488,10 +485,8 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 12,
-    color: theme.textMuted,
     textAlign: 'center',
   },
-  // Divider styles
   dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -500,25 +495,19 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: theme.border,
   },
   dividerText: {
     fontSize: 13,
-    color: theme.textMuted,
     paddingHorizontal: 16,
   },
-  // Google button styles
   googleButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    backgroundColor: theme.surface,
     paddingVertical: 16,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: theme.border,
-    ...theme.shadows.card,
   },
   googleButtonDisabled: {
     opacity: 0.6,
@@ -526,6 +515,5 @@ const styles = StyleSheet.create({
   googleButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: theme.textPrimary,
   },
 });
