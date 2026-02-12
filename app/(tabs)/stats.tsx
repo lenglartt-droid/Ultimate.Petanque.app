@@ -13,6 +13,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { useApp } from '@/contexts/AppContext';
 import Svg, { Circle, Line, G, Text as SvgText, Rect } from 'react-native-svg';
 import { router } from 'expo-router';
@@ -256,6 +257,7 @@ function NAPlaceholder({ message }: { message: string }) {
 // ============================================
 export default function StatsScreen() {
   const insets = useSafeAreaInsets();
+  const { theme: t } = useTheme();
   const { matches, challenges } = useApp();
   
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
@@ -884,9 +886,9 @@ export default function StatsScreen() {
   };
 
   return (
-    <SafeAreaView edges={['top']} style={styles.container}>
+    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: t.backgroundSecondary }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
         <View style={styles.headerTop}>
           <View>
             <Text style={styles.headerTitle}>Statistiques</Text>
@@ -1781,7 +1783,7 @@ export default function StatsScreen() {
 
       {/* Enhanced Progression Modal */}
       <Modal visible={showProgressionModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowProgressionModal(false)}>
-        <SafeAreaView edges={['top']} style={styles.modalContainer}>
+        <SafeAreaView edges={['top']} style={[styles.modalContainer, { backgroundColor: t.backgroundSecondary }]}>
           <View style={styles.modalHeader}>
             <View>
               <Text style={styles.modalTitle}>Progression</Text>
@@ -2027,7 +2029,7 @@ export default function StatsScreen() {
 // STYLES
 // ============================================
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.backgroundSecondary },
+  container: { flex: 1 },
   header: { backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border, paddingBottom: 12 },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 16, paddingTop: 12, marginBottom: 12 },
   headerTitle: { fontSize: 26, fontWeight: '700', color: theme.textPrimary },

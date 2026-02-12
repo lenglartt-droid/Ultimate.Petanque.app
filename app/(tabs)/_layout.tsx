@@ -2,10 +2,11 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Platform } from 'react-native';
-import theme from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
 
   const tabBarStyle = {
     height: Platform.select({
