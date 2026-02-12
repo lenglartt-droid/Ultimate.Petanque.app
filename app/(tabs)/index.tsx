@@ -178,7 +178,7 @@ export default function HomeScreen() {
             <View style={styles.emptyStateIcon}>
               <MaterialIcons name="sports" size={48} color={theme.primary} />
             </View>
-            <Text style={styles.emptyStateTitle}>Bienvenue sur PPSS !</Text>
+            <Text style={styles.emptyStateTitle}>Bienvenue sur Ultimate Petanque !</Text>
             <Text style={styles.emptyStateText}>
               Commencez par créer un match d'entraînement ou lancez un défi pour suivre vos performances.
             </Text>

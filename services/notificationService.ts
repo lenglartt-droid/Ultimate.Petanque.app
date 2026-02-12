@@ -260,7 +260,7 @@ export async function sendTestNotification(): Promise<void> {
   try {
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: '🎯 Test PPSS',
+        title: '🎯 Test Ultimate Petanque',
         body: 'Les notifications fonctionnent correctement !',
         data: { type: 'test' },
         sound: 'default',

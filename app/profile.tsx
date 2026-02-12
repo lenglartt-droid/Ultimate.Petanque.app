@@ -782,7 +782,7 @@ export default function ProfileScreen() {
         )}
 
         {/* App Version */}
-        <Text style={styles.versionText}>PPSS v1.0.0</Text>
+        <Text style={styles.versionText}>Ultimate Petanque v1.0.0</Text>
       </ScrollView>
 
       {/* Club Picker Modal */}

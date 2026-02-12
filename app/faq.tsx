@@ -24,13 +24,13 @@ const FAQ_DATA = [
     questions: [
       {
         id: 'q1',
-        question: "Qu'est-ce que PPSS ?",
-        answer: "PPSS (Personal Pétanque Scorer & Stats) est une application complète pour suivre vos parties de pétanque, analyser vos performances, gérer vos joueurs et tournois, et améliorer votre jeu grâce à des statistiques détaillées."
+        question: "Qu'est-ce que Ultimate Petanque ?",
+        answer: "Ultimate Petanque est une application complète pour suivre vos parties de pétanque, analyser vos performances, gérer vos joueurs et tournois, et améliorer votre jeu grâce à des statistiques détaillées."
       },
       {
         id: 'q2',
         question: "L'application fonctionne-t-elle hors ligne ?",
-        answer: "Oui ! Vous pouvez utiliser PPSS sans connexion internet. Vos données seront synchronisées automatiquement dès que vous retrouverez une connexion."
+        answer: "Oui ! Vous pouvez utiliser Ultimate Petanque sans connexion internet. Vos données seront synchronisées automatiquement dès que vous retrouverez une connexion."
       },
       {
         id: 'q3',
@@ -76,7 +76,7 @@ const FAQ_DATA = [
       {
         id: 'q8',
         question: "Quels types de défis sont disponibles ?",
-        answer: "PPSS propose 3 types de défis : '10 Tirs' (tirs classiques), '10 Tirs Sautée' (tirs en cloche), et 'Tir de Précision' (20 tirs sur 5 ateliers différents avec notation par distance)."
+        answer: "Ultimate Petanque propose 3 types de défis : '10 Tirs' (tirs classiques), '10 Tirs Sautée' (tirs en cloche), et 'Tir de Précision' (20 tirs sur 5 ateliers différents avec notation par distance)."
       },
       {
         id: 'q9',
@@ -104,7 +104,7 @@ const FAQ_DATA = [
       {
         id: 'q12',
         question: "Quels types de cadrage sont disponibles ?",
-        answer: "PPSS supporte : Poules, Élimination directe, Mixte (poules + élimination), Système Suisse, A/B/C (tableaux multiples) et Tirage intégral. Chaque type a ses propres phases."
+        answer: "Ultimate Petanque supporte : Poules, Élimination directe, Mixte (poules + élimination), Système Suisse, A/B/C (tableaux multiples) et Tirage intégral. Chaque type a ses propres phases."
       },
       {
         id: 'q13',
@@ -122,7 +122,7 @@ const FAQ_DATA = [
       {
         id: 'q14',
         question: "Quelles statistiques sont disponibles ?",
-        answer: "PPSS analyse : taux de victoire, taux de réussite au tir et au point, taux de carreaux, durée moyenne des matchs, analyse des erreurs par contexte, évolution temporelle, et comparaison entre joueurs."
+        answer: "Ultimate Petanque analyse : taux de victoire, taux de réussite au tir et au point, taux de carreaux, durée moyenne des matchs, analyse des erreurs par contexte, évolution temporelle, et comparaison entre joueurs."
       },
       {
         id: 'q15',

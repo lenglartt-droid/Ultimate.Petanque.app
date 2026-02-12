@@ -126,7 +126,7 @@ export default function LoginScreen() {
               style={styles.logo}
               contentFit="contain"
             />
-            <Text style={styles.appName}>Personal Petanque Scorer and Stats</Text>
+            <Text style={styles.appName}>Ultimate Petanque</Text>
             <Text style={styles.tagline}>
               {mode === 'login' ? 'Content de vous revoir !' : 'Créez votre compte'}
             </Text>
