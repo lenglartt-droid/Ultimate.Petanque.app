@@ -731,31 +731,7 @@ export default function ProfileScreen() {
               <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
             </Pressable>
 
-            <Pressable 
-              style={[styles.playerCardLink, { marginTop: 10 }]}
-              onPress={() => {
-                setUnreadShareCount(0);
-                router.push('/share-notifications');
-              }}
-            >
-              <View style={[styles.playerCardLinkIcon, { backgroundColor: theme.warning + '15' }]}>
-                <MaterialIcons name="notifications" size={24} color={theme.warning} />
-                {unreadShareCount > 0 && (
-                  <View style={styles.shareNotifBadge}>
-                    <Text style={styles.shareNotifBadgeText}>{unreadShareCount > 9 ? '9+' : unreadShareCount}</Text>
-                  </View>
-                )}
-              </View>
-              <View style={styles.playerCardLinkInfo}>
-                <Text style={styles.playerCardLinkTitle}>Notifications de partage</Text>
-                <Text style={styles.playerCardLinkSubtitle}>
-                  {unreadShareCount > 0 
-                    ? `${unreadShareCount} nouvel accès à vos fiches`
-                    : 'Voir qui a accédé à vos fiches'}
-                </Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
-            </Pressable>
+
           </Animated.View>
         )}
 
@@ -781,6 +757,35 @@ export default function ProfileScreen() {
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </Pressable>
 
+            <Text style={styles.subSectionTitle}>NOTIFICATIONS</Text>
+
+            <Pressable 
+              style={styles.menuItem}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setUnreadShareCount(0);
+                router.push('/share-notifications');
+              }}
+            >
+              <View style={[styles.menuIcon, { backgroundColor: theme.warning + '15' }]}>
+                <MaterialIcons name="share" size={20} color={theme.warning} />
+                {unreadShareCount > 0 && (
+                  <View style={styles.shareNotifBadge}>
+                    <Text style={styles.shareNotifBadgeText}>{unreadShareCount > 9 ? '9+' : unreadShareCount}</Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuItemText}>Notifications de partage</Text>
+                <Text style={styles.menuItemSubtext}>
+                  {unreadShareCount > 0 
+                    ? `${unreadShareCount} nouvel accès à vos fiches`
+                    : 'Voir qui a accédé à vos fiches'}
+                </Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+            </Pressable>
+
             <Pressable 
               style={styles.menuItem}
               onPress={() => {
@@ -792,8 +797,8 @@ export default function ProfileScreen() {
                 <MaterialIcons name="notifications" size={20} color={theme.success} />
               </View>
               <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>Notifications</Text>
-                <Text style={styles.menuItemSubtext}>Rappels de tournois</Text>
+                <Text style={styles.menuItemText}>Notifications de tournois</Text>
+                <Text style={styles.menuItemSubtext}>Rappels et programmation</Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </Pressable>
@@ -1204,6 +1209,15 @@ const styles = StyleSheet.create({
     color: theme.textSecondary,
     letterSpacing: 1,
     marginBottom: 12,
+    paddingLeft: 4,
+  },
+  subSectionTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textMuted,
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    marginTop: 4,
     paddingLeft: 4,
   },
   fieldCard: {
