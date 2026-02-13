@@ -252,25 +252,18 @@ function AccordionItem({ question, answer, isOpen, onToggle, accentColor }: {
   accentColor: string;
 }) {
   const rotation = useSharedValue(0);
-  const height = useSharedValue(0);
 
   React.useEffect(() => {
     rotation.value = withTiming(isOpen ? 180 : 0, { duration: 200 });
-    height.value = withTiming(isOpen ? 1 : 0, { duration: 250 });
-  }, [isOpen, rotation, height]);
+  }, [isOpen, rotation]);
 
   const iconStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotation.value}deg` }],
   }));
 
-  const contentStyle = useAnimatedStyle(() => ({
-    opacity: height.value,
-    maxHeight: height.value === 0 ? 0 : 600,
-  }));
-
   return (
     <Pressable
-      style={[styles.faqItem, isOpen && [styles.faqItemOpen, { borderLeftColor: accentColor }]]}
+      style={[styles.faqItem, isOpen && { borderLeftWidth: 3, borderLeftColor: accentColor }]}
       onPress={() => {
         Haptics.selectionAsync();
         onToggle();
@@ -282,9 +275,11 @@ function AccordionItem({ question, answer, isOpen, onToggle, accentColor }: {
           <MaterialIcons name="expand-more" size={22} color={isOpen ? accentColor : theme.textMuted} />
         </Animated.View>
       </View>
-      <Animated.View style={[styles.faqAnswerContainer, contentStyle]}>
-        <Text style={styles.faqAnswerText}>{answer}</Text>
-      </Animated.View>
+      {isOpen && (
+        <Animated.View entering={FadeIn.duration(200)} style={styles.faqAnswerContainer}>
+          <Text style={styles.faqAnswerText}>{answer}</Text>
+        </Animated.View>
+      )}
     </Pressable>
   );
 }
@@ -929,10 +924,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.border,
   },
-  faqItemOpen: {
-    borderLeftWidth: 3,
-    borderColor: theme.border,
-  },
+
   faqQuestion: {
     flexDirection: 'row',
     alignItems: 'center',
