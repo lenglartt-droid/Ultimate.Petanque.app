@@ -22,13 +22,16 @@ const { width: screenWidth } = Dimensions.get('window');
 // ============================================
 // TYPES & CONSTANTS
 // ============================================
-type TimeFilter = 'week' | 'month' | 'year' | 'all';
+type TimeFilter = 'today' | 'week' | 'month' | '3months' | '6months' | 'year' | 'all';
 type ProgressionFilter = '4weeks' | '8weeks' | '3months' | '6months' | 'year';
 type StatsCategory = 'performance' | 'tir' | 'point' | 'errors';
 
 const TIME_FILTERS: { id: TimeFilter; label: string }[] = [
+  { id: 'today', label: 'Auj.' },
   { id: 'week', label: '7j' },
   { id: 'month', label: '30j' },
+  { id: '3months', label: '3 mois' },
+  { id: '6months', label: '6 mois' },
   { id: 'year', label: '1an' },
   { id: 'all', label: 'Tout' },
 ];
@@ -59,15 +62,28 @@ function filterByTime<T extends { date: string }>(items: T[], filter: TimeFilter
   
   let startDate: Date;
   switch (filter) {
+    case 'today':
+      startDate = new Date(startOfDay);
+      break;
     case 'week':
       startDate = new Date(startOfDay);
       startDate.setDate(startDate.getDate() - 7);
       break;
     case 'month':
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      startDate = new Date(startOfDay);
+      startDate.setDate(startDate.getDate() - 30);
+      break;
+    case '3months':
+      startDate = new Date(startOfDay);
+      startDate.setMonth(startDate.getMonth() - 3);
+      break;
+    case '6months':
+      startDate = new Date(startOfDay);
+      startDate.setMonth(startDate.getMonth() - 6);
       break;
     case 'year':
-      startDate = new Date(now.getFullYear(), 0, 1);
+      startDate = new Date(startOfDay);
+      startDate.setFullYear(startDate.getFullYear() - 1);
       break;
     default:
       return items;
