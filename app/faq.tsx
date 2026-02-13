@@ -11,7 +11,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Animated, { FadeInDown, FadeIn, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn, useAnimatedStyle, useSharedValue, withTiming, Layout } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 
@@ -291,9 +291,9 @@ function QuickActionCard({ action, index }: { action: typeof QUICK_ACTIONS[0]; i
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <Animated.View entering={FadeInDown.duration(250).delay(100 + index * 60)}>
+    <View>
       <Pressable
-        style={[styles.quickActionCard, expanded && { borderColor: action.color + '40' }]}
+        style={[styles.quickActionCard, expanded && { borderColor: action.color + '40', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }]}
         onPress={() => {
           Haptics.selectionAsync();
           setExpanded(!expanded);
@@ -310,7 +310,7 @@ function QuickActionCard({ action, index }: { action: typeof QUICK_ACTIONS[0]; i
         />
       </Pressable>
       {expanded && (
-        <View style={styles.quickActionSteps}>
+        <View style={[styles.quickActionSteps, { borderColor: action.color + '40' }]}>
           {action.steps.map((step, i) => (
             <View key={i} style={styles.quickActionStep}>
               <View style={[styles.quickActionStepNumber, { backgroundColor: action.color }]}>
@@ -324,7 +324,7 @@ function QuickActionCard({ action, index }: { action: typeof QUICK_ACTIONS[0]; i
           ))}
         </View>
       )}
-    </Animated.View>
+    </View>
   );
 }
 
@@ -419,7 +419,7 @@ export default function FAQScreen() {
 
         {/* Quick Actions - only when not searching */}
         {!isSearching && !selectedCategory && (
-          <Animated.View entering={FadeInDown.duration(300).delay(80)} style={styles.quickActionsSection}>
+          <View style={styles.quickActionsSection}>
             <View style={styles.sectionHeaderRow}>
               <MaterialIcons name="flash-on" size={18} color={theme.carreauColor} />
               <Text style={styles.sectionHeaderText}>Guides rapides</Text>
@@ -429,11 +429,11 @@ export default function FAQScreen() {
                 <QuickActionCard key={action.id} action={action} index={index} />
               ))}
             </View>
-          </Animated.View>
+          </View>
         )}
 
         {/* Category Chips */}
-        <Animated.View entering={FadeInDown.duration(300).delay(isSearching ? 80 : 120)}>
+        <View>
           <View style={styles.sectionHeaderRow}>
             <MaterialIcons name="category" size={18} color={theme.primary} />
             <Text style={styles.sectionHeaderText}>Catégories</Text>
@@ -486,24 +486,23 @@ export default function FAQScreen() {
               );
             })}
           </ScrollView>
-        </Animated.View>
+        </View>
 
         {/* Search results count */}
         {isSearching && (
-          <Animated.View entering={FadeIn.duration(200)} style={styles.searchResultInfo}>
+          <View style={styles.searchResultInfo}>
             <MaterialIcons name="search" size={16} color={theme.textMuted} />
             <Text style={styles.searchResultText}>
               {filteredData.reduce((sum, c) => sum + c.questions.length, 0)} résultat(s) pour "{searchQuery}"
             </Text>
-          </Animated.View>
+          </View>
         )}
 
         {/* FAQ Sections */}
         {filteredData.length > 0 ? (
           filteredData.map((category, catIndex) => (
-            <Animated.View
+            <View
               key={category.id}
-              entering={FadeInDown.duration(300).delay(150 + catIndex * 40)}
               style={styles.categorySection}
             >
               <View style={styles.categorySectionHeader}>
@@ -530,10 +529,10 @@ export default function FAQScreen() {
                   />
                 ))}
               </View>
-            </Animated.View>
+            </View>
           ))
         ) : (
-          <Animated.View entering={FadeIn.duration(300)} style={styles.emptyState}>
+          <View style={styles.emptyState}>
             <View style={styles.emptyStateIcon}>
               <MaterialIcons name="search-off" size={48} color={theme.textMuted} />
             </View>
@@ -552,12 +551,12 @@ export default function FAQScreen() {
               <MaterialIcons name="refresh" size={18} color={theme.primary} />
               <Text style={styles.emptyStateButtonText}>Réinitialiser</Text>
             </Pressable>
-          </Animated.View>
+          </View>
         )}
 
         {/* Tips Section - only when not searching */}
         {!isSearching && (
-          <Animated.View entering={FadeInDown.duration(300).delay(300)} style={styles.tipsSection}>
+          <View style={styles.tipsSection}>
             <View style={styles.sectionHeaderRow}>
               <MaterialIcons name="lightbulb" size={18} color={theme.warning} />
               <Text style={styles.sectionHeaderText}>Astuces</Text>
@@ -584,11 +583,11 @@ export default function FAQScreen() {
                 <MaterialIcons name="expand-more" size={18} color={theme.primary} />
               </Pressable>
             )}
-          </Animated.View>
+          </View>
         )}
 
         {/* Contact Section */}
-        <Animated.View entering={FadeInDown.duration(300).delay(350)} style={styles.contactSection}>
+        <View style={styles.contactSection}>
           <View style={styles.contactHeader}>
             <View style={styles.contactHeaderIcon}>
               <MaterialIcons name="forum" size={28} color={theme.primary} />
@@ -612,7 +611,7 @@ export default function FAQScreen() {
               <MaterialIcons name="arrow-forward" size={18} color={theme.primary} />
             </View>
           </Pressable>
-        </Animated.View>
+        </View>
 
         {/* Version */}
         <Text style={styles.versionText}>Ultimate Petanque v1.0.0</Text>
@@ -786,11 +785,11 @@ const styles = StyleSheet.create({
     backgroundColor: theme.surface,
     borderBottomLeftRadius: theme.borderRadius.md,
     borderBottomRightRadius: theme.borderRadius.md,
-    marginTop: -8,
-    paddingTop: 16,
+    marginTop: 0,
+    paddingTop: 12,
     paddingHorizontal: 16,
     paddingBottom: 14,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderTopWidth: 0,
     borderColor: theme.border,
     gap: 0,
