@@ -211,6 +211,13 @@ export default function RootLayout() {
                   animation: 'slide_from_right',
                 }} 
               />
+              <Stack.Screen 
+                name="shared-items" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
             </Stack>
           </AppProvider>
         </SafeAreaProvider>

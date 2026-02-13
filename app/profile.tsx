@@ -731,6 +731,20 @@ export default function ProfileScreen() {
               <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
             </Pressable>
 
+            <Pressable 
+              style={[styles.playerCardLink, { marginTop: 10 }]}
+              onPress={() => router.push('/shared-items')}
+            >
+              <View style={[styles.playerCardLinkIcon, { backgroundColor: theme.warning + '15' }]}>
+                <MaterialIcons name="folder-shared" size={24} color={theme.warning} />
+              </View>
+              <View style={styles.playerCardLinkInfo}>
+                <Text style={styles.playerCardLinkTitle}>Gestion des partages</Text>
+                <Text style={styles.playerCardLinkSubtitle}>Voir et gérer vos fiches partagées</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
+            </Pressable>
+
 
           </Animated.View>
         )}

@@ -268,6 +268,35 @@ export async function revokeShare(shareId: string): Promise<{ error: string | nu
   return { error: error?.message || null };
 }
 
+export async function updateSharePermission(shareId: string, permission: SharePermission): Promise<{ error: string | null }> {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from('shared_items')
+    .update({ permission, updated_at: new Date().toISOString() })
+    .eq('id', shareId);
+  return { error: error?.message || null };
+}
+
+export async function fetchItemName(itemType: ShareItemType, itemId: string): Promise<string> {
+  const supabase = getSupabaseClient();
+  try {
+    if (itemType === 'player') {
+      const { data } = await supabase.from('players').select('name').eq('id', itemId).single();
+      return data?.name || 'Joueur inconnu';
+    } else if (itemType === 'club') {
+      const { data } = await supabase.from('clubs').select('name').eq('id', itemId).single();
+      return data?.name || 'Club inconnu';
+    } else if (itemType === 'terrain') {
+      const { data } = await supabase.from('terrains').select('name').eq('id', itemId).single();
+      return data?.name || 'Terrain inconnu';
+    } else if (itemType === 'tournament') {
+      const { data } = await supabase.from('tournaments').select('name').eq('id', itemId).single();
+      return data?.name || 'Tournoi inconnu';
+    }
+  } catch { /* ignore */ }
+  return 'Inconnu';
+}
+
 export async function getSharedWithMe(): Promise<{ items: SharedItem[]; error: string | null }> {
   const supabase = getSupabaseClient();
   const { data: userData } = await supabase.auth.getUser();
