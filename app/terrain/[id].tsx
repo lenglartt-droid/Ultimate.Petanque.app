@@ -19,6 +19,8 @@ import theme from '@/constants/theme';
 import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import ShareModal from '@/components/ui/ShareModal';
+import { isSharedWithMe, saveSharedItemToMyAccount } from '@/services/shareService';
+import { useAlert } from '@/template';
 
 export default function TerrainDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -27,6 +29,15 @@ export default function TerrainDetailScreen() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [isShared, setIsShared] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const { showAlert } = useAlert();
+
+  useEffect(() => {
+    if (id) {
+      isSharedWithMe('terrain', id).then(setIsShared);
+    }
+  }, [id]);
   
   const isFavorite = id ? isFavoriteTerrain(id) : false;
 
@@ -113,6 +124,26 @@ export default function TerrainDetailScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>Détails du terrain</Text>
         <View style={styles.headerActions}>
+          {isShared && (
+            <Pressable
+              style={[styles.saveButton, isSaving && { opacity: 0.6 }]}
+              onPress={async () => {
+                setIsSaving(true);
+                const { newItemId, error } = await saveSharedItemToMyAccount('terrain', id!);
+                setIsSaving(false);
+                if (error) {
+                  showAlert('Erreur', error);
+                } else {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  showAlert('Enregistre', 'Ce terrain a ete copie dans votre annuaire');
+                  if (newItemId) router.replace(`/terrain/${newItemId}` as any);
+                }
+              }}
+              disabled={isSaving}
+            >
+              <MaterialIcons name="save-alt" size={22} color={theme.accent} />
+            </Pressable>
+          )}
           <Pressable style={styles.shareButton} onPress={() => setShowShareModal(true)}>
             <MaterialIcons name="share" size={22} color={theme.success} />
           </Pressable>
@@ -427,6 +458,14 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     gap: 4,
+  },
+  saveButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.accent + '15',
+    borderRadius: 20,
   },
   shareButton: {
     width: 40,

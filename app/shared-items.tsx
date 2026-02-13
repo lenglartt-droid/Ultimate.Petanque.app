@@ -22,6 +22,7 @@ import {
   revokeShare,
   updateSharePermission,
   fetchItemName,
+  saveSharedItemToMyAccount,
   SharedItem,
   ShareItemType,
   SharePermission,
@@ -180,6 +181,20 @@ export default function SharedItemsScreen() {
       ]
     );
   }, [showAlert]);
+
+  const handleSaveToMyAccount = useCallback(async (item: EnrichedSharedItem) => {
+    Haptics.selectionAsync();
+    const { newItemId, error } = await saveSharedItemToMyAccount(item.itemType, item.itemId);
+    if (error) {
+      showAlert('Erreur', error);
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showAlert('Enregistré', `"${item.itemName}" a été copié dans votre annuaire`);
+      if (newItemId) {
+        handleNavigate(item.itemType, newItemId);
+      }
+    }
+  }, [showAlert, handleNavigate]);
 
   const currentItems = activeTab === 'shared_by_me' ? myShares : sharedWithMe;
 
@@ -374,6 +389,13 @@ export default function SharedItemsScreen() {
                     ) : (
                       <View style={styles.itemActions}>
                         <Pressable
+                          style={[styles.actionBtn, styles.actionBtnSave]}
+                          onPress={() => handleSaveToMyAccount(item)}
+                          hitSlop={4}
+                        >
+                          <MaterialIcons name="save-alt" size={16} color={theme.accent} />
+                        </Pressable>
+                        <Pressable
                           style={[styles.actionBtn, styles.actionBtnDanger]}
                           onPress={() => handleRemoveSharedWithMe(item)}
                           hitSlop={4}
@@ -524,6 +546,7 @@ const styles = StyleSheet.create({
   },
   actionBtnSuccess: { backgroundColor: theme.success + '15' },
   actionBtnDanger: { backgroundColor: theme.error + '10' },
+  actionBtnSave: { backgroundColor: theme.accent + '15' },
 
   // Code row
   codeRow: {

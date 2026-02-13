@@ -16,6 +16,8 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import ShareModal from '@/components/ui/ShareModal';
+import { isSharedWithMe, saveSharedItemToMyAccount } from '@/services/shareService';
+import { useAlert } from '@/template';
 
 export default function ClubDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -26,6 +28,15 @@ export default function ClubDetailScreen() {
   const clubPlayers = players.filter(p => p.clubId === id);
   const clubTournaments = tournaments.filter(t => t.clubId === id);
   const [showShareModal, setShowShareModal] = React.useState(false);
+  const [isShared, setIsShared] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
+  const { showAlert } = useAlert();
+
+  React.useEffect(() => {
+    if (id) {
+      isSharedWithMe('club', id).then(setIsShared);
+    }
+  }, [id]);
 
   const handleDelete = () => {
     Alert.alert(
@@ -65,6 +76,26 @@ export default function ClubDetailScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>Club</Text>
         <View style={styles.headerActions}>
+          {isShared && (
+            <Pressable
+              style={[styles.saveButton, isSaving && { opacity: 0.6 }]}
+              onPress={async () => {
+                setIsSaving(true);
+                const { newItemId, error } = await saveSharedItemToMyAccount('club', id!);
+                setIsSaving(false);
+                if (error) {
+                  showAlert('Erreur', error);
+                } else {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  showAlert('Enregistre', 'Ce club a ete copie dans votre annuaire');
+                  if (newItemId) router.replace(`/club/${newItemId}` as any);
+                }
+              }}
+              disabled={isSaving}
+            >
+              <MaterialIcons name="save-alt" size={22} color={theme.accent} />
+            </Pressable>
+          )}
           <Pressable style={styles.shareButton} onPress={() => setShowShareModal(true)}>
             <MaterialIcons name="share" size={22} color={theme.success} />
           </Pressable>
@@ -284,6 +315,14 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     gap: 4,
+  },
+  saveButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.accent + '15',
+    borderRadius: 20,
   },
   shareButton: {
     width: 40,

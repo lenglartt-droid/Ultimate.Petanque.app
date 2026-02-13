@@ -297,6 +297,159 @@ export async function fetchItemName(itemType: ShareItemType, itemId: string): Pr
   return 'Inconnu';
 }
 
+// Check if user is viewing a shared item (not their own)
+export async function isSharedWithMe(itemType: ShareItemType, itemId: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData?.user) return false;
+
+  const { data } = await supabase
+    .from('shared_items')
+    .select('id')
+    .eq('item_type', itemType)
+    .eq('item_id', itemId)
+    .eq('shared_with_id', userData.user.id)
+    .maybeSingle();
+
+  return !!data;
+}
+
+// Duplicate a shared item into the current user's own data
+export async function saveSharedItemToMyAccount(
+  itemType: ShareItemType,
+  itemId: string,
+): Promise<{ newItemId: string | null; error: string | null }> {
+  const supabase = getSupabaseClient();
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData?.user) return { newItemId: null, error: 'Non connecte' };
+
+  try {
+    if (itemType === 'player') {
+      const { data: source, error: fetchErr } = await supabase
+        .from('players')
+        .select('*')
+        .eq('id', itemId)
+        .single();
+      if (fetchErr || !source) return { newItemId: null, error: 'Joueur introuvable' };
+
+      const { data: newItem, error: insertErr } = await supabase.from('players').insert({
+        user_id: userData.user.id,
+        name: source.name,
+        nickname: source.nickname,
+        avatar: source.avatar,
+        club: source.club,
+        club_id: null,
+        role: source.role,
+        level: source.level,
+        location: source.location,
+        phone: source.phone,
+        email: source.email,
+        country: source.country,
+        boules: source.boules,
+        stats: source.stats,
+      }).select('id').single();
+      if (insertErr) return { newItemId: null, error: insertErr.message };
+      return { newItemId: newItem?.id || null, error: null };
+
+    } else if (itemType === 'club') {
+      const { data: source, error: fetchErr } = await supabase
+        .from('clubs')
+        .select('*')
+        .eq('id', itemId)
+        .single();
+      if (fetchErr || !source) return { newItemId: null, error: 'Club introuvable' };
+
+      const { data: newItem, error: insertErr } = await supabase.from('clubs').insert({
+        user_id: userData.user.id,
+        name: source.name,
+        logo: source.logo,
+        address: source.address,
+        city: source.city,
+        country: source.country,
+        location: source.location,
+        members_count: source.members_count,
+        founded_year: source.founded_year,
+        description: source.description,
+        facilities: source.facilities,
+        contact_email: source.contact_email,
+        contact_phone: source.contact_phone,
+        terrain_id: null,
+        terrain_name: source.terrain_name,
+        membership_cost: source.membership_cost,
+      }).select('id').single();
+      if (insertErr) return { newItemId: null, error: insertErr.message };
+      return { newItemId: newItem?.id || null, error: null };
+
+    } else if (itemType === 'terrain') {
+      const { data: source, error: fetchErr } = await supabase
+        .from('terrains')
+        .select('*')
+        .eq('id', itemId)
+        .single();
+      if (fetchErr || !source) return { newItemId: null, error: 'Terrain introuvable' };
+
+      const { data: newItem, error: insertErr } = await supabase.from('terrains').insert({
+        user_id: userData.user.id,
+        name: source.name,
+        address: source.address,
+        city: source.city,
+        location: source.location,
+        type: source.type,
+        description: source.description,
+        facilities: source.facilities,
+        photos: source.photos,
+        club_id: null,
+        club_name: source.club_name,
+        is_public: source.is_public,
+        courts_count: source.courts_count,
+        lighting: source.lighting,
+        covered: source.covered,
+      }).select('id').single();
+      if (insertErr) return { newItemId: null, error: insertErr.message };
+      return { newItemId: newItem?.id || null, error: null };
+
+    } else if (itemType === 'tournament') {
+      const { data: source, error: fetchErr } = await supabase
+        .from('tournaments')
+        .select('*')
+        .eq('id', itemId)
+        .single();
+      if (fetchErr || !source) return { newItemId: null, error: 'Tournoi introuvable' };
+
+      const { data: newItem, error: insertErr } = await supabase.from('tournaments').insert({
+        user_id: userData.user.id,
+        name: source.name,
+        date: source.date,
+        end_date: source.end_date,
+        type: source.type,
+        format: source.format,
+        location: source.location,
+        terrain_id: null,
+        terrain_name: source.terrain_name,
+        terrain_type: source.terrain_type,
+        club_id: null,
+        club_name: source.club_name,
+        status: source.status,
+        participants: source.participants,
+        max_participants: source.max_participants,
+        prize: source.prize,
+        description: source.description,
+        tournament_level: source.tournament_level,
+        tournament_category: source.tournament_category,
+        registration_type: source.registration_type,
+        tournament_scope: source.tournament_scope,
+        registration_cost: source.registration_cost,
+      }).select('id').single();
+      if (insertErr) return { newItemId: null, error: insertErr.message };
+      return { newItemId: newItem?.id || null, error: null };
+    }
+
+    return { newItemId: null, error: 'Type non supporté' };
+  } catch (e: any) {
+    return { newItemId: null, error: e.message || 'Erreur lors de la copie' };
+  }
+}
+
 export async function getSharedWithMe(): Promise<{ items: SharedItem[]; error: string | null }> {
   const supabase = getSupabaseClient();
   const { data: userData } = await supabase.auth.getUser();

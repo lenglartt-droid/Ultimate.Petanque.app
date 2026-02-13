@@ -15,7 +15,7 @@ import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import theme from '@/constants/theme';
-import { redeemShareCode, ShareItemType } from '@/services/shareService';
+import { redeemShareCode, saveSharedItemToMyAccount, ShareItemType } from '@/services/shareService';
 import { useAlert } from '@/template';
 
 const ROUTE_MAP: Record<ShareItemType, string> = {
@@ -37,6 +37,7 @@ export default function RedeemShareScreen() {
   const [code, setCode] = useState('');
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [redeemResult, setRedeemResult] = useState<{ itemType: ShareItemType; itemId: string; permission: string } | null>(null);
+  const [isSavingCopy, setIsSavingCopy] = useState(false);
 
   const handleRedeem = async () => {
     if (!code.trim()) {
@@ -137,6 +138,27 @@ export default function RedeemShareScreen() {
               <MaterialIcons name="open-in-new" size={20} color="#FFF" />
               <Text style={styles.navigateBtnText}>Voir la fiche</Text>
             </Pressable>
+
+            <Pressable
+              style={[styles.saveBtn, isSavingCopy && { opacity: 0.6 }]}
+              onPress={async () => {
+                if (!redeemResult) return;
+                setIsSavingCopy(true);
+                const { newItemId, error } = await saveSharedItemToMyAccount(redeemResult.itemType, redeemResult.itemId);
+                setIsSavingCopy(false);
+                if (error) {
+                  showAlert('Erreur', error);
+                } else {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  showAlert('Enregistre', 'Fiche copiee dans votre annuaire');
+                  if (newItemId) router.replace(`${ROUTE_MAP[redeemResult.itemType]}${newItemId}` as any);
+                }
+              }}
+              disabled={isSavingCopy}
+            >
+              <MaterialIcons name="save-alt" size={20} color={theme.accent} />
+              <Text style={styles.saveBtnText}>Enregistrer dans mon annuaire</Text>
+            </Pressable>
           </Animated.View>
         )}
       </KeyboardAvoidingView>
@@ -187,4 +209,11 @@ const styles = StyleSheet.create({
     width: '100%', paddingVertical: 16, borderRadius: theme.borderRadius.lg,
   },
   navigateBtnText: { fontSize: 16, fontWeight: '600', color: '#FFF' },
+  saveBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    width: '100%', paddingVertical: 16, borderRadius: theme.borderRadius.lg,
+    marginTop: 12, backgroundColor: theme.accent + '15', borderWidth: 1.5,
+    borderColor: theme.accent + '40',
+  },
+  saveBtnText: { fontSize: 16, fontWeight: '600', color: theme.accent },
 });
