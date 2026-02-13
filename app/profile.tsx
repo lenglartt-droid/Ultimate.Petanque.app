@@ -58,6 +58,10 @@ export default function ProfileScreen() {
   // Share notifications count
   const [unreadShareCount, setUnreadShareCount] = useState(0);
   
+  // Expandable settings sections
+  const [showNotifSection, setShowNotifSection] = useState(false);
+  const [showShareSection, setShowShareSection] = useState(false);
+  
   // Load unread share notification count
   useEffect(() => {
     if (!user?.id) return;
@@ -761,35 +765,6 @@ export default function ProfileScreen() {
               <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
             </Pressable>
 
-            <Pressable 
-              style={[styles.playerCardLink, { marginTop: 10 }]}
-              onPress={() => router.push('/share')}
-            >
-              <View style={[styles.playerCardLinkIcon, { backgroundColor: theme.success + '15' }]}>
-                <MaterialIcons name="qr-code-2" size={24} color={theme.success} />
-              </View>
-              <View style={styles.playerCardLinkInfo}>
-                <Text style={styles.playerCardLinkTitle}>Code de partage</Text>
-                <Text style={styles.playerCardLinkSubtitle}>Saisir un code pour voir une fiche partagée</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
-            </Pressable>
-
-            <Pressable 
-              style={[styles.playerCardLink, { marginTop: 10 }]}
-              onPress={() => router.push('/shared-items')}
-            >
-              <View style={[styles.playerCardLinkIcon, { backgroundColor: theme.warning + '15' }]}>
-                <MaterialIcons name="folder-shared" size={24} color={theme.warning} />
-              </View>
-              <View style={styles.playerCardLinkInfo}>
-                <Text style={styles.playerCardLinkTitle}>Gestion des partages</Text>
-                <Text style={styles.playerCardLinkSubtitle}>Voir et gérer vos fiches partagées</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
-            </Pressable>
-
-
           </Animated.View>
         )}
 
@@ -815,18 +790,16 @@ export default function ProfileScreen() {
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </Pressable>
 
-            <Text style={styles.subSectionTitle}>NOTIFICATIONS</Text>
-
+            {/* Notifications expandable */}
             <Pressable 
               style={styles.menuItem}
               onPress={() => {
                 Haptics.selectionAsync();
-                setUnreadShareCount(0);
-                router.push('/share-notifications');
+                setShowNotifSection(prev => !prev);
               }}
             >
-              <View style={[styles.menuIcon, { backgroundColor: theme.warning + '15' }]}>
-                <MaterialIcons name="share" size={20} color={theme.warning} />
+              <View style={[styles.menuIcon, { backgroundColor: theme.success + '15' }]}>
+                <MaterialIcons name="notifications" size={20} color={theme.success} />
                 {unreadShareCount > 0 && (
                   <View style={styles.shareNotifBadge}>
                     <Text style={styles.shareNotifBadgeText}>{unreadShareCount > 9 ? '9+' : unreadShareCount}</Text>
@@ -834,32 +807,110 @@ export default function ProfileScreen() {
                 )}
               </View>
               <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>Notifications de partage</Text>
-                <Text style={styles.menuItemSubtext}>
-                  {unreadShareCount > 0 
-                    ? `${unreadShareCount} nouvel accès à vos fiches`
-                    : 'Voir qui a accédé à vos fiches'}
-                </Text>
+                <Text style={styles.menuItemText}>Notifications</Text>
+                <Text style={styles.menuItemSubtext}>Partage et tournois</Text>
               </View>
-              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              <MaterialIcons name={showNotifSection ? 'expand-less' : 'expand-more'} size={20} color={theme.textMuted} />
             </Pressable>
 
+            {showNotifSection && (
+              <View style={styles.subMenuContainer}>
+                <Pressable 
+                  style={styles.subMenuItem}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setUnreadShareCount(0);
+                    router.push('/share-notifications');
+                  }}
+                >
+                  <View style={[styles.subMenuIcon, { backgroundColor: theme.warning + '15' }]}>
+                    <MaterialIcons name="share" size={16} color={theme.warning} />
+                  </View>
+                  <View style={styles.menuItemContent}>
+                    <Text style={styles.subMenuItemText}>Notifications de partage</Text>
+                    <Text style={styles.menuItemSubtext}>
+                      {unreadShareCount > 0 
+                        ? `${unreadShareCount} nouvel accès à vos fiches`
+                        : 'Voir qui a accédé à vos fiches'}
+                    </Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+                </Pressable>
+
+                <Pressable 
+                  style={styles.subMenuItem}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    router.push('/notifications');
+                  }}
+                >
+                  <View style={[styles.subMenuIcon, { backgroundColor: theme.success + '15' }]}>
+                    <MaterialIcons name="event" size={16} color={theme.success} />
+                  </View>
+                  <View style={styles.menuItemContent}>
+                    <Text style={styles.subMenuItemText}>Notifications de tournois</Text>
+                    <Text style={styles.menuItemSubtext}>Rappels et programmation</Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+                </Pressable>
+              </View>
+            )}
+
+            {/* Partage expandable */}
             <Pressable 
               style={styles.menuItem}
               onPress={() => {
                 Haptics.selectionAsync();
-                router.push('/notifications');
+                setShowShareSection(prev => !prev);
               }}
             >
-              <View style={[styles.menuIcon, { backgroundColor: theme.success + '15' }]}>
-                <MaterialIcons name="notifications" size={20} color={theme.success} />
+              <View style={[styles.menuIcon, { backgroundColor: theme.accent + '15' }]}>
+                <MaterialIcons name="folder-shared" size={20} color={theme.accent} />
               </View>
               <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>Notifications de tournois</Text>
-                <Text style={styles.menuItemSubtext}>Rappels et programmation</Text>
+                <Text style={styles.menuItemText}>Partage</Text>
+                <Text style={styles.menuItemSubtext}>Codes et gestion des partages</Text>
               </View>
-              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              <MaterialIcons name={showShareSection ? 'expand-less' : 'expand-more'} size={20} color={theme.textMuted} />
             </Pressable>
+
+            {showShareSection && (
+              <View style={styles.subMenuContainer}>
+                <Pressable 
+                  style={styles.subMenuItem}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    router.push('/share');
+                  }}
+                >
+                  <View style={[styles.subMenuIcon, { backgroundColor: theme.success + '15' }]}>
+                    <MaterialIcons name="qr-code-2" size={16} color={theme.success} />
+                  </View>
+                  <View style={styles.menuItemContent}>
+                    <Text style={styles.subMenuItemText}>Code de partage</Text>
+                    <Text style={styles.menuItemSubtext}>Saisir un code pour voir une fiche</Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+                </Pressable>
+
+                <Pressable 
+                  style={styles.subMenuItem}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    router.push('/shared-items');
+                  }}
+                >
+                  <View style={[styles.subMenuIcon, { backgroundColor: theme.warning + '15' }]}>
+                    <MaterialIcons name="manage-accounts" size={16} color={theme.warning} />
+                  </View>
+                  <View style={styles.menuItemContent}>
+                    <Text style={styles.subMenuItemText}>Gestion des partages</Text>
+                    <Text style={styles.menuItemSubtext}>Voir et gérer vos fiches partagées</Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+                </Pressable>
+              </View>
+            )}
 
             <Pressable 
               style={styles.menuItem}
@@ -1745,6 +1796,36 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: theme.border,
     marginLeft: 44,
+  },
+  // Sub-menu styles
+  subMenuContainer: {
+    marginLeft: 24,
+    marginBottom: 10,
+    borderLeftWidth: 2,
+    borderLeftColor: theme.border,
+    paddingLeft: 12,
+    gap: 6,
+  },
+  subMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    padding: 12,
+    ...theme.shadows.card,
+  },
+  subMenuIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  subMenuItemText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textPrimary,
   },
   // Share notification badge
   shareNotifBadge: {
