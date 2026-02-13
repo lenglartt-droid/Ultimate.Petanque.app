@@ -12,14 +12,17 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import * as Linking from 'expo-linking';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/template';
+import ShareModal from '@/components/ui/ShareModal';
 
 export default function MyPlayerCardScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { selfPlayer, userStats, challengeStats, matches, challenges } = useApp();
+  const [showShareModal, setShowShareModal] = React.useState(false);
 
   // Calculate preferred role from match history
   const roleAnalysis = React.useMemo(() => {
@@ -99,15 +102,23 @@ export default function MyPlayerCardScreen() {
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Ma Fiche Joueur</Text>
-        <Pressable 
-          style={styles.editButton}
-          onPress={() => {
-            Haptics.selectionAsync();
-            router.push('/profile');
-          }}
-        >
-          <MaterialIcons name="edit" size={20} color={theme.primary} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable 
+            style={styles.shareButton}
+            onPress={() => setShowShareModal(true)}
+          >
+            <MaterialIcons name="share" size={20} color={theme.success} />
+          </Pressable>
+          <Pressable 
+            style={styles.editButton}
+            onPress={() => {
+              Haptics.selectionAsync();
+              router.push('/profile');
+            }}
+          >
+            <MaterialIcons name="edit" size={20} color={theme.primary} />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView
@@ -141,6 +152,30 @@ export default function MyPlayerCardScreen() {
               <Text style={styles.metaText}>{selfPlayer.level}</Text>
             </View>
           </View>
+
+          {/* Contact Info */}
+          {(selfPlayer.phone || selfPlayer.email) && (
+            <View style={styles.contactSection}>
+              {selfPlayer.phone && (
+                <Pressable
+                  style={styles.contactItem}
+                  onPress={() => Linking.openURL(`tel:${selfPlayer.phone}`)}
+                >
+                  <MaterialIcons name="phone" size={16} color={theme.primary} />
+                  <Text style={styles.contactText}>{selfPlayer.phone}</Text>
+                </Pressable>
+              )}
+              {selfPlayer.email && (
+                <Pressable
+                  style={styles.contactItem}
+                  onPress={() => Linking.openURL(`mailto:${selfPlayer.email}`)}
+                >
+                  <MaterialIcons name="email" size={16} color={theme.primary} />
+                  <Text style={styles.contactText}>{selfPlayer.email}</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
 
           {/* Club Info */}
           {selfPlayer.club ? (
@@ -394,6 +429,16 @@ export default function MyPlayerCardScreen() {
           </Pressable>
         </Animated.View>
       </ScrollView>
+
+      {selfPlayer && (
+        <ShareModal
+          visible={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          itemType="player"
+          itemId={selfPlayer.id}
+          itemName={selfPlayer.name}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -452,6 +497,17 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     color: theme.textPrimary,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  shareButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   editButton: {
     width: 40,
@@ -556,6 +612,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: theme.primary,
+  },
+  contactSection: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  contactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: theme.primary + '10',
+    borderRadius: theme.borderRadius.full,
+  },
+  contactText: {
+    fontSize: 13,
+    color: theme.primary,
+    fontWeight: '500',
   },
   preferredRoleCard: {
     width: '100%',

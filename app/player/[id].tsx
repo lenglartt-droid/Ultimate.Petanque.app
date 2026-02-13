@@ -16,9 +16,7 @@ import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import Svg, { Circle } from 'react-native-svg';
 import * as Linking from 'expo-linking';
-import ShareModal from '@/components/ui/ShareModal';
-import { isSharedWithMe, saveSharedItemToMyAccount } from '@/services/shareService';
-import { useAlert } from '@/template';
+
 
 function StatRing({ value, color, size = 80 }: { value: number; color: string; size?: number }) {
   const strokeWidth = 6;
@@ -54,16 +52,7 @@ export default function PlayerDetailScreen() {
   const club = player?.clubId ? getClubById(player.clubId) : null;
   const terrain = player?.terrainId ? getTerrainById(player.terrainId) : null;
   const isSelf = selfPlayer && player?.id === selfPlayer.id;
-  const [showShareModal, setShowShareModal] = React.useState(false);
-  const [isShared, setIsShared] = React.useState(false);
-  const [isSaving, setIsSaving] = React.useState(false);
-  const { showAlert } = useAlert();
 
-  React.useEffect(() => {
-    if (id) {
-      isSharedWithMe('player', id).then(setIsShared);
-    }
-  }, [id]);
 
   // Calculate preferred role from match history
   const roleAnalysis = React.useMemo(() => {
@@ -153,29 +142,6 @@ export default function PlayerDetailScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>Profil joueur</Text>
         <View style={styles.headerActions}>
-          {isShared && (
-            <Pressable
-              style={[styles.saveButton, isSaving && { opacity: 0.6 }]}
-              onPress={async () => {
-                setIsSaving(true);
-                const { newItemId, error } = await saveSharedItemToMyAccount('player', id!);
-                setIsSaving(false);
-                if (error) {
-                  showAlert('Erreur', error);
-                } else {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  showAlert('Enregistre', 'Ce joueur a ete copie dans votre annuaire');
-                  if (newItemId) router.replace(`/player/${newItemId}` as any);
-                }
-              }}
-              disabled={isSaving}
-            >
-              <MaterialIcons name="save-alt" size={22} color={theme.accent} />
-            </Pressable>
-          )}
-          <Pressable style={styles.shareButton} onPress={() => setShowShareModal(true)}>
-            <MaterialIcons name="share" size={22} color={theme.success} />
-          </Pressable>
           <Pressable style={styles.editButton} onPress={() => router.push(`/player/edit/${id}`)}>
             <MaterialIcons name="edit" size={22} color={theme.primary} />
           </Pressable>
@@ -445,13 +411,6 @@ export default function PlayerDetailScreen() {
         )}
       </ScrollView>
 
-      <ShareModal
-        visible={showShareModal}
-        onClose={() => setShowShareModal(false)}
-        itemType="player"
-        itemId={id!}
-        itemName={player.name}
-      />
     </SafeAreaView>
   );
 }
@@ -480,20 +439,6 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     gap: 4,
-  },
-  saveButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.accent + '15',
-    borderRadius: 20,
-  },
-  shareButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   editButton: {
     width: 40,
