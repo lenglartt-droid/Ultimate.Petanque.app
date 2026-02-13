@@ -920,7 +920,6 @@ const styles = StyleSheet.create({
   faqItem: {
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.md,
-    overflow: 'hidden',
     borderWidth: 1,
     borderColor: theme.border,
   },
@@ -947,7 +946,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   faqAnswerContainer: {
-    overflow: 'hidden',
   },
   faqAnswerText: {
     fontSize: 14,
