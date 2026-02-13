@@ -276,9 +276,9 @@ function AccordionItem({ question, answer, isOpen, onToggle, accentColor }: {
         </Animated.View>
       </View>
       {isOpen && (
-        <Animated.View entering={FadeIn.duration(200)} style={styles.faqAnswerContainer}>
+        <View style={styles.faqAnswerContainer}>
           <Text style={styles.faqAnswerText}>{answer}</Text>
-        </Animated.View>
+        </View>
       )}
     </Pressable>
   );
@@ -310,7 +310,7 @@ function QuickActionCard({ action, index }: { action: typeof QUICK_ACTIONS[0]; i
         />
       </Pressable>
       {expanded && (
-        <Animated.View entering={FadeIn.duration(200)} style={styles.quickActionSteps}>
+        <View style={styles.quickActionSteps}>
           {action.steps.map((step, i) => (
             <View key={i} style={styles.quickActionStep}>
               <View style={[styles.quickActionStepNumber, { backgroundColor: action.color }]}>
@@ -322,7 +322,7 @@ function QuickActionCard({ action, index }: { action: typeof QUICK_ACTIONS[0]; i
               )}
             </View>
           ))}
-        </Animated.View>
+        </View>
       )}
     </Animated.View>
   );
