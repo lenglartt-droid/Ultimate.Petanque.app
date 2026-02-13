@@ -101,6 +101,46 @@ export async function redeemShareCode(
     });
   }
 
+  // Create a notification for the owner (regardless of existing share)
+  // Fetch accessor info
+  const { data: accessorProfile } = await supabase
+    .from('user_profiles')
+    .select('username, email')
+    .eq('id', userData.user.id)
+    .single();
+
+  // Fetch item name based on type
+  let itemName: string | null = null;
+  try {
+    if (data.item_type === 'player') {
+      const { data: p } = await supabase.from('players').select('name').eq('id', data.item_id).single();
+      itemName = p?.name || null;
+    } else if (data.item_type === 'club') {
+      const { data: c } = await supabase.from('clubs').select('name').eq('id', data.item_id).single();
+      itemName = c?.name || null;
+    } else if (data.item_type === 'terrain') {
+      const { data: t } = await supabase.from('terrains').select('name').eq('id', data.item_id).single();
+      itemName = t?.name || null;
+    } else if (data.item_type === 'tournament') {
+      const { data: t } = await supabase.from('tournaments').select('name').eq('id', data.item_id).single();
+      itemName = t?.name || null;
+    }
+  } catch { /* ignore */ }
+
+  // Insert notification for owner
+  await supabase.from('share_notifications').insert({
+    owner_id: data.owner_id,
+    accessor_id: userData.user.id,
+    accessor_name: accessorProfile?.username || userData.user.email?.split('@')[0] || 'Utilisateur',
+    accessor_email: accessorProfile?.email || userData.user.email,
+    item_type: data.item_type,
+    item_id: data.item_id,
+    item_name: itemName,
+    permission: data.permission,
+    share_code: shareCode,
+    is_read: false,
+  });
+
   return { itemType: data.item_type, itemId: data.item_id, permission: data.permission, error: null };
 }
 
@@ -132,6 +172,94 @@ export async function getMySharedItems(): Promise<{ items: SharedItem[]; error: 
   }));
 
   return { items, error: null };
+}
+
+// Share notifications
+export interface ShareNotification {
+  id: string;
+  ownerId: string;
+  accessorId: string;
+  accessorName: string | null;
+  accessorEmail: string | null;
+  itemType: ShareItemType;
+  itemId: string;
+  itemName: string | null;
+  permission: SharePermission;
+  shareCode: string | null;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export async function getShareNotifications(): Promise<{ notifications: ShareNotification[]; error: string | null }> {
+  const supabase = getSupabaseClient();
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData?.user) return { notifications: [], error: 'Non connecté' };
+
+  const { data, error } = await supabase
+    .from('share_notifications')
+    .select('*')
+    .eq('owner_id', userData.user.id)
+    .order('created_at', { ascending: false });
+
+  if (error) return { notifications: [], error: error.message };
+
+  const notifications: ShareNotification[] = (data || []).map((n: any) => ({
+    id: n.id,
+    ownerId: n.owner_id,
+    accessorId: n.accessor_id,
+    accessorName: n.accessor_name,
+    accessorEmail: n.accessor_email,
+    itemType: n.item_type,
+    itemId: n.item_id,
+    itemName: n.item_name,
+    permission: n.permission,
+    shareCode: n.share_code,
+    isRead: n.is_read,
+    createdAt: n.created_at,
+  }));
+
+  return { notifications, error: null };
+}
+
+export async function getUnreadShareNotificationCount(): Promise<number> {
+  const supabase = getSupabaseClient();
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData?.user) return 0;
+
+  const { count, error } = await supabase
+    .from('share_notifications')
+    .select('*', { count: 'exact', head: true })
+    .eq('owner_id', userData.user.id)
+    .eq('is_read', false);
+
+  if (error) return 0;
+  return count || 0;
+}
+
+export async function markShareNotificationsRead(ids?: string[]): Promise<{ error: string | null }> {
+  const supabase = getSupabaseClient();
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData?.user) return { error: 'Non connecté' };
+
+  let query = supabase
+    .from('share_notifications')
+    .update({ is_read: true })
+    .eq('owner_id', userData.user.id);
+
+  if (ids && ids.length > 0) {
+    query = query.in('id', ids);
+  } else {
+    query = query.eq('is_read', false);
+  }
+
+  const { error } = await query;
+  return { error: error?.message || null };
+}
+
+export async function deleteShareNotification(id: string): Promise<{ error: string | null }> {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.from('share_notifications').delete().eq('id', id);
+  return { error: error?.message || null };
 }
 
 export async function revokeShare(shareId: string): Promise<{ error: string | null }> {

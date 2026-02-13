@@ -24,6 +24,7 @@ import theme from '@/constants/theme';
 import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { Club } from '@/services/mockData';
+import { getUnreadShareNotificationCount } from '@/services/shareService';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -51,6 +52,21 @@ export default function ProfileScreen() {
   const [showCreateClub, setShowCreateClub] = useState(false);
   const [newClubName, setNewClubName] = useState('');
   const [newClubCity, setNewClubCity] = useState('');
+  
+  // Share notifications count
+  const [unreadShareCount, setUnreadShareCount] = useState(0);
+  
+  // Load unread share notification count
+  useEffect(() => {
+    if (!user?.id) return;
+    const loadCount = async () => {
+      const count = await getUnreadShareNotificationCount();
+      setUnreadShareCount(count);
+    };
+    loadCount();
+    const interval = setInterval(loadCount, 30000);
+    return () => clearInterval(interval);
+  }, [user?.id]);
   
 
 
@@ -711,6 +727,32 @@ export default function ProfileScreen() {
               <View style={styles.playerCardLinkInfo}>
                 <Text style={styles.playerCardLinkTitle}>Code de partage</Text>
                 <Text style={styles.playerCardLinkSubtitle}>Saisir un code pour voir une fiche partagée</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
+            </Pressable>
+
+            <Pressable 
+              style={[styles.playerCardLink, { marginTop: 10 }]}
+              onPress={() => {
+                setUnreadShareCount(0);
+                router.push('/share-notifications');
+              }}
+            >
+              <View style={[styles.playerCardLinkIcon, { backgroundColor: theme.warning + '15' }]}>
+                <MaterialIcons name="notifications" size={24} color={theme.warning} />
+                {unreadShareCount > 0 && (
+                  <View style={styles.shareNotifBadge}>
+                    <Text style={styles.shareNotifBadgeText}>{unreadShareCount > 9 ? '9+' : unreadShareCount}</Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.playerCardLinkInfo}>
+                <Text style={styles.playerCardLinkTitle}>Notifications de partage</Text>
+                <Text style={styles.playerCardLinkSubtitle}>
+                  {unreadShareCount > 0 
+                    ? `${unreadShareCount} nouvel accès à vos fiches`
+                    : 'Voir qui a accédé à vos fiches'}
+                </Text>
               </View>
               <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
             </Pressable>
@@ -1608,5 +1650,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFF',
   },
-
+  // Share notification badge
+  shareNotifBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: theme.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+    borderWidth: 2,
+    borderColor: theme.surface,
+  },
+  shareNotifBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFF',
+  },
 });
