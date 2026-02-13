@@ -45,6 +45,8 @@ export default function ProfileScreen() {
   const [club, setClub] = useState('');
   const [clubId, setClubId] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   
   // Club picker state
   const [showClubPicker, setShowClubPicker] = useState(false);
@@ -121,6 +123,12 @@ export default function ProfileScreen() {
         }
         if (selfPlayer?.avatar) {
           setAvatarUrl(selfPlayer.avatar);
+        }
+        if (selfPlayer?.phone) {
+          setPhone(selfPlayer.phone);
+        }
+        if (selfPlayer?.email) {
+          setEmail(selfPlayer.email);
         }
         
 
@@ -318,6 +326,8 @@ export default function ProfileScreen() {
           level,
           club: club || undefined,
           clubId: clubId || undefined,
+          phone: phone.trim() || undefined,
+          email: email.trim() || undefined,
         });
       }
 
@@ -600,6 +610,40 @@ export default function ProfileScreen() {
                     </Text>
                   </Pressable>
                 ))}
+              </View>
+            </View>
+
+            {/* Contact Info */}
+            <View style={styles.fieldCard}>
+              <View style={styles.fieldHeader}>
+                <MaterialIcons name="contact-phone" size={18} color={theme.warning} />
+                <Text style={styles.fieldLabel}>Contact</Text>
+              </View>
+              <View style={styles.contactFieldContainer}>
+                <View style={styles.contactFieldRow}>
+                  <MaterialIcons name="phone" size={20} color={theme.textSecondary} />
+                  <TextInput
+                    style={styles.contactFieldInput}
+                    value={phone}
+                    onChangeText={setPhone}
+                    placeholder="Numéro de téléphone"
+                    placeholderTextColor={theme.textMuted}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+                <View style={styles.contactFieldDivider} />
+                <View style={styles.contactFieldRow}>
+                  <MaterialIcons name="email" size={20} color={theme.textSecondary} />
+                  <TextInput
+                    style={styles.contactFieldInput}
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="Adresse email"
+                    placeholderTextColor={theme.textMuted}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                </View>
               </View>
             </View>
 
@@ -1677,6 +1721,30 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFF',
+  },
+  // Contact fields in edit mode
+  contactFieldContainer: {
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.md,
+    overflow: 'hidden',
+  },
+  contactFieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 2,
+    gap: 10,
+  },
+  contactFieldInput: {
+    flex: 1,
+    fontSize: 16,
+    color: theme.textPrimary,
+    paddingVertical: 14,
+  },
+  contactFieldDivider: {
+    height: 1,
+    backgroundColor: theme.border,
+    marginLeft: 44,
   },
   // Share notification badge
   shareNotifBadge: {
