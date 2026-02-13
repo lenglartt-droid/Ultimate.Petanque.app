@@ -18,6 +18,7 @@ import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
+import ShareModal from '@/components/ui/ShareModal';
 
 export default function TerrainDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -25,6 +26,7 @@ export default function TerrainDetailScreen() {
   const { getTerrainById, tournaments, deleteTerrain, isFavoriteTerrain, toggleFavoriteTerrain } = useApp();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const [showShareModal, setShowShareModal] = useState(false);
   
   const isFavorite = id ? isFavoriteTerrain(id) : false;
 
@@ -111,6 +113,9 @@ export default function TerrainDetailScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>Détails du terrain</Text>
         <View style={styles.headerActions}>
+          <Pressable style={styles.shareButton} onPress={() => setShowShareModal(true)}>
+            <MaterialIcons name="share" size={22} color={theme.success} />
+          </Pressable>
           <Pressable 
             style={[styles.favoriteButton, isFavorite && styles.favoriteButtonActive]} 
             onPress={handleToggleFavorite}
@@ -384,6 +389,16 @@ export default function TerrainDetailScreen() {
           </Animated.View>
         )}
       </ScrollView>
+
+      {terrain && (
+        <ShareModal
+          visible={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          itemType="terrain"
+          itemId={terrain.id}
+          itemName={terrain.name}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -412,6 +427,12 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     gap: 4,
+  },
+  shareButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   favoriteButton: {
     width: 40,

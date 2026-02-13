@@ -16,6 +16,7 @@ import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import Svg, { Circle } from 'react-native-svg';
 import * as Linking from 'expo-linking';
+import ShareModal from '@/components/ui/ShareModal';
 
 function StatRing({ value, color, size = 80 }: { value: number; color: string; size?: number }) {
   const strokeWidth = 6;
@@ -51,6 +52,7 @@ export default function PlayerDetailScreen() {
   const club = player?.clubId ? getClubById(player.clubId) : null;
   const terrain = player?.terrainId ? getTerrainById(player.terrainId) : null;
   const isSelf = selfPlayer && player?.id === selfPlayer.id;
+  const [showShareModal, setShowShareModal] = React.useState(false);
 
   // Calculate preferred role from match history
   const roleAnalysis = React.useMemo(() => {
@@ -140,6 +142,9 @@ export default function PlayerDetailScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>Profil joueur</Text>
         <View style={styles.headerActions}>
+          <Pressable style={styles.shareButton} onPress={() => setShowShareModal(true)}>
+            <MaterialIcons name="share" size={22} color={theme.success} />
+          </Pressable>
           <Pressable style={styles.editButton} onPress={() => router.push(`/player/edit/${id}`)}>
             <MaterialIcons name="edit" size={22} color={theme.primary} />
           </Pressable>
@@ -408,6 +413,14 @@ export default function PlayerDetailScreen() {
           </Animated.View>
         )}
       </ScrollView>
+
+      <ShareModal
+        visible={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        itemType="player"
+        itemId={id!}
+        itemName={player.name}
+      />
     </SafeAreaView>
   );
 }
@@ -436,6 +449,12 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     gap: 4,
+  },
+  shareButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   editButton: {
     width: 40,

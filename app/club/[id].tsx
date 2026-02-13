@@ -15,6 +15,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
+import ShareModal from '@/components/ui/ShareModal';
 
 export default function ClubDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -24,6 +25,7 @@ export default function ClubDetailScreen() {
   const club = getClubById(id!);
   const clubPlayers = players.filter(p => p.clubId === id);
   const clubTournaments = tournaments.filter(t => t.clubId === id);
+  const [showShareModal, setShowShareModal] = React.useState(false);
 
   const handleDelete = () => {
     Alert.alert(
@@ -63,6 +65,9 @@ export default function ClubDetailScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>Club</Text>
         <View style={styles.headerActions}>
+          <Pressable style={styles.shareButton} onPress={() => setShowShareModal(true)}>
+            <MaterialIcons name="share" size={22} color={theme.success} />
+          </Pressable>
           <Pressable 
             style={styles.editButton} 
             onPress={() => router.push(`/club/edit/${id}`)}
@@ -243,6 +248,14 @@ export default function ClubDetailScreen() {
           </Animated.View>
         )}
       </ScrollView>
+
+      <ShareModal
+        visible={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        itemType="club"
+        itemId={id!}
+        itemName={club.name}
+      />
     </SafeAreaView>
   );
 }
@@ -271,6 +284,12 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     gap: 4,
+  },
+  shareButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   editButton: {
     width: 40,

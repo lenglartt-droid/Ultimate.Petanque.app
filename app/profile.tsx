@@ -700,6 +700,20 @@ export default function ProfileScreen() {
               </View>
               <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
             </Pressable>
+
+            <Pressable 
+              style={[styles.playerCardLink, { marginTop: 10 }]}
+              onPress={() => router.push('/share')}
+            >
+              <View style={[styles.playerCardLinkIcon, { backgroundColor: theme.success + '15' }]}>
+                <MaterialIcons name="qr-code-2" size={24} color={theme.success} />
+              </View>
+              <View style={styles.playerCardLinkInfo}>
+                <Text style={styles.playerCardLinkTitle}>Code de partage</Text>
+                <Text style={styles.playerCardLinkSubtitle}>Saisir un code pour voir une fiche partagée</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
+            </Pressable>
           </Animated.View>
         )}
 

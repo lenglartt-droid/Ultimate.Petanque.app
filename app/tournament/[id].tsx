@@ -22,6 +22,7 @@ import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { TextInput } from 'react-native';
 import { TournamentType } from '@/constants/config';
+import ShareModal from '@/components/ui/ShareModal';
 import {
   requestNotificationPermissions,
   areNotificationsEnabled,
@@ -118,6 +119,7 @@ export default function TournamentDetailScreen() {
   });
   const [isScheduling, setIsScheduling] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<'unknown' | 'granted' | 'denied'>('unknown');
+  const [showShareModal, setShowShareModal] = useState(false);
   
   // Notification state
   const isNotificationEnabled = tournament ? isTournamentNotificationEnabled(tournament.id) : false;
@@ -388,6 +390,9 @@ export default function TournamentDetailScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>Mon Parcours</Text>
         <View style={styles.headerActions}>
+          <Pressable style={styles.shareButton} onPress={() => setShowShareModal(true)}>
+            <MaterialIcons name="share" size={20} color={theme.success} />
+          </Pressable>
           <Pressable 
             style={[styles.notificationButton, isNotificationEnabled && styles.notificationButtonActive]}
             onPress={handleNotificationPress}
@@ -923,6 +928,14 @@ export default function TournamentDetailScreen() {
         </SafeAreaView>
       </Modal>
 
+      <ShareModal
+        visible={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        itemType="tournament"
+        itemId={tournament.id}
+        itemName={tournament.name}
+      />
+
       {/* End Tournament Modal - Multi-Step */}
       <Modal
         visible={endTournamentStep > 0}
@@ -1254,6 +1267,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+  },
+  shareButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   notificationButton: {
     width: 40,
