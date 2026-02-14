@@ -3,12 +3,14 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AlertProvider, AuthProvider } from '@/template';
 import { AppProvider } from '@/contexts/AppContext';
+import { LanguageProvider } from '@/contexts/LanguageContext';
 
 export default function RootLayout() {
   return (
     <AlertProvider>
       <AuthProvider>
         <SafeAreaProvider>
+          <LanguageProvider>
           <AppProvider>
             <StatusBar style="dark" />
             <Stack screenOptions={{ headerShown: false }}>
@@ -220,6 +222,7 @@ export default function RootLayout() {
               />
             </Stack>
           </AppProvider>
+          </LanguageProvider>
         </SafeAreaProvider>
       </AuthProvider>
     </AlertProvider>

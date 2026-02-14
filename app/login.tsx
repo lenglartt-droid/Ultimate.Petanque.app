@@ -16,6 +16,7 @@ import { Image } from 'expo-image';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { useAuth, useAlert } from '@/template';
 import theme from '@/constants/theme';
+import { useLanguage } from '@/hooks/useLanguage';
 
 type AuthMode = 'login' | 'register';
 type RegisterStep = 'email' | 'otp';
@@ -23,6 +24,7 @@ type RegisterStep = 'email' | 'otp';
 export default function LoginScreen() {
   const { sendOTP, verifyOTPAndLogin, signInWithPassword, signInWithGoogle, operationLoading } = useAuth();
   const { showAlert } = useAlert();
+  const { t } = useLanguage();
 
   const [mode, setMode] = useState<AuthMode>('login');
   const [registerStep, setRegisterStep] = useState<RegisterStep>('email');
@@ -50,60 +52,60 @@ export default function LoginScreen() {
   const handleGoogleLogin = async () => {
     const { error } = await signInWithGoogle();
     if (error) {
-      showAlert('Erreur Google', error);
+      showAlert(t('login', 'googleError'), error);
     }
   };
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      showAlert('Erreur', 'Veuillez remplir tous les champs');
+      showAlert(t('common', 'error'), t('login', 'fillAllFields'));
       return;
     }
 
     const { error } = await signInWithPassword(email.trim(), password);
     if (error) {
-      showAlert('Erreur de connexion', error);
+      showAlert(t('login', 'loginError'), error);
     }
   };
 
   const handleSendOTP = async () => {
     if (!email.trim()) {
-      showAlert('Erreur', 'Veuillez entrer votre email');
+      showAlert(t('common', 'error'), t('login', 'enterEmail'));
       return;
     }
     if (!password.trim() || password.length < 6) {
-      showAlert('Erreur', 'Le mot de passe doit contenir au moins 6 caractères');
+      showAlert(t('common', 'error'), t('login', 'passwordTooShort'));
       return;
     }
     if (password !== confirmPassword) {
-      showAlert('Erreur', 'Les mots de passe ne correspondent pas');
+      showAlert(t('common', 'error'), t('login', 'passwordMismatch'));
       return;
     }
 
     try {
       const { error } = await sendOTP(email.trim());
       if (error) {
-        showAlert('Erreur', error);
+        showAlert(t('common', 'error'), error);
         return;
       }
 
       // Update state first, then show confirmation
       setRegisterStep('otp');
-      showAlert('Code envoyé', 'Un code de vérification a été envoyé à votre email');
+      showAlert(t('login', 'codeSentSuccess'), t('login', 'codeSentMessage'));
     } catch (err: any) {
-      showAlert('Erreur', err.message || 'Une erreur est survenue lors de l\'envoi du code');
+      showAlert(t('common', 'error'), err.message || t('common', 'error'));
     }
   };
 
   const handleVerifyOTP = async () => {
     if (!otp.trim() || otp.length < 4) {
-      showAlert('Erreur', 'Veuillez entrer le code de vérification');
+      showAlert(t('common', 'error'), t('login', 'enterCode'));
       return;
     }
 
     const { error } = await verifyOTPAndLogin(email.trim(), otp.trim(), { password });
     if (error) {
-      showAlert('Erreur', error);
+      showAlert(t('common', 'error'), error);
     }
   };
 
@@ -128,7 +130,7 @@ export default function LoginScreen() {
             />
             <Text style={styles.appName}>Ultimate Petanque</Text>
             <Text style={styles.tagline}>
-              {mode === 'login' ? 'Content de vous revoir !' : 'Créez votre compte'}
+              {mode === 'login' ? t('login', 'welcomeBack') : t('login', 'createAccount')}
             </Text>
           </Animated.View>
 
@@ -139,7 +141,7 @@ export default function LoginScreen() {
               onPress={() => handleModeSwitch('login')}
             >
               <Text style={[styles.modeTabText, mode === 'login' && styles.modeTabTextActive]}>
-                Connexion
+                {t('login', 'signIn')}
               </Text>
             </Pressable>
             <Pressable
@@ -147,7 +149,7 @@ export default function LoginScreen() {
               onPress={() => handleModeSwitch('register')}
             >
               <Text style={[styles.modeTabText, mode === 'register' && styles.modeTabTextActive]}>
-                Inscription
+                {t('login', 'signUp')}
               </Text>
             </Pressable>
           </Animated.View>
@@ -159,7 +161,7 @@ export default function LoginScreen() {
                 <MaterialIcons name="email" size={20} color={theme.textSecondary} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Email"
+                  placeholder={t('login', 'email')}
                   placeholderTextColor={theme.textMuted}
                   value={email}
                   onChangeText={setEmail}
@@ -173,7 +175,7 @@ export default function LoginScreen() {
                 <MaterialIcons name="lock" size={20} color={theme.textSecondary} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Mot de passe"
+                  placeholder={t('login', 'password')}
                   placeholderTextColor={theme.textMuted}
                   value={password}
                   onChangeText={setPassword}
@@ -198,7 +200,7 @@ export default function LoginScreen() {
                 ) : (
                   <>
                     <MaterialIcons name="login" size={20} color="#FFF" />
-                    <Text style={styles.submitButtonText}>Se connecter</Text>
+                    <Text style={styles.submitButtonText}>{t('login', 'login')}</Text>
                   </>
                 )}
               </Pressable>
@@ -206,7 +208,7 @@ export default function LoginScreen() {
               {/* Divider */}
               <View style={styles.dividerContainer}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>ou</Text>
+                <Text style={styles.dividerText}>{t('common', 'or')}</Text>
                 <View style={styles.dividerLine} />
               </View>
 
@@ -217,7 +219,7 @@ export default function LoginScreen() {
                 disabled={operationLoading}
               >
                 <MaterialIcons name="login" size={20} color={theme.textPrimary} />
-                <Text style={styles.googleButtonText}>Continuer avec Google</Text>
+                <Text style={styles.googleButtonText}>{t('login', 'continueWithGoogle')}</Text>
               </Pressable>
             </Animated.View>
           )}
@@ -229,7 +231,7 @@ export default function LoginScreen() {
                 <MaterialIcons name="email" size={20} color={theme.textSecondary} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Email"
+                  placeholder={t('login', 'email')}
                   placeholderTextColor={theme.textMuted}
                   value={email}
                   onChangeText={setEmail}
@@ -243,7 +245,7 @@ export default function LoginScreen() {
                 <MaterialIcons name="lock" size={20} color={theme.textSecondary} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Mot de passe (min. 6 caractères)"
+                  placeholder={t('login', 'passwordMin')}
                   placeholderTextColor={theme.textMuted}
                   value={password}
                   onChangeText={setPassword}
@@ -262,7 +264,7 @@ export default function LoginScreen() {
                 <MaterialIcons name="lock" size={20} color={theme.textSecondary} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Confirmer le mot de passe"
+                  placeholder={t('login', 'confirmPassword')}
                   placeholderTextColor={theme.textMuted}
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
@@ -280,7 +282,7 @@ export default function LoginScreen() {
                 ) : (
                   <>
                     <MaterialIcons name="send" size={20} color="#FFF" />
-                    <Text style={styles.submitButtonText}>Recevoir le code</Text>
+                    <Text style={styles.submitButtonText}>{t('login', 'getCode')}</Text>
                   </>
                 )}
               </Pressable>
@@ -292,9 +294,9 @@ export default function LoginScreen() {
             <Animated.View entering={FadeIn.duration(300)} style={styles.form}>
               <View style={styles.otpInfo}>
                 <MaterialIcons name="mark-email-read" size={48} color={theme.primary} />
-                <Text style={styles.otpInfoTitle}>Vérifiez votre email</Text>
+                <Text style={styles.otpInfoTitle}>{t('login', 'verifyEmail')}</Text>
                 <Text style={styles.otpInfoText}>
-                  Un code à 4 chiffres a été envoyé à {email}
+                  {t('login', 'codeSent')} {email}
                 </Text>
               </View>
 
@@ -302,7 +304,7 @@ export default function LoginScreen() {
                 <MaterialIcons name="pin" size={20} color={theme.textSecondary} style={styles.inputIcon} />
                 <TextInput
                   style={[styles.input, styles.otpInput]}
-                  placeholder="Code de vérification"
+                  placeholder={t('login', 'verificationCode')}
                   placeholderTextColor={theme.textMuted}
                   value={otp}
                   onChangeText={setOtp}
@@ -321,7 +323,7 @@ export default function LoginScreen() {
                 ) : (
                   <>
                     <MaterialIcons name="verified" size={20} color="#FFF" />
-                    <Text style={styles.submitButtonText}>Créer mon compte</Text>
+                    <Text style={styles.submitButtonText}>{t('login', 'createMyAccount')}</Text>
                   </>
                 )}
               </Pressable>
@@ -331,7 +333,7 @@ export default function LoginScreen() {
                 onPress={() => setRegisterStep('email')}
               >
                 <MaterialIcons name="arrow-back" size={18} color={theme.textSecondary} />
-                <Text style={styles.backButtonText}>Modifier l'email</Text>
+                <Text style={styles.backButtonText}>{t('login', 'editEmail')}</Text>
               </Pressable>
             </Animated.View>
           )}
@@ -339,7 +341,7 @@ export default function LoginScreen() {
           {/* Footer */}
           <Animated.View entering={FadeInDown.duration(500).delay(300)} style={styles.footer}>
             <Text style={styles.footerText}>
-              En continuant, vous acceptez nos conditions d'utilisation
+              {t('login', 'termsText')}
             </Text>
           </Animated.View>
         </ScrollView>

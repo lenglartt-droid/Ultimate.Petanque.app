@@ -16,6 +16,7 @@ import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import Svg, { Circle, Line, G, Text as SvgText, Rect } from 'react-native-svg';
 import { router } from 'expo-router';
+import { useLanguage } from '@/hooks/useLanguage';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -48,7 +49,7 @@ const CATEGORY_TABS: { id: StatsCategory; label: string; icon: string; color: st
   { id: 'performance', label: 'Perf.', icon: 'emoji-events', color: theme.primary },
   { id: 'tir', label: 'Tir', icon: 'gps-fixed', color: theme.tirColor },
   { id: 'point', label: 'Point', icon: 'adjust', color: theme.pointColor },
-  { id: 'errors', label: 'Erreurs', icon: 'error-outline', color: theme.error },
+  { id: 'errors', label: 'Errors', icon: 'error-outline', color: theme.error },
 ];
 
 // ============================================
@@ -273,6 +274,7 @@ function NAPlaceholder({ message }: { message: string }) {
 export default function StatsScreen() {
   const insets = useSafeAreaInsets();
   const { matches, challenges } = useApp();
+  const { t } = useLanguage();
   
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
   const [category, setCategory] = useState<StatsCategory>('performance');
@@ -905,9 +907,9 @@ export default function StatsScreen() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View>
-            <Text style={styles.headerTitle}>Statistiques</Text>
+            <Text style={styles.headerTitle}>{t('stats', 'statistics')}</Text>
             <Text style={styles.headerSubtitle}>
-              {performanceStats.total} parties • {performanceStats.winRate}% victoires
+              {performanceStats.total} {t('stats', 'matches')} • {performanceStats.winRate}% {t('stats', 'victories')}
             </Text>
           </View>
           <View style={styles.headerButtons}>
@@ -916,7 +918,7 @@ export default function StatsScreen() {
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowProgressionModal(true); }}
             >
               <MaterialIcons name="trending-up" size={18} color={theme.primary} />
-              <Text style={styles.progressionButtonText}>Progression</Text>
+              <Text style={styles.progressionButtonText}>{t('stats', 'progression')}</Text>
             </Pressable>
             <Pressable style={styles.historyButton} onPress={() => router.push('/history')}>
               <MaterialIcons name="history" size={22} color={theme.textSecondary} />
@@ -964,11 +966,11 @@ export default function StatsScreen() {
         {!hasData ? (
           <View style={styles.emptyState}>
             <MaterialIcons name="bar-chart" size={64} color={theme.textMuted} />
-            <Text style={styles.emptyTitle}>Pas encore de statistiques</Text>
-            <Text style={styles.emptyText}>Jouez des matchs pour voir vos statistiques évoluer</Text>
+            <Text style={styles.emptyTitle}>{t('stats', 'noStatsYet')}</Text>
+            <Text style={styles.emptyText}>{t('stats', 'playToSee')}</Text>
             <Pressable style={styles.emptyButton} onPress={() => router.push('/match/new')}>
               <MaterialIcons name="add" size={20} color="#FFF" />
-              <Text style={styles.emptyButtonText}>Nouveau match</Text>
+              <Text style={styles.emptyButtonText}>{t('stats', 'newMatch')}</Text>
             </Pressable>
           </View>
         ) : (

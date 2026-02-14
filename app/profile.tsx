@@ -25,6 +25,7 @@ import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { Club } from '@/services/mockData';
 import { getUnreadShareNotificationCount } from '@/services/shareService';
+import { useLanguage } from '@/hooks/useLanguage';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -32,6 +33,7 @@ export default function ProfileScreen() {
   const { showAlert } = useAlert();
   const { clubs, addClub, updatePlayer, selfPlayer, userStats, matches, challenges, tournaments, refreshData } = useApp();
   const supabase = getSupabaseClient();
+  const { t, language, setLanguage } = useLanguage();
 
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -254,7 +256,7 @@ export default function ProfileScreen() {
       await updatePlayer(user.id, { avatar: publicUrl });
       
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showAlert('Succès', 'Photo de profil mise à jour');
+      showAlert(t('common', 'success'), t('profile', 'photoUpdated'));
     } catch (error: any) {
       console.log('Error uploading avatar:', error);
       showAlert('Erreur', error.message || 'Impossible de charger la photo');
@@ -265,13 +267,13 @@ export default function ProfileScreen() {
 
   const showPhotoOptions = () => {
     Alert.alert(
-      'Photo de profil',
-      'Choisissez une option',
+      t('profile', 'photoProfile'),
+      t('profile', 'chooseOption'),
       [
-        { text: 'Prendre une photo', onPress: handleTakePhoto },
-        { text: 'Choisir dans la galerie', onPress: handlePickImage },
-        ...(avatarUrl ? [{ text: 'Supprimer la photo', style: 'destructive' as const, onPress: handleRemovePhoto }] : []),
-        { text: 'Annuler', style: 'cancel' as const },
+        { text: t('profile', 'takePhoto'), onPress: handleTakePhoto },
+        { text: t('profile', 'chooseGallery'), onPress: handlePickImage },
+        ...(avatarUrl ? [{ text: t('profile', 'removePhoto'), style: 'destructive' as const, onPress: handleRemovePhoto }] : []),
+        { text: t('common', 'cancel'), style: 'cancel' as const },
       ]
     );
   };
@@ -303,7 +305,7 @@ export default function ProfileScreen() {
 
   const handleSave = async () => {
     if (!username.trim()) {
-      showAlert('Erreur', 'Le nom d\'utilisateur est requis');
+      showAlert(t('common', 'error'), t('profile', 'usernameRequired'));
       return;
     }
 
@@ -336,7 +338,7 @@ export default function ProfileScreen() {
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showAlert('Succès', 'Profil mis à jour');
+      showAlert(t('common', 'success'), t('profile', 'profileUpdated'));
       setIsEditing(false);
     } catch (error: any) {
       showAlert('Erreur', error.message || 'Impossible de mettre à jour le profil');
@@ -355,7 +357,7 @@ export default function ProfileScreen() {
 
   const handleCreateClub = async () => {
     if (!newClubName.trim() || !newClubCity.trim()) {
-      showAlert('Erreur', 'Le nom et la ville du club sont requis');
+      showAlert(t('common', 'error'), t('profile', 'nameAndCityRequired'));
       return;
     }
 
@@ -387,12 +389,12 @@ export default function ProfileScreen() {
 
   const handleLogout = async () => {
     Alert.alert(
-      'Déconnexion',
-      'Êtes-vous sûr de vouloir vous déconnecter ?',
+      t('profile', 'logoutConfirm'),
+      t('profile', 'logoutMessage'),
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common', 'cancel'), style: 'cancel' },
         {
-          text: 'Déconnexion',
+          text: t('profile', 'logoutConfirm'),
           style: 'destructive',
           onPress: async () => {
             const { error } = await logout();
@@ -422,14 +424,14 @@ export default function ProfileScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Mon Profil</Text>
+        <Text style={styles.headerTitle}>{t('profile', 'myProfile')}</Text>
         {isEditing ? (
           <View style={styles.headerActions}>
             <Pressable 
               style={styles.cancelButton}
               onPress={() => setIsEditing(false)}
             >
-              <Text style={styles.cancelButtonText}>Annuler</Text>
+              <Text style={styles.cancelButtonText}>{t('common', 'cancel')}</Text>
             </Pressable>
             <Pressable 
               style={styles.saveButton}
@@ -439,7 +441,7 @@ export default function ProfileScreen() {
               {saving ? (
                 <ActivityIndicator size="small" color="#FFF" />
               ) : (
-                <Text style={styles.saveButtonText}>Sauver</Text>
+                <Text style={styles.saveButtonText}>{t('common', 'save')}</Text>
               )}
             </Pressable>
           </View>
@@ -522,19 +524,19 @@ export default function ProfileScreen() {
           <View style={styles.quickStats}>
             <View style={styles.quickStatItem}>
               <Text style={styles.quickStatValue}>{matches.length}</Text>
-              <Text style={styles.quickStatLabel}>Matchs</Text>
+              <Text style={styles.quickStatLabel}>{t('profile', 'matches')}</Text>
             </View>
             <View style={styles.quickStatDivider} />
             <View style={styles.quickStatItem}>
               <Text style={[styles.quickStatValue, { color: theme.success }]}>
                 {userStats.winRate}%
               </Text>
-              <Text style={styles.quickStatLabel}>Victoires</Text>
+              <Text style={styles.quickStatLabel}>{t('profile', 'victories')}</Text>
             </View>
             <View style={styles.quickStatDivider} />
             <View style={styles.quickStatItem}>
               <Text style={styles.quickStatValue}>{challenges.length}</Text>
-              <Text style={styles.quickStatLabel}>Défis</Text>
+              <Text style={styles.quickStatLabel}>{t('profile', 'challenges')}</Text>
             </View>
           </View>
         </Animated.View>
@@ -542,19 +544,19 @@ export default function ProfileScreen() {
         {/* Edit Mode Fields */}
         {isEditing && (
           <Animated.View entering={FadeIn.duration(300)} style={styles.editSection}>
-            <Text style={styles.sectionTitle}>MODIFIER MON PROFIL</Text>
+            <Text style={styles.sectionTitle}>{t('profile', 'editProfile')}</Text>
             
             {/* Username */}
             <View style={styles.fieldCard}>
               <View style={styles.fieldHeader}>
                 <MaterialIcons name="person" size={18} color={theme.primary} />
-                <Text style={styles.fieldLabel}>Nom d'utilisateur</Text>
+                <Text style={styles.fieldLabel}>{t('profile', 'username')}</Text>
               </View>
               <TextInput
                 style={styles.fieldInput}
                 value={username}
                 onChangeText={setUsername}
-                placeholder="Votre nom ou pseudo"
+                placeholder={t('profile', 'usernamePlaceholder')}
                 placeholderTextColor={theme.textMuted}
               />
             </View>
@@ -563,7 +565,7 @@ export default function ProfileScreen() {
             <View style={styles.fieldCard}>
               <View style={styles.fieldHeader}>
                 <MaterialIcons name="sports" size={18} color={theme.accent} />
-                <Text style={styles.fieldLabel}>Rôle préféré</Text>
+                <Text style={styles.fieldLabel}>{t('profile', 'preferredRole')}</Text>
               </View>
               <View style={styles.optionGrid}>
                 {roles.map((r) => (
@@ -592,7 +594,7 @@ export default function ProfileScreen() {
             <View style={styles.fieldCard}>
               <View style={styles.fieldHeader}>
                 <MaterialIcons name="trending-up" size={18} color={theme.carreauColor} />
-                <Text style={styles.fieldLabel}>Niveau</Text>
+                <Text style={styles.fieldLabel}>{t('profile', 'level')}</Text>
               </View>
               <View style={styles.levelGrid}>
                 {levels.map((l) => (
@@ -621,7 +623,7 @@ export default function ProfileScreen() {
             <View style={styles.fieldCard}>
               <View style={styles.fieldHeader}>
                 <MaterialIcons name="contact-phone" size={18} color={theme.warning} />
-                <Text style={styles.fieldLabel}>Contact</Text>
+                <Text style={styles.fieldLabel}>{t('profile', 'contact')}</Text>
               </View>
               <View style={styles.contactFieldContainer}>
                 <View style={styles.contactFieldRow}>
@@ -630,7 +632,7 @@ export default function ProfileScreen() {
                     style={styles.contactFieldInput}
                     value={phone}
                     onChangeText={setPhone}
-                    placeholder="Numéro de téléphone"
+                    placeholder={t('profile', 'phone')}
                     placeholderTextColor={theme.textMuted}
                     keyboardType="phone-pad"
                   />
@@ -642,7 +644,7 @@ export default function ProfileScreen() {
                     style={styles.contactFieldInput}
                     value={email}
                     onChangeText={setEmail}
-                    placeholder="Adresse email"
+                    placeholder={t('profile', 'emailAddress')}
                     placeholderTextColor={theme.textMuted}
                     keyboardType="email-address"
                     autoCapitalize="none"
@@ -686,7 +688,7 @@ export default function ProfileScreen() {
                   onPress={() => setShowClubPicker(true)}
                 >
                   <MaterialIcons name="add-circle-outline" size={22} color={theme.primary} />
-                  <Text style={styles.selectClubButtonText}>Sélectionner un club</Text>
+                  <Text style={styles.selectClubButtonText}>{t('profile', 'selectClub')}</Text>
                 </Pressable>
               )}
             </View>
@@ -713,7 +715,7 @@ export default function ProfileScreen() {
                     <MaterialIcons name="account-balance-wallet" size={24} color={balance >= 0 ? theme.success : theme.error} />
                   </View>
                   <View style={styles.financialButtonInfo}>
-                    <Text style={styles.financialButtonTitle}>Bilan financier</Text>
+                    <Text style={styles.financialButtonTitle}>{t('profile', 'financialSummary')}</Text>
                     <View style={styles.financialButtonMeta}>
                       <Text style={[styles.financialButtonBalance, { color: balance >= 0 ? theme.success : theme.error }]}>
                         {balance >= 0 ? '+' : ''}{balance.toFixed(0)} €
@@ -745,8 +747,8 @@ export default function ProfileScreen() {
                 <MaterialIcons name="badge" size={24} color={theme.primary} />
               </View>
               <View style={styles.playerCardLinkInfo}>
-                <Text style={styles.playerCardLinkTitle}>Ma fiche joueur</Text>
-                <Text style={styles.playerCardLinkSubtitle}>Voir mes statistiques détaillées</Text>
+                <Text style={styles.playerCardLinkTitle}>{t('profile', 'myPlayerCard')}</Text>
+                <Text style={styles.playerCardLinkSubtitle}>{t('profile', 'viewDetailedStats')}</Text>
               </View>
               <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
             </Pressable>
@@ -759,8 +761,8 @@ export default function ProfileScreen() {
                 <MaterialIcons name="emoji-events" size={24} color={theme.carreauColor} />
               </View>
               <View style={styles.playerCardLinkInfo}>
-                <Text style={styles.playerCardLinkTitle}>Mon Palmarès</Text>
-                <Text style={styles.playerCardLinkSubtitle}>Tournois, résultats et gains</Text>
+                <Text style={styles.playerCardLinkTitle}>{t('profile', 'myPalmares')}</Text>
+                <Text style={styles.playerCardLinkSubtitle}>{t('profile', 'tournamentsResultsGains')}</Text>
               </View>
               <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
             </Pressable>
@@ -771,7 +773,7 @@ export default function ProfileScreen() {
         {/* Account Section */}
         {!isEditing && (
           <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-            <Text style={styles.sectionTitle}>PARAMÈTRES</Text>
+            <Text style={styles.sectionTitle}>{t('profile', 'settings')}</Text>
 
             <Pressable 
               style={styles.menuItem}
@@ -784,8 +786,8 @@ export default function ProfileScreen() {
                 <MaterialIcons name="lock" size={20} color={theme.primary} />
               </View>
               <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>Mot de passe</Text>
-                <Text style={styles.menuItemSubtext}>Changer votre mot de passe</Text>
+                <Text style={styles.menuItemText}>{t('profile', 'password')}</Text>
+                <Text style={styles.menuItemSubtext}>{t('profile', 'changePassword')}</Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </Pressable>
@@ -807,8 +809,8 @@ export default function ProfileScreen() {
                 )}
               </View>
               <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>Notifications</Text>
-                <Text style={styles.menuItemSubtext}>Partage et tournois</Text>
+                <Text style={styles.menuItemText}>{t('profile', 'notifications')}</Text>
+                <Text style={styles.menuItemSubtext}>{t('profile', 'shareAndTournaments')}</Text>
               </View>
               <MaterialIcons name={showNotifSection ? 'expand-less' : 'expand-more'} size={20} color={theme.textMuted} />
             </Pressable>
@@ -827,11 +829,11 @@ export default function ProfileScreen() {
                     <MaterialIcons name="share" size={16} color={theme.warning} />
                   </View>
                   <View style={styles.menuItemContent}>
-                    <Text style={styles.subMenuItemText}>Notifications de partage</Text>
+                    <Text style={styles.subMenuItemText}>{t('profile', 'shareNotifications')}</Text>
                     <Text style={styles.menuItemSubtext}>
                       {unreadShareCount > 0 
-                        ? `${unreadShareCount} nouvel accès à vos fiches`
-                        : 'Voir qui a accédé à vos fiches'}
+                        ? `${unreadShareCount} ${t('profile', 'newAccess')}`
+                        : t('profile', 'seeWhoAccessed')}
                     </Text>
                   </View>
                   <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
@@ -848,8 +850,8 @@ export default function ProfileScreen() {
                     <MaterialIcons name="event" size={16} color={theme.success} />
                   </View>
                   <View style={styles.menuItemContent}>
-                    <Text style={styles.subMenuItemText}>Notifications de tournois</Text>
-                    <Text style={styles.menuItemSubtext}>Rappels et programmation</Text>
+                    <Text style={styles.subMenuItemText}>{t('profile', 'tournamentNotifications')}</Text>
+                    <Text style={styles.menuItemSubtext}>{t('profile', 'remindersScheduling')}</Text>
                   </View>
                   <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
                 </Pressable>
@@ -868,8 +870,8 @@ export default function ProfileScreen() {
                 <MaterialIcons name="folder-shared" size={20} color={theme.accent} />
               </View>
               <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>Partage</Text>
-                <Text style={styles.menuItemSubtext}>Codes et gestion des partages</Text>
+                <Text style={styles.menuItemText}>{t('profile', 'sharing')}</Text>
+                <Text style={styles.menuItemSubtext}>{t('profile', 'codesAndManagement')}</Text>
               </View>
               <MaterialIcons name={showShareSection ? 'expand-less' : 'expand-more'} size={20} color={theme.textMuted} />
             </Pressable>
@@ -887,8 +889,8 @@ export default function ProfileScreen() {
                     <MaterialIcons name="qr-code-2" size={16} color={theme.success} />
                   </View>
                   <View style={styles.menuItemContent}>
-                    <Text style={styles.subMenuItemText}>Code de partage</Text>
-                    <Text style={styles.menuItemSubtext}>Saisir un code pour voir une fiche</Text>
+                    <Text style={styles.subMenuItemText}>{t('profile', 'shareCode')}</Text>
+                    <Text style={styles.menuItemSubtext}>{t('profile', 'enterCodeToView')}</Text>
                   </View>
                   <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
                 </Pressable>
@@ -904,8 +906,8 @@ export default function ProfileScreen() {
                     <MaterialIcons name="manage-accounts" size={16} color={theme.warning} />
                   </View>
                   <View style={styles.menuItemContent}>
-                    <Text style={styles.subMenuItemText}>Gestion des partages</Text>
-                    <Text style={styles.menuItemSubtext}>Voir et gérer vos fiches partagées</Text>
+                    <Text style={styles.subMenuItemText}>{t('profile', 'shareManagement')}</Text>
+                    <Text style={styles.menuItemSubtext}>{t('profile', 'viewManageShared')}</Text>
                   </View>
                   <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
                 </Pressable>
@@ -923,10 +925,30 @@ export default function ProfileScreen() {
                 <MaterialIcons name="help-outline" size={20} color={theme.carreauColor} />
               </View>
               <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>Aide</Text>
-                <Text style={styles.menuItemSubtext}>Centre d'aide et FAQ</Text>
+                <Text style={styles.menuItemText}>{t('profile', 'help')}</Text>
+                <Text style={styles.menuItemSubtext}>{t('profile', 'helpCenter')}</Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+            </Pressable>
+
+            {/* Language Switcher */}
+            <Pressable 
+              style={styles.menuItem}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setLanguage(language === 'fr' ? 'en' : 'fr');
+              }}
+            >
+              <View style={[styles.menuIcon, { backgroundColor: '#6366F1' + '15' }]}>
+                <MaterialIcons name="language" size={20} color="#6366F1" />
+              </View>
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuItemText}>{t('profile', 'language')}</Text>
+                <Text style={styles.menuItemSubtext}>{language === 'fr' ? 'Français' : 'English'}</Text>
+              </View>
+              <View style={styles.langBadge}>
+                <Text style={styles.langBadgeText}>{language.toUpperCase()}</Text>
+              </View>
             </Pressable>
           </Animated.View>
         )}
@@ -944,7 +966,7 @@ export default function ProfileScreen() {
               ) : (
                 <>
                   <MaterialIcons name="logout" size={20} color={theme.error} />
-                  <Text style={styles.logoutButtonText}>Se déconnecter</Text>
+                  <Text style={styles.logoutButtonText}>{t('profile', 'logout')}</Text>
                 </>
               )}
             </Pressable>
@@ -952,7 +974,7 @@ export default function ProfileScreen() {
         )}
 
         {/* App Version */}
-        <Text style={styles.versionText}>Ultimate Petanque v1.0.0</Text>
+        <Text style={styles.versionText}>{t('common', 'version')}</Text>
       </ScrollView>
 
       {/* Club Picker Modal */}
@@ -979,7 +1001,7 @@ export default function ProfileScreen() {
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>
             <Text style={styles.modalTitle}>
-              {showCreateClub ? 'Nouveau club' : 'Choisir un club'}
+              {showCreateClub ? t('profile', 'newClub') : t('profile', 'chooseClub')}
             </Text>
             <View style={{ width: 40 }} />
           </View>
@@ -993,7 +1015,7 @@ export default function ProfileScreen() {
                   style={styles.clubSearchInput}
                   value={clubSearch}
                   onChangeText={setClubSearch}
-                  placeholder="Rechercher un club..."
+                  placeholder={t('profile', 'searchClub')}
                   placeholderTextColor={theme.textMuted}
                 />
                 {clubSearch.length > 0 && (
@@ -1009,7 +1031,7 @@ export default function ProfileScreen() {
                 onPress={() => setShowCreateClub(true)}
               >
                 <MaterialIcons name="add-business" size={22} color={theme.primary} />
-                <Text style={styles.createClubModalBtnText}>Créer un nouveau club</Text>
+                <Text style={styles.createClubModalBtnText}>{t('profile', 'createNewClub')}</Text>
                 <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
               </Pressable>
 
@@ -1052,7 +1074,7 @@ export default function ProfileScreen() {
                   <View style={styles.emptyClubsContainer}>
                     <MaterialIcons name="search-off" size={48} color={theme.textMuted} />
                     <Text style={styles.emptyClubsText}>
-                      {clubSearch ? 'Aucun club trouvé' : 'Aucun club enregistré'}
+                      {clubSearch ? t('profile', 'noClubFound') : t('profile', 'noClubRegistered')}
                     </Text>
                   </View>
                 )}
@@ -1061,7 +1083,7 @@ export default function ProfileScreen() {
           ) : (
             <View style={styles.createClubFormModal}>
               <View style={styles.createClubFormField}>
-                <Text style={styles.createClubLabel}>Nom du club *</Text>
+                <Text style={styles.createClubLabel}>{t('profile', 'clubName')} *</Text>
                 <TextInput
                   style={styles.createClubInput}
                   value={newClubName}
@@ -1073,7 +1095,7 @@ export default function ProfileScreen() {
               </View>
 
               <View style={styles.createClubFormField}>
-                <Text style={styles.createClubLabel}>Ville *</Text>
+                <Text style={styles.createClubLabel}>{t('profile', 'clubCity')} *</Text>
                 <TextInput
                   style={styles.createClubInput}
                   value={newClubCity}
@@ -1092,7 +1114,7 @@ export default function ProfileScreen() {
                     setNewClubCity('');
                   }}
                 >
-                  <Text style={styles.createClubCancelBtnText}>Annuler</Text>
+                  <Text style={styles.createClubCancelBtnText}>{t('common', 'cancel')}</Text>
                 </Pressable>
                 <Pressable
                   style={[
@@ -1102,7 +1124,7 @@ export default function ProfileScreen() {
                   onPress={handleCreateClub}
                   disabled={!newClubName.trim() || !newClubCity.trim()}
                 >
-                  <Text style={styles.createClubConfirmBtnText}>Créer le club</Text>
+                  <Text style={styles.createClubConfirmBtnText}>{t('profile', 'createClub')}</Text>
                 </Pressable>
               </View>
             </View>
@@ -1846,5 +1868,16 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#FFF',
+  },
+  langBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: theme.borderRadius.sm,
+    backgroundColor: '#6366F1' + '15',
+  },
+  langBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#6366F1',
   },
 });

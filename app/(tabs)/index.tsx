@@ -17,11 +17,13 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/template';
+import { useLanguage } from '@/hooks/useLanguage';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { userStats, tournaments, matches, challenges, selfPlayer } = useApp();
   const { user } = useAuth();
+  const { t, language } = useLanguage();
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'À venir' | 'En cours' | 'Terminé'>('all');
 
@@ -43,7 +45,7 @@ export default function HomeScreen() {
   }), [tournaments]);
 
   // Get display name
-  const displayName = user?.username || selfPlayer?.name || user?.email?.split('@')[0] || 'Joueur';
+  const displayName = user?.username || selfPlayer?.name || user?.email?.split('@')[0] || (language === 'en' ? 'Player' : 'Joueur');
 
 
 
@@ -77,7 +79,7 @@ export default function HomeScreen() {
             </View>
             <View style={styles.profileInfoEnhanced}>
               <Text style={styles.profileNameEnhanced} numberOfLines={1}>{displayName}</Text>
-              <Text style={styles.profileRoleEnhanced}>{selfPlayer?.role || 'Milieu'} • {selfPlayer?.level || 'Intermédiaire'}</Text>
+              <Text style={styles.profileRoleEnhanced}>{selfPlayer?.role || t('roles', 'milieu')} • {selfPlayer?.level || t('levels', 'intermediaire')}</Text>
             </View>
             <View style={styles.profileArrowContainer}>
               <MaterialIcons name="person" size={18} color={theme.primary} />
@@ -88,7 +90,7 @@ export default function HomeScreen() {
 
         {/* Main Actions - Hero Section */}
         <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.heroSection}>
-          <Text style={styles.heroTitle}>Que voulez-vous faire ?</Text>
+          <Text style={styles.heroTitle}>{t('home', 'whatDoYouWant')}</Text>
           
           <View style={styles.mainActionsRow}>
             <Pressable 
@@ -98,8 +100,8 @@ export default function HomeScreen() {
               <View style={[styles.mainActionIcon, { backgroundColor: theme.primary }]}>
                 <MaterialIcons name="sports" size={36} color="#FFF" />
               </View>
-              <Text style={styles.mainActionTitle}>Match</Text>
-              <Text style={styles.mainActionSubtitle}>Entraînement</Text>
+              <Text style={styles.mainActionTitle}>{t('home', 'match')}</Text>
+              <Text style={styles.mainActionSubtitle}>{t('home', 'training')}</Text>
             </Pressable>
 
             <Pressable 
@@ -109,8 +111,8 @@ export default function HomeScreen() {
               <View style={[styles.mainActionIcon, { backgroundColor: theme.accent }]}>
                 <MaterialIcons name="track-changes" size={36} color="#FFF" />
               </View>
-              <Text style={styles.mainActionTitle}>Défi</Text>
-              <Text style={styles.mainActionSubtitle}>Tirs / Points</Text>
+              <Text style={styles.mainActionTitle}>{t('home', 'challenge')}</Text>
+              <Text style={styles.mainActionSubtitle}>{t('home', 'shotsPoints')}</Text>
             </Pressable>
 
             <Pressable 
@@ -120,15 +122,15 @@ export default function HomeScreen() {
               <View style={[styles.mainActionIcon, { backgroundColor: theme.carreauColor }]}>
                 <MaterialIcons name="emoji-events" size={36} color="#FFF" />
               </View>
-              <Text style={styles.mainActionTitle}>Tournoi</Text>
-              <Text style={styles.mainActionSubtitle}>Mon parcours</Text>
+              <Text style={styles.mainActionTitle}>{t('home', 'tournament')}</Text>
+              <Text style={styles.mainActionSubtitle}>{t('home', 'myJourney')}</Text>
             </Pressable>
           </View>
         </Animated.View>
 
         {/* Quick Access Grid */}
         <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.quickAccessSection}>
-          <Text style={styles.quickAccessTitle}>Accès rapide</Text>
+          <Text style={styles.quickAccessTitle}>{t('home', 'quickAccess')}</Text>
           <View style={styles.quickAccessGrid}>
             <Pressable 
               style={({ pressed }) => [styles.quickAccessItem, pressed && styles.quickAccessItemPressed]} 
@@ -137,7 +139,7 @@ export default function HomeScreen() {
               <View style={[styles.quickAccessIcon, { backgroundColor: theme.primary }]}>
                 <MaterialIcons name="person-add" size={24} color="#FFF" />
               </View>
-              <Text style={styles.quickAccessText}>Joueur</Text>
+              <Text style={styles.quickAccessText}>{t('home', 'player')}</Text>
             </Pressable>
 
             <Pressable 
@@ -147,7 +149,7 @@ export default function HomeScreen() {
               <View style={[styles.quickAccessIcon, { backgroundColor: theme.carreauColor }]}>
                 <MaterialIcons name="add-circle" size={24} color="#FFF" />
               </View>
-              <Text style={styles.quickAccessText}>Tournoi</Text>
+              <Text style={styles.quickAccessText}>{t('home', 'tournament')}</Text>
             </Pressable>
 
             <Pressable 
@@ -157,7 +159,7 @@ export default function HomeScreen() {
               <View style={[styles.quickAccessIcon, { backgroundColor: theme.accent }]}>
                 <MaterialIcons name="sports-soccer" size={24} color="#FFF" />
               </View>
-              <Text style={styles.quickAccessText}>Terrain</Text>
+              <Text style={styles.quickAccessText}>{t('home', 'terrain')}</Text>
             </Pressable>
 
             <Pressable 
@@ -167,7 +169,7 @@ export default function HomeScreen() {
               <View style={[styles.quickAccessIcon, { backgroundColor: theme.success }]}>
                 <MaterialIcons name="add-home" size={24} color="#FFF" />
               </View>
-              <Text style={styles.quickAccessText}>Club</Text>
+              <Text style={styles.quickAccessText}>{t('home', 'club')}</Text>
             </Pressable>
           </View>
         </Animated.View>
@@ -178,16 +180,16 @@ export default function HomeScreen() {
             <View style={styles.emptyStateIcon}>
               <MaterialIcons name="sports" size={48} color={theme.primary} />
             </View>
-            <Text style={styles.emptyStateTitle}>Bienvenue sur Ultimate Petanque !</Text>
+            <Text style={styles.emptyStateTitle}>{t('home', 'welcomeTitle')}</Text>
             <Text style={styles.emptyStateText}>
-              Commencez par créer un match d'entraînement ou lancez un défi pour suivre vos performances.
+              {t('home', 'welcomeText')}
             </Text>
             <Pressable 
               style={styles.emptyStateCta}
               onPress={() => router.push('/match/new')}
             >
               <MaterialIcons name="play-arrow" size={20} color="#FFF" />
-              <Text style={styles.emptyStateCtaText}>Premier match</Text>
+              <Text style={styles.emptyStateCtaText}>{t('home', 'firstMatch')}</Text>
             </Pressable>
           </Animated.View>
         )}
@@ -199,7 +201,7 @@ export default function HomeScreen() {
             onPress={() => router.push('/history')}
           >
             <MaterialIcons name="history" size={22} color={theme.primary} />
-            <Text style={styles.historyButtonText}>Voir mon historique</Text>
+            <Text style={styles.historyButtonText}>{t('home', 'viewHistory')}</Text>
             <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
           </Pressable>
         </Animated.View>
@@ -220,7 +222,7 @@ export default function HomeScreen() {
             >
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>
-            <Text style={styles.modalTitle}>Mes Tournois</Text>
+            <Text style={styles.modalTitle}>{t('home', 'myTournaments')}</Text>
             <Pressable
               style={styles.modalAddBtn}
               onPress={() => {
@@ -270,7 +272,7 @@ export default function HomeScreen() {
                           isActive && styles.statusFilterTextActive,
                           !isActive && { color: cfg.color },
                         ]}>
-                          {status === 'all' ? 'Tout' : status}
+                          {status === 'all' ? t('common', 'all') : status === 'À venir' ? t('tournamentStatus', 'upcoming') : status === 'En cours' ? t('tournamentStatus', 'inProgress') : t('tournamentStatus', 'completed')}
                         </Text>
                         <View style={[
                           styles.statusFilterCount,
@@ -319,7 +321,7 @@ export default function HomeScreen() {
                         <View style={styles.tournamentPickerMeta}>
                           <MaterialIcons name="event" size={12} color={theme.textMuted} />
                           <Text style={styles.tournamentPickerDate}>
-                            {new Date(tournament.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            {new Date(tournament.date).toLocaleDateString(language === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
                           </Text>
                           <View style={styles.tournamentPickerDot} />
                           <Text style={styles.tournamentPickerCity}>{tournament.location.city}</Text>
@@ -343,12 +345,12 @@ export default function HomeScreen() {
                 })) : ( // Added closing parenthesis for filteredTournaments.map
                   <View style={styles.emptyFilterState}>
                     <MaterialIcons name="filter-list-off" size={40} color={theme.textMuted} />
-                    <Text style={styles.emptyFilterText}>Aucun tournoi {statusFilter !== 'all' ? `"${statusFilter}"` : ''}</Text>
+                    <Text style={styles.emptyFilterText}>{t('home', 'noTournamentFilter')} {statusFilter !== 'all' ? `"${statusFilter}"` : ''}</Text>
                     <Pressable
                       style={styles.resetFilterBtn}
                       onPress={() => setStatusFilter('all')}
                     >
-                      <Text style={styles.resetFilterBtnText}>Voir tous</Text>
+                      <Text style={styles.resetFilterBtnText}>{t('common', 'seeAll')}</Text>
                     </Pressable>
                   </View>
                 )}
@@ -358,9 +360,9 @@ export default function HomeScreen() {
                 <View style={styles.emptyTournamentIcon}>
                   <MaterialIcons name="emoji-events" size={56} color={theme.carreauColor} />
                 </View>
-                <Text style={styles.emptyTournamentPickerTitle}>Aucun tournoi</Text>
+                <Text style={styles.emptyTournamentPickerTitle}>{t('home', 'noTournament')}</Text>
                 <Text style={styles.emptyTournamentPickerText}>
-                  Créez un tournoi pour commencer à suivre votre parcours en compétition
+                  {t('home', 'noTournamentText')}
                 </Text>
                 <Pressable
                   style={styles.createTournamentBtn}
@@ -370,7 +372,7 @@ export default function HomeScreen() {
                   }}
                 >
                   <MaterialIcons name="add" size={20} color="#FFF" />
-                  <Text style={styles.createTournamentBtnText}>Créer un tournoi</Text>
+                  <Text style={styles.createTournamentBtnText}>{t('home', 'createTournament')}</Text>
                 </Pressable>
               </View>
             )}
