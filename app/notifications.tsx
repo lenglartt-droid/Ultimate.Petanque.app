@@ -18,6 +18,7 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
+import { useLanguage } from '@/hooks/useLanguage';
 import {
   requestNotificationPermissions,
   areNotificationsEnabled,
@@ -30,6 +31,7 @@ import {
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const { tournaments, tournamentNotifications, toggleTournamentNotification, isTournamentNotificationEnabled } = useApp();
+  const { t, language } = useLanguage();
   
   const [permissionStatus, setPermissionStatus] = useState<'unknown' | 'granted' | 'denied'>('unknown');
   const [loading, setLoading] = useState(true);
@@ -76,12 +78,12 @@ export default function NotificationsScreen() {
     
     if (!granted) {
       Alert.alert(
-        'Autorisation requise',
-        'Pour recevoir des rappels, activez les notifications dans les paramètres de votre téléphone.',
+        t('notifications', 'authRequired'),
+        t('notifications', 'authRequiredMsg'),
         [
-          { text: 'Annuler', style: 'cancel' },
+          { text: t('common', 'cancel'), style: 'cancel' },
           { 
-            text: 'Ouvrir Paramètres', 
+            text: t('notifications', 'openSettings'), 
             onPress: () => {
               if (Platform.OS === 'ios') {
                 Linking.openURL('app-settings:');
@@ -98,12 +100,12 @@ export default function NotificationsScreen() {
   // Disable notification for a tournament
   const handleDisableNotification = useCallback(async (tournamentId: string, tournamentName: string) => {
     Alert.alert(
-      'Désactiver les rappels',
-      `Voulez-vous désactiver les rappels pour "${tournamentName}" ?`,
+      t('notifications', 'disableReminders'),
+      `${t('notifications', 'disableConfirm')} "${tournamentName}" ?`,
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common', 'cancel'), style: 'cancel' },
         {
-          text: 'Désactiver',
+          text: t('notifications', 'disableReminders'),
           style: 'destructive',
           onPress: async () => {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -129,7 +131,7 @@ export default function NotificationsScreen() {
   const handleTestNotification = useCallback(async () => {
     Haptics.selectionAsync();
     await sendTestNotification();
-    Alert.alert('Test envoyé', 'Vous devriez recevoir une notification de test.');
+    Alert.alert(t('notifications', 'testSent'), t('notifications', 'testSentMsg'));
   }, []);
 
   // Disable all notifications
@@ -137,12 +139,12 @@ export default function NotificationsScreen() {
     if (tournamentsWithNotifications.length === 0) return;
     
     Alert.alert(
-      'Tout désactiver',
-      `Voulez-vous désactiver les rappels pour ${tournamentsWithNotifications.length} tournoi(s) ?`,
+      t('notifications', 'disableAll'),
+      `${t('notifications', 'disableAllConfirm')} ${tournamentsWithNotifications.length} ${t('notifications', 'tournamentCount')} ?`,
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common', 'cancel'), style: 'cancel' },
         {
-          text: 'Tout désactiver',
+          text: t('notifications', 'disableAll'),
           style: 'destructive',
           onPress: async () => {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -174,7 +176,7 @@ export default function NotificationsScreen() {
           <Pressable style={styles.backButton} onPress={() => router.back()}>
             <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Notifications</Text>
+          <Text style={styles.headerTitle}>{t('notifications', 'title')}</Text>
           <View style={{ width: 40 }} />
         </View>
         <View style={styles.loadingContainer}>
@@ -191,7 +193,7 @@ export default function NotificationsScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Notifications</Text>
+        <Text style={styles.headerTitle}>{t('notifications', 'title')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -217,18 +219,18 @@ export default function NotificationsScreen() {
               styles.statusTitle,
               { color: permissionStatus === 'granted' ? theme.success : theme.warning }
             ]}>
-              {permissionStatus === 'granted' ? 'Notifications activées' : 'Notifications désactivées'}
+              {permissionStatus === 'granted' ? t('notifications', 'enabled') : t('notifications', 'disabled')}
             </Text>
             <Text style={styles.statusSubtitle}>
               {permissionStatus === 'granted' 
-                ? `${scheduledCount} rappel(s) programmé(s)`
-                : 'Activez pour recevoir des rappels'
+                ? `${scheduledCount} ${t('notifications', 'scheduledReminders')}`
+                : t('notifications', 'enableToReceive')
               }
             </Text>
           </View>
           {permissionStatus !== 'granted' && (
             <Pressable style={styles.enableButton} onPress={handleRequestPermission}>
-              <Text style={styles.enableButtonText}>Activer</Text>
+              <Text style={styles.enableButtonText}>{t('notifications', 'enable')}</Text>
             </Pressable>
           )}
         </Animated.View>
@@ -238,7 +240,7 @@ export default function NotificationsScreen() {
           <Animated.View entering={FadeInDown.duration(300).delay(50)}>
             <Pressable style={styles.testButton} onPress={handleTestNotification}>
               <MaterialIcons name="send" size={20} color={theme.primary} />
-              <Text style={styles.testButtonText}>Envoyer une notification test</Text>
+              <Text style={styles.testButtonText}>{t('notifications', 'sendTest')}</Text>
             </Pressable>
           </Animated.View>
         )}
@@ -246,10 +248,10 @@ export default function NotificationsScreen() {
         {/* Active Notifications Section */}
         <Animated.View entering={FadeInDown.duration(300).delay(100)} style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>RAPPELS ACTIFS</Text>
+            <Text style={styles.sectionTitle}>{t('notifications', 'activeReminders')}</Text>
             {tournamentsWithNotifications.length > 0 && (
               <Pressable onPress={handleDisableAll}>
-                <Text style={styles.disableAllText}>Tout désactiver</Text>
+                <Text style={styles.disableAllText}>{t('notifications', 'disableAll')}</Text>
               </Pressable>
             )}
           </View>
@@ -296,7 +298,7 @@ export default function NotificationsScreen() {
                                 styles.tournamentMetaText,
                                 daysUntil <= 3 && { color: theme.warning, fontWeight: '600' }
                               ]}>
-                                {daysUntil === 0 ? "Aujourd'hui" : daysUntil === 1 ? 'Demain' : `Dans ${daysUntil}j`}
+                                {daysUntil === 0 ? t('notifications', 'todayLabel') : daysUntil === 1 ? t('notifications', 'tomorrowLabel') : `${t('notifications', 'inDays')} ${daysUntil}${t('notifications', 'daysUnit')}`}
                               </Text>
                             </>
                           )}
@@ -317,9 +319,9 @@ export default function NotificationsScreen() {
           ) : (
             <View style={styles.emptyState}>
               <MaterialIcons name="notifications-none" size={48} color={theme.textMuted} />
-              <Text style={styles.emptyStateText}>Aucun rappel actif</Text>
+              <Text style={styles.emptyStateText}>{t('notifications', 'noActiveReminders')}</Text>
               <Text style={styles.emptyStateHint}>
-                Activez les rappels depuis la page d'un tournoi
+                {t('notifications', 'enableFromTournament')}
               </Text>
             </View>
           )}
@@ -329,7 +331,7 @@ export default function NotificationsScreen() {
         {upcomingTournaments.length > 0 && (
           <Animated.View entering={FadeInDown.duration(300).delay(150)} style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>TOURNOIS À VENIR</Text>
+              <Text style={styles.sectionTitle}>{t('notifications', 'upcomingTournaments')}</Text>
               <Text style={styles.sectionCount}>{upcomingTournaments.length}</Text>
             </View>
 
@@ -363,7 +365,7 @@ export default function NotificationsScreen() {
                           </Text>
                           <View style={styles.dot} />
                           <Text style={styles.tournamentMetaText}>
-                            Dans {daysUntil}j
+                            {t('notifications', 'inDays')} {daysUntil}{t('notifications', 'daysUnit')}
                           </Text>
                         </View>
                       </View>
@@ -382,7 +384,7 @@ export default function NotificationsScreen() {
                 onPress={() => router.push('/(tabs)/directory')}
               >
                 <Text style={styles.viewAllButtonText}>
-                  Voir tous les tournois ({upcomingTournaments.length})
+                  {t('notifications', 'viewAll')} ({upcomingTournaments.length})
                 </Text>
                 <MaterialIcons name="chevron-right" size={18} color={theme.primary} />
               </Pressable>
@@ -394,7 +396,7 @@ export default function NotificationsScreen() {
         <Animated.View entering={FadeInDown.duration(300).delay(200)} style={styles.infoCard}>
           <MaterialIcons name="info-outline" size={20} color={theme.textMuted} />
           <Text style={styles.infoText}>
-            Les rappels sont envoyés sous forme de notifications push locales. Ils fonctionnent même sans connexion internet. Vous pouvez configurer les horaires (1 semaine, 3 jours, veille) depuis la page de chaque tournoi.
+            {t('notifications', 'infoText')}
           </Text>
         </Animated.View>
       </ScrollView>

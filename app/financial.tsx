@@ -15,10 +15,12 @@ import Svg, { Rect, G, Text as SvgText, Line } from 'react-native-svg';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { Club } from '@/services/mockData';
+import { useLanguage } from '@/hooks/useLanguage';
 
 export default function FinancialScreen() {
   const insets = useSafeAreaInsets();
   const { tournaments, clubs, selfPlayer } = useApp();
+  const { t, language } = useLanguage();
 
   const financialData = useMemo(() => {
     const myClub = selfPlayer?.clubId ? clubs.find((c: Club) => c.id === selfPlayer.clubId) : null;
@@ -61,7 +63,7 @@ export default function FinancialScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Bilan financier</Text>
+        <Text style={styles.headerTitle}>{t('financial', 'title')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -75,7 +77,7 @@ export default function FinancialScreen() {
           <View style={[styles.heroIconContainer, { backgroundColor: balanceColor + '15' }]}>
             <MaterialIcons name="account-balance-wallet" size={32} color={balanceColor} />
           </View>
-          <Text style={styles.heroLabel}>Bilan net</Text>
+          <Text style={styles.heroLabel}>{t('financial', 'netBalance')}</Text>
           <Text style={[styles.heroValue, { color: balanceColor }]}>
             {balanceIsPositive ? '+' : ''}{financialData.balance.toFixed(0)} €
           </Text>
@@ -84,13 +86,13 @@ export default function FinancialScreen() {
           <View style={styles.heroSummaryRow}>
             <View style={styles.heroSummaryItem}>
               <MaterialIcons name="arrow-upward" size={16} color={theme.success} />
-              <Text style={styles.heroSummaryLabel}>Gains</Text>
+              <Text style={styles.heroSummaryLabel}>{t('financial', 'gains')}</Text>
               <Text style={[styles.heroSummaryValue, { color: theme.success }]}>+{financialData.totalPrizesWon.toFixed(0)} €</Text>
             </View>
             <View style={styles.heroSummaryDivider} />
             <View style={styles.heroSummaryItem}>
               <MaterialIcons name="arrow-downward" size={16} color={theme.error} />
-              <Text style={styles.heroSummaryLabel}>Dépenses</Text>
+              <Text style={styles.heroSummaryLabel}>{t('financial', 'expenses')}</Text>
               <Text style={[styles.heroSummaryValue, { color: theme.error }]}>-{financialData.totalCosts.toFixed(0)} €</Text>
             </View>
           </View>
@@ -112,10 +114,10 @@ export default function FinancialScreen() {
               </View>
               <View style={styles.balanceBarLabels}>
                 <Text style={[styles.balanceBarLabelText, { color: theme.success }]}>
-                  {Math.round((financialData.totalPrizesWon / Math.max(financialData.totalPrizesWon + financialData.totalCosts, 1)) * 100)}% gains
+                  {Math.round((financialData.totalPrizesWon / Math.max(financialData.totalPrizesWon + financialData.totalCosts, 1)) * 100)}% {t('financial', 'gainsPercent')}
                 </Text>
                 <Text style={[styles.balanceBarLabelText, { color: theme.error }]}>
-                  {Math.round((financialData.totalCosts / Math.max(financialData.totalPrizesWon + financialData.totalCosts, 1)) * 100)}% dépenses
+                  {Math.round((financialData.totalCosts / Math.max(financialData.totalPrizesWon + financialData.totalCosts, 1)) * 100)}% {t('financial', 'expensesPercent')}
                 </Text>
               </View>
             </View>
@@ -127,7 +129,7 @@ export default function FinancialScreen() {
           <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.chartCard}>
             <View style={styles.chartHeader}>
               <MaterialIcons name="bar-chart" size={18} color={theme.primary} />
-              <Text style={styles.chartTitle}>Évolution mensuelle</Text>
+              <Text style={styles.chartTitle}>{t('financial', 'monthlyEvolution')}</Text>
             </View>
             <View style={styles.chartContainer}>
               <Svg width={Math.max(monthlyData.length * 60, 280)} height={160}>
@@ -160,11 +162,11 @@ export default function FinancialScreen() {
             <View style={styles.chartLegend}>
               <View style={styles.legendItem}>
                 <View style={[styles.legendDot, { backgroundColor: theme.success }]} />
-                <Text style={styles.legendText}>Gains</Text>
+                <Text style={styles.legendText}>{t('financial', 'gains')}</Text>
               </View>
               <View style={styles.legendItem}>
                 <View style={[styles.legendDot, { backgroundColor: theme.error }]} />
-                <Text style={styles.legendText}>Dépenses</Text>
+                <Text style={styles.legendText}>{t('financial', 'expenses')}</Text>
               </View>
             </View>
           </Animated.View>
@@ -177,8 +179,8 @@ export default function FinancialScreen() {
               <MaterialIcons name="emoji-events" size={20} color={theme.success} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.sectionTitle}>Gains en tournois</Text>
-              <Text style={styles.sectionSubtitle}>{financialData.tournamentsWithPrize.length} tournoi{financialData.tournamentsWithPrize.length > 1 ? 's' : ''} avec gains</Text>
+              <Text style={styles.sectionTitle}>{t('financial', 'tournamentWinnings')}</Text>
+              <Text style={styles.sectionSubtitle}>{financialData.tournamentsWithPrize.length} {t('financial', 'tournamentWithWinnings')}</Text>
             </View>
             <Text style={[styles.sectionTotal, { color: theme.success }]}>+{financialData.totalPrizesWon.toFixed(0)} €</Text>
           </View>
@@ -211,7 +213,7 @@ export default function FinancialScreen() {
           ) : (
             <View style={styles.emptySection}>
               <MaterialIcons name="info-outline" size={20} color={theme.textMuted} />
-              <Text style={styles.emptySectionText}>Aucun gain enregistré</Text>
+              <Text style={styles.emptySectionText}>{t('financial', 'noWinnings')}</Text>
             </View>
           )}
         </Animated.View>
@@ -223,8 +225,8 @@ export default function FinancialScreen() {
               <MaterialIcons name="payments" size={20} color={theme.error} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.sectionTitle}>Inscriptions tournois</Text>
-              <Text style={styles.sectionSubtitle}>{financialData.tournamentsWithCost.length} inscription{financialData.tournamentsWithCost.length > 1 ? 's' : ''}</Text>
+              <Text style={styles.sectionTitle}>{t('financial', 'tournamentRegistrations')}</Text>
+              <Text style={styles.sectionSubtitle}>{financialData.tournamentsWithCost.length} {t('financial', 'registrations')}</Text>
             </View>
             <Text style={[styles.sectionTotal, { color: theme.error }]}>-{financialData.totalRegistrationCosts.toFixed(0)} €</Text>
           </View>
@@ -249,7 +251,7 @@ export default function FinancialScreen() {
           ) : (
             <View style={styles.emptySection}>
               <MaterialIcons name="info-outline" size={20} color={theme.textMuted} />
-              <Text style={styles.emptySectionText}>Aucune inscription enregistrée</Text>
+              <Text style={styles.emptySectionText}>{t('financial', 'noRegistrations')}</Text>
             </View>
           )}
         </Animated.View>
@@ -262,7 +264,7 @@ export default function FinancialScreen() {
                 <MaterialIcons name="card-membership" size={20} color={theme.accent} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.sectionTitle}>Cotisation club</Text>
+                <Text style={styles.sectionTitle}>{t('financial', 'clubMembership')}</Text>
                 <Text style={styles.sectionSubtitle}>{financialData.clubName}</Text>
               </View>
               <Text style={[styles.sectionTotal, { color: theme.error }]}>-{financialData.membershipCost.toFixed(0)} €</Text>
@@ -272,12 +274,12 @@ export default function FinancialScreen() {
 
         {/* Total Summary */}
         <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>RÉCAPITULATIF</Text>
+          <Text style={styles.summaryTitle}>{t('financial', 'summary')}</Text>
 
           <View style={styles.summaryRow}>
             <View style={styles.summaryRowLeft}>
               <MaterialIcons name="arrow-upward" size={16} color={theme.success} />
-              <Text style={styles.summaryRowLabel}>Total des gains</Text>
+              <Text style={styles.summaryRowLabel}>{t('financial', 'totalWinnings')}</Text>
             </View>
             <Text style={[styles.summaryRowValue, { color: theme.success }]}>+{financialData.totalPrizesWon.toFixed(0)} €</Text>
           </View>
@@ -285,7 +287,7 @@ export default function FinancialScreen() {
           <View style={styles.summaryRow}>
             <View style={styles.summaryRowLeft}>
               <MaterialIcons name="arrow-downward" size={16} color={theme.error} />
-              <Text style={styles.summaryRowLabel}>Total des dépenses</Text>
+              <Text style={styles.summaryRowLabel}>{t('financial', 'totalExpenses')}</Text>
             </View>
             <Text style={[styles.summaryRowValue, { color: theme.error }]}>-{financialData.totalCosts.toFixed(0)} €</Text>
           </View>
@@ -295,7 +297,7 @@ export default function FinancialScreen() {
           <View style={styles.summaryRow}>
             <View style={styles.summaryRowLeft}>
               <MaterialIcons name="account-balance-wallet" size={18} color={balanceColor} />
-              <Text style={[styles.summaryRowLabel, { fontWeight: '700', color: theme.textPrimary, fontSize: 16 }]}>Bilan net</Text>
+              <Text style={[styles.summaryRowLabel, { fontWeight: '700', color: theme.textPrimary, fontSize: 16 }]}>{t('financial', 'netBalance')}</Text>
             </View>
             <Text style={[styles.summaryRowValue, { color: balanceColor, fontSize: 22, fontWeight: '800' }]}>
               {balanceIsPositive ? '+' : ''}{financialData.balance.toFixed(0)} €

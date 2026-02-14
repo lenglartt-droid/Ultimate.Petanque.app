@@ -18,12 +18,14 @@ import * as Haptics from 'expo-haptics';
 import { useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import theme from '@/constants/theme';
+import { useLanguage } from '@/hooks/useLanguage';
 
 export default function PasswordScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { showAlert } = useAlert();
   const supabase = getSupabaseClient();
+  const { t } = useLanguage();
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -42,25 +44,25 @@ export default function PasswordScreen() {
     if (/[0-9]/.test(pwd)) score++;
     if (/[^A-Za-z0-9]/.test(pwd)) score++;
 
-    if (score <= 1) return { level: 1, label: 'Faible', color: theme.error };
-    if (score <= 2) return { level: 2, label: 'Moyen', color: theme.warning };
-    if (score <= 3) return { level: 3, label: 'Bon', color: theme.accent };
-    return { level: 4, label: 'Fort', color: theme.success };
+    if (score <= 1) return { level: 1, label: t('password', 'weak'), color: theme.error };
+    if (score <= 2) return { level: 2, label: t('password', 'medium'), color: theme.warning };
+    if (score <= 3) return { level: 3, label: t('password', 'good'), color: theme.accent };
+    return { level: 4, label: t('password', 'strong'), color: theme.success };
   };
 
   const strength = getPasswordStrength(newPassword);
 
   const handleChangePassword = async () => {
     if (!newPassword.trim()) {
-      showAlert('Erreur', 'Veuillez entrer un nouveau mot de passe');
+      showAlert(t('common', 'error'), t('password', 'enterNew'));
       return;
     }
     if (newPassword.length < 6) {
-      showAlert('Erreur', 'Le mot de passe doit contenir au moins 6 caractères');
+      showAlert(t('common', 'error'), t('password', 'tooShort'));
       return;
     }
     if (newPassword !== confirmPassword) {
-      showAlert('Erreur', 'Les mots de passe ne correspondent pas');
+      showAlert(t('common', 'error'), t('password', 'mismatch'));
       return;
     }
 
@@ -75,7 +77,7 @@ export default function PasswordScreen() {
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showAlert('Mot de passe modifié', 'Votre mot de passe a été mis à jour avec succès');
+      showAlert(t('password', 'changed'), t('password', 'changedSuccess'));
       
       // Reset fields
       setCurrentPassword('');
@@ -87,16 +89,16 @@ export default function PasswordScreen() {
     } catch (error: any) {
       console.log('Password change error:', error);
       
-      let errorMsg = 'Impossible de modifier le mot de passe';
+      let errorMsg = t('password', 'cantChange');
       if (error.message?.includes('same_password')) {
-        errorMsg = 'Le nouveau mot de passe doit être différent de l\'ancien';
+        errorMsg = t('password', 'samePassword');
       } else if (error.message?.includes('weak_password')) {
-        errorMsg = 'Le mot de passe est trop faible, essayez un mot de passe plus complexe';
+        errorMsg = t('password', 'weakPassword');
       } else if (error.message) {
         errorMsg = error.message;
       }
       
-      showAlert('Erreur', errorMsg);
+      showAlert(t('common', 'error'), errorMsg);
     } finally {
       setSaving(false);
     }
@@ -113,7 +115,7 @@ export default function PasswordScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Mot de passe</Text>
+        <Text style={styles.headerTitle}>{t('password', 'title')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -132,9 +134,9 @@ export default function PasswordScreen() {
             <View style={styles.infoIconContainer}>
               <MaterialIcons name="shield" size={32} color={theme.primary} />
             </View>
-            <Text style={styles.infoTitle}>Modifier votre mot de passe</Text>
+            <Text style={styles.infoTitle}>{t('password', 'changePassword')}</Text>
             <Text style={styles.infoText}>
-              Choisissez un mot de passe fort avec au moins 6 caractères, incluant des chiffres et des lettres.
+              {t('password', 'chooseStrong')}
             </Text>
           </Animated.View>
 
@@ -146,12 +148,12 @@ export default function PasswordScreen() {
 
           {/* New Password */}
           <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Nouveau mot de passe</Text>
+            <Text style={styles.fieldLabel}>{t('password', 'newPassword')}</Text>
             <View style={[styles.inputContainer, newPassword.length > 0 && newPassword.length < 6 && styles.inputContainerError]}>
               <MaterialIcons name="lock" size={20} color={theme.textSecondary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Min. 6 caractères"
+                placeholder={t('password', 'minChars')}
                 placeholderTextColor={theme.textMuted}
                 value={newPassword}
                 onChangeText={setNewPassword}
@@ -187,16 +189,16 @@ export default function PasswordScreen() {
 
             {/* Requirements */}
             <View style={styles.requirementsList}>
-              <RequirementItem met={newPassword.length >= 6} text="Au moins 6 caractères" />
-              <RequirementItem met={/[A-Z]/.test(newPassword)} text="Une majuscule" />
-              <RequirementItem met={/[0-9]/.test(newPassword)} text="Un chiffre" />
-              <RequirementItem met={/[^A-Za-z0-9]/.test(newPassword)} text="Un caractère spécial" />
+              <RequirementItem met={newPassword.length >= 6} text={t('password', 'atLeast6')} />
+              <RequirementItem met={/[A-Z]/.test(newPassword)} text={t('password', 'uppercase')} />
+              <RequirementItem met={/[0-9]/.test(newPassword)} text={t('password', 'digit')} />
+              <RequirementItem met={/[^A-Za-z0-9]/.test(newPassword)} text={t('password', 'specialChar')} />
             </View>
           </Animated.View>
 
           {/* Confirm Password */}
           <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Confirmer le mot de passe</Text>
+            <Text style={styles.fieldLabel}>{t('password', 'confirmPassword')}</Text>
             <View style={[
               styles.inputContainer,
               passwordsMatch && styles.inputContainerSuccess,
@@ -205,7 +207,7 @@ export default function PasswordScreen() {
               <MaterialIcons name="lock-outline" size={20} color={theme.textSecondary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Retapez le mot de passe"
+                placeholder={t('password', 'retypePassword')}
                 placeholderTextColor={theme.textMuted}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
@@ -220,7 +222,7 @@ export default function PasswordScreen() {
               )}
             </View>
             {passwordsMismatch && (
-              <Text style={styles.errorText}>Les mots de passe ne correspondent pas</Text>
+              <Text style={styles.errorText}>{t('password', 'mismatch')}</Text>
             )}
           </Animated.View>
 
@@ -236,7 +238,7 @@ export default function PasswordScreen() {
               ) : (
                 <>
                   <MaterialIcons name="check" size={20} color="#FFF" />
-                  <Text style={styles.submitButtonText}>Modifier le mot de passe</Text>
+                  <Text style={styles.submitButtonText}>{t('password', 'changeBtn')}</Text>
                 </>
               )}
             </Pressable>
