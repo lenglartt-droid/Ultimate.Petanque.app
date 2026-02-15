@@ -24,6 +24,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
+import { useLanguage } from '@/hooks/useLanguage';
 import { SimplifiedShotNotation, SimpleShotRecord } from '@/components';
 import { 
   ChallengeType, 
@@ -39,34 +40,6 @@ import {
 } from '@/services/mockData';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// ============================================
-// CONFIGURATION
-// ============================================
-
-const CHALLENGE_CONFIG = {
-  '10_tirs': {
-    name: '10 Tirs',
-    description: 'Réalisez 10 tirs sur cible',
-    icon: 'gps-fixed' as const,
-    totalShots: 10,
-    color: theme.tirColor,
-  },
-  '10_tirs_sautee': {
-    name: '10 Tirs Sautée',
-    description: 'Réalisez 10 tirs à la sautée',
-    icon: 'sports' as const,
-    totalShots: 10,
-    color: theme.primary,
-  },
-  'precision': {
-    name: 'Tir de Précision',
-    description: '20 tirs sur 5 ateliers',
-    icon: 'stars' as const,
-    totalShots: 20,
-    color: theme.carreauColor,
-  },
-} as const;
 
 // ============================================
 // UTILITY FUNCTIONS
@@ -87,9 +60,10 @@ interface CountdownTimerProps {
   isRunning: boolean;
   onStart: () => void;
   onTimeUp: () => void;
+  startLabel: string;
 }
 
-function CountdownTimer({ seconds, isRunning, onStart, onTimeUp }: CountdownTimerProps) {
+function CountdownTimer({ seconds, isRunning, onStart, onTimeUp, startLabel }: CountdownTimerProps) {
   const [timeLeft, setTimeLeft] = useState(seconds);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onTimeUpRef = useRef(onTimeUp);
@@ -163,7 +137,7 @@ function CountdownTimer({ seconds, isRunning, onStart, onTimeUp }: CountdownTime
       {!isRunning && (
         <Pressable style={styles.startTimerButton} onPress={onStart}>
           <MaterialIcons name="play-arrow" size={24} color="#FFF" />
-          <Text style={styles.startTimerButtonText}>Démarrer</Text>
+          <Text style={styles.startTimerButtonText}>{startLabel}</Text>
         </Pressable>
       )}
     </View>
@@ -177,6 +151,34 @@ function CountdownTimer({ seconds, isRunning, onStart, onTimeUp }: CountdownTime
 export default function NewChallengeScreen() {
   const insets = useSafeAreaInsets();
   const { addChallenge, userStats, selfPlayer, players } = useApp();
+  const { t } = useLanguage();
+
+  // ============================================
+  // CONFIGURATION (translated)
+  // ============================================
+  const CHALLENGE_CONFIG = useMemo(() => ({
+    '10_tirs': {
+      name: t('challenge', 'tenShots'),
+      description: t('challenge', 'tenShotsDesc'),
+      icon: 'gps-fixed' as const,
+      totalShots: 10,
+      color: theme.tirColor,
+    },
+    '10_tirs_sautee': {
+      name: t('challenge', 'tenShotsLob'),
+      description: t('challenge', 'tenShotsLobDesc'),
+      icon: 'sports' as const,
+      totalShots: 10,
+      color: theme.primary,
+    },
+    'precision': {
+      name: t('challenge', 'precision'),
+      description: t('challenge', 'precisionDesc'),
+      icon: 'stars' as const,
+      totalShots: 20,
+      color: theme.carreauColor,
+    },
+  } as const), [t]);
 
   // Navigation state
   const [selectedType, setSelectedType] = useState<ChallengeType | null>(null);
@@ -277,7 +279,7 @@ export default function NewChallengeScreen() {
   const startChallenge = useCallback(() => {
     if (!selectedType || !challengeMode) return;
     if (challengeMode === '1v1' && !selectedOpponent) {
-      Alert.alert('Erreur', 'Sélectionnez un adversaire');
+      Alert.alert(t('common', 'error'), t('challenge', 'selectOpponent'));
       return;
     }
     
@@ -298,7 +300,7 @@ export default function NewChallengeScreen() {
     setCurrentTurn('player');
     setShotTimerRunning(false);
     setShotStartTime(0);
-  }, [selectedType, challengeMode, selectedOpponent]);
+  }, [selectedType, challengeMode, selectedOpponent, t]);
 
   const recordShot = useCallback((success: boolean, carreau: boolean = false, isOpponent: boolean = false) => {
     if (!config || selectedType === 'precision') return;
@@ -537,19 +539,19 @@ export default function NewChallengeScreen() {
       playerStats, atelierScores, elapsedTime, shots, addChallenge, selfPlayer, userStats]);
 
   const cancelChallenge = useCallback(() => {
-    Alert.alert('Quitter le défi ?', 'Le défi en cours sera perdu.', [
-      { text: 'Continuer', style: 'cancel' },
-      { text: 'Quitter', style: 'destructive', onPress: () => {
+    Alert.alert(t('challenge', 'quitChallenge'), t('challenge', 'challengeWillBeLost'), [
+      { text: t('challenge', 'continueLabel'), style: 'cancel' },
+      { text: t('challenge', 'quitLabel'), style: 'destructive', onPress: () => {
         if (timerRef.current) clearInterval(timerRef.current);
         router.back();
       }},
     ]);
-  }, []);
+  }, [t]);
 
   const resetChallenge = useCallback(() => {
-    Alert.alert('Défi terminé', 'Que souhaitez-vous faire ?', [
+    Alert.alert(t('challenge', 'challengeFinished'), t('challenge', 'whatToDo'), [
       {
-        text: 'Recommencer',
+        text: t('challenge', 'restartLabel'),
         onPress: () => {
           setIsStarted(false);
           setShots([]);
@@ -569,7 +571,7 @@ export default function NewChallengeScreen() {
         },
       },
       {
-        text: 'Sortir des défis',
+        text: t('challenge', 'exitChallenges'),
         style: 'destructive',
         onPress: () => {
           if (timerRef.current) clearInterval(timerRef.current);
@@ -577,7 +579,7 @@ export default function NewChallengeScreen() {
         },
       },
     ]);
-  }, []);
+  }, [t]);
 
   // ============================================
   // RENDER: Challenge Type Selection
@@ -590,7 +592,7 @@ export default function NewChallengeScreen() {
           <Pressable style={styles.headerBtn} onPress={() => router.back()}>
             <MaterialIcons name="close" size={24} color={theme.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Nouveau Défi</Text>
+          <Text style={styles.headerTitle}>{t('challenge', 'newChallenge')}</Text>
           <View style={styles.headerBtn} />
         </View>
 
@@ -603,8 +605,8 @@ export default function NewChallengeScreen() {
             <View style={styles.heroIcon}>
               <MaterialIcons name="emoji-events" size={40} color={theme.carreauColor} />
             </View>
-            <Text style={styles.heroTitle}>Choisissez votre défi</Text>
-            <Text style={styles.heroSubtitle}>Entraînez-vous et progressez</Text>
+            <Text style={styles.heroTitle}>{t('challenge', 'chooseChallenge')}</Text>
+            <Text style={styles.heroSubtitle}>{t('challenge', 'trainAndProgress')}</Text>
           </Animated.View>
 
           {(Object.entries(CHALLENGE_CONFIG) as [ChallengeType, typeof CHALLENGE_CONFIG[ChallengeType]][]).map(([type, cfg], index) => (
@@ -625,7 +627,7 @@ export default function NewChallengeScreen() {
                   <View style={styles.challengeCardMeta}>
                     <View style={[styles.metaBadge, { backgroundColor: cfg.color + '10' }]}>
                       <Text style={[styles.metaBadgeText, { color: cfg.color }]}>
-                        {type === 'precision' ? '5 ateliers' : `${cfg.totalShots} tirs`}
+                        {type === 'precision' ? `5 ${t('challenge', 'workshops')}` : `${cfg.totalShots} ${t('challenge', 'shots')}`}
                       </Text>
                     </View>
                   </View>
@@ -659,7 +661,7 @@ export default function NewChallengeScreen() {
             <View style={[styles.modeHeaderIcon, { backgroundColor: config?.color + '15' }]}>
               <MaterialIcons name={config?.icon || 'sports'} size={28} color={config?.color} />
             </View>
-            <Text style={styles.modeHeaderTitle}>Comment jouer ?</Text>
+            <Text style={styles.modeHeaderTitle}>{t('challenge', 'howToPlay')}</Text>
           </Animated.View>
 
           <View style={styles.modeGrid}>
@@ -674,10 +676,10 @@ export default function NewChallengeScreen() {
                 <View style={[styles.modeCardIconBg, { backgroundColor: theme.primary }]}>
                   <MaterialIcons name="person" size={36} color="#FFF" />
                 </View>
-                <Text style={styles.modeCardTitle}>Solo</Text>
-                <Text style={styles.modeCardDesc}>Entraînement personnel</Text>
+                <Text style={styles.modeCardTitle}>{t('challenge', 'solo')}</Text>
+                <Text style={styles.modeCardDesc}>{t('challenge', 'personalTraining')}</Text>
                 <View style={[styles.modeCardBtn, { backgroundColor: theme.primary }]}>
-                  <Text style={styles.modeCardBtnText}>Commencer</Text>
+                  <Text style={styles.modeCardBtnText}>{t('challenge', 'start')}</Text>
                 </View>
               </Pressable>
             </Animated.View>
@@ -693,10 +695,10 @@ export default function NewChallengeScreen() {
                 <View style={[styles.modeCardIconBg, { backgroundColor: theme.accent }]}>
                   <MaterialIcons name="people" size={36} color="#FFF" />
                 </View>
-                <Text style={styles.modeCardTitle}>1 contre 1</Text>
-                <Text style={styles.modeCardDesc}>Défiez un adversaire</Text>
+                <Text style={styles.modeCardTitle}>{t('challenge', 'oneVsOne')}</Text>
+                <Text style={styles.modeCardDesc}>{t('challenge', 'challengeOpponent')}</Text>
                 <View style={[styles.modeCardBtn, { backgroundColor: theme.accent }]}>
-                  <Text style={styles.modeCardBtnText}>Choisir</Text>
+                  <Text style={styles.modeCardBtnText}>{t('challenge', 'choose')}</Text>
                 </View>
               </Pressable>
             </Animated.View>
@@ -717,7 +719,7 @@ export default function NewChallengeScreen() {
           <Pressable style={styles.headerBtn} onPress={() => setChallengeMode(null)}>
             <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Adversaire</Text>
+          <Text style={styles.headerTitle}>{t('challenge', 'opponentLabel')}</Text>
           <View style={styles.headerBtn} />
         </View>
 
@@ -733,7 +735,7 @@ export default function NewChallengeScreen() {
               <MaterialIcons name="help-outline" size={20} color={theme.accent} />
             </View>
           </View>
-          <Text style={styles.opponentBannerTitle}>Qui défier ?</Text>
+          <Text style={styles.opponentBannerTitle}>{t('challenge', 'whoToChallenge')}</Text>
         </View>
 
         <ScrollView
@@ -758,10 +760,10 @@ export default function NewChallengeScreen() {
                   </View>
                   <View style={styles.opponentInfo}>
                     <Text style={styles.opponentName}>{player.name}</Text>
-                    <Text style={styles.opponentMeta}>{player.club || 'Sans club'} • {player.role}</Text>
+                    <Text style={styles.opponentMeta}>{player.club || '-'} • {player.role}</Text>
                   </View>
                   <View style={styles.opponentBtn}>
-                    <Text style={styles.opponentBtnText}>Défier</Text>
+                    <Text style={styles.opponentBtnText}>{t('challenge', 'challengeBtn')}</Text>
                   </View>
                 </Pressable>
               </Animated.View>
@@ -769,10 +771,10 @@ export default function NewChallengeScreen() {
           ) : (
             <View style={styles.emptyState}>
               <MaterialIcons name="person-search" size={48} color={theme.textMuted} />
-              <Text style={styles.emptyStateText}>Aucun joueur disponible</Text>
+              <Text style={styles.emptyStateText}>{t('challenge', 'noPlayers')}</Text>
               <Pressable style={styles.emptyStateBtn} onPress={() => router.push('/player/new')}>
                 <MaterialIcons name="person-add" size={18} color={theme.primary} />
-                <Text style={styles.emptyStateBtnText}>Créer un joueur</Text>
+                <Text style={styles.emptyStateBtnText}>{t('challenge', 'createPlayer')}</Text>
               </Pressable>
             </View>
           )}
@@ -820,14 +822,14 @@ export default function NewChallengeScreen() {
                 color={challengeMode === 'solo' ? theme.primary : theme.accent} 
               />
               <Text style={[styles.modeBadgeText, challengeMode === '1v1' && styles.modeBadgeText1v1]}>
-                {challengeMode === 'solo' ? 'Solo' : `vs ${selectedOpponent?.name}`}
+                {challengeMode === 'solo' ? t('challenge', 'solo') : `vs ${selectedOpponent?.name}`}
               </Text>
             </View>
           </Animated.View>
 
           {isPrecision && (
             <View style={styles.readySection}>
-              <Text style={styles.readySectionTitle}>LES 5 ATELIERS</Text>
+              <Text style={styles.readySectionTitle}>{t('challenge', 'theWorkshops')}</Text>
               {PRECISION_ATELIERS.map((atelier, index) => (
                 <Animated.View key={atelier.id} entering={FadeInDown.duration(300).delay(100 + index * 60)}>
                   <View style={styles.atelierCard}>
@@ -849,15 +851,15 @@ export default function NewChallengeScreen() {
             <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.readyInfoCard}>
               <View style={styles.readyInfoRow}>
                 <MaterialIcons name="timer" size={18} color={theme.textSecondary} />
-                <Text style={styles.readyInfoText}>Chronométré automatiquement</Text>
+                <Text style={styles.readyInfoText}>{t('challenge', 'timedAuto')}</Text>
               </View>
               <View style={styles.readyInfoRow}>
                 <MaterialIcons name="stars" size={18} color={theme.carreauColor} />
-                <Text style={styles.readyInfoText}>Carreaux comptabilisés</Text>
+                <Text style={styles.readyInfoText}>{t('challenge', 'carreauxCounted')}</Text>
               </View>
               <View style={styles.readyInfoRow}>
                 <MaterialIcons name="save" size={18} color={theme.primary} />
-                <Text style={styles.readyInfoText}>Résultats enregistrés</Text>
+                <Text style={styles.readyInfoText}>{t('challenge', 'resultsSaved')}</Text>
               </View>
             </Animated.View>
           )}
@@ -866,7 +868,7 @@ export default function NewChallengeScreen() {
         <View style={[styles.bottomAction, { paddingBottom: insets.bottom + 16 }]}>
           <Pressable style={[styles.startBtn, { backgroundColor: config?.color }]} onPress={startChallenge}>
             <MaterialIcons name="play-arrow" size={28} color="#FFF" />
-            <Text style={styles.startBtnText}>Commencer</Text>
+            <Text style={styles.startBtnText}>{t('challenge', 'start')}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -890,7 +892,7 @@ export default function NewChallengeScreen() {
           <Pressable style={styles.headerBtn} onPress={() => router.back()}>
             <MaterialIcons name="close" size={24} color={theme.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Résultats</Text>
+          <Text style={styles.headerTitle}>{t('challenge', 'results')}</Text>
           <View style={styles.headerBtn} />
         </View>
 
@@ -912,7 +914,7 @@ export default function NewChallengeScreen() {
                 color="#FFF" 
               />
               <Text style={styles.winnerBannerText}>
-                {winner === 'draw' ? 'Égalité !' : winner === 'player' ? 'Victoire !' : `${selectedOpponent?.name} gagne !`}
+                {winner === 'draw' ? t('challenge', 'drawResult') : winner === 'player' ? t('challenge', 'victoryResult') : `${selectedOpponent?.name} ${t('challenge', 'winsResult')}`}
               </Text>
             </Animated.View>
           )}
@@ -928,12 +930,12 @@ export default function NewChallengeScreen() {
             
             <View style={[styles.resultBadge, { backgroundColor: scoreColor }]}>
               <Text style={styles.resultBadgeText}>
-                {score >= 70 ? 'Excellent !' : score >= 50 ? 'Bien !' : 'À améliorer'}
+                {score >= 70 ? t('challenge', 'excellent') : score >= 50 ? t('challenge', 'well') : t('challenge', 'toImprove')}
               </Text>
             </View>
 
             <Text style={styles.resultScore}>{score}{isPrecision ? '' : '%'}</Text>
-            <Text style={styles.resultLabel}>{isPrecision ? '/ 100 points' : 'Taux de réussite'}</Text>
+            <Text style={styles.resultLabel}>{isPrecision ? '/ 100 points' : t('challenge', 'successRate')}</Text>
 
             <View style={styles.resultGrid}>
               {!isPrecision && (
@@ -941,12 +943,12 @@ export default function NewChallengeScreen() {
                   <View style={styles.resultGridItem}>
                     <MaterialIcons name="check-circle" size={22} color={theme.success} />
                     <Text style={styles.resultGridValue}>{playerStats.successCount}</Text>
-                    <Text style={styles.resultGridLabel}>Réussis</Text>
+                    <Text style={styles.resultGridLabel}>{t('challenge', 'succeeded')}</Text>
                   </View>
                   <View style={styles.resultGridItem}>
                     <MaterialIcons name="cancel" size={22} color={theme.error} />
                     <Text style={styles.resultGridValue}>{shots.length - playerStats.successCount}</Text>
-                    <Text style={styles.resultGridLabel}>Ratés</Text>
+                    <Text style={styles.resultGridLabel}>{t('challenge', 'missed')}</Text>
                   </View>
                 </>
               )}
@@ -955,12 +957,12 @@ export default function NewChallengeScreen() {
                 <Text style={styles.resultGridValue}>
                   {isPrecision ? precisionShots.filter(s => s.points === 5).length : playerStats.carreauCount}
                 </Text>
-                <Text style={styles.resultGridLabel}>Carreaux</Text>
+                <Text style={styles.resultGridLabel}>{t('history', 'carreaux')}</Text>
               </View>
               <View style={styles.resultGridItem}>
                 <MaterialIcons name="timer" size={22} color={theme.primary} />
                 <Text style={styles.resultGridValue}>{formatTime(elapsedTime)}</Text>
-                <Text style={styles.resultGridLabel}>Durée</Text>
+                <Text style={styles.resultGridLabel}>{t('history', 'duration')}</Text>
               </View>
             </View>
           </Animated.View>
@@ -974,18 +976,18 @@ export default function NewChallengeScreen() {
               </View>
               
               <Text style={styles.resultScore}>{opScore}{isPrecision ? '' : '%'}</Text>
-              <Text style={styles.resultLabel}>{isPrecision ? '/ 100 points' : 'Taux de réussite'}</Text>
+              <Text style={styles.resultLabel}>{isPrecision ? '/ 100 points' : t('challenge', 'successRate')}</Text>
             </Animated.View>
           )}
 
           <View style={styles.resultActions}>
             <Pressable style={styles.retryBtn} onPress={resetChallenge}>
               <MaterialIcons name="refresh" size={20} color={theme.primary} />
-              <Text style={styles.retryBtnText}>Recommencer</Text>
+              <Text style={styles.retryBtnText}>{t('challenge', 'retry')}</Text>
             </Pressable>
             <Pressable style={styles.saveBtn} onPress={saveChallenge}>
               <MaterialIcons name="save" size={20} color="#FFF" />
-              <Text style={styles.saveBtnText}>Enregistrer</Text>
+              <Text style={styles.saveBtnText}>{t('challenge', 'saveChallenge')}</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -1008,9 +1010,9 @@ export default function NewChallengeScreen() {
       <SafeAreaView edges={['top']} style={styles.container}>
         <View style={styles.header}>
           <Pressable style={styles.cancelHeaderBtn} onPress={cancelChallenge}>
-            <Text style={styles.cancelHeaderBtnText}>Annuler</Text>
+            <Text style={styles.cancelHeaderBtnText}>{t('common', 'cancel')}</Text>
           </Pressable>
-          <Text style={styles.headerTitle}>Tir de Précision</Text>
+          <Text style={styles.headerTitle}>{t('challenge', 'precision')}</Text>
           <View style={styles.timerBadge}>
             <MaterialIcons name="timer" size={14} color={theme.primary} />
             <Text style={styles.timerText}>{formatTime(elapsedTime)}</Text>
@@ -1021,7 +1023,7 @@ export default function NewChallengeScreen() {
           <View style={[styles.turnIndicator, isOpponentTurn && styles.turnIndicatorOpponent]}>
             <MaterialIcons name="person" size={16} color="#FFF" />
             <Text style={styles.turnIndicatorText}>
-              {isOpponentTurn ? `Tour de ${selectedOpponent?.name}` : 'Votre tour'}
+              {isOpponentTurn ? `${t('challenge', 'turnOf')} ${selectedOpponent?.name}` : t('challenge', 'yourTurn')}
             </Text>
           </View>
         )}
@@ -1041,17 +1043,17 @@ export default function NewChallengeScreen() {
           </View>
 
           <View style={styles.progressInfo}>
-            <Text style={styles.progressInfoText}>Tir {displayShotNumber} / 20</Text>
+            <Text style={styles.progressInfoText}>{t('challenge', 'shots').charAt(0).toUpperCase() + t('challenge', 'shots').slice(1)} {displayShotNumber} / 20</Text>
             <View style={styles.progressBar}>
               <View style={[styles.progressBarFill, { width: `${((displayShotNumber - 1) / 20) * 100}%` }]} />
             </View>
           </View>
 
-          <CountdownTimer seconds={30} isRunning={shotTimerRunning} onStart={startShotTimer} onTimeUp={handleTimeUp} />
+          <CountdownTimer seconds={30} isRunning={shotTimerRunning} onStart={startShotTimer} onTimeUp={handleTimeUp} startLabel={t('challenge', 'start')} />
 
           <View style={styles.scoreCard}>
             <Text style={styles.scoreCardLabel}>
-              {challengeMode === '1v1' ? (isOpponentTurn ? `Score ${selectedOpponent?.name}` : 'Votre score') : 'Score'}
+              {challengeMode === '1v1' ? (isOpponentTurn ? `${t('challenge', 'scoreOf')} ${selectedOpponent?.name}` : t('challenge', 'yourScore')) : t('match', 'score')}
             </Text>
             <Text style={styles.scoreCardValue}>{displayTotalPoints}</Text>
             <Text style={styles.scoreCardMax}>/ 100 pts</Text>
@@ -1060,7 +1062,7 @@ export default function NewChallengeScreen() {
           {challengeMode === '1v1' && (
             <View style={styles.scoresCompare}>
               <View style={styles.scoreCompareSide}>
-                <Text style={styles.scoreCompareName}>Vous</Text>
+                <Text style={styles.scoreCompareName}>{t('challenge', 'youLabel')}</Text>
                 <Text style={[styles.scoreCompareValue, !isOpponentTurn && styles.scoreCompareValueActive]}>
                   {playerStats.totalPrecisionPoints}
                 </Text>
@@ -1077,7 +1079,7 @@ export default function NewChallengeScreen() {
         </ScrollView>
 
         <View style={[styles.scoringButtons, { paddingBottom: insets.bottom + 16 }]}>
-          <Text style={styles.scoringButtonsTitle}>Résultat du tir</Text>
+          <Text style={styles.scoringButtonsTitle}>{t('challenge', 'shotResult')}</Text>
           <View style={styles.scoringButtonsGrid}>
             {displayAtelier.scoringOptions.map((option, index) => {
               const colors: Record<number, string> = { 0: theme.error, 1: theme.warning, 3: theme.success, 5: theme.carreauColor };
@@ -1115,7 +1117,7 @@ export default function NewChallengeScreen() {
     <SafeAreaView edges={['top']} style={styles.container}>
       <View style={styles.header}>
         <Pressable style={styles.cancelHeaderBtn} onPress={cancelChallenge}>
-          <Text style={styles.cancelHeaderBtnText}>Annuler</Text>
+          <Text style={styles.cancelHeaderBtnText}>{t('common', 'cancel')}</Text>
         </Pressable>
         <Text style={styles.headerTitle}>{config?.name}</Text>
         <View style={styles.timerBadge}>
@@ -1128,7 +1130,7 @@ export default function NewChallengeScreen() {
         <View style={[styles.turnIndicator, isOpponentTurn && styles.turnIndicatorOpponent]}>
           <MaterialIcons name="person" size={16} color="#FFF" />
           <Text style={styles.turnIndicatorText}>
-            {isOpponentTurn ? `Tour de ${selectedOpponent?.name}` : 'Votre tour'}
+            {isOpponentTurn ? `${t('challenge', 'turnOf')} ${selectedOpponent?.name}` : t('challenge', 'yourTurn')}
           </Text>
         </View>
       )}
@@ -1137,7 +1139,7 @@ export default function NewChallengeScreen() {
         <View style={styles.progressBar}>
           <Animated.View style={[styles.progressBarFill, { width: `${(displayCurrentShot / (config?.totalShots || 10)) * 100}%`, backgroundColor: config?.color }]} />
         </View>
-        <Text style={styles.progressText}>Tir {displayCurrentShot} / {config?.totalShots}</Text>
+        <Text style={styles.progressText}>{t('challenge', 'shots').charAt(0).toUpperCase() + t('challenge', 'shots').slice(1)} {displayCurrentShot} / {config?.totalShots}</Text>
       </View>
 
       <View style={styles.shotsIndicator}>
@@ -1162,24 +1164,24 @@ export default function NewChallengeScreen() {
       <View style={styles.statsRow}>
         <View style={styles.statItem}>
           <Text style={[styles.statValue, { color: theme.success }]}>{displayStats.successCount}</Text>
-          <Text style={styles.statLabel}>Réussis</Text>
+          <Text style={styles.statLabel}>{t('challenge', 'succeeded')}</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
           <Text style={[styles.statValue, { color: theme.error }]}>{displayShots.length - displayStats.successCount}</Text>
-          <Text style={styles.statLabel}>Ratés</Text>
+          <Text style={styles.statLabel}>{t('challenge', 'missed')}</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
           <Text style={[styles.statValue, { color: theme.carreauColor }]}>{displayStats.carreauCount}</Text>
-          <Text style={styles.statLabel}>Carreaux</Text>
+          <Text style={styles.statLabel}>{t('history', 'carreaux')}</Text>
         </View>
       </View>
 
       {challengeMode === '1v1' && (
         <View style={styles.scoresCompare}>
           <View style={styles.scoreCompareSide}>
-            <Text style={styles.scoreCompareName}>Vous</Text>
+            <Text style={styles.scoreCompareName}>{t('challenge', 'youLabel')}</Text>
             <Text style={[styles.scoreCompareValue, !isOpponentTurn && styles.scoreCompareValueActive]}>
               {playerStats.successCount}/{shots.length}
             </Text>
@@ -1196,27 +1198,27 @@ export default function NewChallengeScreen() {
 
       <View style={styles.shotButtonsContainer}>
         <Text style={styles.shotButtonsTitle}>
-          {challengeMode === '1v1' ? (isOpponentTurn ? `Tir de ${selectedOpponent?.name}` : 'Votre tir') : 'Résultat du tir'}
+          {challengeMode === '1v1' ? (isOpponentTurn ? `${t('challenge', 'turnOf')} ${selectedOpponent?.name}` : t('challenge', 'yourTurn')) : t('challenge', 'shotResult')}
         </Text>
         
         <Pressable style={styles.mainShotBtn} onPress={() => openNotationModal(isOpponentTurn)}>
           <MaterialIcons name="gps-fixed" size={40} color="#FFF" />
           <Text style={styles.mainShotBtnText}>TIR</Text>
-          <Text style={styles.mainShotBtnSub}>Notation détaillée</Text>
+          <Text style={styles.mainShotBtnSub}>{t('challenge', 'detailedNotation')}</Text>
         </Pressable>
 
         <View style={styles.quickBtns}>
           <Pressable style={[styles.quickBtn, { backgroundColor: theme.error }]} onPress={() => recordShot(false, false, isOpponentTurn)}>
             <MaterialIcons name="close" size={22} color="#FFF" />
-            <Text style={styles.quickBtnText}>Raté</Text>
+            <Text style={styles.quickBtnText}>{t('challenge', 'missedBtn')}</Text>
           </Pressable>
           <Pressable style={[styles.quickBtn, { backgroundColor: theme.success }]} onPress={() => recordShot(true, false, isOpponentTurn)}>
             <MaterialIcons name="check" size={22} color="#FFF" />
-            <Text style={styles.quickBtnText}>Réussi</Text>
+            <Text style={styles.quickBtnText}>{t('challenge', 'succeededBtn')}</Text>
           </Pressable>
           <Pressable style={[styles.quickBtn, { backgroundColor: theme.carreauColor }]} onPress={() => recordShot(true, true, isOpponentTurn)}>
             <MaterialIcons name="stars" size={22} color="#FFF" />
-            <Text style={styles.quickBtnText}>Carreau</Text>
+            <Text style={styles.quickBtnText}>{t('challenge', 'carreauBtn')}</Text>
           </Pressable>
         </View>
       </View>
@@ -1226,7 +1228,7 @@ export default function NewChallengeScreen() {
         onClose={() => { setShowNotation(false); setPendingNotationIsOpponent(false); }}
         actionType="tir"
         playerId={pendingNotationIsOpponent ? (selectedOpponent?.id || '') : (selfPlayer?.id || userStats.playerId)}
-        playerName={pendingNotationIsOpponent ? (selectedOpponent?.name || 'Adversaire') : (selfPlayer?.name || userStats.playerName)}
+        playerName={pendingNotationIsOpponent ? (selectedOpponent?.name || t('challenge', 'opponentLabel')) : (selfPlayer?.name || userStats.playerName)}
         team={pendingNotationIsOpponent ? 'B' : 'A'}
         onSubmit={handleNotationSubmit}
       />
