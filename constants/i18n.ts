@@ -1820,6 +1820,13 @@ export const translations = {
     cityRequired: { fr: 'Ville *', en: 'City *' },
     cityPlaceholder: { fr: 'Ex: Lyon', en: 'Ex: Lyon' },
     chooseExistingClub: { fr: 'Choisir un club existant', en: 'Choose an existing club' },
+    // Step 0 - Language
+    chooseLanguage: { fr: 'Choisissez votre langue', en: 'Choose your language' },
+    languageDesc: { fr: 'Vous pourrez changer la langue plus tard dans les paramètres', en: 'You can change the language later in settings' },
+    french: { fr: 'Français', en: 'French' },
+    english: { fr: 'Anglais', en: 'English' },
+    frenchDesc: { fr: 'Interface en français', en: 'French interface' },
+    englishDesc: { fr: 'Interface en anglais', en: 'English interface' },
     // Footer
     back: { fr: 'Retour', en: 'Back' },
     skip: { fr: 'Passer', en: 'Skip' },

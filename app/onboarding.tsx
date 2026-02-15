@@ -22,17 +22,19 @@ import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { Club } from '@/services/mockData';
 import { useLanguage } from '@/hooks/useLanguage';
+import { Language } from '@/constants/i18n';
 
-type Step = 1 | 2 | 3 | 4;
+type Step = 0 | 1 | 2 | 3 | 4;
 
 export default function OnboardingScreen() {
   const { user } = useAuth();
   const { showAlert } = useAlert();
   const { clubs, addClub, updatePlayer, refreshData } = useApp();
   const supabase = getSupabaseClient();
-  const { t, lang } = useLanguage();
+  const { t, language, setLanguage } = useLanguage();
 
-  const [step, setStep] = useState<Step>(1);
+  const [step, setStep] = useState<Step>(0);
+  const [selectedLang, setSelectedLang] = useState<Language>(language);
   const [saving, setSaving] = useState(false);
 
   // Profile fields
@@ -67,6 +69,7 @@ export default function OnboardingScreen() {
   ], [t]);
 
   const canProceed = () => {
+    if (step === 0) return true; // Language always valid
     if (step === 1) return username.trim().length >= 2;
     if (step === 2) return role !== null;
     if (step === 3) return true; // Level is optional
@@ -82,6 +85,13 @@ export default function OnboardingScreen() {
   const handleNext = async () => {
     if (!canProceed()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    // Apply language selection at step 0
+    if (step === 0) {
+      await setLanguage(selectedLang);
+      setStep(1);
+      return;
+    }
     
     // If creating a new club in step 4, create it first
     if (step === 4 && showCreateClub && newClubName.trim() && newClubCity.trim()) {
@@ -109,7 +119,7 @@ export default function OnboardingScreen() {
 
   const handleBack = () => {
     Haptics.selectionAsync();
-    if (step > 1) {
+    if (step > 0) {
       setStep((prev) => (prev - 1) as Step);
     }
   };
@@ -201,11 +211,11 @@ export default function OnboardingScreen() {
             <Animated.View
               style={[
                 styles.progressFill,
-                { width: `${(step / 4) * 100}%` },
+                { width: `${(step / 5) * 100}%` },
               ]}
             />
           </View>
-          <Text style={styles.progressText}>{t('onboarding', 'stepProgress')} {step}/4</Text>
+          <Text style={styles.progressText}>{t('onboarding', 'stepProgress')} {step === 0 ? '—' : `${step}/4`}</Text>
         </View>
 
         <ScrollView
@@ -214,6 +224,65 @@ export default function OnboardingScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Step 0: Language */}
+          {step === 0 && (
+            <Animated.View entering={FadeInDown.duration(400)} style={styles.stepContainer}>
+              <View style={styles.iconContainer}>
+                <MaterialIcons name="translate" size={48} color={theme.primary} />
+              </View>
+              <Text style={styles.stepTitle}>{t('onboarding', 'chooseLanguage')}</Text>
+              <Text style={styles.stepDescription}>
+                {t('onboarding', 'languageDesc')}
+              </Text>
+
+              <View style={styles.optionsContainer}>
+                {[
+                  { id: 'fr' as Language, flag: '🇫🇷', label: t('onboarding', 'french'), description: t('onboarding', 'frenchDesc') },
+                  { id: 'en' as Language, flag: '🇬🇧', label: t('onboarding', 'english'), description: t('onboarding', 'englishDesc') },
+                ].map((langOption, index) => (
+                  <Animated.View
+                    key={langOption.id}
+                    entering={FadeInUp.duration(300).delay(index * 100)}
+                  >
+                    <Pressable
+                      style={[
+                        styles.optionCard,
+                        selectedLang === langOption.id && styles.optionCardActive,
+                      ]}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setSelectedLang(langOption.id);
+                      }}
+                    >
+                      <View
+                        style={[
+                          styles.optionIcon,
+                          selectedLang === langOption.id && styles.optionIconActive,
+                        ]}
+                      >
+                        <Text style={styles.langFlag}>{langOption.flag}</Text>
+                      </View>
+                      <View style={styles.optionContent}>
+                        <Text
+                          style={[
+                            styles.optionTitle,
+                            selectedLang === langOption.id && styles.optionTitleActive,
+                          ]}
+                        >
+                          {langOption.label}
+                        </Text>
+                        <Text style={styles.optionDescription}>{langOption.description}</Text>
+                      </View>
+                      {selectedLang === langOption.id && (
+                        <MaterialIcons name="check-circle" size={24} color={theme.primary} />
+                      )}
+                    </Pressable>
+                  </Animated.View>
+                ))}
+              </View>
+            </Animated.View>
+          )}
+
           {/* Step 1: Username */}
           {step === 1 && (
             <Animated.View entering={FadeInDown.duration(400)} style={styles.stepContainer}>
@@ -512,7 +581,7 @@ export default function OnboardingScreen() {
         {/* Footer */}
         <View style={styles.footer}>
           <View style={styles.footerButtons}>
-            {step > 1 && (
+            {step > 0 && (
               <Pressable style={styles.backButton} onPress={handleBack}>
                 <MaterialIcons name="arrow-back" size={20} color={theme.textSecondary} />
                 <Text style={styles.backButtonText}>{t('onboarding', 'back')}</Text>
@@ -644,6 +713,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.textMuted,
     marginTop: 12,
+  },
+  langFlag: {
+    fontSize: 28,
   },
   optionsContainer: {
     width: '100%',
