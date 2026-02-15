@@ -19,6 +19,7 @@ import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import config, { GameFormat, TournamentType } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
+import { useLanguage } from '@/hooks/useLanguage';
 import { SimplifiedShotNotation, SimpleShotRecord } from '@/components';
 
 // Tournament phases configuration
@@ -131,6 +132,7 @@ export default function NewMatchScreen() {
     seriesId?: string;
   }>();
   const { addMatch, players, tournaments, matches, selfPlayer, terrains } = useApp();
+  const { t } = useLanguage();
   
   const isRevanche = revanche === 'true';
   const seriesWinsA = parseInt(initialWinsA || '0');
@@ -315,7 +317,7 @@ export default function NewMatchScreen() {
     const currentTeam = team === 'A' ? teamAPlayers : teamBPlayers;
 
     if (otherTeam.some(p => p.playerId === playerId)) {
-      Alert.alert('Erreur', 'Ce joueur est déjà dans l\'autre équipe');
+      Alert.alert(t('common', 'error'), t('match', 'errorAlreadyInTeam'));
       return;
     }
 
@@ -323,7 +325,7 @@ export default function NewMatchScreen() {
       setTeam(prev => prev.filter(p => p.playerId !== playerId));
     } else {
       if (currentTeam.length >= maxPlayersPerTeam) {
-        Alert.alert('Équipe complète', `Maximum ${maxPlayersPerTeam} joueur(s) en ${format}`);
+        Alert.alert(t('match', 'errorTeamFull'), `Maximum ${maxPlayersPerTeam} - ${format}`);
         return;
       }
       const player = players.find(p => p.id === playerId);
@@ -348,9 +350,9 @@ export default function NewMatchScreen() {
 
   const getPlayerName = (id: string) => {
     if (selfPlayer && id === selfPlayer.id) {
-      return selfPlayer.name || 'Moi';
+      return selfPlayer.name || t('history', 'me');
     }
-    return players.find(p => p.id === id)?.name || 'Inconnu';
+    return players.find(p => p.id === id)?.name || '?';
   };
 
   const getTeamPlayerIds = (team: TeamPlayerWithRole[]): string[] => {
@@ -476,12 +478,12 @@ export default function NewMatchScreen() {
 
   const resetTimer = useCallback(() => {
     Alert.alert(
-      'Réinitialiser',
-      'Voulez-vous réinitialiser le match ?',
+      t('match', 'reset'),
+      t('match', 'resetMatch'),
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common', 'cancel'), style: 'cancel' },
         {
-          text: 'Réinitialiser',
+          text: t('match', 'reset'),
           style: 'destructive',
           onPress: () => {
             setIsTimerRunning(false);
@@ -543,11 +545,11 @@ export default function NewMatchScreen() {
 
   const addMene = () => {
     if (!isNullMene && currentMenePoints.teamA === 0 && currentMenePoints.teamB === 0) {
-      Alert.alert('Erreur', 'Sélectionnez les points ou cochez "Mène nulle"');
+      Alert.alert(t('common', 'error'), t('match', 'errorSelectPoints'));
       return;
     }
     if (currentMenePoints.teamA > 0 && currentMenePoints.teamB > 0) {
-      Alert.alert('Erreur', 'Une seule équipe peut marquer par mène');
+      Alert.alert(t('common', 'error'), t('match', 'errorOneTeam'));
       return;
     }
 
@@ -587,12 +589,12 @@ export default function NewMatchScreen() {
     isFinale: boolean;
   }) => {
     if (teamAScore === 0 && teamBScore === 0) {
-      Alert.alert('Erreur', 'Veuillez entrer un score valide');
+      Alert.alert(t('common', 'error'), t('match', 'errorNoScore'));
       return;
     }
 
     if (isTournamentMode && !selectedPhase) {
-      Alert.alert('Phase requise', 'Veuillez sélectionner la phase du tournoi');
+      Alert.alert(t('match', 'phaseRequired'), t('match', 'selectPhase'));
       return;
     }
 
@@ -608,15 +610,15 @@ export default function NewMatchScreen() {
     const teamAPlayerNames = teamAPlayers.length > 0 
       ? teamAPlayers.map(p => {
           const player = players.find(pl => pl.id === p.playerId);
-          return player?.name || 'Joueur';
+          return player?.name || '?';
         })
-      : ['Mon équipe'];
+      : [t('match', 'myTeam')];
     const teamBPlayerNames = teamBPlayers.length > 0 
       ? teamBPlayers.map(p => {
           const player = players.find(pl => pl.id === p.playerId);
-          return player?.name || 'Joueur';
+          return player?.name || '?';
         })
-      : ['Adversaire'];
+      : [t('match', 'opponent')];
     
     const teamAPlayerRoles = teamAPlayers.map(p => ({
       playerId: p.playerId,
@@ -818,7 +820,7 @@ export default function NewMatchScreen() {
                   color={isTimerRunning ? '#4ADE80' : 'rgba(255,255,255,0.5)'} 
                 />
                 <View style={styles.fsDualTimerContent}>
-                  <Text style={styles.fsDualTimerLabel}>PARTIE</Text>
+                  <Text style={styles.fsDualTimerLabel}>{t('match', 'game')}</Text>
                   <Text style={[styles.fsDualTimerValue, isTimerRunning && styles.fsDualTimerValueActive]}>
                     {formatTime(matchTime)}
                   </Text>
@@ -828,7 +830,7 @@ export default function NewMatchScreen() {
               <View style={[styles.fsDualTimerPill, styles.fsDualTimerPillMene]}>
                 <MaterialIcons name="sports" size={18} color={'rgba(255,255,255,0.5)'} />
                 <View style={styles.fsDualTimerContent}>
-                  <Text style={styles.fsDualTimerLabel}>MÈNE {menes.length + 1}</Text>
+                  <Text style={styles.fsDualTimerLabel}>{t('match', 'end')} {menes.length + 1}</Text>
                   <Text style={styles.fsDualTimerValue}>{formatTime(meneTime)}</Text>
                 </View>
               </View>
@@ -898,7 +900,7 @@ export default function NewMatchScreen() {
               >
                 <View style={styles.fsGiantScoreHeader}>
                   <View style={[styles.fsGiantTeamDot, { backgroundColor: theme.primary }]} />
-                  <Text style={styles.fsGiantTeamLabel}>MON ÉQUIPE</Text>
+                  <Text style={styles.fsGiantTeamLabel}>{t('match', 'myTeamLabel')}</Text>
                 </View>
                 {teamAPlayers.length > 0 && (
                   <Text style={styles.fsGiantPlayerNames} numberOfLines={1}>
@@ -941,7 +943,7 @@ export default function NewMatchScreen() {
               >
                 <View style={styles.fsGiantScoreHeader}>
                   <View style={[styles.fsGiantTeamDot, { backgroundColor: theme.accent }]} />
-                  <Text style={styles.fsGiantTeamLabel}>ADVERSAIRE</Text>
+                  <Text style={styles.fsGiantTeamLabel}>{t('match', 'opponentLabel')}</Text>
                 </View>
                 {teamBPlayers.length > 0 && (
                   <Text style={styles.fsGiantPlayerNames} numberOfLines={1}>
@@ -965,7 +967,7 @@ export default function NewMatchScreen() {
             {/* Point Selection */}
             <View style={styles.fsPointSelection}>
               <Text style={styles.fsPointSelectionTitle}>
-                {fsSelectedPoints.team ? `Points pour ${fsSelectedPoints.team === 'A' ? 'Mon équipe' : 'Adversaire'}` : 'Sélectionner une équipe'}
+                {fsSelectedPoints.team ? `${t('match', 'pointsFor')} ${fsSelectedPoints.team === 'A' ? t('match', 'myTeam') : t('match', 'opponent')}` : t('match', 'selectTeam')}
               </Text>
               <View style={styles.fsPointButtonsRow}>
                 {pointOptions.map(pts => (
@@ -1006,7 +1008,7 @@ export default function NewMatchScreen() {
                   disabled={!fsSelectedPoints.team || fsSelectedPoints.points === 0}
                 >
                   <MaterialIcons name="check" size={28} color="#FFF" />
-                  <Text style={styles.fsValidateMeneBtnText}>Valider la mène</Text>
+                  <Text style={styles.fsValidateMeneBtnText}>{t('match', 'validateTheEnd')}</Text>
                 </Pressable>
                 
                 <Pressable style={styles.fsNullMeneBtn} onPress={handleFsNullMene}>
@@ -1018,11 +1020,11 @@ export default function NewMatchScreen() {
             {/* Mène Timeline */}
             <View style={styles.fsMeneTimeline}>
               <View style={styles.fsMeneTimelineHeader}>
-                <Text style={styles.fsMeneTimelineTitle}>Déroulé du match</Text>
+                <Text style={styles.fsMeneTimelineTitle}>{t('match', 'matchFlow')}</Text>
                 {menes.length > 0 && (
                   <Pressable style={styles.fsMeneUndoBtn} onPress={undoLastMene}>
                     <MaterialIcons name="undo" size={18} color="rgba(255,255,255,0.6)" />
-                    <Text style={styles.fsMeneUndoBtnText}>Annuler</Text>
+                    <Text style={styles.fsMeneUndoBtnText}>{t('match', 'undo')}</Text>
                   </Pressable>
                 )}
               </View>
@@ -1030,7 +1032,7 @@ export default function NewMatchScreen() {
               {menes.length === 0 ? (
                 <View style={styles.fsMeneEmptyState}>
                   <MaterialIcons name="sports" size={32} color="rgba(255,255,255,0.2)" />
-                  <Text style={styles.fsMeneEmptyText}>Le match commence...</Text>
+                  <Text style={styles.fsMeneEmptyText}>{t('match', 'matchStarts')}</Text>
                 </View>
               ) : (
                 <ScrollView 
@@ -1048,7 +1050,7 @@ export default function NewMatchScreen() {
                         {m.isNull ? (
                           <View style={styles.fsMeneCardNull}>
                             <MaterialIcons name="block" size={24} color="#FBBF24" />
-                            <Text style={styles.fsMeneCardNullText}>Nulle</Text>
+                            <Text style={styles.fsMeneCardNullText}>{t('match', 'nullLabel')}</Text>
                           </View>
                         ) : (
                           <View style={styles.fsMeneCardScore}>
@@ -1094,8 +1096,8 @@ export default function NewMatchScreen() {
               <Animated.View entering={FadeIn.duration(200)} style={styles.fsNewMeneOverlay}>
                 <Animated.View entering={FadeInUp.springify().damping(12)} style={styles.fsNewMeneCard}>
                   <MaterialIcons name="sports" size={40} color="#4ADE80" />
-                  <Text style={styles.fsNewMeneTitle}>Mène {fsNewMeneIndicator}</Text>
-                  <Text style={styles.fsNewMeneSubtitle}>C'est parti !</Text>
+                  <Text style={styles.fsNewMeneTitle}>{t('match', 'end')} {fsNewMeneIndicator}</Text>
+                  <Text style={styles.fsNewMeneSubtitle}>{t('match', 'letsGo')}</Text>
                 </Animated.View>
               </Animated.View>
             )}
@@ -1106,17 +1108,17 @@ export default function NewMatchScreen() {
                 <View style={styles.fsPauseCard}>
                   <View style={styles.fsPauseHeader}>
                     <MaterialIcons name="pause-circle-filled" size={56} color={theme.warning} />
-                    <Text style={styles.fsPauseTitle}>PAUSE</Text>
+                    <Text style={styles.fsPauseTitle}>{t('match', 'pause')}</Text>
                   </View>
                   
                   <View style={styles.fsPauseScoreDisplay}>
                     <View style={styles.fsPauseScoreItem}>
-                      <Text style={styles.fsPauseScoreLabel}>MON ÉQUIPE</Text>
+                      <Text style={styles.fsPauseScoreLabel}>{t('match', 'myTeamLabel')}</Text>
                       <Text style={[styles.fsPauseScoreValue, { color: theme.primary }]}>{teamAScore}</Text>
                     </View>
                     <Text style={styles.fsPauseScoreSep}>-</Text>
                     <View style={styles.fsPauseScoreItem}>
-                      <Text style={styles.fsPauseScoreLabel}>ADVERSAIRE</Text>
+                      <Text style={styles.fsPauseScoreLabel}>{t('match', 'opponentLabel')}</Text>
                       <Text style={[styles.fsPauseScoreValue, { color: theme.accent }]}>{teamBScore}</Text>
                     </View>
                   </View>
@@ -1128,7 +1130,7 @@ export default function NewMatchScreen() {
                     </View>
                     <View style={styles.fsPauseInfoRow}>
                       <MaterialIcons name="sports" size={18} color="rgba(255,255,255,0.5)" />
-                      <Text style={styles.fsPauseInfoText}>{menes.length} mène{menes.length > 1 ? 's' : ''}</Text>
+                      <Text style={styles.fsPauseInfoText}>{menes.length} {t('match', 'endsLabel')}</Text>
                     </View>
                   </View>
                   
@@ -1142,7 +1144,7 @@ export default function NewMatchScreen() {
                       }}
                     >
                       <MaterialIcons name="play-arrow" size={28} color="#FFF" />
-                      <Text style={styles.fsPauseResumeBtnText}>Reprendre le match</Text>
+                      <Text style={styles.fsPauseResumeBtnText}>{t('match', 'resumeMatch')}</Text>
                     </Pressable>
                     
                     <Pressable 
@@ -1155,7 +1157,7 @@ export default function NewMatchScreen() {
                       }}
                     >
                       <MaterialIcons name="logout" size={20} color="rgba(255,255,255,0.7)" />
-                      <Text style={styles.fsPauseExitBtnText}>Quitter le plein écran</Text>
+                      <Text style={styles.fsPauseExitBtnText}>{t('match', 'exitFullscreen')}</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -1172,10 +1174,10 @@ export default function NewMatchScreen() {
                     color={teamAScore > teamBScore ? '#FFD700' : '#F87171'} 
                   />
                   <Text style={styles.fsWinnerTitle}>
-                    {teamAScore > teamBScore ? 'VICTOIRE !' : 'DÉFAITE'}
+                    {teamAScore > teamBScore ? t('match', 'victoryLabel') : t('match', 'defeatLabel')}
                   </Text>
                   <Text style={styles.fsWinnerScore}>{teamAScore} - {teamBScore}</Text>
-                  <Text style={styles.fsWinnerMenes}>{menes.length} mène{menes.length > 1 ? 's' : ''} • {formatTime(matchTime)}</Text>
+                  <Text style={styles.fsWinnerMenes}>{menes.length} {t('match', 'endsLabel')} • {formatTime(matchTime)}</Text>
                   
                   {/* Series Info */}
                   {seriesId && (
@@ -1198,7 +1200,7 @@ export default function NewMatchScreen() {
                       }}
                     >
                       <MaterialIcons name="check" size={22} color="#FFF" />
-                      <Text style={styles.fsWinnerBtnText}>Enregistrer et terminer</Text>
+                      <Text style={styles.fsWinnerBtnText}>{t('match', 'saveAndFinish')}</Text>
                     </Pressable>
                     
                     {!isTournamentMode && (
@@ -1219,8 +1221,8 @@ export default function NewMatchScreen() {
                             // Series complete, save and end
                             handleSaveMatch();
                             Alert.alert(
-                              'Série terminée !', 
-                              `${newWinsA >= 2 ? 'Vous avez' : 'Adversaire a'} remporté la série ${newWinsA}-${newWinsB}`,
+                              t('match', 'seriesComplete'), 
+                              `${newWinsA >= 2 ? t('match', 'youWon') : t('match', 'opponentWon')} ${t('match', 'seriesWonBy')} ${newWinsA}-${newWinsB}`,
                               [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
                             );
                             return;
@@ -1260,11 +1262,11 @@ export default function NewMatchScreen() {
                         <Text style={styles.fsWinnerBtnRevancheText}>
                           {seriesId 
                             ? (seriesWinsA === 1 && seriesWinsB === 0) || (seriesWinsA === 0 && seriesWinsB === 1)
-                              ? 'Mène 2'
+                              ? t('match', 'rematch') + ' 2'
                               : (seriesWinsA === 1 && seriesWinsB === 1) 
-                                ? 'Finale'
-                                : 'Revanche'
-                            : 'Revanche'
+                                ? t('history', 'finale')
+                                : t('match', 'rematch')
+                            : t('match', 'rematch')
                           }
                         </Text>
                         {seriesId && (
@@ -1297,7 +1299,7 @@ export default function NewMatchScreen() {
         </Pressable>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>
-            {isTournamentMode ? 'Match Tournoi' : isFinale ? 'Finale' : isRevanche ? `Mène ${currentMatchNumber}` : 'Nouveau Match'}
+            {isTournamentMode ? t('match', 'tournamentMatch') : isFinale ? t('history', 'finale') : isRevanche ? `${t('match', 'end')} ${currentMatchNumber}` : t('match', 'newMatch')}
           </Text>
           {isTournamentMode && linkedTournament && (
             <Text style={styles.headerSubtitle} numberOfLines={1}>{linkedTournament.name}</Text>
@@ -1321,8 +1323,8 @@ export default function NewMatchScreen() {
                   <MaterialIcons name="fitness-center" size={20} color="#FFF" />
                 </View>
                 <View style={styles.modeBannerContent}>
-                  <Text style={styles.modeBannerText}>Entraînement</Text>
-                  <Text style={styles.modeBannerSubtext}>Possibilité de revanche et finale</Text>
+                  <Text style={styles.modeBannerText}>{t('match', 'training')}</Text>
+                  <Text style={styles.modeBannerSubtext}>{t('match', 'revanPossible')}</Text>
                 </View>
               </View>
               
@@ -1331,9 +1333,9 @@ export default function NewMatchScreen() {
                   <MaterialIcons name="place" size={20} color={selectedTerrain ? theme.primary : theme.textMuted} />
                 </View>
                 <View style={styles.terrainSelectorContent}>
-                  <Text style={styles.terrainSelectorLabel}>Terrain</Text>
+                  <Text style={styles.terrainSelectorLabel}>{t('match', 'terrain')}</Text>
                   <Text style={[styles.terrainSelectorValue, !selectedTerrain && styles.terrainSelectorPlaceholder]} numberOfLines={1}>
-                    {selectedTerrain ? selectedTerrain.name : 'Choisir un terrain (optionnel)'}
+                    {selectedTerrain ? selectedTerrain.name : t('match', 'chooseTerrain')}
                   </Text>
                 </View>
                 <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
@@ -1344,7 +1346,7 @@ export default function NewMatchScreen() {
           {/* Tournament Phase Selection */}
           {isTournamentMode && linkedTournament && (
             <Animated.View entering={FadeInDown.duration(300)} style={styles.phaseSection}>
-              <Text style={styles.sectionLabel}>PHASE DU TOURNOI</Text>
+              <Text style={styles.sectionLabel}>{t('match', 'tournamentPhase')}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.phaseScroll}>
                 {tournamentPhases.map((phase) => (
                   <Pressable
@@ -1363,7 +1365,7 @@ export default function NewMatchScreen() {
 
           {/* Format Selection */}
           <Animated.View entering={FadeInDown.duration(300).delay(50)} style={styles.formatSection}>
-            <Text style={styles.sectionLabel}>FORMAT</Text>
+            <Text style={styles.sectionLabel}>{t('match', 'format')}</Text>
             <View style={styles.formatRow}>
               {config.game.formats.map(f => {
                 const isActive = format === f;
@@ -1391,13 +1393,13 @@ export default function NewMatchScreen() {
 
           {/* Team Selection Section */}
           <Animated.View entering={FadeInDown.duration(300).delay(100)} style={styles.teamSelectionSection}>
-            <Text style={styles.sectionLabel}>CHOIX DES ÉQUIPES</Text>
+            <Text style={styles.sectionLabel}>{t('match', 'teamSelection')}</Text>
             
             {/* Team A */}
             <Pressable style={styles.teamCard} onPress={() => setShowPlayerPicker('A')}>
               <View style={styles.teamCardHeader}>
                 <View style={[styles.teamColorDot, { backgroundColor: theme.primary }]} />
-                <Text style={styles.teamCardTitle}>Mon équipe</Text>
+                <Text style={styles.teamCardTitle}>{t('match', 'myTeam')}</Text>
                 <MaterialIcons name="edit" size={18} color={theme.textMuted} />
               </View>
               <View style={styles.teamCardPlayers}>
@@ -1413,7 +1415,7 @@ export default function NewMatchScreen() {
                     </View>
                   ))
                 ) : (
-                  <Text style={styles.teamCardPlaceholder}>Ajouter des joueurs...</Text>
+                  <Text style={styles.teamCardPlaceholder}>{t('match', 'addPlayers')}</Text>
                 )}
               </View>
               <Text style={styles.teamCardCount}>{teamAPlayers.length}/{maxPlayersPerTeam}</Text>
@@ -1423,7 +1425,7 @@ export default function NewMatchScreen() {
             <Pressable style={styles.teamCard} onPress={() => setShowPlayerPicker('B')}>
               <View style={styles.teamCardHeader}>
                 <View style={[styles.teamColorDot, { backgroundColor: theme.accent }]} />
-                <Text style={styles.teamCardTitle}>Adversaire</Text>
+                <Text style={styles.teamCardTitle}>{t('match', 'opponent')}</Text>
                 <MaterialIcons name="edit" size={18} color={theme.textMuted} />
               </View>
               <View style={styles.teamCardPlayers}>
@@ -1439,7 +1441,7 @@ export default function NewMatchScreen() {
                     </View>
                   ))
                 ) : (
-                  <Text style={styles.teamCardPlaceholder}>Ajouter des joueurs...</Text>
+                  <Text style={styles.teamCardPlaceholder}>{t('match', 'addPlayers')}</Text>
                 )}
               </View>
               <Text style={styles.teamCardCount}>{teamBPlayers.length}/{maxPlayersPerTeam}</Text>
@@ -1454,8 +1456,8 @@ export default function NewMatchScreen() {
             >
               <MaterialIcons name="edit-note" size={24} color={theme.primary} />
               <View style={styles.actionsEditorContent}>
-                <Text style={styles.actionsEditorTitle}>Édition des actions de match</Text>
-                <Text style={styles.actionsEditorSubtitle}>Mènes, actions des joueurs, chronomètre</Text>
+                <Text style={styles.actionsEditorTitle}>{t('match', 'matchActions')}</Text>
+                <Text style={styles.actionsEditorSubtitle}>{t('match', 'menActionsTimer')}</Text>
               </View>
               <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
             </Pressable>
@@ -1464,22 +1466,22 @@ export default function NewMatchScreen() {
           {/* Summary Stats */}
           {(menes.length > 0 || matchTime > 0) && (
             <Animated.View entering={FadeInDown.duration(300).delay(200)} style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>Résumé du match</Text>
+              <Text style={styles.summaryTitle}>{t('match', 'matchSummary')}</Text>
               <View style={styles.summaryRow}>
                 <View style={styles.summaryItem}>
                   <MaterialIcons name="timer" size={20} color={theme.primary} />
                   <Text style={styles.summaryValue}>{formatTime(matchTime)}</Text>
-                  <Text style={styles.summaryLabel}>Durée</Text>
+                  <Text style={styles.summaryLabel}>{t('match', 'durationLabel')}</Text>
                 </View>
                 <View style={styles.summaryItem}>
                   <MaterialIcons name="sports" size={20} color={theme.accent} />
                   <Text style={styles.summaryValue}>{menes.length}</Text>
-                  <Text style={styles.summaryLabel}>Mènes</Text>
+                  <Text style={styles.summaryLabel}>{t('match', 'endsLabel')}</Text>
                 </View>
                 <View style={styles.summaryItem}>
                   <MaterialIcons name="scoreboard" size={20} color={theme.carreauColor} />
                   <Text style={styles.summaryValue}>{teamAScore} - {teamBScore}</Text>
-                  <Text style={styles.summaryLabel}>Score</Text>
+                  <Text style={styles.summaryLabel}>{t('match', 'score')}</Text>
                 </View>
               </View>
             </Animated.View>
@@ -1498,11 +1500,11 @@ export default function NewMatchScreen() {
                 }}
               >
                 <MaterialIcons name="fullscreen" size={22} color={theme.primary} />
-                <Text style={styles.returnToMatchButtonText}>Revenir au Match</Text>
+                <Text style={styles.returnToMatchButtonText}>{t('match', 'returnToMatch')}</Text>
               </Pressable>
               <Pressable style={styles.saveButton} onPress={() => handleSaveMatch()}>
                 <MaterialIcons name="check" size={22} color="#FFF" />
-                <Text style={styles.saveButtonText}>Enregistrer et clore</Text>
+                <Text style={styles.saveButtonText}>{t('match', 'saveAndClose')}</Text>
               </Pressable>
             </View>
           ) : (
@@ -1515,7 +1517,7 @@ export default function NewMatchScreen() {
               }}
             >
               <MaterialIcons name="play-arrow" size={24} color="#FFF" />
-              <Text style={styles.fullscreenButtonText}>Commencer le match</Text>
+              <Text style={styles.fullscreenButtonText}>{t('match', 'startMatch')}</Text>
             </Pressable>
           )}
         </View>
@@ -1533,7 +1535,7 @@ export default function NewMatchScreen() {
             <Pressable style={styles.modalCloseBtn} onPress={() => setShowActionsEditor(false)}>
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>
-            <Text style={styles.modalTitle}>Actions de match</Text>
+            <Text style={styles.modalTitle}>{t('match', 'playerActions')}</Text>
             <Pressable style={styles.modalDoneBtn} onPress={() => setShowActionsEditor(false)}>
               <Text style={styles.modalDoneText}>OK</Text>
             </Pressable>
@@ -1542,7 +1544,7 @@ export default function NewMatchScreen() {
           <ScrollView style={styles.actionsEditorScroll} contentContainerStyle={styles.actionsEditorContent}>
             {/* Timer Section */}
             <View style={styles.editorSection}>
-              <Text style={styles.editorSectionTitle}>Chronomètre</Text>
+              <Text style={styles.editorSectionTitle}>{t('match', 'timer')}</Text>
               <View style={styles.timerDisplay}>
                 <View style={styles.timerMain}>
                   <MaterialIcons name="timer" size={28} color={isTimerRunning ? theme.primary : theme.textMuted} />
@@ -1567,10 +1569,10 @@ export default function NewMatchScreen() {
 
             {/* Mène Section */}
             <View style={styles.editorSection}>
-              <Text style={styles.editorSectionTitle}>Mènes ({menes.length})</Text>
+              <Text style={styles.editorSectionTitle}>{t('match', 'menes')} ({menes.length})</Text>
               <View style={styles.meneCard}>
                 <View style={styles.meneRow}>
-                  <Text style={styles.meneTeamLabel}>Mon équipe</Text>
+                  <Text style={styles.meneTeamLabel}>{t('match', 'myTeam')}</Text>
                   <View style={styles.menePointsRow}>
                     {Array.from({ length: maxPointsPerMene }, (_, i) => i + 1).map(pts => (
                       <Pressable
@@ -1585,7 +1587,7 @@ export default function NewMatchScreen() {
                 </View>
                 <View style={styles.meneDivider} />
                 <View style={styles.meneRow}>
-                  <Text style={styles.meneTeamLabel}>Adversaire</Text>
+                  <Text style={styles.meneTeamLabel}>{t('match', 'opponent')}</Text>
                   <View style={styles.menePointsRow}>
                     {Array.from({ length: maxPointsPerMene }, (_, i) => i + 1).map(pts => (
                       <Pressable
@@ -1600,23 +1602,23 @@ export default function NewMatchScreen() {
                 </View>
                 <Pressable style={[styles.nullMeneBtn, isNullMene && styles.nullMeneBtnActive]} onPress={handleNullMene}>
                   <MaterialIcons name={isNullMene ? 'check-box' : 'check-box-outline-blank'} size={18} color={isNullMene ? theme.warning : theme.textMuted} />
-                  <Text style={[styles.nullMeneText, isNullMene && styles.nullMeneTextActive]}>Mène nulle</Text>
+                  <Text style={[styles.nullMeneText, isNullMene && styles.nullMeneTextActive]}>{t('match', 'nullEnd')}</Text>
                 </Pressable>
                 <Pressable 
                   style={[styles.addMeneBtn, (!isNullMene && !currentMenePoints.teamA && !currentMenePoints.teamB) && styles.addMeneBtnDisabled]}
                   onPress={addMene}
                 >
                   <MaterialIcons name="check" size={20} color="#FFF" />
-                  <Text style={styles.addMeneBtnText}>Valider mène {menes.length + 1}</Text>
+                  <Text style={styles.addMeneBtnText}>{t('match', 'validateEnd')} {menes.length + 1}</Text>
                 </Pressable>
               </View>
 
               {menes.length > 0 && (
                 <View style={styles.menesHistory}>
                   <View style={styles.menesHistoryHeader}>
-                    <Text style={styles.menesHistoryTitle}>Historique</Text>
+                    <Text style={styles.menesHistoryTitle}>{t('match', 'historyLabel')}</Text>
                     <Pressable onPress={undoLastMene}>
-                      <Text style={styles.undoText}>Annuler dernière</Text>
+                      <Text style={styles.undoText}>{t('match', 'undoLast')}</Text>
                     </Pressable>
                   </View>
                   <View style={styles.menesHistoryList}>
@@ -1646,7 +1648,7 @@ export default function NewMatchScreen() {
             {/* Player Actions */}
             {(teamAPlayers.length > 0 || teamBPlayers.length > 0) && (
               <View style={styles.editorSection}>
-                <Text style={styles.editorSectionTitle}>Actions des joueurs</Text>
+                <Text style={styles.editorSectionTitle}>{t('match', 'playerActions')}</Text>
                 {[...teamAPlayers, ...teamBPlayers].map((p, idx) => {
                   const isTeamA = idx < teamAPlayers.length;
                   const stats = getPlayerActionStats(p.playerId);
@@ -1672,7 +1674,7 @@ export default function NewMatchScreen() {
                           }}
                         >
                           <MaterialIcons name="gps-fixed" size={18} color="#FFF" />
-                          <Text style={styles.playerNotationBtnText}>+ Tir</Text>
+                          <Text style={styles.playerNotationBtnText}>+ {t('match', 'shot')}</Text>
                         </Pressable>
                         <Pressable
                           style={[styles.playerNotationBtn, { backgroundColor: theme.pointColor }]}
@@ -1684,7 +1686,7 @@ export default function NewMatchScreen() {
                           }}
                         >
                           <MaterialIcons name="adjust" size={18} color="#FFF" />
-                          <Text style={styles.playerNotationBtnText}>+ Point</Text>
+                          <Text style={styles.playerNotationBtnText}>+ {t('match', 'point')}</Text>
                         </Pressable>
                         <Pressable
                           style={[styles.playerNotationBtn, { backgroundColor: theme.carreauColor }]}
@@ -1694,7 +1696,7 @@ export default function NewMatchScreen() {
                           }}
                         >
                           <MaterialIcons name="stars" size={18} color="#FFF" />
-                          <Text style={styles.playerNotationBtnText}>Carreau</Text>
+                          <Text style={styles.playerNotationBtnText}>{t('match', 'carreau')}</Text>
                         </Pressable>
                       </View>
                     </View>
@@ -1734,9 +1736,9 @@ export default function NewMatchScreen() {
             <Pressable style={styles.modalCloseBtn} onPress={() => setShowTerrainPicker(false)}>
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>
-            <Text style={styles.modalTitle}>Choisir un terrain</Text>
+            <Text style={styles.modalTitle}>{t('match', 'terrain')}</Text>
             <Pressable style={styles.modalDoneBtn} onPress={() => { setSelectedTerrainId(null); setShowTerrainPicker(false); }}>
-              <Text style={[styles.modalDoneText, { color: theme.textMuted }]}>Aucun</Text>
+              <Text style={[styles.modalDoneText, { color: theme.textMuted }]}>-</Text>
             </Pressable>
           </View>
 
@@ -1746,8 +1748,8 @@ export default function NewMatchScreen() {
                 <MaterialIcons name="add-location" size={22} color={theme.primary} />
               </View>
               <View style={styles.createPlayerInfo}>
-                <Text style={[styles.createPlayerTitle, { color: theme.primary }]}>Ajouter un terrain</Text>
-                <Text style={styles.createPlayerSubtitle}>Créer un nouveau boulodrome</Text>
+                <Text style={[styles.createPlayerTitle, { color: theme.primary }]}>{t('match', 'addTerrain')}</Text>
+                <Text style={styles.createPlayerSubtitle}>{t('match', 'createNewField')}</Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </Pressable>
@@ -1755,7 +1757,7 @@ export default function NewMatchScreen() {
             {terrains.length === 0 ? (
               <View style={styles.emptySearch}>
                 <MaterialIcons name="location-off" size={40} color={theme.textMuted} />
-                <Text style={styles.emptySearchText}>Aucun terrain enregistré</Text>
+                <Text style={styles.emptySearchText}>{t('match', 'noTerrains')}</Text>
               </View>
             ) : (
               terrains.map(terrain => (
@@ -1795,7 +1797,7 @@ export default function NewMatchScreen() {
             <Pressable style={styles.modalCloseBtn} onPress={() => { setShowPlayerPicker(null); setPlayerSearch(''); }}>
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>
-            <Text style={styles.modalTitle}>{showPlayerPicker === 'A' ? 'Mon équipe' : 'Adversaire'}</Text>
+            <Text style={styles.modalTitle}>{showPlayerPicker === 'A' ? t('match', 'myTeam') : t('match', 'opponent')}</Text>
             <Pressable style={styles.modalDoneBtn} onPress={() => { setShowPlayerPicker(null); setPlayerSearch(''); }}>
               <Text style={styles.modalDoneText}>OK</Text>
             </Pressable>
@@ -1807,7 +1809,7 @@ export default function NewMatchScreen() {
               style={styles.searchInput}
               value={playerSearch}
               onChangeText={setPlayerSearch}
-              placeholder="Rechercher..."
+              placeholder={`${t('common', 'search')}...`}
               placeholderTextColor={theme.textMuted}
             />
             {playerSearch.length > 0 && (
@@ -1818,7 +1820,7 @@ export default function NewMatchScreen() {
           </View>
 
           <Text style={styles.selectionCount}>
-            {showPlayerPicker === 'A' ? teamAPlayers.length : teamBPlayers.length} / {maxPlayersPerTeam} sélectionné(s)
+            {showPlayerPicker === 'A' ? teamAPlayers.length : teamBPlayers.length} / {maxPlayersPerTeam} {t('match', 'selected')}
           </Text>
 
           <ScrollView style={styles.playersList} contentContainerStyle={styles.playersListContent}>
@@ -1832,7 +1834,7 @@ export default function NewMatchScreen() {
                 </View>
                 <View style={styles.playerInfo}>
                   <View style={styles.playerNameRow}>
-                    <Text style={styles.playerName}>{selfPlayer.name || 'Moi'}</Text>
+                    <Text style={styles.playerName}>{selfPlayer.name || t('history', 'me')}</Text>
                     <View style={styles.moiBadge}><Text style={styles.moiBadgeText}>MOI</Text></View>
                   </View>
                   <Text style={styles.playerMeta}>{selfPlayer.role} • {selfPlayer.level}</Text>
@@ -1847,7 +1849,7 @@ export default function NewMatchScreen() {
 
             {showPlayerPicker && availableRoles.length > 0 && (showPlayerPicker === 'A' ? teamAPlayers : teamBPlayers).length > 0 && (
               <View style={styles.roleSelectionSection}>
-                <Text style={styles.roleSelectionTitle}>Rôles des joueurs</Text>
+                <Text style={styles.roleSelectionTitle}>{t('match', 'playerRoles')}</Text>
                 {(showPlayerPicker === 'A' ? teamAPlayers : teamBPlayers).map(p => (
                   <View key={p.playerId} style={styles.roleSelectionRow}>
                     <Text style={styles.roleSelectionName}>{getPlayerName(p.playerId)}</Text>
@@ -1873,8 +1875,8 @@ export default function NewMatchScreen() {
                   <MaterialIcons name="person-add" size={22} color={theme.accent} />
                 </View>
                 <View style={styles.createPlayerInfo}>
-                  <Text style={styles.createPlayerTitle}>Créer un adversaire</Text>
-                  <Text style={styles.createPlayerSubtitle}>Ajouter un nouveau joueur</Text>
+                  <Text style={styles.createPlayerTitle}>{t('match', 'createOpponent')}</Text>
+                  <Text style={styles.createPlayerSubtitle}>{t('match', 'addNewPlayer')}</Text>
                 </View>
                 <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
               </Pressable>
@@ -1903,7 +1905,7 @@ export default function NewMatchScreen() {
                       <Text style={styles.playerMeta}>{player.role} • {player.level}{player.club ? ` • ${player.club}` : ''}</Text>
                     </View>
                     {isInOtherTeam ? (
-                      <Text style={styles.otherTeamLabel}>Autre équipe</Text>
+                      <Text style={styles.otherTeamLabel}>{t('match', 'otherTeam')}</Text>
                     ) : (
                       <MaterialIcons 
                         name={isSelected ? 'check-circle' : 'radio-button-unchecked'} 
@@ -1918,7 +1920,7 @@ export default function NewMatchScreen() {
             {filteredPlayers.length === 0 && (
               <View style={styles.emptySearch}>
                 <MaterialIcons name="search-off" size={40} color={theme.textMuted} />
-                <Text style={styles.emptySearchText}>Aucun joueur trouvé</Text>
+                <Text style={styles.emptySearchText}>{t('match', 'noPlayersFound')}</Text>
               </View>
             )}
           </ScrollView>
