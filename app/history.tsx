@@ -108,7 +108,7 @@ const filterByPeriod = <T extends { date: string }>(items: T[], days: number): T
 };
 
 // Components
-const MatchCard = React.memo(({ match, onPress, compact = false, t }: { match: Match; onPress: () => void; compact?: boolean; t: (s: string, k: string) => string }) => {
+const MatchCard = React.memo(({ match, onPress, compact = false, t, language }: { match: Match; onPress: () => void; compact?: boolean; t: (s: string, k: string) => string; language: 'fr' | 'en' }) => {
   const isWin = match.winner === 'A';
   const isTournament = match.mode === 'Tournoi';
 
@@ -196,7 +196,7 @@ const MatchCard = React.memo(({ match, onPress, compact = false, t }: { match: M
 });
 
 // Series Card Component
-const SeriesCard = React.memo(({ series, onMatchPress, t }: { series: SeriesGroup; onMatchPress: (match: Match) => void; t: (s: string, k: string) => string }) => {
+const SeriesCard = React.memo(({ series, onMatchPress, t, language }: { series: SeriesGroup; onMatchPress: (match: Match) => void; t: (s: string, k: string) => string; language: 'fr' | 'en' }) => {
   const [expanded, setExpanded] = useState(false);
   const rotateAnim = useSharedValue(0);
   
@@ -296,7 +296,7 @@ const SeriesCard = React.memo(({ series, onMatchPress, t }: { series: SeriesGrou
       {expanded && (
         <Animated.View entering={FadeIn.duration(200)} style={styles.seriesMatchList}>
           {series.matches.map((match) => (
-            <MatchCard key={match.id} match={match} onPress={() => onMatchPress(match)} compact t={t} />
+            <MatchCard key={match.id} match={match} onPress={() => onMatchPress(match)} compact t={t} language={language} />
           ))}
         </Animated.View>
       )}
@@ -305,7 +305,7 @@ const SeriesCard = React.memo(({ series, onMatchPress, t }: { series: SeriesGrou
 });
 
 // Challenge Card Component - Improved design
-const ChallengeCard = React.memo(({ challenge, onPress, t }: { challenge: Challenge; onPress: () => void; t: (s: string, k: string) => string }) => {
+const ChallengeCard = React.memo(({ challenge, onPress, t, language }: { challenge: Challenge; onPress: () => void; t: (s: string, k: string) => string; language: 'fr' | 'en' }) => {
   const config = CHALLENGE_CONFIG[challenge.type];
   const challengeName = t('challenge', config.nameKey);
   const score = challenge.type === 'precision' ? challenge.totalPoints || 0 : challenge.successRate || 0;
@@ -667,7 +667,7 @@ export default function HistoryScreen() {
     if (item.type === 'series') {
       return (
         <Animated.View entering={FadeIn.duration(200).delay(Math.min(index * 20, 100))}>
-          <SeriesCard series={item.data as SeriesGroup} onMatchPress={handleMatchPress} t={t} />
+          <SeriesCard series={item.data as SeriesGroup} onMatchPress={handleMatchPress} t={t} language={language} />
         </Animated.View>
       );
     }
@@ -675,14 +675,14 @@ export default function HistoryScreen() {
     if (item.type === 'match') {
       return (
         <Animated.View entering={FadeIn.duration(200).delay(Math.min(index * 20, 100))}>
-          <MatchCard match={item.data as Match} onPress={() => handleMatchPress(item.data as Match)} t={t} />
+          <MatchCard match={item.data as Match} onPress={() => handleMatchPress(item.data as Match)} t={t} language={language} />
         </Animated.View>
       );
     }
     
     return (
       <Animated.View entering={FadeIn.duration(200).delay(Math.min(index * 20, 100))}>
-        <ChallengeCard challenge={item.data as Challenge} onPress={() => handleChallengePress(item.data as Challenge)} t={t} />
+        <ChallengeCard challenge={item.data as Challenge} onPress={() => handleChallengePress(item.data as Challenge)} t={t} language={language} />
       </Animated.View>
     );
   }, [handleMatchPress, handleChallengePress, t]);
