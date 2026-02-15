@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,12 +16,20 @@ import * as Clipboard from 'expo-clipboard';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import theme from '@/constants/theme';
 import { createShareLink, ShareItemType, SharePermission } from '@/services/shareService';
+import { useLanguage } from '@/hooks/useLanguage';
 
-const TYPE_LABELS: Record<ShareItemType, { label: string; icon: string; color: string }> = {
-  player: { label: 'Joueur', icon: 'person', color: theme.primary },
-  club: { label: 'Club', icon: 'home', color: theme.accent },
-  terrain: { label: 'Terrain', icon: 'landscape', color: theme.success },
-  tournament: { label: 'Tournoi', icon: 'emoji-events', color: theme.carreauColor },
+const TYPE_CONFIG: Record<ShareItemType, { labelKey: string; icon: string; color: string }> = {
+  player: { labelKey: 'playerLabelUpper', icon: 'person', color: theme.primary },
+  club: { labelKey: 'clubLabelUpper', icon: 'home', color: theme.accent },
+  terrain: { labelKey: 'terrainLabelUpper', icon: 'landscape', color: theme.success },
+  tournament: { labelKey: 'tournamentLabelUpper', icon: 'emoji-events', color: theme.carreauColor },
+};
+
+const TYPE_LOWER_KEY: Record<ShareItemType, string> = {
+  player: 'playerLabel',
+  club: 'clubLabel',
+  terrain: 'terrainLabel',
+  tournament: 'tournamentLabel',
 };
 
 interface ShareModalProps {
@@ -33,6 +41,7 @@ interface ShareModalProps {
 }
 
 export default function ShareModal({ visible, onClose, itemType, itemId, itemName }: ShareModalProps) {
+  const { t } = useLanguage();
   const [permission, setPermission] = useState<SharePermission>('read');
   const [isGenerating, setIsGenerating] = useState(false);
   const [shareCode, setShareCode] = useState<string | null>(null);
@@ -40,7 +49,9 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const config = TYPE_LABELS[itemType];
+  const config = TYPE_CONFIG[itemType];
+  const typeLabel = t('shareModal', config.labelKey);
+  const typeLabelLower = t('shareModal', TYPE_LOWER_KEY[itemType]);
 
   const handleGenerate = useCallback(async () => {
     setIsGenerating(true);
@@ -55,11 +66,11 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     } catch (e) {
-      setError('Erreur lors de la création du lien');
+      setError(t('shareModal', 'errorCreating'));
     } finally {
       setIsGenerating(false);
     }
-  }, [itemType, itemId, permission]);
+  }, [itemType, itemId, permission, t]);
 
   const handleCopy = useCallback(async () => {
     if (!shareCode) return;
@@ -71,16 +82,16 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
 
   const handleShare = useCallback(async () => {
     if (!shareCode) return;
-    const message = `Je partage ma fiche ${config.label.toLowerCase()} "${itemName}" sur Ultimate Petanque !\n\nCode de partage : ${shareCode}`;
+    const message = `${t('shareModal', 'shareMessage')} ${typeLabelLower} "${itemName}" ${t('shareModal', 'shareMessageSuffix')}\n\n${t('shareModal', 'shareMessageCode')} ${shareCode}`;
     try {
       await Share.share({
         message,
-        title: `Partager - ${itemName}`,
+        title: `${t('shareModal', 'shareMessageTitle')} ${itemName}`,
       });
     } catch (e) {
       // User cancelled
     }
-  }, [shareCode, config.label, itemName]);
+  }, [shareCode, typeLabelLower, itemName, t]);
 
   const handleClose = useCallback(() => {
     setShareCode(null);
@@ -103,7 +114,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
           <Pressable style={styles.closeBtn} onPress={handleClose}>
             <MaterialIcons name="close" size={24} color={theme.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Partager</Text>
+          <Text style={styles.headerTitle}>{t('shareModal', 'shareTitle')}</Text>
           <View style={{ width: 40 }} />
         </View>
 
@@ -115,7 +126,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
             </View>
             <View style={styles.itemInfo}>
               <Text style={styles.itemName} numberOfLines={1}>{itemName}</Text>
-              <Text style={styles.itemType}>{config.label}</Text>
+              <Text style={styles.itemType}>{typeLabel}</Text>
             </View>
           </Animated.View>
 
@@ -123,7 +134,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
             <>
               {/* Permission selection */}
               <Animated.View entering={FadeInDown.duration(300).delay(50)} style={styles.permissionSection}>
-                <Text style={styles.sectionLabel}>PERMISSION</Text>
+                <Text style={styles.sectionLabel}>{t('shareModal', 'permissionLabel')}</Text>
                 <View style={styles.permissionOptions}>
                   <Pressable
                     style={[styles.permissionOption, permission === 'read' && styles.permissionOptionActive]}
@@ -133,11 +144,11 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                       <MaterialIcons name="visibility" size={22} color={theme.primary} />
                     </View>
                     <View style={styles.permissionInfo}>
-                      <Text style={[styles.permissionTitle, permission === 'read' && { color: theme.primary }]}>Lecture seule</Text>
-                      <Text style={styles.permissionDesc}>Peut consulter la fiche</Text>
+                      <Text style={[styles.permissionTitle, permission === 'read' && { color: theme.primary }]}>{t('shareModal', 'readOnly')}</Text>
+                      <Text style={styles.permissionDesc}>{t('shareModal', 'canViewCard')}</Text>
                     </View>
                     <View style={[styles.radio, permission === 'read' && styles.radioActive]}>
-                      {permission === 'read' && <View style={styles.radioDot} />}
+                      {permission === 'read' ? <View style={styles.radioDot} /> : null}
                     </View>
                   </Pressable>
 
@@ -149,22 +160,22 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                       <MaterialIcons name="edit" size={22} color={theme.accent} />
                     </View>
                     <View style={styles.permissionInfo}>
-                      <Text style={[styles.permissionTitle, permission === 'write' && { color: theme.accent }]}>Lecture + Modification</Text>
-                      <Text style={styles.permissionDesc}>Peut consulter et modifier</Text>
+                      <Text style={[styles.permissionTitle, permission === 'write' && { color: theme.accent }]}>{t('shareModal', 'readWrite')}</Text>
+                      <Text style={styles.permissionDesc}>{t('shareModal', 'canViewAndEdit')}</Text>
                     </View>
                     <View style={[styles.radio, permission === 'write' && styles.radioActiveWrite]}>
-                      {permission === 'write' && <View style={[styles.radioDot, { backgroundColor: theme.accent }]} />}
+                      {permission === 'write' ? <View style={[styles.radioDot, { backgroundColor: theme.accent }]} /> : null}
                     </View>
                   </Pressable>
                 </View>
               </Animated.View>
 
-              {error && (
+              {error ? (
                 <View style={styles.errorBox}>
                   <MaterialIcons name="error" size={18} color={theme.error} />
                   <Text style={styles.errorText}>{error}</Text>
                 </View>
-              )}
+              ) : null}
 
               {/* Generate button */}
               <Animated.View entering={FadeInDown.duration(300).delay(100)}>
@@ -178,7 +189,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                   ) : (
                     <>
                       <MaterialIcons name="link" size={22} color="#FFF" />
-                      <Text style={styles.generateBtnText}>Générer le code de partage</Text>
+                      <Text style={styles.generateBtnText}>{t('shareModal', 'generateCode')}</Text>
                     </>
                   )}
                 </Pressable>
@@ -191,9 +202,9 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                 <View style={styles.resultIcon}>
                   <MaterialIcons name="check-circle" size={48} color={theme.success} />
                 </View>
-                <Text style={styles.resultTitle}>Code de partage créé</Text>
+                <Text style={styles.resultTitle}>{t('shareModal', 'codeCreated')}</Text>
                 <Text style={styles.resultDesc}>
-                  Partagez ce code avec vos amis pour leur donner accès
+                  {t('shareModal', 'shareCodeDesc')}
                 </Text>
 
                 {/* Share code display */}
@@ -202,7 +213,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                   <Pressable style={styles.copyBtn} onPress={handleCopy}>
                     <MaterialIcons name={copied ? 'check' : 'content-copy'} size={20} color={copied ? theme.success : theme.primary} />
                     <Text style={[styles.copyBtnText, copied && { color: theme.success }]}>
-                      {copied ? 'Copié' : 'Copier'}
+                      {copied ? t('shareModal', 'copied') : t('shareModal', 'copy')}
                     </Text>
                   </Pressable>
                 </View>
@@ -215,7 +226,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                     color={permission === 'read' ? theme.primary : theme.accent}
                   />
                   <Text style={[styles.permissionBadgeText, { color: permission === 'read' ? theme.primary : theme.accent }]}>
-                    {permission === 'read' ? 'Lecture seule' : 'Lecture + Modification'}
+                    {permission === 'read' ? t('shareModal', 'readOnly') : t('shareModal', 'readWrite')}
                   </Text>
                 </View>
               </Animated.View>
@@ -224,11 +235,11 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
               <Animated.View entering={FadeInDown.duration(300).delay(100)} style={styles.shareActions}>
                 <Pressable style={styles.shareActionBtn} onPress={handleShare}>
                   <MaterialIcons name="share" size={24} color={theme.primary} />
-                  <Text style={styles.shareActionBtnText}>Partager</Text>
+                  <Text style={styles.shareActionBtnText}>{t('shareModal', 'shareBtn')}</Text>
                 </Pressable>
                 <Pressable style={styles.shareActionBtn} onPress={handleCopy}>
                   <MaterialIcons name="content-copy" size={24} color={theme.accent} />
-                  <Text style={styles.shareActionBtnText}>Copier le code</Text>
+                  <Text style={styles.shareActionBtnText}>{t('shareModal', 'copyCode')}</Text>
                 </Pressable>
               </Animated.View>
 
@@ -236,7 +247,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
               <Animated.View entering={FadeInDown.duration(300).delay(150)} style={styles.infoBox}>
                 <MaterialIcons name="info-outline" size={18} color={theme.textMuted} />
                 <Text style={styles.infoText}>
-                  Le destinataire doit avoir l'application Ultimate Petanque et saisir le code dans la section "Code de partage" de son profil.
+                  {t('shareModal', 'infoText')}
                 </Text>
               </Animated.View>
             </>

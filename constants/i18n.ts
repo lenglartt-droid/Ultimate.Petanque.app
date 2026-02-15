@@ -1517,6 +1517,41 @@ export const translations = {
     optionalContinue: { fr: 'Optionnel : continuez pour préciser le type et la qualité', en: 'Optional: continue to specify type and quality' },
     longPressDetailed: { fr: 'Appui long = notation détaillée', en: 'Long press = detailed notation' },
   },
+  // ============================================
+  // SHARE MODAL
+  // ============================================
+  shareModal: {
+    shareTitle: { fr: 'Partager', en: 'Share' },
+    permissionLabel: { fr: 'PERMISSION', en: 'PERMISSION' },
+    readOnly: { fr: 'Lecture seule', en: 'Read only' },
+    canViewCard: { fr: 'Peut consulter la fiche', en: 'Can view the card' },
+    readWrite: { fr: 'Lecture + Modification', en: 'Read + Edit' },
+    canViewAndEdit: { fr: 'Peut consulter et modifier', en: 'Can view and edit' },
+    generateCode: { fr: 'Générer le code de partage', en: 'Generate share code' },
+    errorCreating: { fr: 'Erreur lors de la création du lien', en: 'Error creating share link' },
+    codeCreated: { fr: 'Code de partage créé', en: 'Share code created' },
+    shareCodeDesc: { fr: 'Partagez ce code avec vos amis pour leur donner accès', en: 'Share this code with your friends to give them access' },
+    copied: { fr: 'Copié', en: 'Copied' },
+    copy: { fr: 'Copier', en: 'Copy' },
+    shareBtn: { fr: 'Partager', en: 'Share' },
+    copyCode: { fr: 'Copier le code', en: 'Copy code' },
+    infoText: {
+      fr: 'Le destinataire doit avoir l\'application Ultimate Petanque et saisir le code dans la section "Code de partage" de son profil.',
+      en: 'The recipient must have the Ultimate Petanque app and enter the code in the "Share code" section of their profile.',
+    },
+    shareMessage: { fr: 'Je partage ma fiche', en: 'I am sharing my' },
+    shareMessageSuffix: { fr: 'sur Ultimate Petanque !', en: 'card on Ultimate Petanque!' },
+    shareMessageCode: { fr: 'Code de partage :', en: 'Share code:' },
+    shareMessageTitle: { fr: 'Partager -', en: 'Share -' },
+    playerLabel: { fr: 'joueur', en: 'player' },
+    clubLabel: { fr: 'club', en: 'club' },
+    terrainLabel: { fr: 'terrain', en: 'terrain' },
+    tournamentLabel: { fr: 'tournoi', en: 'tournament' },
+    playerLabelUpper: { fr: 'Joueur', en: 'Player' },
+    clubLabelUpper: { fr: 'Club', en: 'Club' },
+    terrainLabelUpper: { fr: 'Terrain', en: 'Terrain' },
+    tournamentLabelUpper: { fr: 'Tournoi', en: 'Tournament' },
+  },
 } as const;
 
 // Helper type to get a translation value
