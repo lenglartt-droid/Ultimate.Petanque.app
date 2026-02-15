@@ -329,7 +329,7 @@ export default function HomeScreen() {
                         <View style={styles.tournamentPickerBadges}>
                           <View style={[styles.tournamentPickerBadge, { backgroundColor: colors.bg }]}>
                             <Text style={[styles.tournamentPickerBadgeText, { color: colors.text }]}>
-                              {tournament.status}
+                              {tournament.status === 'À venir' ? t('tournamentStatus', 'upcoming') : tournament.status === 'En cours' ? t('tournamentStatus', 'inProgress') : t('tournamentStatus', 'completed')}
                             </Text>
                           </View>
                           <View style={[styles.tournamentPickerBadge, { backgroundColor: theme.backgroundSecondary }]}>
@@ -345,7 +345,7 @@ export default function HomeScreen() {
                 })) : ( // Added closing parenthesis for filteredTournaments.map
                   <View style={styles.emptyFilterState}>
                     <MaterialIcons name="filter-list-off" size={40} color={theme.textMuted} />
-                    <Text style={styles.emptyFilterText}>{t('home', 'noTournamentFilter')} {statusFilter !== 'all' ? `"${statusFilter}"` : ''}</Text>
+                    <Text style={styles.emptyFilterText}>{t('home', 'noTournamentFilter')} {statusFilter !== 'all' ? `"${statusFilter === 'À venir' ? t('tournamentStatus', 'upcoming') : statusFilter === 'En cours' ? t('tournamentStatus', 'inProgress') : t('tournamentStatus', 'completed')}"` : ''}</Text>
                     <Pressable
                       style={styles.resetFilterBtn}
                       onPress={() => setStatusFilter('all')}
