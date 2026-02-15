@@ -16,6 +16,7 @@ import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import theme from '@/constants/theme';
+import { useLanguage } from '@/hooks/useLanguage';
 
 export interface LocationData {
   address: string;
@@ -49,12 +50,17 @@ interface SearchResult {
 export default function LocationPicker({
   value,
   onChange,
-  placeholder = 'Rechercher une adresse...',
-  label = 'LOCALISATION',
+  placeholder,
+  label,
   required = false,
   showAddressField = true,
   showCityOnly = false,
 }: LocationPickerProps) {
+  const { t } = useLanguage();
+
+  const resolvedPlaceholder = placeholder || t('locationPicker', 'searchAddress');
+  const resolvedLabel = label !== undefined ? label : t('locationPicker', 'location');
+
   const [modalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -164,8 +170,8 @@ export default function LocationPicker({
         const granted = await requestLocationPermission();
         if (!granted) {
           Alert.alert(
-            'Permission requise',
-            'Veuillez autoriser l\'accès à la localisation pour utiliser cette fonctionnalité.'
+            t('locationPicker', 'permissionRequired'),
+            t('locationPicker', 'permissionMessage')
           );
           setIsGeolocating(false);
           return;
@@ -204,11 +210,11 @@ export default function LocationPicker({
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setModalVisible(false);
       } else {
-        Alert.alert('Erreur', 'Impossible de déterminer votre adresse actuelle.');
+        Alert.alert(t('common', 'error'), t('locationPicker', 'errorAddress'));
       }
     } catch (error) {
       console.log('Geolocation error:', error);
-      Alert.alert('Erreur', 'Impossible de récupérer votre position. Vérifiez vos paramètres de localisation.');
+      Alert.alert(t('common', 'error'), t('locationPicker', 'errorPosition'));
     } finally {
       setIsGeolocating(false);
     }
@@ -286,11 +292,11 @@ export default function LocationPicker({
 
   return (
     <View style={styles.container}>
-      {label && (
+      {resolvedLabel ? (
         <Text style={styles.label}>
-          {label} {required && '*'}
+          {resolvedLabel} {required ? '*' : ''}
         </Text>
-      )}
+      ) : null}
 
       <Pressable style={styles.inputContainer} onPress={openModal}>
         <MaterialIcons 
@@ -305,9 +311,9 @@ export default function LocationPicker({
                 <Text style={styles.inputValue}>{value.city}</Text>
               ) : (
                 <>
-                  {showAddressField && value.address && (
+                  {showAddressField && value.address ? (
                     <Text style={styles.inputValue}>{value.address}</Text>
-                  )}
+                  ) : null}
                   <Text style={[styles.inputCity, !value.address && styles.inputValue]}>
                     {value.city}
                   </Text>
@@ -315,7 +321,7 @@ export default function LocationPicker({
               )}
             </>
           ) : (
-            <Text style={styles.placeholder}>{placeholder}</Text>
+            <Text style={styles.placeholder}>{resolvedPlaceholder}</Text>
           )}
         </View>
         {value?.city ? (
@@ -328,12 +334,12 @@ export default function LocationPicker({
       </Pressable>
 
       {/* Location confirmed indicator */}
-      {value?.latitude !== 0 && value?.longitude !== 0 && (
+      {value?.latitude !== 0 && value?.longitude !== 0 ? (
         <Animated.View entering={FadeIn.duration(200)} style={styles.confirmedBadge}>
           <MaterialIcons name="check-circle" size={14} color={theme.success} />
-          <Text style={styles.confirmedText}>Position GPS enregistrée</Text>
+          <Text style={styles.confirmedText}>{t('locationPicker', 'gpsPositionSaved')}</Text>
         </Animated.View>
-      )}
+      ) : null}
 
       {/* Search Modal */}
       <Modal
@@ -348,7 +354,7 @@ export default function LocationPicker({
             <Pressable style={styles.modalCloseBtn} onPress={closeModal}>
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>
-            <Text style={styles.modalTitle}>Rechercher un lieu</Text>
+            <Text style={styles.modalTitle}>{t('locationPicker', 'searchPlace')}</Text>
             <View style={{ width: 40 }} />
           </View>
 
@@ -364,7 +370,7 @@ export default function LocationPicker({
               <MaterialIcons name="my-location" size={20} color="#FFF" />
             )}
             <Text style={styles.gpsButtonText}>
-              {isGeolocating ? 'Localisation en cours...' : 'Utiliser ma position actuelle'}
+              {isGeolocating ? t('locationPicker', 'locating') : t('locationPicker', 'useCurrentPosition')}
             </Text>
           </Pressable>
 
@@ -375,16 +381,16 @@ export default function LocationPicker({
               style={styles.searchInput}
               value={searchQuery}
               onChangeText={setSearchQuery}
-              placeholder="Entrez une adresse, une ville..."
+              placeholder={t('locationPicker', 'enterAddress')}
               placeholderTextColor={theme.textMuted}
               autoFocus
               returnKeyType="search"
             />
-            {searchQuery.length > 0 && (
+            {searchQuery.length > 0 ? (
               <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
                 <MaterialIcons name="close" size={18} color={theme.textMuted} />
               </Pressable>
-            )}
+            ) : null}
           </View>
 
           {/* Search Results / Recent / Loading */}
@@ -392,7 +398,7 @@ export default function LocationPicker({
             {isSearching ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={theme.primary} />
-                <Text style={styles.loadingText}>Recherche en cours...</Text>
+                <Text style={styles.loadingText}>{t('locationPicker', 'searching')}</Text>
               </View>
             ) : searchResults.length > 0 ? (
               <FlatList
@@ -405,15 +411,15 @@ export default function LocationPicker({
             ) : searchQuery.length >= 3 ? (
               <View style={styles.emptyContainer}>
                 <MaterialIcons name="location-off" size={48} color={theme.textMuted} />
-                <Text style={styles.emptyText}>Aucun résultat trouvé</Text>
-                <Text style={styles.emptyHint}>Essayez avec une adresse ou une ville différente</Text>
+                <Text style={styles.emptyText}>{t('locationPicker', 'noResultFound')}</Text>
+                <Text style={styles.emptyHint}>{t('locationPicker', 'tryDifferentAddress')}</Text>
               </View>
             ) : (
               <View style={styles.hintsContainer}>
                 {/* Recent searches */}
-                {recentSearches.length > 0 && (
+                {recentSearches.length > 0 ? (
                   <Animated.View entering={FadeInDown.duration(300)}>
-                    <Text style={styles.hintsSectionTitle}>Recherches récentes</Text>
+                    <Text style={styles.hintsSectionTitle}>{t('locationPicker', 'recentSearches')}</Text>
                     {recentSearches.map((result) => (
                       <Pressable
                         key={result.id}
@@ -428,17 +434,15 @@ export default function LocationPicker({
                       </Pressable>
                     ))}
                   </Animated.View>
-                )}
+                ) : null}
 
                 {/* Hints */}
                 <View style={styles.hintsCard}>
                   <MaterialIcons name="lightbulb" size={20} color={theme.warning} />
                   <View style={styles.hintsContent}>
-                    <Text style={styles.hintsTitle}>Conseils de recherche</Text>
+                    <Text style={styles.hintsTitle}>{t('locationPicker', 'searchTips')}</Text>
                     <Text style={styles.hintsText}>
-                      • Entrez au moins 3 caractères{'\n'}
-                      • Incluez le nom de la ville{'\n'}
-                      • Ex: "12 rue de la paix, Lyon"
+                      {`\u2022 ${t('locationPicker', 'tipMinChars')}\n\u2022 ${t('locationPicker', 'tipIncludeCity')}\n\u2022 ${t('locationPicker', 'tipExample')}`}
                     </Text>
                   </View>
                 </View>

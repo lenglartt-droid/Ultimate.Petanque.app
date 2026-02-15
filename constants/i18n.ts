@@ -1597,6 +1597,30 @@ export const translations = {
     nameRequired: { fr: 'Le nom est requis', en: 'Name is required' },
     unableToCreateProfile: { fr: 'Impossible de créer le profil', en: 'Unable to create profile' },
   },
+  // ============================================
+  // LOCATION PICKER
+  // ============================================
+  locationPicker: {
+    searchPlace: { fr: 'Rechercher un lieu', en: 'Search a place' },
+    searchAddress: { fr: 'Rechercher une adresse...', en: 'Search an address...' },
+    location: { fr: 'LOCALISATION', en: 'LOCATION' },
+    gpsPositionSaved: { fr: 'Position GPS enregistrée', en: 'GPS position saved' },
+    useCurrentPosition: { fr: 'Utiliser ma position actuelle', en: 'Use my current position' },
+    locating: { fr: 'Localisation en cours...', en: 'Locating...' },
+    enterAddress: { fr: 'Entrez une adresse, une ville...', en: 'Enter an address, a city...' },
+    searching: { fr: 'Recherche en cours...', en: 'Searching...' },
+    noResultFound: { fr: 'Aucun résultat trouvé', en: 'No result found' },
+    tryDifferentAddress: { fr: 'Essayez avec une adresse ou une ville différente', en: 'Try a different address or city' },
+    recentSearches: { fr: 'Recherches récentes', en: 'Recent searches' },
+    searchTips: { fr: 'Conseils de recherche', en: 'Search tips' },
+    tipMinChars: { fr: 'Entrez au moins 3 caractères', en: 'Enter at least 3 characters' },
+    tipIncludeCity: { fr: 'Incluez le nom de la ville', en: 'Include the city name' },
+    tipExample: { fr: 'Ex: "12 rue de la paix, Lyon"', en: 'Ex: "12 High Street, London"' },
+    permissionRequired: { fr: 'Permission requise', en: 'Permission required' },
+    permissionMessage: { fr: "Veuillez autoriser l'accès à la localisation pour utiliser cette fonctionnalité.", en: 'Please allow location access to use this feature.' },
+    errorAddress: { fr: 'Impossible de déterminer votre adresse actuelle.', en: 'Unable to determine your current address.' },
+    errorPosition: { fr: 'Impossible de récupérer votre position. Vérifiez vos paramètres de localisation.', en: 'Unable to get your position. Check your location settings.' },
+  },
 } as const;
 
 // Helper type to get a translation value
