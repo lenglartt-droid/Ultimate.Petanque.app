@@ -19,6 +19,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import theme from '@/constants/theme';
 import config, { GameFormat, PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface MeneEdit {
   teamAPoints: number;
@@ -30,6 +31,7 @@ export default function EditMatchScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getMatchById, updateMatch, deleteMatch, players, matches } = useApp();
+  const { t, language } = useLanguage();
 
   const match = getMatchById(id!);
   
@@ -84,10 +86,10 @@ export default function EditMatchScreen() {
 
   const maxScore = config.game.maxScore;
 
-  const ROLE_CONFIG: Record<PlayerRole, { icon: string; color: string; label: string }> = {
-    'Pointeur': { icon: 'radio-button-on', color: '#3B82F6', label: 'Pointeur' },
-    'Milieu': { icon: 'swap-horiz', color: '#8B5CF6', label: 'Milieu' },
-    'Tireur': { icon: 'gps-fixed', color: '#F97316', label: 'Tireur' },
+  const ROLE_CONFIG: Record<PlayerRole, { icon: string; color: string; labelKey: string }> = {
+    'Pointeur': { icon: 'radio-button-on', color: '#3B82F6', labelKey: 'pointeur' },
+    'Milieu': { icon: 'swap-horiz', color: '#8B5CF6', labelKey: 'milieu' },
+    'Tireur': { icon: 'gps-fixed', color: '#F97316', labelKey: 'tireur' },
   };
 
   useEffect(() => {
@@ -112,6 +114,8 @@ export default function EditMatchScreen() {
   // State to show series panel
   const [showSeriesPanel, setShowSeriesPanel] = useState(true);
 
+  const locale = language === 'en' ? 'en-US' : 'fr-FR';
+
   if (!match) {
     return (
       <SafeAreaView style={styles.container}>
@@ -119,7 +123,7 @@ export default function EditMatchScreen() {
           <Pressable style={styles.backButton} onPress={() => router.back()}>
             <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Match non trouvé</Text>
+          <Text style={styles.headerTitle}>{t('match', 'matchNotFound')}</Text>
           <View style={{ width: 40 }} />
         </View>
       </SafeAreaView>
@@ -167,10 +171,10 @@ export default function EditMatchScreen() {
   };
 
   const handleDeleteMene = (index: number) => {
-    Alert.alert('Supprimer', 'Supprimer cette mène ?', [
-      { text: 'Annuler', style: 'cancel' },
+    Alert.alert(t('common', 'delete'), t('match', 'deleteThisMene'), [
+      { text: t('common', 'cancel'), style: 'cancel' },
       { 
-        text: 'Supprimer', 
+        text: t('common', 'delete'), 
         style: 'destructive',
         onPress: () => setMenes(prev => prev.filter((_, i) => i !== index))
       },
@@ -218,12 +222,12 @@ export default function EditMatchScreen() {
 
   const handleDelete = () => {
     Alert.alert(
-      'Supprimer le match',
-      'Cette action est irréversible. Voulez-vous vraiment supprimer ce match ?',
+      t('match', 'deleteMatch'),
+      t('match', 'deleteMatchConfirm'),
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common', 'cancel'), style: 'cancel' },
         {
-          text: 'Supprimer',
+          text: t('common', 'delete'),
           style: 'destructive',
           onPress: () => {
             deleteMatch(id!);
@@ -242,7 +246,7 @@ export default function EditMatchScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="close" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Modifier le match</Text>
+        <Text style={styles.headerTitle}>{t('match', 'editMatch')}</Text>
         <Pressable style={styles.deleteButton} onPress={handleDelete}>
           <MaterialIcons name="delete" size={24} color={theme.error} />
         </Pressable>
@@ -275,12 +279,12 @@ export default function EditMatchScreen() {
                   </View>
                   <View>
                     <Text style={styles.seriesPanelTitle}>
-                      Série ({seriesMatches.length} matchs)
+                      {t('match', 'seriesLabel')} ({seriesMatches.length} {t('match', 'matchesCount')})
                     </Text>
                     <Text style={styles.seriesPanelSubtitle}>
                       {seriesStats.isComplete 
-                        ? (seriesStats.seriesWinner === 'A' ? 'Série gagnée' : 'Série perdue')
-                        : 'En cours'
+                        ? (seriesStats.seriesWinner === 'A' ? t('match', 'seriesWon') : t('match', 'seriesLost'))
+                        : t('match', 'inProgressLabel')
                       } • {seriesStats.winsA} - {seriesStats.winsB}
                     </Text>
                   </View>
@@ -326,11 +330,11 @@ export default function EditMatchScreen() {
                           </View>
                           <View>
                             <Text style={styles.seriesMatchLabel}>
-                              {isFinale ? 'Finale' : `Match ${idx + 1}`}
-                              {isCurrentMatch && ' (actuel)'}
+                              {isFinale ? t('match', 'finaleLabel') : `${t('match', 'matchNumber')} ${idx + 1}`}
+                              {isCurrentMatch ? ` (${t('match', 'currentLabel')})` : ''}
                             </Text>
                             <Text style={styles.seriesMatchDate}>
-                              {new Date(seriesMatch.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                              {new Date(seriesMatch.date).toLocaleDateString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                             </Text>
                           </View>
                         </View>
@@ -358,7 +362,7 @@ export default function EditMatchScreen() {
                       <Text style={[styles.seriesSummaryValue, seriesStats.winsA > seriesStats.winsB && styles.seriesSummaryValueWin]}>
                         {seriesStats.winsA}
                       </Text>
-                      <Text style={styles.seriesSummarySep}>victoires</Text>
+                      <Text style={styles.seriesSummarySep}>{t('match', 'victoriesLabel')}</Text>
                       <Text style={[styles.seriesSummaryValue, seriesStats.winsB > seriesStats.winsA && styles.seriesSummaryValueLoss]}>
                         {seriesStats.winsB}
                       </Text>
@@ -377,7 +381,7 @@ export default function EditMatchScreen() {
                           styles.seriesFinalBadgeText,
                           { color: seriesStats.seriesWinner === 'A' ? theme.success : theme.error }
                         ]}>
-                          {seriesStats.seriesWinner === 'A' ? 'Série gagnée' : 'Série perdue'}
+                          {seriesStats.seriesWinner === 'A' ? t('match', 'seriesWon') : t('match', 'seriesLost')}
                         </Text>
                       </View>
                     )}
@@ -389,7 +393,7 @@ export default function EditMatchScreen() {
 
           {/* Date & Time */}
           <Animated.View entering={FadeInDown.duration(400).delay(seriesMatches.length > 1 ? 50 : 0)} style={styles.section}>
-            <Text style={styles.sectionTitle}>DATE ET HEURE</Text>
+            <Text style={styles.sectionTitle}>{t('match', 'dateAndTime')}</Text>
             <View style={styles.dateTimeContainer}>
               <Pressable 
                 style={styles.dateButton}
@@ -397,7 +401,7 @@ export default function EditMatchScreen() {
               >
                 <MaterialIcons name="event" size={20} color={theme.primary} />
                 <Text style={styles.dateText}>
-                  {matchDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  {matchDate.toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' })}
                 </Text>
               </Pressable>
               <Pressable 
@@ -406,7 +410,7 @@ export default function EditMatchScreen() {
               >
                 <MaterialIcons name="access-time" size={20} color={theme.primary} />
                 <Text style={styles.dateText}>
-                  {matchDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                  {matchDate.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
                 </Text>
               </Pressable>
             </View>
@@ -430,12 +434,12 @@ export default function EditMatchScreen() {
 
           {/* Location */}
           <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
-            <Text style={styles.sectionTitle}>LIEU / TOURNOI</Text>
+            <Text style={styles.sectionTitle}>{t('match', 'locationTournament')}</Text>
             <TextInput
               style={styles.textInput}
               value={location}
               onChangeText={setLocation}
-              placeholder="Ex: Parc de la Tête d'Or, Lyon"
+              placeholder={t('match', 'locationPlaceholder')}
               placeholderTextColor={theme.textMuted}
             />
           </Animated.View>
@@ -443,7 +447,7 @@ export default function EditMatchScreen() {
           {/* Mode Selection - Only show if not a tournament match */}
           {!match.tournamentId && (
             <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-              <Text style={styles.sectionTitle}>MODE</Text>
+              <Text style={styles.sectionTitle}>{t('match', 'modeLabel')}</Text>
               <View style={styles.modeContainer}>
                 {config.matchModes.map(m => (
                   <Pressable
@@ -466,7 +470,7 @@ export default function EditMatchScreen() {
                       styles.modeText,
                       mode === m && styles.modeTextActive
                     ]}>
-                      {m}
+                      {m === 'Entraînement' ? t('modes', 'training') : t('modes', 'tournament')}
                     </Text>
                   </Pressable>
                 ))}
@@ -477,12 +481,12 @@ export default function EditMatchScreen() {
           {/* Tournament Badge - Show if it's a tournament match */}
           {match.tournamentId && (
             <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-              <Text style={styles.sectionTitle}>MODE</Text>
+              <Text style={styles.sectionTitle}>{t('match', 'modeLabel')}</Text>
               <View style={styles.tournamentBadgeContainer}>
                 <View style={styles.tournamentBadge}>
                   <MaterialIcons name="emoji-events" size={20} color={theme.carreauColor} />
                   <View style={styles.tournamentBadgeInfo}>
-                    <Text style={styles.tournamentBadgeLabel}>Match de tournoi</Text>
+                    <Text style={styles.tournamentBadgeLabel}>{t('match', 'tournamentMatchLabel')}</Text>
                     <Text style={styles.tournamentBadgeName}>{match.tournamentName}</Text>
                   </View>
                 </View>
@@ -497,7 +501,7 @@ export default function EditMatchScreen() {
 
           {/* Format Selection */}
           <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
-            <Text style={styles.sectionTitle}>FORMAT</Text>
+            <Text style={styles.sectionTitle}>{t('match', 'formatLabel')}</Text>
             <View style={styles.formatContainer}>
               {config.game.formats.map(f => (
                 <Pressable
@@ -524,15 +528,15 @@ export default function EditMatchScreen() {
 
           {/* Teams */}
           <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-            <Text style={styles.sectionTitle}>ÉQUIPES</Text>
+            <Text style={styles.sectionTitle}>{t('match', 'teamsLabel')}</Text>
             <View style={styles.teamsCard}>
               <View style={styles.teamInputGroup}>
-                <Text style={styles.teamLabel}>Mon équipe</Text>
+                <Text style={styles.teamLabel}>{t('match', 'myTeam')}</Text>
                 <TextInput
                   style={styles.teamInput}
                   value={teamANames}
                   onChangeText={setTeamANames}
-                  placeholder="Noms séparés par des virgules"
+                  placeholder={t('match', 'namesSeparatedByCommas')}
                   placeholderTextColor={theme.textMuted}
                 />
                 {/* Display roles if available */}
@@ -540,12 +544,12 @@ export default function EditMatchScreen() {
                   <View style={styles.rolesDisplay}>
                     {match.teamA.playerRoles.map((pr, idx) => {
                       const roleConfig = ROLE_CONFIG[pr.role as PlayerRole];
-                      const playerName = match.teamA.playerNames[idx]?.split(' ')[0] || 'Joueur';
+                      const playerName = match.teamA.playerNames[idx]?.split(' ')[0] || t('match', 'playerDefault');
                       return (
                         <View key={pr.playerId} style={[styles.roleDisplayBadge, { backgroundColor: roleConfig.color + '15' }]}>
                           <MaterialIcons name={roleConfig.icon as any} size={12} color={roleConfig.color} />
                           <Text style={[styles.roleDisplayText, { color: roleConfig.color }]}>
-                            {playerName} - {roleConfig.label}
+                            {playerName} - {t('roles', roleConfig.labelKey)}
                           </Text>
                         </View>
                       );
@@ -555,12 +559,12 @@ export default function EditMatchScreen() {
               </View>
               <View style={styles.teamDivider} />
               <View style={styles.teamInputGroup}>
-                <Text style={styles.teamLabel}>Adversaire</Text>
+                <Text style={styles.teamLabel}>{t('match', 'opponent')}</Text>
                 <TextInput
                   style={styles.teamInput}
                   value={teamBNames}
                   onChangeText={setTeamBNames}
-                  placeholder="Noms séparés par des virgules"
+                  placeholder={t('match', 'namesSeparatedByCommas')}
                   placeholderTextColor={theme.textMuted}
                 />
                 {/* Display roles if available */}
@@ -568,12 +572,12 @@ export default function EditMatchScreen() {
                   <View style={styles.rolesDisplay}>
                     {match.teamB.playerRoles.map((pr, idx) => {
                       const roleConfig = ROLE_CONFIG[pr.role as PlayerRole];
-                      const playerName = match.teamB.playerNames[idx]?.split(' ')[0] || 'Joueur';
+                      const playerName = match.teamB.playerNames[idx]?.split(' ')[0] || t('match', 'playerDefault');
                       return (
                         <View key={pr.playerId} style={[styles.roleDisplayBadge, { backgroundColor: roleConfig.color + '15' }]}>
                           <MaterialIcons name={roleConfig.icon as any} size={12} color={roleConfig.color} />
                           <Text style={[styles.roleDisplayText, { color: roleConfig.color }]}>
-                            {playerName} - {roleConfig.label}
+                            {playerName} - {t('roles', roleConfig.labelKey)}
                           </Text>
                         </View>
                       );
@@ -586,10 +590,10 @@ export default function EditMatchScreen() {
 
           {/* Score */}
           <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-            <Text style={styles.sectionTitle}>SCORE FINAL</Text>
+            <Text style={styles.sectionTitle}>{t('match', 'finalScore')}</Text>
             <View style={styles.scoreContainer}>
               <View style={styles.teamScore}>
-                <Text style={styles.scoreLabel}>Mon équipe</Text>
+                <Text style={styles.scoreLabel}>{t('match', 'myTeam')}</Text>
                 <View style={styles.scoreControls}>
                   <Pressable 
                     style={styles.scoreButton}
@@ -617,7 +621,7 @@ export default function EditMatchScreen() {
               </View>
 
               <View style={styles.teamScore}>
-                <Text style={styles.scoreLabel}>Adversaire</Text>
+                <Text style={styles.scoreLabel}>{t('match', 'opponent')}</Text>
                 <View style={styles.scoreControls}>
                   <Pressable 
                     style={styles.scoreButton}
@@ -644,7 +648,7 @@ export default function EditMatchScreen() {
 
           {/* Duration */}
           <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-            <Text style={styles.sectionTitle}>DURÉE (MINUTES)</Text>
+            <Text style={styles.sectionTitle}>{t('match', 'durationMinutes')}</Text>
             <View style={styles.durationContainer}>
               <Pressable 
                 style={styles.durationButton}
@@ -670,10 +674,10 @@ export default function EditMatchScreen() {
           {/* Mènes */}
           <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>MÈNES ({menes.length})</Text>
+              <Text style={styles.sectionTitle}>{t('match', 'menesCount')} ({menes.length})</Text>
               <Pressable style={styles.addMeneBtn} onPress={handleAddMene}>
                 <MaterialIcons name="add" size={18} color={theme.primary} />
-                <Text style={styles.addMeneBtnText}>Ajouter</Text>
+                <Text style={styles.addMeneBtnText}>{t('match', 'addLabel')}</Text>
               </Pressable>
             </View>
 
@@ -728,7 +732,7 @@ export default function EditMatchScreen() {
                 
                 {/* Totals */}
                 <View style={styles.meneTotalRow}>
-                  <Text style={styles.meneTotalLabel}>Total</Text>
+                  <Text style={styles.meneTotalLabel}>{t('match', 'totalLabel')}</Text>
                   <Text style={[styles.meneTotalValue, { color: theme.success }]}>
                     {menes.reduce((sum, m) => sum + m.teamAPoints, 0)}
                   </Text>
@@ -740,7 +744,7 @@ export default function EditMatchScreen() {
               </View>
             ) : (
               <View style={styles.noMenesCard}>
-                <Text style={styles.noMenesText}>Aucune mène enregistrée</Text>
+                <Text style={styles.noMenesText}>{t('match', 'noMenesRecorded')}</Text>
               </View>
             )}
           </Animated.View>
@@ -750,7 +754,7 @@ export default function EditMatchScreen() {
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
           <Pressable style={styles.saveButton} onPress={handleSave}>
             <MaterialIcons name="check" size={24} color="#FFF" />
-            <Text style={styles.saveButtonText}>Enregistrer les modifications</Text>
+            <Text style={styles.saveButtonText}>{t('match', 'saveChangesBtn')}</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
