@@ -339,7 +339,7 @@ export default function NewTournamentScreen() {
                     <View style={[styles.formatCardIconBox, isActive && styles.formatCardIconBoxActive]}>
                       <MaterialIcons name={cfg.icon as any} size={22} color={isActive ? '#FFF' : theme.textSecondary} />
                     </View>
-                    <Text style={[styles.formatCardName, isActive && styles.formatCardNameActive]}>{f}</Text>
+                    <Text style={[styles.formatCardName, isActive && styles.formatCardNameActive]}>{t('formats', f)}</Text>
                     <Text style={styles.formatCardMeta}>{cfg.players}</Text>
                     <Text style={styles.formatCardMeta}>{cfg.boules}</Text>
                   </Pressable>

@@ -188,7 +188,7 @@ const MatchCard = React.memo(({ match, onPress, compact = false, t }: { match: M
               {isWin ? t('history', 'victory') : t('history', 'defeat')}
             </Text>
           </View>
-          <Text style={styles.formatText}>{match.format}</Text>
+          <Text style={styles.formatText}>{t('formats', match.format)}</Text>
         </View>
       </View>
     </Pressable>
@@ -232,7 +232,7 @@ const SeriesCard = React.memo(({ series, onMatchPress, t }: { series: SeriesGrou
               </View>
               <View style={[styles.badge, { backgroundColor: theme.primary + '15' }]}>
                 <MaterialIcons name="fitness-center" size={12} color={theme.primary} />
-                <Text style={[styles.badgeText, { color: theme.primary }]}>{series.format}</Text>
+                <Text style={[styles.badgeText, { color: theme.primary }]}>{t('formats', series.format)}</Text>
               </View>
             </View>
             <Text style={styles.timeText}>

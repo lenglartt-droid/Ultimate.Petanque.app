@@ -649,7 +649,7 @@ export default function EditTournamentScreen() {
                     styles.formatText,
                     format === f && styles.formatTextActive
                   ]}>
-                    {f}
+                    {t('formats', f)}
                   </Text>
                 </Pressable>
               ))}

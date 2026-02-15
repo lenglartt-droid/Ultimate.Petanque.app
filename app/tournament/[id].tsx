@@ -466,7 +466,7 @@ export default function TournamentDetailScreen() {
                 <View style={styles.dot} />
                 <Text style={styles.tournamentMetaText}>{tournament.location.city}</Text>
                 <View style={styles.dot} />
-                <Text style={styles.tournamentMetaText}>{tournament.format}</Text>
+                <Text style={styles.tournamentMetaText}>{t('formats', tournament.format)}</Text>
               </View>
             </View>
           </View>

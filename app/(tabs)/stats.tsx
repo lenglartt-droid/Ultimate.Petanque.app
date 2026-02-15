@@ -1038,7 +1038,7 @@ export default function StatsScreen() {
                       return (
                         <View key={format} style={styles.formatRow}>
                           <View style={styles.formatInfo}>
-                            <Text style={styles.formatName}>{format}</Text>
+                            <Text style={styles.formatName}>{t('formats', format)}</Text>
                             <Text style={styles.formatRecord}>{data.wins}V - {data.total - data.wins}D ({data.total})</Text>
                           </View>
                           <View style={styles.formatBarContainer}>
@@ -1498,7 +1498,7 @@ export default function StatsScreen() {
                     {Object.entries(errorStats.errorByFormat).map(([format, data]) => (
                       <View key={format} style={styles.formatRow}>
                         <View style={styles.formatInfo}>
-                          <Text style={styles.formatName}>{format}</Text>
+                          <Text style={styles.formatName}>{t('formats', format)}</Text>
                           <Text style={styles.formatRecord}>{data.errors} {t('stats', 'errorsSlashActions')} / {data.total} {t('stats', 'actionsUnit')}</Text>
                         </View>
                         <View style={styles.formatBarContainer}>

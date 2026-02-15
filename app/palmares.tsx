@@ -116,7 +116,7 @@ function TournamentCard({ item, index, t, language }: { item: TournamentPalmares
                 {new Date(tournament.date).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' })}
               </Text>
               <View style={styles.dot} />
-              <Text style={styles.cardFormat}>{tournament.format}</Text>
+              <Text style={styles.cardFormat}>{t('formats', tournament.format)}</Text>
               {tournament.location?.city ? (
                 <>
                   <View style={styles.dot} />
@@ -228,9 +228,9 @@ export default function PalmaresScreen() {
 
   const FORMAT_FILTERS: { id: FormatFilter; label: string }[] = [
     { id: 'all', label: t('palmares', 'allFormats') },
-    { id: 'Tête-à-tête', label: 'TàT' },
-    { id: 'Doublette', label: 'Doublette' },
-    { id: 'Triplette', label: 'Triplette' },
+    { id: 'Tête-à-tête', label: t('formats', 'TàT') },
+    { id: 'Doublette', label: t('formats', 'Doublette') },
+    { id: 'Triplette', label: t('formats', 'Triplette') },
   ];
 
   const [yearFilter, setYearFilter] = useState<YearFilter>('all');
@@ -729,7 +729,7 @@ export default function PalmaresScreen() {
                     <View style={styles.tooltipStatsRow}>
                       <View style={styles.tooltipStatItem}>
                         <Text style={styles.tooltipStatLabel}>Format</Text>
-                        <Text style={styles.tooltipStatValue}>{chartData[selectedChartIndex].tournamentFormat}</Text>
+                        <Text style={styles.tooltipStatValue}>{t('formats', chartData[selectedChartIndex].tournamentFormat)}</Text>
                       </View>
                       <View style={styles.tooltipStatDivider} />
                       <View style={styles.tooltipStatItem}>

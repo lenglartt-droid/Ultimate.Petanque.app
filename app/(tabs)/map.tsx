@@ -379,7 +379,7 @@ export default function MapScreen() {
                 ) : null}
                 {selected.itemType === 'tournaments' ? (
                   <View style={styles.tag}>
-                    <Text style={styles.tagText}>{selected.format}</Text>
+                    <Text style={styles.tagText}>{t('formats', selected.format)}</Text>
                   </View>
                 ) : null}
               </View>

@@ -387,7 +387,7 @@ export default function PlayerCompareScreen() {
                         })}
                       </Text>
                       <View style={styles.matchHistoryModeBadge}>
-                        <Text style={styles.matchHistoryModeText}>{match.format}</Text>
+                        <Text style={styles.matchHistoryModeText}>{t('formats', match.format)}</Text>
                       </View>
                     </View>
                     <View style={styles.matchHistoryScore}>

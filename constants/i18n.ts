@@ -622,6 +622,10 @@ export const translations = {
     teteATete: { fr: 'Tête-à-tête', en: 'Singles' },
     doublette: { fr: 'Doublette', en: 'Doubles' },
     triplette: { fr: 'Triplette', en: 'Triples' },
+    'Tête-à-tête': { fr: 'Tête-à-tête', en: 'Singles' },
+    'Doublette': { fr: 'Doublette', en: 'Doubles' },
+    'Triplette': { fr: 'Triplette', en: 'Triples' },
+    'TàT': { fr: 'TàT', en: 'Sgl' },
   },
 
   // ============================================

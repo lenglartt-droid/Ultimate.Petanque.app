@@ -262,7 +262,7 @@ export default function ClubDetailScreen() {
                 <View style={styles.tournamentInfo}>
                   <Text style={styles.tournamentName}>{tournament.name}</Text>
                   <Text style={styles.tournamentFormat}>
-                    {tournament.format} • {tournament.type}
+                    {t('formats', tournament.format)} • {tournament.type}
                   </Text>
                 </View>
                 <View style={[

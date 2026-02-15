@@ -519,7 +519,7 @@ export default function EditMatchScreen() {
                     styles.formatChipText,
                     format === f && styles.formatChipTextActive
                   ]}>
-                    {f}
+                    {t('formats', f)}
                   </Text>
                 </Pressable>
               ))}

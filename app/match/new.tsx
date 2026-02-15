@@ -797,7 +797,7 @@ export default function NewMatchScreen() {
               </Pressable>
 
               <View style={styles.fsTopCenter}>
-                <Text style={styles.fsFormatBadge}>{format}</Text>
+                <Text style={styles.fsFormatBadge}>{t('formats', format)}</Text>
                 {selectedTerrain && (
                   <Text style={styles.fsTerrainName} numberOfLines={1}>
                     <MaterialIcons name="place" size={12} color="rgba(255,255,255,0.5)" /> {selectedTerrain.name}
@@ -1383,7 +1383,7 @@ export default function NewMatchScreen() {
                       color={isActive ? '#FFF' : isDisabled ? theme.textMuted : theme.textSecondary} 
                     />
                     <Text style={[styles.formatChipText, isActive && styles.formatChipTextActive, isDisabled && styles.formatChipTextDisabled]}>
-                      {f}
+                      {t('formats', f)}
                     </Text>
                   </Pressable>
                 );

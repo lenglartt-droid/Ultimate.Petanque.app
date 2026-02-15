@@ -334,7 +334,7 @@ export default function HomeScreen() {
                           </View>
                           <View style={[styles.tournamentPickerBadge, { backgroundColor: theme.backgroundSecondary }]}>
                             <Text style={[styles.tournamentPickerBadgeText, { color: theme.textSecondary }]}>
-                              {tournament.format}
+                              {t('formats', tournament.format)}
                             </Text>
                           </View>
                         </View>

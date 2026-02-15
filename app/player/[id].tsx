@@ -388,7 +388,7 @@ export default function PlayerDetailScreen() {
                   <View style={[styles.matchIndicator, { backgroundColor: won ? theme.success : theme.error }]} />
                   <View style={styles.matchContent}>
                     <View style={styles.matchHeader}>
-                      <Text style={styles.matchFormat}>{match.format}</Text>
+                      <Text style={styles.matchFormat}>{t('formats', match.format)}</Text>
                       <Text style={styles.matchDate}>
                         {new Date(match.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
                       </Text>

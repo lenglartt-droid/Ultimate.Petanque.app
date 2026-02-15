@@ -420,7 +420,7 @@ export default function DirectoryScreen() {
               <Text style={[styles.tagText, { color: status.color }]}>{getStatusLabel(item.status)}</Text>
             </View>
             <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}>
-              <Text style={[styles.tagText, { color: theme.textSecondary }]}>{item.format}</Text>
+              <Text style={[styles.tagText, { color: theme.textSecondary }]}>{t('formats', item.format)}</Text>
             </View>
             <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}>
               <Text style={[styles.tagText, { color: theme.textSecondary }]}>{item.type}</Text>
