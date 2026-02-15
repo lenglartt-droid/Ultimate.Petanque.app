@@ -24,6 +24,7 @@ import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
+import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 
 const levels = ['Débutant', 'Intermédiaire', 'Confirmé', 'Expert'] as const;
@@ -32,6 +33,7 @@ export default function EditPlayerScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getPlayerById, updatePlayer, deletePlayer, clubs } = useApp();
+  const { t } = useLanguage();
   const supabase = getSupabaseClient();
 
   const player = getPlayerById(id!);
@@ -86,7 +88,7 @@ export default function EditPlayerScreen() {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission requise', 'Nous avons besoin de votre permission pour accéder à vos photos.');
+        Alert.alert(t('player', 'permissionRequired'), t('player', 'permissionPhotos'));
         return;
       }
 
@@ -104,7 +106,7 @@ export default function EditPlayerScreen() {
       }
     } catch (error) {
       console.log('Error picking image:', error);
-      Alert.alert('Erreur', 'Impossible de sélectionner la photo');
+      Alert.alert(t('common', 'error'), t('player', 'errorSelectPhoto'));
     }
   };
 
@@ -112,7 +114,7 @@ export default function EditPlayerScreen() {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission requise', 'Nous avons besoin de votre permission pour utiliser la caméra.');
+        Alert.alert(t('player', 'permissionRequired'), t('player', 'permissionCamera'));
         return;
       }
 
@@ -129,19 +131,19 @@ export default function EditPlayerScreen() {
       }
     } catch (error) {
       console.log('Error taking photo:', error);
-      Alert.alert('Erreur', 'Impossible de prendre la photo');
+      Alert.alert(t('common', 'error'), t('player', 'errorTakePhoto'));
     }
   };
 
   const showImageOptions = () => {
     Alert.alert(
-      'Photo de profil',
-      'Choisissez une option',
+      t('player', 'profilePhoto'),
+      t('player', 'chooseOption'),
       [
-        { text: 'Prendre une photo', onPress: takePhoto },
-        { text: 'Choisir dans la galerie', onPress: pickImage },
-        ...(avatarUri ? [{ text: 'Supprimer', style: 'destructive' as const, onPress: () => { setAvatarUri(null); setAvatarChanged(true); } }] : []),
-        { text: 'Annuler', style: 'cancel' as const },
+        { text: t('player', 'takePhoto'), onPress: takePhoto },
+        { text: t('player', 'chooseFromGallery'), onPress: pickImage },
+        ...(avatarUri ? [{ text: t('player', 'removeLabel'), style: 'destructive' as const, onPress: () => { setAvatarUri(null); setAvatarChanged(true); } }] : []),
+        { text: t('common', 'cancel'), style: 'cancel' as const },
       ]
     );
   };
@@ -201,7 +203,7 @@ export default function EditPlayerScreen() {
           <Pressable style={styles.backButton} onPress={() => router.back()}>
             <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Joueur non trouvé</Text>
+          <Text style={styles.headerTitle}>{t('player', 'playerNotFound')}</Text>
           <View style={{ width: 40 }} />
         </View>
       </SafeAreaView>
@@ -210,7 +212,7 @@ export default function EditPlayerScreen() {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      Alert.alert('Erreur', 'Le nom est obligatoire');
+      Alert.alert(t('common', 'error'), t('player', 'nameIsRequired'));
       return;
     }
 
@@ -251,12 +253,12 @@ export default function EditPlayerScreen() {
 
   const handleDelete = () => {
     Alert.alert(
-      'Supprimer le joueur',
-      'Cette action est irréversible. Voulez-vous vraiment supprimer ce joueur ?',
+      t('player', 'deletePlayer'),
+      t('player', 'deleteIrreversibleConfirm'),
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common', 'cancel'), style: 'cancel' },
         {
-          text: 'Supprimer',
+          text: t('common', 'delete'),
           style: 'destructive',
           onPress: () => {
             deletePlayer(id!);
@@ -275,7 +277,7 @@ export default function EditPlayerScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="close" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Modifier le joueur</Text>
+        <Text style={styles.headerTitle}>{t('player', 'editPlayer')}</Text>
         <Pressable style={styles.deleteButton} onPress={handleDelete}>
           <MaterialIcons name="delete" size={24} color={theme.error} />
         </Pressable>
@@ -316,17 +318,17 @@ export default function EditPlayerScreen() {
                 )}
               </View>
             </Pressable>
-            <Text style={styles.avatarHint}>Appuyez pour modifier la photo</Text>
+            <Text style={styles.avatarHint}>{t('player', 'tapToEditPhoto')}</Text>
           </Animated.View>
 
           {/* Name */}
           <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-            <Text style={styles.sectionTitle}>NOM</Text>
+            <Text style={styles.sectionTitle}>{t('player', 'nameLabel')}</Text>
             <TextInput
               style={styles.textInput}
               value={name}
               onChangeText={setName}
-              placeholder="Nom complet du joueur"
+              placeholder={t('player', 'namePlaceholder')}
               placeholderTextColor={theme.textMuted}
               autoCapitalize="words"
             />
@@ -334,19 +336,19 @@ export default function EditPlayerScreen() {
 
           {/* Nickname */}
           <Animated.View entering={FadeInDown.duration(400).delay(120)} style={styles.section}>
-            <Text style={styles.sectionTitle}>SURNOM</Text>
+            <Text style={styles.sectionTitle}>{t('player', 'nicknameLabel')}</Text>
             <TextInput
               style={styles.textInput}
               value={nickname}
               onChangeText={setNickname}
-              placeholder="Ex: Le Tireur, La Flèche..."
+              placeholder={t('player', 'nicknamePlaceholder')}
               placeholderTextColor={theme.textMuted}
             />
           </Animated.View>
 
           {/* Role */}
           <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
-            <Text style={styles.sectionTitle}>RÔLE</Text>
+            <Text style={styles.sectionTitle}>{t('player', 'roleLabel')}</Text>
             <View style={styles.optionsContainer}>
               {config.playerRoles.map(r => (
                 <Pressable
@@ -378,7 +380,7 @@ export default function EditPlayerScreen() {
 
           {/* Level */}
           <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-            <Text style={styles.sectionTitle}>NIVEAU</Text>
+            <Text style={styles.sectionTitle}>{t('player', 'levelLabel')}</Text>
             <View style={styles.levelContainer}>
               {levels.map(l => (
                 <Pressable
@@ -405,7 +407,7 @@ export default function EditPlayerScreen() {
 
           {/* Club */}
           <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-            <Text style={styles.sectionTitle}>CLUB</Text>
+            <Text style={styles.sectionTitle}>{t('player', 'clubLabel')}</Text>
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
@@ -425,7 +427,7 @@ export default function EditPlayerScreen() {
                   styles.clubChipText,
                   !clubId && styles.clubChipTextActive
                 ]}>
-                  Sans club
+                  {t('player', 'noClub')}
                 </Text>
               </Pressable>
               {clubs.map(club => (
@@ -454,17 +456,17 @@ export default function EditPlayerScreen() {
           {/* Location */}
           <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
             <LocationPicker
-              label="LOCALISATION"
+              label={t('player', 'locationLabel')}
               value={location}
               onChange={setLocation}
-              placeholder="Rechercher une ville..."
+              placeholder={t('player', 'searchCity')}
               showCityOnly
             />
           </Animated.View>
 
           {/* Contact Info */}
           <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
-            <Text style={styles.sectionTitle}>CONTACT</Text>
+            <Text style={styles.sectionTitle}>{t('player', 'contactLabel')}</Text>
             <View style={styles.contactInputs}>
               <View style={styles.contactInputContainer}>
                 <MaterialIcons name="phone" size={20} color={theme.textSecondary} style={styles.contactIcon} />
@@ -472,7 +474,7 @@ export default function EditPlayerScreen() {
                   style={styles.contactInput}
                   value={phone}
                   onChangeText={setPhone}
-                  placeholder="Téléphone"
+                  placeholder={t('player', 'phonePlaceholder')}
                   placeholderTextColor={theme.textMuted}
                   keyboardType="phone-pad"
                 />
@@ -483,7 +485,7 @@ export default function EditPlayerScreen() {
                   style={styles.contactInput}
                   value={email}
                   onChangeText={setEmail}
-                  placeholder="Adresse email"
+                  placeholder={t('player', 'emailPlaceholder')}
                   placeholderTextColor={theme.textMuted}
                   keyboardType="email-address"
                   autoCapitalize="none"
@@ -494,18 +496,18 @@ export default function EditPlayerScreen() {
 
           {/* Boules Section */}
           <Animated.View entering={FadeInDown.duration(400).delay(370)} style={styles.section}>
-            <Text style={styles.sectionTitle}>BOULES</Text>
+            <Text style={styles.sectionTitle}>{t('player', 'boulesLabel')}</Text>
             <View style={styles.boulesCard}>
               <TextInput
                 style={[styles.textInput, { marginBottom: 12 }]}
                 value={boulesName}
                 onChangeText={setBoulesName}
-                placeholder="Marque et modèle (ex: Obut ATX)"
+                placeholder={t('player', 'boulesPlaceholder')}
                 placeholderTextColor={theme.textMuted}
               />
               <View style={styles.boulesSpecsRow}>
                 <View style={styles.boulesSpecInput}>
-                  <Text style={styles.boulesSpecLabel}>Diamètre (mm)</Text>
+                  <Text style={styles.boulesSpecLabel}>{t('player', 'diameterLabel')}</Text>
                   <TextInput
                     style={styles.textInput}
                     value={boulesDiameter}
@@ -516,7 +518,7 @@ export default function EditPlayerScreen() {
                   />
                 </View>
                 <View style={styles.boulesSpecInput}>
-                  <Text style={styles.boulesSpecLabel}>Poids (g)</Text>
+                  <Text style={styles.boulesSpecLabel}>{t('player', 'weightLabel')}</Text>
                   <TextInput
                     style={styles.textInput}
                     value={boulesWeight}
@@ -532,27 +534,27 @@ export default function EditPlayerScreen() {
 
           {/* Stats Preview */}
           <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
-            <Text style={styles.sectionTitle}>STATISTIQUES</Text>
+            <Text style={styles.sectionTitle}>{t('player', 'statistics')}</Text>
             <View style={styles.statsCard}>
               <View style={styles.statRow}>
-                <Text style={styles.statLabel}>Matchs joués</Text>
+                <Text style={styles.statLabel}>{t('player', 'matchesPlayed')}</Text>
                 <Text style={styles.statValue}>{player.stats.matchesPlayed}</Text>
               </View>
               <View style={styles.statRow}>
-                <Text style={styles.statLabel}>Victoires</Text>
+                <Text style={styles.statLabel}>{t('player', 'victories')}</Text>
                 <Text style={[styles.statValue, { color: theme.success }]}>{player.stats.wins}</Text>
               </View>
               <View style={styles.statRow}>
-                <Text style={styles.statLabel}>Défaites</Text>
+                <Text style={styles.statLabel}>{t('player', 'defeats')}</Text>
                 <Text style={[styles.statValue, { color: theme.error }]}>{player.stats.losses}</Text>
               </View>
               <View style={[styles.statRow, { borderBottomWidth: 0 }]}>
-                <Text style={styles.statLabel}>Taux de victoire</Text>
+                <Text style={styles.statLabel}>{t('player', 'winRate')}</Text>
                 <Text style={[styles.statValue, { color: theme.primary }]}>{player.stats.winRate}%</Text>
               </View>
             </View>
             <Text style={styles.statsNote}>
-              Les statistiques sont calculées automatiquement à partir des matchs
+              {t('player', 'statsAutoCalculated')}
             </Text>
           </Animated.View>
         </ScrollView>
@@ -570,7 +572,7 @@ export default function EditPlayerScreen() {
               <MaterialIcons name="check" size={24} color="#FFF" />
             )}
             <Text style={styles.saveButtonText}>
-              {uploadingAvatar ? 'Enregistrement...' : 'Enregistrer'}
+              {uploadingAvatar ? t('player', 'saving') : t('player', 'savePlayer')}
             </Text>
           </Pressable>
         </View>

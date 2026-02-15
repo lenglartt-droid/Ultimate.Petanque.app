@@ -14,6 +14,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
+import { useLanguage } from '@/hooks/useLanguage';
 import Svg, { Circle } from 'react-native-svg';
 import * as Linking from 'expo-linking';
 
@@ -46,6 +47,7 @@ export default function PlayerDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getPlayerById, getMatchesByPlayer, getClubById, getTerrainById, deletePlayer, selfPlayer, matches } = useApp();
+  const { t } = useLanguage();
 
   const player = getPlayerById(id!);
   const playerMatches = getMatchesByPlayer(id!).slice(0, 5);
@@ -94,17 +96,17 @@ export default function PlayerDetailScreen() {
 
   const handleDelete = () => {
     if (isSelf) {
-      Alert.alert('Impossible', 'Vous ne pouvez pas supprimer votre propre fiche joueur.');
+      Alert.alert(t('player', 'impossible'), t('player', 'cannotDeleteSelf'));
       return;
     }
     
     Alert.alert(
-      'Supprimer le joueur',
-      `Êtes-vous sûr de vouloir supprimer "${player?.name}" ? Cette action est irréversible.`,
+      t('player', 'deletePlayer'),
+      `${t('player', 'deleteConfirm')} "${player?.name}" ? ${t('player', 'deleteIrreversible')}`,
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common', 'cancel'), style: 'cancel' },
         {
-          text: 'Supprimer',
+          text: t('common', 'delete'),
           style: 'destructive',
           onPress: async () => {
             if (player) {
@@ -121,7 +123,7 @@ export default function PlayerDetailScreen() {
   if (!player) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text>Joueur non trouvé</Text>
+        <Text>{t('player', 'playerNotFound')}</Text>
       </SafeAreaView>
     );
   }
@@ -140,7 +142,7 @@ export default function PlayerDetailScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Profil joueur</Text>
+        <Text style={styles.headerTitle}>{t('player', 'playerProfile')}</Text>
         <View style={styles.headerActions}>
           <Pressable style={styles.editButton} onPress={() => router.push(`/player/edit/${id}`)}>
             <MaterialIcons name="edit" size={22} color={theme.primary} />
@@ -188,7 +190,7 @@ export default function PlayerDetailScreen() {
           {/* Preferred Role from Match History */}
           {roleAnalysis.totalWithRoles > 0 && (
             <View style={styles.preferredRoleCard}>
-              <Text style={styles.preferredRoleTitle}>Rôle préféré</Text>
+              <Text style={styles.preferredRoleTitle}>{t('player', 'preferredRole')}</Text>
               <View style={styles.preferredRoleContent}>
                 <View style={[styles.preferredRoleIcon, { backgroundColor: roleIcons[roleAnalysis.preferredRole]?.color || theme.primary }]}>
                   <MaterialIcons 
@@ -200,7 +202,7 @@ export default function PlayerDetailScreen() {
                 <View style={styles.preferredRoleInfo}>
                   <Text style={styles.preferredRoleName}>{roleAnalysis.preferredRole}</Text>
                   <Text style={styles.preferredRoleStats}>
-                    {roleAnalysis.roleCounts[roleAnalysis.preferredRole]} sur {roleAnalysis.totalWithRoles} matchs
+                    {roleAnalysis.roleCounts[roleAnalysis.preferredRole]} {t('player', 'outOf')} {roleAnalysis.totalWithRoles} {t('player', 'matchesLabel')}
                   </Text>
                 </View>
               </View>
@@ -269,22 +271,22 @@ export default function PlayerDetailScreen() {
         <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.quickStats}>
           <View style={styles.quickStatItem}>
             <Text style={styles.quickStatValue}>{player.stats.matchesPlayed}</Text>
-            <Text style={styles.quickStatLabel}>Matchs</Text>
+            <Text style={styles.quickStatLabel}>{t('player', 'matchesUpper')}</Text>
           </View>
           <View style={[styles.quickStatItem, styles.quickStatBorder]}>
             <Text style={[styles.quickStatValue, { color: theme.success }]}>{player.stats.wins}</Text>
-            <Text style={styles.quickStatLabel}>Victoires</Text>
+            <Text style={styles.quickStatLabel}>{t('player', 'victories')}</Text>
           </View>
           <View style={styles.quickStatItem}>
             <Text style={[styles.quickStatValue, { color: theme.error }]}>{player.stats.losses}</Text>
-            <Text style={styles.quickStatLabel}>Défaites</Text>
+            <Text style={styles.quickStatLabel}>{t('player', 'defeats')}</Text>
           </View>
         </Animated.View>
 
         {/* Boules Section */}
         {player.boules && (player.boules.name || player.boules.diameter || player.boules.weight) && (
           <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
-            <Text style={styles.sectionTitle}>BOULES</Text>
+            <Text style={styles.sectionTitle}>{t('player', 'boulesLabel')}</Text>
             <View style={styles.boulesCard}>
               <View style={styles.boulesIconContainer}>
                 <MaterialIcons name="sports-baseball" size={32} color={theme.accent} />
@@ -296,13 +298,13 @@ export default function PlayerDetailScreen() {
                 <View style={styles.boulesSpecs}>
                   {player.boules.diameter && (
                     <View style={styles.boulesSpecItem}>
-                      <Text style={styles.boulesSpecLabel}>Diamètre</Text>
+                      <Text style={styles.boulesSpecLabel}>{t('player', 'diameter')}</Text>
                       <Text style={styles.boulesSpecValue}>{player.boules.diameter} mm</Text>
                     </View>
                   )}
                   {player.boules.weight && (
                     <View style={styles.boulesSpecItem}>
-                      <Text style={styles.boulesSpecLabel}>Poids</Text>
+                      <Text style={styles.boulesSpecLabel}>{t('player', 'weight')}</Text>
                       <Text style={styles.boulesSpecValue}>{player.boules.weight} g</Text>
                     </View>
                   )}
@@ -314,41 +316,41 @@ export default function PlayerDetailScreen() {
 
         {/* Performance Rings */}
         <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-          <Text style={styles.sectionTitle}>PERFORMANCE</Text>
+          <Text style={styles.sectionTitle}>{t('player', 'performance')}</Text>
           <View style={styles.ringsContainer}>
             <View style={styles.ringItem}>
               <StatRing value={player.stats.winRate} color={theme.primary} />
-              <Text style={styles.ringLabel}>Victoires</Text>
+              <Text style={styles.ringLabel}>{t('player', 'victories')}</Text>
             </View>
             <View style={styles.ringItem}>
               <StatRing value={player.stats.tirRate} color={theme.tirColor} />
-              <Text style={styles.ringLabel}>Tir</Text>
+              <Text style={styles.ringLabel}>{t('player', 'shot')}</Text>
             </View>
             <View style={styles.ringItem}>
               <StatRing value={player.stats.pointRate} color={theme.pointColor} />
-              <Text style={styles.ringLabel}>Point</Text>
+              <Text style={styles.ringLabel}>{t('player', 'pointLabel')}</Text>
             </View>
             <View style={styles.ringItem}>
               <StatRing value={player.stats.carreauRate} color={theme.carreauColor} />
-              <Text style={styles.ringLabel}>Carreau</Text>
+              <Text style={styles.ringLabel}>{t('player', 'carreau')}</Text>
             </View>
           </View>
         </Animated.View>
 
         {/* Detailed Stats */}
         <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-          <Text style={styles.sectionTitle}>DÉTAILS</Text>
+          <Text style={styles.sectionTitle}>{t('player', 'details')}</Text>
           <View style={styles.detailsCard}>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Points marqués / match</Text>
+              <Text style={styles.detailLabel}>{t('player', 'pointsScoredPerMatch')}</Text>
               <Text style={styles.detailValue}>{player.stats.avgPointsScored}</Text>
             </View>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Points encaissés / match</Text>
+              <Text style={styles.detailLabel}>{t('player', 'pointsConcededPerMatch')}</Text>
               <Text style={styles.detailValue}>{player.stats.avgPointsConceded}</Text>
             </View>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Différentiel</Text>
+              <Text style={styles.detailLabel}>{t('player', 'differential')}</Text>
               <Text style={[styles.detailValue, { 
                 color: player.stats.avgPointsScored - player.stats.avgPointsConceded > 0 
                   ? theme.success 
@@ -360,12 +362,12 @@ export default function PlayerDetailScreen() {
             </View>
             {player.location && (
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Localisation</Text>
+                <Text style={styles.detailLabel}>{t('player', 'location')}</Text>
                 <Text style={styles.detailValue}>{player.location.city}</Text>
               </View>
             )}
             <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
-              <Text style={styles.detailLabel}>Membre depuis</Text>
+              <Text style={styles.detailLabel}>{t('player', 'memberSince')}</Text>
               <Text style={styles.detailValue}>
                 {new Date(player.createdAt).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
               </Text>
@@ -376,7 +378,7 @@ export default function PlayerDetailScreen() {
         {/* Recent Matches */}
         {playerMatches.length > 0 && (
           <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
-            <Text style={styles.sectionTitle}>MATCHS RÉCENTS</Text>
+            <Text style={styles.sectionTitle}>{t('player', 'recentMatches')}</Text>
             {playerMatches.map(match => {
               const isTeamA = match.teamA.players.includes(id!);
               const won = (isTeamA && match.winner === 'A') || (!isTeamA && match.winner === 'B');

@@ -15,12 +15,14 @@ import * as Haptics from 'expo-haptics';
 import * as Linking from 'expo-linking';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
+import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
 import ShareModal from '@/components/ui/ShareModal';
 
 export default function MyPlayerCardScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const { selfPlayer, userStats, challengeStats, matches, challenges } = useApp();
   const [showShareModal, setShowShareModal] = React.useState(false);
 
@@ -88,7 +90,7 @@ export default function MyPlayerCardScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.primary} />
-          <Text style={styles.loadingText}>Chargement de votre fiche...</Text>
+          <Text style={styles.loadingText}>{t('player', 'loadingCard')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -101,7 +103,7 @@ export default function MyPlayerCardScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Ma Fiche Joueur</Text>
+        <Text style={styles.headerTitle}>{t('player', 'myPlayerCard')}</Text>
         <View style={styles.headerActions}>
           <Pressable 
             style={styles.shareButton}
@@ -192,14 +194,14 @@ export default function MyPlayerCardScreen() {
               }}
             >
               <MaterialIcons name="add-circle-outline" size={16} color={theme.primary} />
-              <Text style={styles.addClubText}>Ajouter un club</Text>
+              <Text style={styles.addClubText}>{t('player', 'addClub')}</Text>
             </Pressable>
           )}
           
           {/* Preferred Role from Match History */}
           {roleAnalysis.totalWithRoles > 0 && (
             <View style={styles.preferredRoleCard}>
-              <Text style={styles.preferredRoleTitle}>Rôle préféré</Text>
+              <Text style={styles.preferredRoleTitle}>{t('player', 'preferredRole')}</Text>
               <View style={styles.preferredRoleContent}>
                 <View style={[styles.preferredRoleIcon, { backgroundColor: roleIcons[roleAnalysis.preferredRole]?.color || theme.primary }]}>
                   <MaterialIcons 
@@ -211,7 +213,7 @@ export default function MyPlayerCardScreen() {
                 <View style={styles.preferredRoleInfo}>
                   <Text style={styles.preferredRoleName}>{roleAnalysis.preferredRole}</Text>
                   <Text style={styles.preferredRoleStats}>
-                    {roleAnalysis.roleCounts[roleAnalysis.preferredRole]} sur {roleAnalysis.totalWithRoles} matchs
+                    {roleAnalysis.roleCounts[roleAnalysis.preferredRole]} {t('player', 'outOf')} {roleAnalysis.totalWithRoles} {t('player', 'matchesLabel')}
                   </Text>
                 </View>
               </View>
@@ -237,74 +239,74 @@ export default function MyPlayerCardScreen() {
 
         {/* Quick Stats Grid */}
         <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-          <Text style={styles.sectionTitle}>RÉSUMÉ</Text>
+          <Text style={styles.sectionTitle}>{t('player', 'summaryLabel')}</Text>
           <View style={styles.quickStatsGrid}>
             <View style={styles.quickStatCard}>
               <View style={[styles.quickStatIcon, { backgroundColor: theme.primary + '15' }]}>
                 <MaterialIcons name="sports" size={24} color={theme.primary} />
               </View>
               <Text style={styles.quickStatValue}>{totalMatches}</Text>
-              <Text style={styles.quickStatLabel}>Matchs</Text>
+              <Text style={styles.quickStatLabel}>{t('player', 'matchesUpper')}</Text>
             </View>
             <View style={styles.quickStatCard}>
               <View style={[styles.quickStatIcon, { backgroundColor: theme.success + '15' }]}>
                 <MaterialIcons name="emoji-events" size={24} color={theme.success} />
               </View>
               <Text style={[styles.quickStatValue, { color: theme.success }]}>{userStats.wins}</Text>
-              <Text style={styles.quickStatLabel}>Victoires</Text>
+              <Text style={styles.quickStatLabel}>{t('player', 'victories')}</Text>
             </View>
             <View style={styles.quickStatCard}>
               <View style={[styles.quickStatIcon, { backgroundColor: theme.carreauColor + '15' }]}>
                 <MaterialIcons name="star" size={24} color={theme.carreauColor} />
               </View>
               <Text style={[styles.quickStatValue, { color: theme.carreauColor }]}>{challengeStats.totalChallenges}</Text>
-              <Text style={styles.quickStatLabel}>Défis</Text>
+              <Text style={styles.quickStatLabel}>{t('player', 'challenges')}</Text>
             </View>
             <View style={styles.quickStatCard}>
               <View style={[styles.quickStatIcon, { backgroundColor: theme.accent + '15' }]}>
                 <MaterialIcons name="percent" size={24} color={theme.accent} />
               </View>
               <Text style={[styles.quickStatValue, { color: theme.accent }]}>{userStats.winRate}%</Text>
-              <Text style={styles.quickStatLabel}>Victoires</Text>
+              <Text style={styles.quickStatLabel}>{t('player', 'winsLabel')}</Text>
             </View>
           </View>
         </Animated.View>
 
         {/* Match Statistics */}
         <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-          <Text style={styles.sectionTitle}>MATCHS</Text>
+          <Text style={styles.sectionTitle}>{t('player', 'matchesSection')}</Text>
           <View style={styles.statsCard}>
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
                 <Text style={styles.statValue}>{totalMatches}</Text>
-                <Text style={styles.statLabel}>Total</Text>
+                <Text style={styles.statLabel}>{t('player', 'total')}</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
                 <Text style={[styles.statValue, { color: theme.success }]}>{userStats.wins}</Text>
-                <Text style={styles.statLabel}>Gagnés</Text>
+                <Text style={styles.statLabel}>{t('player', 'won')}</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
                 <Text style={[styles.statValue, { color: theme.error }]}>{userStats.losses}</Text>
-                <Text style={styles.statLabel}>Perdus</Text>
+                <Text style={styles.statLabel}>{t('player', 'lost')}</Text>
               </View>
             </View>
             <View style={styles.statsSeparator} />
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
                 <Text style={styles.statValue}>{tournamentMatches.length}</Text>
-                <Text style={styles.statLabel}>Tournois</Text>
+                <Text style={styles.statLabel}>{t('player', 'tournaments')}</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
                 <Text style={styles.statValue}>{trainingMatches.length}</Text>
-                <Text style={styles.statLabel}>Entraînements</Text>
+                <Text style={styles.statLabel}>{t('player', 'trainings')}</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
                 <Text style={styles.statValue}>{userStats.avgMatchDuration}</Text>
-                <Text style={styles.statLabel}>Durée moy.</Text>
+                <Text style={styles.statLabel}>{t('player', 'avgDuration')}</Text>
               </View>
             </View>
           </View>
@@ -312,7 +314,7 @@ export default function MyPlayerCardScreen() {
 
         {/* Shot Statistics */}
         <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-          <Text style={styles.sectionTitle}>PERFORMANCES</Text>
+          <Text style={styles.sectionTitle}>{t('player', 'performancesLabel')}</Text>
           <View style={styles.performanceCard}>
             {/* Tir */}
             <View style={styles.performanceRow}>
@@ -320,9 +322,9 @@ export default function MyPlayerCardScreen() {
                 <MaterialIcons name="gps-fixed" size={20} color={theme.accent} />
               </View>
               <View style={styles.performanceInfo}>
-                <Text style={styles.performanceLabel}>Taux de Tir</Text>
+                <Text style={styles.performanceLabel}>{t('player', 'shotRate')}</Text>
                 <Text style={styles.performanceSubtext}>
-                  {totalTirsSuccess} réussis sur {totalTirs}
+                  {totalTirsSuccess} {t('player', 'succeededOn')} {totalTirs}
                 </Text>
               </View>
               <View style={styles.performanceValueContainer}>
@@ -336,9 +338,9 @@ export default function MyPlayerCardScreen() {
                 <MaterialIcons name="adjust" size={20} color={theme.primary} />
               </View>
               <View style={styles.performanceInfo}>
-                <Text style={styles.performanceLabel}>Taux de Point</Text>
+                <Text style={styles.performanceLabel}>{t('player', 'pointRate')}</Text>
                 <Text style={styles.performanceSubtext}>
-                  {totalPointsSuccess} réussis sur {totalPoints}
+                  {totalPointsSuccess} {t('player', 'succeededOn')} {totalPoints}
                 </Text>
               </View>
               <View style={styles.performanceValueContainer}>
@@ -352,9 +354,9 @@ export default function MyPlayerCardScreen() {
                 <MaterialIcons name="stars" size={20} color={theme.carreauColor} />
               </View>
               <View style={styles.performanceInfo}>
-                <Text style={styles.performanceLabel}>Taux de Carreau</Text>
+                <Text style={styles.performanceLabel}>{t('player', 'carreauRate')}</Text>
                 <Text style={styles.performanceSubtext}>
-                  {totalCarreaux} carreaux sur {totalTirsSuccess} tirs réussis
+                  {totalCarreaux} {t('player', 'carreauxOn')} {totalTirsSuccess} {t('player', 'successfulShots')}
                 </Text>
               </View>
               <View style={styles.performanceValueContainer}>
@@ -366,7 +368,7 @@ export default function MyPlayerCardScreen() {
 
         {/* Challenges Stats */}
         <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
-          <Text style={styles.sectionTitle}>DÉFIS</Text>
+          <Text style={styles.sectionTitle}>{t('player', 'challengesLabel')}</Text>
           <View style={styles.challengesCard}>
             <View style={styles.challengeRow}>
               <View style={styles.challengeInfo}>
@@ -376,9 +378,9 @@ export default function MyPlayerCardScreen() {
                 <Text style={styles.challengeName}>10 Tirs</Text>
               </View>
               <View style={styles.challengeStats}>
-                <Text style={styles.challengeCount}>{challengeStats.byType['10_tirs'].count} défis</Text>
+                <Text style={styles.challengeCount}>{challengeStats.byType['10_tirs'].count} {t('player', 'challengeCount')}</Text>
                 <Text style={styles.challengeBest}>
-                  Meilleur: {challengeStats.byType['10_tirs'].bestScore}%
+                  {t('player', 'best')}: {challengeStats.byType['10_tirs'].bestScore}%
                 </Text>
               </View>
             </View>
@@ -391,9 +393,9 @@ export default function MyPlayerCardScreen() {
                 <Text style={styles.challengeName}>10 Tirs Sautée</Text>
               </View>
               <View style={styles.challengeStats}>
-                <Text style={styles.challengeCount}>{challengeStats.byType['10_tirs_sautee'].count} défis</Text>
+                <Text style={styles.challengeCount}>{challengeStats.byType['10_tirs_sautee'].count} {t('player', 'challengeCount')}</Text>
                 <Text style={styles.challengeBest}>
-                  Meilleur: {challengeStats.byType['10_tirs_sautee'].bestScore}%
+                  {t('player', 'best')}: {challengeStats.byType['10_tirs_sautee'].bestScore}%
                 </Text>
               </View>
             </View>
@@ -406,9 +408,9 @@ export default function MyPlayerCardScreen() {
                 <Text style={styles.challengeName}>Précision</Text>
               </View>
               <View style={styles.challengeStats}>
-                <Text style={styles.challengeCount}>{challengeStats.byType['precision'].count} défis</Text>
+                <Text style={styles.challengeCount}>{challengeStats.byType['precision'].count} {t('player', 'challengeCount')}</Text>
                 <Text style={styles.challengeBest}>
-                  Meilleur: {challengeStats.byType['precision'].bestScore} pts
+                  {t('player', 'best')}: {challengeStats.byType['precision'].bestScore} pts
                 </Text>
               </View>
             </View>
@@ -425,7 +427,7 @@ export default function MyPlayerCardScreen() {
             }}
           >
             <MaterialIcons name="edit" size={20} color="#FFF" />
-            <Text style={styles.editProfileButtonText}>Modifier mon profil</Text>
+            <Text style={styles.editProfileButtonText}>{t('player', 'editMyProfile')}</Text>
           </Pressable>
         </Animated.View>
       </ScrollView>
