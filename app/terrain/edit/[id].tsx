@@ -24,11 +24,13 @@ import * as ImagePicker from 'expo-image-picker';
 import theme from '@/constants/theme';
 import config, { TerrainType } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
+import { useLanguage } from '@/hooks/useLanguage';
 
 export default function EditTerrainScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { getTerrainById, updateTerrain, clubs } = useApp();
+  const { t } = useLanguage();
 
   const terrain = getTerrainById(id || '');
 
@@ -92,7 +94,7 @@ export default function EditTerrainScreen() {
         setLongitude(results[0].longitude);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
-        Alert.alert('Adresse non trouvée', 'Impossible de géolocaliser cette adresse. Vérifiez les informations saisies.');
+        Alert.alert(t('terrain', 'addressNotFound'), t('terrain', 'addressNotFoundMsg'));
       }
     } catch (error) {
       console.error('Geocoding error:', error);
@@ -104,7 +106,7 @@ export default function EditTerrainScreen() {
   // Get current location
   const getCurrentLocation = async () => {
     if (!locationPermission) {
-      Alert.alert('Permission requise', "Autorisez l'accès à la localisation pour utiliser cette fonctionnalité.");
+      Alert.alert(t('terrain', 'permissionRequired'), t('terrain', 'locationPermissionMsg'));
       return;
     }
 
@@ -128,7 +130,7 @@ export default function EditTerrainScreen() {
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de récupérer votre position actuelle.');
+      Alert.alert(t('common', 'error'), t('terrain', 'errorGetPosition'));
     } finally {
       setIsGeocoding(false);
     }
@@ -138,7 +140,7 @@ export default function EditTerrainScreen() {
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission requise', "L'accès à la galerie est nécessaire pour ajouter des photos.");
+      Alert.alert(t('terrain', 'permissionRequired'), t('terrain', 'galleryPermissionMsg'));
       return;
     }
 
@@ -160,7 +162,7 @@ export default function EditTerrainScreen() {
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission requise', "L'accès à la caméra est nécessaire pour prendre des photos.");
+      Alert.alert(t('terrain', 'permissionRequired'), t('terrain', 'cameraPermissionMsg'));
       return;
     }
 
@@ -184,15 +186,15 @@ export default function EditTerrainScreen() {
     if (!terrain) return;
     
     if (!name.trim()) {
-      Alert.alert('Erreur', 'Le nom du terrain est obligatoire');
+      Alert.alert(t('common', 'error'), t('terrain', 'errorNameRequired'));
       return;
     }
     if (!address.trim()) {
-      Alert.alert('Erreur', "L'adresse est obligatoire");
+      Alert.alert(t('common', 'error'), t('terrain', 'errorAddressRequired'));
       return;
     }
     if (!city.trim()) {
-      Alert.alert('Erreur', 'La ville est obligatoire');
+      Alert.alert(t('common', 'error'), t('terrain', 'errorCityRequired'));
       return;
     }
 
@@ -220,7 +222,7 @@ export default function EditTerrainScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de sauvegarder les modifications');
+      Alert.alert(t('common', 'error'), t('terrain', 'errorSave'));
     } finally {
       setIsSaving(false);
     }
@@ -236,7 +238,7 @@ export default function EditTerrainScreen() {
         </View>
         <View style={styles.emptyContainer}>
           <MaterialIcons name="error-outline" size={64} color={theme.textMuted} />
-          <Text style={styles.emptyText}>Terrain non trouvé</Text>
+          <Text style={styles.emptyText}>{t('terrain', 'terrainNotFound')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -249,7 +251,7 @@ export default function EditTerrainScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="close" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Modifier le terrain</Text>
+        <Text style={styles.headerTitle}>{t('terrain', 'editTerrain')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -265,7 +267,7 @@ export default function EditTerrainScreen() {
         >
           {/* Photos Section */}
           <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
-            <Text style={styles.sectionTitle}>PHOTOS ({photos.length}/5)</Text>
+            <Text style={styles.sectionTitle}>{t('terrain', 'photosLabel')} ({photos.length}/5)</Text>
             <View style={styles.photosContainer}>
               {photos.map((photo, index) => (
                 <View key={index} style={styles.photoItem}>
@@ -282,11 +284,11 @@ export default function EditTerrainScreen() {
                 <View style={styles.addPhotoButtons}>
                   <Pressable style={styles.addPhotoButton} onPress={pickImage}>
                     <MaterialIcons name="photo-library" size={24} color={theme.primary} />
-                    <Text style={styles.addPhotoText}>Galerie</Text>
+                    <Text style={styles.addPhotoText}>{t('terrain', 'gallery')}</Text>
                   </Pressable>
                   <Pressable style={styles.addPhotoButton} onPress={takePhoto}>
                     <MaterialIcons name="camera-alt" size={24} color={theme.primary} />
-                    <Text style={styles.addPhotoText}>Photo</Text>
+                    <Text style={styles.addPhotoText}>{t('terrain', 'photo')}</Text>
                   </Pressable>
                 </View>
               )}
@@ -295,12 +297,12 @@ export default function EditTerrainScreen() {
 
           {/* Name */}
           <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
-            <Text style={styles.sectionTitle}>NOM DU TERRAIN *</Text>
+            <Text style={styles.sectionTitle}>{t('terrain', 'terrainNameRequired')}</Text>
             <TextInput
               style={styles.textInput}
               value={name}
               onChangeText={setName}
-              placeholder="Ex: Boulodrome Municipal"
+              placeholder={t('terrain', 'namePlaceholder')}
               placeholderTextColor={theme.textMuted}
               autoCapitalize="words"
             />
@@ -308,7 +310,7 @@ export default function EditTerrainScreen() {
 
           {/* Type */}
           <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-            <Text style={styles.sectionTitle}>TYPE DE TERRAIN *</Text>
+            <Text style={styles.sectionTitle}>{t('terrain', 'terrainTypeRequired')}</Text>
             <View style={styles.typeContainer}>
               {config.terrainTypes.map((t) => (
                 <Pressable
@@ -349,7 +351,7 @@ export default function EditTerrainScreen() {
           {/* Address */}
           <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>ADRESSE *</Text>
+              <Text style={styles.sectionTitle}>{t('terrain', 'addressRequired')}</Text>
               <Pressable 
                 style={styles.locationButton}
                 onPress={getCurrentLocation}
@@ -360,7 +362,7 @@ export default function EditTerrainScreen() {
                 ) : (
                   <>
                     <MaterialIcons name="my-location" size={16} color={theme.primary} />
-                    <Text style={styles.locationButtonText}>Ma position</Text>
+                    <Text style={styles.locationButtonText}>{t('terrain', 'myLocation')}</Text>
                   </>
                 )}
               </Pressable>
@@ -369,14 +371,14 @@ export default function EditTerrainScreen() {
               style={[styles.textInput, { marginBottom: 12 }]}
               value={address}
               onChangeText={setAddress}
-              placeholder="Numéro et rue"
+              placeholder={t('terrain', 'streetNumber')}
               placeholderTextColor={theme.textMuted}
             />
             <TextInput
               style={[styles.textInput, { marginBottom: 12 }]}
               value={city}
               onChangeText={setCity}
-              placeholder="Ville *"
+              placeholder={t('terrain', 'cityRequired')}
               placeholderTextColor={theme.textMuted}
             />
             
@@ -394,7 +396,7 @@ export default function EditTerrainScreen() {
               ) : (
                 <>
                   <MaterialIcons name="place" size={18} color="#FFF" />
-                  <Text style={styles.geocodeButtonText}>Géolocaliser cette adresse</Text>
+                  <Text style={styles.geocodeButtonText}>{t('terrain', 'geocodeAddress')}</Text>
                 </>
               )}
             </Pressable>
@@ -404,7 +406,7 @@ export default function EditTerrainScreen() {
               <Animated.View entering={FadeInDown.duration(300)} style={styles.locationPreview}>
                 <MaterialIcons name="check-circle" size={20} color={theme.success} />
                 <View style={styles.locationPreviewInfo}>
-                  <Text style={styles.locationPreviewTitle}>Position enregistrée</Text>
+                  <Text style={styles.locationPreviewTitle}>{t('terrain', 'positionSaved')}</Text>
                   <Text style={styles.locationPreviewCoords}>
                     {latitude.toFixed(6)}, {longitude.toFixed(6)}
                   </Text>
@@ -425,7 +427,7 @@ export default function EditTerrainScreen() {
 
           {/* Club */}
           <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-            <Text style={styles.sectionTitle}>CLUB ASSOCIÉ</Text>
+            <Text style={styles.sectionTitle}>{t('terrain', 'associatedClub')}</Text>
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
@@ -445,7 +447,7 @@ export default function EditTerrainScreen() {
                   styles.clubChipText,
                   !clubId && styles.clubChipTextActive
                 ]}>
-                  Aucun
+                  {t('terrain', 'noneLabel')}
                 </Text>
               </Pressable>
               {clubs.map(club => (
@@ -473,7 +475,7 @@ export default function EditTerrainScreen() {
 
           {/* Courts Count */}
           <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-            <Text style={styles.sectionTitle}>NOMBRE DE TERRAINS</Text>
+            <Text style={styles.sectionTitle}>{t('terrain', 'courtsCount')}</Text>
             <View style={styles.countsContainer}>
               {['1', '2', '4', '6', '8', '10', '12', '18'].map(num => (
                 <Pressable
@@ -500,14 +502,14 @@ export default function EditTerrainScreen() {
 
           {/* Features */}
           <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-            <Text style={styles.sectionTitle}>CARACTÉRISTIQUES</Text>
+            <Text style={styles.sectionTitle}>{t('terrain', 'features')}</Text>
             <View style={styles.featuresCard}>
               <View style={styles.featureRow}>
                 <View style={styles.featureInfo}>
                   <MaterialIcons name="public" size={24} color={theme.primary} />
                   <View>
-                    <Text style={styles.featureTitle}>Accès public</Text>
-                    <Text style={styles.featureDescription}>Ouvert à tous les joueurs</Text>
+                    <Text style={styles.featureTitle}>{t('terrain', 'publicAccess')}</Text>
+                    <Text style={styles.featureDescription}>{t('terrain', 'openToAll')}</Text>
                   </View>
                 </View>
                 <Switch
@@ -522,8 +524,8 @@ export default function EditTerrainScreen() {
                 <View style={styles.featureInfo}>
                   <MaterialIcons name="lightbulb" size={24} color={theme.warning} />
                   <View>
-                    <Text style={styles.featureTitle}>Éclairage</Text>
-                    <Text style={styles.featureDescription}>Jeu en soirée possible</Text>
+                    <Text style={styles.featureTitle}>{t('terrain', 'lighting')}</Text>
+                    <Text style={styles.featureDescription}>{t('terrain', 'eveningPlay')}</Text>
                   </View>
                 </View>
                 <Switch
@@ -538,8 +540,8 @@ export default function EditTerrainScreen() {
                 <View style={styles.featureInfo}>
                   <MaterialIcons name="roofing" size={24} color={theme.accent} />
                   <View>
-                    <Text style={styles.featureTitle}>Couvert</Text>
-                    <Text style={styles.featureDescription}>Protection contre intempéries</Text>
+                    <Text style={styles.featureTitle}>{t('terrain', 'covered')}</Text>
+                    <Text style={styles.featureDescription}>{t('terrain', 'weatherProtection')}</Text>
                   </View>
                 </View>
                 <Switch
@@ -554,7 +556,7 @@ export default function EditTerrainScreen() {
 
           {/* Environment */}
           <Animated.View entering={FadeInDown.duration(400).delay(325)} style={styles.section}>
-            <Text style={styles.sectionTitle}>ENVIRONNEMENT</Text>
+            <Text style={styles.sectionTitle}>{t('terrain', 'environment')}</Text>
             <View style={styles.environmentContainer}>
               {config.terrainEnvironments.map((env) => (
                 <Pressable
@@ -594,12 +596,12 @@ export default function EditTerrainScreen() {
 
           {/* Description */}
           <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
-            <Text style={styles.sectionTitle}>DESCRIPTION</Text>
+            <Text style={styles.sectionTitle}>{t('terrain', 'descriptionLabel')}</Text>
             <TextInput
               style={[styles.textInput, styles.textArea]}
               value={description}
               onChangeText={setDescription}
-              placeholder="Informations complémentaires..."
+              placeholder={t('terrain', 'descriptionPlaceholder')}
               placeholderTextColor={theme.textMuted}
               multiline
               numberOfLines={4}
@@ -623,7 +625,7 @@ export default function EditTerrainScreen() {
             ) : (
               <>
                 <MaterialIcons name="check" size={24} color="#FFF" />
-                <Text style={styles.saveButtonText}>Enregistrer les modifications</Text>
+                <Text style={styles.saveButtonText}>{t('terrain', 'saveChanges')}</Text>
               </>
             )}
           </Pressable>

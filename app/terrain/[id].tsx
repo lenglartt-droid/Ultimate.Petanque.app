@@ -21,6 +21,7 @@ import { useApp } from '@/contexts/AppContext';
 import ShareModal from '@/components/ui/ShareModal';
 import { isSharedWithMe, saveSharedItemToMyAccount } from '@/services/shareService';
 import { useAlert } from '@/template';
+import { useLanguage } from '@/hooks/useLanguage';
 
 export default function TerrainDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -32,6 +33,7 @@ export default function TerrainDetailScreen() {
   const [isShared, setIsShared] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const { showAlert } = useAlert();
+  const { t } = useLanguage();
 
   useEffect(() => {
     if (id) {
@@ -52,12 +54,12 @@ export default function TerrainDetailScreen() {
 
   const handleDelete = () => {
     Alert.alert(
-      'Supprimer le terrain',
-      `Êtes-vous sûr de vouloir supprimer "${terrain?.name}" ? Cette action est irréversible.`,
+      t('terrain', 'deleteTerrain'),
+      `${t('terrain', 'deleteConfirm')} "${terrain?.name}" ? ${t('terrain', 'deleteIrreversible')}`,
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common', 'cancel'), style: 'cancel' },
         {
-          text: 'Supprimer',
+          text: t('common', 'delete'),
           style: 'destructive',
           onPress: async () => {
             if (terrain) {
@@ -81,7 +83,7 @@ export default function TerrainDetailScreen() {
         </View>
         <View style={styles.emptyContainer}>
           <MaterialIcons name="error-outline" size={64} color={theme.textMuted} />
-          <Text style={styles.emptyText}>Terrain non trouvé</Text>
+          <Text style={styles.emptyText}>{t('terrain', 'terrainNotFound')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -122,7 +124,7 @@ export default function TerrainDetailScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Détails du terrain</Text>
+        <Text style={styles.headerTitle}>{t('terrain', 'terrainDetails')}</Text>
         <View style={styles.headerActions}>
           {isShared && (
             <Pressable
@@ -132,10 +134,10 @@ export default function TerrainDetailScreen() {
                 const { newItemId, error } = await saveSharedItemToMyAccount('terrain', id!);
                 setIsSaving(false);
                 if (error) {
-                  showAlert('Erreur', error);
+                  showAlert(t('common', 'error'), error);
                 } else {
                   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  showAlert('Enregistre', 'Ce terrain a ete copie dans votre annuaire');
+                  showAlert(t('terrain', 'savedLabel'), t('terrain', 'terrainCopied'));
                   if (newItemId) router.replace(`/terrain/${newItemId}` as any);
                 }
               }}
@@ -258,34 +260,34 @@ export default function TerrainDetailScreen() {
               <MaterialIcons name="sports-soccer" size={20} color={theme.primary} />
             </View>
             <Text style={styles.quickInfoValue}>{terrain.courtsCount}</Text>
-            <Text style={styles.quickInfoLabel}>Terrain{terrain.courtsCount > 1 ? 's' : ''}</Text>
+            <Text style={styles.quickInfoLabel}>{terrain.courtsCount > 1 ? t('terrain', 'courtsLabelPlural') : t('terrain', 'courtsLabel')}</Text>
           </View>
           <View style={styles.quickInfoItem}>
             <View style={[styles.quickInfoIcon, { backgroundColor: terrain.lighting ? theme.warning + '15' : theme.textMuted + '15' }]}>
               <MaterialIcons name="lightbulb" size={20} color={terrain.lighting ? theme.warning : theme.textMuted} />
             </View>
-            <Text style={styles.quickInfoValue}>{terrain.lighting ? 'Oui' : 'Non'}</Text>
-            <Text style={styles.quickInfoLabel}>Éclairage</Text>
+            <Text style={styles.quickInfoValue}>{terrain.lighting ? t('terrain', 'yesLabel') : t('terrain', 'noLabel')}</Text>
+            <Text style={styles.quickInfoLabel}>{t('terrain', 'lighting')}</Text>
           </View>
           <View style={styles.quickInfoItem}>
             <View style={[styles.quickInfoIcon, { backgroundColor: terrain.covered ? theme.accent + '15' : theme.textMuted + '15' }]}>
               <MaterialIcons name="roofing" size={20} color={terrain.covered ? theme.accent : theme.textMuted} />
             </View>
-            <Text style={styles.quickInfoValue}>{terrain.covered ? 'Oui' : 'Non'}</Text>
-            <Text style={styles.quickInfoLabel}>Couvert</Text>
+            <Text style={styles.quickInfoValue}>{terrain.covered ? t('terrain', 'yesLabel') : t('terrain', 'noLabel')}</Text>
+            <Text style={styles.quickInfoLabel}>{t('terrain', 'covered')}</Text>
           </View>
           <View style={styles.quickInfoItem}>
             <View style={[styles.quickInfoIcon, { backgroundColor: terrain.isPublic ? theme.success + '15' : theme.error + '15' }]}>
               <MaterialIcons name={terrain.isPublic ? 'public' : 'lock'} size={20} color={terrain.isPublic ? theme.success : theme.error} />
             </View>
-            <Text style={styles.quickInfoValue}>{terrain.isPublic ? 'Public' : 'Privé'}</Text>
-            <Text style={styles.quickInfoLabel}>Accès</Text>
+            <Text style={styles.quickInfoValue}>{terrain.isPublic ? t('terrain', 'publicLabel') : t('terrain', 'privateLabel')}</Text>
+            <Text style={styles.quickInfoLabel}>{t('terrain', 'accessLabel')}</Text>
           </View>
         </Animated.View>
 
         {/* Location */}
         <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
-          <Text style={styles.sectionTitle}>ADRESSE</Text>
+          <Text style={styles.sectionTitle}>{t('terrain', 'addressSection')}</Text>
           <Pressable style={styles.locationCard} onPress={openMaps}>
             <View style={styles.locationIcon}>
               <MaterialIcons name="place" size={24} color={theme.primary} />
@@ -301,7 +303,7 @@ export default function TerrainDetailScreen() {
         {/* Club */}
         {terrain.clubName && (
           <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-            <Text style={styles.sectionTitle}>CLUB</Text>
+            <Text style={styles.sectionTitle}>{t('terrain', 'clubSection')}</Text>
             <Pressable 
               style={styles.clubCard}
               onPress={() => terrain.clubId && router.push(`/club/${terrain.clubId}`)}
@@ -311,7 +313,7 @@ export default function TerrainDetailScreen() {
               </View>
               <View style={styles.clubInfo}>
                 <Text style={styles.clubName}>{terrain.clubName}</Text>
-                <Text style={styles.clubSubtitle}>Club organisateur</Text>
+                <Text style={styles.clubSubtitle}>{t('terrain', 'organizingClub')}</Text>
               </View>
               <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
             </Pressable>
@@ -321,7 +323,7 @@ export default function TerrainDetailScreen() {
         {/* Description */}
         {terrain.description && (
           <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-            <Text style={styles.sectionTitle}>DESCRIPTION</Text>
+            <Text style={styles.sectionTitle}>{t('terrain', 'descriptionLabel')}</Text>
             <View style={styles.descriptionCard}>
               <Text style={styles.descriptionText}>{terrain.description}</Text>
             </View>
@@ -331,7 +333,7 @@ export default function TerrainDetailScreen() {
         {/* Facilities */}
         {terrain.facilities && terrain.facilities.length > 0 && (
           <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-            <Text style={styles.sectionTitle}>ÉQUIPEMENTS</Text>
+            <Text style={styles.sectionTitle}>{t('terrain', 'facilitiesSection')}</Text>
             <View style={styles.facilitiesGrid}>
               {terrain.facilities.map((facility, index) => (
                 <View key={index} style={styles.facilityItem}>
@@ -345,46 +347,46 @@ export default function TerrainDetailScreen() {
 
         {/* Terrain Type Tips */}
         <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
-          <Text style={styles.sectionTitle}>CONSEILS DE JEU</Text>
+          <Text style={styles.sectionTitle}>{t('terrain', 'playingTips')}</Text>
           <View style={[styles.tipsCard, { backgroundColor: colors.light, borderColor: colors.bg + '30' }]}>
             <View style={styles.tipsHeader}>
               <MaterialIcons name="tips-and-updates" size={24} color={colors.bg} />
-              <Text style={[styles.tipsTitle, { color: colors.bg }]}>Terrain {terrain.type}</Text>
+              <Text style={[styles.tipsTitle, { color: colors.bg }]}>{t('terrain', 'terrainType')} {terrain.type}</Text>
             </View>
             <View style={styles.tipsList}>
               {terrain.type === 'Stabilisé' && (
                 <>
-                  <Text style={styles.tipItem}>• Idéal pour le point roulé et tir régulier</Text>
-                  <Text style={styles.tipItem}>• Sol dur et compact avec bon roulement</Text>
-                  <Text style={styles.tipItem}>• Peu de trous, jeu précis possible</Text>
+                  <Text style={styles.tipItem}>• {t('terrain', 'tipStabilise1')}</Text>
+                  <Text style={styles.tipItem}>• {t('terrain', 'tipStabilise2')}</Text>
+                  <Text style={styles.tipItem}>• {t('terrain', 'tipStabilise3')}</Text>
                 </>
               )}
               {terrain.type === 'Graviers' && (
                 <>
-                  <Text style={styles.tipItem}>• Privilégiez le jeu porté</Text>
-                  <Text style={styles.tipItem}>• Attention aux rebonds possibles</Text>
-                  <Text style={styles.tipItem}>• Surface irrégulière, adaptation rapide nécessaire</Text>
+                  <Text style={styles.tipItem}>• {t('terrain', 'tipGraviers1')}</Text>
+                  <Text style={styles.tipItem}>• {t('terrain', 'tipGraviers2')}</Text>
+                  <Text style={styles.tipItem}>• {t('terrain', 'tipGraviers3')}</Text>
                 </>
               )}
               {terrain.type === 'Sable' && (
                 <>
-                  <Text style={styles.tipItem}>• Parfait pour le point plombé</Text>
-                  <Text style={styles.tipItem}>• Les boules s'arrêtent rapidement</Text>
-                  <Text style={styles.tipItem}>• Privilégiez le tir devant</Text>
+                  <Text style={styles.tipItem}>• {t('terrain', 'tipSable1')}</Text>
+                  <Text style={styles.tipItem}>• {t('terrain', 'tipSable2')}</Text>
+                  <Text style={styles.tipItem}>• {t('terrain', 'tipSable3')}</Text>
                 </>
               )}
               {terrain.type === 'Cailloux' && (
                 <>
-                  <Text style={styles.tipItem}>• Terrain très technique</Text>
-                  <Text style={styles.tipItem}>• Rebonds imprévisibles</Text>
-                  <Text style={styles.tipItem}>• Réservé aux joueurs expérimentés</Text>
+                  <Text style={styles.tipItem}>• {t('terrain', 'tipCailloux1')}</Text>
+                  <Text style={styles.tipItem}>• {t('terrain', 'tipCailloux2')}</Text>
+                  <Text style={styles.tipItem}>• {t('terrain', 'tipCailloux3')}</Text>
                 </>
               )}
               {terrain.type === 'Terre battue' && (
                 <>
-                  <Text style={styles.tipItem}>• Jeu adaptable selon la météo</Text>
-                  <Text style={styles.tipItem}>• Peut devenir collant ou dur</Text>
-                  <Text style={styles.tipItem}>• Surface évolutive pendant la partie</Text>
+                  <Text style={styles.tipItem}>• {t('terrain', 'tipTerreBattue1')}</Text>
+                  <Text style={styles.tipItem}>• {t('terrain', 'tipTerreBattue2')}</Text>
+                  <Text style={styles.tipItem}>• {t('terrain', 'tipTerreBattue3')}</Text>
                 </>
               )}
             </View>
@@ -394,7 +396,7 @@ export default function TerrainDetailScreen() {
         {/* Upcoming Tournaments */}
         {terrainTournaments.length > 0 && (
           <Animated.View entering={FadeInUp.duration(400).delay(400)} style={styles.section}>
-            <Text style={styles.sectionTitle}>TOURNOIS À VENIR</Text>
+            <Text style={styles.sectionTitle}>{t('terrain', 'upcomingTournaments')}</Text>
             {terrainTournaments.slice(0, 3).map((tournament, index) => (
               <Pressable
                 key={tournament.id}

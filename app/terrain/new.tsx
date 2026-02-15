@@ -21,10 +21,12 @@ import * as Location from 'expo-location';
 import theme from '@/constants/theme';
 import config, { TerrainType } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
+import { useLanguage } from '@/hooks/useLanguage';
 
 export default function NewTerrainScreen() {
   const insets = useSafeAreaInsets();
   const { addTerrain, clubs } = useApp();
+  const { t } = useLanguage();
 
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
@@ -64,7 +66,7 @@ export default function NewTerrainScreen() {
         setLongitude(results[0].longitude);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
-        Alert.alert('Adresse non trouvée', 'Impossible de géolocaliser cette adresse. Vérifiez les informations saisies.');
+        Alert.alert(t('terrain', 'addressNotFound'), t('terrain', 'addressNotFoundMsg'));
       }
     } catch (error) {
       console.error('Geocoding error:', error);
@@ -76,7 +78,7 @@ export default function NewTerrainScreen() {
   // Get current location
   const getCurrentLocation = async () => {
     if (!locationPermission) {
-      Alert.alert('Permission requise', 'Autorisez l\'accès à la localisation pour utiliser cette fonctionnalité.');
+      Alert.alert(t('terrain', 'permissionRequired'), t('terrain', 'locationPermissionMsg'));
       return;
     }
 
@@ -100,7 +102,7 @@ export default function NewTerrainScreen() {
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de récupérer votre position actuelle.');
+      Alert.alert(t('common', 'error'), t('terrain', 'errorGetPosition'));
     } finally {
       setIsGeocoding(false);
     }
@@ -108,15 +110,15 @@ export default function NewTerrainScreen() {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      Alert.alert('Erreur', 'Le nom du terrain est obligatoire');
+      Alert.alert(t('common', 'error'), t('terrain', 'errorNameRequired'));
       return;
     }
     if (!address.trim()) {
-      Alert.alert('Erreur', "L'adresse est obligatoire");
+      Alert.alert(t('common', 'error'), t('terrain', 'errorAddressRequired'));
       return;
     }
     if (!city.trim()) {
-      Alert.alert('Erreur', 'La ville est obligatoire');
+      Alert.alert(t('common', 'error'), t('terrain', 'errorCityRequired'));
       return;
     }
 
@@ -150,7 +152,7 @@ export default function NewTerrainScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="close" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Nouveau terrain</Text>
+        <Text style={styles.headerTitle}>{t('terrain', 'newTerrain')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -177,12 +179,12 @@ export default function NewTerrainScreen() {
 
           {/* Name */}
           <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-            <Text style={styles.sectionTitle}>NOM DU TERRAIN *</Text>
+            <Text style={styles.sectionTitle}>{t('terrain', 'terrainNameRequired')}</Text>
             <TextInput
               style={styles.textInput}
               value={name}
               onChangeText={setName}
-              placeholder="Ex: Boulodrome Municipal"
+              placeholder={t('terrain', 'namePlaceholder')}
               placeholderTextColor={theme.textMuted}
               autoCapitalize="words"
               autoFocus
@@ -191,7 +193,7 @@ export default function NewTerrainScreen() {
 
           {/* Type */}
           <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
-            <Text style={styles.sectionTitle}>TYPE DE TERRAIN *</Text>
+            <Text style={styles.sectionTitle}>{t('terrain', 'terrainTypeRequired')}</Text>
             <View style={styles.typeContainer}>
               {config.terrainTypes.map((t, index) => (
                 <Pressable
@@ -232,7 +234,7 @@ export default function NewTerrainScreen() {
           {/* Address */}
           <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>ADRESSE *</Text>
+              <Text style={styles.sectionTitle}>{t('terrain', 'addressRequired')}</Text>
               <Pressable 
                 style={styles.locationButton}
                 onPress={getCurrentLocation}
@@ -243,7 +245,7 @@ export default function NewTerrainScreen() {
                 ) : (
                   <>
                     <MaterialIcons name="my-location" size={16} color={theme.primary} />
-                    <Text style={styles.locationButtonText}>Ma position</Text>
+                    <Text style={styles.locationButtonText}>{t('terrain', 'myLocation')}</Text>
                   </>
                 )}
               </Pressable>
@@ -252,14 +254,14 @@ export default function NewTerrainScreen() {
               style={[styles.textInput, { marginBottom: 12 }]}
               value={address}
               onChangeText={setAddress}
-              placeholder="Numéro et rue"
+              placeholder={t('terrain', 'streetNumber')}
               placeholderTextColor={theme.textMuted}
             />
             <TextInput
               style={[styles.textInput, { marginBottom: 12 }]}
               value={city}
               onChangeText={setCity}
-              placeholder="Ville *"
+              placeholder={t('terrain', 'cityRequired')}
               placeholderTextColor={theme.textMuted}
             />
             
@@ -277,7 +279,7 @@ export default function NewTerrainScreen() {
               ) : (
                 <>
                   <MaterialIcons name="place" size={18} color="#FFF" />
-                  <Text style={styles.geocodeButtonText}>Géolocaliser cette adresse</Text>
+                  <Text style={styles.geocodeButtonText}>{t('terrain', 'geocodeAddress')}</Text>
                 </>
               )}
             </Pressable>
@@ -287,7 +289,7 @@ export default function NewTerrainScreen() {
               <Animated.View entering={FadeInDown.duration(300)} style={styles.locationPreview}>
                 <MaterialIcons name="check-circle" size={20} color={theme.success} />
                 <View style={styles.locationPreviewInfo}>
-                  <Text style={styles.locationPreviewTitle}>Position enregistrée</Text>
+                  <Text style={styles.locationPreviewTitle}>{t('terrain', 'positionSaved')}</Text>
                   <Text style={styles.locationPreviewCoords}>
                     {latitude.toFixed(6)}, {longitude.toFixed(6)}
                   </Text>
@@ -298,7 +300,7 @@ export default function NewTerrainScreen() {
 
           {/* Club */}
           <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-            <Text style={styles.sectionTitle}>CLUB ASSOCIÉ</Text>
+            <Text style={styles.sectionTitle}>{t('terrain', 'associatedClub')}</Text>
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
@@ -318,7 +320,7 @@ export default function NewTerrainScreen() {
                   styles.clubChipText,
                   !clubId && styles.clubChipTextActive
                 ]}>
-                  Aucun
+                  {t('terrain', 'noneLabel')}
                 </Text>
               </Pressable>
               {clubs.map(club => (
@@ -346,7 +348,7 @@ export default function NewTerrainScreen() {
 
           {/* Courts Count */}
           <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-            <Text style={styles.sectionTitle}>NOMBRE DE TERRAINS</Text>
+            <Text style={styles.sectionTitle}>{t('terrain', 'courtsCount')}</Text>
             <View style={styles.countsContainer}>
               {['1', '2', '4', '6', '8', '10', '12', '18'].map(num => (
                 <Pressable
@@ -373,14 +375,14 @@ export default function NewTerrainScreen() {
 
           {/* Features */}
           <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
-            <Text style={styles.sectionTitle}>CARACTÉRISTIQUES</Text>
+            <Text style={styles.sectionTitle}>{t('terrain', 'features')}</Text>
             <View style={styles.featuresCard}>
               <View style={styles.featureRow}>
                 <View style={styles.featureInfo}>
                   <MaterialIcons name="public" size={24} color={theme.primary} />
                   <View>
-                    <Text style={styles.featureTitle}>Accès public</Text>
-                    <Text style={styles.featureDescription}>Ouvert à tous les joueurs</Text>
+                    <Text style={styles.featureTitle}>{t('terrain', 'publicAccess')}</Text>
+                    <Text style={styles.featureDescription}>{t('terrain', 'openToAll')}</Text>
                   </View>
                 </View>
                 <Switch
@@ -395,8 +397,8 @@ export default function NewTerrainScreen() {
                 <View style={styles.featureInfo}>
                   <MaterialIcons name="lightbulb" size={24} color={theme.warning} />
                   <View>
-                    <Text style={styles.featureTitle}>Éclairage</Text>
-                    <Text style={styles.featureDescription}>Jeu en soirée possible</Text>
+                    <Text style={styles.featureTitle}>{t('terrain', 'lighting')}</Text>
+                    <Text style={styles.featureDescription}>{t('terrain', 'eveningPlay')}</Text>
                   </View>
                 </View>
                 <Switch
@@ -411,8 +413,8 @@ export default function NewTerrainScreen() {
                 <View style={styles.featureInfo}>
                   <MaterialIcons name="roofing" size={24} color={theme.accent} />
                   <View>
-                    <Text style={styles.featureTitle}>Couvert</Text>
-                    <Text style={styles.featureDescription}>Protection contre intempéries</Text>
+                    <Text style={styles.featureTitle}>{t('terrain', 'covered')}</Text>
+                    <Text style={styles.featureDescription}>{t('terrain', 'weatherProtection')}</Text>
                   </View>
                 </View>
                 <Switch
@@ -427,7 +429,7 @@ export default function NewTerrainScreen() {
 
           {/* Environment */}
           <Animated.View entering={FadeInDown.duration(400).delay(375)} style={styles.section}>
-            <Text style={styles.sectionTitle}>ENVIRONNEMENT</Text>
+            <Text style={styles.sectionTitle}>{t('terrain', 'environment')}</Text>
             <View style={styles.environmentContainer}>
               {config.terrainEnvironments.map((env) => (
                 <Pressable
@@ -467,12 +469,12 @@ export default function NewTerrainScreen() {
 
           {/* Description */}
           <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
-            <Text style={styles.sectionTitle}>DESCRIPTION</Text>
+            <Text style={styles.sectionTitle}>{t('terrain', 'descriptionLabel')}</Text>
             <TextInput
               style={[styles.textInput, styles.textArea]}
               value={description}
               onChangeText={setDescription}
-              placeholder="Informations complémentaires..."
+              placeholder={t('terrain', 'descriptionPlaceholder')}
               placeholderTextColor={theme.textMuted}
               multiline
               numberOfLines={4}
@@ -488,7 +490,7 @@ export default function NewTerrainScreen() {
             onPress={handleSave}
           >
             <MaterialIcons name="check" size={24} color="#FFF" />
-            <Text style={styles.saveButtonText}>Créer le terrain</Text>
+            <Text style={styles.saveButtonText}>{t('terrain', 'createTerrain')}</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
