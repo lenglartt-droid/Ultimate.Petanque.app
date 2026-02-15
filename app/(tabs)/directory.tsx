@@ -20,26 +20,28 @@ import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { Terrain, Player, Club, Tournament } from '@/services/mockData';
 import { TerrainType } from '@/constants/config';
+import { useLanguage } from '@/hooks/useLanguage';
 
 const { width: screenWidth } = Dimensions.get('window');
 
 type DirectoryTab = 'players' | 'clubs' | 'terrains' | 'tournaments';
 type TournamentStatus = 'all' | 'À venir' | 'En cours' | 'Terminé';
 
-// Tab configuration
-const TABS: { id: DirectoryTab; label: string; icon: string; color: string }[] = [
-  { id: 'players', label: 'Joueurs', icon: 'person', color: theme.primary },
-  { id: 'clubs', label: 'Clubs', icon: 'home', color: theme.accent },
-  { id: 'terrains', label: 'Terrains', icon: 'sports-soccer', color: theme.success },
-  { id: 'tournaments', label: 'Tournois', icon: 'emoji-events', color: theme.carreauColor },
-];
-
 export default function DirectoryScreen() {
   const insets = useSafeAreaInsets();
   const { players, clubs, tournaments, terrains, selfPlayer, favoriteTerrainIds } = useApp();
+  const { t, language } = useLanguage();
   const [activeTab, setActiveTab] = useState<DirectoryTab>('players');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+
+  // Tab configuration (uses t() for labels)
+  const TABS: { id: DirectoryTab; label: string; icon: string; color: string }[] = useMemo(() => [
+    { id: 'players', label: t('directory', 'players'), icon: 'person', color: theme.primary },
+    { id: 'clubs', label: t('directory', 'clubs'), icon: 'home', color: theme.accent },
+    { id: 'terrains', label: t('directory', 'terrains'), icon: 'sports-soccer', color: theme.success },
+    { id: 'tournaments', label: t('directory', 'tournaments'), icon: 'emoji-events', color: theme.carreauColor },
+  ], [language]);
   
   // All filters state
   const [filters, setFilters] = useState({
@@ -104,6 +106,38 @@ export default function DirectoryScreen() {
 
   const currentFilterCount = activeFilterCounts[activeTab];
 
+  // Singular label for current tab
+  const getTabSingular = (tab: DirectoryTab) => {
+    const map: Record<DirectoryTab, string> = {
+      players: t('directory', 'player'),
+      clubs: t('directory', 'club'),
+      terrains: t('directory', 'terrain'),
+      tournaments: t('directory', 'tournament'),
+    };
+    return map[tab];
+  };
+
+  const getTabPlural = (tab: DirectoryTab) => {
+    const map: Record<DirectoryTab, string> = {
+      players: t('directory', 'playersLabel'),
+      clubs: t('directory', 'clubsLabel'),
+      terrains: t('directory', 'terrainsLabel'),
+      tournaments: t('directory', 'tournamentsLabel'),
+    };
+    return map[tab];
+  };
+
+  // Search placeholders
+  const getSearchPlaceholder = () => {
+    const map: Record<DirectoryTab, string> = {
+      players: t('directory', 'searchPlayer'),
+      clubs: t('directory', 'searchClub'),
+      terrains: t('directory', 'searchTerrain'),
+      tournaments: t('directory', 'searchTournament'),
+    };
+    return map[activeTab];
+  };
+
   // Filtered data
   const filteredPlayers = useMemo(() => {
     let result = players.filter(p => {
@@ -140,33 +174,33 @@ export default function DirectoryScreen() {
   }, [clubs, searchQuery, filters]);
 
   const filteredTerrains = useMemo(() => {
-    return terrains.filter(t => {
-      const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.city.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesType = filters.terrainType === 'all' || t.type === filters.terrainType;
-      const matchesCity = filters.terrainCity === 'all' || t.city === filters.terrainCity;
+    return terrains.filter(tr => {
+      const matchesSearch = tr.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        tr.city.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesType = filters.terrainType === 'all' || tr.type === filters.terrainType;
+      const matchesCity = filters.terrainCity === 'all' || tr.city === filters.terrainCity;
       const matchesLighting = filters.terrainLighting === 'all' || 
-        (filters.terrainLighting === 'yes' ? t.lighting : !t.lighting);
+        (filters.terrainLighting === 'yes' ? tr.lighting : !tr.lighting);
       const matchesCovered = filters.terrainCovered === 'all' || 
-        (filters.terrainCovered === 'yes' ? t.covered : !t.covered);
+        (filters.terrainCovered === 'yes' ? tr.covered : !tr.covered);
       const matchesEnvironment = filters.terrainEnvironment === 'all' || 
-        (t.environment || 'outdoor') === filters.terrainEnvironment;
+        (tr.environment || 'outdoor') === filters.terrainEnvironment;
       return matchesSearch && matchesType && matchesCity && matchesLighting && matchesCovered && matchesEnvironment;
     });
   }, [terrains, searchQuery, filters]);
 
   const filteredTournaments = useMemo(() => {
     const statusOrder: Record<string, number> = { 'En cours': 0, 'À venir': 1, 'Terminé': 2 };
-    return tournaments.filter(t => {
-      const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.location.city.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesStatus = filters.tournamentStatus === 'all' || t.status === filters.tournamentStatus;
-      const matchesFormat = filters.tournamentFormat === 'all' || t.format === filters.tournamentFormat;
-      const matchesLevel = filters.tournamentLevel === 'all' || t.tournamentLevel === filters.tournamentLevel;
-      const matchesCategory = filters.tournamentCategory === 'all' || t.tournamentCategory === filters.tournamentCategory;
-      const matchesRegistration = filters.tournamentRegistration === 'all' || t.registrationType === filters.tournamentRegistration;
-      const matchesScope = filters.tournamentScope === 'all' || t.tournamentScope === filters.tournamentScope;
-      const matchesCity = filters.tournamentCity === 'all' || (t.location?.city || t.terrainName) === filters.tournamentCity;
+    return tournaments.filter(tr => {
+      const matchesSearch = tr.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        tr.location.city.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesStatus = filters.tournamentStatus === 'all' || tr.status === filters.tournamentStatus;
+      const matchesFormat = filters.tournamentFormat === 'all' || tr.format === filters.tournamentFormat;
+      const matchesLevel = filters.tournamentLevel === 'all' || tr.tournamentLevel === filters.tournamentLevel;
+      const matchesCategory = filters.tournamentCategory === 'all' || tr.tournamentCategory === filters.tournamentCategory;
+      const matchesRegistration = filters.tournamentRegistration === 'all' || tr.registrationType === filters.tournamentRegistration;
+      const matchesScope = filters.tournamentScope === 'all' || tr.tournamentScope === filters.tournamentScope;
+      const matchesCity = filters.tournamentCity === 'all' || (tr.location?.city || tr.terrainName) === filters.tournamentCity;
       return matchesSearch && matchesStatus && matchesFormat && matchesLevel && matchesCategory && matchesRegistration && matchesScope && matchesCity;
     }).sort((a, b) => (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3));
   }, [tournaments, searchQuery, filters]);
@@ -184,7 +218,17 @@ export default function DirectoryScreen() {
   }, [activeTab]);
 
   const getTerrainTypeConfig = (type: string) => {
-    return config.terrainTypes.find(t => t.id === type) || config.terrainTypes[0];
+    return config.terrainTypes.find(tc => tc.id === type) || config.terrainTypes[0];
+  };
+
+  // Translate tournament status for display
+  const getStatusLabel = (status: string) => {
+    const map: Record<string, string> = {
+      'À venir': t('tournamentStatus', 'upcoming'),
+      'En cours': t('tournamentStatus', 'inProgress'),
+      'Terminé': t('tournamentStatus', 'completed'),
+    };
+    return map[status] || status;
   };
 
   // Render functions
@@ -212,7 +256,7 @@ export default function DirectoryScreen() {
             </Text>
             {isSelf && (
               <View style={styles.moiBadge}>
-                <Text style={styles.moiBadgeText}>MOI</Text>
+                <Text style={styles.moiBadgeText}>{t('directory', 'me')}</Text>
               </View>
             )}
           </View>
@@ -276,7 +320,7 @@ export default function DirectoryScreen() {
           </View>
           {item.foundedYear && (
             <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}>
-              <Text style={[styles.tagText, { color: theme.textSecondary }]}>Depuis {item.foundedYear}</Text>
+              <Text style={[styles.tagText, { color: theme.textSecondary }]}>{t('directory', 'since')} {item.foundedYear}</Text>
             </View>
           )}
         </View>
@@ -321,7 +365,7 @@ export default function DirectoryScreen() {
             </View>
             <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}>
               <Text style={[styles.tagText, { color: theme.textSecondary }]}>
-                {item.courtsCount} terrain{item.courtsCount > 1 ? 's' : ''}
+                {item.courtsCount} {item.courtsCount > 1 ? t('directory', 'terrainCountPlural') : t('directory', 'terrainCount')}
               </Text>
             </View>
             {item.lighting && (
@@ -363,7 +407,7 @@ export default function DirectoryScreen() {
             <View style={styles.metaItem}>
               <MaterialIcons name="event" size={12} color={theme.textMuted} />
               <Text style={styles.metaText}>
-                {new Date(item.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                {new Date(item.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
               </Text>
             </View>
             <View style={styles.metaItem}>
@@ -373,7 +417,7 @@ export default function DirectoryScreen() {
           </View>
           <View style={styles.itemTags}>
             <View style={[styles.tag, { backgroundColor: status.bg }]}>
-              <Text style={[styles.tagText, { color: status.color }]}>{item.status}</Text>
+              <Text style={[styles.tagText, { color: status.color }]}>{getStatusLabel(item.status)}</Text>
             </View>
             <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}>
               <Text style={[styles.tagText, { color: theme.textSecondary }]}>{item.format}</Text>
@@ -414,35 +458,40 @@ export default function DirectoryScreen() {
         return (
           <>
             <FilterSection
-              title="Rôle"
+              title={t('directory', 'role')}
               options={uniqueValues.playerRoles}
               value={filters.playerRole}
               onChange={(v) => setFilters(f => ({ ...f, playerRole: v }))}
               icons={{ 'Pointeur': 'radio-button-on', 'Tireur': 'gps-fixed', 'Milieu': 'swap-horiz' }}
+              allLabel={t('directory', 'allLabel')}
             />
             <FilterSection
-              title="Niveau"
+              title={t('directory', 'level')}
               options={uniqueValues.playerLevels}
               value={filters.playerLevel}
               onChange={(v) => setFilters(f => ({ ...f, playerLevel: v }))}
+              allLabel={t('directory', 'allLabel')}
             />
             <FilterSection
-              title="Club"
+              title={t('directory', 'clubs')}
               options={uniqueValues.playerClubs}
               value={filters.playerClub}
               onChange={(v) => setFilters(f => ({ ...f, playerClub: v }))}
+              allLabel={t('directory', 'allLabel')}
             />
             <FilterSection
-              title="Ville"
+              title={t('directory', 'city')}
               options={uniqueValues.playerCities}
               value={filters.playerCity}
               onChange={(v) => setFilters(f => ({ ...f, playerCity: v }))}
+              allLabel={t('directory', 'allLabel')}
             />
             <FilterSection
-              title="Pays"
+              title={t('directory', 'country')}
               options={uniqueValues.playerCountries}
               value={filters.playerCountry}
               onChange={(v) => setFilters(f => ({ ...f, playerCountry: v }))}
+              allLabel={t('directory', 'allLabel')}
             />
           </>
         );
@@ -450,16 +499,18 @@ export default function DirectoryScreen() {
         return (
           <>
             <FilterSection
-              title="Ville"
+              title={t('directory', 'city')}
               options={uniqueValues.clubCities}
               value={filters.clubCity}
               onChange={(v) => setFilters(f => ({ ...f, clubCity: v }))}
+              allLabel={t('directory', 'allLabel')}
             />
             <FilterSection
-              title="Pays"
+              title={t('directory', 'country')}
               options={uniqueValues.clubCountries}
               value={filters.clubCountry}
               onChange={(v) => setFilters(f => ({ ...f, clubCountry: v }))}
+              allLabel={t('directory', 'allLabel')}
             />
           </>
         );
@@ -467,42 +518,47 @@ export default function DirectoryScreen() {
         return (
           <>
             <FilterSection
-              title="Environnement"
+              title={t('directory', 'environmentLabel')}
               options={['all', 'indoor', 'outdoor']}
-              labels={{ all: 'Tous', indoor: 'Intérieur (Boulodrome)', outdoor: 'Extérieur' }}
+              labels={{ all: t('directory', 'allLabel'), indoor: t('directory', 'indoorLabel'), outdoor: t('directory', 'outdoorLabel') }}
               value={filters.terrainEnvironment}
               onChange={(v) => setFilters(f => ({ ...f, terrainEnvironment: v as 'all' | 'indoor' | 'outdoor' }))}
               icons={{ indoor: 'domain', outdoor: 'park' }}
+              allLabel={t('directory', 'allLabel')}
             />
             <FilterSection
-              title="Type de surface"
-              options={['all', ...config.terrainTypes.map(t => t.id)]}
-              labels={{ all: 'Tous', ...Object.fromEntries(config.terrainTypes.map(t => [t.id, t.label])) }}
+              title={t('directory', 'surfaceType')}
+              options={['all', ...config.terrainTypes.map(tc => tc.id)]}
+              labels={{ all: t('directory', 'allLabel'), ...Object.fromEntries(config.terrainTypes.map(tc => [tc.id, tc.label])) }}
               value={filters.terrainType}
               onChange={(v) => setFilters(f => ({ ...f, terrainType: v as TerrainType | 'all' }))}
-              icons={Object.fromEntries(config.terrainTypes.map(t => [t.id, t.icon]))}
+              icons={Object.fromEntries(config.terrainTypes.map(tc => [tc.id, tc.icon]))}
+              allLabel={t('directory', 'allLabel')}
             />
             <FilterSection
-              title="Ville"
+              title={t('directory', 'city')}
               options={uniqueValues.terrainCities}
               value={filters.terrainCity}
               onChange={(v) => setFilters(f => ({ ...f, terrainCity: v }))}
+              allLabel={t('directory', 'allLabel')}
             />
             <FilterSection
-              title="Éclairage"
+              title={t('directory', 'lightingLabel')}
               options={['all', 'yes', 'no']}
-              labels={{ all: 'Tous', yes: 'Avec éclairage', no: 'Sans éclairage' }}
+              labels={{ all: t('directory', 'allLabel'), yes: t('directory', 'withLighting'), no: t('directory', 'withoutLighting') }}
               value={filters.terrainLighting}
               onChange={(v) => setFilters(f => ({ ...f, terrainLighting: v as 'all' | 'yes' | 'no' }))}
               icons={{ yes: 'lightbulb', no: 'lightbulb-outline' }}
+              allLabel={t('directory', 'allLabel')}
             />
             <FilterSection
-              title="Couverture"
+              title={t('directory', 'coverLabel')}
               options={['all', 'yes', 'no']}
-              labels={{ all: 'Tous', yes: 'Couvert', no: 'Extérieur' }}
+              labels={{ all: t('directory', 'allLabel'), yes: t('directory', 'coveredLabel'), no: t('directory', 'outdoorCover') }}
               value={filters.terrainCovered}
               onChange={(v) => setFilters(f => ({ ...f, terrainCovered: v as 'all' | 'yes' | 'no' }))}
               icons={{ yes: 'roofing', no: 'wb-sunny' }}
+              allLabel={t('directory', 'allLabel')}
             />
           </>
         );
@@ -510,58 +566,65 @@ export default function DirectoryScreen() {
         return (
           <>
             <FilterSection
-              title="Statut"
+              title={t('directory', 'status')}
               options={['all', 'À venir', 'En cours', 'Terminé']}
-              labels={{ all: 'Tous' }}
+              labels={{ all: t('directory', 'allLabel'), 'À venir': t('tournamentStatus', 'upcoming'), 'En cours': t('tournamentStatus', 'inProgress'), 'Terminé': t('tournamentStatus', 'completed') }}
               value={filters.tournamentStatus}
               onChange={(v) => setFilters(f => ({ ...f, tournamentStatus: v as TournamentStatus }))}
               icons={{ 'À venir': 'event', 'En cours': 'play-circle', 'Terminé': 'check-circle' }}
+              allLabel={t('directory', 'allLabel')}
             />
             <FilterSection
-              title="Lieu"
+              title={t('directory', 'locationLabel')}
               options={uniqueValues.tournamentCities}
               value={filters.tournamentCity}
               onChange={(v) => setFilters(f => ({ ...f, tournamentCity: v }))}
+              allLabel={t('directory', 'allLabel')}
             />
             <FilterSection
-              title="Format"
+              title={t('directory', 'format')}
               options={uniqueValues.tournamentFormats}
               value={filters.tournamentFormat}
               onChange={(v) => setFilters(f => ({ ...f, tournamentFormat: v }))}
+              allLabel={t('directory', 'allLabel')}
             />
             {uniqueValues.tournamentLevels.length > 1 && (
               <FilterSection
-                title="Niveau"
+                title={t('directory', 'level')}
                 options={uniqueValues.tournamentLevels}
                 value={filters.tournamentLevel}
                 onChange={(v) => setFilters(f => ({ ...f, tournamentLevel: v }))}
                 icons={{ 'Loisir / Amical': 'mood', 'Promotion': 'trending-up', 'Honneur': 'star', 'Élite': 'emoji-events' }}
+                allLabel={t('directory', 'allLabel')}
               />
             )}
             {uniqueValues.tournamentCategories.length > 1 && (
               <FilterSection
-                title="Type de tournoi"
+                title={t('directory', 'tournamentType')}
                 options={uniqueValues.tournamentCategories}
                 value={filters.tournamentCategory}
                 onChange={(v) => setFilters(f => ({ ...f, tournamentCategory: v }))}
+                allLabel={t('directory', 'allLabel')}
               />
             )}
             {uniqueValues.tournamentRegistrations.length > 1 && (
               <FilterSection
-                title="Type d'inscription"
+                title={t('directory', 'registrationType')}
                 options={uniqueValues.tournamentRegistrations}
                 value={filters.tournamentRegistration}
                 onChange={(v) => setFilters(f => ({ ...f, tournamentRegistration: v }))}
                 icons={{ 'Inscription libre': 'lock-open', 'Sur invitation': 'mail', 'Réservé aux licenciés': 'verified', 'Ouvert': 'public' }}
+                allLabel={t('directory', 'allLabel')}
               />
             )}
             {uniqueValues.tournamentScopes.length > 1 && (
               <FilterSection
-                title="Cadre"
+                title={t('directory', 'scopeLabel')}
                 options={uniqueValues.tournamentScopes}
                 value={filters.tournamentScope}
                 onChange={(v) => setFilters(f => ({ ...f, tournamentScope: v }))}
                 icons={{ 'Tournoi de club': 'home', 'Championnat départemental': 'place', 'Championnat régional': 'map', 'Championnat national': 'flag', 'Championnat international': 'public' }}
+                allLabel={t('directory', 'allLabel')}
               />
             )}
           </>
@@ -569,17 +632,19 @@ export default function DirectoryScreen() {
     }
   };
 
-  const tabConfig = TABS.find(t => t.id === activeTab);
+  const tabConfig = TABS.find(tc => tc.id === activeTab);
+  const currentData = getCurrentData();
+  const dataCount = currentData.length;
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <Text style={styles.title}>Annuaire</Text>
+          <Text style={styles.title}>{t('directory', 'directory')}</Text>
           <View style={styles.headerStats}>
             <Text style={styles.headerStatsText}>
-              {counts.players + counts.clubs + counts.terrains + counts.tournaments} éléments
+              {counts.players + counts.clubs + counts.terrains + counts.tournaments} {t('directory', 'items')}
             </Text>
           </View>
         </View>
@@ -590,7 +655,7 @@ export default function DirectoryScreen() {
             <MaterialIcons name="search" size={20} color={theme.textMuted} />
             <TextInput
               style={styles.searchInput}
-              placeholder={`Rechercher un ${activeTab === 'players' ? 'joueur' : activeTab === 'clubs' ? 'club' : activeTab === 'terrains' ? 'terrain' : 'tournoi'}...`}
+              placeholder={getSearchPlaceholder()}
               placeholderTextColor={theme.textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -670,7 +735,7 @@ export default function DirectoryScreen() {
           >
             <Pressable style={styles.clearAllButton} onPress={clearFilters}>
               <MaterialIcons name="clear-all" size={16} color={theme.error} />
-              <Text style={styles.clearAllText}>Effacer</Text>
+              <Text style={styles.clearAllText}>{t('directory', 'clearLabel')}</Text>
             </Pressable>
             {activeTab === 'players' && (
               <>
@@ -689,16 +754,16 @@ export default function DirectoryScreen() {
             )}
             {activeTab === 'terrains' && (
               <>
-                {filters.terrainEnvironment !== 'all' && <ActiveFilterChip label={filters.terrainEnvironment === 'indoor' ? 'Intérieur' : 'Extérieur'} onRemove={() => setFilters(f => ({ ...f, terrainEnvironment: 'all' }))} icon={filters.terrainEnvironment === 'indoor' ? 'domain' : 'park'} />}
-                {filters.terrainType !== 'all' && <ActiveFilterChip label={config.terrainTypes.find(t => t.id === filters.terrainType)?.label || filters.terrainType} onRemove={() => setFilters(f => ({ ...f, terrainType: 'all' }))} />}
+                {filters.terrainEnvironment !== 'all' && <ActiveFilterChip label={filters.terrainEnvironment === 'indoor' ? t('directory', 'indoorShort') : t('directory', 'outdoorShort')} onRemove={() => setFilters(f => ({ ...f, terrainEnvironment: 'all' }))} icon={filters.terrainEnvironment === 'indoor' ? 'domain' : 'park'} />}
+                {filters.terrainType !== 'all' && <ActiveFilterChip label={config.terrainTypes.find(tc => tc.id === filters.terrainType)?.label || filters.terrainType} onRemove={() => setFilters(f => ({ ...f, terrainType: 'all' }))} />}
                 {filters.terrainCity !== 'all' && <ActiveFilterChip label={filters.terrainCity} onRemove={() => setFilters(f => ({ ...f, terrainCity: 'all' }))} />}
-                {filters.terrainLighting !== 'all' && <ActiveFilterChip label={filters.terrainLighting === 'yes' ? 'Éclairé' : 'Non éclairé'} onRemove={() => setFilters(f => ({ ...f, terrainLighting: 'all' }))} icon="lightbulb" />}
-                {filters.terrainCovered !== 'all' && <ActiveFilterChip label={filters.terrainCovered === 'yes' ? 'Couvert' : 'Extérieur'} onRemove={() => setFilters(f => ({ ...f, terrainCovered: 'all' }))} icon="roofing" />}
+                {filters.terrainLighting !== 'all' && <ActiveFilterChip label={filters.terrainLighting === 'yes' ? t('directory', 'litLabel') : t('directory', 'notLitLabel')} onRemove={() => setFilters(f => ({ ...f, terrainLighting: 'all' }))} icon="lightbulb" />}
+                {filters.terrainCovered !== 'all' && <ActiveFilterChip label={filters.terrainCovered === 'yes' ? t('directory', 'coveredLabel') : t('directory', 'outdoorShort')} onRemove={() => setFilters(f => ({ ...f, terrainCovered: 'all' }))} icon="roofing" />}
               </>
             )}
             {activeTab === 'tournaments' && (
               <>
-                {filters.tournamentStatus !== 'all' && <ActiveFilterChip label={filters.tournamentStatus} onRemove={() => setFilters(f => ({ ...f, tournamentStatus: 'all' }))} icon="event" />}
+                {filters.tournamentStatus !== 'all' && <ActiveFilterChip label={getStatusLabel(filters.tournamentStatus)} onRemove={() => setFilters(f => ({ ...f, tournamentStatus: 'all' }))} icon="event" />}
                 {filters.tournamentCity !== 'all' && <ActiveFilterChip label={filters.tournamentCity} onRemove={() => setFilters(f => ({ ...f, tournamentCity: 'all' }))} icon="place" />}
                 {filters.tournamentFormat !== 'all' && <ActiveFilterChip label={filters.tournamentFormat} onRemove={() => setFilters(f => ({ ...f, tournamentFormat: 'all' }))} />}
                 {filters.tournamentLevel !== 'all' && <ActiveFilterChip label={filters.tournamentLevel} onRemove={() => setFilters(f => ({ ...f, tournamentLevel: 'all' }))} icon="star" />}
@@ -714,17 +779,17 @@ export default function DirectoryScreen() {
       {/* Results Count */}
       <View style={styles.resultsHeader}>
         <Text style={styles.resultsCount}>
-          {getCurrentData().length} {activeTab === 'players' ? 'joueur' : activeTab === 'clubs' ? 'club' : activeTab === 'terrains' ? 'terrain' : 'tournoi'}{getCurrentData().length !== 1 ? 's' : ''}
+          {dataCount} {dataCount !== 1 ? getTabPlural(activeTab) : getTabSingular(activeTab)}
         </Text>
-        {searchQuery && (
-          <Text style={styles.searchingFor}>pour "{searchQuery}"</Text>
-        )}
+        {searchQuery ? (
+          <Text style={styles.searchingFor}>{t('directory', 'forSearch')} "{searchQuery}"</Text>
+        ) : null}
       </View>
 
       {/* List */}
       <View style={styles.listContainer}>
         <FlashList
-          data={getCurrentData()}
+          data={currentData}
           renderItem={getCurrentRenderItem() as any}
           estimatedItemSize={110}
           contentContainerStyle={{ 
@@ -735,13 +800,13 @@ export default function DirectoryScreen() {
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <MaterialIcons name={tabConfig?.icon as any || 'search'} size={48} color={theme.textMuted} />
-              <Text style={styles.emptyTitle}>Aucun résultat</Text>
+              <Text style={styles.emptyTitle}>{t('directory', 'noResultsFound')}</Text>
               <Text style={styles.emptyText}>
                 {searchQuery 
-                  ? `Aucun ${activeTab === 'players' ? 'joueur' : activeTab === 'clubs' ? 'club' : activeTab === 'terrains' ? 'terrain' : 'tournoi'} ne correspond à "${searchQuery}"`
+                  ? `${language === 'fr' ? 'Aucun' : 'No'} ${getTabSingular(activeTab)} ${t('directory', 'noMatchSearch')} "${searchQuery}"`
                   : currentFilterCount > 0 
-                    ? 'Essayez de modifier vos filtres'
-                    : `Aucun ${activeTab === 'players' ? 'joueur' : activeTab === 'clubs' ? 'club' : activeTab === 'terrains' ? 'terrain' : 'tournoi'} enregistré`
+                    ? t('directory', 'tryModifyFilters')
+                    : `${language === 'fr' ? 'Aucun' : 'No'} ${getTabSingular(activeTab)} ${t('directory', 'noRegistered')}`
                 }
               </Text>
             </View>
@@ -762,7 +827,12 @@ export default function DirectoryScreen() {
               <View style={[styles.modalIcon, { backgroundColor: tabConfig?.color + '15' }]}>
                 <MaterialIcons name={tabConfig?.icon as any} size={20} color={tabConfig?.color} />
               </View>
-              <Text style={styles.modalTitle}>Filtrer les {tabConfig?.label.toLowerCase()}</Text>
+              <Text style={styles.modalTitle}>
+                {activeTab === 'players' ? t('directory', 'filterPlayers') :
+                 activeTab === 'clubs' ? t('directory', 'filterClubs') :
+                 activeTab === 'terrains' ? t('directory', 'filterTerrains') :
+                 t('directory', 'filterTournaments')}
+              </Text>
             </View>
             <Pressable 
               style={styles.modalCloseButton}
@@ -782,14 +852,14 @@ export default function DirectoryScreen() {
           <View style={[styles.modalFooter, { paddingBottom: insets.bottom + 16 }]}>
             <Pressable style={styles.clearButton} onPress={clearFilters}>
               <MaterialIcons name="clear-all" size={20} color={theme.textSecondary} />
-              <Text style={styles.clearButtonText}>Effacer tout</Text>
+              <Text style={styles.clearButtonText}>{t('directory', 'clearAll')}</Text>
             </Pressable>
             <Pressable 
               style={[styles.applyButton, { backgroundColor: tabConfig?.color }]}
               onPress={() => setShowFilters(false)}
             >
               <Text style={styles.applyButtonText}>
-                Voir {getCurrentData().length} résultat{getCurrentData().length !== 1 ? 's' : ''}
+                {t('directory', 'seeResults')} {dataCount} {dataCount !== 1 ? t('directory', 'resultCountPlural') : t('directory', 'resultCount')}
               </Text>
             </Pressable>
           </View>
@@ -806,7 +876,8 @@ function FilterSection({
   value, 
   onChange, 
   labels = {}, 
-  icons = {} 
+  icons = {},
+  allLabel = 'Tous',
 }: { 
   title: string; 
   options: string[]; 
@@ -814,6 +885,7 @@ function FilterSection({
   onChange: (v: string) => void;
   labels?: Record<string, string>;
   icons?: Record<string, string>;
+  allLabel?: string;
 }) {
   return (
     <View style={styles.filterSection}>
@@ -821,7 +893,7 @@ function FilterSection({
       <View style={styles.filterOptions}>
         {options.map(option => {
           const isActive = value === option;
-          const label = labels[option] || (option === 'all' ? 'Tous' : option);
+          const label = labels[option] || (option === 'all' ? allLabel : option);
           const icon = icons[option];
           return (
             <Pressable
