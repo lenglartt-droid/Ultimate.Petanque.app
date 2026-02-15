@@ -419,23 +419,23 @@ export default function EditTournamentScreen() {
           <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
             <Text style={styles.sectionTitle}>{t('tournament', 'cadrageUpper')}</Text>
             <View style={styles.typeContainer}>
-              {config.tournamentTypes.map(t => (
+              {config.tournamentTypes.map(ct => (
                 <Pressable
-                  key={t}
+                  key={ct}
                   style={[
                     styles.typeChip,
-                    type === t && styles.typeChipActive
+                    type === ct && styles.typeChipActive
                   ]}
                   onPress={() => {
                     Haptics.selectionAsync();
-                    setType(t);
+                    setType(ct);
                   }}
                 >
                   <Text style={[
                     styles.typeText,
-                    type === t && styles.typeTextActive
+                    type === ct && styles.typeTextActive
                   ]}>
-                    {t}
+                    {t('tournamentTypes', ct)}
                   </Text>
                 </Pressable>
               ))}

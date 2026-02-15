@@ -627,6 +627,15 @@ export const translations = {
     'Triplette': { fr: 'Triplette', en: 'Triples' },
     'TàT': { fr: 'TàT', en: 'Sgl' },
   },
+  tournamentTypes: {
+    'Poules': { fr: 'Poules', en: 'Pools' },
+    'Élimination directe': { fr: 'Élimination directe', en: 'Single elimination' },
+    'Mixte': { fr: 'Mixte', en: 'Mixed' },
+    'Suisse': { fr: 'Suisse', en: 'Swiss' },
+    'A/B/C': { fr: 'A/B/C', en: 'A/B/C' },
+    'Tirage intégral': { fr: 'Tirage intégral', en: 'Full draw' },
+    'Autre': { fr: 'Autre', en: 'Other' },
+  },
 
   // ============================================
   // GAME MODES

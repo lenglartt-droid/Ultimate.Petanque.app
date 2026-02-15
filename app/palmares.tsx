@@ -199,7 +199,7 @@ function TournamentCard({ item, index, t, language }: { item: TournamentPalmares
         <View style={styles.cardFooter}>
           <View style={styles.cardType}>
             <MaterialIcons name="category" size={12} color={theme.textMuted} />
-            <Text style={styles.cardTypeText}>{tournament.type}</Text>
+            <Text style={styles.cardTypeText}>{t('tournamentTypes', tournament.type)}</Text>
           </View>
           {stats.carreaux > 0 ? (
             <View style={styles.carreauBadge}>

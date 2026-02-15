@@ -571,7 +571,7 @@ export default function TournamentDetailScreen() {
             <Text style={styles.sectionTitle}>{t('tournament', 'progression')}</Text>
             <View style={styles.cadrageBadge}>
               <MaterialIcons name="category" size={12} color={theme.primary} />
-              <Text style={styles.cadrageBadgeText}>{tournament.type}</Text>
+              <Text style={styles.cadrageBadgeText}>{t('tournamentTypes', tournament.type)}</Text>
             </View>
           </View>
           <View style={styles.progressCard}>

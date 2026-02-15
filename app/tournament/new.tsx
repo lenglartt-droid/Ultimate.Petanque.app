@@ -351,17 +351,17 @@ export default function NewTournamentScreen() {
           {/* Cadrage */}
           <SectionCard title={t('tournament', 'cadrage')} subtitle={t('tournament', 'competitionType')} icon="account-tree" color={theme.tirColor} delay={200}>
             <View style={styles.cadrageGrid}>
-              {config.tournamentTypes.map(t => {
-                const cfg = CADRAGE_CONFIG[t];
-                const isActive = type === t;
+              {config.tournamentTypes.map(ct => {
+                const cfg = CADRAGE_CONFIG[ct];
+                const isActive = type === ct;
                 return (
                   <Pressable
-                    key={t}
+                    key={ct}
                     style={[styles.cadrageChip, isActive && styles.cadrageChipActive]}
-                    onPress={() => { Haptics.selectionAsync(); setType(t); }}
+                    onPress={() => { Haptics.selectionAsync(); setType(ct); }}
                   >
                     <MaterialIcons name={cfg.icon as any} size={16} color={isActive ? theme.tirColor : theme.textMuted} />
-                    <Text style={[styles.cadrageChipText, isActive && styles.cadrageChipTextActive]}>{t}</Text>
+                    <Text style={[styles.cadrageChipText, isActive && styles.cadrageChipTextActive]}>{t('tournamentTypes', ct)}</Text>
                   </Pressable>
                 );
               })}
