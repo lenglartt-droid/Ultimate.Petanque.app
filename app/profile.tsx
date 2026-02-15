@@ -155,7 +155,7 @@ export default function ProfileScreen() {
       // Request permission
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        showAlert('Permission requise', 'Autorisez l\'accès à la galerie pour changer votre photo');
+        showAlert(t('profile', 'permissionRequired'), t('profile', 'galleryPermission'));
         return;
       }
 
@@ -173,7 +173,7 @@ export default function ProfileScreen() {
       }
     } catch (error: any) {
       console.log('Error picking image:', error);
-      showAlert('Erreur', 'Impossible de sélectionner l\'image');
+      showAlert(t('common', 'error'), t('profile', 'errorSelectImage'));
     }
   };
 
@@ -182,7 +182,7 @@ export default function ProfileScreen() {
       // Request permission
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
-        showAlert('Permission requise', 'Autorisez l\'accès à la caméra pour prendre une photo');
+        showAlert(t('profile', 'permissionRequired'), t('profile', 'cameraPermission'));
         return;
       }
 
@@ -199,7 +199,7 @@ export default function ProfileScreen() {
       }
     } catch (error: any) {
       console.log('Error taking photo:', error);
-      showAlert('Erreur', 'Impossible de prendre la photo');
+      showAlert(t('common', 'error'), t('profile', 'errorTakePhoto'));
     }
   };
 
@@ -224,7 +224,7 @@ export default function ProfileScreen() {
       if (uploadError) {
         // Try creating bucket if it doesn't exist
         if (uploadError.message?.includes('not found')) {
-          showAlert('Configuration', 'Le stockage des avatars n\'est pas encore configuré');
+          showAlert(t('profile', 'configurationLabel'), t('profile', 'storageNotConfigured'));
           return;
         }
         throw uploadError;
@@ -259,7 +259,7 @@ export default function ProfileScreen() {
       showAlert(t('common', 'success'), t('profile', 'photoUpdated'));
     } catch (error: any) {
       console.log('Error uploading avatar:', error);
-      showAlert('Erreur', error.message || 'Impossible de charger la photo');
+      showAlert(t('common', 'error'), error.message || t('profile', 'errorUploadPhoto'));
     } finally {
       setUploadingPhoto(false);
     }
@@ -341,7 +341,7 @@ export default function ProfileScreen() {
       showAlert(t('common', 'success'), t('profile', 'profileUpdated'));
       setIsEditing(false);
     } catch (error: any) {
-      showAlert('Erreur', error.message || 'Impossible de mettre à jour le profil');
+      showAlert(t('common', 'error'), error.message || t('profile', 'errorUpdateProfile'));
     } finally {
       setSaving(false);
     }
@@ -377,7 +377,7 @@ export default function ProfileScreen() {
       setNewClubCity('');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error: any) {
-      showAlert('Erreur', error.message || 'Impossible de créer le club');
+      showAlert(t('common', 'error'), error.message || t('profile', 'errorCreateClub'));
     }
   };
 
@@ -399,7 +399,7 @@ export default function ProfileScreen() {
           onPress: async () => {
             const { error } = await logout();
             if (error) {
-              showAlert('Erreur', error);
+              showAlert(t('common', 'error'), error);
             }
           },
         },
