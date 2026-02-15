@@ -65,6 +65,7 @@ const CADRAGE_RULES: Record<TournamentType, { description: string; matches: stri
   },
 };
 import { useApp } from '@/contexts/AppContext';
+import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 
 type TournamentStatus = 'À venir' | 'En cours' | 'Terminé';
@@ -73,6 +74,7 @@ export default function EditTournamentScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getTournamentById, updateTournament, clubs } = useApp();
+  const { t } = useLanguage();
 
   const tournament = getTournamentById(id!);
 
@@ -205,11 +207,11 @@ export default function EditTournamentScreen() {
 
   const handleSave = () => {
     if (!name.trim()) {
-      Alert.alert('Erreur', 'Le nom du tournoi est obligatoire');
+      Alert.alert(t('common', 'error'), t('tournament', 'errorNameRequired'));
       return;
     }
     if (!location.city.trim()) {
-      Alert.alert('Erreur', 'La ville est obligatoire');
+      Alert.alert(t('common', 'error'), t('tournament', 'errorCityRequired'));
       return;
     }
 
@@ -253,12 +255,12 @@ export default function EditTournamentScreen() {
           <Pressable style={styles.backButton} onPress={() => router.back()}>
             <MaterialIcons name="close" size={24} color={theme.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Modifier tournoi</Text>
+          <Text style={styles.headerTitle}>{t('tournament', 'editTournament')}</Text>
           <View style={{ width: 40 }} />
         </View>
         <View style={styles.emptyContainer}>
           <MaterialIcons name="error-outline" size={64} color={theme.textMuted} />
-          <Text style={styles.emptyText}>Tournoi non trouvé</Text>
+          <Text style={styles.emptyText}>{t('tournament', 'tournamentNotFound')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -271,7 +273,7 @@ export default function EditTournamentScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="close" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Modifier tournoi</Text>
+        <Text style={styles.headerTitle}>{t('tournament', 'editTournament')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -294,12 +296,12 @@ export default function EditTournamentScreen() {
 
           {/* Name */}
           <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-            <Text style={styles.sectionTitle}>NOM DU TOURNOI *</Text>
+            <Text style={styles.sectionTitle}>{t('tournament', 'tournamentNameRequired')}</Text>
             <TextInput
               style={styles.textInput}
               value={name}
               onChangeText={setName}
-              placeholder="Ex: Tournoi de Printemps"
+              placeholder={t('tournament', 'namePlaceholder')}
               placeholderTextColor={theme.textMuted}
               autoCapitalize="words"
             />
@@ -307,7 +309,7 @@ export default function EditTournamentScreen() {
 
           {/* Status */}
           <Animated.View entering={FadeInDown.duration(400).delay(125)} style={styles.section}>
-            <Text style={styles.sectionTitle}>STATUT</Text>
+            <Text style={styles.sectionTitle}>{t('tournament', 'statusLabel')}</Text>
             <View style={styles.statusContainer}>
               {(['À venir', 'En cours', 'Terminé'] as TournamentStatus[]).map(s => {
                 const statusConfig = {
@@ -347,7 +349,7 @@ export default function EditTournamentScreen() {
 
           {/* Date */}
           <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
-            <Text style={styles.sectionTitle}>DATE *</Text>
+            <Text style={styles.sectionTitle}>{t('tournament', 'dateRequired')}</Text>
             <Pressable 
               style={styles.dateButton}
               onPress={() => setShowDatePicker(true)}
@@ -373,7 +375,7 @@ export default function EditTournamentScreen() {
 
             {/* End Date */}
             <View style={{ marginTop: 12 }}>
-              <Text style={[styles.sectionTitle, { marginBottom: 8 }]}>DATE DE FIN (optionnel)</Text>
+              <Text style={[styles.sectionTitle, { marginBottom: 8 }]}>{t('tournament', 'endDateOptional')}</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <Pressable
                   style={[styles.dateButton, { flex: 1 }]}
@@ -383,7 +385,7 @@ export default function EditTournamentScreen() {
                   <Text style={[styles.dateText, !endDate && { color: theme.textMuted }]}>
                     {endDate
                       ? endDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-                      : 'Tournoi sur un seul jour'
+                      : t('tournament', 'singleDayOnly')
                     }
                   </Text>
                 </Pressable>
@@ -415,7 +417,7 @@ export default function EditTournamentScreen() {
 
           {/* Type */}
           <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-            <Text style={styles.sectionTitle}>CADRAGE</Text>
+            <Text style={styles.sectionTitle}>{t('tournament', 'cadrageUpper')}</Text>
             <View style={styles.typeContainer}>
               {config.tournamentTypes.map(t => (
                 <Pressable
@@ -470,7 +472,7 @@ export default function EditTournamentScreen() {
 
           {/* Tournament Level */}
           <Animated.View entering={FadeInDown.duration(400).delay(225)} style={styles.section}>
-            <Text style={styles.sectionTitle}>NIVEAU DU TOURNOI</Text>
+            <Text style={styles.sectionTitle}>{t('tournament', 'tournamentLevelUpper')}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
               {config.tournamentLevels.map(level => (
                 <Pressable
@@ -518,7 +520,7 @@ export default function EditTournamentScreen() {
                   styles.levelChipText,
                   showCustomLevelInput && styles.levelChipTextActive
                 ]}>
-                  Autre
+                  {t('tournament', 'otherLevel')}
                 </Text>
               </Pressable>
             </ScrollView>
@@ -533,7 +535,7 @@ export default function EditTournamentScreen() {
                     setCustomLevel(text);
                     setTournamentLevel(text.trim() || undefined);
                   }}
-                  placeholder="Saisir un niveau personnalisé..."
+                  placeholder={t('tournament', 'customLevelPlaceholderLong')}
                   placeholderTextColor={theme.textMuted}
                   autoFocus
                 />
@@ -548,7 +550,7 @@ export default function EditTournamentScreen() {
 
           {/* Tournament Category */}
           <Animated.View entering={FadeInDown.duration(400).delay(235)} style={styles.section}>
-            <Text style={styles.sectionTitle}>TYPE DE TOURNOI</Text>
+            <Text style={styles.sectionTitle}>{t('tournament', 'tournamentTypeUpper')}</Text>
             <View style={styles.categoryContainer}>
               {config.tournamentCategories.map(cat => (
                 <Pressable
@@ -575,7 +577,7 @@ export default function EditTournamentScreen() {
 
           {/* Registration Type */}
           <Animated.View entering={FadeInDown.duration(400).delay(245)} style={styles.section}>
-            <Text style={styles.sectionTitle}>TYPE D'INSCRIPTION</Text>
+            <Text style={styles.sectionTitle}>{t('tournament', 'registrationTypeUpper')}</Text>
             <View style={styles.registrationContainer}>
               {config.registrationTypes.map(reg => (
                 <Pressable
@@ -602,7 +604,7 @@ export default function EditTournamentScreen() {
 
           {/* Tournament Scope */}
           <Animated.View entering={FadeInDown.duration(400).delay(248)} style={styles.section}>
-            <Text style={styles.sectionTitle}>CADRE</Text>
+            <Text style={styles.sectionTitle}>{t('tournament', 'scopeUpper')}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
               {config.tournamentScopes.map(scope => (
                 <Pressable
@@ -629,7 +631,7 @@ export default function EditTournamentScreen() {
 
           {/* Format */}
           <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-            <Text style={styles.sectionTitle}>FORMAT</Text>
+            <Text style={styles.sectionTitle}>{t('tournament', 'formatUpper')}</Text>
             <View style={styles.formatContainer}>
               {config.game.formats.map(f => (
                 <Pressable
@@ -657,10 +659,10 @@ export default function EditTournamentScreen() {
           {/* Location */}
           <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
             <LocationPicker
-              label="LIEU DU TOURNOI"
+              label={t('tournament', 'tournamentLocation')}
               value={location}
               onChange={setLocation}
-              placeholder="Rechercher une adresse..."
+              placeholder={t('tournament', 'searchAddress')}
               required
               showAddressField
             />
@@ -668,7 +670,7 @@ export default function EditTournamentScreen() {
 
           {/* Organizing Club */}
           <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
-            <Text style={styles.sectionTitle}>CLUB ORGANISATEUR</Text>
+            <Text style={styles.sectionTitle}>{t('tournament', 'organizingClubUpper')}</Text>
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
@@ -688,7 +690,7 @@ export default function EditTournamentScreen() {
                   styles.clubChipText,
                   !clubId && styles.clubChipTextActive
                 ]}>
-                  Aucun
+                  {t('tournament', 'none')}
                 </Text>
               </Pressable>
               {clubs.map(club => (
@@ -716,7 +718,7 @@ export default function EditTournamentScreen() {
 
           {/* Max Participants */}
           <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
-            <Text style={styles.sectionTitle}>NOMBRE MAX DE PARTICIPANTS</Text>
+            <Text style={styles.sectionTitle}>{t('tournament', 'maxParticipantsUpper')}</Text>
             <View style={styles.participantsContainer}>
               {['16', '24', '32', '48', '64'].map(num => (
                 <Pressable
@@ -743,7 +745,7 @@ export default function EditTournamentScreen() {
 
           {/* Registration Cost */}
           <Animated.View entering={FadeInDown.duration(400).delay(450)} style={styles.section}>
-            <Text style={styles.sectionTitle}>COÛT D'INSCRIPTION (€)</Text>
+            <Text style={styles.sectionTitle}>{t('tournament', 'registrationCostUpper')}</Text>
             <TextInput
               style={styles.textInput}
               value={registrationCost}
@@ -756,12 +758,12 @@ export default function EditTournamentScreen() {
 
           {/* Prize */}
           <Animated.View entering={FadeInDown.duration(400).delay(475)} style={styles.section}>
-            <Text style={styles.sectionTitle}>DOTATION</Text>
+            <Text style={styles.sectionTitle}>{t('tournament', 'prizeUpper')}</Text>
             <TextInput
               style={styles.textInput}
               value={prize}
               onChangeText={setPrize}
-              placeholder="Ex: 500€, Trophées..."
+              placeholder={t('tournament', 'prizePlaceholderLong')}
               placeholderTextColor={theme.textMuted}
             />
           </Animated.View>
@@ -770,7 +772,7 @@ export default function EditTournamentScreen() {
           {status === 'Terminé' && (
             <>
               <Animated.View entering={FadeInDown.duration(400).delay(488)} style={styles.section}>
-                <Text style={styles.sectionTitle}>RÉSULTAT FINAL</Text>
+                <Text style={styles.sectionTitle}>{t('tournament', 'finalResultUpper')}</Text>
                 <View style={styles.finalResultContainer}>
                   {['1er', '2ème', '3ème', 'Demi-finale', 'Quart de finale', '1/8 finale', 'Poules', 'Autre'].map(result => {
                     const resultConfig: Record<string, { icon: string; color: string }> = {
@@ -805,7 +807,7 @@ export default function EditTournamentScreen() {
                 </View>
               </Animated.View>
               <Animated.View entering={FadeInDown.duration(400).delay(490)} style={styles.section}>
-                <Text style={styles.sectionTitle}>GAIN OBTENU (€)</Text>
+                <Text style={styles.sectionTitle}>{t('tournament', 'prizeWonUpper')}</Text>
                 <TextInput
                   style={styles.textInput}
                   value={prizeWon}
@@ -820,12 +822,12 @@ export default function EditTournamentScreen() {
 
           {/* Description */}
           <Animated.View entering={FadeInDown.duration(400).delay(525)} style={styles.section}>
-            <Text style={styles.sectionTitle}>DESCRIPTION</Text>
+            <Text style={styles.sectionTitle}>{t('tournament', 'description').toUpperCase()}</Text>
             <TextInput
               style={[styles.textInput, styles.textArea]}
               value={description}
               onChangeText={setDescription}
-              placeholder="Informations complémentaires..."
+              placeholder={t('tournament', 'descriptionPlaceholderLong')}
               placeholderTextColor={theme.textMuted}
               multiline
               numberOfLines={4}
@@ -841,7 +843,7 @@ export default function EditTournamentScreen() {
             onPress={handleSave}
           >
             <MaterialIcons name="check" size={24} color="#FFF" />
-            <Text style={styles.saveButtonText}>Enregistrer les modifications</Text>
+            <Text style={styles.saveButtonText}>{t('tournament', 'saveChanges')}</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>

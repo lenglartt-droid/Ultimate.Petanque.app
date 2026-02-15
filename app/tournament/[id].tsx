@@ -19,6 +19,7 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import config from '@/constants/config';
+import { useLanguage } from '@/hooks/useLanguage';
 import { useApp } from '@/contexts/AppContext';
 import { TextInput } from 'react-native';
 import { TournamentType } from '@/constants/config';
@@ -95,6 +96,7 @@ export default function TournamentDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getTournamentById, getClubById, getTerrainById, getMatchesByTournament, updateTournament, tournamentNotifications, toggleTournamentNotification, isTournamentNotificationEnabled } = useApp();
+  const { t } = useLanguage();
 
   const tournament = getTournamentById(id!);
   const terrain = tournament?.terrainId ? getTerrainById(tournament.terrainId) : null;
@@ -156,8 +158,8 @@ export default function TournamentDetailScreen() {
     
     if (!isUpcoming) {
       Alert.alert(
-        'Tournoi passé',
-        'Les notifications ne sont disponibles que pour les tournois à venir.'
+        t('tournament', 'pastTournament'),
+        t('tournament', 'notifOnlyUpcoming')
       );
       return;
     }
@@ -177,12 +179,12 @@ export default function TournamentDetailScreen() {
     
     if (!granted) {
       Alert.alert(
-        'Autorisation requise',
-        'Pour recevoir des rappels, activez les notifications dans les paramètres de votre téléphone.',
+        t('tournament', 'notifPermRequired'),
+        t('tournament', 'notifEnableInSettings'),
         [
-          { text: 'Annuler', style: 'cancel' },
+          { text: t('common', 'cancel'), style: 'cancel' },
           { 
-            text: 'Ouvrir Paramètres', 
+            text: t('tournament', 'openSettings'), 
             onPress: () => {
               if (Platform.OS === 'ios') {
                 Linking.openURL('app-settings:');
@@ -200,7 +202,7 @@ export default function TournamentDetailScreen() {
   const handleTestNotification = useCallback(async () => {
     Haptics.selectionAsync();
     await sendTestNotification();
-    Alert.alert('Test envoyé', 'Vous devriez recevoir une notification de test.');
+    Alert.alert(t('tournament', 'testSent'), t('tournament', 'testSentMsg'));
   }, []);
 
   // Save notification settings
@@ -217,7 +219,7 @@ export default function TournamentDetailScreen() {
         
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setShowNotificationModal(false);
-        Alert.alert('Notifications désactivées', 'Vous ne recevrez plus de rappel pour ce tournoi.');
+        Alert.alert(t('tournament', 'notifDisabled'), t('tournament', 'notifDisabledMsg'));
       } else {
         // Enable - schedule notifications
         const scheduledIds = await scheduleTournamentNotifications({
@@ -236,20 +238,20 @@ export default function TournamentDetailScreen() {
         
         // Build reminder message
         const reminders = [];
-        if (notificationSettings.oneWeek && daysUntilTournament >= 7) reminders.push('1 semaine avant');
-        if (notificationSettings.threeDays && daysUntilTournament >= 3) reminders.push('3 jours avant');
-        if (notificationSettings.oneDayBefore && daysUntilTournament >= 1) reminders.push('la veille');
+        if (notificationSettings.oneWeek && daysUntilTournament >= 7) reminders.push(t('tournament', 'oneWeekBefore'));
+        if (notificationSettings.threeDays && daysUntilTournament >= 3) reminders.push(t('tournament', 'threeDaysBefore'));
+        if (notificationSettings.oneDayBefore && daysUntilTournament >= 1) reminders.push(t('tournament', 'dayBefore'));
         
         Alert.alert(
-          'Notifications programmées',
+          t('tournament', 'notifScheduled'),
           scheduledIds.length > 0 
-            ? `${scheduledIds.length} rappel(s) programmé(s) : ${reminders.join(', ')}.`
-            : 'Le tournoi est très proche, aucun rappel programmé.'
+            ? `${scheduledIds.length} ${t('tournament', 'remindersScheduledMsg')} : ${reminders.join(', ')}.`
+            : t('tournament', 'noReminderScheduled')
         );
       }
     } catch (error) {
       console.log('Error scheduling notifications:', error);
-      Alert.alert('Erreur', 'Impossible de programmer les notifications.');
+      Alert.alert(t('common', 'error'), t('tournament', 'errorScheduling'));
     } finally {
       setIsScheduling(false);
     }
@@ -295,7 +297,7 @@ export default function TournamentDetailScreen() {
 
   // Journey status
   const journeyStatus = useMemo(() => {
-    if (myMatches.length === 0) return { status: 'not_started', label: 'En attente', color: theme.textMuted, icon: 'hourglass-empty' };
+    if (myMatches.length === 0) return { status: 'not_started', label: t('tournament', 'waiting'), color: theme.textMuted, icon: 'hourglass-empty' };
     
     const lastMatch = myMatches[myMatches.length - 1];
     const lastMatchWon = lastMatch.winner === 'A';
@@ -304,21 +306,21 @@ export default function TournamentDetailScreen() {
     const isLastPhase = lastPhaseIndex === tournamentPhases.length - 1;
     
     if (isLastPhase && lastMatchWon) {
-      return { status: 'champion', label: 'Champion !', color: theme.carreauColor, icon: 'emoji-events' };
+      return { status: 'champion', label: t('tournament', 'champion'), color: theme.carreauColor, icon: 'emoji-events' };
     }
     if ((phase.includes('finale') || isLastPhase) && !lastMatchWon) {
-      return { status: 'finalist', label: phase === 'finale' ? 'Finaliste' : 'Parcours terminé', color: theme.accent, icon: 'workspace-premium' };
+      return { status: 'finalist', label: phase === 'finale' ? t('tournament', 'finalist') : t('tournament', 'journeyEnded'), color: theme.accent, icon: 'workspace-premium' };
     }
     if ((tournament?.type === 'Suisse' || tournament?.type === 'Poules') && phase.includes('classement')) {
-      return { status: 'completed', label: 'Classé', color: theme.success, icon: 'emoji-events' };
+      return { status: 'completed', label: t('tournament', 'ranked'), color: theme.success, icon: 'emoji-events' };
     }
     if (lastMatchWon) {
-      return { status: 'advancing', label: 'En course', color: theme.success, icon: 'trending-up' };
+      return { status: 'advancing', label: t('tournament', 'inTheRunning'), color: theme.success, icon: 'trending-up' };
     }
     if (tournament?.type === 'Élimination directe' || tournament?.type === 'Tirage intégral') {
-      return { status: 'eliminated', label: 'Éliminé', color: theme.error, icon: 'block' };
+      return { status: 'eliminated', label: t('tournament', 'eliminated'), color: theme.error, icon: 'block' };
     }
-    return { status: 'continuing', label: 'Continue', color: theme.warning, icon: 'trending-flat' };
+    return { status: 'continuing', label: t('tournament', 'continuing'), color: theme.warning, icon: 'trending-flat' };
   }, [myMatches, tournamentPhases, tournament]);
 
   // Current phase progress
@@ -361,7 +363,7 @@ export default function TournamentDetailScreen() {
       setPrizeWonInput('');
     } catch (e) {
       console.log('Error ending tournament:', e);
-      Alert.alert('Erreur', 'Impossible de terminer le tournoi.');
+      Alert.alert(t('common', 'error'), t('tournament', 'errorEndTournament'));
     } finally {
       setIsSavingEnd(false);
     }
@@ -381,12 +383,12 @@ export default function TournamentDetailScreen() {
           <Pressable style={styles.backButton} onPress={() => router.back()}>
             <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Mon Parcours</Text>
+          <Text style={styles.headerTitle}>{t('tournament', 'myJourney')}</Text>
           <View style={{ width: 40 }} />
         </View>
         <View style={styles.emptyContainer}>
           <MaterialIcons name="error-outline" size={64} color={theme.textMuted} />
-          <Text style={styles.emptyText}>Tournoi non trouvé</Text>
+          <Text style={styles.emptyText}>{t('tournament', 'tournamentNotFound')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -399,7 +401,7 @@ export default function TournamentDetailScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Mon Parcours</Text>
+        <Text style={styles.headerTitle}>{t('tournament', 'myJourney')}</Text>
         <View style={styles.headerActions}>
           {isShared && (
             <Pressable
@@ -409,10 +411,10 @@ export default function TournamentDetailScreen() {
                 const { newItemId, error } = await saveSharedItemToMyAccount('tournament', id!);
                 setIsSaving(false);
                 if (error) {
-                  showShareAlert('Erreur', error);
+                  showShareAlert(t('common', 'error'), error);
                 } else {
                   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  showShareAlert('Enregistre', 'Ce tournoi a ete copie dans votre annuaire');
+                  showShareAlert(t('tournament', 'savedLabel'), t('tournament', 'tournamentCopied'));
                   if (newItemId) router.replace(`/tournament/${newItemId}` as any);
                 }
               }}
@@ -558,7 +560,7 @@ export default function TournamentDetailScreen() {
           {myStats.tirRate !== null && (
             <View style={styles.statusStat}>
               <Text style={[styles.statusStatValue, { color: theme.tirColor }]}>{myStats.tirRate}%</Text>
-              <Text style={styles.statusStatLabel}>Tir</Text>
+              <Text style={styles.statusStatLabel}>{t('tournament', 'shotLabel')}</Text>
             </View>
           )}
         </Animated.View>
@@ -566,7 +568,7 @@ export default function TournamentDetailScreen() {
         {/* Phase Progress */}
         <Animated.View entering={FadeInDown.duration(300).delay(100)} style={styles.section}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>PROGRESSION</Text>
+            <Text style={styles.sectionTitle}>{t('tournament', 'progression')}</Text>
             <View style={styles.cadrageBadge}>
               <MaterialIcons name="category" size={12} color={theme.primary} />
               <Text style={styles.cadrageBadgeText}>{tournament.type}</Text>
@@ -629,13 +631,13 @@ export default function TournamentDetailScreen() {
             <View style={styles.cadrageDescription}>
               <MaterialIcons name="info-outline" size={14} color={theme.textMuted} />
               <Text style={styles.cadrageDescriptionText}>
-                {tournament.type === 'Poules' && 'Matchs en poules, classement final'}
-                {tournament.type === 'Élimination directe' && 'Élimination simple, un match perdu = éliminé'}
-                {tournament.type === 'Mixte' && 'Poules puis tableau à élimination'}
-                {tournament.type === 'Suisse' && 'Rondes successives contre adversaires de même niveau'}
-                {tournament.type === 'A/B/C' && 'Tableaux multiples avec repêchage'}
-                {tournament.type === 'Tirage intégral' && 'Tableau fixé au tirage, élimination directe'}
-                {tournament.type === 'Autre' && 'Format personnalisé'}
+                {tournament.type === 'Poules' && t('tournament', 'poulesDesc')}
+                {tournament.type === 'Élimination directe' && t('tournament', 'eliminationDesc')}
+                {tournament.type === 'Mixte' && t('tournament', 'mixteDesc')}
+                {tournament.type === 'Suisse' && t('tournament', 'suisseDesc')}
+                {tournament.type === 'A/B/C' && t('tournament', 'abcDesc')}
+                {tournament.type === 'Tirage intégral' && t('tournament', 'tirageDesc')}
+                {tournament.type === 'Autre' && t('tournament', 'autreDesc')}
               </Text>
             </View>
           </View>
@@ -644,7 +646,7 @@ export default function TournamentDetailScreen() {
         {/* Match Timeline */}
         <Animated.View entering={FadeInDown.duration(300).delay(150)} style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>MES MATCHS</Text>
+            <Text style={styles.sectionTitle}>{t('tournament', 'myMatches')}</Text>
             <Text style={styles.sectionCount}>{myMatches.length}</Text>
           </View>
           
@@ -667,7 +669,7 @@ export default function TournamentDetailScreen() {
                       </View>
                       {match.tournamentBracket && (
                         <View style={styles.bracketTag}>
-                          <Text style={styles.bracketTagText}>Tableau {match.tournamentBracket}</Text>
+                          <Text style={styles.bracketTagText}>{t('tournament', 'bracketLabel')} {match.tournamentBracket}</Text>
                         </View>
                       )}
                       <View style={{ flex: 1 }} />
@@ -678,7 +680,7 @@ export default function TournamentDetailScreen() {
                     
                     <View style={styles.matchBody}>
                       <View style={styles.matchTeam}>
-                        <Text style={styles.matchTeamLabel}>Moi</Text>
+                        <Text style={styles.matchTeamLabel}>{t('tournament', 'meLabel')}</Text>
                         <Text style={[styles.matchScore, isWin && styles.matchScoreWin]}>
                           {match.teamA.score}
                         </Text>
@@ -688,7 +690,7 @@ export default function TournamentDetailScreen() {
                       </View>
                       <View style={[styles.matchTeam, { alignItems: 'flex-end' }]}>
                         <Text style={styles.matchTeamLabel} numberOfLines={1}>
-                          {match.teamB.playerNames[0] || 'Adversaire'}
+                          {match.teamB.playerNames[0] || t('tournament', 'opponentLabel')}
                         </Text>
                         <Text style={[styles.matchScore, !isWin && styles.matchScoreWin]}>
                           {match.teamB.score}
@@ -703,7 +705,7 @@ export default function TournamentDetailScreen() {
                         color={isWin ? theme.success : theme.error} 
                       />
                       <Text style={[styles.matchResult, { color: isWin ? theme.success : theme.error }]}>
-                        {isWin ? 'Victoire' : 'Défaite'}
+                        {isWin ? t('tournament', 'victory') : t('tournament', 'defeat')}
                       </Text>
                       <View style={{ flex: 1 }} />
                       <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
@@ -715,8 +717,8 @@ export default function TournamentDetailScreen() {
           ) : (
             <View style={styles.emptyMatches}>
               <MaterialIcons name="sports" size={48} color={theme.textMuted} />
-              <Text style={styles.emptyMatchesText}>Aucun match enregistré</Text>
-              <Text style={styles.emptyMatchesHint}>Ajoutez votre premier match pour commencer à suivre votre parcours</Text>
+              <Text style={styles.emptyMatchesText}>{t('tournament', 'noMatchRecorded')}</Text>
+              <Text style={styles.emptyMatchesHint}>{t('tournament', 'addFirstMatch')}</Text>
             </View>
           )}
         </Animated.View>
@@ -738,7 +740,7 @@ export default function TournamentDetailScreen() {
           onPress={() => router.push(`/match/new?tournamentId=${tournament.id}`)}
         >
           <MaterialIcons name="add" size={28} color="#FFF" />
-          <Text style={styles.fabText}>Nouveau Match</Text>
+          <Text style={styles.fabText}>{t('tournament', 'newMatch')}</Text>
         </Pressable>
       </Animated.View>
 
@@ -754,7 +756,7 @@ export default function TournamentDetailScreen() {
             <Pressable style={styles.modalClose} onPress={() => setShowNotificationModal(false)}>
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>
-            <Text style={styles.modalTitle}>Notifications</Text>
+            <Text style={styles.modalTitle}>{t('tournament', 'notifications')}</Text>
             <Pressable 
               style={[styles.modalSave, (isScheduling || permissionStatus !== 'granted') && styles.modalSaveDisabled]}
               onPress={handleSaveNotifications}
@@ -764,7 +766,7 @@ export default function TournamentDetailScreen() {
                 <ActivityIndicator size="small" color={theme.primary} />
               ) : (
                 <Text style={[styles.modalSaveText, permissionStatus !== 'granted' && styles.modalSaveTextDisabled]}>
-                  {isNotificationEnabled ? 'Désactiver' : 'Activer'}
+                  {isNotificationEnabled ? t('tournament', 'disableLabel') : t('tournament', 'enableLabel')}
                 </Text>
               )}
             </Pressable>
@@ -796,14 +798,14 @@ export default function TournamentDetailScreen() {
                   <View style={styles.daysCountdown}>
                     <MaterialIcons name="schedule" size={14} color={theme.primary} />
                     <Text style={styles.daysCountdownText}>
-                      Dans {daysUntilTournament} jour{daysUntilTournament > 1 ? 's' : ''}
+                      {t('tournament', 'inDaysCount')} {daysUntilTournament} {daysUntilTournament > 1 ? t('tournament', 'daysUnit') : t('tournament', 'dayUnit')}
                     </Text>
                   </View>
                 ) : (
                   <View style={[styles.daysCountdown, { backgroundColor: theme.warning + '15' }]}>
                     <MaterialIcons name="event" size={14} color={theme.warning} />
                     <Text style={[styles.daysCountdownText, { color: theme.warning }]}>
-                      {daysUntilTournament === 0 ? "Aujourd'hui" : 'Passé'}
+                      {daysUntilTournament === 0 ? t('tournament', 'todayLabel') : t('tournament', 'passedLabel')}
                     </Text>
                   </View>
                 )}
@@ -817,13 +819,13 @@ export default function TournamentDetailScreen() {
                   <MaterialIcons name="notifications-off" size={24} color={theme.warning} />
                 </View>
                 <View style={styles.permissionBannerContent}>
-                  <Text style={styles.permissionBannerTitle}>Autorisations requises</Text>
+                  <Text style={styles.permissionBannerTitle}>{t('tournament', 'permissionsRequired')}</Text>
                   <Text style={styles.permissionBannerDesc}>
-                    Activez les notifications pour recevoir des rappels
+                    {t('tournament', 'enableNotifToReceive')}
                   </Text>
                 </View>
                 <Pressable style={styles.permissionBannerBtn} onPress={handleRequestPermission}>
-                  <Text style={styles.permissionBannerBtnText}>Autoriser</Text>
+                  <Text style={styles.permissionBannerBtnText}>{t('tournament', 'authorize')}</Text>
                 </Pressable>
               </View>
             )}
@@ -843,12 +845,12 @@ export default function TournamentDetailScreen() {
                   styles.notificationStatusTitle,
                   { color: isNotificationEnabled ? theme.success : theme.textSecondary }
                 ]}>
-                  {isNotificationEnabled ? 'Rappels programmés' : 'Rappels désactivés'}
+                  {isNotificationEnabled ? t('tournament', 'scheduledReminders') : t('tournament', 'remindersDisabled')}
                 </Text>
                 <Text style={styles.notificationStatusDesc}>
                   {isNotificationEnabled 
-                    ? 'Vous recevrez des notifications push'
-                    : 'Activez pour recevoir des rappels'
+                    ? t('tournament', 'willReceivePush')
+                    : t('tournament', 'enableToReceive')
                   }
                 </Text>
               </View>
@@ -856,9 +858,9 @@ export default function TournamentDetailScreen() {
 
             {/* Reminder Options */}
             <View style={styles.notificationSection}>
-              <Text style={styles.notificationSectionTitle}>RAPPELS À PROGRAMMER</Text>
+              <Text style={styles.notificationSectionTitle}>{t('tournament', 'remindersToSchedule')}</Text>
               <Text style={styles.notificationSectionSubtitle}>
-                Choisissez quand recevoir une notification
+                {t('tournament', 'chooseWhenReminder')}
               </Text>
 
               {/* 1 Week Before */}
@@ -870,11 +872,11 @@ export default function TournamentDetailScreen() {
                   <MaterialIcons name="date-range" size={22} color={theme.primary} />
                 </View>
                 <View style={styles.notificationOptionInfo}>
-                  <Text style={styles.notificationOptionTitle}>1 semaine avant</Text>
+                  <Text style={styles.notificationOptionTitle}>{t('tournament', 'oneWeekBeforeLabel')}</Text>
                   <Text style={styles.notificationOptionDesc}>
                     {daysUntilTournament >= 7 
-                      ? `Le ${new Date(tournamentDate.getTime() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} à 9h00`
-                      : 'Délai dépassé'
+                      ? `${new Date(tournamentDate.getTime() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} ${t('tournament', 'atTime')} 9h00`
+                      : t('tournament', 'deadlinePassed')
                     }
                   </Text>
                 </View>
@@ -896,11 +898,11 @@ export default function TournamentDetailScreen() {
                   <MaterialIcons name="event-note" size={22} color={theme.accent} />
                 </View>
                 <View style={styles.notificationOptionInfo}>
-                  <Text style={styles.notificationOptionTitle}>3 jours avant</Text>
+                  <Text style={styles.notificationOptionTitle}>{t('tournament', 'threeDaysBeforeLabel')}</Text>
                   <Text style={styles.notificationOptionDesc}>
                     {daysUntilTournament >= 3 
-                      ? `Le ${new Date(tournamentDate.getTime() - 3 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} à 9h00`
-                      : 'Délai dépassé'
+                      ? `${new Date(tournamentDate.getTime() - 3 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} ${t('tournament', 'atTime')} 9h00`
+                      : t('tournament', 'deadlinePassed')
                     }
                   </Text>
                 </View>
@@ -922,11 +924,11 @@ export default function TournamentDetailScreen() {
                   <MaterialIcons name="today" size={22} color={theme.warning} />
                 </View>
                 <View style={styles.notificationOptionInfo}>
-                  <Text style={styles.notificationOptionTitle}>La veille</Text>
+                  <Text style={styles.notificationOptionTitle}>{t('tournament', 'dayBeforeLabel')}</Text>
                   <Text style={styles.notificationOptionDesc}>
                     {daysUntilTournament >= 1 
-                      ? `Le ${new Date(tournamentDate.getTime() - 1 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} à 18h00`
-                      : 'Délai dépassé'
+                      ? `${new Date(tournamentDate.getTime() - 1 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} ${t('tournament', 'atTime')} 18h00`
+                      : t('tournament', 'deadlinePassed')
                     }
                   </Text>
                 </View>
@@ -944,7 +946,7 @@ export default function TournamentDetailScreen() {
             {permissionStatus === 'granted' && (
               <Pressable style={styles.testNotificationBtn} onPress={handleTestNotification}>
                 <MaterialIcons name="send" size={18} color={theme.primary} />
-                <Text style={styles.testNotificationBtnText}>Envoyer une notification test</Text>
+                <Text style={styles.testNotificationBtnText}>{t('tournament', 'sendTestNotif')}</Text>
               </Pressable>
             )}
 
@@ -952,7 +954,7 @@ export default function TournamentDetailScreen() {
             <View style={styles.notificationInfoCard}>
               <MaterialIcons name="info-outline" size={20} color={theme.textMuted} />
               <Text style={styles.notificationInfoText}>
-                Les rappels seront envoyés sous forme de notifications push locales. Ils fonctionnent même sans connexion internet.
+                {t('tournament', 'notifInfoText')}
               </Text>
             </View>
           </ScrollView>
@@ -980,7 +982,7 @@ export default function TournamentDetailScreen() {
               <MaterialIcons name={endTournamentStep > 1 ? 'arrow-back' : 'close'} size={24} color={theme.textPrimary} />
             </Pressable>
             <Text style={styles.modalTitle}>
-              {endTournamentStep === 1 ? 'Classement final' : endTournamentStep === 2 ? 'Détails' : 'Confirmation'}
+              {endTournamentStep === 1 ? t('tournament', 'finalRanking') : endTournamentStep === 2 ? t('tournament', 'detailsLabel') : t('tournament', 'confirmationLabel')}
             </Text>
             <View style={styles.endStepIndicator}>
               <Text style={styles.endStepText}>{endTournamentStep}/3</Text>
@@ -1006,7 +1008,7 @@ export default function TournamentDetailScreen() {
             {/* STEP 1: Result Selection with Podium */}
             {endTournamentStep === 1 && (
               <Animated.View entering={FadeInDown.duration(300)}>
-                <Text style={styles.endTournamentQuestion}>Quel est votre classement final ?</Text>
+                <Text style={styles.endTournamentQuestion}>{t('tournament', 'whatIsYourRanking')}</Text>
 
                 {/* Visual Podium - Top 3 */}
                 <View style={styles.podiumContainer}>
@@ -1040,14 +1042,14 @@ export default function TournamentDetailScreen() {
                 </View>
 
                 {/* Other results */}
-                <Text style={styles.endOtherResultsTitle}>Autre classement</Text>
+                <Text style={styles.endOtherResultsTitle}>{t('tournament', 'otherRanking')}</Text>
                 <View style={styles.endOtherResults}>
                   {[
-                    { id: 'Demi-finale', label: 'Demi-finale', icon: 'trending-up', color: '#4A90D9' },
-                    { id: 'Quart de finale', label: 'Quart de finale', icon: 'trending-flat', color: '#F5A623' },
-                    { id: '1/8 finale', label: '1/8 de finale', icon: 'sports', color: '#7B8794' },
-                    { id: 'Poules', label: 'Éliminé en poules', icon: 'group', color: '#7B8794' },
-                    { id: 'Autre', label: 'Autre', icon: 'more-horiz', color: theme.textMuted },
+                    { id: 'Demi-finale', label: t('tournament', 'semiFinal'), icon: 'trending-up', color: '#4A90D9' },
+                    { id: 'Quart de finale', label: t('tournament', 'quarterFinal'), icon: 'trending-flat', color: '#F5A623' },
+                    { id: '1/8 finale', label: t('tournament', 'roundOf16'), icon: 'sports', color: '#7B8794' },
+                    { id: 'Poules', label: t('tournament', 'eliminatedInGroups'), icon: 'group', color: '#7B8794' },
+                    { id: 'Autre', label: t('tournament', 'other'), icon: 'more-horiz', color: theme.textMuted },
                   ].map(item => (
                     <Pressable
                       key={item.id}
@@ -1071,9 +1073,9 @@ export default function TournamentDetailScreen() {
                 {/* Selected result badge */}
                 {(() => {
                   const cfg = {
-                    '1er': { icon: 'emoji-events', color: '#FFD700', label: 'Champion' },
-                    '2ème': { icon: 'workspace-premium', color: '#C0C0C0', label: 'Finaliste' },
-                    '3ème': { icon: 'military-tech', color: '#CD7F32', label: '3ème place' },
+                    '1er': { icon: 'emoji-events', color: '#FFD700', label: t('tournament', 'championCelebration') },
+                    '2ème': { icon: 'workspace-premium', color: '#C0C0C0', label: t('tournament', 'finalistCelebration') },
+                    '3ème': { icon: 'military-tech', color: '#CD7F32', label: t('tournament', 'thirdPlace') },
                   }[selectedFinalResult] || { icon: 'sports', color: theme.textSecondary, label: selectedFinalResult };
                   const isPodium = ['1er', '2ème', '3ème'].includes(selectedFinalResult);
                   return (
@@ -1081,10 +1083,10 @@ export default function TournamentDetailScreen() {
                       <MaterialIcons name={cfg.icon as any} size={32} color={cfg.color} />
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.endSelectedResultLabel, { color: cfg.color }]}>{cfg.label}</Text>
-                        {isPodium && <Text style={styles.endSelectedResultSub}>Classement final</Text>}
+                        {isPodium && <Text style={styles.endSelectedResultSub}>{t('tournament', 'finalRankingLabel')}</Text>}
                       </View>
                       <Pressable style={styles.endChangeBtn} onPress={() => setEndTournamentStep(1)}>
-                        <Text style={styles.endChangeBtnText}>Modifier</Text>
+                        <Text style={styles.endChangeBtnText}>{t('tournament', 'changeLabel')}</Text>
                       </Pressable>
                     </View>
                   );
@@ -1092,7 +1094,7 @@ export default function TournamentDetailScreen() {
 
                 {/* Prize input */}
                 <View style={styles.endDetailSection}>
-                  <Text style={styles.endDetailSectionTitle}>Gains du tournoi (optionnel)</Text>
+                  <Text style={styles.endDetailSectionTitle}>{t('tournament', 'tournamentPrize')}</Text>
                   <View style={styles.endPrizeInputRow}>
                     <MaterialIcons name="emoji-events" size={22} color={theme.success} />
                     <TextInput
@@ -1109,8 +1111,8 @@ export default function TournamentDetailScreen() {
                     <View style={styles.endCostInfo}>
                       <MaterialIcons name="info-outline" size={14} color={theme.textMuted} />
                       <Text style={styles.endCostInfoText}>
-                        Inscription : {tournament.registrationCost}€ — 
-                        Net : {((parseFloat(prizeWonInput) || 0) - tournament.registrationCost) >= 0 ? '+' : ''}
+                        {t('tournament', 'registrationLabel')} : {tournament.registrationCost}€ — 
+                        {t('tournament', 'netLabel')} : {((parseFloat(prizeWonInput) || 0) - tournament.registrationCost) >= 0 ? '+' : ''}
                         {((parseFloat(prizeWonInput) || 0) - tournament.registrationCost).toFixed(0)}€
                       </Text>
                     </View>
@@ -1119,25 +1121,25 @@ export default function TournamentDetailScreen() {
 
                 {/* Stats summary */}
                 <View style={styles.endDetailSection}>
-                  <Text style={styles.endDetailSectionTitle}>Résumé du parcours</Text>
+                  <Text style={styles.endDetailSectionTitle}>{t('tournament', 'journeySummary')}</Text>
                   <View style={styles.endTournamentStats}>
                     <View style={styles.endTournamentStatsRow}>
                       <View style={styles.endTournamentStatItem}>
                         <Text style={styles.endTournamentStatValue}>{myStats.played}</Text>
-                        <Text style={styles.endTournamentStatLabel}>Matchs</Text>
+                        <Text style={styles.endTournamentStatLabel}>{t('tournament', 'matchesLabel')}</Text>
                       </View>
                       <View style={styles.endTournamentStatItem}>
                         <Text style={[styles.endTournamentStatValue, { color: theme.success }]}>{myStats.wins}</Text>
-                        <Text style={styles.endTournamentStatLabel}>Victoires</Text>
+                        <Text style={styles.endTournamentStatLabel}>{t('tournament', 'victoriesLabel')}</Text>
                       </View>
                       <View style={styles.endTournamentStatItem}>
                         <Text style={[styles.endTournamentStatValue, { color: theme.error }]}>{myStats.losses}</Text>
-                        <Text style={styles.endTournamentStatLabel}>Défaites</Text>
+                        <Text style={styles.endTournamentStatLabel}>{t('tournament', 'defeatsLabel')}</Text>
                       </View>
                       {myStats.tirRate !== null ? (
                         <View style={styles.endTournamentStatItem}>
                           <Text style={[styles.endTournamentStatValue, { color: theme.tirColor }]}>{myStats.tirRate}%</Text>
-                          <Text style={styles.endTournamentStatLabel}>Tir</Text>
+                          <Text style={styles.endTournamentStatLabel}>{t('tournament', 'shotLabel')}</Text>
                         </View>
                       ) : null}
                     </View>
@@ -1146,7 +1148,7 @@ export default function TournamentDetailScreen() {
 
                 {/* Continue button */}
                 <Pressable style={styles.endContinueBtn} onPress={handleGoToSummary}>
-                  <Text style={styles.endContinueBtnText}>Continuer</Text>
+                  <Text style={styles.endContinueBtnText}>{t('tournament', 'continueBtn')}</Text>
                   <MaterialIcons name="arrow-forward" size={20} color="#FFF" />
                 </Pressable>
               </Animated.View>
@@ -1174,7 +1176,7 @@ export default function TournamentDetailScreen() {
                             <MaterialIcons name={cfg.icon as any} size={56} color={cfg.color} />
                           </View>
                           <Text style={[styles.endCelebrationTitle, { color: cfg.color }]}>
-                            {selectedFinalResult === '1er' ? 'Champion !' : selectedFinalResult === '2ème' ? 'Finaliste !' : 'Podium !'}
+                            {selectedFinalResult === '1er' ? t('tournament', 'championCelebration') : selectedFinalResult === '2ème' ? t('tournament', 'finalistCelebration') : t('tournament', 'podiumCelebration')}
                           </Text>
                           <Text style={styles.endCelebrationSub}>{tournament.name}</Text>
                         </Animated.View>
@@ -1194,19 +1196,19 @@ export default function TournamentDetailScreen() {
                       <View style={styles.endSummaryCard}>
                         <View style={styles.endSummaryRow}>
                           <MaterialIcons name="emoji-events" size={18} color={theme.textSecondary} />
-                          <Text style={styles.endSummaryRowLabel}>Classement</Text>
+                          <Text style={styles.endSummaryRowLabel}>{t('tournament', 'rankingLabel')}</Text>
                           <Text style={[styles.endSummaryRowValue, { color: cfg.color }]}>{selectedFinalResult}</Text>
                         </View>
                         <View style={styles.endSummaryDivider} />
                         <View style={styles.endSummaryRow}>
                           <MaterialIcons name="sports" size={18} color={theme.textSecondary} />
-                          <Text style={styles.endSummaryRowLabel}>Matchs joués</Text>
+                          <Text style={styles.endSummaryRowLabel}>{t('tournament', 'matchesPlayed')}</Text>
                           <Text style={styles.endSummaryRowValue}>{myStats.played} ({myStats.wins}V-{myStats.losses}D)</Text>
                         </View>
                         <View style={styles.endSummaryDivider} />
                         <View style={styles.endSummaryRow}>
                           <MaterialIcons name="show-chart" size={18} color={theme.textSecondary} />
-                          <Text style={styles.endSummaryRowLabel}>Diff. points</Text>
+                          <Text style={styles.endSummaryRowLabel}>{t('tournament', 'pointDiff')}</Text>
                           <Text style={[styles.endSummaryRowValue, { color: myStats.pointDiff >= 0 ? theme.success : theme.error }]}>
                             {myStats.pointDiff > 0 ? '+' : ''}{myStats.pointDiff}
                           </Text>
@@ -1216,7 +1218,7 @@ export default function TournamentDetailScreen() {
                             <View style={styles.endSummaryDivider} />
                             <View style={styles.endSummaryRow}>
                               <MaterialIcons name="payments" size={18} color={theme.success} />
-                              <Text style={styles.endSummaryRowLabel}>Gains</Text>
+                              <Text style={styles.endSummaryRowLabel}>{t('tournament', 'gainsLabel')}</Text>
                               <Text style={[styles.endSummaryRowValue, { color: theme.success }]}>+{prize}€</Text>
                             </View>
                           </>
@@ -1226,7 +1228,7 @@ export default function TournamentDetailScreen() {
                             <View style={styles.endSummaryDivider} />
                             <View style={styles.endSummaryRow}>
                               <MaterialIcons name="receipt" size={18} color={theme.textMuted} />
-                              <Text style={styles.endSummaryRowLabel}>Inscription</Text>
+                              <Text style={styles.endSummaryRowLabel}>{t('tournament', 'registrationLabel')}</Text>
                               <Text style={[styles.endSummaryRowValue, { color: theme.error }]}>-{tournament.registrationCost}€</Text>
                             </View>
                           </>
@@ -1237,7 +1239,7 @@ export default function TournamentDetailScreen() {
                       <View style={styles.endNotice}>
                         <MaterialIcons name="info" size={18} color={theme.primary} />
                         <Text style={styles.endNoticeText}>
-                          Le tournoi sera marqué comme « Terminé » et apparaîtra dans votre palmarès.
+                          {t('tournament', 'endNotice')}
                         </Text>
                       </View>
 
@@ -1252,7 +1254,7 @@ export default function TournamentDetailScreen() {
                         ) : (
                           <>
                             <MaterialIcons name="check" size={22} color="#FFF" />
-                            <Text style={styles.endConfirmBtnText}>Terminer le tournoi</Text>
+                            <Text style={styles.endConfirmBtnText}>{t('tournament', 'endTournament')}</Text>
                           </>
                         )}
                       </Pressable>

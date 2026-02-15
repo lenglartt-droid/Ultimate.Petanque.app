@@ -19,6 +19,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import theme from '@/constants/theme';
 import config, { GameFormat, TournamentType, TournamentLevel, TournamentCategory, RegistrationType, TournamentScope } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
+import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 
 // ============================================
@@ -100,6 +101,7 @@ function StepIndicator({ step, total, label }: { step: number; total: number; la
 export default function NewTournamentScreen() {
   const insets = useSafeAreaInsets();
   const { addTournament, clubs, terrains } = useApp();
+  const { t } = useLanguage();
 
   // Form state
   const [name, setName] = useState('');
@@ -139,9 +141,9 @@ export default function NewTournamentScreen() {
   }, [name, terrainId, manualLocation.city]);
 
   const progressLabel = useMemo(() => {
-    if (!name.trim()) return 'Commencez par le nom du tournoi';
-    if (!terrainId && !manualLocation.city.trim()) return 'Choisissez un lieu';
-    return 'Prêt à créer le tournoi';
+    if (!name.trim()) return t('tournament', 'startWithName');
+    if (!terrainId && !manualLocation.city.trim()) return t('tournament', 'chooseLocation');
+    return t('tournament', 'readyToCreate');
   }, [name, terrainId, manualLocation.city]);
 
   const canSave = name.trim() && (terrainId || manualLocation.city.trim());
@@ -178,11 +180,11 @@ export default function NewTournamentScreen() {
 
   const handleSave = () => {
     if (!name.trim()) {
-      Alert.alert('Erreur', 'Le nom du tournoi est obligatoire');
+      Alert.alert(t('common', 'error'), t('tournament', 'errorNameRequired'));
       return;
     }
     if (!terrainId && !manualLocation.city.trim()) {
-      Alert.alert('Erreur', 'Sélectionnez un terrain ou indiquez une ville');
+      Alert.alert(t('common', 'error'), t('tournament', 'errorLocationRequired'));
       return;
     }
 
@@ -230,7 +232,7 @@ export default function NewTournamentScreen() {
           <MaterialIcons name="close" size={24} color={theme.textPrimary} />
         </Pressable>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Nouveau tournoi</Text>
+          <Text style={styles.headerTitle}>{t('tournament', 'newTournament')}</Text>
         </View>
         <View style={styles.headerBtn} />
       </View>
@@ -249,12 +251,12 @@ export default function NewTournamentScreen() {
           {/* =================== ESSENTIEL =================== */}
 
           {/* Name */}
-          <SectionCard title="Nom du tournoi" icon="emoji-events" color={theme.carreauColor} delay={50} required>
+          <SectionCard title={t('tournament', 'tournamentName')} icon="emoji-events" color={theme.carreauColor} delay={50} required>
             <TextInput
               style={styles.textInput}
               value={name}
               onChangeText={setName}
-              placeholder="Ex: Tournoi de Printemps"
+              placeholder={t('tournament', 'namePlaceholder')}
               placeholderTextColor={theme.textMuted}
               autoCapitalize="words"
               autoFocus
@@ -262,12 +264,12 @@ export default function NewTournamentScreen() {
           </SectionCard>
 
           {/* Date */}
-          <SectionCard title="Dates" subtitle={endDate ? 'Tournoi multi-jours' : 'Tournoi sur un jour'} icon="event" color={theme.primary} delay={100} required>
+          <SectionCard title={t('tournament', 'dates')} subtitle={endDate ? t('tournament', 'multiDay') : t('tournament', 'singleDay')} icon="event" color={theme.primary} delay={100} required>
             <View style={styles.dateRow}>
               <Pressable style={[styles.dateCard, styles.dateCardStart]} onPress={() => setShowDatePicker(true)}>
                 <View style={styles.dateCardLabel}>
                   <MaterialIcons name="today" size={14} color={theme.primary} />
-                  <Text style={styles.dateCardLabelText}>Début</Text>
+                  <Text style={styles.dateCardLabelText}>{t('tournament', 'startLabel')}</Text>
                 </View>
                 <Text style={styles.dateCardDay}>{date.getDate()}</Text>
                 <Text style={styles.dateCardMonth}>
@@ -286,7 +288,7 @@ export default function NewTournamentScreen() {
                   <>
                     <View style={styles.dateCardLabel}>
                       <MaterialIcons name="event" size={14} color={theme.accent} />
-                      <Text style={[styles.dateCardLabelText, { color: theme.accent }]}>Fin</Text>
+                      <Text style={[styles.dateCardLabelText, { color: theme.accent }]}>{t('tournament', 'endLabel')}</Text>
                       <Pressable
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         onPress={(e) => { e.stopPropagation(); Haptics.selectionAsync(); setEndDate(null); }}
@@ -308,8 +310,8 @@ export default function NewTournamentScreen() {
                     <View style={styles.addEndDateIcon}>
                       <MaterialIcons name="add" size={24} color={theme.textMuted} />
                     </View>
-                    <Text style={styles.addEndDateText}>Date de fin</Text>
-                    <Text style={styles.addEndDateHint}>Multi-jours</Text>
+                    <Text style={styles.addEndDateText}>{t('tournament', 'endDate')}</Text>
+                    <Text style={styles.addEndDateHint}>{t('tournament', 'multiDays')}</Text>
                   </>
                 )}
               </Pressable>
@@ -323,7 +325,7 @@ export default function NewTournamentScreen() {
           </SectionCard>
 
           {/* Format */}
-          <SectionCard title="Format de jeu" icon="groups" color={theme.accent} delay={150} required>
+          <SectionCard title={t('tournament', 'gameFormat')} icon="groups" color={theme.accent} delay={150} required>
             <View style={styles.formatGrid}>
               {config.game.formats.map(f => {
                 const cfg = FORMAT_CONFIG[f];
@@ -347,7 +349,7 @@ export default function NewTournamentScreen() {
           </SectionCard>
 
           {/* Cadrage */}
-          <SectionCard title="Cadrage" subtitle="Type de compétition" icon="account-tree" color={theme.tirColor} delay={200}>
+          <SectionCard title={t('tournament', 'cadrage')} subtitle={t('tournament', 'competitionType')} icon="account-tree" color={theme.tirColor} delay={200}>
             <View style={styles.cadrageGrid}>
               {config.tournamentTypes.map(t => {
                 const cfg = CADRAGE_CONFIG[t];
@@ -396,12 +398,12 @@ export default function NewTournamentScreen() {
           {/* =================== LIEU =================== */}
 
           {/* Terrain */}
-          <SectionCard title="Lieu" icon="place" color={theme.success} delay={250} required>
+          <SectionCard title={t('tournament', 'location')} icon="place" color={theme.success} delay={250} required>
             <View style={styles.terrainHeaderRow}>
-              <Text style={styles.fieldHint}>Sélectionnez un terrain enregistré ou saisissez une adresse</Text>
+              <Text style={styles.fieldHint}>{t('tournament', 'selectTerrainOrAddress')}</Text>
               <Pressable style={styles.addTerrainBtn} onPress={() => router.push('/terrain/new')}>
                 <MaterialIcons name="add" size={14} color={theme.primary} />
-                <Text style={styles.addTerrainBtnText}>Terrain</Text>
+                <Text style={styles.addTerrainBtnText}>{t('tournament', 'terrainBtn')}</Text>
               </Pressable>
             </View>
 
@@ -412,7 +414,7 @@ export default function NewTournamentScreen() {
                   onPress={() => { Haptics.selectionAsync(); setTerrainId(undefined); }}
                 >
                   <MaterialIcons name="edit-location" size={20} color={!terrainId ? theme.success : theme.textMuted} />
-                  <Text style={[styles.terrainOptionText, !terrainId && styles.terrainOptionTextActive]}>Autre lieu</Text>
+                  <Text style={[styles.terrainOptionText, !terrainId && styles.terrainOptionTextActive]}>{t('tournament', 'otherLocation')}</Text>
                 </Pressable>
                 {terrains.map(terrain => {
                   const tc = config.terrainTypes.find(t => t.id === terrain.type);
@@ -435,10 +437,10 @@ export default function NewTournamentScreen() {
             ) : (
               <View style={styles.noTerrainsBox}>
                 <MaterialIcons name="landscape" size={32} color={theme.textMuted} />
-                <Text style={styles.noTerrainsText}>Aucun terrain enregistré</Text>
+                <Text style={styles.noTerrainsText}>{t('tournament', 'noTerrainsRegistered')}</Text>
                 <Pressable style={styles.createTerrainBtn} onPress={() => router.push('/terrain/new')}>
                   <MaterialIcons name="add" size={16} color={theme.primary} />
-                  <Text style={styles.createTerrainBtnText}>Créer un terrain</Text>
+                  <Text style={styles.createTerrainBtnText}>{t('tournament', 'createTerrain')}</Text>
                 </Pressable>
               </View>
             )}
@@ -446,10 +448,10 @@ export default function NewTournamentScreen() {
             {!terrainId && (
               <Animated.View entering={FadeInDown.duration(250)} style={{ marginTop: 16 }}>
                 <LocationPicker
-                  label="LIEU DU TOURNOI"
+                  label={t('tournament', 'tournamentLocation')}
                   value={manualLocation}
                   onChange={setManualLocation}
-                  placeholder="Rechercher une adresse..."
+                  placeholder={t('tournament', 'searchAddress')}
                   required
                   showAddressField
                 />
@@ -467,13 +469,13 @@ export default function NewTournamentScreen() {
           </SectionCard>
 
           {/* Club */}
-          <SectionCard title="Club organisateur" icon="home-work" color={theme.primaryLight} delay={300}>
+          <SectionCard title={t('tournament', 'organizingClub')} icon="home-work" color={theme.primaryLight} delay={300}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
               <Pressable
                 style={[styles.chipBtn, !clubId && styles.chipBtnActive]}
                 onPress={() => { Haptics.selectionAsync(); setClubId(undefined); }}
               >
-                <Text style={[styles.chipBtnText, !clubId && styles.chipBtnTextActive]}>Aucun</Text>
+                <Text style={[styles.chipBtnText, !clubId && styles.chipBtnTextActive]}>{t('tournament', 'none')}</Text>
               </Pressable>
               {clubs.map(club => (
                 <Pressable
@@ -490,7 +492,7 @@ export default function NewTournamentScreen() {
           {/* =================== CLASSIFICATION =================== */}
 
           {/* Tournament Level */}
-          <SectionCard title="Niveau" subtitle="Classement du tournoi" icon="signal-cellular-alt" color={theme.success} delay={350}>
+          <SectionCard title={t('tournament', 'levelTitle')} subtitle={t('tournament', 'levelSubtitle')} icon="signal-cellular-alt" color={theme.success} delay={350}>
             <View style={styles.levelGrid}>
               {config.tournamentLevels.map(level => {
                 const isActive = tournamentLevel === level && !showCustomLevelInput;
@@ -511,7 +513,7 @@ export default function NewTournamentScreen() {
                 onPress={() => { Haptics.selectionAsync(); setShowCustomLevelInput(!showCustomLevelInput); if (!showCustomLevelInput) setTournamentLevel(undefined); }}
               >
                 <MaterialIcons name="add" size={14} color={showCustomLevelInput ? theme.success : theme.textMuted} />
-                <Text style={[styles.levelChipText, showCustomLevelInput && styles.levelChipTextActive]}>Autre</Text>
+                <Text style={[styles.levelChipText, showCustomLevelInput && styles.levelChipTextActive]}>{t('tournament', 'otherLevel')}</Text>
               </Pressable>
             </View>
             {showCustomLevelInput && (
@@ -520,7 +522,7 @@ export default function NewTournamentScreen() {
                   style={styles.customInputField}
                   value={customLevel}
                   onChangeText={(text) => { setCustomLevel(text); setTournamentLevel(text.trim() || undefined); }}
-                  placeholder="Niveau personnalisé..."
+                  placeholder={t('tournament', 'customLevelPlaceholder')}
                   placeholderTextColor={theme.textMuted}
                   autoFocus
                 />
@@ -530,7 +532,7 @@ export default function NewTournamentScreen() {
           </SectionCard>
 
           {/* Tournament Category */}
-          <SectionCard title="Type de tournoi" icon="verified" color={theme.warning} delay={375}>
+          <SectionCard title={t('tournament', 'tournamentType')} icon="verified" color={theme.warning} delay={375}>
             <View style={styles.chipGrid}>
               {config.tournamentCategories.map(cat => {
                 const isActive = tournamentCategory === cat;
@@ -549,7 +551,7 @@ export default function NewTournamentScreen() {
 
           {/* Registration & Scope in one row */}
           <View style={styles.twoColRow}>
-            <SectionCard title="Inscription" icon="how-to-reg" color={theme.primary} delay={400}>
+            <SectionCard title={t('tournament', 'registration')} icon="how-to-reg" color={theme.primary} delay={400}>
               <View style={styles.chipGrid}>
                 {config.registrationTypes.map(reg => {
                   const isActive = registrationType === reg;
@@ -567,7 +569,7 @@ export default function NewTournamentScreen() {
             </SectionCard>
           </View>
 
-          <SectionCard title="Cadre" subtitle="Niveau de compétition" icon="public" color={theme.accent} delay={425}>
+          <SectionCard title={t('tournament', 'scope')} subtitle={t('tournament', 'scopeSubtitle')} icon="public" color={theme.accent} delay={425}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
               {config.tournamentScopes.map(scope => {
                 const isActive = tournamentScope === scope;
@@ -587,7 +589,7 @@ export default function NewTournamentScreen() {
           {/* =================== DÉTAILS =================== */}
 
           {/* Participants */}
-          <SectionCard title="Participants max" icon="people-outline" color={theme.carreauColor} delay={450}>
+          <SectionCard title={t('tournament', 'maxParticipants')} icon="people-outline" color={theme.carreauColor} delay={450}>
             <View style={styles.participantsRow}>
               {['8', '16', '24', '32', '48', '64', '128'].map(num => {
                 const isActive = maxParticipants === num;
@@ -605,10 +607,10 @@ export default function NewTournamentScreen() {
           </SectionCard>
 
           {/* Financial & Prize */}
-          <SectionCard title="Finances" subtitle="Inscription et dotation" icon="payments" color={theme.carreauColor} delay={475}>
+          <SectionCard title={t('tournament', 'finances')} subtitle={t('tournament', 'financesSubtitle')} icon="payments" color={theme.carreauColor} delay={475}>
             <View style={styles.financeRow}>
               <View style={styles.financeField}>
-                <Text style={styles.financeLabel}>Inscription (€)</Text>
+                <Text style={styles.financeLabel}>{t('tournament', 'registrationCost')}</Text>
                 <TextInput
                   style={styles.financeInput}
                   value={registrationCost}
@@ -619,12 +621,12 @@ export default function NewTournamentScreen() {
                 />
               </View>
               <View style={styles.financeField}>
-                <Text style={styles.financeLabel}>Dotation</Text>
+                <Text style={styles.financeLabel}>{t('tournament', 'prize')}</Text>
                 <TextInput
                   style={styles.financeInput}
                   value={prize}
                   onChangeText={setPrize}
-                  placeholder="Trophées..."
+                  placeholder={t('tournament', 'prizePlaceholder')}
                   placeholderTextColor={theme.textMuted}
                 />
               </View>
@@ -632,12 +634,12 @@ export default function NewTournamentScreen() {
           </SectionCard>
 
           {/* Description */}
-          <SectionCard title="Description" subtitle="Informations complémentaires" icon="description" color={theme.textSecondary} delay={500}>
+          <SectionCard title={t('tournament', 'description')} subtitle={t('tournament', 'descriptionSubtitle')} icon="description" color={theme.textSecondary} delay={500}>
             <TextInput
               style={[styles.textInput, styles.textArea]}
               value={description}
               onChangeText={setDescription}
-              placeholder="Règlement, horaires, remarques..."
+              placeholder={t('tournament', 'descriptionPlaceholder')}
               placeholderTextColor={theme.textMuted}
               multiline
               numberOfLines={4}
@@ -655,7 +657,7 @@ export default function NewTournamentScreen() {
             disabled={!canSave}
           >
             <MaterialIcons name="emoji-events" size={22} color="#FFF" />
-            <Text style={styles.saveButtonText}>Créer le tournoi</Text>
+            <Text style={styles.saveButtonText}>{t('tournament', 'createTournament')}</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
