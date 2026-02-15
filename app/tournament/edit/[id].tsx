@@ -339,7 +339,7 @@ export default function EditTournamentScreen() {
                       styles.statusText,
                       status === s && { color: config.color }
                     ]}>
-                      {s}
+                      {t('tournamentStatus', s)}
                     </Text>
                   </Pressable>
                 );

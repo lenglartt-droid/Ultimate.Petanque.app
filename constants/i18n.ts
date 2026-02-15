@@ -591,6 +591,9 @@ export const translations = {
     upcoming: { fr: 'À venir', en: 'Upcoming' },
     inProgress: { fr: 'En cours', en: 'In progress' },
     completed: { fr: 'Terminé', en: 'Completed' },
+    'À venir': { fr: 'À venir', en: 'Upcoming' },
+    'En cours': { fr: 'En cours', en: 'In progress' },
+    'Terminé': { fr: 'Terminé', en: 'Completed' },
   },
 
   // ============================================

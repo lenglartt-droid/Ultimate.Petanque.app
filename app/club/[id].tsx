@@ -273,7 +273,7 @@ export default function ClubDetailScreen() {
                     styles.statusText,
                     { color: tournament.status === 'À venir' ? theme.primary : theme.textSecondary }
                   ]}>
-                    {tournament.status}
+                    {t('tournamentStatus', tournament.status)}
                   </Text>
                 </View>
               </Pressable>
