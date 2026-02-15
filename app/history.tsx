@@ -15,40 +15,55 @@ import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { Match, Challenge, SeriesInfo } from '@/services/mockData';
+import { useLanguage } from '@/hooks/useLanguage';
 
 // Constants
 const CHALLENGE_CONFIG = {
-  '10_tirs': { name: '10 Tirs', icon: 'gps-fixed' as const, color: '#F97316' },
-  '10_tirs_sautee': { name: 'Tirs Sautée', icon: 'sports' as const, color: '#3B82F6' },
-  'precision': { name: 'Précision', icon: 'stars' as const, color: '#F59E0B' },
+  '10_tirs': { nameKey: 'tenShots', icon: 'gps-fixed' as const, color: '#F97316' },
+  '10_tirs_sautee': { nameKey: 'tenShotsLob', icon: 'sports' as const, color: '#3B82F6' },
+  'precision': { nameKey: 'precision', icon: 'stars' as const, color: '#F59E0B' },
 } as const;
 
 type ContentFilter = 'all' | 'training' | 'tournament' | 'challenges';
 type TrainingSubFilter = 'all' | 'matches' | 'challenges' | 'series';
 type PeriodOption = 'all' | 'week' | '2weeks' | 'month' | '3months' | '6months' | 'year';
 
-const PERIOD_OPTIONS: { id: PeriodOption; label: string; days: number }[] = [
-  { id: 'all', label: 'Tout', days: 0 },
-  { id: 'week', label: '7 jours', days: 7 },
-  { id: '2weeks', label: '2 semaines', days: 14 },
-  { id: 'month', label: '1 mois', days: 30 },
-  { id: '3months', label: '3 mois', days: 90 },
-  { id: '6months', label: '6 mois', days: 180 },
-  { id: 'year', label: '1 an', days: 365 },
+const PERIOD_KEYS: Record<PeriodOption, string> = {
+  all: 'allTime',
+  week: 'sevenDays',
+  '2weeks': 'twoWeeks',
+  month: 'oneMonth',
+  '3months': 'threeMonths',
+  '6months': 'sixMonths',
+  year: 'oneYear',
+};
+
+const PERIOD_DAYS: Record<PeriodOption, number> = {
+  all: 0,
+  week: 7,
+  '2weeks': 14,
+  month: 30,
+  '3months': 90,
+  '6months': 180,
+  year: 365,
+};
+
+const PERIOD_IDS: PeriodOption[] = ['all', 'week', '2weeks', 'month', '3months', '6months', 'year'];
+
+type ContentFilterDef = { id: ContentFilter; labelKey: string; icon: keyof typeof MaterialIcons.glyphMap };
+const CONTENT_FILTERS: ContentFilterDef[] = [
+  { id: 'all', labelKey: 'all', icon: 'layers' },
+  { id: 'training', labelKey: 'trainings', icon: 'fitness-center' },
+  { id: 'tournament', labelKey: 'tournaments', icon: 'emoji-events' },
+  { id: 'challenges', labelKey: 'challenges', icon: 'track-changes' },
 ];
 
-const CONTENT_FILTERS: { id: ContentFilter; label: string; icon: keyof typeof MaterialIcons.glyphMap }[] = [
-  { id: 'all', label: 'Tout', icon: 'layers' },
-  { id: 'training', label: 'Entraînements', icon: 'fitness-center' },
-  { id: 'tournament', label: 'Tournois', icon: 'emoji-events' },
-  { id: 'challenges', label: 'Défis', icon: 'track-changes' },
-];
-
-const TRAINING_SUB_FILTERS: { id: TrainingSubFilter; label: string; icon: keyof typeof MaterialIcons.glyphMap }[] = [
-  { id: 'all', label: 'Tout', icon: 'layers' },
-  { id: 'matches', label: 'Matchs', icon: 'sports' },
-  { id: 'challenges', label: 'Défis', icon: 'track-changes' },
-  { id: 'series', label: 'Best of 3', icon: 'replay' },
+type TrainingSubFilterDef = { id: TrainingSubFilter; labelKey: string; icon: keyof typeof MaterialIcons.glyphMap };
+const TRAINING_SUB_FILTERS: TrainingSubFilterDef[] = [
+  { id: 'all', labelKey: 'all', icon: 'layers' },
+  { id: 'matches', labelKey: 'matches', icon: 'sports' },
+  { id: 'challenges', labelKey: 'challenges', icon: 'track-changes' },
+  { id: 'series', labelKey: 'series', icon: 'replay' },
 ];
 
 // Types
@@ -72,17 +87,17 @@ type HistoryItem =
   | { type: 'header'; title: string; date: string };
 
 // Utility functions
-const getDateKey = (date: Date): string => {
+const getDateKey = (date: Date, lang: 'fr' | 'en'): string => {
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
   
-  if (date.toDateString() === today.toDateString()) return "Aujourd'hui";
-  if (date.toDateString() === yesterday.toDateString()) return "Hier";
+  if (date.toDateString() === today.toDateString()) return lang === 'fr' ? "Aujourd'hui" : 'Today';
+  if (date.toDateString() === yesterday.toDateString()) return lang === 'fr' ? 'Hier' : 'Yesterday';
   if (date.getFullYear() === today.getFullYear()) {
-    return date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    return date.toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long' });
   }
-  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+  return date.toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' });
 };
 
 const filterByPeriod = <T extends { date: string }>(items: T[], days: number): T[] => {
@@ -93,7 +108,7 @@ const filterByPeriod = <T extends { date: string }>(items: T[], days: number): T
 };
 
 // Components
-const MatchCard = React.memo(({ match, onPress, compact = false }: { match: Match; onPress: () => void; compact?: boolean }) => {
+const MatchCard = React.memo(({ match, onPress, compact = false, t }: { match: Match; onPress: () => void; compact?: boolean; t: (s: string, k: string) => string }) => {
   const isWin = match.winner === 'A';
   const isTournament = match.mode === 'Tournoi';
 
@@ -103,7 +118,7 @@ const MatchCard = React.memo(({ match, onPress, compact = false }: { match: Matc
         <View style={[styles.compactIndicator, { backgroundColor: isWin ? theme.success : theme.error }]} />
         <View style={styles.compactMatchContent}>
           <Text style={styles.compactMatchLabel}>
-            {match.seriesInfo?.isFinale ? 'Finale' : `Match ${match.seriesInfo?.matchNumber}`}
+            {match.seriesInfo?.isFinale ? t('history', 'finale') : `${t('history', 'matchN')} ${match.seriesInfo?.matchNumber}`}
           </Text>
           <View style={styles.compactScoreRow}>
             <Text style={[styles.compactScore, isWin && styles.compactScoreWin]}>{match.teamA.score}</Text>
@@ -132,7 +147,7 @@ const MatchCard = React.memo(({ match, onPress, compact = false }: { match: Matc
               color={isTournament ? theme.carreauColor : theme.primary} 
             />
             <Text style={[styles.badgeText, { color: isTournament ? theme.carreauColor : theme.primary }]}>
-              {isTournament ? 'Tournoi' : 'Entraînement'}
+              {isTournament ? t('modes', 'tournament') : t('modes', 'training')}
             </Text>
           </View>
           <Text style={styles.timeText}>
@@ -146,7 +161,7 @@ const MatchCard = React.memo(({ match, onPress, compact = false }: { match: Matc
 
         <View style={styles.scoreRow}>
           <View style={styles.teamCol}>
-            <Text style={styles.teamLabel}>MOI</Text>
+            <Text style={styles.teamLabel}>{t('history', 'me')}</Text>
             <Text style={styles.teamNames} numberOfLines={1}>
               {match.teamA.playerNames.slice(0, 2).join(' • ')}
             </Text>
@@ -159,7 +174,7 @@ const MatchCard = React.memo(({ match, onPress, compact = false }: { match: Matc
           </View>
           
           <View style={[styles.teamCol, styles.teamRight]}>
-            <Text style={styles.teamLabel}>ADV</Text>
+            <Text style={styles.teamLabel}>{t('history', 'opp')}</Text>
             <Text style={styles.teamNames} numberOfLines={1}>
               {match.teamB.playerNames.slice(0, 2).join(' • ')}
             </Text>
@@ -170,7 +185,7 @@ const MatchCard = React.memo(({ match, onPress, compact = false }: { match: Matc
           <View style={[styles.resultBadge, { backgroundColor: isWin ? theme.success + '15' : theme.error + '15' }]}>
             <MaterialIcons name={isWin ? 'check-circle' : 'cancel'} size={12} color={isWin ? theme.success : theme.error} />
             <Text style={[styles.resultText, { color: isWin ? theme.success : theme.error }]}>
-              {isWin ? 'Victoire' : 'Défaite'}
+              {isWin ? t('history', 'victory') : t('history', 'defeat')}
             </Text>
           </View>
           <Text style={styles.formatText}>{match.format}</Text>
@@ -181,7 +196,7 @@ const MatchCard = React.memo(({ match, onPress, compact = false }: { match: Matc
 });
 
 // Series Card Component
-const SeriesCard = React.memo(({ series, onMatchPress }: { series: SeriesGroup; onMatchPress: (match: Match) => void }) => {
+const SeriesCard = React.memo(({ series, onMatchPress, t }: { series: SeriesGroup; onMatchPress: (match: Match) => void; t: (s: string, k: string) => string }) => {
   const [expanded, setExpanded] = useState(false);
   const rotateAnim = useSharedValue(0);
   
@@ -199,8 +214,8 @@ const SeriesCard = React.memo(({ series, onMatchPress }: { series: SeriesGroup; 
   }));
 
   const getResultText = () => {
-    if (!series.isComplete) return 'En cours';
-    return isWin ? 'Série gagnée' : 'Série perdue';
+    if (!series.isComplete) return t('history', 'inProgress');
+    return isWin ? t('history', 'seriesWon') : t('history', 'seriesLost');
   };
 
   return (
@@ -227,7 +242,7 @@ const SeriesCard = React.memo(({ series, onMatchPress }: { series: SeriesGroup; 
 
           <View style={styles.seriesTeamsRow}>
             <View style={styles.seriesTeamCol}>
-              <Text style={styles.seriesTeamLabel}>MOI</Text>
+              <Text style={styles.seriesTeamLabel}>{t('history', 'me')}</Text>
               <Text style={styles.seriesTeamNames} numberOfLines={1}>
                 {series.teamANames.slice(0, 2).join(' • ')}
               </Text>
@@ -249,7 +264,7 @@ const SeriesCard = React.memo(({ series, onMatchPress }: { series: SeriesGroup; 
             </View>
             
             <View style={[styles.seriesTeamCol, styles.teamRight]}>
-              <Text style={styles.seriesTeamLabel}>ADV</Text>
+              <Text style={styles.seriesTeamLabel}>{t('history', 'opp')}</Text>
               <Text style={styles.seriesTeamNames} numberOfLines={1}>
                 {series.teamBNames.slice(0, 2).join(' • ')}
               </Text>
@@ -269,7 +284,7 @@ const SeriesCard = React.memo(({ series, onMatchPress }: { series: SeriesGroup; 
               ))}
             </View>
             <View style={styles.expandButton}>
-              <Text style={styles.expandText}>{expanded ? 'Réduire' : 'Voir les matchs'}</Text>
+              <Text style={styles.expandText}>{expanded ? t('history', 'collapse') : t('history', 'seeMatches')}</Text>
               <Animated.View style={chevronStyle}>
                 <MaterialIcons name="expand-more" size={18} color={theme.primary} />
               </Animated.View>
@@ -281,7 +296,7 @@ const SeriesCard = React.memo(({ series, onMatchPress }: { series: SeriesGroup; 
       {expanded && (
         <Animated.View entering={FadeIn.duration(200)} style={styles.seriesMatchList}>
           {series.matches.map((match) => (
-            <MatchCard key={match.id} match={match} onPress={() => onMatchPress(match)} compact />
+            <MatchCard key={match.id} match={match} onPress={() => onMatchPress(match)} compact t={t} />
           ))}
         </Animated.View>
       )}
@@ -290,8 +305,9 @@ const SeriesCard = React.memo(({ series, onMatchPress }: { series: SeriesGroup; 
 });
 
 // Challenge Card Component - Improved design
-const ChallengeCard = React.memo(({ challenge, onPress }: { challenge: Challenge; onPress: () => void }) => {
+const ChallengeCard = React.memo(({ challenge, onPress, t }: { challenge: Challenge; onPress: () => void; t: (s: string, k: string) => string }) => {
   const config = CHALLENGE_CONFIG[challenge.type];
+  const challengeName = t('challenge', config.nameKey);
   const score = challenge.type === 'precision' ? challenge.totalPoints || 0 : challenge.successRate || 0;
   const percentage = Math.min(100, score);
   const is1v1 = challenge.mode === '1v1';
@@ -305,7 +321,7 @@ const ChallengeCard = React.memo(({ challenge, onPress }: { challenge: Challenge
             <MaterialIcons name={config.icon} size={20} color={config.color} />
           </View>
           <View style={styles.challengeInfo}>
-            <Text style={styles.challengeName}>{config.name}</Text>
+            <Text style={styles.challengeName}>{challengeName}</Text>
             {challenge.playerName && (
               <Text style={styles.challengePlayer} numberOfLines={1}>
                 {is1v1 ? `${challenge.playerName} vs ${challenge.opponentName}` : challenge.playerName}
@@ -317,7 +333,7 @@ const ChallengeCard = React.memo(({ challenge, onPress }: { challenge: Challenge
               {score}{challenge.type === 'precision' ? '' : '%'}
             </Text>
             <Text style={styles.challengeScoreLabel}>
-              {challenge.type === 'precision' ? 'pts' : 'réussite'}
+              {challenge.type === 'precision' ? 'pts' : t('history', 'success')}
             </Text>
           </View>
         </View>
@@ -345,7 +361,7 @@ const ChallengeCard = React.memo(({ challenge, onPress }: { challenge: Challenge
                 color="#FFF" 
               />
               <Text style={styles.challengeWinnerText}>
-                {challenge.winner === 'draw' ? 'Égalité' : challenge.winner === 'player' ? 'Victoire' : 'Défaite'}
+                {challenge.winner === 'draw' ? t('history', 'draw') : challenge.winner === 'player' ? t('history', 'victory') : t('history', 'defeat')}
               </Text>
             </View>
           )}
@@ -379,7 +395,7 @@ const SectionHeader = React.memo(({ title }: { title: string }) => (
 ));
 
 // Challenge Stats Summary
-const ChallengeStatsSummary = React.memo(({ challenges }: { challenges: Challenge[] }) => {
+const ChallengeStatsSummary = React.memo(({ challenges, t }: { challenges: Challenge[]; t: (s: string, k: string) => string }) => {
   const stats = useMemo(() => {
     const byType = {
       '10_tirs': challenges.filter(c => c.type === '10_tirs'),
@@ -408,7 +424,7 @@ const ChallengeStatsSummary = React.memo(({ challenges }: { challenges: Challeng
     <View style={styles.challengeStatsCard}>
       <View style={styles.challengeStatsHeader}>
         <MaterialIcons name="track-changes" size={18} color={theme.primary} />
-        <Text style={styles.challengeStatsTitle}>Résumé des défis</Text>
+        <Text style={styles.challengeStatsTitle}>{t('history', 'challengeSummary')}</Text>
         <View style={styles.challengeStatsCount}>
           <Text style={styles.challengeStatsCountText}>{stats.total}</Text>
         </View>
@@ -416,6 +432,7 @@ const ChallengeStatsSummary = React.memo(({ challenges }: { challenges: Challeng
       <View style={styles.challengeStatsGrid}>
         {(Object.keys(CHALLENGE_CONFIG) as (keyof typeof CHALLENGE_CONFIG)[]).map(type => {
           const cfg = CHALLENGE_CONFIG[type];
+          const challengeName = t('challenge', cfg.nameKey);
           const data = stats.byType[type];
           if (data.count === 0) return null;
           return (
@@ -424,8 +441,8 @@ const ChallengeStatsSummary = React.memo(({ challenges }: { challenges: Challeng
                 <MaterialIcons name={cfg.icon} size={16} color={cfg.color} />
               </View>
               <View style={styles.challengeStatInfo}>
-                <Text style={styles.challengeStatName}>{cfg.name}</Text>
-                <Text style={styles.challengeStatMeta}>{data.count} défi{data.count > 1 ? 's' : ''} • {data.avg}{type === 'precision' ? ' pts' : '%'} moy.</Text>
+                <Text style={styles.challengeStatName}>{challengeName}</Text>
+                <Text style={styles.challengeStatMeta}>{data.count} {data.count > 1 ? t('history', 'challenges').toLowerCase() : t('history', 'challenges').toLowerCase()} • {data.avg}{type === 'precision' ? ' pts' : '%'} {t('history', 'avg')}</Text>
               </View>
             </View>
           );
@@ -438,6 +455,7 @@ const ChallengeStatsSummary = React.memo(({ challenges }: { challenges: Challeng
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
   const { matches, challenges, deleteChallenge } = useApp();
+  const { t, language } = useLanguage();
   
   const [contentFilter, setContentFilter] = useState<ContentFilter>('all');
   const [trainingSubFilter, setTrainingSubFilter] = useState<TrainingSubFilter>('all');
@@ -488,7 +506,7 @@ export default function HistoryScreen() {
 
   // Filtered and grouped data
   const { listData, stats, filteredChallenges, trainingStats } = useMemo(() => {
-    const periodDays = PERIOD_OPTIONS.find(p => p.id === selectedPeriod)?.days || 0;
+    const periodDays = PERIOD_DAYS[selectedPeriod] || 0;
     const filteredMatches = filterByPeriod(matches, periodDays);
     const filteredChallengesData = filterByPeriod(challenges, periodDays);
 
@@ -574,7 +592,7 @@ export default function HistoryScreen() {
     let currentDateKey = '';
     
     items.forEach(item => {
-      const dateKey = getDateKey(new Date(item.date));
+      const dateKey = getDateKey(new Date(item.date), language);
       if (dateKey !== currentDateKey) {
         currentDateKey = dateKey;
         listData.push({ type: 'header', title: dateKey, date: item.date });
@@ -597,7 +615,7 @@ export default function HistoryScreen() {
         challengesCount: filteredChallengesData.length,
       },
     };
-  }, [matches, challenges, contentFilter, trainingSubFilter, selectedPeriod, groupMatchesBySeries]);
+  }, [matches, challenges, contentFilter, trainingSubFilter, selectedPeriod, groupMatchesBySeries, language]);
 
   // Handlers
   const handleMatchPress = useCallback((match: Match) => {
@@ -649,7 +667,7 @@ export default function HistoryScreen() {
     if (item.type === 'series') {
       return (
         <Animated.View entering={FadeIn.duration(200).delay(Math.min(index * 20, 100))}>
-          <SeriesCard series={item.data as SeriesGroup} onMatchPress={handleMatchPress} />
+          <SeriesCard series={item.data as SeriesGroup} onMatchPress={handleMatchPress} t={t} />
         </Animated.View>
       );
     }
@@ -657,17 +675,17 @@ export default function HistoryScreen() {
     if (item.type === 'match') {
       return (
         <Animated.View entering={FadeIn.duration(200).delay(Math.min(index * 20, 100))}>
-          <MatchCard match={item.data as Match} onPress={() => handleMatchPress(item.data as Match)} />
+          <MatchCard match={item.data as Match} onPress={() => handleMatchPress(item.data as Match)} t={t} />
         </Animated.View>
       );
     }
     
     return (
       <Animated.View entering={FadeIn.duration(200).delay(Math.min(index * 20, 100))}>
-        <ChallengeCard challenge={item.data as Challenge} onPress={() => handleChallengePress(item.data as Challenge)} />
+        <ChallengeCard challenge={item.data as Challenge} onPress={() => handleChallengePress(item.data as Challenge)} t={t} />
       </Animated.View>
     );
-  }, [handleMatchPress, handleChallengePress]);
+  }, [handleMatchPress, handleChallengePress, t]);
 
   const keyExtractor = useCallback((item: HistoryItem) => {
     if (item.type === 'header') return `header-${item.title}`;
@@ -676,18 +694,18 @@ export default function HistoryScreen() {
     return `challenge-${(item.data as Challenge).id}`;
   }, []);
 
-  const selectedPeriodLabel = PERIOD_OPTIONS.find(p => p.id === selectedPeriod)?.label || 'Tout';
+  const selectedPeriodLabel = t('history', PERIOD_KEYS[selectedPeriod]);
 
   // List header with challenge stats
   const ListHeader = useCallback(() => {
     if (contentFilter === 'challenges' && filteredChallenges.length > 0) {
-      return <ChallengeStatsSummary challenges={filteredChallenges} />;
+      return <ChallengeStatsSummary challenges={filteredChallenges} t={t} />;
     }
     if (contentFilter === 'training' && trainingSubFilter === 'challenges' && filteredChallenges.length > 0) {
-      return <ChallengeStatsSummary challenges={filteredChallenges} />;
+      return <ChallengeStatsSummary challenges={filteredChallenges} t={t} />;
     }
     return null;
-  }, [contentFilter, trainingSubFilter, filteredChallenges]);
+  }, [contentFilter, trainingSubFilter, filteredChallenges, t]);
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
@@ -696,7 +714,7 @@ export default function HistoryScreen() {
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Historique</Text>
+        <Text style={styles.headerTitle}>{t('history', 'history')}</Text>
         <Pressable 
           style={styles.periodBtn}
           onPress={() => {
@@ -725,7 +743,7 @@ export default function HistoryScreen() {
               onPress={() => handleFilterPress(filter.id)}
             >
               <MaterialIcons name={filter.icon} size={14} color={isActive ? '#FFF' : theme.textSecondary} />
-              <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>{filter.label}</Text>
+              <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>{t('history', filter.labelKey)}</Text>
               <View style={[styles.filterCount, isActive && styles.filterCountActive]}>
                 <Text style={[styles.filterCountText, isActive && styles.filterCountTextActive]}>{count}</Text>
               </View>
@@ -751,7 +769,7 @@ export default function HistoryScreen() {
                 onPress={() => handleTrainingSubFilterPress(filter.id)}
               >
                 <MaterialIcons name={filter.icon} size={12} color={isActive ? theme.primary : theme.textMuted} />
-                <Text style={[styles.subFilterChipText, isActive && styles.subFilterChipTextActive]}>{filter.label}</Text>
+                <Text style={[styles.subFilterChipText, isActive && styles.subFilterChipTextActive]}>{t('history', filter.labelKey)}</Text>
                 <Text style={[styles.subFilterCount, isActive && styles.subFilterCountActive]}>{count}</Text>
               </Pressable>
             );
@@ -776,8 +794,8 @@ export default function HistoryScreen() {
             <View style={styles.emptyIcon}>
               <MaterialIcons name="search-off" size={40} color={theme.textMuted} />
             </View>
-            <Text style={styles.emptyTitle}>Aucun résultat</Text>
-            <Text style={styles.emptyText}>Aucune activité ne correspond à vos filtres</Text>
+            <Text style={styles.emptyTitle}>{t('history', 'noResults')}</Text>
+            <Text style={styles.emptyText}>{t('history', 'noActivity')}</Text>
             <Pressable 
               style={styles.resetBtn}
               onPress={() => {
@@ -787,7 +805,7 @@ export default function HistoryScreen() {
               }}
             >
               <MaterialIcons name="refresh" size={16} color="#FFF" />
-              <Text style={styles.resetBtnText}>Réinitialiser</Text>
+              <Text style={styles.resetBtnText}>{t('history', 'resetFilters')}</Text>
             </Pressable>
           </View>
         }
@@ -802,22 +820,22 @@ export default function HistoryScreen() {
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Période</Text>
+            <Text style={styles.modalTitle}>{t('history', 'period')}</Text>
             <Pressable style={styles.modalClose} onPress={() => setShowPeriodModal(false)}>
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>
           </View>
           <View style={styles.modalContent}>
-            {PERIOD_OPTIONS.map((option) => (
+            {PERIOD_IDS.map((id) => (
               <Pressable
-                key={option.id}
-                style={[styles.periodOption, selectedPeriod === option.id && styles.periodOptionActive]}
-                onPress={() => handlePeriodPress(option.id)}
+                key={id}
+                style={[styles.periodOption, selectedPeriod === id && styles.periodOptionActive]}
+                onPress={() => handlePeriodPress(id)}
               >
-                <Text style={[styles.periodOptionText, selectedPeriod === option.id && styles.periodOptionTextActive]}>
-                  {option.label}
+                <Text style={[styles.periodOptionText, selectedPeriod === id && styles.periodOptionTextActive]}>
+                  {t('history', PERIOD_KEYS[id])}
                 </Text>
-                {selectedPeriod === option.id && (
+                {selectedPeriod === id && (
                   <MaterialIcons name="check-circle" size={20} color={theme.primary} />
                 )}
               </Pressable>
@@ -835,7 +853,7 @@ export default function HistoryScreen() {
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Détails du défi</Text>
+            <Text style={styles.modalTitle}>{t('history', 'challengeDetails')}</Text>
             <Pressable style={styles.modalClose} onPress={() => setEditingChallenge(null)}>
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>
@@ -853,9 +871,9 @@ export default function HistoryScreen() {
                   />
                 </View>
                 <View style={styles.detailInfo}>
-                  <Text style={styles.detailName}>{CHALLENGE_CONFIG[editingChallenge.type].name}</Text>
+                  <Text style={styles.detailName}>{t('challenge', CHALLENGE_CONFIG[editingChallenge.type].nameKey)}</Text>
                   <Text style={styles.detailDate}>
-                    {new Date(editingChallenge.date).toLocaleDateString('fr-FR', {
+                    {new Date(editingChallenge.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', {
                       weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'
                     })}
                   </Text>
@@ -873,7 +891,7 @@ export default function HistoryScreen() {
                 </Text>
                 {editingChallenge.type !== 'precision' && (
                   <Text style={styles.detailScoreSub}>
-                    {editingChallenge.successCount || 0}/{editingChallenge.totalShots || 0} tirs réussis
+                    {editingChallenge.successCount || 0}/{editingChallenge.totalShots || 0} {t('history', 'successfulShots')}
                   </Text>
                 )}
               </View>
@@ -884,7 +902,7 @@ export default function HistoryScreen() {
                   <View style={styles.detailStatItem}>
                     <MaterialIcons name="stars" size={20} color={theme.carreauColor} />
                     <Text style={styles.detailStatValue}>{editingChallenge.carreauCount}</Text>
-                    <Text style={styles.detailStatLabel}>Carreaux</Text>
+                    <Text style={styles.detailStatLabel}>{t('history', 'carreaux')}</Text>
                   </View>
                 )}
                 {editingChallenge.duration && (
@@ -893,7 +911,7 @@ export default function HistoryScreen() {
                     <Text style={styles.detailStatValue}>
                       {Math.floor(editingChallenge.duration / 60)}:{(editingChallenge.duration % 60).toString().padStart(2, '0')}
                     </Text>
-                    <Text style={styles.detailStatLabel}>Durée</Text>
+                    <Text style={styles.detailStatLabel}>{t('history', 'duration')}</Text>
                   </View>
                 )}
               </View>
@@ -916,7 +934,7 @@ export default function HistoryScreen() {
                       { backgroundColor: editingChallenge.winner === 'player' ? theme.success : editingChallenge.winner === 'opponent' ? theme.error : theme.warning }
                     ]}>
                       <Text style={styles.detailWinnerText}>
-                        {editingChallenge.winner === 'draw' ? 'Égalité' : editingChallenge.winner === 'player' ? 'Victoire !' : 'Défaite'}
+                        {editingChallenge.winner === 'draw' ? t('history', 'draw') : editingChallenge.winner === 'player' ? `${t('history', 'victory')} !` : t('history', 'defeat')}
                       </Text>
                     </View>
                   )}
@@ -926,7 +944,7 @@ export default function HistoryScreen() {
               {/* Shots Grid */}
               {editingChallenge.shots && editingChallenge.shots.length > 0 && (
                 <View style={styles.detailShots}>
-                  <Text style={styles.detailShotsTitle}>Détail des tirs</Text>
+                  <Text style={styles.detailShotsTitle}>{t('history', 'shotDetail')}</Text>
                   <View style={styles.detailShotsGrid}>
                     {editingChallenge.shots.map((shot, idx) => (
                       <View 
@@ -947,10 +965,10 @@ export default function HistoryScreen() {
               <View style={styles.detailActions}>
                 <Pressable style={styles.deleteBtn} onPress={handleDeleteChallenge}>
                   <MaterialIcons name="delete" size={18} color={theme.error} />
-                  <Text style={styles.deleteBtnText}>Supprimer</Text>
+                  <Text style={styles.deleteBtnText}>{t('common', 'delete')}</Text>
                 </Pressable>
                 <Pressable style={styles.closeBtn} onPress={() => setEditingChallenge(null)}>
-                  <Text style={styles.closeBtnText}>Fermer</Text>
+                  <Text style={styles.closeBtnText}>{t('common', 'close')}</Text>
                 </Pressable>
               </View>
             </View>
