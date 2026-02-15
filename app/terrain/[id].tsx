@@ -235,7 +235,7 @@ export default function TerrainDetailScreen() {
             <Text style={styles.terrainName}>{terrain.name}</Text>
             <View style={[styles.typeBadge, { backgroundColor: colors.light }]}>
               <MaterialIcons name={typeConfig.icon as any} size={16} color={colors.bg} />
-              <Text style={[styles.typeBadgeText, { color: colors.bg }]}>{terrain.type}</Text>
+              <Text style={[styles.typeBadgeText, { color: colors.bg }]}>{t('terrainTypes', terrain.type)}</Text>
             </View>
             <Text style={styles.typeDescription}>{typeConfig.description}</Text>
           </Animated.View>
@@ -247,7 +247,7 @@ export default function TerrainDetailScreen() {
             <Text style={styles.terrainNameLarge}>{terrain.name}</Text>
             <View style={[styles.typeBadge, { backgroundColor: colors.light }]}>
               <MaterialIcons name={typeConfig.icon as any} size={16} color={colors.bg} />
-              <Text style={[styles.typeBadgeText, { color: colors.bg }]}>{terrain.type}</Text>
+              <Text style={[styles.typeBadgeText, { color: colors.bg }]}>{t('terrainTypes', terrain.type)}</Text>
             </View>
             <Text style={styles.typeDescription}>{typeConfig.description}</Text>
           </Animated.View>
@@ -351,7 +351,7 @@ export default function TerrainDetailScreen() {
           <View style={[styles.tipsCard, { backgroundColor: colors.light, borderColor: colors.bg + '30' }]}>
             <View style={styles.tipsHeader}>
               <MaterialIcons name="tips-and-updates" size={24} color={colors.bg} />
-              <Text style={[styles.tipsTitle, { color: colors.bg }]}>{t('terrain', 'terrainType')} {terrain.type}</Text>
+              <Text style={[styles.tipsTitle, { color: colors.bg }]}>{t('terrain', 'terrainType')} {t('terrainTypes', terrain.type)}</Text>
             </View>
             <View style={styles.tipsList}>
               {terrain.type === 'Stabilisé' && (

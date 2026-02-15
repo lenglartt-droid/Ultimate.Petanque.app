@@ -539,7 +539,7 @@ export default function TournamentDetailScreen() {
               </View>
               <View style={styles.terrainInfoContent}>
                 <Text style={styles.terrainInfoName}>{terrain.name}</Text>
-                <Text style={styles.terrainInfoType}>{terrain.type} • {terrain.address}</Text>
+                <Text style={styles.terrainInfoType}>{t('terrainTypes', terrain.type)} • {terrain.address}</Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </Pressable>

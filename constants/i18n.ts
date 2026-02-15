@@ -630,6 +630,13 @@ export const translations = {
     'Triplette': { fr: 'Triplette', en: 'Triples' },
     'TàT': { fr: 'TàT', en: 'Sgl' },
   },
+  terrainTypes: {
+    'Stabilisé': { fr: 'Stabilisé', en: 'Stabilized' },
+    'Graviers': { fr: 'Graviers', en: 'Gravel' },
+    'Sable': { fr: 'Sable', en: 'Sand' },
+    'Cailloux': { fr: 'Cailloux', en: 'Pebbles' },
+    'Terre battue': { fr: 'Terre battue', en: 'Clay' },
+  },
   tournamentTypes: {
     'Poules': { fr: 'Poules', en: 'Pools' },
     'Élimination directe': { fr: 'Élimination directe', en: 'Single elimination' },

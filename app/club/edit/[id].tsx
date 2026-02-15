@@ -336,7 +336,7 @@ export default function EditClubScreen() {
                       styles.terrainChipSubtext,
                       selectedTerrainId === terrain.id && styles.terrainChipSubtextActive
                     ]}>
-                      {terrain.city} • {terrain.type}
+                      {terrain.city} • {t('terrainTypes', terrain.type)}
                     </Text>
                   </View>
                 </Pressable>

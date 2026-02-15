@@ -32,7 +32,7 @@ if (Platform.OS !== 'web') {
 }
 
 // Memoized list item component
-const ListItem = React.memo(({ item, onPress, singularLabel }: { item: any; onPress: () => void; singularLabel: string }) => {
+const ListItem = React.memo(({ item, onPress, singularLabel, terrainTypeLabel }: { item: any; onPress: () => void; singularLabel: string; terrainTypeLabel?: string }) => {
   const MARKER_COLORS: Record<string, string> = {
     terrains: theme.success,
     clubs: theme.accent,
@@ -60,7 +60,7 @@ const ListItem = React.memo(({ item, onPress, singularLabel }: { item: any; onPr
       <View style={styles.listContent}>
         <Text style={styles.listName} numberOfLines={1}>{item.name}</Text>
         <Text style={styles.listMeta} numberOfLines={1}>
-          {item.itemType === 'terrains' ? `${item.city} • ${item.type}` :
+          {item.itemType === 'terrains' ? `${item.city} • ${terrainTypeLabel || item.type}` :
            item.itemType === 'clubs' ? item.city :
            item.itemType === 'players' ? (item.location?.city || item.club || '-') :
            item.location?.city}
@@ -182,8 +182,9 @@ export default function MapScreen() {
       item={item}
       onPress={() => handleSelect(item, item.itemType)}
       singularLabel={getSingularLabel(item.itemType)}
+      terrainTypeLabel={item.itemType === 'terrains' ? t('terrainTypes', item.type) : undefined}
     />
-  ), [handleSelect, getSingularLabel]);
+  ), [handleSelect, getSingularLabel, t]);
 
   const keyExtractor = useCallback((item: any) => `${item.itemType}-${item.id}`, []);
 
@@ -353,7 +354,7 @@ export default function MapScreen() {
               <View style={styles.selectedMeta}>
                 <MaterialIcons name="place" size={12} color={theme.textMuted} />
                 <Text style={styles.selectedMetaText}>
-                  {selected.itemType === 'terrains' ? `${selected.city} • ${selected.type}` :
+                  {selected.itemType === 'terrains' ? `${selected.city} • ${t('terrainTypes', selected.type)}` :
                    selected.itemType === 'clubs' ? selected.city :
                    selected.itemType === 'players' ? (selected.location?.city || selected.club || '-') :
                    selected.location?.city}

@@ -1771,7 +1771,7 @@ export default function NewMatchScreen() {
                   </View>
                   <View style={styles.playerInfo}>
                     <Text style={styles.playerName}>{terrain.name}</Text>
-                    <Text style={styles.playerMeta}>{terrain.type} • {terrain.city}</Text>
+                    <Text style={styles.playerMeta}>{t('terrainTypes', terrain.type)} • {terrain.city}</Text>
                   </View>
                   <MaterialIcons 
                     name={selectedTerrainId === terrain.id ? 'check-circle' : 'radio-button-unchecked'} 

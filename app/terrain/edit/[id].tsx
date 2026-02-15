@@ -312,36 +312,36 @@ export default function EditTerrainScreen() {
           <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
             <Text style={styles.sectionTitle}>{t('terrain', 'terrainTypeRequired')}</Text>
             <View style={styles.typeContainer}>
-              {config.terrainTypes.map((t) => (
+              {config.terrainTypes.map((tt) => (
                 <Pressable
-                  key={t.id}
+                  key={tt.id}
                   style={[
                     styles.typeCard,
-                    type === t.id && styles.typeCardActive
+                    type === tt.id && styles.typeCardActive
                   ]}
                   onPress={() => {
                     Haptics.selectionAsync();
-                    setType(t.id);
+                    setType(tt.id);
                   }}
                 >
                   <View style={[
                     styles.typeIconContainer,
-                    type === t.id && styles.typeIconContainerActive
+                    type === tt.id && styles.typeIconContainerActive
                   ]}>
                     <MaterialIcons 
-                      name={t.icon as any} 
+                      name={tt.icon as any} 
                       size={24} 
-                      color={type === t.id ? '#FFF' : theme.textSecondary} 
+                      color={type === tt.id ? '#FFF' : theme.textSecondary} 
                     />
                   </View>
                   <Text style={[
                     styles.typeName,
-                    type === t.id && styles.typeNameActive
+                    type === tt.id && styles.typeNameActive
                   ]}>
-                    {t.label}
+                    {t('terrainTypes', tt.id)}
                   </Text>
                   <Text style={styles.typeDescription} numberOfLines={2}>
-                    {t.description}
+                    {tt.description}
                   </Text>
                 </Pressable>
               ))}

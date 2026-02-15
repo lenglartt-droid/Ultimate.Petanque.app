@@ -361,7 +361,7 @@ export default function DirectoryScreen() {
           </View>
           <View style={styles.itemTags}>
             <View style={[styles.tag, { backgroundColor: theme.success + '15' }]}>
-              <Text style={[styles.tagText, { color: theme.success }]}>{item.type}</Text>
+              <Text style={[styles.tagText, { color: theme.success }]}>{t('terrainTypes', item.type)}</Text>
             </View>
             <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}>
               <Text style={[styles.tagText, { color: theme.textSecondary }]}>

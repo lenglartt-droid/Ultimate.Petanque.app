@@ -451,7 +451,7 @@ export default function NewPlayerScreen() {
                       styles.terrainChipSubtext,
                       terrainId === terrain.id && styles.terrainChipSubtextActive
                     ]} numberOfLines={1}>
-                      {terrain.city} • {terrain.type}
+                      {terrain.city} • {t('terrainTypes', terrain.type)}
                     </Text>
                   </View>
                 </Pressable>
