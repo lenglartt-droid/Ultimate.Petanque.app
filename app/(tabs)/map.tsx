@@ -17,15 +17,9 @@ import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
+import { useLanguage } from '@/hooks/useLanguage';
 
 type MarkerType = 'all' | 'terrains' | 'clubs' | 'tournaments' | 'players';
-
-const MARKER_CONFIG = {
-  terrains: { label: 'Terrains', icon: 'sports-soccer', color: theme.success },
-  clubs: { label: 'Clubs', icon: 'home', color: theme.accent },
-  tournaments: { label: 'Tournois', icon: 'emoji-events', color: theme.carreauColor },
-  players: { label: 'Joueurs', icon: 'person', color: theme.primary },
-} as const;
 
 // Conditionally import map components
 let MapViewComponent: React.ComponentType<any> | null = null;
@@ -38,16 +32,30 @@ if (Platform.OS !== 'web') {
 }
 
 // Memoized list item component
-const ListItem = React.memo(({ item, onPress }: { item: any; onPress: () => void }) => {
-  const cfg = MARKER_CONFIG[item.itemType as keyof typeof MARKER_CONFIG];
-  const terrainConfig = item.itemType === 'terrains' 
-    ? config.terrainTypes.find(t => t.id === item.type) 
+const ListItem = React.memo(({ item, onPress, singularLabel }: { item: any; onPress: () => void; singularLabel: string }) => {
+  const MARKER_COLORS: Record<string, string> = {
+    terrains: theme.success,
+    clubs: theme.accent,
+    tournaments: theme.carreauColor,
+    players: theme.primary,
+  };
+  const MARKER_ICONS: Record<string, string> = {
+    terrains: 'sports-soccer',
+    clubs: 'home',
+    tournaments: 'emoji-events',
+    players: 'person',
+  };
+
+  const color = MARKER_COLORS[item.itemType] || theme.primary;
+  const icon = MARKER_ICONS[item.itemType] || 'place';
+  const terrainConfig = item.itemType === 'terrains'
+    ? config.terrainTypes.find(t => t.id === item.type)
     : null;
-  
+
   return (
     <Pressable style={styles.listItem} onPress={onPress}>
-      <View style={[styles.listIcon, { backgroundColor: cfg.color }]}>
-        <MaterialIcons name={(terrainConfig?.icon || cfg.icon) as any} size={18} color="#FFF" />
+      <View style={[styles.listIcon, { backgroundColor: color }]}>
+        <MaterialIcons name={(terrainConfig?.icon || icon) as any} size={18} color="#FFF" />
       </View>
       <View style={styles.listContent}>
         <Text style={styles.listName} numberOfLines={1}>{item.name}</Text>
@@ -58,9 +66,9 @@ const ListItem = React.memo(({ item, onPress }: { item: any; onPress: () => void
            item.location?.city}
         </Text>
       </View>
-      <View style={[styles.listBadge, { backgroundColor: cfg.color + '15' }]}>
-        <Text style={[styles.listBadgeText, { color: cfg.color }]}>
-          {cfg.label.slice(0, -1)}
+      <View style={[styles.listBadge, { backgroundColor: color + '15' }]}>
+        <Text style={[styles.listBadgeText, { color }]}>
+          {singularLabel}
         </Text>
       </View>
     </Pressable>
@@ -70,10 +78,19 @@ const ListItem = React.memo(({ item, onPress }: { item: any; onPress: () => void
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const { clubs, tournaments, terrains, players } = useApp();
+  const { t, language } = useLanguage();
   const [filter, setFilter] = useState<MarkerType>('all');
   const [selected, setSelected] = useState<any>(null);
   const [search, setSearch] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+
+  // Marker config with translated labels
+  const MARKER_CONFIG = useMemo(() => ({
+    terrains: { label: t('map', 'terrains'), singular: t('map', 'terrainSingular'), icon: 'sports-soccer', color: theme.success },
+    clubs: { label: t('map', 'clubs'), singular: t('map', 'clubSingular'), icon: 'home', color: theme.accent },
+    tournaments: { label: t('map', 'tournaments'), singular: t('map', 'tournamentSingular'), icon: 'emoji-events', color: theme.carreauColor },
+    players: { label: t('map', 'players'), singular: t('map', 'playerSingular'), icon: 'person', color: theme.primary },
+  }), [language]);
 
   // Filtered data with valid locations
   const data = useMemo(() => ({
@@ -92,7 +109,7 @@ export default function MapScreen() {
                      type === 'clubs' ? [item.name, item.city] :
                      type === 'players' ? [item.name, item.location?.city, item.club] :
                      [item.name, item.location?.city];
-      return fields.some(f => f?.toLowerCase().includes(q));
+      return fields.some((f: string | undefined) => f?.toLowerCase().includes(q));
     };
 
     const items: any[] = [];
@@ -121,7 +138,7 @@ export default function MapScreen() {
                        type === 'clubs' ? [item.name, item.city] :
                        type === 'players' ? [item.name, item.location?.city, item.club] :
                        [item.name, item.location?.city];
-        return fields.some(f => f?.toLowerCase().includes(q));
+        return fields.some((f: string | undefined) => f?.toLowerCase().includes(q));
       }).length;
     };
     return {
@@ -156,9 +173,17 @@ export default function MapScreen() {
     setSelected(null);
   }, []);
 
+  const getSingularLabel = useCallback((itemType: string) => {
+    return MARKER_CONFIG[itemType as keyof typeof MARKER_CONFIG]?.singular || itemType;
+  }, [MARKER_CONFIG]);
+
   const renderItem = useCallback(({ item }: { item: any }) => (
-    <ListItem item={item} onPress={() => handleSelect(item, item.itemType)} />
-  ), [handleSelect]);
+    <ListItem
+      item={item}
+      onPress={() => handleSelect(item, item.itemType)}
+      singularLabel={getSingularLabel(item.itemType)}
+    />
+  ), [handleSelect, getSingularLabel]);
 
   const keyExtractor = useCallback((item: any) => `${item.itemType}-${item.id}`, []);
 
@@ -211,8 +236,8 @@ export default function MapScreen() {
     <View style={styles.listContainer}>
       <View style={styles.listHeader}>
         <MaterialIcons name="map" size={48} color={theme.textMuted} />
-        <Text style={styles.listTitle}>Carte Interactive</Text>
-        <Text style={styles.listSubtitle}>Disponible sur mobile</Text>
+        <Text style={styles.listTitle}>{t('map', 'interactiveMap')}</Text>
+        <Text style={styles.listSubtitle}>{t('map', 'availableOnMobile')}</Text>
       </View>
       <FlatList
         data={results}
@@ -234,7 +259,7 @@ export default function MapScreen() {
       <SafeAreaView edges={['top']} style={styles.header}>
         <Animated.View entering={FadeInDown.duration(300)} style={styles.card}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Carte</Text>
+            <Text style={styles.cardTitle}>{t('map', 'map')}</Text>
             <Pressable
               style={[styles.searchBtn, showSearch && styles.searchBtnActive]}
               onPress={() => {
@@ -253,7 +278,7 @@ export default function MapScreen() {
                 <MaterialIcons name="search" size={18} color={theme.textMuted} />
                 <TextInput
                   style={styles.searchInput}
-                  placeholder="Rechercher..."
+                  placeholder={t('map', 'search')}
                   placeholderTextColor={theme.textMuted}
                   value={search}
                   onChangeText={setSearch}
@@ -265,9 +290,11 @@ export default function MapScreen() {
                   </Pressable>
                 )}
               </View>
-              {search.trim() && (
-                <Text style={styles.searchCount}>{counts.total} résultat{counts.total !== 1 ? 's' : ''}</Text>
-              )}
+              {search.trim() ? (
+                <Text style={styles.searchCount}>
+                  {counts.total} {counts.total !== 1 ? t('map', 'results') : t('map', 'result')}
+                </Text>
+              ) : null}
             </Animated.View>
           )}
 
@@ -290,7 +317,9 @@ export default function MapScreen() {
               onPress={() => handleFilterPress('all')}
             >
               <MaterialIcons name="layers" size={14} color={filter === 'all' ? '#FFF' : theme.textSecondary} />
-              <Text style={[styles.chipText, filter === 'all' && styles.chipTextActive]}>Tout ({counts.total})</Text>
+              <Text style={[styles.chipText, filter === 'all' && styles.chipTextActive]}>
+                {t('map', 'all')} ({counts.total})
+              </Text>
             </Pressable>
             {(Object.keys(MARKER_CONFIG) as (keyof typeof MARKER_CONFIG)[]).map(k => (
               <Pressable
@@ -333,24 +362,26 @@ export default function MapScreen() {
               <View style={styles.selectedTags}>
                 <View style={[styles.tag, { backgroundColor: MARKER_CONFIG[selected.itemType as keyof typeof MARKER_CONFIG]?.color + '15' }]}>
                   <Text style={[styles.tagText, { color: MARKER_CONFIG[selected.itemType as keyof typeof MARKER_CONFIG]?.color }]}>
-                    {MARKER_CONFIG[selected.itemType as keyof typeof MARKER_CONFIG]?.label.slice(0, -1)}
+                    {MARKER_CONFIG[selected.itemType as keyof typeof MARKER_CONFIG]?.singular}
                   </Text>
                 </View>
-                {selected.itemType === 'terrains' && selected.courtsCount && (
+                {selected.itemType === 'terrains' && selected.courtsCount ? (
                   <View style={styles.tag}>
-                    <Text style={styles.tagText}>{selected.courtsCount} terrain{selected.courtsCount > 1 ? 's' : ''}</Text>
+                    <Text style={styles.tagText}>
+                      {selected.courtsCount} {selected.courtsCount > 1 ? t('map', 'courts') : t('map', 'court')}
+                    </Text>
                   </View>
-                )}
-                {selected.itemType === 'players' && (
+                ) : null}
+                {selected.itemType === 'players' ? (
                   <View style={styles.tag}>
                     <Text style={styles.tagText}>{selected.role}</Text>
                   </View>
-                )}
-                {selected.itemType === 'tournaments' && (
+                ) : null}
+                {selected.itemType === 'tournaments' ? (
                   <View style={styles.tag}>
                     <Text style={styles.tagText}>{selected.format}</Text>
                   </View>
-                )}
+                ) : null}
               </View>
             </View>
             <View style={styles.selectedArrow}>

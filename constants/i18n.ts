@@ -374,6 +374,18 @@ export const translations = {
     availableOnMobile: { fr: 'Disponible sur mobile', en: 'Available on mobile' },
     all: { fr: 'Tout', en: 'All' },
     result: { fr: 'résultat', en: 'result' },
+    results: { fr: 'résultats', en: 'results' },
+    search: { fr: 'Rechercher...', en: 'Search...' },
+    terrains: { fr: 'Terrains', en: 'Terrains' },
+    clubs: { fr: 'Clubs', en: 'Clubs' },
+    tournaments: { fr: 'Tournois', en: 'Tournaments' },
+    players: { fr: 'Joueurs', en: 'Players' },
+    terrainSingular: { fr: 'Terrain', en: 'Terrain' },
+    clubSingular: { fr: 'Club', en: 'Club' },
+    tournamentSingular: { fr: 'Tournoi', en: 'Tournament' },
+    playerSingular: { fr: 'Joueur', en: 'Player' },
+    court: { fr: 'terrain', en: 'court' },
+    courts: { fr: 'terrains', en: 'courts' },
   },
 
   // ============================================
