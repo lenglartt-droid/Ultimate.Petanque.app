@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import theme from '@/constants/theme';
 import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { Club } from '@/services/mockData';
+import { useLanguage } from '@/hooks/useLanguage';
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -29,6 +30,7 @@ export default function OnboardingScreen() {
   const { showAlert } = useAlert();
   const { clubs, addClub, updatePlayer, refreshData } = useApp();
   const supabase = getSupabaseClient();
+  const { t, lang } = useLanguage();
 
   const [step, setStep] = useState<Step>(1);
   const [saving, setSaving] = useState(false);
@@ -51,18 +53,18 @@ export default function OnboardingScreen() {
     c.city.toLowerCase().includes(clubSearch.toLowerCase())
   );
 
-  const levels = [
-    { id: 'Débutant', icon: 'school', description: 'Je découvre la pétanque' },
-    { id: 'Intermédiaire', icon: 'trending-up', description: 'Je joue régulièrement' },
-    { id: 'Confirmé', icon: 'stars', description: 'Je participe à des compétitions' },
-    { id: 'Expert', icon: 'emoji-events', description: 'Joueur confirmé en compétition' },
-  ];
+  const levels = useMemo(() => [
+    { id: 'Débutant', icon: 'school', label: t('levels', 'debutant'), description: t('onboarding', 'beginnerDesc') },
+    { id: 'Intermédiaire', icon: 'trending-up', label: t('levels', 'intermediaire'), description: t('onboarding', 'intermediateDesc') },
+    { id: 'Confirmé', icon: 'stars', label: t('levels', 'confirme'), description: t('onboarding', 'advancedDesc') },
+    { id: 'Expert', icon: 'emoji-events', label: t('levels', 'expert'), description: t('onboarding', 'expertDesc') },
+  ], [t]);
 
-  const roles: { id: PlayerRole; icon: string; description: string }[] = [
-    { id: 'Tireur', icon: 'gps-fixed', description: 'Spécialiste du tir' },
-    { id: 'Pointeur', icon: 'adjust', description: 'Spécialiste du point' },
-    { id: 'Milieu', icon: 'swap-horiz', description: 'Polyvalent tir et point' },
-  ];
+  const roles = useMemo(() => [
+    { id: 'Tireur' as PlayerRole, icon: 'gps-fixed', label: t('roles', 'tireur'), description: t('onboarding', 'shooterDesc') },
+    { id: 'Pointeur' as PlayerRole, icon: 'adjust', label: t('roles', 'pointeur'), description: t('onboarding', 'pointerDesc') },
+    { id: 'Milieu' as PlayerRole, icon: 'swap-horiz', label: t('roles', 'milieu'), description: t('onboarding', 'middleDesc') },
+  ], [t]);
 
   const canProceed = () => {
     if (step === 1) return username.trim().length >= 2;
@@ -114,7 +116,7 @@ export default function OnboardingScreen() {
 
   const handleComplete = async () => {
     if (!username.trim()) {
-      showAlert('Erreur', 'Le nom est requis');
+      showAlert(t('common', 'error'), t('onboarding', 'nameRequired'));
       return;
     }
 
@@ -166,7 +168,7 @@ export default function OnboardingScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace('/(tabs)');
     } catch (error: any) {
-      showAlert('Erreur', error.message || 'Impossible de créer le profil');
+      showAlert(t('common', 'error'), error.message || t('onboarding', 'unableToCreateProfile'));
     } finally {
       setSaving(false);
     }
@@ -203,7 +205,7 @@ export default function OnboardingScreen() {
               ]}
             />
           </View>
-          <Text style={styles.progressText}>Étape {step}/4</Text>
+          <Text style={styles.progressText}>{t('onboarding', 'stepProgress')} {step}/4</Text>
         </View>
 
         <ScrollView
@@ -218,9 +220,9 @@ export default function OnboardingScreen() {
               <View style={styles.iconContainer}>
                 <MaterialIcons name="person" size={48} color={theme.primary} />
               </View>
-              <Text style={styles.stepTitle}>Comment vous appelez-vous ?</Text>
+              <Text style={styles.stepTitle}>{t('onboarding', 'whatIsYourName')}</Text>
               <Text style={styles.stepDescription}>
-                Ce nom sera visible par les autres joueurs
+                {t('onboarding', 'nameVisibleToOthers')}
               </Text>
 
               <View style={styles.inputWrapper}>
@@ -228,7 +230,7 @@ export default function OnboardingScreen() {
                   style={styles.nameInput}
                   value={username}
                   onChangeText={setUsername}
-                  placeholder="Votre prénom ou pseudo"
+                  placeholder={t('onboarding', 'namePlaceholder')}
                   placeholderTextColor={theme.textMuted}
                   autoFocus
                   autoCapitalize="words"
@@ -245,7 +247,7 @@ export default function OnboardingScreen() {
                   </View>
                 )}
               </View>
-              <Text style={styles.inputHint}>Minimum 2 caractères</Text>
+              <Text style={styles.inputHint}>{t('onboarding', 'minTwoChars')}</Text>
             </Animated.View>
           )}
 
@@ -255,9 +257,9 @@ export default function OnboardingScreen() {
               <View style={styles.iconContainer}>
                 <MaterialIcons name="sports" size={48} color={theme.accent} />
               </View>
-              <Text style={styles.stepTitle}>Quel est votre rôle préféré ?</Text>
+              <Text style={styles.stepTitle}>{t('onboarding', 'whatIsYourRole')}</Text>
               <Text style={styles.stepDescription}>
-                Cela nous aide à personnaliser vos statistiques
+                {t('onboarding', 'roleHelpsStats')}
               </Text>
 
               <View style={styles.optionsContainer}>
@@ -295,7 +297,7 @@ export default function OnboardingScreen() {
                             role === r.id && styles.optionTitleActive,
                           ]}
                         >
-                          {r.id}
+                          {r.label}
                         </Text>
                         <Text style={styles.optionDescription}>{r.description}</Text>
                       </View>
@@ -315,9 +317,9 @@ export default function OnboardingScreen() {
               <View style={styles.iconContainer}>
                 <MaterialIcons name="trending-up" size={48} color={theme.carreauColor} />
               </View>
-              <Text style={styles.stepTitle}>Quel est votre niveau ?</Text>
+              <Text style={styles.stepTitle}>{t('onboarding', 'whatIsYourLevel')}</Text>
               <Text style={styles.stepDescription}>
-                Pas de pression, vous pouvez modifier cela plus tard
+                {t('onboarding', 'noPressure')}
               </Text>
 
               <View style={styles.levelGrid}>
@@ -348,7 +350,7 @@ export default function OnboardingScreen() {
                           level === l.id && styles.levelTitleActive,
                         ]}
                       >
-                        {l.id}
+                        {l.label}
                       </Text>
                       <Text style={styles.levelDescription} numberOfLines={2}>
                         {l.description}
@@ -366,9 +368,9 @@ export default function OnboardingScreen() {
               <View style={styles.iconContainer}>
                 <MaterialIcons name="groups" size={48} color={theme.accent} />
               </View>
-              <Text style={styles.stepTitle}>Avez-vous un club ?</Text>
+              <Text style={styles.stepTitle}>{t('onboarding', 'doYouHaveClub')}</Text>
               <Text style={styles.stepDescription}>
-                Associez votre profil à votre club de pétanque
+                {t('onboarding', 'associateClub')}
               </Text>
 
               {!showCreateClub ? (
@@ -380,7 +382,7 @@ export default function OnboardingScreen() {
                       style={styles.clubSearchInput}
                       value={clubSearch}
                       onChangeText={setClubSearch}
-                      placeholder="Rechercher un club..."
+                      placeholder={t('onboarding', 'searchClub')}
                       placeholderTextColor={theme.textMuted}
                     />
                     {clubSearch.length > 0 && (
@@ -437,7 +439,7 @@ export default function OnboardingScreen() {
                       <View style={styles.noClubsContainer}>
                         <MaterialIcons name="search-off" size={32} color={theme.textMuted} />
                         <Text style={styles.noClubsText}>
-                          {clubSearch ? 'Aucun club trouvé' : 'Aucun club enregistré'}
+                          {clubSearch ? t('onboarding', 'noClubFound') : t('onboarding', 'noClubRegistered')}
                         </Text>
                       </View>
                     )}
@@ -453,7 +455,7 @@ export default function OnboardingScreen() {
                     }}
                   >
                     <MaterialIcons name="add-circle-outline" size={22} color={theme.primary} />
-                    <Text style={styles.createClubButtonText}>Créer un nouveau club</Text>
+                    <Text style={styles.createClubButtonText}>{t('onboarding', 'createNewClub')}</Text>
                   </Pressable>
                 </>
               ) : (
@@ -462,28 +464,28 @@ export default function OnboardingScreen() {
                   <Animated.View entering={FadeInDown.duration(300)} style={styles.createClubForm}>
                     <View style={styles.createClubHeader}>
                       <MaterialIcons name="add-business" size={28} color={theme.primary} />
-                      <Text style={styles.createClubTitle}>Nouveau club</Text>
+                      <Text style={styles.createClubTitle}>{t('onboarding', 'newClub')}</Text>
                     </View>
 
                     <View style={styles.createClubInputWrapper}>
-                      <Text style={styles.createClubLabel}>Nom du club *</Text>
+                      <Text style={styles.createClubLabel}>{t('onboarding', 'clubNameRequired')}</Text>
                       <TextInput
                         style={styles.createClubInput}
                         value={newClubName}
                         onChangeText={setNewClubName}
-                        placeholder="Ex: Pétanque Club de Lyon"
+                        placeholder={t('onboarding', 'clubNamePlaceholder')}
                         placeholderTextColor={theme.textMuted}
                         autoFocus
                       />
                     </View>
 
                     <View style={styles.createClubInputWrapper}>
-                      <Text style={styles.createClubLabel}>Ville *</Text>
+                      <Text style={styles.createClubLabel}>{t('onboarding', 'cityRequired')}</Text>
                       <TextInput
                         style={styles.createClubInput}
                         value={newClubCity}
                         onChangeText={setNewClubCity}
-                        placeholder="Ex: Lyon"
+                        placeholder={t('onboarding', 'cityPlaceholder')}
                         placeholderTextColor={theme.textMuted}
                       />
                     </View>
@@ -498,7 +500,7 @@ export default function OnboardingScreen() {
                       }}
                     >
                       <MaterialIcons name="arrow-back" size={18} color={theme.textSecondary} />
-                      <Text style={styles.cancelCreateClubText}>Choisir un club existant</Text>
+                      <Text style={styles.cancelCreateClubText}>{t('onboarding', 'chooseExistingClub')}</Text>
                     </Pressable>
                   </Animated.View>
                 </>
@@ -513,13 +515,13 @@ export default function OnboardingScreen() {
             {step > 1 && (
               <Pressable style={styles.backButton} onPress={handleBack}>
                 <MaterialIcons name="arrow-back" size={20} color={theme.textSecondary} />
-                <Text style={styles.backButtonText}>Retour</Text>
+                <Text style={styles.backButtonText}>{t('onboarding', 'back')}</Text>
               </Pressable>
             )}
 
             {step > 1 && (
               <Pressable style={styles.skipButton} onPress={handleSkip}>
-                <Text style={styles.skipButtonText}>Passer</Text>
+                <Text style={styles.skipButtonText}>{t('onboarding', 'skip')}</Text>
               </Pressable>
             )}
           </View>
@@ -537,7 +539,7 @@ export default function OnboardingScreen() {
             ) : (
               <>
                 <Text style={styles.nextButtonText}>
-                  {step === 4 ? 'Commencer' : 'Continuer'}
+                  {step === 4 ? t('onboarding', 'start') : t('onboarding', 'continue')}
                 </Text>
                 <MaterialIcons
                   name={step === 4 ? 'check' : 'arrow-forward'}

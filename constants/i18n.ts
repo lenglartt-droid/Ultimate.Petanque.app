@@ -1552,6 +1552,51 @@ export const translations = {
     terrainLabelUpper: { fr: 'Terrain', en: 'Terrain' },
     tournamentLabelUpper: { fr: 'Tournoi', en: 'Tournament' },
   },
+  // ============================================
+  // ONBOARDING
+  // ============================================
+  onboarding: {
+    stepProgress: { fr: 'Étape', en: 'Step' },
+    // Step 1 - Username
+    whatIsYourName: { fr: 'Comment vous appelez-vous ?', en: 'What is your name?' },
+    nameVisibleToOthers: { fr: 'Ce nom sera visible par les autres joueurs', en: 'This name will be visible to other players' },
+    namePlaceholder: { fr: 'Votre prénom ou pseudo', en: 'Your first name or nickname' },
+    minTwoChars: { fr: 'Minimum 2 caractères', en: 'Minimum 2 characters' },
+    // Step 2 - Role
+    whatIsYourRole: { fr: 'Quel est votre rôle préféré ?', en: 'What is your preferred role?' },
+    roleHelpsStats: { fr: 'Cela nous aide à personnaliser vos statistiques', en: 'This helps us personalize your statistics' },
+    shooterDesc: { fr: 'Spécialiste du tir', en: 'Shooting specialist' },
+    pointerDesc: { fr: 'Spécialiste du point', en: 'Pointing specialist' },
+    middleDesc: { fr: 'Polyvalent tir et point', en: 'Versatile shooting and pointing' },
+    // Step 3 - Level
+    whatIsYourLevel: { fr: 'Quel est votre niveau ?', en: 'What is your level?' },
+    noPressure: { fr: 'Pas de pression, vous pouvez modifier cela plus tard', en: 'No pressure, you can change this later' },
+    beginnerDesc: { fr: 'Je découvre la pétanque', en: 'I am discovering pétanque' },
+    intermediateDesc: { fr: 'Je joue régulièrement', en: 'I play regularly' },
+    advancedDesc: { fr: 'Je participe à des compétitions', en: 'I participate in competitions' },
+    expertDesc: { fr: 'Joueur confirmé en compétition', en: 'Confirmed competition player' },
+    // Step 4 - Club
+    doYouHaveClub: { fr: 'Avez-vous un club ?', en: 'Do you have a club?' },
+    associateClub: { fr: 'Associez votre profil à votre club de pétanque', en: 'Associate your profile with your pétanque club' },
+    searchClub: { fr: 'Rechercher un club...', en: 'Search a club...' },
+    noClubFound: { fr: 'Aucun club trouvé', en: 'No club found' },
+    noClubRegistered: { fr: 'Aucun club enregistré', en: 'No club registered' },
+    createNewClub: { fr: 'Créer un nouveau club', en: 'Create a new club' },
+    newClub: { fr: 'Nouveau club', en: 'New club' },
+    clubNameRequired: { fr: 'Nom du club *', en: 'Club name *' },
+    clubNamePlaceholder: { fr: 'Ex: Pétanque Club de Lyon', en: 'Ex: Pétanque Club de Lyon' },
+    cityRequired: { fr: 'Ville *', en: 'City *' },
+    cityPlaceholder: { fr: 'Ex: Lyon', en: 'Ex: Lyon' },
+    chooseExistingClub: { fr: 'Choisir un club existant', en: 'Choose an existing club' },
+    // Footer
+    back: { fr: 'Retour', en: 'Back' },
+    skip: { fr: 'Passer', en: 'Skip' },
+    continue: { fr: 'Continuer', en: 'Continue' },
+    start: { fr: 'Commencer', en: 'Start' },
+    // Errors
+    nameRequired: { fr: 'Le nom est requis', en: 'Name is required' },
+    unableToCreateProfile: { fr: 'Impossible de créer le profil', en: 'Unable to create profile' },
+  },
 } as const;
 
 // Helper type to get a translation value
