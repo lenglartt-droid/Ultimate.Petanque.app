@@ -16,6 +16,7 @@ import * as Haptics from 'expo-haptics';
 import Svg, { Circle, Line, G, Text as SvgText, Rect } from 'react-native-svg';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
+import { useLanguage } from '@/hooks/useLanguage';
 import { Tournament, Match } from '@/services/mockData';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -77,21 +78,22 @@ function BadgeCard({ badge, index }: { badge: PerformanceBadge; index: number })
           <Text style={[styles.badgeValue, { color: badge.color }]}>{badge.value}</Text>
         ) : null}
         <Text style={styles.badgeDesc} numberOfLines={2}>{badge.description}</Text>
-        {!badge.earned && (
+        {!badge.earned ? (
           <View style={styles.badgeLockOverlay}>
             <MaterialIcons name="lock-outline" size={12} color={theme.textMuted} />
           </View>
-        )}
+        ) : null}
       </View>
     </Animated.View>
   );
 }
 
-function TournamentCard({ item, index }: { item: TournamentPalmaresItem; index: number }) {
+function TournamentCard({ item, index, t, language }: { item: TournamentPalmaresItem; index: number; t: (s: string, k: string) => string; language: string }) {
   const { tournament, stats } = item;
   const resultCfg = RESULT_CONFIG[tournament.finalResult || ''] || { icon: 'sports', color: theme.textMuted, rank: 99 };
   const hasFinancials = (tournament.registrationCost && tournament.registrationCost > 0) || (tournament.prizeWon && tournament.prizeWon > 0);
   const netGain = (tournament.prizeWon || 0) - (tournament.registrationCost || 0);
+  const locale = language === 'en' ? 'en-US' : 'fr-FR';
 
   return (
     <Animated.View entering={FadeInDown.duration(300).delay(index * 50)}>
@@ -111,7 +113,7 @@ function TournamentCard({ item, index }: { item: TournamentPalmaresItem; index: 
             <Text style={styles.cardName} numberOfLines={2}>{tournament.name}</Text>
             <View style={styles.cardMeta}>
               <Text style={styles.cardDate}>
-                {new Date(tournament.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                {new Date(tournament.date).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' })}
               </Text>
               <View style={styles.dot} />
               <Text style={styles.cardFormat}>{tournament.format}</Text>
@@ -134,7 +136,7 @@ function TournamentCard({ item, index }: { item: TournamentPalmaresItem; index: 
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <Text style={styles.statValue}>{stats.played}</Text>
-            <Text style={styles.statLabel}>Matchs</Text>
+            <Text style={styles.statLabel}>{t('palmares', 'matchs')}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
@@ -144,19 +146,19 @@ function TournamentCard({ item, index }: { item: TournamentPalmaresItem; index: 
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={[styles.statValue, { color: theme.error }]}>{stats.losses}</Text>
-            <Text style={styles.statLabel}>D</Text>
+            <Text style={styles.statLabel}>{language === 'en' ? 'L' : 'D'}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={[styles.statValue, { color: theme.primary }]}>{stats.winRate}%</Text>
-            <Text style={styles.statLabel}>Vict.</Text>
+            <Text style={styles.statLabel}>{language === 'en' ? 'Win' : 'Vict.'}</Text>
           </View>
           {stats.tirRate !== null ? (
             <>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
                 <Text style={[styles.statValue, { color: theme.tirColor }]}>{stats.tirRate}%</Text>
-                <Text style={styles.statLabel}>Tir</Text>
+                <Text style={styles.statLabel}>{t('stats', 'tir')}</Text>
               </View>
             </>
           ) : null}
@@ -202,7 +204,7 @@ function TournamentCard({ item, index }: { item: TournamentPalmaresItem; index: 
           {stats.carreaux > 0 ? (
             <View style={styles.carreauBadge}>
               <MaterialIcons name="stars" size={12} color={theme.carreauColor} />
-              <Text style={styles.carreauText}>{stats.carreaux} carreaux</Text>
+              <Text style={styles.carreauText}>{stats.carreaux} {t('palmares', 'carreaux').toLowerCase()}</Text>
             </View>
           ) : null}
           <View style={{ flex: 1 }} />
@@ -218,16 +220,18 @@ type FormatFilter = 'all' | 'Tête-à-tête' | 'Doublette' | 'Triplette';
 type ResultFilter = 'all' | 'podium';
 type GroupMode = 'rank' | 'season';
 
-const FORMAT_FILTERS: { id: FormatFilter; label: string }[] = [
-  { id: 'all', label: 'Tous' },
-  { id: 'Tête-à-tête', label: 'TàT' },
-  { id: 'Doublette', label: 'Doublette' },
-  { id: 'Triplette', label: 'Triplette' },
-];
-
 export default function PalmaresScreen() {
   const insets = useSafeAreaInsets();
   const { tournaments, matches } = useApp();
+  const { t, language } = useLanguage();
+  const locale = language === 'en' ? 'en-US' : 'fr-FR';
+
+  const FORMAT_FILTERS: { id: FormatFilter; label: string }[] = [
+    { id: 'all', label: t('palmares', 'allFormats') },
+    { id: 'Tête-à-tête', label: 'TàT' },
+    { id: 'Doublette', label: 'Doublette' },
+    { id: 'Triplette', label: 'Triplette' },
+  ];
 
   const [yearFilter, setYearFilter] = useState<YearFilter>('all');
   const [formatFilter, setFormatFilter] = useState<FormatFilter>('all');
@@ -380,63 +384,63 @@ export default function PalmaresScreen() {
   const badges: PerformanceBadge[] = useMemo(() => {
     return [
       {
-        id: 'champion', icon: 'emoji-events', label: 'Champion',
-        description: 'Remporter un tournoi',
+        id: 'champion', icon: 'emoji-events', label: t('palmares', 'champion'),
+        description: t('palmares', 'championDesc'),
         color: '#FFD700', bgColor: '#FFD700' + '18',
         earned: summary.titles > 0,
-        value: summary.titles > 0 ? `${summary.titles} titre${summary.titles > 1 ? 's' : ''}` : undefined,
+        value: summary.titles > 0 ? `${summary.titles} ${t('palmares', 'titleCount')}` : undefined,
       },
       {
-        id: 'podium_collector', icon: 'workspace-premium', label: 'Collectionneur',
-        description: 'Obtenir 3 podiums ou plus',
+        id: 'podium_collector', icon: 'workspace-premium', label: t('palmares', 'collector'),
+        description: t('palmares', 'collectorDesc'),
         color: '#C0C0C0', bgColor: '#C0C0C0' + '18',
         earned: summary.podiums >= 3,
-        value: summary.podiums >= 3 ? `${summary.podiums} podiums` : undefined,
+        value: summary.podiums >= 3 ? `${summary.podiums} ${t('palmares', 'podiumCount')}` : undefined,
       },
       {
-        id: 'invincible', icon: 'shield', label: 'Invincible',
-        description: 'Terminer un tournoi sans défaite',
+        id: 'invincible', icon: 'shield', label: t('palmares', 'invincible'),
+        description: t('palmares', 'invincibleDesc'),
         color: theme.success, bgColor: theme.success + '15',
         earned: summary.undefeated > 0,
-        value: summary.undefeated > 0 ? `${summary.undefeated} fois` : undefined,
+        value: summary.undefeated > 0 ? `${summary.undefeated} ${t('palmares', 'times')}` : undefined,
       },
       {
-        id: 'streak', icon: 'local-fire-department', label: 'En feu',
-        description: 'Enchaîner 5+ victoires consécutives',
+        id: 'streak', icon: 'local-fire-department', label: t('palmares', 'onFire'),
+        description: t('palmares', 'onFireDesc'),
         color: '#FF6B35', bgColor: '#FF6B35' + '15',
         earned: summary.maxStreak >= 5,
-        value: summary.maxStreak >= 5 ? `${summary.maxStreak} matchs` : undefined,
+        value: summary.maxStreak >= 5 ? `${summary.maxStreak} ${t('palmares', 'matchCount')}` : undefined,
       },
       {
-        id: 'sniper', icon: 'gps-fixed', label: 'Sniper',
-        description: 'Atteindre 60%+ de réussite au tir sur un tournoi',
+        id: 'sniper', icon: 'gps-fixed', label: t('palmares', 'sniper'),
+        description: t('palmares', 'sniperDesc'),
         color: theme.tirColor, bgColor: theme.tirColor + '15',
         earned: summary.bestTirTournament !== null && (summary.bestTirTournament.stats.tirRate || 0) >= 60,
         value: summary.bestTirTournament ? `${summary.bestTirTournament.stats.tirRate}%` : undefined,
       },
       {
-        id: 'carreau_master', icon: 'stars', label: 'Maître carreau',
-        description: 'Réaliser 10 carreaux en tournoi',
+        id: 'carreau_master', icon: 'stars', label: t('palmares', 'carreauMaster'),
+        description: t('palmares', 'carreauMasterDesc'),
         color: theme.carreauColor, bgColor: theme.carreauColor + '15',
         earned: summary.totalCarreaux >= 10,
-        value: summary.totalCarreaux >= 10 ? `${summary.totalCarreaux} carreaux` : undefined,
+        value: summary.totalCarreaux >= 10 ? `${summary.totalCarreaux} ${t('palmares', 'carreaux').toLowerCase()}` : undefined,
       },
       {
-        id: 'veteran', icon: 'military-tech', label: 'Vétéran',
-        description: 'Participer à 10 tournois ou plus',
+        id: 'veteran', icon: 'military-tech', label: t('palmares', 'veteran'),
+        description: t('palmares', 'veteranDesc'),
         color: '#8B5CF6', bgColor: '#8B5CF6' + '15',
         earned: summary.totalTournaments >= 10,
-        value: summary.totalTournaments >= 10 ? `${summary.totalTournaments} tournois` : undefined,
+        value: summary.totalTournaments >= 10 ? `${summary.totalTournaments} ${t('palmares', 'tournois')}` : undefined,
       },
       {
-        id: 'winner', icon: 'trending-up', label: 'Gagnant',
-        description: 'Maintenir un taux de victoire de 60%+',
+        id: 'winner', icon: 'trending-up', label: t('palmares', 'winner'),
+        description: t('palmares', 'winnerDesc'),
         color: theme.primary, bgColor: theme.primary + '15',
         earned: summary.avgWinRate >= 60 && summary.totalMatches >= 5,
         value: summary.avgWinRate >= 60 ? `${summary.avgWinRate}%` : undefined,
       },
     ];
-  }, [summary]);
+  }, [summary, t]);
 
   const earnedBadges = badges.filter(b => b.earned);
   const lockedBadges = badges.filter(b => !b.earned);
@@ -448,13 +452,13 @@ export default function PalmaresScreen() {
       const cumulativeWins = sorted.slice(0, index + 1).reduce((sum, i) => sum + i.stats.wins, 0);
       const cumulativeMatches = sorted.slice(0, index + 1).reduce((sum, i) => sum + i.stats.played, 0);
       return {
-        label: new Date(item.tournament.date).toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }),
+        label: new Date(item.tournament.date).toLocaleDateString(locale, { month: 'short', year: '2-digit' }),
         shortName: item.tournament.name.substring(0, 10),
         winRate: cumulativeMatches > 0 ? Math.round((cumulativeWins / cumulativeMatches) * 100) : 0,
         tournamentWinRate: item.stats.winRate,
         pointDiff: item.stats.pointDiff,
         tournamentName: item.tournament.name,
-        tournamentDate: new Date(item.tournament.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
+        tournamentDate: new Date(item.tournament.date).toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' }),
         tournamentCity: item.tournament.location?.city || '',
         tournamentFormat: item.tournament.format,
         tournamentResult: item.tournament.finalResult,
@@ -464,7 +468,7 @@ export default function PalmaresScreen() {
         statsLosses: item.stats.losses,
       };
     });
-  }, [palmaresData]);
+  }, [palmaresData, locale]);
 
   // Build flat list data for season mode
   const flatListData = useMemo(() => {
@@ -480,14 +484,14 @@ export default function PalmaresScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Mon Palmarès</Text>
+        <Text style={styles.headerTitle}>{t('palmares', 'title')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <FlatList
         data={flatListData}
         keyExtractor={item => item.tournament.id}
-        renderItem={({ item, index }) => <TournamentCard item={item} index={index} />}
+        renderItem={({ item, index }) => <TournamentCard item={item} index={index} t={t} language={language} />}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={() => (
@@ -503,7 +507,7 @@ export default function PalmaresScreen() {
                     </View>
                     <Text style={[styles.podiumCount, { color: '#A0A0A0' }]}>{summary.seconds}</Text>
                     <View style={[styles.podiumBar, styles.podiumBar2nd]}>
-                      <Text style={styles.podiumBarText}>2e</Text>
+                      <Text style={styles.podiumBarText}>{language === 'en' ? '2nd' : '2e'}</Text>
                     </View>
                   </View>
                   {/* 1st place */}
@@ -513,7 +517,7 @@ export default function PalmaresScreen() {
                     </View>
                     <Text style={[styles.podiumCount, { color: '#DAA520' }]}>{summary.titles}</Text>
                     <View style={[styles.podiumBar, styles.podiumBar1st]}>
-                      <Text style={styles.podiumBarText}>1er</Text>
+                      <Text style={styles.podiumBarText}>{language === 'en' ? '1st' : '1er'}</Text>
                     </View>
                   </View>
                   {/* 3rd place */}
@@ -523,7 +527,7 @@ export default function PalmaresScreen() {
                     </View>
                     <Text style={[styles.podiumCount, { color: '#CD7F32' }]}>{summary.thirds}</Text>
                     <View style={[styles.podiumBar, styles.podiumBar3rd]}>
-                      <Text style={styles.podiumBarText}>3e</Text>
+                      <Text style={styles.podiumBarText}>{language === 'en' ? '3rd' : '3e'}</Text>
                     </View>
                   </View>
                 </View>
@@ -535,28 +539,30 @@ export default function PalmaresScreen() {
                 </View>
               )}
 
-              <Text style={styles.heroTitle}>{summary.totalTournaments} tournois</Text>
-              <Text style={styles.heroSubtitle}>{summary.totalMatches} matchs • {summary.totalWins} victoires • {summary.avgWinRate}% taux</Text>
+              <Text style={styles.heroTitle}>{summary.totalTournaments} {t('palmares', 'tournois')}</Text>
+              <Text style={styles.heroSubtitle}>
+                {summary.totalMatches} {t('palmares', 'matchs')} • {summary.totalWins} {t('palmares', 'victoires')} • {summary.avgWinRate}% {t('palmares', 'taux')}
+              </Text>
 
               <View style={styles.heroStatsRow}>
                 <View style={styles.heroStatItem}>
                   <Text style={[styles.heroStatValue, { color: theme.carreauColor }]}>{summary.titles}</Text>
-                  <Text style={styles.heroStatLabel}>Titres</Text>
+                  <Text style={styles.heroStatLabel}>{t('palmares', 'titres')}</Text>
                 </View>
                 <View style={styles.heroStatDivider} />
                 <View style={styles.heroStatItem}>
                   <Text style={[styles.heroStatValue, { color: theme.accent }]}>{summary.podiums}</Text>
-                  <Text style={styles.heroStatLabel}>Podiums</Text>
+                  <Text style={styles.heroStatLabel}>{t('palmares', 'podiums')}</Text>
                 </View>
                 <View style={styles.heroStatDivider} />
                 <View style={styles.heroStatItem}>
                   <Text style={[styles.heroStatValue, { color: theme.success }]}>{summary.avgWinRate}%</Text>
-                  <Text style={styles.heroStatLabel}>Victoires</Text>
+                  <Text style={styles.heroStatLabel}>{t('palmares', 'victoires')}</Text>
                 </View>
                 <View style={styles.heroStatDivider} />
                 <View style={styles.heroStatItem}>
                   <Text style={[styles.heroStatValue, { color: theme.tirColor }]}>{summary.totalCarreaux}</Text>
-                  <Text style={styles.heroStatLabel}>Carreaux</Text>
+                  <Text style={styles.heroStatLabel}>{t('palmares', 'carreaux')}</Text>
                 </View>
               </View>
             </Animated.View>
@@ -569,7 +575,7 @@ export default function PalmaresScreen() {
               >
                 <View style={styles.badgesSectionLeft}>
                   <MaterialIcons name="stars" size={18} color={theme.carreauColor} />
-                  <Text style={styles.badgesSectionTitle}>Badges de performance</Text>
+                  <Text style={styles.badgesSectionTitle}>{t('palmares', 'badges')}</Text>
                   <View style={styles.badgeCountPill}>
                     <Text style={styles.badgeCountText}>{earnedBadges.length}/{badges.length}</Text>
                   </View>
@@ -598,7 +604,7 @@ export default function PalmaresScreen() {
                   style={[styles.filterChip, yearFilter === 'all' && styles.filterChipActive]}
                   onPress={() => { Haptics.selectionAsync(); setYearFilter('all'); }}
                 >
-                  <Text style={[styles.filterChipText, yearFilter === 'all' && styles.filterChipTextActive]}>Toutes</Text>
+                  <Text style={[styles.filterChipText, yearFilter === 'all' && styles.filterChipTextActive]}>{t('palmares', 'allYears')}</Text>
                 </Pressable>
                 {availableYears.map(year => (
                   <Pressable
@@ -627,7 +633,7 @@ export default function PalmaresScreen() {
                   onPress={() => { Haptics.selectionAsync(); setResultFilter(resultFilter === 'podium' ? 'all' : 'podium'); }}
                 >
                   <MaterialIcons name="emoji-events" size={14} color={resultFilter === 'podium' ? theme.carreauColor : theme.textMuted} />
-                  <Text style={[styles.filterChipSmallText, resultFilter === 'podium' && { color: theme.carreauColor }]}>Podiums</Text>
+                  <Text style={[styles.filterChipSmallText, resultFilter === 'podium' && { color: theme.carreauColor }]}>{t('palmares', 'podiumsOnly')}</Text>
                 </Pressable>
               </View>
             </View>
@@ -639,14 +645,14 @@ export default function PalmaresScreen() {
                 onPress={() => { Haptics.selectionAsync(); setGroupMode('rank'); }}
               >
                 <MaterialIcons name="emoji-events" size={15} color={groupMode === 'rank' ? '#FFF' : theme.textSecondary} />
-                <Text style={[styles.groupToggleText, groupMode === 'rank' && styles.groupToggleTextActive]}>Par classement</Text>
+                <Text style={[styles.groupToggleText, groupMode === 'rank' && styles.groupToggleTextActive]}>{t('palmares', 'byRank')}</Text>
               </Pressable>
               <Pressable
                 style={[styles.groupToggleBtn, groupMode === 'season' && styles.groupToggleBtnActive]}
                 onPress={() => { Haptics.selectionAsync(); setGroupMode('season'); }}
               >
                 <MaterialIcons name="date-range" size={15} color={groupMode === 'season' ? '#FFF' : theme.textSecondary} />
-                <Text style={[styles.groupToggleText, groupMode === 'season' && styles.groupToggleTextActive]}>Par saison</Text>
+                <Text style={[styles.groupToggleText, groupMode === 'season' && styles.groupToggleTextActive]}>{t('palmares', 'bySeason')}</Text>
               </Pressable>
             </View>
 
@@ -657,7 +663,7 @@ export default function PalmaresScreen() {
                 onPress={() => { Haptics.selectionAsync(); setShowChart(!showChart); }}
               >
                 <MaterialIcons name="show-chart" size={18} color={theme.primary} />
-                <Text style={styles.chartToggleText}>{showChart ? 'Masquer le graphique' : 'Voir la progression'}</Text>
+                <Text style={styles.chartToggleText}>{showChart ? t('palmares', 'hideChart') : t('palmares', 'showProgression')}</Text>
                 <MaterialIcons name={showChart ? 'expand-less' : 'expand-more'} size={20} color={theme.primary} />
               </Pressable>
             ) : null}
@@ -667,9 +673,9 @@ export default function PalmaresScreen() {
               <Animated.View entering={FadeIn.duration(400)} style={styles.chartCard}>
                 <View style={styles.chartHeader}>
                   <MaterialIcons name="trending-up" size={18} color={theme.primary} />
-                  <Text style={styles.chartTitle}>Évolution en tournoi</Text>
+                  <Text style={styles.chartTitle}>{t('palmares', 'tournamentEvolution')}</Text>
                 </View>
-                <Text style={styles.chartSubtitle}>Taux de victoire par tournoi — touchez un point</Text>
+                <Text style={styles.chartSubtitle}>{t('palmares', 'winRateByTournament')}</Text>
                 <View style={styles.chartContainer}>
                   <Svg width={screenWidth - 80} height={180}>
                     {[0, 25, 50, 75, 100].map((v, i) => (
@@ -727,15 +733,15 @@ export default function PalmaresScreen() {
                       </View>
                       <View style={styles.tooltipStatDivider} />
                       <View style={styles.tooltipStatItem}>
-                        <Text style={styles.tooltipStatLabel}>Résultat</Text>
+                        <Text style={styles.tooltipStatLabel}>{language === 'en' ? 'Result' : 'Résultat'}</Text>
                         <Text style={[styles.tooltipStatValue, { color: RESULT_CONFIG[chartData[selectedChartIndex].tournamentResult || '']?.color || theme.textPrimary }]}>
                           {chartData[selectedChartIndex].tournamentResult || '-'}
                         </Text>
                       </View>
                       <View style={styles.tooltipStatDivider} />
                       <View style={styles.tooltipStatItem}>
-                        <Text style={styles.tooltipStatLabel}>Matchs</Text>
-                        <Text style={styles.tooltipStatValue}>{chartData[selectedChartIndex].statsWins}V-{chartData[selectedChartIndex].statsLosses}D</Text>
+                        <Text style={styles.tooltipStatLabel}>{t('palmares', 'matchs')}</Text>
+                        <Text style={styles.tooltipStatValue}>{chartData[selectedChartIndex].statsWins}V-{chartData[selectedChartIndex].statsLosses}{language === 'en' ? 'L' : 'D'}</Text>
                       </View>
                       <View style={styles.tooltipStatDivider} />
                       <View style={styles.tooltipStatItem}>
@@ -753,14 +759,14 @@ export default function PalmaresScreen() {
                         if (tid) router.push(`/tournament/${tid}`);
                       }}
                     >
-                      <Text style={styles.tooltipDetailBtnText}>Voir le parcours</Text>
+                      <Text style={styles.tooltipDetailBtnText}>{t('palmares', 'seeJourney')}</Text>
                       <MaterialIcons name="chevron-right" size={16} color={theme.primary} />
                     </Pressable>
                   </Animated.View>
                 ) : null}
 
                 <View style={styles.chartDivider} />
-                <Text style={styles.chartSubtitle}>Différence de points par tournoi</Text>
+                <Text style={styles.chartSubtitle}>{t('palmares', 'pointDiffByTournament')}</Text>
                 <View style={styles.chartContainer}>
                   <Svg width={screenWidth - 80} height={120}>
                     {chartData.map((data, i) => {
@@ -797,7 +803,7 @@ export default function PalmaresScreen() {
                     <View style={styles.seasonHeaderCard}>
                       <View style={styles.seasonHeaderLeft}>
                         <MaterialIcons name="date-range" size={20} color={theme.primary} />
-                        <Text style={styles.seasonYear}>Saison {group.year}</Text>
+                        <Text style={styles.seasonYear}>{t('palmares', 'season')} {group.year}</Text>
                       </View>
                       <View style={styles.seasonBadgeRow}>
                         {group.summary.titles > 0 ? (
@@ -819,33 +825,33 @@ export default function PalmaresScreen() {
                     <View style={styles.seasonStatsBar}>
                       <View style={styles.seasonStatCell}>
                         <Text style={styles.seasonStatVal}>{group.summary.total}</Text>
-                        <Text style={styles.seasonStatLbl}>Tournois</Text>
+                        <Text style={styles.seasonStatLbl}>{t('palmares', 'tournois')}</Text>
                       </View>
                       <View style={styles.seasonStatDiv} />
                       <View style={styles.seasonStatCell}>
                         <Text style={[styles.seasonStatVal, { color: theme.success }]}>{group.summary.wins}</Text>
-                        <Text style={styles.seasonStatLbl}>Victoires</Text>
+                        <Text style={styles.seasonStatLbl}>{t('palmares', 'victoires')}</Text>
                       </View>
                       <View style={styles.seasonStatDiv} />
                       <View style={styles.seasonStatCell}>
                         <Text style={styles.seasonStatVal}>{group.summary.matches}</Text>
-                        <Text style={styles.seasonStatLbl}>Matchs</Text>
+                        <Text style={styles.seasonStatLbl}>{t('palmares', 'matchs')}</Text>
                       </View>
                       <View style={styles.seasonStatDiv} />
                       <View style={styles.seasonStatCell}>
                         <Text style={[styles.seasonStatVal, { color: theme.primary }]}>{group.summary.winRate}%</Text>
-                        <Text style={styles.seasonStatLbl}>Vict.</Text>
+                        <Text style={styles.seasonStatLbl}>{language === 'en' ? 'Win' : 'Vict.'}</Text>
                       </View>
                       <View style={styles.seasonStatDiv} />
                       <View style={styles.seasonStatCell}>
                         <Text style={[styles.seasonStatVal, { color: theme.accent }]}>{group.summary.podiums}</Text>
-                        <Text style={styles.seasonStatLbl}>Podiums</Text>
+                        <Text style={styles.seasonStatLbl}>{t('palmares', 'podiums')}</Text>
                       </View>
                     </View>
 
                     {/* Season Tournaments */}
                     {group.items.map((item, idx) => (
-                      <TournamentCard key={item.tournament.id} item={item} index={idx} />
+                      <TournamentCard key={item.tournament.id} item={item} index={idx} t={t} language={language} />
                     ))}
 
                     {gi < seasonGroups.length - 1 ? <View style={styles.seasonDivider} /> : null}
@@ -854,7 +860,7 @@ export default function PalmaresScreen() {
               </>
             ) : (
               palmaresData.length > 0 ? (
-                <Text style={styles.listSectionTitle}>DÉTAIL PAR TOURNOI ({palmaresData.length})</Text>
+                <Text style={styles.listSectionTitle}>{t('palmares', 'detailByTournament')} ({palmaresData.length})</Text>
               ) : null
             )}
           </>
@@ -863,11 +869,11 @@ export default function PalmaresScreen() {
           groupMode === 'rank' ? (
             <View style={styles.emptyState}>
               <MaterialIcons name="emoji-events" size={64} color={theme.textMuted} />
-              <Text style={styles.emptyTitle}>Aucun tournoi terminé</Text>
-              <Text style={styles.emptyText}>Participez à des tournois pour construire votre palmarès</Text>
+              <Text style={styles.emptyTitle}>{t('palmares', 'noFinished')}</Text>
+              <Text style={styles.emptyText}>{t('palmares', 'noFinishedText')}</Text>
               <Pressable style={styles.emptyButton} onPress={() => router.push('/tournament/new')}>
                 <MaterialIcons name="add" size={20} color="#FFF" />
-                <Text style={styles.emptyButtonText}>Créer un tournoi</Text>
+                <Text style={styles.emptyButtonText}>{t('palmares', 'createTournament')}</Text>
               </Pressable>
             </View>
           ) : null
