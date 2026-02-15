@@ -493,7 +493,7 @@ export default function ProfileScreen() {
 
           {/* Name and Role */}
           <View style={styles.heroInfo}>
-            <Text style={styles.heroName}>{username || 'Utilisateur'}</Text>
+            <Text style={styles.heroName}>{username || t('share', 'userFallback')}</Text>
             <View style={styles.heroMeta}>
               <View style={styles.heroBadge}>
                 <MaterialIcons 
@@ -501,7 +501,7 @@ export default function ProfileScreen() {
                   size={14} 
                   color={theme.primary} 
                 />
-                <Text style={styles.heroBadgeText}>{role}</Text>
+                <Text style={styles.heroBadgeText}>{t('roles', role)}</Text>
               </View>
               <View style={[styles.heroBadge, { backgroundColor: theme.accent + '15' }]}>
                 <MaterialIcons 
@@ -509,7 +509,7 @@ export default function ProfileScreen() {
                   size={14} 
                   color={theme.accent} 
                 />
-                <Text style={[styles.heroBadgeText, { color: theme.accent }]}>{level}</Text>
+                <Text style={[styles.heroBadgeText, { color: theme.accent }]}>{t('levels', level)}</Text>
               </View>
             </View>
             {club && (
@@ -583,7 +583,7 @@ export default function ProfileScreen() {
                       color={role === r.id ? theme.primary : theme.textSecondary} 
                     />
                     <Text style={[styles.optionText, role === r.id && styles.optionTextActive]}>
-                      {r.id}
+                      {t('roles', r.id)}
                     </Text>
                   </Pressable>
                 ))}
@@ -612,7 +612,7 @@ export default function ProfileScreen() {
                       color={level === l.id ? theme.carreauColor : theme.textSecondary} 
                     />
                     <Text style={[styles.levelText, level === l.id && styles.levelTextActive]}>
-                      {l.id}
+                      {t('levels', l.id)}
                     </Text>
                   </Pressable>
                 ))}

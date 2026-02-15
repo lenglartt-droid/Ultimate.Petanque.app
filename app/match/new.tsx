@@ -1837,7 +1837,7 @@ export default function NewMatchScreen() {
                     <Text style={styles.playerName}>{selfPlayer.name || t('history', 'me')}</Text>
                     <View style={styles.moiBadge}><Text style={styles.moiBadgeText}>MOI</Text></View>
                   </View>
-                  <Text style={styles.playerMeta}>{selfPlayer.role} • {selfPlayer.level}</Text>
+                  <Text style={styles.playerMeta}>{t('roles', selfPlayer.role)} • {t('levels', selfPlayer.level)}</Text>
                 </View>
                 <MaterialIcons 
                   name={teamAPlayers.some(p => p.playerId === selfPlayer.id) ? 'check-circle' : 'radio-button-unchecked'} 
@@ -1902,7 +1902,7 @@ export default function NewMatchScreen() {
                     </View>
                     <View style={styles.playerInfo}>
                       <Text style={[styles.playerName, isInOtherTeam && { color: theme.textMuted }]}>{player.name}</Text>
-                      <Text style={styles.playerMeta}>{player.role} • {player.level}{player.club ? ` • ${player.club}` : ''}</Text>
+                      <Text style={styles.playerMeta}>{t('roles', player.role)} • {t('levels', player.level)}{player.club ? ` • ${player.club}` : ''}</Text>
                     </View>
                     {isInOtherTeam ? (
                       <Text style={styles.otherTeamLabel}>{t('match', 'otherTeam')}</Text>

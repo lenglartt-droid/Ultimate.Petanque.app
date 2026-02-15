@@ -146,12 +146,12 @@ export default function MyPlayerCardScreen() {
           <View style={styles.playerMeta}>
             <View style={styles.metaItem}>
               <MaterialIcons name={getRoleIcon(selfPlayer.role)} size={16} color={theme.textSecondary} />
-              <Text style={styles.metaText}>{selfPlayer.role}</Text>
+              <Text style={styles.metaText}>{t('roles', selfPlayer.role)}</Text>
             </View>
             <View style={styles.metaDivider} />
             <View style={styles.metaItem}>
               <MaterialIcons name="trending-up" size={16} color={theme.textSecondary} />
-              <Text style={styles.metaText}>{selfPlayer.level}</Text>
+              <Text style={styles.metaText}>{t('levels', selfPlayer.level)}</Text>
             </View>
           </View>
 
@@ -211,7 +211,7 @@ export default function MyPlayerCardScreen() {
                   />
                 </View>
                 <View style={styles.preferredRoleInfo}>
-                  <Text style={styles.preferredRoleName}>{roleAnalysis.preferredRole}</Text>
+                  <Text style={styles.preferredRoleName}>{t('roles', roleAnalysis.preferredRole)}</Text>
                   <Text style={styles.preferredRoleStats}>
                     {roleAnalysis.roleCounts[roleAnalysis.preferredRole]} {t('player', 'outOf')} {roleAnalysis.totalWithRoles} {t('player', 'matchesLabel')}
                   </Text>
@@ -375,7 +375,7 @@ export default function MyPlayerCardScreen() {
                 <View style={[styles.challengeIcon, { backgroundColor: theme.accent + '15' }]}>
                   <MaterialIcons name="gps-fixed" size={18} color={theme.accent} />
                 </View>
-                <Text style={styles.challengeName}>10 Tirs</Text>
+                <Text style={styles.challengeName}>{t('challengeNames', '10_tirs')}</Text>
               </View>
               <View style={styles.challengeStats}>
                 <Text style={styles.challengeCount}>{challengeStats.byType['10_tirs'].count} {t('player', 'challengeCount')}</Text>
@@ -390,7 +390,7 @@ export default function MyPlayerCardScreen() {
                 <View style={[styles.challengeIcon, { backgroundColor: theme.primary + '15' }]}>
                   <MaterialIcons name="sports" size={18} color={theme.primary} />
                 </View>
-                <Text style={styles.challengeName}>10 Tirs Sautée</Text>
+                <Text style={styles.challengeName}>{t('challengeNames', '10_tirs_sautee')}</Text>
               </View>
               <View style={styles.challengeStats}>
                 <Text style={styles.challengeCount}>{challengeStats.byType['10_tirs_sautee'].count} {t('player', 'challengeCount')}</Text>
@@ -405,7 +405,7 @@ export default function MyPlayerCardScreen() {
                 <View style={[styles.challengeIcon, { backgroundColor: theme.carreauColor + '15' }]}>
                   <MaterialIcons name="stars" size={18} color={theme.carreauColor} />
                 </View>
-                <Text style={styles.challengeName}>Précision</Text>
+                <Text style={styles.challengeName}>{t('challengeNames', 'precision')}</Text>
               </View>
               <View style={styles.challengeStats}>
                 <Text style={styles.challengeCount}>{challengeStats.byType['precision'].count} {t('player', 'challengeCount')}</Text>

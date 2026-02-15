@@ -24,7 +24,7 @@ export default function ClubDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getClubById, players, tournaments, deleteClub } = useApp();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const club = getClubById(id!);
   const clubPlayers = players.filter(p => p.clubId === id);
@@ -253,10 +253,10 @@ export default function ClubDetailScreen() {
               >
                 <View style={styles.tournamentDate}>
                   <Text style={styles.tournamentDay}>
-                    {new Date(tournament.date).toLocaleDateString('fr-FR', { day: 'numeric' })}
+                    {new Date(tournament.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric' })}
                   </Text>
                   <Text style={styles.tournamentMonth}>
-                    {new Date(tournament.date).toLocaleDateString('fr-FR', { month: 'short' })}
+                    {new Date(tournament.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' })}
                   </Text>
                 </View>
                 <View style={styles.tournamentInfo}>

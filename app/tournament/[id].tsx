@@ -96,7 +96,7 @@ export default function TournamentDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getTournamentById, getClubById, getTerrainById, getMatchesByTournament, updateTournament, tournamentNotifications, toggleTournamentNotification, isTournamentNotificationEnabled } = useApp();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const tournament = getTournamentById(id!);
   const terrain = tournament?.terrainId ? getTerrainById(tournament.terrainId) : null;
@@ -461,7 +461,7 @@ export default function TournamentDetailScreen() {
               <View style={styles.tournamentMeta}>
                 <MaterialIcons name="event" size={14} color={theme.textSecondary} />
                 <Text style={styles.tournamentMetaText}>
-                  {new Date(tournament.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                  {new Date(tournament.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
                 </Text>
                 <View style={styles.dot} />
                 <Text style={styles.tournamentMetaText}>{tournament.location.city}</Text>
@@ -674,7 +674,7 @@ export default function TournamentDetailScreen() {
                       )}
                       <View style={{ flex: 1 }} />
                       <Text style={styles.matchDate}>
-                        {new Date(match.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                        {new Date(match.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
                       </Text>
                     </View>
                     
@@ -787,7 +787,7 @@ export default function TournamentDetailScreen() {
                   {tournament?.name}
                 </Text>
                 <Text style={styles.notificationTournamentDate}>
-                  {tournamentDate.toLocaleDateString('fr-FR', { 
+                  {tournamentDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { 
                     weekday: 'long', 
                     day: 'numeric', 
                     month: 'long', 
@@ -875,7 +875,7 @@ export default function TournamentDetailScreen() {
                   <Text style={styles.notificationOptionTitle}>{t('tournament', 'oneWeekBeforeLabel')}</Text>
                   <Text style={styles.notificationOptionDesc}>
                     {daysUntilTournament >= 7 
-                      ? `${new Date(tournamentDate.getTime() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} ${t('tournament', 'atTime')} 9h00`
+                      ? `${new Date(tournamentDate.getTime() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })} ${t('tournament', 'atTime')} 9h00`
                       : t('tournament', 'deadlinePassed')
                     }
                   </Text>
@@ -901,7 +901,7 @@ export default function TournamentDetailScreen() {
                   <Text style={styles.notificationOptionTitle}>{t('tournament', 'threeDaysBeforeLabel')}</Text>
                   <Text style={styles.notificationOptionDesc}>
                     {daysUntilTournament >= 3 
-                      ? `${new Date(tournamentDate.getTime() - 3 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} ${t('tournament', 'atTime')} 9h00`
+                      ? `${new Date(tournamentDate.getTime() - 3 * 24 * 60 * 60 * 1000).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })} ${t('tournament', 'atTime')} 9h00`
                       : t('tournament', 'deadlinePassed')
                     }
                   </Text>
@@ -927,7 +927,7 @@ export default function TournamentDetailScreen() {
                   <Text style={styles.notificationOptionTitle}>{t('tournament', 'dayBeforeLabel')}</Text>
                   <Text style={styles.notificationOptionDesc}>
                     {daysUntilTournament >= 1 
-                      ? `${new Date(tournamentDate.getTime() - 1 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} ${t('tournament', 'atTime')} 18h00`
+                      ? `${new Date(tournamentDate.getTime() - 1 * 24 * 60 * 60 * 1000).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })} ${t('tournament', 'atTime')} 18h00`
                       : t('tournament', 'deadlinePassed')
                     }
                   </Text>

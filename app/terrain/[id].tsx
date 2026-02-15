@@ -33,7 +33,7 @@ export default function TerrainDetailScreen() {
   const [isShared, setIsShared] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const { showAlert } = useAlert();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   useEffect(() => {
     if (id) {
@@ -409,7 +409,7 @@ export default function TerrainDetailScreen() {
                 <View style={styles.tournamentInfo}>
                   <Text style={styles.tournamentName}>{tournament.name}</Text>
                   <Text style={styles.tournamentDate}>
-                    {new Date(tournament.date).toLocaleDateString('fr-FR', {
+                    {new Date(tournament.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', {
                       day: 'numeric',
                       month: 'long',
                       year: 'numeric',

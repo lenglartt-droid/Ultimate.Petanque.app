@@ -600,12 +600,19 @@ export const translations = {
     tireur: { fr: 'Tireur', en: 'Shooter' },
     pointeur: { fr: 'Pointeur', en: 'Pointer' },
     milieu: { fr: 'Milieu', en: 'Middle' },
+    Tireur: { fr: 'Tireur', en: 'Shooter' },
+    Pointeur: { fr: 'Pointeur', en: 'Pointer' },
+    Milieu: { fr: 'Milieu', en: 'Middle' },
   },
   levels: {
     debutant: { fr: 'Débutant', en: 'Beginner' },
     intermediaire: { fr: 'Intermédiaire', en: 'Intermediate' },
     confirme: { fr: 'Confirmé', en: 'Advanced' },
     expert: { fr: 'Expert', en: 'Expert' },
+    'Débutant': { fr: 'Débutant', en: 'Beginner' },
+    'Intermédiaire': { fr: 'Intermédiaire', en: 'Intermediate' },
+    'Confirmé': { fr: 'Confirmé', en: 'Advanced' },
+    Expert: { fr: 'Expert', en: 'Expert' },
   },
 
   // ============================================
@@ -963,6 +970,11 @@ export const translations = {
   // ============================================
   // CHALLENGE
   // ============================================
+  challengeNames: {
+    '10_tirs': { fr: '10 Tirs', en: '10 Shots' },
+    '10_tirs_sautee': { fr: '10 Tirs Sautée', en: '10 Lob Shots' },
+    precision: { fr: 'Précision', en: 'Precision' },
+  },
   challenge: {
     newChallenge: { fr: 'Nouveau Défi', en: 'New Challenge' },
     chooseChallenge: { fr: 'Choisissez votre défi', en: 'Choose your challenge' },
@@ -1492,6 +1504,7 @@ export const translations = {
     deleteAll: { fr: 'Tout supprimer', en: 'Delete all' },
     deleteAllNotif: { fr: 'Supprimer toutes les notifications de partage ?', en: 'Delete all share notifications?' },
     user: { fr: 'Utilisateur', en: 'User' },
+    userFallback: { fr: 'Utilisateur', en: 'User' },
     accessedYourCard: { fr: 'a accédé à votre fiche', en: 'accessed your card' },
     readPermission: { fr: 'Lecture', en: 'Read' },
     editPermission: { fr: 'Modification', en: 'Edit' },

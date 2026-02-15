@@ -33,7 +33,7 @@ export async function createShareLink(
 ): Promise<{ shareCode: string; shareUrl: string; error: string | null }> {
   const supabase = getSupabaseClient();
   const { data: userData } = await supabase.auth.getUser();
-  if (!userData?.user) return { shareCode: '', shareUrl: '', error: 'Non connecté' };
+  if (!userData?.user) return { shareCode: '', shareUrl: '', error: 'Not connected' };
 
   const shareCode = generateShareCode();
   const shareUrl = Linking.createURL(`share/${shareCode}`);
@@ -57,7 +57,7 @@ export async function redeemShareCode(
 ): Promise<{ itemType: ShareItemType; itemId: string; permission: SharePermission; error: string | null }> {
   const supabase = getSupabaseClient();
   const { data: userData } = await supabase.auth.getUser();
-  if (!userData?.user) return { itemType: 'player', itemId: '', permission: 'read', error: 'Non connecté' };
+  if (!userData?.user) return { itemType: 'player', itemId: '', permission: 'read', error: 'Not connected' };
 
   // Look up the share
   const { data, error } = await supabase
@@ -67,11 +67,11 @@ export async function redeemShareCode(
     .eq('is_public_link', true)
     .single();
 
-  if (error || !data) return { itemType: 'player', itemId: '', permission: 'read', error: 'Code de partage invalide' };
+  if (error || !data) return { itemType: 'player', itemId: '', permission: 'read', error: 'Invalid share code' };
 
   // Check expiration
   if (data.expires_at && new Date(data.expires_at) < new Date()) {
-    return { itemType: 'player', itemId: '', permission: 'read', error: 'Ce lien de partage a expiré' };
+    return { itemType: 'player', itemId: '', permission: 'read', error: 'This share link has expired' };
   }
 
   // Don't share with yourself
@@ -131,7 +131,7 @@ export async function redeemShareCode(
   await supabase.from('share_notifications').insert({
     owner_id: data.owner_id,
     accessor_id: userData.user.id,
-    accessor_name: accessorProfile?.username || userData.user.email?.split('@')[0] || 'Utilisateur',
+    accessor_name: accessorProfile?.username || userData.user.email?.split('@')[0] || 'User',
     accessor_email: accessorProfile?.email || userData.user.email,
     item_type: data.item_type,
     item_id: data.item_id,
@@ -147,7 +147,7 @@ export async function redeemShareCode(
 export async function getMySharedItems(): Promise<{ items: SharedItem[]; error: string | null }> {
   const supabase = getSupabaseClient();
   const { data: userData } = await supabase.auth.getUser();
-  if (!userData?.user) return { items: [], error: 'Non connecté' };
+  if (!userData?.user) return { items: [], error: 'Not connected' };
 
   const { data, error } = await supabase
     .from('shared_items')
@@ -193,7 +193,7 @@ export interface ShareNotification {
 export async function getShareNotifications(): Promise<{ notifications: ShareNotification[]; error: string | null }> {
   const supabase = getSupabaseClient();
   const { data: userData } = await supabase.auth.getUser();
-  if (!userData?.user) return { notifications: [], error: 'Non connecté' };
+  if (!userData?.user) return { notifications: [], error: 'Not connected' };
 
   const { data, error } = await supabase
     .from('share_notifications')
@@ -239,7 +239,7 @@ export async function getUnreadShareNotificationCount(): Promise<number> {
 export async function markShareNotificationsRead(ids?: string[]): Promise<{ error: string | null }> {
   const supabase = getSupabaseClient();
   const { data: userData } = await supabase.auth.getUser();
-  if (!userData?.user) return { error: 'Non connecté' };
+  if (!userData?.user) return { error: 'Not connected' };
 
   let query = supabase
     .from('share_notifications')
@@ -282,19 +282,19 @@ export async function fetchItemName(itemType: ShareItemType, itemId: string): Pr
   try {
     if (itemType === 'player') {
       const { data } = await supabase.from('players').select('name').eq('id', itemId).single();
-      return data?.name || 'Joueur inconnu';
+      return data?.name || 'Unknown player';
     } else if (itemType === 'club') {
       const { data } = await supabase.from('clubs').select('name').eq('id', itemId).single();
-      return data?.name || 'Club inconnu';
+      return data?.name || 'Unknown club';
     } else if (itemType === 'terrain') {
       const { data } = await supabase.from('terrains').select('name').eq('id', itemId).single();
-      return data?.name || 'Terrain inconnu';
+      return data?.name || 'Unknown terrain';
     } else if (itemType === 'tournament') {
       const { data } = await supabase.from('tournaments').select('name').eq('id', itemId).single();
-      return data?.name || 'Tournoi inconnu';
+      return data?.name || 'Unknown tournament';
     }
   } catch { /* ignore */ }
-  return 'Inconnu';
+  return 'Unknown';
 }
 
 // Check if user is viewing a shared item (not their own)
@@ -321,7 +321,7 @@ export async function saveSharedItemToMyAccount(
 ): Promise<{ newItemId: string | null; error: string | null }> {
   const supabase = getSupabaseClient();
   const { data: userData } = await supabase.auth.getUser();
-  if (!userData?.user) return { newItemId: null, error: 'Non connecte' };
+  if (!userData?.user) return { newItemId: null, error: 'Not connected' };
 
   try {
     if (itemType === 'player') {
@@ -330,7 +330,7 @@ export async function saveSharedItemToMyAccount(
         .select('*')
         .eq('id', itemId)
         .single();
-      if (fetchErr || !source) return { newItemId: null, error: 'Joueur introuvable' };
+      if (fetchErr || !source) return { newItemId: null, error: 'Player not found' };
 
       const { data: newItem, error: insertErr } = await supabase.from('players').insert({
         user_id: userData.user.id,
@@ -357,7 +357,7 @@ export async function saveSharedItemToMyAccount(
         .select('*')
         .eq('id', itemId)
         .single();
-      if (fetchErr || !source) return { newItemId: null, error: 'Club introuvable' };
+      if (fetchErr || !source) return { newItemId: null, error: 'Club not found' };
 
       const { data: newItem, error: insertErr } = await supabase.from('clubs').insert({
         user_id: userData.user.id,
@@ -386,7 +386,7 @@ export async function saveSharedItemToMyAccount(
         .select('*')
         .eq('id', itemId)
         .single();
-      if (fetchErr || !source) return { newItemId: null, error: 'Terrain introuvable' };
+      if (fetchErr || !source) return { newItemId: null, error: 'Terrain not found' };
 
       const { data: newItem, error: insertErr } = await supabase.from('terrains').insert({
         user_id: userData.user.id,
@@ -414,7 +414,7 @@ export async function saveSharedItemToMyAccount(
         .select('*')
         .eq('id', itemId)
         .single();
-      if (fetchErr || !source) return { newItemId: null, error: 'Tournoi introuvable' };
+      if (fetchErr || !source) return { newItemId: null, error: 'Tournament not found' };
 
       const { data: newItem, error: insertErr } = await supabase.from('tournaments').insert({
         user_id: userData.user.id,
@@ -444,16 +444,16 @@ export async function saveSharedItemToMyAccount(
       return { newItemId: newItem?.id || null, error: null };
     }
 
-    return { newItemId: null, error: 'Type non supporté' };
+    return { newItemId: null, error: 'Unsupported type' };
   } catch (e: any) {
-    return { newItemId: null, error: e.message || 'Erreur lors de la copie' };
+    return { newItemId: null, error: e.message || 'Error during copy' };
   }
 }
 
 export async function getSharedWithMe(): Promise<{ items: SharedItem[]; error: string | null }> {
   const supabase = getSupabaseClient();
   const { data: userData } = await supabase.auth.getUser();
-  if (!userData?.user) return { items: [], error: 'Non connecté' };
+  if (!userData?.user) return { items: [], error: 'Not connected' };
 
   const { data, error } = await supabase
     .from('shared_items')

@@ -101,7 +101,7 @@ function StepIndicator({ step, total, label }: { step: number; total: number; la
 export default function NewTournamentScreen() {
   const insets = useSafeAreaInsets();
   const { addTournament, clubs, terrains } = useApp();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   // Form state
   const [name, setName] = useState('');
@@ -273,10 +273,10 @@ export default function NewTournamentScreen() {
                 </View>
                 <Text style={styles.dateCardDay}>{date.getDate()}</Text>
                 <Text style={styles.dateCardMonth}>
-                  {date.toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' })}
+                  {date.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short', year: 'numeric' })}
                 </Text>
                 <Text style={styles.dateCardWeekday}>
-                  {date.toLocaleDateString('fr-FR', { weekday: 'long' })}
+                  {date.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { weekday: 'long' })}
                 </Text>
               </Pressable>
 
@@ -299,10 +299,10 @@ export default function NewTournamentScreen() {
                     </View>
                     <Text style={[styles.dateCardDay, { color: theme.accent }]}>{endDate.getDate()}</Text>
                     <Text style={styles.dateCardMonth}>
-                      {endDate.toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' })}
+                      {endDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short', year: 'numeric' })}
                     </Text>
                     <Text style={styles.dateCardWeekday}>
-                      {endDate.toLocaleDateString('fr-FR', { weekday: 'long' })}
+                      {endDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { weekday: 'long' })}
                     </Text>
                   </>
                 ) : (

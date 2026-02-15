@@ -285,7 +285,7 @@ export default function NotificationsScreen() {
                         <View style={styles.tournamentMeta}>
                           <MaterialIcons name="event" size={12} color={theme.textMuted} />
                           <Text style={styles.tournamentMetaText}>
-                            {new Date(tournament.date).toLocaleDateString('fr-FR', {
+                            {new Date(tournament.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', {
                               day: 'numeric',
                               month: 'short',
                               year: 'numeric'
@@ -358,7 +358,7 @@ export default function NotificationsScreen() {
                         <View style={styles.tournamentMeta}>
                           <MaterialIcons name="event" size={12} color={theme.textMuted} />
                           <Text style={styles.tournamentMetaText}>
-                            {new Date(tournament.date).toLocaleDateString('fr-FR', {
+                            {new Date(tournament.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', {
                               day: 'numeric',
                               month: 'short'
                             })}

@@ -371,7 +371,7 @@ export default function EditPlayerScreen() {
                     styles.optionText,
                     role === r && styles.optionTextActive
                   ]}>
-                    {r}
+                    {t('roles', r)}
                   </Text>
                 </Pressable>
               ))}
@@ -398,7 +398,7 @@ export default function EditPlayerScreen() {
                     styles.levelText,
                     level === l && styles.levelTextActive
                   ]}>
-                    {l}
+                    {t('levels', l)}
                   </Text>
                 </Pressable>
               ))}

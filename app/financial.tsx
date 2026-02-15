@@ -42,7 +42,7 @@ export default function FinancialScreen() {
     finishedTournaments.forEach(t => {
       const date = new Date(t.date);
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      const label = date.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' });
+      const label = date.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short', year: '2-digit' });
       if (!months[key]) months[key] = { gains: 0, costs: 0, label };
       months[key].gains += t.prizeWon || 0;
       months[key].costs += t.registrationCost || 0;
@@ -195,7 +195,7 @@ export default function FinancialScreen() {
                     <Text style={styles.detailName} numberOfLines={1}>{t.name}</Text>
                     <View style={styles.detailMeta}>
                       <Text style={styles.detailDate}>
-                        {new Date(t.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {new Date(t.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </Text>
                       {t.finalResult && (
                         <>
@@ -240,7 +240,7 @@ export default function FinancialScreen() {
                   <View style={styles.detailInfo}>
                     <Text style={styles.detailName} numberOfLines={1}>{t.name}</Text>
                     <Text style={styles.detailDate}>
-                      {new Date(t.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {new Date(t.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </Text>
                   </View>
                   <Text style={[styles.detailAmount, { color: theme.error }]}>-{t.registrationCost} €</Text>

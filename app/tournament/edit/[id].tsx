@@ -74,7 +74,7 @@ export default function EditTournamentScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getTournamentById, updateTournament, clubs } = useApp();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const tournament = getTournamentById(id!);
 
@@ -356,7 +356,7 @@ export default function EditTournamentScreen() {
             >
               <MaterialIcons name="event" size={20} color={theme.primary} />
               <Text style={styles.dateText}>
-                {date.toLocaleDateString('fr-FR', { 
+                {date.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { 
                   weekday: 'long',
                   day: 'numeric', 
                   month: 'long', 
@@ -384,7 +384,7 @@ export default function EditTournamentScreen() {
                   <MaterialIcons name="event" size={20} color={endDate ? theme.accent : theme.textMuted} />
                   <Text style={[styles.dateText, !endDate && { color: theme.textMuted }]}>
                     {endDate
-                      ? endDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+                      ? endDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
                       : t('tournament', 'singleDayOnly')
                     }
                   </Text>

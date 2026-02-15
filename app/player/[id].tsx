@@ -47,7 +47,7 @@ export default function PlayerDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getPlayerById, getMatchesByPlayer, getClubById, getTerrainById, deletePlayer, selfPlayer, matches } = useApp();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const player = getPlayerById(id!);
   const playerMatches = getMatchesByPlayer(id!).slice(0, 5);
@@ -170,10 +170,10 @@ export default function PlayerDetailScreen() {
           <Text style={styles.playerName}>{player.name}</Text>
           <View style={styles.profileBadges}>
             <View style={[styles.badge, { backgroundColor: levelColors[player.level] + '20' }]}>
-              <Text style={[styles.badgeText, { color: levelColors[player.level] }]}>{player.level}</Text>
+              <Text style={[styles.badgeText, { color: levelColors[player.level] }]}>{t('levels', player.level)}</Text>
             </View>
             <View style={[styles.badge, { backgroundColor: theme.primaryLight + '30' }]}>
-              <Text style={[styles.badgeText, { color: theme.primary }]}>{player.role}</Text>
+              <Text style={[styles.badgeText, { color: theme.primary }]}>{t('roles', player.role)}</Text>
             </View>
           </View>
           {club && (
@@ -200,7 +200,7 @@ export default function PlayerDetailScreen() {
                   />
                 </View>
                 <View style={styles.preferredRoleInfo}>
-                  <Text style={styles.preferredRoleName}>{roleAnalysis.preferredRole}</Text>
+                  <Text style={styles.preferredRoleName}>{t('roles', roleAnalysis.preferredRole)}</Text>
                   <Text style={styles.preferredRoleStats}>
                     {roleAnalysis.roleCounts[roleAnalysis.preferredRole]} {t('player', 'outOf')} {roleAnalysis.totalWithRoles} {t('player', 'matchesLabel')}
                   </Text>
@@ -369,7 +369,7 @@ export default function PlayerDetailScreen() {
             <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
               <Text style={styles.detailLabel}>{t('player', 'memberSince')}</Text>
               <Text style={styles.detailValue}>
-                {new Date(player.createdAt).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+                {new Date(player.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'long', year: 'numeric' })}
               </Text>
             </View>
           </View>
@@ -390,7 +390,7 @@ export default function PlayerDetailScreen() {
                     <View style={styles.matchHeader}>
                       <Text style={styles.matchFormat}>{match.format}</Text>
                       <Text style={styles.matchDate}>
-                        {new Date(match.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                        {new Date(match.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
                       </Text>
                     </View>
                     <Text style={styles.matchTeams} numberOfLines={1}>

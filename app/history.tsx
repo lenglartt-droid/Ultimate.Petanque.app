@@ -151,7 +151,7 @@ const MatchCard = React.memo(({ match, onPress, compact = false, t }: { match: M
             </Text>
           </View>
           <Text style={styles.timeText}>
-            {new Date(match.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+            {new Date(match.date).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
           </Text>
         </View>
 
@@ -236,7 +236,7 @@ const SeriesCard = React.memo(({ series, onMatchPress, t }: { series: SeriesGrou
               </View>
             </View>
             <Text style={styles.timeText}>
-              {new Date(series.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+              {new Date(series.date).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
             </Text>
           </View>
 
@@ -378,7 +378,7 @@ const ChallengeCard = React.memo(({ challenge, onPress, t }: { challenge: Challe
             </View>
           ) : null}
           <Text style={styles.challengeTime}>
-            {new Date(challenge.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+            {new Date(challenge.date).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
           </Text>
         </View>
       </View>

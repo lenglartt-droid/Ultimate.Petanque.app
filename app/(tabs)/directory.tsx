@@ -276,13 +276,13 @@ export default function DirectoryScreen() {
           </View>
           <View style={styles.itemTags}>
             <View style={[styles.tag, { backgroundColor: theme.primary + '15' }]}>
-              <Text style={[styles.tagText, { color: theme.primary }]}>{item.role}</Text>
+              <Text style={[styles.tagText, { color: theme.primary }]}>{t('roles', item.role)}</Text>
             </View>
             <View style={[styles.tag, { backgroundColor: theme.success + '15' }]}>
               <Text style={[styles.tagText, { color: theme.success }]}>{item.stats.winRate}%</Text>
             </View>
             <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}>
-              <Text style={[styles.tagText, { color: theme.textSecondary }]}>{item.level}</Text>
+              <Text style={[styles.tagText, { color: theme.textSecondary }]}>{t('levels', item.level)}</Text>
             </View>
           </View>
         </View>
