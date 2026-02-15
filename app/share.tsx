@@ -17,6 +17,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import theme from '@/constants/theme';
 import { redeemShareCode, saveSharedItemToMyAccount, ShareItemType } from '@/services/shareService';
 import { useAlert } from '@/template';
+import { useLanguage } from '@/hooks/useLanguage';
 
 const ROUTE_MAP: Record<ShareItemType, string> = {
   player: '/player/',
@@ -25,15 +26,30 @@ const ROUTE_MAP: Record<ShareItemType, string> = {
   tournament: '/tournament/',
 };
 
-const TYPE_CONFIG: Record<ShareItemType, { label: string; icon: string; color: string }> = {
-  player: { label: 'Joueur', icon: 'person', color: theme.primary },
-  club: { label: 'Club', icon: 'home', color: theme.accent },
-  terrain: { label: 'Terrain', icon: 'landscape', color: theme.success },
-  tournament: { label: 'Tournoi', icon: 'emoji-events', color: theme.carreauColor },
+const TYPE_LABEL_KEY: Record<ShareItemType, string> = {
+  player: 'playerLabel',
+  club: 'clubLabel',
+  terrain: 'terrainLabel',
+  tournament: 'tournamentLabel',
+};
+
+const TYPE_ICON: Record<ShareItemType, string> = {
+  player: 'person',
+  club: 'home',
+  terrain: 'landscape',
+  tournament: 'emoji-events',
+};
+
+const TYPE_COLOR: Record<ShareItemType, string> = {
+  player: theme.primary,
+  club: theme.accent,
+  terrain: theme.success,
+  tournament: theme.carreauColor,
 };
 
 export default function RedeemShareScreen() {
   const { showAlert } = useAlert();
+  const { t } = useLanguage();
   const [code, setCode] = useState('');
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [redeemResult, setRedeemResult] = useState<{ itemType: ShareItemType; itemId: string; permission: string } | null>(null);
@@ -41,7 +57,7 @@ export default function RedeemShareScreen() {
 
   const handleRedeem = async () => {
     if (!code.trim()) {
-      showAlert('Erreur', 'Veuillez saisir un code de partage');
+      showAlert(t('common', 'error'), t('share', 'enterCode'));
       return;
     }
 
@@ -49,13 +65,13 @@ export default function RedeemShareScreen() {
     try {
       const result = await redeemShareCode(code.trim());
       if (result.error) {
-        showAlert('Erreur', result.error);
+        showAlert(t('common', 'error'), result.error);
       } else {
         setRedeemResult({ itemType: result.itemType, itemId: result.itemId, permission: result.permission });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     } catch (e) {
-      showAlert('Erreur', 'Impossible de valider le code');
+      showAlert(t('common', 'error'), t('share', 'cannotValidate'));
     } finally {
       setIsRedeeming(false);
     }
@@ -67,7 +83,9 @@ export default function RedeemShareScreen() {
     router.replace(route as any);
   };
 
-  const config = redeemResult ? TYPE_CONFIG[redeemResult.itemType] : null;
+  const typeColor = redeemResult ? TYPE_COLOR[redeemResult.itemType] : null;
+  const typeIcon = redeemResult ? TYPE_ICON[redeemResult.itemType] : null;
+  const typeLabel = redeemResult ? t('share', TYPE_LABEL_KEY[redeemResult.itemType]).toLowerCase() : '';
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
@@ -75,7 +93,7 @@ export default function RedeemShareScreen() {
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Code de partage</Text>
+        <Text style={styles.headerTitle}>{t('share', 'shareCode')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -88,9 +106,9 @@ export default function RedeemShareScreen() {
             <View style={styles.iconCircle}>
               <MaterialIcons name="qr-code-2" size={48} color={theme.primary} />
             </View>
-            <Text style={styles.title}>Saisir un code de partage</Text>
+            <Text style={styles.title}>{t('share', 'enterShareCode')}</Text>
             <Text style={styles.desc}>
-              Entrez le code reçu pour accéder à une fiche partagée par un autre joueur.
+              {t('share', 'enterShareCodeDesc')}
             </Text>
 
             <View style={styles.inputRow}>
@@ -116,27 +134,27 @@ export default function RedeemShareScreen() {
               ) : (
                 <>
                   <MaterialIcons name="lock-open" size={20} color="#FFF" />
-                  <Text style={styles.redeemBtnText}>Valider le code</Text>
+                  <Text style={styles.redeemBtnText}>{t('share', 'validateCode')}</Text>
                 </>
               )}
             </Pressable>
           </Animated.View>
         ) : (
           <Animated.View entering={FadeInDown.duration(400)} style={styles.successSection}>
-            <View style={[styles.successIcon, { backgroundColor: config?.color + '20' }]}>
-              <MaterialIcons name={config?.icon as any} size={48} color={config?.color} />
+            <View style={[styles.successIcon, { backgroundColor: typeColor + '20' }]}>
+              <MaterialIcons name={typeIcon as any} size={48} color={typeColor} />
             </View>
-            <Text style={styles.successTitle}>Fiche débloquée</Text>
+            <Text style={styles.successTitle}>{t('share', 'cardUnlocked')}</Text>
             <Text style={styles.successDesc}>
-              Vous avez maintenant accès à cette fiche {config?.label.toLowerCase()} en{' '}
+              {t('share', 'accessGranted')} {typeLabel} {t('share', 'inMode')}{' '}
               <Text style={{ fontWeight: '700' }}>
-                {redeemResult.permission === 'read' ? 'lecture seule' : 'lecture + modification'}
+                {redeemResult.permission === 'read' ? t('share', 'readOnly') : t('share', 'readWrite')}
               </Text>.
             </Text>
 
-            <Pressable style={[styles.navigateBtn, { backgroundColor: config?.color }]} onPress={handleNavigate}>
+            <Pressable style={[styles.navigateBtn, { backgroundColor: typeColor }]} onPress={handleNavigate}>
               <MaterialIcons name="open-in-new" size={20} color="#FFF" />
-              <Text style={styles.navigateBtnText}>Voir la fiche</Text>
+              <Text style={styles.navigateBtnText}>{t('share', 'viewCard')}</Text>
             </Pressable>
 
             <Pressable
@@ -147,17 +165,17 @@ export default function RedeemShareScreen() {
                 const { newItemId, error } = await saveSharedItemToMyAccount(redeemResult.itemType, redeemResult.itemId);
                 setIsSavingCopy(false);
                 if (error) {
-                  showAlert('Erreur', error);
+                  showAlert(t('common', 'error'), error);
                 } else {
                   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  showAlert('Enregistre', 'Fiche copiee dans votre annuaire');
+                  showAlert(t('share', 'saved'), t('share', 'copiedToDirectory'));
                   if (newItemId) router.replace(`${ROUTE_MAP[redeemResult.itemType]}${newItemId}` as any);
                 }
               }}
               disabled={isSavingCopy}
             >
               <MaterialIcons name="save-alt" size={20} color={theme.accent} />
-              <Text style={styles.saveBtnText}>Enregistrer dans mon annuaire</Text>
+              <Text style={styles.saveBtnText}>{t('share', 'saveToDirectory')}</Text>
             </Pressable>
           </Animated.View>
         )}

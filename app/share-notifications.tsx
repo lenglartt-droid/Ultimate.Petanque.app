@@ -22,12 +22,28 @@ import {
   ShareNotification,
   ShareItemType,
 } from '@/services/shareService';
+import { useLanguage } from '@/hooks/useLanguage';
+import { Language } from '@/constants/i18n';
 
-const TYPE_CONFIG: Record<ShareItemType, { label: string; icon: string; color: string }> = {
-  player: { label: 'Joueur', icon: 'person', color: theme.primary },
-  club: { label: 'Club', icon: 'home', color: theme.accent },
-  terrain: { label: 'Terrain', icon: 'landscape', color: theme.success },
-  tournament: { label: 'Tournoi', icon: 'emoji-events', color: theme.carreauColor },
+const TYPE_ICON: Record<ShareItemType, string> = {
+  player: 'person',
+  club: 'home',
+  terrain: 'landscape',
+  tournament: 'emoji-events',
+};
+
+const TYPE_COLOR: Record<ShareItemType, string> = {
+  player: theme.primary,
+  club: theme.accent,
+  terrain: theme.success,
+  tournament: theme.carreauColor,
+};
+
+const TYPE_LABEL_KEY: Record<ShareItemType, string> = {
+  player: 'playerLabel',
+  club: 'clubLabel',
+  terrain: 'terrainLabel',
+  tournament: 'tournamentLabel',
 };
 
 const ROUTE_MAP: Record<ShareItemType, string> = {
@@ -37,7 +53,7 @@ const ROUTE_MAP: Record<ShareItemType, string> = {
   tournament: '/tournament/',
 };
 
-function formatRelativeDate(dateStr: string): string {
+function formatRelativeDate(dateStr: string, lang: Language): string {
   const date = new Date(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -45,15 +61,16 @@ function formatRelativeDate(dateStr: string): string {
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
 
-  if (diffMins < 1) return "A l'instant";
-  if (diffMins < 60) return `Il y a ${diffMins} min`;
-  if (diffHours < 24) return `Il y a ${diffHours}h`;
-  if (diffDays < 7) return `Il y a ${diffDays}j`;
-  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  if (diffMins < 1) return lang === 'fr' ? "A l'instant" : 'Just now';
+  if (diffMins < 60) return lang === 'fr' ? `Il y a ${diffMins} min` : `${diffMins} min ago`;
+  if (diffHours < 24) return lang === 'fr' ? `Il y a ${diffHours}h` : `${diffHours}h ago`;
+  if (diffDays < 7) return lang === 'fr' ? `Il y a ${diffDays}j` : `${diffDays}d ago`;
+  return date.toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' });
 }
 
 export default function ShareNotificationsScreen() {
   const insets = useSafeAreaInsets();
+  const { t, language } = useLanguage();
   const [notifications, setNotifications] = useState<ShareNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -103,12 +120,12 @@ export default function ShareNotificationsScreen() {
 
   const handleDelete = useCallback((id: string) => {
     Alert.alert(
-      'Supprimer',
-      'Supprimer cette notification ?',
+      t('share', 'deleteLabel'),
+      t('share', 'deleteNotif'),
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common', 'cancel'), style: 'cancel' },
         {
-          text: 'Supprimer',
+          text: t('common', 'delete'),
           style: 'destructive',
           onPress: async () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -118,17 +135,17 @@ export default function ShareNotificationsScreen() {
         },
       ]
     );
-  }, []);
+  }, [t]);
 
   const handleClearAll = useCallback(() => {
     if (notifications.length === 0) return;
     Alert.alert(
-      'Tout supprimer',
-      'Supprimer toutes les notifications de partage ?',
+      t('share', 'deleteAll'),
+      t('share', 'deleteAllNotif'),
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common', 'cancel'), style: 'cancel' },
         {
-          text: 'Tout supprimer',
+          text: t('share', 'deleteAll'),
           style: 'destructive',
           onPress: async () => {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -140,7 +157,7 @@ export default function ShareNotificationsScreen() {
         },
       ]
     );
-  }, [notifications]);
+  }, [notifications, t]);
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
@@ -151,7 +168,7 @@ export default function ShareNotificationsScreen() {
           <Pressable style={styles.backBtn} onPress={() => router.back()}>
             <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Notifications de partage</Text>
+          <Text style={styles.headerTitle}>{t('share', 'shareNotifications')}</Text>
           <View style={{ width: 40 }} />
         </View>
         <View style={styles.loadingContainer}>
@@ -167,7 +184,7 @@ export default function ShareNotificationsScreen() {
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Notifications de partage</Text>
+        <Text style={styles.headerTitle}>{t('share', 'shareNotifications')}</Text>
         {notifications.length > 0 ? (
           <Pressable style={styles.clearAllBtn} onPress={handleClearAll}>
             <MaterialIcons name="delete-sweep" size={22} color={theme.error} />
@@ -193,13 +210,13 @@ export default function ShareNotificationsScreen() {
           <View style={styles.summaryInfo}>
             <Text style={styles.summaryTitle}>
               {notifications.length === 0
-                ? 'Aucune notification'
-                : `${notifications.length} accès enregistré${notifications.length > 1 ? 's' : ''}`}
+                ? t('share', 'noNotifications')
+                : `${notifications.length} ${notifications.length > 1 ? t('share', 'accessRecordedPlural') : t('share', 'accessRecorded')}`}
             </Text>
             <Text style={styles.summarySubtitle}>
               {unreadCount > 0
-                ? `${unreadCount} non lu${unreadCount > 1 ? 's' : ''}`
-                : 'Tout est à jour'}
+                ? `${unreadCount} ${unreadCount > 1 ? t('share', 'unreadPlural') : t('share', 'unread')}`
+                : t('share', 'allUpToDate')}
             </Text>
           </View>
         </Animated.View>
@@ -208,7 +225,9 @@ export default function ShareNotificationsScreen() {
         {notifications.length > 0 ? (
           <View style={styles.notificationsList}>
             {notifications.map((notif, index) => {
-              const config = TYPE_CONFIG[notif.itemType];
+              const color = TYPE_COLOR[notif.itemType];
+              const icon = TYPE_ICON[notif.itemType];
+              const labelKey = TYPE_LABEL_KEY[notif.itemType];
               return (
                 <Animated.View
                   key={notif.id}
@@ -236,23 +255,23 @@ export default function ShareNotificationsScreen() {
                     <View style={styles.notifContent}>
                       <View style={styles.notifTextRow}>
                         <Text style={styles.notifName} numberOfLines={1}>
-                          {notif.accessorName || 'Utilisateur'}
+                          {notif.accessorName || t('share', 'user')}
                         </Text>
                         <Text style={styles.notifTime}>
-                          {formatRelativeDate(notif.createdAt)}
+                          {formatRelativeDate(notif.createdAt, language)}
                         </Text>
                       </View>
 
                       <Text style={styles.notifAction} numberOfLines={2}>
-                        a accédé à votre fiche {config.label.toLowerCase()}
+                        {t('share', 'accessedYourCard')} {t('share', labelKey).toLowerCase()}
                         {notif.itemName ? ` "${notif.itemName}"` : ''}
                       </Text>
 
                       {/* Badges */}
                       <View style={styles.notifBadges}>
-                        <View style={[styles.notifTypeBadge, { backgroundColor: config.color + '15' }]}>
-                          <MaterialIcons name={config.icon as any} size={12} color={config.color} />
-                          <Text style={[styles.notifTypeBadgeText, { color: config.color }]}>{config.label}</Text>
+                        <View style={[styles.notifTypeBadge, { backgroundColor: color + '15' }]}>
+                          <MaterialIcons name={icon as any} size={12} color={color} />
+                          <Text style={[styles.notifTypeBadgeText, { color }]}>{t('share', labelKey)}</Text>
                         </View>
                         <View style={[
                           styles.notifPermBadge,
@@ -267,7 +286,7 @@ export default function ShareNotificationsScreen() {
                             styles.notifPermBadgeText,
                             { color: notif.permission === 'read' ? theme.primary : theme.accent }
                           ]}>
-                            {notif.permission === 'read' ? 'Lecture' : 'Modification'}
+                            {notif.permission === 'read' ? t('share', 'readPermission') : t('share', 'editPermission')}
                           </Text>
                         </View>
                       </View>
@@ -284,9 +303,9 @@ export default function ShareNotificationsScreen() {
             <View style={styles.emptyIcon}>
               <MaterialIcons name="notifications-none" size={56} color={theme.textMuted} />
             </View>
-            <Text style={styles.emptyTitle}>Aucune notification</Text>
+            <Text style={styles.emptyTitle}>{t('share', 'noNotifTitle')}</Text>
             <Text style={styles.emptyDesc}>
-              Quand un autre joueur utilisera votre code de partage, vous verrez ici qui a accédé à vos fiches.
+              {t('share', 'noNotifDesc')}
             </Text>
           </Animated.View>
         )}
@@ -295,7 +314,7 @@ export default function ShareNotificationsScreen() {
         <View style={styles.infoBox}>
           <MaterialIcons name="info-outline" size={16} color={theme.textMuted} />
           <Text style={styles.infoText}>
-            Appuyez longuement sur une notification pour la supprimer. Tirez vers le bas pour rafraîchir.
+            {t('share', 'longPressInfo')}
           </Text>
         </View>
       </ScrollView>

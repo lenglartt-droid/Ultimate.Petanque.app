@@ -28,12 +28,27 @@ import {
   SharePermission,
 } from '@/services/shareService';
 import { useAlert } from '@/template';
+import { useLanguage } from '@/hooks/useLanguage';
 
-const TYPE_CONFIG: Record<ShareItemType, { label: string; icon: string; color: string }> = {
-  player: { label: 'Joueur', icon: 'person', color: theme.primary },
-  club: { label: 'Club', icon: 'home', color: theme.accent },
-  terrain: { label: 'Terrain', icon: 'landscape', color: theme.success },
-  tournament: { label: 'Tournoi', icon: 'emoji-events', color: theme.carreauColor },
+const TYPE_ICON: Record<ShareItemType, string> = {
+  player: 'person',
+  club: 'home',
+  terrain: 'landscape',
+  tournament: 'emoji-events',
+};
+
+const TYPE_COLOR: Record<ShareItemType, string> = {
+  player: theme.primary,
+  club: theme.accent,
+  terrain: theme.success,
+  tournament: theme.carreauColor,
+};
+
+const TYPE_LABEL_KEY: Record<ShareItemType, string> = {
+  player: 'playerLabel',
+  club: 'clubLabel',
+  terrain: 'terrainLabel',
+  tournament: 'tournamentLabel',
 };
 
 const ROUTE_MAP: Record<ShareItemType, string> = {
@@ -52,6 +67,7 @@ interface EnrichedSharedItem extends SharedItem {
 export default function SharedItemsScreen() {
   const insets = useSafeAreaInsets();
   const { showAlert } = useAlert();
+  const { t, language } = useLanguage();
   const [activeTab, setActiveTab] = useState<Tab>('shared_by_me');
   const [myShares, setMyShares] = useState<EnrichedSharedItem[]>([]);
   const [sharedWithMe, setSharedWithMe] = useState<EnrichedSharedItem[]>([]);
@@ -61,7 +77,6 @@ export default function SharedItemsScreen() {
 
   const enrichItems = useCallback(async (items: SharedItem[]): Promise<EnrichedSharedItem[]> => {
     const enriched: EnrichedSharedItem[] = [];
-    // Batch by unique item_type+item_id to avoid duplicates
     const nameCache: Record<string, string> = {};
     for (const item of items) {
       const key = `${item.itemType}_${item.itemId}`;
@@ -117,18 +132,18 @@ export default function SharedItemsScreen() {
 
   const handleRevoke = useCallback((item: EnrichedSharedItem) => {
     Alert.alert(
-      'Révoquer le partage',
-      `Supprimer le partage de "${item.itemName}" ? Les personnes ayant ce code ne pourront plus accéder à cette fiche.`,
+      t('share', 'revokeShare'),
+      `${t('share', 'revokeShareMsg')} "${item.itemName}" ${t('share', 'revokeShareMsgEnd')}`,
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common', 'cancel'), style: 'cancel' },
         {
-          text: 'Révoquer',
+          text: t('share', 'revoke'),
           style: 'destructive',
           onPress: async () => {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
             const { error } = await revokeShare(item.id);
             if (error) {
-              showAlert('Erreur', error);
+              showAlert(t('common', 'error'), error);
             } else {
               setMyShares(prev => prev.filter(s => s.id !== item.id));
             }
@@ -136,23 +151,23 @@ export default function SharedItemsScreen() {
         },
       ]
     );
-  }, [showAlert]);
+  }, [showAlert, t]);
 
   const handleTogglePermission = useCallback(async (item: EnrichedSharedItem) => {
     const newPermission: SharePermission = item.permission === 'read' ? 'write' : 'read';
-    const label = newPermission === 'read' ? 'Lecture seule' : 'Lecture + Modification';
+    const label = newPermission === 'read' ? t('share', 'readOnlyLabel') : t('share', 'readWriteLabel');
 
     Haptics.selectionAsync();
     const { error } = await updateSharePermission(item.id, newPermission);
     if (error) {
-      showAlert('Erreur', error);
+      showAlert(t('common', 'error'), error);
     } else {
       setMyShares(prev =>
         prev.map(s => (s.id === item.id ? { ...s, permission: newPermission } : s))
       );
-      showAlert('Permission modifiée', `Maintenant en "${label}"`);
+      showAlert(t('share', 'permissionChanged'), `${t('share', 'nowIn')} "${label}"`);
     }
-  }, [showAlert]);
+  }, [showAlert, t]);
 
   const handleNavigate = useCallback((itemType: ShareItemType, itemId: string) => {
     Haptics.selectionAsync();
@@ -161,18 +176,18 @@ export default function SharedItemsScreen() {
 
   const handleRemoveSharedWithMe = useCallback((item: EnrichedSharedItem) => {
     Alert.alert(
-      'Retirer le partage',
-      `Ne plus accéder à "${item.itemName}" ?`,
+      t('share', 'removeShare'),
+      `${t('share', 'removeShareMsg')} "${item.itemName}" ?`,
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common', 'cancel'), style: 'cancel' },
         {
-          text: 'Retirer',
+          text: t('share', 'removeLabel'),
           style: 'destructive',
           onPress: async () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             const { error } = await revokeShare(item.id);
             if (error) {
-              showAlert('Erreur', error);
+              showAlert(t('common', 'error'), error);
             } else {
               setSharedWithMe(prev => prev.filter(s => s.id !== item.id));
             }
@@ -180,21 +195,21 @@ export default function SharedItemsScreen() {
         },
       ]
     );
-  }, [showAlert]);
+  }, [showAlert, t]);
 
   const handleSaveToMyAccount = useCallback(async (item: EnrichedSharedItem) => {
     Haptics.selectionAsync();
     const { newItemId, error } = await saveSharedItemToMyAccount(item.itemType, item.itemId);
     if (error) {
-      showAlert('Erreur', error);
+      showAlert(t('common', 'error'), error);
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showAlert('Enregistré', `"${item.itemName}" a été copié dans votre annuaire`);
+      showAlert(t('share', 'saved'), `"${item.itemName}" ${t('share', 'copiedToDirectory')}`);
       if (newItemId) {
         handleNavigate(item.itemType, newItemId);
       }
     }
-  }, [showAlert, handleNavigate]);
+  }, [showAlert, handleNavigate, t]);
 
   const currentItems = activeTab === 'shared_by_me' ? myShares : sharedWithMe;
 
@@ -205,7 +220,7 @@ export default function SharedItemsScreen() {
           <Pressable style={styles.backBtn} onPress={() => router.back()}>
             <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Gestion des partages</Text>
+          <Text style={styles.headerTitle}>{t('share', 'shareManagement')}</Text>
           <View style={{ width: 40 }} />
         </View>
         <View style={styles.loadingContainer}>
@@ -221,7 +236,7 @@ export default function SharedItemsScreen() {
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Gestion des partages</Text>
+        <Text style={styles.headerTitle}>{t('share', 'shareManagement')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -237,7 +252,7 @@ export default function SharedItemsScreen() {
             color={activeTab === 'shared_by_me' ? theme.primary : theme.textSecondary}
           />
           <Text style={[styles.tabText, activeTab === 'shared_by_me' && styles.tabTextActive]}>
-            Mes partages
+            {t('share', 'myShares')}
           </Text>
           {myShares.length > 0 && (
             <View style={[styles.tabBadge, activeTab === 'shared_by_me' && styles.tabBadgeActive]}>
@@ -257,7 +272,7 @@ export default function SharedItemsScreen() {
             color={activeTab === 'shared_with_me' ? theme.primary : theme.textSecondary}
           />
           <Text style={[styles.tabText, activeTab === 'shared_with_me' && styles.tabTextActive]}>
-            Reçus
+            {t('share', 'received')}
           </Text>
           {sharedWithMe.length > 0 && (
             <View style={[styles.tabBadge, activeTab === 'shared_with_me' && styles.tabBadgeActive]}>
@@ -291,13 +306,13 @@ export default function SharedItemsScreen() {
           <View style={styles.summaryInfo}>
             <Text style={styles.summaryTitle}>
               {activeTab === 'shared_by_me'
-                ? `${myShares.length} fiche${myShares.length !== 1 ? 's' : ''} partagée${myShares.length !== 1 ? 's' : ''}`
-                : `${sharedWithMe.length} fiche${sharedWithMe.length !== 1 ? 's' : ''} reçue${sharedWithMe.length !== 1 ? 's' : ''}`}
+                ? `${myShares.length} ${myShares.length !== 1 ? t('share', 'cardsShared') : t('share', 'cardShared')}`
+                : `${sharedWithMe.length} ${sharedWithMe.length !== 1 ? t('share', 'cardsReceived') : t('share', 'cardReceived')}`}
             </Text>
             <Text style={styles.summarySubtitle}>
               {activeTab === 'shared_by_me'
-                ? 'Codes actifs que vous avez générés'
-                : 'Fiches partagées par d\'autres joueurs'}
+                ? t('share', 'activeCodesGenerated')
+                : t('share', 'cardsSharedByOthers')}
             </Text>
           </View>
         </Animated.View>
@@ -306,7 +321,9 @@ export default function SharedItemsScreen() {
         {currentItems.length > 0 ? (
           <View style={styles.itemsList}>
             {currentItems.map((item, index) => {
-              const config = TYPE_CONFIG[item.itemType];
+              const color = TYPE_COLOR[item.itemType];
+              const icon = TYPE_ICON[item.itemType];
+              const labelKey = TYPE_LABEL_KEY[item.itemType];
               const isCopied = copiedId === item.id;
               return (
                 <Animated.View key={item.id} entering={FadeIn.duration(200).delay(index * 40)}>
@@ -315,16 +332,16 @@ export default function SharedItemsScreen() {
                     onPress={() => handleNavigate(item.itemType, item.itemId)}
                   >
                     {/* Type icon */}
-                    <View style={[styles.itemIcon, { backgroundColor: config.color + '15' }]}>
-                      <MaterialIcons name={config.icon as any} size={24} color={config.color} />
+                    <View style={[styles.itemIcon, { backgroundColor: color + '15' }]}>
+                      <MaterialIcons name={icon as any} size={24} color={color} />
                     </View>
 
                     {/* Item info */}
                     <View style={styles.itemInfo}>
                       <Text style={styles.itemName} numberOfLines={1}>{item.itemName}</Text>
                       <View style={styles.itemMeta}>
-                        <View style={[styles.itemTypeBadge, { backgroundColor: config.color + '12' }]}>
-                          <Text style={[styles.itemTypeBadgeText, { color: config.color }]}>{config.label}</Text>
+                        <View style={[styles.itemTypeBadge, { backgroundColor: color + '12' }]}>
+                          <Text style={[styles.itemTypeBadgeText, { color }]}>{t('share', labelKey)}</Text>
                         </View>
                         <View style={[
                           styles.itemPermBadge,
@@ -339,12 +356,12 @@ export default function SharedItemsScreen() {
                             styles.itemPermBadgeText,
                             { color: item.permission === 'read' ? theme.primary : theme.accent },
                           ]}>
-                            {item.permission === 'read' ? 'Lecture' : 'Modif.'}
+                            {item.permission === 'read' ? t('share', 'readShort') : t('share', 'editShort')}
                           </Text>
                         </View>
                       </View>
                       <Text style={styles.itemDate}>
-                        {new Date(item.createdAt).toLocaleDateString('fr-FR', {
+                        {new Date(item.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', {
                           day: 'numeric', month: 'short', year: 'numeric',
                         })}
                       </Text>
@@ -427,12 +444,12 @@ export default function SharedItemsScreen() {
               />
             </View>
             <Text style={styles.emptyTitle}>
-              {activeTab === 'shared_by_me' ? 'Aucun partage actif' : 'Aucune fiche reçue'}
+              {activeTab === 'shared_by_me' ? t('share', 'noActiveShares') : t('share', 'noReceivedCards')}
             </Text>
             <Text style={styles.emptyDesc}>
               {activeTab === 'shared_by_me'
-                ? 'Partagez vos fiches joueurs, clubs, terrains ou tournois via le bouton de partage sur chaque fiche.'
-                : 'Demandez un code de partage ou saisissez-en un depuis votre profil pour accéder aux fiches partagées.'}
+                ? t('share', 'noActiveSharesDesc')
+                : t('share', 'noReceivedCardsDesc')}
             </Text>
           </Animated.View>
         )}
@@ -440,24 +457,24 @@ export default function SharedItemsScreen() {
         {/* Legend */}
         {activeTab === 'shared_by_me' && myShares.length > 0 && (
           <Animated.View entering={FadeInDown.duration(300).delay(200)} style={styles.legendCard}>
-            <Text style={styles.legendTitle}>Actions</Text>
+            <Text style={styles.legendTitle}>{t('share', 'actions')}</Text>
             <View style={styles.legendRow}>
               <View style={[styles.legendIcon, { backgroundColor: theme.primary + '15' }]}>
                 <MaterialIcons name="content-copy" size={14} color={theme.primary} />
               </View>
-              <Text style={styles.legendText}>Copier le code de partage</Text>
+              <Text style={styles.legendText}>{t('share', 'copyShareCode')}</Text>
             </View>
             <View style={styles.legendRow}>
               <View style={[styles.legendIcon, { backgroundColor: theme.warning + '15' }]}>
                 <MaterialIcons name="lock" size={14} color={theme.warning} />
               </View>
-              <Text style={styles.legendText}>Basculer lecture / modification</Text>
+              <Text style={styles.legendText}>{t('share', 'toggleReadWrite')}</Text>
             </View>
             <View style={styles.legendRow}>
               <View style={[styles.legendIcon, { backgroundColor: theme.error + '15' }]}>
                 <MaterialIcons name="delete-outline" size={14} color={theme.error} />
               </View>
-              <Text style={styles.legendText}>Révoquer le partage</Text>
+              <Text style={styles.legendText}>{t('share', 'revokeTheShare')}</Text>
             </View>
           </Animated.View>
         )}
