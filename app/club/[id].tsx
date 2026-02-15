@@ -15,6 +15,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
+import { useLanguage } from '@/hooks/useLanguage';
 import ShareModal from '@/components/ui/ShareModal';
 import { isSharedWithMe, saveSharedItemToMyAccount } from '@/services/shareService';
 import { useAlert } from '@/template';
@@ -23,10 +24,11 @@ export default function ClubDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getClubById, players, tournaments, deleteClub } = useApp();
+  const { t } = useLanguage();
 
   const club = getClubById(id!);
   const clubPlayers = players.filter(p => p.clubId === id);
-  const clubTournaments = tournaments.filter(t => t.clubId === id);
+  const clubTournaments = tournaments.filter(tr => tr.clubId === id);
   const [showShareModal, setShowShareModal] = React.useState(false);
   const [isShared, setIsShared] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
@@ -40,12 +42,12 @@ export default function ClubDetailScreen() {
 
   const handleDelete = () => {
     Alert.alert(
-      'Supprimer le club',
-      `Êtes-vous sûr de vouloir supprimer "${club?.name}" ? Les terrains associés perdront leur lien avec ce club. Cette action est irréversible.`,
+      t('club', 'deleteClub'),
+      `${t('club', 'deleteConfirm')} "${club?.name}" ? ${t('club', 'deleteLinkedTerrains')}`,
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common', 'cancel'), style: 'cancel' },
         {
-          text: 'Supprimer',
+          text: t('common', 'delete'),
           style: 'destructive',
           onPress: async () => {
             if (club) {
@@ -62,7 +64,7 @@ export default function ClubDetailScreen() {
   if (!club) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text>Club non trouvé</Text>
+        <Text>{t('club', 'clubNotFound')}</Text>
       </SafeAreaView>
     );
   }
@@ -74,7 +76,7 @@ export default function ClubDetailScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Club</Text>
+        <Text style={styles.headerTitle}>{t('club', 'clubLabel')}</Text>
         <View style={styles.headerActions}>
           {isShared && (
             <Pressable
@@ -84,10 +86,10 @@ export default function ClubDetailScreen() {
                 const { newItemId, error } = await saveSharedItemToMyAccount('club', id!);
                 setIsSaving(false);
                 if (error) {
-                  showAlert('Erreur', error);
+                  showAlert(t('common', 'error'), error);
                 } else {
                   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  showAlert('Enregistre', 'Ce club a ete copie dans votre annuaire');
+                  showAlert(t('club', 'savedLabel'), t('club', 'clubCopied'));
                   if (newItemId) router.replace(`/club/${newItemId}` as any);
                 }
               }}
@@ -133,25 +135,25 @@ export default function ClubDetailScreen() {
         <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.quickStats}>
           <View style={styles.quickStatItem}>
             <Text style={styles.quickStatValue}>{club.membersCount}</Text>
-            <Text style={styles.quickStatLabel}>Membres</Text>
+            <Text style={styles.quickStatLabel}>{t('club', 'members')}</Text>
           </View>
           <View style={[styles.quickStatItem, styles.quickStatBorder]}>
             <Text style={styles.quickStatValue}>{club.foundedYear}</Text>
-            <Text style={styles.quickStatLabel}>Fondé</Text>
+            <Text style={styles.quickStatLabel}>{t('club', 'founded')}</Text>
           </View>
           <View style={[styles.quickStatItem, styles.quickStatBorder]}>
             <Text style={styles.quickStatValue}>{clubTournaments.length}</Text>
-            <Text style={styles.quickStatLabel}>Tournois</Text>
+            <Text style={styles.quickStatLabel}>{t('club', 'tournamentsLabel')}</Text>
           </View>
           <View style={styles.quickStatItem}>
             <Text style={styles.quickStatValue}>{club.membershipCost ? `${club.membershipCost}€` : '-'}</Text>
-            <Text style={styles.quickStatLabel}>Cotisation</Text>
+            <Text style={styles.quickStatLabel}>{t('club', 'membership')}</Text>
           </View>
         </Animated.View>
 
         {/* Location */}
         <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-          <Text style={styles.sectionTitle}>LOCALISATION</Text>
+          <Text style={styles.sectionTitle}>{t('club', 'locationLabel')}</Text>
           <View style={styles.locationCard}>
             <View style={styles.locationInfo}>
               <Text style={styles.locationAddress}>{club.address}</Text>
@@ -162,14 +164,14 @@ export default function ClubDetailScreen() {
               onPress={() => router.push('/(tabs)/map')}
             >
               <MaterialIcons name="map" size={20} color={theme.primary} />
-              <Text style={styles.mapButtonText}>Voir sur la carte</Text>
+              <Text style={styles.mapButtonText}>{t('club', 'viewOnMap')}</Text>
             </Pressable>
           </View>
         </Animated.View>
 
         {/* Facilities */}
         <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-          <Text style={styles.sectionTitle}>ÉQUIPEMENTS</Text>
+          <Text style={styles.sectionTitle}>{t('club', 'facilitiesLabel')}</Text>
           <View style={styles.facilitiesGrid}>
             {club.facilities.map((facility, index) => (
               <View key={index} style={styles.facilityTag}>
@@ -183,7 +185,7 @@ export default function ClubDetailScreen() {
         {/* Contact */}
         {(club.contactEmail || club.contactPhone) && (
           <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
-            <Text style={styles.sectionTitle}>CONTACT</Text>
+            <Text style={styles.sectionTitle}>{t('club', 'contactLabel')}</Text>
             <View style={styles.contactCard}>
               {club.contactEmail && (
                 <Pressable 
@@ -213,7 +215,7 @@ export default function ClubDetailScreen() {
         {clubPlayers.length > 0 && (
           <Animated.View entering={FadeInDown.duration(400).delay(500)} style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>MEMBRES ({clubPlayers.length})</Text>
+              <Text style={styles.sectionTitle}>{t('club', 'membersCount')} ({clubPlayers.length})</Text>
             </View>
             {clubPlayers.slice(0, 5).map(player => (
               <Pressable 
@@ -242,7 +244,7 @@ export default function ClubDetailScreen() {
         {/* Tournaments */}
         {clubTournaments.length > 0 && (
           <Animated.View entering={FadeInDown.duration(400).delay(600)} style={styles.section}>
-            <Text style={styles.sectionTitle}>TOURNOIS ORGANISÉS</Text>
+            <Text style={styles.sectionTitle}>{t('club', 'organizedTournaments')}</Text>
             {clubTournaments.map(tournament => (
               <Pressable 
                 key={tournament.id}

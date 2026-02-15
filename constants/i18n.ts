@@ -844,6 +844,62 @@ export const translations = {
     statsAutoCalculated: { fr: 'Les statistiques sont calculées automatiquement à partir des matchs', en: 'Statistics are calculated automatically from matches' },
   },
   // ============================================
+  // CLUB
+  // ============================================
+  club: {
+    // Headers
+    newClub: { fr: 'Nouveau club', en: 'New Club' },
+    editClub: { fr: 'Modifier le club', en: 'Edit Club' },
+    clubLabel: { fr: 'Club', en: 'Club' },
+    clubNotFound: { fr: 'Club non trouvé', en: 'Club not found' },
+    // Form labels
+    clubNameRequired: { fr: 'NOM DU CLUB *', en: 'CLUB NAME *' },
+    namePlaceholder: { fr: 'Ex: La Boule Lyonnaise', en: 'Ex: The Bowling League' },
+    locationLabel: { fr: 'LOCALISATION', en: 'LOCATION' },
+    searchAddress: { fr: 'Rechercher une adresse...', en: 'Search an address...' },
+    descriptionLabel: { fr: 'DESCRIPTION', en: 'DESCRIPTION' },
+    descriptionPlaceholder: { fr: 'Décrivez votre club...', en: 'Describe your club...' },
+    foundedYearLabel: { fr: 'ANNÉE DE CRÉATION', en: 'YEAR FOUNDED' },
+    foundedYearPlaceholder: { fr: 'Ex: 1985', en: 'Ex: 1985' },
+    facilitiesLabel: { fr: 'ÉQUIPEMENTS', en: 'FACILITIES' },
+    membershipCostLabel: { fr: 'COÛT CARTE MEMBRE (€/an)', en: 'MEMBERSHIP COST (€/yr)' },
+    contactLabel: { fr: 'CONTACT', en: 'CONTACT' },
+    emailPlaceholder: { fr: 'Email', en: 'Email' },
+    phonePlaceholder: { fr: 'Téléphone', en: 'Phone' },
+    mainTerrainLabel: { fr: 'TERRAIN PRINCIPAL', en: 'MAIN TERRAIN' },
+    noneLabel: { fr: 'Aucun', en: 'None' },
+    // Buttons
+    createClub: { fr: 'Créer le club', en: 'Create club' },
+    saveChanges: { fr: 'Enregistrer les modifications', en: 'Save changes' },
+    // Alerts
+    errorNameRequired: { fr: 'Le nom du club est obligatoire', en: 'Club name is required' },
+    errorCityRequired: { fr: 'La ville est obligatoire', en: 'City is required' },
+    errorSave: { fr: 'Impossible de sauvegarder les modifications', en: 'Unable to save changes' },
+    // Detail page
+    members: { fr: 'Membres', en: 'Members' },
+    founded: { fr: 'Fondé', en: 'Founded' },
+    tournamentsLabel: { fr: 'Tournois', en: 'Tournaments' },
+    membership: { fr: 'Cotisation', en: 'Membership' },
+    viewOnMap: { fr: 'Voir sur la carte', en: 'View on map' },
+    membersCount: { fr: 'MEMBRES', en: 'MEMBERS' },
+    organizedTournaments: { fr: 'TOURNOIS ORGANISÉS', en: 'ORGANIZED TOURNAMENTS' },
+    deleteClub: { fr: 'Supprimer le club', en: 'Delete club' },
+    deleteConfirm: { fr: 'Êtes-vous sûr de vouloir supprimer', en: 'Are you sure you want to delete' },
+    deleteLinkedTerrains: { fr: 'Les terrains associés perdront leur lien avec ce club. Cette action est irréversible.', en: 'Linked terrains will lose their association with this club. This action is irreversible.' },
+    savedLabel: { fr: 'Enregistré', en: 'Saved' },
+    clubCopied: { fr: 'Ce club a été copié dans votre annuaire', en: 'This club has been copied to your directory' },
+    // Facilities
+    facilityOutdoor: { fr: 'Terrains extérieurs', en: 'Outdoor courts' },
+    facilityCovered: { fr: 'Terrain couvert', en: 'Covered court' },
+    facilityClubhouse: { fr: 'Club house', en: 'Clubhouse' },
+    facilityBar: { fr: 'Bar / Restaurant', en: 'Bar / Restaurant' },
+    facilityParking: { fr: 'Parking', en: 'Parking' },
+    facilityChanging: { fr: 'Vestiaires', en: 'Changing rooms' },
+    facilityLighting: { fr: 'Éclairage nocturne', en: 'Night lighting' },
+    facilitySchool: { fr: 'École de pétanque', en: 'Pétanque school' },
+  },
+
+  // ============================================
   // TOURNAMENT
   // ============================================
   tournament: {

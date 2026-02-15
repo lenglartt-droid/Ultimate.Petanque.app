@@ -19,23 +19,25 @@ import * as Haptics from 'expo-haptics';
 
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
+import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 
-const facilities = [
-  { id: 'terrains', label: 'Terrains extérieurs', icon: 'sports' },
-  { id: 'covered', label: 'Terrain couvert', icon: 'roofing' },
-  { id: 'clubhouse', label: 'Club house', icon: 'house' },
-  { id: 'bar', label: 'Bar / Restaurant', icon: 'local-bar' },
-  { id: 'parking', label: 'Parking', icon: 'local-parking' },
-  { id: 'vestiaires', label: 'Vestiaires', icon: 'checkroom' },
-  { id: 'eclairage', label: 'Éclairage nocturne', icon: 'lightbulb' },
-  { id: 'ecole', label: 'École de pétanque', icon: 'school' },
-] as const;
+const FACILITY_KEYS: { id: string; key: string; icon: string }[] = [
+  { id: 'terrains', key: 'facilityOutdoor', icon: 'sports' },
+  { id: 'covered', key: 'facilityCovered', icon: 'roofing' },
+  { id: 'clubhouse', key: 'facilityClubhouse', icon: 'house' },
+  { id: 'bar', key: 'facilityBar', icon: 'local-bar' },
+  { id: 'parking', key: 'facilityParking', icon: 'local-parking' },
+  { id: 'vestiaires', key: 'facilityChanging', icon: 'checkroom' },
+  { id: 'eclairage', key: 'facilityLighting', icon: 'lightbulb' },
+  { id: 'ecole', key: 'facilitySchool', icon: 'school' },
+];
 
 export default function EditClubScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { getClubById, updateClub, terrains } = useApp();
+  const { t } = useLanguage();
 
   const club = getClubById(id || '');
 
@@ -56,9 +58,7 @@ export default function EditClubScreen() {
   
   const [selectedTerrainId, setSelectedTerrainId] = useState<string | undefined>();
   
-  
   const [isSaving, setIsSaving] = useState(false);
-  
 
   // Load club data
   useEffect(() => {
@@ -76,19 +76,15 @@ export default function EditClubScreen() {
       setContactEmail(club.contactEmail || '');
       setContactPhone(club.contactPhone || '');
       
-      
-      // Convert facility labels back to IDs
-      const facilityIds = facilities
-        .filter(f => club.facilities?.includes(f.label))
+      // Convert facility labels back to IDs - match against both FR and EN labels
+      const facilityIds = FACILITY_KEYS
+        .filter(f => club.facilities?.some(label => label === t('club', f.key) || label === f.id))
         .map(f => f.id);
       setSelectedFacilities(facilityIds);
       setSelectedTerrainId(club.terrainId);
       setMembershipCost(club.membershipCost ? String(club.membershipCost) : '');
-      
     }
   }, [club]);
-
-  
 
   const toggleFacility = (id: string) => {
     Haptics.selectionAsync();
@@ -97,27 +93,25 @@ export default function EditClubScreen() {
     );
   };
 
-  
-
   const handleSave = async () => {
     if (!club) return;
 
     if (!name.trim()) {
-      Alert.alert('Erreur', 'Le nom du club est obligatoire');
+      Alert.alert(t('common', 'error'), t('club', 'errorNameRequired'));
       return;
     }
     if (!location.city.trim()) {
-      Alert.alert('Erreur', 'La ville est obligatoire');
+      Alert.alert(t('common', 'error'), t('club', 'errorCityRequired'));
       return;
     }
 
     setIsSaving(true);
     try {
       const facilityLabels = selectedFacilities.map(
-        id => facilities.find(f => f.id === id)?.label || ''
+        id => FACILITY_KEYS.find(f => f.id === id) ? t('club', FACILITY_KEYS.find(f => f.id === id)!.key) : ''
       ).filter(Boolean);
 
-      const selectedTerrain = terrains.find(t => t.id === selectedTerrainId);
+      const selectedTerrain = terrains.find(tr => tr.id === selectedTerrainId);
 
       await updateClub(club.id, {
         name: name.trim(),
@@ -138,7 +132,7 @@ export default function EditClubScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de sauvegarder les modifications');
+      Alert.alert(t('common', 'error'), t('club', 'errorSave'));
     } finally {
       setIsSaving(false);
     }
@@ -154,7 +148,7 @@ export default function EditClubScreen() {
         </View>
         <View style={styles.emptyContainer}>
           <MaterialIcons name="error-outline" size={64} color={theme.textMuted} />
-          <Text style={styles.emptyText}>Club non trouvé</Text>
+          <Text style={styles.emptyText}>{t('club', 'clubNotFound')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -167,7 +161,7 @@ export default function EditClubScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="close" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Modifier le club</Text>
+        <Text style={styles.headerTitle}>{t('club', 'editClub')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -190,12 +184,12 @@ export default function EditClubScreen() {
 
           {/* Name */}
           <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
-            <Text style={styles.sectionTitle}>NOM DU CLUB *</Text>
+            <Text style={styles.sectionTitle}>{t('club', 'clubNameRequired')}</Text>
             <TextInput
               style={styles.textInput}
               value={name}
               onChangeText={setName}
-              placeholder="Ex: La Boule Lyonnaise"
+              placeholder={t('club', 'namePlaceholder')}
               placeholderTextColor={theme.textMuted}
               autoCapitalize="words"
             />
@@ -204,10 +198,10 @@ export default function EditClubScreen() {
           {/* Location */}
           <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
             <LocationPicker
-              label="LOCALISATION"
+              label={t('club', 'locationLabel')}
               value={location}
               onChange={setLocation}
-              placeholder="Rechercher une adresse..."
+              placeholder={t('club', 'searchAddress')}
               required
               showAddressField
             />
@@ -215,12 +209,12 @@ export default function EditClubScreen() {
 
           {/* Description */}
           <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
-            <Text style={styles.sectionTitle}>DESCRIPTION</Text>
+            <Text style={styles.sectionTitle}>{t('club', 'descriptionLabel')}</Text>
             <TextInput
               style={[styles.textInput, styles.textArea]}
               value={description}
               onChangeText={setDescription}
-              placeholder="Décrivez votre club..."
+              placeholder={t('club', 'descriptionPlaceholder')}
               placeholderTextColor={theme.textMuted}
               multiline
               numberOfLines={4}
@@ -230,12 +224,12 @@ export default function EditClubScreen() {
 
           {/* Founded Year */}
           <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-            <Text style={styles.sectionTitle}>ANNÉE DE CRÉATION</Text>
+            <Text style={styles.sectionTitle}>{t('club', 'foundedYearLabel')}</Text>
             <TextInput
               style={styles.textInput}
               value={foundedYear}
               onChangeText={setFoundedYear}
-              placeholder="Ex: 1985"
+              placeholder={t('club', 'foundedYearPlaceholder')}
               placeholderTextColor={theme.textMuted}
               keyboardType="number-pad"
               maxLength={4}
@@ -244,9 +238,9 @@ export default function EditClubScreen() {
 
           {/* Facilities */}
           <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-            <Text style={styles.sectionTitle}>ÉQUIPEMENTS</Text>
+            <Text style={styles.sectionTitle}>{t('club', 'facilitiesLabel')}</Text>
             <View style={styles.facilitiesGrid}>
-              {facilities.map(facility => (
+              {FACILITY_KEYS.map(facility => (
                 <Pressable
                   key={facility.id}
                   style={[
@@ -264,18 +258,16 @@ export default function EditClubScreen() {
                     styles.facilityText,
                     selectedFacilities.includes(facility.id) && styles.facilityTextActive
                   ]}>
-                    {facility.label}
+                    {t('club', facility.key)}
                   </Text>
                 </Pressable>
               ))}
             </View>
           </Animated.View>
 
-
-
           {/* Membership Cost */}
           <Animated.View entering={FadeInDown.duration(400).delay(270)} style={styles.section}>
-            <Text style={styles.sectionTitle}>COÛT CARTE MEMBRE (€/an)</Text>
+            <Text style={styles.sectionTitle}>{t('club', 'membershipCostLabel')}</Text>
             <TextInput
               style={styles.textInput}
               value={membershipCost}
@@ -288,7 +280,7 @@ export default function EditClubScreen() {
 
           {/* Terrain Association */}
           <Animated.View entering={FadeInDown.duration(400).delay(290)} style={styles.section}>
-            <Text style={styles.sectionTitle}>TERRAIN PRINCIPAL</Text>
+            <Text style={styles.sectionTitle}>{t('club', 'mainTerrainLabel')}</Text>
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
@@ -313,7 +305,7 @@ export default function EditClubScreen() {
                   styles.terrainChipText,
                   !selectedTerrainId && styles.terrainChipTextActive
                 ]}>
-                  Aucun
+                  {t('club', 'noneLabel')}
                 </Text>
               </Pressable>
               {terrains.map(terrain => (
@@ -354,14 +346,14 @@ export default function EditClubScreen() {
 
           {/* Contact */}
           <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-            <Text style={styles.sectionTitle}>CONTACT</Text>
+            <Text style={styles.sectionTitle}>{t('club', 'contactLabel')}</Text>
             <View style={styles.contactInputContainer}>
               <MaterialIcons name="email" size={20} color={theme.textSecondary} />
               <TextInput
                 style={styles.contactInput}
                 value={contactEmail}
                 onChangeText={setContactEmail}
-                placeholder="Email"
+                placeholder={t('club', 'emailPlaceholder')}
                 placeholderTextColor={theme.textMuted}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -373,7 +365,7 @@ export default function EditClubScreen() {
                 style={styles.contactInput}
                 value={contactPhone}
                 onChangeText={setContactPhone}
-                placeholder="Téléphone"
+                placeholder={t('club', 'phonePlaceholder')}
                 placeholderTextColor={theme.textMuted}
                 keyboardType="phone-pad"
               />
@@ -396,7 +388,7 @@ export default function EditClubScreen() {
             ) : (
               <>
                 <MaterialIcons name="check" size={24} color="#FFF" />
-                <Text style={styles.saveButtonText}>Enregistrer les modifications</Text>
+                <Text style={styles.saveButtonText}>{t('club', 'saveChanges')}</Text>
               </>
             )}
           </Pressable>
@@ -471,12 +463,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 12,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
   textInput: {
     backgroundColor: theme.surface,
     paddingHorizontal: 16,
@@ -534,62 +520,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: theme.textPrimary,
-  },
-  locationButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: theme.primary + '15',
-    borderRadius: theme.borderRadius.sm,
-  },
-  locationButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.primary,
-  },
-  geocodeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: theme.primary,
-    paddingVertical: 14,
-    borderRadius: theme.borderRadius.md,
-  },
-  geocodeButtonDisabled: {
-    backgroundColor: theme.textMuted,
-  },
-  geocodeButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  locationPreview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: theme.success + '10',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: theme.borderRadius.md,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: theme.success + '30',
-  },
-  locationPreviewInfo: {
-    flex: 1,
-  },
-  locationPreviewTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.success,
-  },
-  locationPreviewCoords: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    marginTop: 2,
   },
   footer: {
     paddingHorizontal: 16,

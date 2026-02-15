@@ -17,22 +17,24 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
+import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 
-const facilities = [
-  { id: 'terrains', label: 'Terrains extérieurs', icon: 'sports' },
-  { id: 'covered', label: 'Terrain couvert', icon: 'roofing' },
-  { id: 'clubhouse', label: 'Club house', icon: 'house' },
-  { id: 'bar', label: 'Bar / Restaurant', icon: 'local-bar' },
-  { id: 'parking', label: 'Parking', icon: 'local-parking' },
-  { id: 'vestiaires', label: 'Vestiaires', icon: 'checkroom' },
-  { id: 'eclairage', label: 'Éclairage nocturne', icon: 'lightbulb' },
-  { id: 'ecole', label: 'École de pétanque', icon: 'school' },
-] as const;
+const FACILITY_KEYS: { id: string; key: string; icon: string }[] = [
+  { id: 'terrains', key: 'facilityOutdoor', icon: 'sports' },
+  { id: 'covered', key: 'facilityCovered', icon: 'roofing' },
+  { id: 'clubhouse', key: 'facilityClubhouse', icon: 'house' },
+  { id: 'bar', key: 'facilityBar', icon: 'local-bar' },
+  { id: 'parking', key: 'facilityParking', icon: 'local-parking' },
+  { id: 'vestiaires', key: 'facilityChanging', icon: 'checkroom' },
+  { id: 'eclairage', key: 'facilityLighting', icon: 'lightbulb' },
+  { id: 'ecole', key: 'facilitySchool', icon: 'school' },
+];
 
 export default function NewClubScreen() {
   const insets = useSafeAreaInsets();
   const { addClub } = useApp();
+  const { t } = useLanguage();
 
   const [name, setName] = useState('');
   const [location, setLocation] = useState<LocationData>({
@@ -58,16 +60,16 @@ export default function NewClubScreen() {
 
   const handleSave = () => {
     if (!name.trim()) {
-      Alert.alert('Erreur', 'Le nom du club est obligatoire');
+      Alert.alert(t('common', 'error'), t('club', 'errorNameRequired'));
       return;
     }
     if (!location.city.trim()) {
-      Alert.alert('Erreur', 'La ville est obligatoire');
+      Alert.alert(t('common', 'error'), t('club', 'errorCityRequired'));
       return;
     }
 
     const facilityLabels = selectedFacilities.map(
-      id => facilities.find(f => f.id === id)?.label || ''
+      id => FACILITY_KEYS.find(f => f.id === id) ? t('club', FACILITY_KEYS.find(f => f.id === id)!.key) : ''
     ).filter(Boolean);
 
     addClub({
@@ -99,7 +101,7 @@ export default function NewClubScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="close" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Nouveau club</Text>
+        <Text style={styles.headerTitle}>{t('club', 'newClub')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -122,12 +124,12 @@ export default function NewClubScreen() {
 
           {/* Name */}
           <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-            <Text style={styles.sectionTitle}>NOM DU CLUB *</Text>
+            <Text style={styles.sectionTitle}>{t('club', 'clubNameRequired')}</Text>
             <TextInput
               style={styles.textInput}
               value={name}
               onChangeText={setName}
-              placeholder="Ex: La Boule Lyonnaise"
+              placeholder={t('club', 'namePlaceholder')}
               placeholderTextColor={theme.textMuted}
               autoCapitalize="words"
               autoFocus
@@ -137,10 +139,10 @@ export default function NewClubScreen() {
           {/* Location */}
           <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
             <LocationPicker
-              label="LOCALISATION"
+              label={t('club', 'locationLabel')}
               value={location}
               onChange={setLocation}
-              placeholder="Rechercher une adresse..."
+              placeholder={t('club', 'searchAddress')}
               required
               showAddressField
             />
@@ -148,12 +150,12 @@ export default function NewClubScreen() {
 
           {/* Description */}
           <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-            <Text style={styles.sectionTitle}>DESCRIPTION</Text>
+            <Text style={styles.sectionTitle}>{t('club', 'descriptionLabel')}</Text>
             <TextInput
               style={[styles.textInput, styles.textArea]}
               value={description}
               onChangeText={setDescription}
-              placeholder="Décrivez votre club..."
+              placeholder={t('club', 'descriptionPlaceholder')}
               placeholderTextColor={theme.textMuted}
               multiline
               numberOfLines={4}
@@ -163,12 +165,12 @@ export default function NewClubScreen() {
 
           {/* Founded Year */}
           <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-            <Text style={styles.sectionTitle}>ANNÉE DE CRÉATION</Text>
+            <Text style={styles.sectionTitle}>{t('club', 'foundedYearLabel')}</Text>
             <TextInput
               style={styles.textInput}
               value={foundedYear}
               onChangeText={setFoundedYear}
-              placeholder="Ex: 1985"
+              placeholder={t('club', 'foundedYearPlaceholder')}
               placeholderTextColor={theme.textMuted}
               keyboardType="number-pad"
               maxLength={4}
@@ -177,9 +179,9 @@ export default function NewClubScreen() {
 
           {/* Facilities */}
           <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-            <Text style={styles.sectionTitle}>ÉQUIPEMENTS</Text>
+            <Text style={styles.sectionTitle}>{t('club', 'facilitiesLabel')}</Text>
             <View style={styles.facilitiesGrid}>
-              {facilities.map(facility => (
+              {FACILITY_KEYS.map(facility => (
                 <Pressable
                   key={facility.id}
                   style={[
@@ -197,7 +199,7 @@ export default function NewClubScreen() {
                     styles.facilityText,
                     selectedFacilities.includes(facility.id) && styles.facilityTextActive
                   ]}>
-                    {facility.label}
+                    {t('club', facility.key)}
                   </Text>
                 </Pressable>
               ))}
@@ -206,7 +208,7 @@ export default function NewClubScreen() {
 
           {/* Membership Cost */}
           <Animated.View entering={FadeInDown.duration(400).delay(325)} style={styles.section}>
-            <Text style={styles.sectionTitle}>COÛT CARTE MEMBRE (€/an)</Text>
+            <Text style={styles.sectionTitle}>{t('club', 'membershipCostLabel')}</Text>
             <TextInput
               style={styles.textInput}
               value={membershipCost}
@@ -219,14 +221,14 @@ export default function NewClubScreen() {
 
           {/* Contact */}
           <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
-            <Text style={styles.sectionTitle}>CONTACT</Text>
+            <Text style={styles.sectionTitle}>{t('club', 'contactLabel')}</Text>
             <View style={styles.contactInputContainer}>
               <MaterialIcons name="email" size={20} color={theme.textSecondary} />
               <TextInput
                 style={styles.contactInput}
                 value={contactEmail}
                 onChangeText={setContactEmail}
-                placeholder="Email"
+                placeholder={t('club', 'emailPlaceholder')}
                 placeholderTextColor={theme.textMuted}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -238,7 +240,7 @@ export default function NewClubScreen() {
                 style={styles.contactInput}
                 value={contactPhone}
                 onChangeText={setContactPhone}
-                placeholder="Téléphone"
+                placeholder={t('club', 'phonePlaceholder')}
                 placeholderTextColor={theme.textMuted}
                 keyboardType="phone-pad"
               />
@@ -253,7 +255,7 @@ export default function NewClubScreen() {
             onPress={handleSave}
           >
             <MaterialIcons name="check" size={24} color="#FFF" />
-            <Text style={styles.saveButtonText}>Créer le club</Text>
+            <Text style={styles.saveButtonText}>{t('club', 'createClub')}</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
