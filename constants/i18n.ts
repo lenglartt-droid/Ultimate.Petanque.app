@@ -1598,6 +1598,40 @@ export const translations = {
     unableToCreateProfile: { fr: 'Impossible de créer le profil', en: 'Unable to create profile' },
   },
   // ============================================
+  // PLAYER COMPARE
+  // ============================================
+  compare: {
+    comparison: { fr: 'Comparaison', en: 'Comparison' },
+    selectPlayer: { fr: 'Sélectionner joueur', en: 'Select player' },
+    faceToFace: { fr: 'FACE À FACE', en: 'HEAD TO HEAD' },
+    victories: { fr: 'Victoires', en: 'Wins' },
+    matches: { fr: 'matchs', en: 'matches' },
+    avgScore: { fr: 'Score moyen', en: 'Average score' },
+    ptsPerMatch: { fr: 'pts/match', en: 'pts/match' },
+    neverPlayed: { fr: 'Ces joueurs ne se sont jamais affrontés', en: 'These players have never played against each other' },
+    statistics: { fr: 'STATISTIQUES', en: 'STATISTICS' },
+    matchesPlayed: { fr: 'Matchs joués', en: 'Matches played' },
+    winRate: { fr: 'Taux victoire', en: 'Win rate' },
+    shotRate: { fr: 'Taux tir', en: 'Shot rate' },
+    pointRate: { fr: 'Taux point', en: 'Point rate' },
+    carreauRate: { fr: 'Taux carreau', en: 'Carreau rate' },
+    ptsScoredPerMatch: { fr: 'Pts marqués/match', en: 'Pts scored/match' },
+    ptsConcededPerMatch: { fr: 'Pts encaissés/match', en: 'Pts conceded/match' },
+    globalRecord: { fr: 'BILAN GLOBAL', en: 'GLOBAL RECORD' },
+    wins: { fr: 'Victoires', en: 'Wins' },
+    losses: { fr: 'Défaites', en: 'Losses' },
+    profileSection: { fr: 'PROFIL', en: 'PROFILE' },
+    role: { fr: 'Rôle', en: 'Role' },
+    level: { fr: 'Niveau', en: 'Level' },
+    commonOpponents: { fr: 'ADVERSAIRES COMMUNS', en: 'COMMON OPPONENTS' },
+    matchHistory: { fr: 'HISTORIQUE DES CONFRONTATIONS', en: 'MATCH HISTORY' },
+    compareTwoPlayers: { fr: 'Comparez deux joueurs', en: 'Compare two players' },
+    emptyStateText: { fr: 'Sélectionnez deux joueurs pour voir leurs statistiques face-à-face et comparer leurs performances', en: 'Select two players to see their head-to-head statistics and compare their performances' },
+    searchPlayer: { fr: 'Rechercher un joueur...', en: 'Search a player...' },
+    winsPercent: { fr: 'victoires', en: 'wins' },
+  },
+
+  // ============================================
   // LOCATION PICKER
   // ============================================
   locationPicker: {

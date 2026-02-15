@@ -16,6 +16,7 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { Player } from '@/services/mockData';
+import { useLanguage } from '@/hooks/useLanguage';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -27,6 +28,7 @@ export default function PlayerCompareScreen() {
   }>();
   
   const { players, getPlayerById, getHeadToHead, getCommonOpponents, getMatchesByPlayer } = useApp();
+  const { t, language } = useLanguage();
   
   const [player1Id, setPlayer1Id] = useState<string | null>(initialPlayer1 || null);
   const [player2Id, setPlayer2Id] = useState<string | null>(initialPlayer2 || null);
@@ -151,7 +153,7 @@ export default function PlayerCompareScreen() {
             </Text>
           </View>
           <Text style={styles.playerName} numberOfLines={1}>{player.name}</Text>
-          <Text style={styles.playerClub} numberOfLines={1}>{player.club || 'Sans club'}</Text>
+          <Text style={styles.playerClub} numberOfLines={1}>{player.club || t('player', 'noClub')}</Text>
           <View style={styles.playerRoleBadge}>
             <Text style={styles.playerRoleText}>{player.role}</Text>
           </View>
@@ -162,12 +164,14 @@ export default function PlayerCompareScreen() {
             <MaterialIcons name="person-add" size={32} color={theme.textMuted} />
           </View>
           <Text style={styles.playerPlaceholderText}>
-            Sélectionner joueur {slot}
+            {t('compare', 'selectPlayer')} {slot}
           </Text>
         </>
       )}
     </Pressable>
   );
+
+  const dateLocale = language === 'en' ? 'en-US' : 'fr-FR';
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
@@ -176,7 +180,7 @@ export default function PlayerCompareScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Comparaison</Text>
+        <Text style={styles.headerTitle}>{t('compare', 'comparison')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -198,7 +202,7 @@ export default function PlayerCompareScreen() {
           <>
             {/* Head to Head Summary */}
             <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-              <Text style={styles.sectionTitle}>FACE À FACE</Text>
+              <Text style={styles.sectionTitle}>{t('compare', 'faceToFace')}</Text>
               <View style={styles.h2hCard}>
                 {headToHead && headToHead.stats.totalMatches > 0 ? (
                   <>
@@ -207,19 +211,19 @@ export default function PlayerCompareScreen() {
                         <Text style={[styles.h2hScoreValue, { color: theme.primary }]}>
                           {headToHead.stats.player1Wins}
                         </Text>
-                        <Text style={styles.h2hScoreLabel}>Victoires</Text>
+                        <Text style={styles.h2hScoreLabel}>{t('compare', 'victories')}</Text>
                       </View>
                       <View style={styles.h2hMatchCount}>
                         <Text style={styles.h2hMatchCountValue}>
                           {headToHead.stats.totalMatches}
                         </Text>
-                        <Text style={styles.h2hMatchCountLabel}>matchs</Text>
+                        <Text style={styles.h2hMatchCountLabel}>{t('compare', 'matches')}</Text>
                       </View>
                       <View style={styles.h2hScoreItem}>
                         <Text style={[styles.h2hScoreValue, { color: theme.accent }]}>
                           {headToHead.stats.player2Wins}
                         </Text>
-                        <Text style={styles.h2hScoreLabel}>Victoires</Text>
+                        <Text style={styles.h2hScoreLabel}>{t('compare', 'victories')}</Text>
                       </View>
                     </View>
                     
@@ -253,12 +257,12 @@ export default function PlayerCompareScreen() {
                     <View style={styles.h2hAvgRow}>
                       <View style={styles.h2hAvgItem}>
                         <Text style={styles.h2hAvgValue}>{headToHead.stats.player1AvgScore}</Text>
-                        <Text style={styles.h2hAvgLabel}>pts/match</Text>
+                        <Text style={styles.h2hAvgLabel}>{t('compare', 'ptsPerMatch')}</Text>
                       </View>
-                      <Text style={styles.h2hAvgDivider}>Score moyen</Text>
+                      <Text style={styles.h2hAvgDivider}>{t('compare', 'avgScore')}</Text>
                       <View style={styles.h2hAvgItem}>
                         <Text style={styles.h2hAvgValue}>{headToHead.stats.player2AvgScore}</Text>
-                        <Text style={styles.h2hAvgLabel}>pts/match</Text>
+                        <Text style={styles.h2hAvgLabel}>{t('compare', 'ptsPerMatch')}</Text>
                       </View>
                     </View>
                   </>
@@ -266,7 +270,7 @@ export default function PlayerCompareScreen() {
                   <View style={styles.noH2hContainer}>
                     <MaterialIcons name="sports" size={48} color={theme.textMuted} />
                     <Text style={styles.noH2hText}>
-                      Ces joueurs ne se sont jamais affrontés
+                      {t('compare', 'neverPlayed')}
                     </Text>
                   </View>
                 )}
@@ -275,7 +279,7 @@ export default function PlayerCompareScreen() {
 
             {/* Stats Comparison */}
             <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-              <Text style={styles.sectionTitle}>STATISTIQUES</Text>
+              <Text style={styles.sectionTitle}>{t('compare', 'statistics')}</Text>
               <View style={styles.statsCard}>
                 <View style={styles.statsHeader}>
                   <Text style={[styles.statsHeaderName, { color: theme.primary }]}>
@@ -287,34 +291,34 @@ export default function PlayerCompareScreen() {
                   </Text>
                 </View>
 
-                {renderStatComparison('Matchs joués', player1.stats.matchesPlayed, player2.stats.matchesPlayed)}
-                {renderStatComparison('Taux victoire', player1.stats.winRate, player2.stats.winRate, '%')}
-                {renderStatComparison('Taux tir', player1.stats.tirRate, player2.stats.tirRate, '%')}
-                {renderStatComparison('Taux point', player1.stats.pointRate, player2.stats.pointRate, '%')}
-                {renderStatComparison('Taux carreau', player1.stats.carreauRate, player2.stats.carreauRate, '%')}
-                {renderStatComparison('Pts marqués/match', player1.stats.avgPointsScored, player2.stats.avgPointsScored)}
-                {renderStatComparison('Pts encaissés/match', player1.stats.avgPointsConceded, player2.stats.avgPointsConceded, '', false)}
+                {renderStatComparison(t('compare', 'matchesPlayed'), player1.stats.matchesPlayed, player2.stats.matchesPlayed)}
+                {renderStatComparison(t('compare', 'winRate'), player1.stats.winRate, player2.stats.winRate, '%')}
+                {renderStatComparison(t('compare', 'shotRate'), player1.stats.tirRate, player2.stats.tirRate, '%')}
+                {renderStatComparison(t('compare', 'pointRate'), player1.stats.pointRate, player2.stats.pointRate, '%')}
+                {renderStatComparison(t('compare', 'carreauRate'), player1.stats.carreauRate, player2.stats.carreauRate, '%')}
+                {renderStatComparison(t('compare', 'ptsScoredPerMatch'), player1.stats.avgPointsScored, player2.stats.avgPointsScored)}
+                {renderStatComparison(t('compare', 'ptsConcededPerMatch'), player1.stats.avgPointsConceded, player2.stats.avgPointsConceded, '', false)}
               </View>
             </Animated.View>
 
             {/* Wins/Losses Comparison */}
             <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-              <Text style={styles.sectionTitle}>BILAN GLOBAL</Text>
+              <Text style={styles.sectionTitle}>{t('compare', 'globalRecord')}</Text>
               <View style={styles.comparisonCard}>
-                {renderBarComparison('Victoires', player1.stats.wins, player2.stats.wins)}
-                {renderBarComparison('Défaites', player1.stats.losses, player2.stats.losses)}
+                {renderBarComparison(t('compare', 'wins'), player1.stats.wins, player2.stats.wins)}
+                {renderBarComparison(t('compare', 'losses'), player1.stats.losses, player2.stats.losses)}
               </View>
             </Animated.View>
 
             {/* Role & Level Comparison */}
             <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
-              <Text style={styles.sectionTitle}>PROFIL</Text>
+              <Text style={styles.sectionTitle}>{t('compare', 'profileSection')}</Text>
               <View style={styles.profileCompareCard}>
                 <View style={styles.profileRow}>
                   <View style={[styles.profileBadge, { backgroundColor: theme.primary + '20' }]}>
                     <Text style={[styles.profileBadgeText, { color: theme.primary }]}>{player1.role}</Text>
                   </View>
-                  <Text style={styles.profileLabel}>Rôle</Text>
+                  <Text style={styles.profileLabel}>{t('compare', 'role')}</Text>
                   <View style={[styles.profileBadge, { backgroundColor: theme.accent + '20' }]}>
                     <Text style={[styles.profileBadgeText, { color: theme.accent }]}>{player2.role}</Text>
                   </View>
@@ -323,7 +327,7 @@ export default function PlayerCompareScreen() {
                   <View style={[styles.profileBadge, { backgroundColor: theme.primary + '20' }]}>
                     <Text style={[styles.profileBadgeText, { color: theme.primary }]}>{player1.level}</Text>
                   </View>
-                  <Text style={styles.profileLabel}>Niveau</Text>
+                  <Text style={styles.profileLabel}>{t('compare', 'level')}</Text>
                   <View style={[styles.profileBadge, { backgroundColor: theme.accent + '20' }]}>
                     <Text style={[styles.profileBadgeText, { color: theme.accent }]}>{player2.level}</Text>
                   </View>
@@ -334,7 +338,7 @@ export default function PlayerCompareScreen() {
             {/* Common Opponents */}
             {commonOpponents.length > 0 && (
               <Animated.View entering={FadeInDown.duration(400).delay(500)} style={styles.section}>
-                <Text style={styles.sectionTitle}>ADVERSAIRES COMMUNS ({commonOpponents.length})</Text>
+                <Text style={styles.sectionTitle}>{t('compare', 'commonOpponents')} ({commonOpponents.length})</Text>
                 <ScrollView 
                   horizontal 
                   showsHorizontalScrollIndicator={false}
@@ -367,7 +371,7 @@ export default function PlayerCompareScreen() {
             {/* Match History */}
             {headToHead && headToHead.matches.length > 0 && (
               <Animated.View entering={FadeInDown.duration(400).delay(600)} style={styles.section}>
-                <Text style={styles.sectionTitle}>HISTORIQUE DES CONFRONTATIONS</Text>
+                <Text style={styles.sectionTitle}>{t('compare', 'matchHistory')}</Text>
                 {headToHead.matches.slice(0, 5).map((match, index) => (
                   <Pressable
                     key={match.id}
@@ -376,7 +380,7 @@ export default function PlayerCompareScreen() {
                   >
                     <View style={styles.matchHistoryDate}>
                       <Text style={styles.matchHistoryDateText}>
-                        {new Date(match.date).toLocaleDateString('fr-FR', {
+                        {new Date(match.date).toLocaleDateString(dateLocale, {
                           day: 'numeric',
                           month: 'short',
                           year: 'numeric',
@@ -419,9 +423,9 @@ export default function PlayerCompareScreen() {
         ) : (
           <Animated.View entering={FadeIn.duration(400)} style={styles.emptyState}>
             <MaterialIcons name="compare-arrows" size={64} color={theme.textMuted} />
-            <Text style={styles.emptyStateTitle}>Comparez deux joueurs</Text>
+            <Text style={styles.emptyStateTitle}>{t('compare', 'compareTwoPlayers')}</Text>
             <Text style={styles.emptyStateText}>
-              Sélectionnez deux joueurs pour voir leurs statistiques face-à-face et comparer leurs performances
+              {t('compare', 'emptyStateText')}
             </Text>
           </Animated.View>
         )}
@@ -449,7 +453,7 @@ export default function PlayerCompareScreen() {
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>
             <Text style={styles.modalTitle}>
-              Sélectionner joueur {showPicker}
+              {t('compare', 'selectPlayer')} {showPicker}
             </Text>
             <View style={{ width: 40 }} />
           </View>
@@ -460,7 +464,7 @@ export default function PlayerCompareScreen() {
               style={styles.searchInput}
               value={searchQuery}
               onChangeText={setSearchQuery}
-              placeholder="Rechercher un joueur..."
+              placeholder={t('compare', 'searchPlayer')}
               placeholderTextColor={theme.textMuted}
               autoCapitalize="none"
             />
@@ -490,7 +494,7 @@ export default function PlayerCompareScreen() {
                 <View style={styles.playerItemInfo}>
                   <Text style={styles.playerItemName}>{player.name}</Text>
                   <Text style={styles.playerItemMeta}>
-                    {player.role} • {player.level} • {player.stats.winRate.toFixed(0)}% victoires
+                    {player.role} • {player.level} • {player.stats.winRate.toFixed(0)}% {t('compare', 'winsPercent')}
                   </Text>
                 </View>
                 <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
