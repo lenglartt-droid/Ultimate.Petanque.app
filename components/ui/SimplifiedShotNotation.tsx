@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
+import { useLanguage } from '@/hooks/useLanguage';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -89,7 +90,7 @@ export interface SimpleShotRecord {
   carreau?: boolean;
   
   // Advanced - Tir
-  shotResult?: SimpleShotResult;  // Where the failed shot went (only for failed tirs)
+  shotResult?: SimpleShotResult;
   shotType?: SimpleShotType;
   shotQuality?: SimpleShotQuality;
   
@@ -99,73 +100,84 @@ export interface SimpleShotRecord {
 }
 
 // ============================================
-// SHOT TYPE CONFIGS
+// CONFIG ARRAYS WITH TRANSLATION KEYS
 // ============================================
 
-// Shot types when SUCCESS
-const SHOT_TYPES_SUCCESS = [
-  { id: 'au_fer' as SimpleShotType, label: 'Tir tendu', icon: 'gps-fixed', desc: 'Direct, sans rebond' },
-  { id: 'au_plomb' as SimpleShotType, label: 'Tir en cloche', icon: 'flight-takeoff', desc: 'Lancé en hauteur' },
-  { id: 'en_rafle' as SimpleShotType, label: 'En rafle', icon: 'swap-horiz', desc: 'Tir rasant' },
-  { id: 'court_ramasse' as SimpleShotType, label: 'Court, ramassé', icon: 'redo', desc: 'Rebond avant cible' },
-  { id: 'carreau' as SimpleShotType, label: 'Carreau', icon: 'stars', desc: 'Prend la place', special: true },
+const SHOT_TYPES_SUCCESS_CONFIG = [
+  { id: 'au_fer' as SimpleShotType, labelKey: 'tirTendu', icon: 'gps-fixed', descKey: 'tirTenduDesc' },
+  { id: 'au_plomb' as SimpleShotType, labelKey: 'tirCloche', icon: 'flight-takeoff', descKey: 'tirClocheDesc' },
+  { id: 'en_rafle' as SimpleShotType, labelKey: 'enRafleSimple', icon: 'swap-horiz', descKey: 'enRafleSimpleDesc' },
+  { id: 'court_ramasse' as SimpleShotType, labelKey: 'courtRamasse', icon: 'redo', descKey: 'courtRamasseDesc' },
+  { id: 'carreau' as SimpleShotType, labelKey: 'carreauLabel', icon: 'stars', descKey: 'carreauTakesPlaceShort', special: true },
 ];
 
-// Shot types when FAILED (technique types only - result is tracked separately)
-const SHOT_TYPES_FAILED = [
-  { id: 'au_fer' as SimpleShotType, label: 'Tir tendu', icon: 'gps-fixed', desc: 'Direct, sans rebond' },
-  { id: 'au_plomb' as SimpleShotType, label: 'Tir en cloche', icon: 'flight-takeoff', desc: 'Lancé en hauteur' },
-  { id: 'en_rafle' as SimpleShotType, label: 'En rafle', icon: 'swap-horiz', desc: 'Tir rasant' },
+const SHOT_TYPES_FAILED_CONFIG = [
+  { id: 'au_fer' as SimpleShotType, labelKey: 'tirTendu', icon: 'gps-fixed', descKey: 'tirTenduDesc' },
+  { id: 'au_plomb' as SimpleShotType, labelKey: 'tirCloche', icon: 'flight-takeoff', descKey: 'tirClocheDesc' },
+  { id: 'en_rafle' as SimpleShotType, labelKey: 'enRafleSimple', icon: 'swap-horiz', descKey: 'enRafleSimpleDesc' },
 ];
 
-// Shot results for failed tirs (WHERE the shot went wrong)
-const SHOT_RESULTS_FAILED: { id: SimpleShotResult; label: string; icon: string; desc: string; color: string }[] = [
-  { id: 'court_droite', label: 'Court, à droite', icon: 'subdirectory-arrow-right', desc: 'Trop court côté droit', color: '#E57373' },
-  { id: 'court_gauche', label: 'Court, à gauche', icon: 'subdirectory-arrow-left', desc: 'Trop court côté gauche', color: '#EF5350' },
-  { id: 'long', label: 'Long', icon: 'arrow-upward', desc: 'Derrière la boule cible', color: '#F44336' },
-  { id: 'tir_bouchon', label: 'Tir sur bouchon', icon: 'adjust', desc: 'A touché le cochonnet', color: theme.warning },
+const SHOT_RESULTS_FAILED_CONFIG: { id: SimpleShotResult; labelKey: string; icon: string; descKey: string; color: string }[] = [
+  { id: 'court_droite', labelKey: 'courtDroite', icon: 'subdirectory-arrow-right', descKey: 'courtDroiteDesc', color: '#E57373' },
+  { id: 'court_gauche', labelKey: 'courtGauche', icon: 'subdirectory-arrow-left', descKey: 'courtGaucheDesc', color: '#EF5350' },
+  { id: 'long', labelKey: 'longResult', icon: 'arrow-upward', descKey: 'longResultDesc', color: '#F44336' },
+  { id: 'tir_bouchon', labelKey: 'tirBouchon', icon: 'adjust', descKey: 'tirBouchonDesc', color: theme.warning },
 ];
 
-// Combined for backward compatibility
+const SHOT_QUALITIES_CONFIG = [
+  { id: 'gain_point' as SimpleShotQuality, labelKey: 'gainPoint', icon: 'trending-up', color: theme.success },
+  { id: 'sans_effet' as SimpleShotQuality, labelKey: 'noEffect', icon: 'remove', color: theme.warning },
+  { id: 'negatif' as SimpleShotQuality, labelKey: 'negative', icon: 'trending-down', color: theme.error },
+  { id: 'decisif' as SimpleShotQuality, labelKey: 'decisive', icon: 'flag', color: theme.carreauColor },
+];
+
+const CARREAU_QUALITIES_CONFIG = [
+  { id: 'gain_point' as SimpleShotQuality, labelKey: 'gainPoint', icon: 'trending-up', color: theme.success },
+];
+
+const POINT_TYPES_CONFIG = [
+  { id: 'roule' as SimplePointType, labelKey: 'rouleSimple', icon: 'sports-baseball', descKey: 'rouleSimpleDesc' },
+  { id: 'plombe' as SimplePointType, labelKey: 'plombeSimple', icon: 'flight-land', descKey: 'plombeSimpleDesc' },
+  { id: 'demi_portee' as SimplePointType, labelKey: 'demiPorteeSimple', icon: 'height', descKey: 'demiPorteeSimpleDesc' },
+  { id: 'portee' as SimplePointType, labelKey: 'portee', icon: 'flight', descKey: 'porteeDesc' },
+];
+
+const POINT_QUALITIES_SUCCESS_CONFIG = [
+  { id: 'excellent' as SimplePointQuality, labelKey: 'excellent', icon: 'stars', color: theme.carreauColor, descKey: 'excellentDesc' },
+  { id: 'bon' as SimplePointQuality, labelKey: 'bon', icon: 'check-circle', color: theme.success, descKey: 'bonDesc' },
+  { id: 'moyen' as SimplePointQuality, labelKey: 'moyen', icon: 'radio-button-checked', color: theme.warning, descKey: 'moyenDesc' },
+  { id: 'au_bouchon' as SimplePointQuality, labelKey: 'auBouchon', icon: 'adjust', color: theme.primary, descKey: 'auBouchonDesc' },
+  { id: 'devant_boule' as SimplePointQuality, labelKey: 'devantBoule', icon: 'sports-baseball', color: theme.accent, descKey: 'devantBouleDesc' },
+];
+
+const POINT_QUALITIES_FAILED_CONFIG = [
+  { id: 'rate' as SimplePointQuality, labelKey: 'rate', icon: 'cancel', color: theme.error, descKey: 'rateDesc' },
+  { id: 'crochete' as SimplePointQuality, labelKey: 'crochete', icon: 'sync-problem', color: theme.warning, descKey: 'crocheteDesc' },
+  { id: 'sorti' as SimplePointQuality, labelKey: 'sorti', icon: 'logout', color: theme.error, descKey: 'sortiDesc' },
+];
+
+// Backward-compatible exports
+const SHOT_TYPES_SUCCESS = SHOT_TYPES_SUCCESS_CONFIG.map(s => ({ ...s, label: s.labelKey, desc: s.descKey }));
+const SHOT_TYPES_FAILED = SHOT_TYPES_FAILED_CONFIG.map(s => ({ ...s, label: s.labelKey, desc: s.descKey }));
+const SHOT_RESULTS_FAILED = SHOT_RESULTS_FAILED_CONFIG.map(s => ({ ...s, label: s.labelKey, desc: s.descKey }));
 const SHOT_TYPES = SHOT_TYPES_SUCCESS;
-
-const SHOT_QUALITIES = [
-  { id: 'gain_point' as SimpleShotQuality, label: 'Gain de point', icon: 'trending-up', color: theme.success },
-  { id: 'sans_effet' as SimpleShotQuality, label: 'Sans effet', icon: 'remove', color: theme.warning },
-  { id: 'negatif' as SimpleShotQuality, label: 'Négatif', icon: 'trending-down', color: theme.error },
-  { id: 'decisif' as SimpleShotQuality, label: 'Décisif', icon: 'flag', color: theme.carreauColor },
-];
-
-// Filtered qualities for carreau (only gain_point)
-const CARREAU_QUALITIES = [
-  { id: 'gain_point' as SimpleShotQuality, label: 'Gain de point', icon: 'trending-up', color: theme.success },
-];
-
-const POINT_TYPES = [
-  { id: 'roule' as SimplePointType, label: 'Roulé', icon: 'sports-baseball', desc: 'Boule roulée' },
-  { id: 'plombe' as SimplePointType, label: 'Plombé', icon: 'flight-land', desc: 'Lancée en hauteur' },
-  { id: 'demi_portee' as SimplePointType, label: 'Demi-portée', icon: 'height', desc: 'Entre les deux' },
-  { id: 'portee' as SimplePointType, label: 'Portée', icon: 'flight', desc: 'Lancée haute' },
-];
-
-// Point qualities when SUCCESS (no "Raté" option)
-const POINT_QUALITIES_SUCCESS = [
-  { id: 'excellent' as SimplePointQuality, label: 'Excellent', icon: 'stars', color: theme.carreauColor, desc: '< 10 cm' },
-  { id: 'bon' as SimplePointQuality, label: 'Bon', icon: 'check-circle', color: theme.success, desc: '< 30 cm' },
-  { id: 'moyen' as SimplePointQuality, label: 'Moyen', icon: 'radio-button-checked', color: theme.warning, desc: '< 50 cm' },
-  { id: 'au_bouchon' as SimplePointQuality, label: 'Au bouchon', icon: 'adjust', color: theme.primary, desc: 'Collée au cochonnet' },
-  { id: 'devant_boule' as SimplePointQuality, label: 'Devant de boule', icon: 'sports-baseball', color: theme.accent, desc: 'Devant la boule adverse' },
-];
-
-// Point qualities when FAILED (3 specific options)
-const POINT_QUALITIES_FAILED = [
-  { id: 'rate' as SimplePointQuality, label: 'Raté', icon: 'cancel', color: theme.error, desc: 'Trop loin du but' },
-  { id: 'crochete' as SimplePointQuality, label: 'Crocheté', icon: 'sync-problem', color: theme.warning, desc: 'Mauvaise ouverture de main' },
-  { id: 'sorti' as SimplePointQuality, label: 'Sorti du terrain', icon: 'logout', color: theme.error, desc: 'Boule hors jeu' },
-];
-
-// Combined for export (backward compatibility)
+const SHOT_QUALITIES = SHOT_QUALITIES_CONFIG.map(s => ({ ...s, label: s.labelKey }));
+const POINT_TYPES = POINT_TYPES_CONFIG.map(s => ({ ...s, label: s.labelKey, desc: s.descKey }));
+const POINT_QUALITIES_SUCCESS = POINT_QUALITIES_SUCCESS_CONFIG.map(s => ({ ...s, label: s.labelKey, desc: s.descKey }));
+const POINT_QUALITIES_FAILED = POINT_QUALITIES_FAILED_CONFIG.map(s => ({ ...s, label: s.labelKey, desc: s.descKey }));
 const POINT_QUALITIES = [...POINT_QUALITIES_SUCCESS, ...POINT_QUALITIES_FAILED];
+
+// Helper to resolve translated config
+function useTranslatedConfig<T extends { labelKey: string }>(
+  config: T[],
+  t: (section: string, key: string) => string
+) {
+  return useMemo(() => config.map(item => ({
+    ...item,
+    label: t('notation', item.labelKey),
+    ...('descKey' in item ? { desc: t('notation', (item as any).descKey) } : {}),
+  })), [config, t]);
+}
 
 // ============================================
 // QUICK OPTION BUTTON
@@ -238,7 +250,7 @@ function QuickOption({ icon, label, sublabel, color, selected, onPress, size = '
         ]}>
           {label}
         </Text>
-        {sublabel && (
+        {sublabel ? (
           <Text style={[
             styles.quickOptionSublabel, 
             selected && styles.quickOptionSublabelSelected,
@@ -246,12 +258,12 @@ function QuickOption({ icon, label, sublabel, color, selected, onPress, size = '
           ]}>
             {sublabel}
           </Text>
-        )}
-        {selected && (
+        ) : null}
+        {selected ? (
           <View style={styles.quickOptionCheck}>
             <MaterialIcons name="check" size={14} color="#FFF" />
           </View>
-        )}
+        ) : null}
       </Animated.View>
     </Pressable>
   );
@@ -282,6 +294,21 @@ export function SimplifiedShotNotation({
   onSubmit,
   quickMode = false,
 }: SimplifiedShotNotationProps) {
+  const { t } = useLanguage();
+
+  // Translated config arrays
+  const translatedShotTypesSuccess = useTranslatedConfig(SHOT_TYPES_SUCCESS_CONFIG, t);
+  const translatedShotTypesFailed = useTranslatedConfig(SHOT_TYPES_FAILED_CONFIG, t);
+  const translatedShotResultsFailed = useTranslatedConfig(SHOT_RESULTS_FAILED_CONFIG, t);
+  const translatedShotQualities = useTranslatedConfig(SHOT_QUALITIES_CONFIG, t);
+  const translatedCarreauQualities = useTranslatedConfig(CARREAU_QUALITIES_CONFIG, t);
+  const translatedPointTypes = useTranslatedConfig(POINT_TYPES_CONFIG, t);
+  const translatedPointQualitiesSuccess = useTranslatedConfig(POINT_QUALITIES_SUCCESS_CONFIG, t);
+  const translatedPointQualitiesFailed = useTranslatedConfig(POINT_QUALITIES_FAILED_CONFIG, t);
+
+  // Combined shot types for label lookups
+  const allShotTypes = useMemo(() => [...translatedShotTypesSuccess, ...translatedShotTypesFailed], [translatedShotTypesSuccess, translatedShotTypesFailed]);
+
   // State
   const [success, setSuccess] = useState<boolean | null>(null);
   const [shotResult, setShotResult] = useState<SimpleShotResult | null>(null);
@@ -293,24 +320,18 @@ export function SimplifiedShotNotation({
   // Animation
   const progressWidth = useSharedValue(0);
 
-  // For failed tirs, we have 4 steps: Result -> Shot Result -> Type -> Impact
-  // For successful tirs: 3 steps: Result -> Type -> Impact  
-  // For points: 3 steps: Result -> Type -> Quality
   const isFailedTir = actionType === 'tir' && success === false;
   const totalSteps = isFailedTir ? 4 : 3;
 
-  // Determine current step based on state
   const getCurrentStep = useCallback(() => {
     if (success === null) return 1;
     if (actionType === 'tir') {
       if (success === false) {
-        // Failed tir: Result(1) -> ShotResult(2) -> Type(3) -> Impact(4)
         if (!shotResult) return 2;
         if (!shotType) return 3;
         if (!shotQuality) return 4;
         return 4;
       } else {
-        // Success tir: Result(1) -> Type(2) -> Impact(3)
         if (!shotType) return 2;
         if (!shotQuality) return 3;
         return 3;
@@ -332,14 +353,12 @@ export function SimplifiedShotNotation({
     const currentStep = getCurrentStep();
     let progress = 0;
     if (totalSteps === 4) {
-      // 4-step flow for failed tirs
       if (currentStep === 1) progress = 0;
       else if (currentStep === 2) progress = 25;
       else if (currentStep === 3) progress = 50;
       else if (currentStep === 4) progress = 75;
       if (shotQuality) progress = 100;
     } else {
-      // 3-step flow
       if (currentStep === 1) progress = 0;
       else if (currentStep === 2) progress = 33;
       else if (currentStep === 3) progress = 66;
@@ -353,7 +372,6 @@ export function SimplifiedShotNotation({
     width: `${progressWidth.value}%`,
   }));
 
-  // Reset on close
   const resetState = useCallback(() => {
     setSuccess(null);
     setShotResult(null);
@@ -368,12 +386,10 @@ export function SimplifiedShotNotation({
     onClose();
   }, [onClose, resetState]);
 
-  // Quick result (Réussi / Raté)
   const handleQuickResult = useCallback((isSuccess: boolean) => {
     Haptics.impactAsync(isSuccess ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light);
     
     if (quickMode) {
-      // Immediately submit in quick mode
       const record: SimpleShotRecord = {
         id: Date.now().toString(),
         timestamp: new Date().toISOString(),
@@ -391,13 +407,11 @@ export function SimplifiedShotNotation({
     }
   }, [quickMode, playerId, playerName, team, actionType, onSubmit, handleClose]);
 
-  // Select shot result (for failed tirs)
   const handleShotResultSelect = useCallback((result: SimpleShotResult) => {
     Haptics.selectionAsync();
     setShotResult(result);
   }, []);
 
-  // Select type
   const handleTypeSelect = useCallback((type: SimpleShotType | SimplePointType) => {
     Haptics.selectionAsync();
     if (actionType === 'tir') {
@@ -407,7 +421,6 @@ export function SimplifiedShotNotation({
     }
   }, [actionType]);
 
-  // Select quality and submit
   const handleQualitySelect = useCallback((quality: SimpleShotQuality | SimplePointQuality | null) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
@@ -431,16 +444,14 @@ export function SimplifiedShotNotation({
     
     onSubmit(record);
     handleClose();
-  }, [playerId, playerName, team, actionType, success, shotType, pointType, onSubmit, handleClose]);
+  }, [playerId, playerName, team, actionType, success, shotType, pointType, onSubmit, handleClose, shotResult]);
 
-  // Skip detailed selection
   const handleSkip = useCallback(() => {
     if (success !== null) {
       handleQualitySelect(null);
     }
   }, [success, handleQualitySelect]);
 
-  // Go back
   const handleBack = useCallback(() => {
     Haptics.selectionAsync();
     if (shotQuality || pointQuality) {
@@ -463,10 +474,11 @@ export function SimplifiedShotNotation({
   const canGoBack = success !== null;
   const isCarreau = shotType === 'carreau';
 
-  // Get step labels based on action type and success/fail
   const stepLabels = isTir 
-    ? (isFailedTir ? ['Résultat', 'Résultat détaillé', 'Type', 'Impact'] : ['Résultat', 'Type', 'Impact'])
-    : ['Résultat', 'Type', 'Qualité'];
+    ? (isFailedTir 
+        ? [t('notation', 'resultStep'), t('notation', 'detailedResult'), t('notation', 'typeStep'), t('notation', 'impactStep')] 
+        : [t('notation', 'resultStep'), t('notation', 'typeStep'), t('notation', 'impactStep')])
+    : [t('notation', 'resultStep'), t('notation', 'typeStep'), t('notation', 'qualityStep')];
 
   return (
     <Modal
@@ -494,7 +506,7 @@ export function SimplifiedShotNotation({
                 color={teamColor} 
               />
               <Text style={[styles.headerBadgeText, { color: teamColor }]}>
-                {isTir ? 'TIR' : 'POINT'}
+                {isTir ? t('notation', 'tirLabel') : t('notation', 'pointLabel')}
               </Text>
             </View>
             <Text style={styles.headerPlayer}>{playerName}</Text>
@@ -502,7 +514,7 @@ export function SimplifiedShotNotation({
           
           {success !== null ? (
             <Pressable style={styles.headerBtn} onPress={handleSkip}>
-              <Text style={styles.skipText}>Terminer</Text>
+              <Text style={styles.skipText}>{t('notation', 'finish')}</Text>
             </Pressable>
           ) : (
             <View style={{ width: 60 }} />
@@ -522,7 +534,7 @@ export function SimplifiedShotNotation({
               const isActive = currentStep === stepNumber;
               
               return (
-                <View key={label} style={styles.progressStep}>
+                <View key={`${label}-${i}`} style={styles.progressStep}>
                   <View style={[
                     styles.progressDot,
                     isCompleted && styles.progressDotDone,
@@ -556,10 +568,10 @@ export function SimplifiedShotNotation({
           {success === null && (
             <Animated.View entering={FadeIn.duration(200)}>
               <Text style={styles.stepTitle}>
-                {isTir ? 'Résultat du tir' : 'Résultat du point'}
+                {isTir ? t('notation', 'shotResultTitle') : t('notation', 'pointResultTitle')}
               </Text>
               <Text style={styles.stepSubtitle}>
-                {isTir ? 'La boule adverse a-t-elle été touchée ?' : 'Le point est-il réussi ?'}
+                {isTir ? t('notation', 'wasBallTouched') : t('notation', 'isPointSuccessful')}
               </Text>
 
               <View style={styles.resultGrid}>
@@ -570,7 +582,7 @@ export function SimplifiedShotNotation({
                   <Animated.View entering={ZoomIn.duration(200).delay(100)}>
                     <MaterialIcons name="check" size={48} color="#FFF" />
                   </Animated.View>
-                  <Text style={styles.resultCardLabel}>Réussi</Text>
+                  <Text style={styles.resultCardLabel}>{t('notation', 'succeeded')}</Text>
                 </Pressable>
 
                 <Pressable
@@ -580,14 +592,14 @@ export function SimplifiedShotNotation({
                   <Animated.View entering={ZoomIn.duration(200).delay(150)}>
                     <MaterialIcons name="close" size={48} color="#FFF" />
                   </Animated.View>
-                  <Text style={styles.resultCardLabel}>Raté</Text>
+                  <Text style={styles.resultCardLabel}>{t('notation', 'missed')}</Text>
                 </Pressable>
               </View>
 
               <View style={styles.quickModeHint}>
                 <MaterialIcons name="info-outline" size={16} color={theme.textMuted} />
                 <Text style={styles.quickModeHintText}>
-                  Optionnel : continuez pour préciser le type et la qualité
+                  {t('notation', 'optionalContinue')}
                 </Text>
               </View>
             </Animated.View>
@@ -598,14 +610,14 @@ export function SimplifiedShotNotation({
             <Animated.View entering={FadeIn.duration(200)}>
               <View style={styles.resultSummary}>
                 <MaterialIcons name="cancel" size={20} color={theme.error} />
-                <Text style={styles.resultSummaryText}>Raté</Text>
+                <Text style={styles.resultSummaryText}>{t('notation', 'missed')}</Text>
               </View>
 
-              <Text style={styles.stepTitle}>Résultat du tir</Text>
-              <Text style={styles.stepSubtitle}>Où est allée la boule ?</Text>
+              <Text style={styles.stepTitle}>{t('notation', 'shotResultTitle')}</Text>
+              <Text style={styles.stepSubtitle}>{t('notation', 'whereDidBallGo')}</Text>
 
               <View style={styles.qualityList}>
-                {SHOT_RESULTS_FAILED.map((result, index) => (
+                {translatedShotResultsFailed.map((result, index) => (
                   <Animated.View key={result.id} entering={FadeInDown.duration(200).delay(index * 50)}>
                     <Pressable
                       style={[styles.qualityItem, { borderLeftColor: result.color }]}
@@ -626,7 +638,7 @@ export function SimplifiedShotNotation({
             </Animated.View>
           )}
 
-          {/* STEP: Type selection (step 2 for success tir & points, step 3 for failed tir) */}
+          {/* STEP: Type selection */}
           {success !== null && !shotType && !pointType && (isFailedTir ? shotResult !== null : true) && !(isTir && success === false && !shotResult) && (
             <Animated.View entering={FadeIn.duration(200)}>
               <View style={styles.resultSummary}>
@@ -636,34 +648,34 @@ export function SimplifiedShotNotation({
                   color={success ? theme.success : theme.error} 
                 />
                 <Text style={styles.resultSummaryText}>
-                  {success ? 'Réussi' : 'Raté'}
+                  {success ? t('notation', 'succeeded') : t('notation', 'missed')}
                 </Text>
-                {shotResult && (
+                {shotResult ? (
                   <>
                     <View style={styles.resultSummaryDivider} />
                     <MaterialIcons 
-                      name={SHOT_RESULTS_FAILED.find(r => r.id === shotResult)?.icon as any} 
+                      name={translatedShotResultsFailed.find(r => r.id === shotResult)?.icon as any} 
                       size={18} 
                       color={theme.error} 
                     />
                     <Text style={[styles.resultSummaryText, { color: theme.error }]}>
-                      {SHOT_RESULTS_FAILED.find(r => r.id === shotResult)?.label}
+                      {translatedShotResultsFailed.find(r => r.id === shotResult)?.label}
                     </Text>
                   </>
-                )}
+                ) : null}
               </View>
 
               <Text style={styles.stepTitle}>
-                Type de {isTir ? 'tir' : 'point'}
+                {isTir ? t('notation', 'shotTypeTitle') : t('notation', 'pointTypeTitle')}
               </Text>
               <Text style={styles.stepSubtitle}>
-                {isTir ? 'Comment avez-vous tiré ?' : 'Comment avez-vous pointé ?'}
+                {isTir ? t('notation', 'howDidYouShoot') : t('notation', 'howDidYouPoint')}
               </Text>
 
               <View style={styles.typeGrid}>
                 {(isTir 
-                  ? (success ? SHOT_TYPES_SUCCESS : SHOT_TYPES_FAILED) 
-                  : POINT_TYPES
+                  ? (success ? translatedShotTypesSuccess : translatedShotTypesFailed) 
+                  : translatedPointTypes
                 ).map((type, index) => (
                   <Animated.View key={type.id} entering={FadeInDown.duration(200).delay(index * 50)}>
                     <QuickOption
@@ -673,7 +685,7 @@ export function SimplifiedShotNotation({
                       color={isTir ? theme.tirColor : theme.pointColor}
                       onPress={() => handleTypeSelect(type.id)}
                       size="medium"
-                      special={'special' in type ? type.special : false}
+                      special={'special' in type ? (type as any).special : false}
                     />
                   </Animated.View>
                 ))}
@@ -682,7 +694,7 @@ export function SimplifiedShotNotation({
           )}
 
           {/* STEP 3: Quality */}
-          {(shotType || pointType) && (
+          {(shotType || pointType) ? (
             <Animated.View entering={FadeIn.duration(200)}>
               <View style={styles.resultSummary}>
                 <MaterialIcons 
@@ -691,19 +703,19 @@ export function SimplifiedShotNotation({
                   color={success ? (isCarreau ? theme.carreauColor : theme.success) : theme.error} 
                 />
                 <Text style={styles.resultSummaryText}>
-                  {success ? (isCarreau ? 'Carreau' : 'Réussi') : 'Raté'}
+                  {success ? (isCarreau ? t('notation', 'carreauLabel') : t('notation', 'succeeded')) : t('notation', 'missed')}
                 </Text>
-                {shotResult && (
+                {shotResult ? (
                   <>
                     <View style={styles.resultSummaryDivider} />
                     <Text style={[styles.resultSummaryText, { color: theme.error }]}>
-                      {SHOT_RESULTS_FAILED.find(r => r.id === shotResult)?.label}
+                      {translatedShotResultsFailed.find(r => r.id === shotResult)?.label}
                     </Text>
                   </>
-                )}
+                ) : null}
                 <View style={styles.resultSummaryDivider} />
                 <MaterialIcons 
-                  name={(isTir ? SHOT_TYPES : POINT_TYPES).find(t => t.id === (shotType || pointType))?.icon as any} 
+                  name={(isTir ? allShotTypes : translatedPointTypes).find(tp => tp.id === (shotType || pointType))?.icon as any} 
                   size={18} 
                   color={isCarreau ? theme.carreauColor : theme.textSecondary} 
                 />
@@ -711,37 +723,37 @@ export function SimplifiedShotNotation({
                   styles.resultSummaryText,
                   isCarreau && { color: theme.carreauColor, fontWeight: '600' }
                 ]}>
-                  {(isTir ? SHOT_TYPES : POINT_TYPES).find(t => t.id === (shotType || pointType))?.label}
+                  {(isTir ? allShotTypes : translatedPointTypes).find(tp => tp.id === (shotType || pointType))?.label}
                 </Text>
               </View>
 
               <Text style={styles.stepTitle}>
-                {isTir ? 'Impact du tir' : 'Qualité du point'}
+                {isTir ? t('notation', 'shotImpactTitle') : t('notation', 'pointQualityTitle')}
               </Text>
               <Text style={styles.stepSubtitle}>
                 {isCarreau 
-                  ? 'Le carreau entraîne automatiquement un gain de point'
+                  ? t('notation', 'carreauAutoGain')
                   : isTir 
-                    ? 'Effet sur la mène' 
+                    ? t('notation', 'effectOnEnd') 
                     : success 
-                      ? 'Précision par rapport au but'
-                      : 'Qu\'est-ce qui s\'est passé ?'
+                      ? t('notation', 'precisionVsJack')
+                      : t('notation', 'whatHappened')
                 }
               </Text>
 
-              {isCarreau && (
+              {isCarreau ? (
                 <Animated.View entering={FadeInDown.duration(200)} style={styles.carreauInfo}>
                   <MaterialIcons name="info" size={20} color={theme.carreauColor} />
                   <Text style={styles.carreauInfoText}>
-                    Un carreau est toujours un gain de point
+                    {t('notation', 'carreauAlwaysGain')}
                   </Text>
                 </Animated.View>
-              )}
+              ) : null}
 
               <View style={styles.qualityList}>
                 {(isTir 
-                  ? (isCarreau ? CARREAU_QUALITIES : SHOT_QUALITIES) 
-                  : (success ? POINT_QUALITIES_SUCCESS : POINT_QUALITIES_FAILED)
+                  ? (isCarreau ? translatedCarreauQualities : translatedShotQualities) 
+                  : (success ? translatedPointQualitiesSuccess : translatedPointQualitiesFailed)
                 ).map((quality, index) => (
                   <Animated.View key={quality.id} entering={FadeInDown.duration(200).delay(index * 40)}>
                     <Pressable
@@ -753,9 +765,9 @@ export function SimplifiedShotNotation({
                       </View>
                       <View style={styles.qualityItemContent}>
                         <Text style={styles.qualityItemLabel}>{quality.label}</Text>
-                        {'desc' in quality && (
+                        {'desc' in quality && quality.desc ? (
                           <Text style={styles.qualityItemDesc}>{quality.desc}</Text>
-                        )}
+                        ) : null}
                       </View>
                       <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
                     </Pressable>
@@ -763,7 +775,7 @@ export function SimplifiedShotNotation({
                 ))}
               </View>
             </Animated.View>
-          )}
+          ) : null}
         </ScrollView>
       </View>
     </Modal>
@@ -793,6 +805,7 @@ export function QuickShotBar({
   stats,
   compact = false,
 }: QuickShotBarProps) {
+  const { t } = useLanguage();
   const teamColor = team === 'A' ? theme.primary : theme.accent;
 
   if (compact) {
@@ -830,17 +843,17 @@ export function QuickShotBar({
       <View style={styles.quickBarHeader}>
         <View style={[styles.quickBarDot, { backgroundColor: teamColor }]} />
         <Text style={styles.quickBarNameFull}>{playerName}</Text>
-        {stats && (
+        {stats ? (
           <Text style={styles.quickBarStats}>
             T:{stats.tirsSuccess}/{stats.tirs} P:{stats.pointsSuccess}/{stats.points} C:{stats.carreaux}
           </Text>
-        )}
+        ) : null}
       </View>
       
       <View style={styles.quickBarRow}>
         {/* TIR Section */}
         <View style={styles.quickBarSection}>
-          <Text style={styles.quickBarSectionLabel}>TIR</Text>
+          <Text style={styles.quickBarSectionLabel}>{t('notation', 'tirLabel')}</Text>
           <View style={styles.quickBarSectionBtns}>
             <Pressable
               style={[styles.quickBarActionBtn, { backgroundColor: theme.success }]}
@@ -860,7 +873,7 @@ export function QuickShotBar({
 
         {/* POINT Section */}
         <View style={styles.quickBarSection}>
-          <Text style={styles.quickBarSectionLabel}>POINT</Text>
+          <Text style={styles.quickBarSectionLabel}>{t('notation', 'pointLabel')}</Text>
           <View style={styles.quickBarSectionBtns}>
             <Pressable
               style={[styles.quickBarActionBtn, { backgroundColor: theme.success }]}
@@ -884,12 +897,12 @@ export function QuickShotBar({
           onPress={() => onQuickShot('carreau', true)}
         >
           <MaterialIcons name="stars" size={22} color={theme.carreauColor} />
-          <Text style={styles.quickBarCarreauText}>CARREAU</Text>
+          <Text style={styles.quickBarCarreauText}>{t('notation', 'carreauLabel')}</Text>
         </Pressable>
       </View>
 
       <Text style={styles.quickBarHint}>
-        Appui long = notation détaillée
+        {t('notation', 'longPressDetailed')}
       </Text>
     </View>
   );
