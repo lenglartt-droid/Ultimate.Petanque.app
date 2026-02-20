@@ -176,7 +176,7 @@ export default function ClubDetailScreen() {
             {club.facilities.map((facility, index) => (
               <View key={index} style={styles.facilityTag}>
                 <MaterialIcons name="check-circle" size={16} color={theme.success} />
-                <Text style={styles.facilityText}>{facility}</Text>
+                <Text style={styles.facilityText}>{t('facilityLabels', facility) || facility}</Text>
               </View>
             ))}
           </View>

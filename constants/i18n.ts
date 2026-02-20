@@ -644,6 +644,31 @@ export const translations = {
     'Cailloux': { fr: 'Gros cailloux, rebonds imprévisibles', en: 'Large pebbles, unpredictable bounces' },
     'Terre battue': { fr: 'Terre nue, évolue selon la météo', en: 'Bare earth, changes with weather' },
   },
+  // Stats categories
+  statsCategories: {
+    global: { fr: 'Global', en: 'Overall' },
+    tir: { fr: 'Tir', en: 'Shot' },
+    point: { fr: 'Point', en: 'Point' },
+    matchups: { fr: 'Face à Face', en: 'Head to Head' },
+  },
+  // Facility reverse-lookup (stored label → display)
+  facilityLabels: {
+    'Terrains extérieurs': { fr: 'Terrains extérieurs', en: 'Outdoor courts' },
+    'Terrain couvert': { fr: 'Terrain couvert', en: 'Covered court' },
+    'Club house': { fr: 'Club house', en: 'Clubhouse' },
+    'Bar / Restaurant': { fr: 'Bar / Restaurant', en: 'Bar / Restaurant' },
+    'Parking': { fr: 'Parking', en: 'Parking' },
+    'Vestiaires': { fr: 'Vestiaires', en: 'Changing rooms' },
+    'Éclairage nocturne': { fr: 'Éclairage nocturne', en: 'Night lighting' },
+    'École de pétanque': { fr: 'École de pétanque', en: 'Pétanque school' },
+    // English stored labels
+    'Outdoor courts': { fr: 'Terrains extérieurs', en: 'Outdoor courts' },
+    'Covered court': { fr: 'Terrain couvert', en: 'Covered court' },
+    'Clubhouse': { fr: 'Club house', en: 'Clubhouse' },
+    'Changing rooms': { fr: 'Vestiaires', en: 'Changing rooms' },
+    'Night lighting': { fr: 'Éclairage nocturne', en: 'Night lighting' },
+    'Pétanque school': { fr: 'École de pétanque', en: 'Pétanque school' },
+  },
   terrainEnv: {
     indoorLabel: { fr: 'Intérieur (Boulodrome)', en: 'Indoor (Boulodrome)' },
     outdoorLabel: { fr: 'Extérieur', en: 'Outdoor' },

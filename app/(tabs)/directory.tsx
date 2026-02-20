@@ -529,7 +529,7 @@ export default function DirectoryScreen() {
             <FilterSection
               title={t('directory', 'surfaceType')}
               options={['all', ...config.terrainTypes.map(tc => tc.id)]}
-              labels={{ all: t('directory', 'allLabel'), ...Object.fromEntries(config.terrainTypes.map(tc => [tc.id, tc.label])) }}
+              labels={{ all: t('directory', 'allLabel'), ...Object.fromEntries(config.terrainTypes.map(tc => [tc.id, t('terrainTypes', tc.id)])) }}
               value={filters.terrainType}
               onChange={(v) => setFilters(f => ({ ...f, terrainType: v as TerrainType | 'all' }))}
               icons={Object.fromEntries(config.terrainTypes.map(tc => [tc.id, tc.icon]))}
@@ -759,7 +759,7 @@ export default function DirectoryScreen() {
             {activeTab === 'terrains' && (
               <>
                 {filters.terrainEnvironment !== 'all' && <ActiveFilterChip label={filters.terrainEnvironment === 'indoor' ? t('directory', 'indoorShort') : t('directory', 'outdoorShort')} onRemove={() => setFilters(f => ({ ...f, terrainEnvironment: 'all' }))} icon={filters.terrainEnvironment === 'indoor' ? 'domain' : 'park'} />}
-                {filters.terrainType !== 'all' && <ActiveFilterChip label={config.terrainTypes.find(tc => tc.id === filters.terrainType)?.label || filters.terrainType} onRemove={() => setFilters(f => ({ ...f, terrainType: 'all' }))} />}
+                {filters.terrainType !== 'all' && <ActiveFilterChip label={t('terrainTypes', filters.terrainType)} onRemove={() => setFilters(f => ({ ...f, terrainType: 'all' }))} />}
                 {filters.terrainCity !== 'all' && <ActiveFilterChip label={filters.terrainCity} onRemove={() => setFilters(f => ({ ...f, terrainCity: 'all' }))} />}
                 {filters.terrainLighting !== 'all' && <ActiveFilterChip label={filters.terrainLighting === 'yes' ? t('directory', 'litLabel') : t('directory', 'notLitLabel')} onRemove={() => setFilters(f => ({ ...f, terrainLighting: 'all' }))} icon="lightbulb" />}
                 {filters.terrainCovered !== 'all' && <ActiveFilterChip label={filters.terrainCovered === 'yes' ? t('directory', 'coveredLabel') : t('directory', 'outdoorShort')} onRemove={() => setFilters(f => ({ ...f, terrainCovered: 'all' }))} icon="roofing" />}
