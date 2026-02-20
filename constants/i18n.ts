@@ -878,6 +878,7 @@ export const translations = {
     titleCount: { fr: 'titre(s)', en: 'title(s)' },
     podiumCount: { fr: 'podiums', en: 'podiums' },
     matchCount: { fr: 'matchs', en: 'matches' },
+    resultLabel: { fr: 'Résultat', en: 'Result' },
   },
 
   // ============================================
@@ -973,6 +974,63 @@ export const translations = {
     tip2: { fr: 'Le chronomètre se met en pause automatiquement entre les mènes', en: 'The timer pauses automatically between ends' },
     tip3: { fr: 'Jouez régulièrement pour voir votre courbe de progression évoluer', en: 'Play regularly to see your progression curve evolve' },
     tip4: { fr: 'Partagez votre fiche joueur pour que vos coéquipiers voient vos stats', en: 'Share your player card so your teammates can see your stats' },
+  },
+
+  // ============================================
+  // PRECISION WORKSHOPS (Challenge)
+  // ============================================
+  precisionWorkshops: {
+    boule_seule: { fr: 'Tir de boule seule', en: 'Single ball shot' },
+    boule_seuleDesc: { fr: 'Tirer une boule isolée placée dans un cercle', en: 'Shoot an isolated ball placed in a circle' },
+    derriere_but: { fr: 'Boule derrière le but', en: 'Ball behind the jack' },
+    derriere_butDesc: { fr: 'Tirer une boule placée derrière le cochonnet sans toucher le but', en: 'Shoot a ball placed behind the jack without touching it' },
+    entre_2_boules: { fr: 'Entre 2 boules', en: 'Between 2 balls' },
+    entre_2_boulesDesc: { fr: 'Tirer une boule placée entre deux boules obstacles', en: 'Shoot a ball placed between two obstacle balls' },
+    sautee: { fr: 'Tir à la sautée', en: 'Lob shot' },
+    sauteeDesc: { fr: 'Tir en cloche par-dessus une boule obstacle', en: 'Lob shot over an obstacle ball' },
+    tir_but: { fr: 'Tir de but', en: 'Jack shot' },
+    tir_butDesc: { fr: 'Tirer directement le cochonnet', en: 'Shoot directly at the jack' },
+    // Scoring labels
+    rate: { fr: 'Raté', en: 'Missed' },
+    touche: { fr: 'Touché', en: 'Hit' },
+    sorti: { fr: 'Sorti', en: 'Knocked out' },
+    carreau: { fr: 'Carreau', en: 'Carreau' },
+    // Scoring descriptions per workshop
+    boule_seule_rate: { fr: 'Boule cible non touchée', en: 'Target ball not touched' },
+    boule_seule_touche: { fr: 'Boule cible frappée mais reste dans le cercle', en: 'Target ball hit but stays in the circle' },
+    boule_seule_sorti: { fr: 'Boule cible frappée et sort du cercle', en: 'Target ball hit and knocked out of circle' },
+    boule_seule_carreau: { fr: 'Boule envoyée reste dans le cercle après avoir frappé la cible', en: 'Shot ball stays in circle after hitting target' },
+    derriere_but_rate: { fr: 'Boule non touchée, sol touché avant, ou but touché en premier', en: 'Ball not touched, ground hit first, or jack hit first' },
+    derriere_but_touche: { fr: 'Boule cible frappée en premier mais reste dans le cercle', en: 'Target ball hit first but stays in circle' },
+    derriere_but_sorti: { fr: 'Boule cible frappée en premier et sort du cercle', en: 'Target ball hit first and knocked out of circle' },
+    derriere_but_carreau: { fr: 'Boule envoyée reste dans le cercle sans toucher le but', en: 'Shot ball stays in circle without touching jack' },
+    entre_2_boules_rate: { fr: 'Obstacle touché en premier ou obstacle sorti après touche', en: 'Obstacle hit first or obstacle knocked out after touch' },
+    entre_2_boules_touche: { fr: 'Cible frappée, obstacle touché mais reste, ou cible reste dans cercle', en: 'Target hit, obstacle touched but stays, or target stays in circle' },
+    entre_2_boules_sorti: { fr: 'Cible sort du cercle sans toucher les obstacles', en: 'Target knocked out without touching obstacles' },
+    entre_2_boules_carreau: { fr: 'Boule envoyée reste dans le cercle sans toucher les obstacles', en: 'Shot ball stays in circle without touching obstacles' },
+    sautee_rate: { fr: 'Obstacle touché en premier ou obstacle sorti au recul', en: 'Obstacle hit first or obstacle knocked out on recoil' },
+    sautee_touche: { fr: 'Cible touchée, obstacle touché au recul mais reste, ou cible reste', en: 'Target touched, obstacle touched on recoil but stays, or target stays' },
+    sautee_sorti: { fr: 'Cible sort du cercle sans déplacer l\'obstacle', en: 'Target knocked out without moving obstacle' },
+    sautee_carreau: { fr: 'Boule envoyée reste dans le cercle sans déplacer l\'obstacle', en: 'Shot ball stays in circle without moving obstacle' },
+    tir_but_rate: { fr: 'But non touché', en: 'Jack not touched' },
+    tir_but_touche: { fr: 'But frappé mais reste dans le cercle', en: 'Jack hit but stays in circle' },
+    tir_but_sorti: { fr: 'But frappé et sort du cercle', en: 'Jack hit and knocked out of circle' },
+  },
+  // ============================================
+  // PALMARES RESULTS
+  // ============================================
+  palmaresResults: {
+    '1er': { fr: '1er', en: '1st' },
+    '2ème': { fr: '2ème', en: '2nd' },
+    '3ème': { fr: '3ème', en: '3rd' },
+    'Demi-finale': { fr: 'Demi-finale', en: 'Semi-final' },
+    'Quart de finale': { fr: 'Quart de finale', en: 'Quarter-final' },
+    '1/8 finale': { fr: '1/8 finale', en: 'Round of 16' },
+    'Poules': { fr: 'Poules', en: 'Group stage' },
+    'Autre': { fr: 'Autre', en: 'Other' },
+    'Finaliste': { fr: 'Finaliste', en: 'Finalist' },
+    'Éliminé': { fr: 'Éliminé', en: 'Eliminated' },
+    'Champion': { fr: 'Champion', en: 'Champion' },
   },
 
   // ============================================

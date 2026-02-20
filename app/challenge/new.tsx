@@ -36,6 +36,8 @@ import {
   PrecisionShot,
   PRECISION_ATELIERS,
   PRECISION_DISTANCES,
+  PrecisionAtelierConfig,
+  PrecisionScoringOption,
   Player,
 } from '@/services/mockData';
 
@@ -180,6 +182,23 @@ export default function NewChallengeScreen() {
     },
   } as const), [t]);
 
+  // Translated precision ateliers
+  const TRANSLATED_ATELIERS = useMemo(() => {
+    return PRECISION_ATELIERS.map(atelier => ({
+      ...atelier,
+      name: t('precisionWorkshops', atelier.id),
+      description: t('precisionWorkshops', atelier.id + 'Desc'),
+      scoringOptions: atelier.scoringOptions.map(opt => ({
+        ...opt,
+        label: opt.points === 0 ? t('precisionWorkshops', 'rate') :
+               opt.points === 5 ? t('precisionWorkshops', 'carreau') :
+               opt.label === 'Touch\u00e9' ? t('precisionWorkshops', 'touche') :
+               t('precisionWorkshops', 'sorti'),
+        description: t('precisionWorkshops', `${atelier.id}_${opt.points === 0 ? 'rate' : opt.points === 5 ? 'carreau' : opt.label === 'Touch\u00e9' ? 'touche' : 'sorti'}`),
+      })),
+    }));
+  }, [t]);
+
   // Navigation state
   const [selectedType, setSelectedType] = useState<ChallengeType | null>(null);
   const [challengeMode, setChallengeMode] = useState<ChallengeMode | null>(null);
@@ -233,11 +252,11 @@ export default function NewChallengeScreen() {
     totalPrecisionPoints: opponentPrecisionShots.reduce((sum, s) => sum + s.points, 0),
   }), [opponentShots, opponentPrecisionShots]);
 
-  const currentAtelier = PRECISION_ATELIERS[currentAtelierIndex];
+  const currentAtelier = TRANSLATED_ATELIERS[currentAtelierIndex];
   const currentDistance = PRECISION_DISTANCES[currentDistanceIndex];
   const currentPrecisionShotNumber = currentAtelierIndex * 4 + currentDistanceIndex + 1;
 
-  const opponentAtelier = PRECISION_ATELIERS[opponentAtelierIndex];
+  const opponentAtelier = TRANSLATED_ATELIERS[opponentAtelierIndex];
   const opponentDistance = PRECISION_DISTANCES[opponentDistanceIndex];
   const opponentPrecisionShotNumber = opponentAtelierIndex * 4 + opponentDistanceIndex + 1;
 
@@ -830,7 +849,7 @@ export default function NewChallengeScreen() {
           {isPrecision && (
             <View style={styles.readySection}>
               <Text style={styles.readySectionTitle}>{t('challenge', 'theWorkshops')}</Text>
-              {PRECISION_ATELIERS.map((atelier, index) => (
+              {TRANSLATED_ATELIERS.map((atelier, index) => (
                 <Animated.View key={atelier.id} entering={FadeInDown.duration(300).delay(100 + index * 60)}>
                   <View style={styles.atelierCard}>
                     <View style={[styles.atelierIcon, { backgroundColor: theme.primary + '15' }]}>

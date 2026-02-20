@@ -94,6 +94,7 @@ function TournamentCard({ item, index, t, language }: { item: TournamentPalmares
   const hasFinancials = (tournament.registrationCost && tournament.registrationCost > 0) || (tournament.prizeWon && tournament.prizeWon > 0);
   const netGain = (tournament.prizeWon || 0) - (tournament.registrationCost || 0);
   const locale = language === 'en' ? 'en-US' : 'fr-FR';
+  const translatedResult = tournament.finalResult ? t('palmaresResults', tournament.finalResult) : null;
 
   return (
     <Animated.View entering={FadeInDown.duration(300).delay(index * 50)}>
@@ -125,9 +126,9 @@ function TournamentCard({ item, index, t, language }: { item: TournamentPalmares
               ) : null}
             </View>
           </View>
-          {tournament.finalResult ? (
+          {translatedResult ? (
             <View style={[styles.resultTag, { backgroundColor: resultCfg.color + '15', borderColor: resultCfg.color + '40' }]}>
-              <Text style={[styles.resultTagText, { color: resultCfg.color }]}>{tournament.finalResult}</Text>
+              <Text style={[styles.resultTagText, { color: resultCfg.color }]}>{translatedResult}</Text>
             </View>
           ) : null}
         </View>
@@ -733,9 +734,9 @@ export default function PalmaresScreen() {
                       </View>
                       <View style={styles.tooltipStatDivider} />
                       <View style={styles.tooltipStatItem}>
-                        <Text style={styles.tooltipStatLabel}>{language === 'en' ? 'Result' : 'Résultat'}</Text>
+                        <Text style={styles.tooltipStatLabel}>{t('palmares', 'resultLabel')}</Text>
                         <Text style={[styles.tooltipStatValue, { color: RESULT_CONFIG[chartData[selectedChartIndex].tournamentResult || '']?.color || theme.textPrimary }]}>
-                          {chartData[selectedChartIndex].tournamentResult || '-'}
+                          {chartData[selectedChartIndex].tournamentResult ? t('palmaresResults', chartData[selectedChartIndex].tournamentResult) : '-'}
                         </Text>
                       </View>
                       <View style={styles.tooltipStatDivider} />
