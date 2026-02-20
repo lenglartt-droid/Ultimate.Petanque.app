@@ -34,63 +34,62 @@ import {
   sendTestNotification,
 } from '@/services/notificationService';
 
-// Base tournament phases
-const BASE_PHASES = [
-  { id: 'Poules', label: 'Poules', short: 'PL' },
-  { id: '1/16 finale', label: '1/16', short: '1/16' },
-  { id: '1/8 finale', label: '1/8', short: '1/8' },
-  { id: 'Quart de finale', label: 'Quarts', short: 'QF' },
-  { id: 'Demi-finale', label: 'Demis', short: 'DF' },
-  { id: 'Petite finale', label: 'Petite F.', short: 'PF' },
-  { id: 'Finale', label: 'Finale', short: 'F' },
-];
-
-// Phases configuration by cadrage type
-const PHASES_BY_CADRAGE: Record<TournamentType, { id: string; label: string; short: string }[]> = {
-  'Poules': [
-    { id: 'Poule 1', label: 'Poule 1', short: 'P1' },
-    { id: 'Poule 2', label: 'Poule 2', short: 'P2' },
-    { id: 'Poule 3', label: 'Poule 3', short: 'P3' },
-    { id: 'Classement', label: 'Classement', short: 'CL' },
+// Phase IDs - DB values (French), translated at display time
+const PHASE_IDS = {
+  BASE: [
+    { id: 'Poules', labelKey: 'Poules', shortKey: 'PL' },
+    { id: '1/16 finale', labelKey: '1/16 finale', shortKey: '1/16' },
+    { id: '1/8 finale', labelKey: '1/8 finale', shortKey: '1/8' },
+    { id: 'Quart de finale', labelKey: 'Quarts', shortKey: 'QF' },
+    { id: 'Demi-finale', labelKey: 'Demis', shortKey: 'DF' },
+    { id: 'Petite finale', labelKey: 'Petite F.', shortKey: 'PF' },
+    { id: 'Finale', labelKey: 'Finale', shortKey: 'F' },
   ],
-  'Élimination directe': [
-    { id: '1/16 finale', label: '1/16', short: '1/16' },
-    { id: '1/8 finale', label: '1/8', short: '1/8' },
-    { id: 'Quart de finale', label: 'Quarts', short: 'QF' },
-    { id: 'Demi-finale', label: 'Demis', short: 'DF' },
-    { id: 'Finale', label: 'Finale', short: 'F' },
-  ],
-  'Mixte': [
-    { id: 'Poules', label: 'Poules', short: 'PL' },
-    { id: '1/8 finale', label: '1/8', short: '1/8' },
-    { id: 'Quart de finale', label: 'Quarts', short: 'QF' },
-    { id: 'Demi-finale', label: 'Demis', short: 'DF' },
-    { id: 'Finale', label: 'Finale', short: 'F' },
-  ],
-  'Suisse': [
-    { id: 'Ronde 1', label: 'R1', short: 'R1' },
-    { id: 'Ronde 2', label: 'R2', short: 'R2' },
-    { id: 'Ronde 3', label: 'R3', short: 'R3' },
-    { id: 'Ronde 4', label: 'R4', short: 'R4' },
-    { id: 'Ronde 5', label: 'R5', short: 'R5' },
-    { id: 'Classement', label: 'Class.', short: 'CL' },
-  ],
-  'A/B/C': [
-    { id: 'Poules', label: 'Poules', short: 'PL' },
-    { id: 'Tableau A', label: 'Tab. A', short: 'A' },
-    { id: 'Tableau B', label: 'Tab. B', short: 'B' },
-    { id: 'Tableau C', label: 'Tab. C', short: 'C' },
-    { id: 'Finale', label: 'Finale', short: 'F' },
-  ],
-  'Tirage intégral': [
-    { id: 'Tour 1', label: 'T1', short: 'T1' },
-    { id: 'Tour 2', label: 'T2', short: 'T2' },
-    { id: 'Tour 3', label: 'T3', short: 'T3' },
-    { id: 'Demi-finale', label: 'Demis', short: 'DF' },
-    { id: 'Finale', label: 'Finale', short: 'F' },
-  ],
-  'Autre': BASE_PHASES,
-};
+  BY_CADRAGE: {
+    'Poules': [
+      { id: 'Poule 1', labelKey: 'Poule 1', shortKey: 'P1' },
+      { id: 'Poule 2', labelKey: 'Poule 2', shortKey: 'P2' },
+      { id: 'Poule 3', labelKey: 'Poule 3', shortKey: 'P3' },
+      { id: 'Classement', labelKey: 'Classement', shortKey: 'CL' },
+    ],
+    'Élimination directe': [
+      { id: '1/16 finale', labelKey: '1/16 finale', shortKey: '1/16' },
+      { id: '1/8 finale', labelKey: '1/8 finale', shortKey: '1/8' },
+      { id: 'Quart de finale', labelKey: 'Quarts', shortKey: 'QF' },
+      { id: 'Demi-finale', labelKey: 'Demis', shortKey: 'DF' },
+      { id: 'Finale', labelKey: 'Finale', shortKey: 'F' },
+    ],
+    'Mixte': [
+      { id: 'Poules', labelKey: 'Poules', shortKey: 'PL' },
+      { id: '1/8 finale', labelKey: '1/8 finale', shortKey: '1/8' },
+      { id: 'Quart de finale', labelKey: 'Quarts', shortKey: 'QF' },
+      { id: 'Demi-finale', labelKey: 'Demis', shortKey: 'DF' },
+      { id: 'Finale', labelKey: 'Finale', shortKey: 'F' },
+    ],
+    'Suisse': [
+      { id: 'Ronde 1', labelKey: 'Ronde 1', shortKey: 'R1' },
+      { id: 'Ronde 2', labelKey: 'Ronde 2', shortKey: 'R2' },
+      { id: 'Ronde 3', labelKey: 'Ronde 3', shortKey: 'R3' },
+      { id: 'Ronde 4', labelKey: 'Ronde 4', shortKey: 'R4' },
+      { id: 'Ronde 5', labelKey: 'Ronde 5', shortKey: 'R5' },
+      { id: 'Classement', labelKey: 'Class.', shortKey: 'CL' },
+    ],
+    'A/B/C': [
+      { id: 'Poules', labelKey: 'Poules', shortKey: 'PL' },
+      { id: 'Tableau A', labelKey: 'Tab. A', shortKey: 'A' },
+      { id: 'Tableau B', labelKey: 'Tab. B', shortKey: 'B' },
+      { id: 'Tableau C', labelKey: 'Tab. C', shortKey: 'C' },
+      { id: 'Finale', labelKey: 'Finale', shortKey: 'F' },
+    ],
+    'Tirage intégral': [
+      { id: 'Tour 1', labelKey: 'Tour 1', shortKey: 'T1' },
+      { id: 'Tour 2', labelKey: 'Tour 2', shortKey: 'T2' },
+      { id: 'Tour 3', labelKey: 'Tour 3', shortKey: 'T3' },
+      { id: 'Demi-finale', labelKey: 'Demis', shortKey: 'DF' },
+      { id: 'Finale', labelKey: 'Finale', shortKey: 'F' },
+    ],
+  } as Record<TournamentType, { id: string; labelKey: string; shortKey: string }[]>,
+} as const;
 
 export default function TournamentDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -102,11 +101,20 @@ export default function TournamentDetailScreen() {
   const terrain = tournament?.terrainId ? getTerrainById(tournament.terrainId) : null;
   const tournamentMatches = getMatchesByTournament(id!);
   
+  // Build translated phases
+  const buildPhases = useCallback((phaseList: { id: string; labelKey: string; shortKey: string }[]) => {
+    return phaseList.map(p => ({ id: p.id, label: t('tournamentPhases', p.labelKey), short: t('tournamentPhases', p.shortKey) }));
+  }, [t]);
+
+  const BASE_PHASES = useMemo(() => buildPhases(PHASE_IDS.BASE), [buildPhases]);
+
   // Get phases based on tournament cadrage
   const tournamentPhases = useMemo(() => {
     if (!tournament) return BASE_PHASES;
-    return PHASES_BY_CADRAGE[tournament.type] || BASE_PHASES;
-  }, [tournament]);
+    const cadragePhases = PHASE_IDS.BY_CADRAGE[tournament.type];
+    if (!cadragePhases) return BASE_PHASES;
+    return buildPhases(cadragePhases);
+  }, [tournament, BASE_PHASES, buildPhases]);
 
   // End tournament modal state
   const [endTournamentStep, setEndTournamentStep] = useState(0); // 0=hidden, 1=result, 2=details, 3=summary
@@ -488,7 +496,7 @@ export default function TournamentDetailScreen() {
               <View style={styles.finalResultBanner}>
                 <MaterialIcons name={cfg.icon as any} size={20} color={cfg.color} />
                 <Text style={[styles.finalResultBannerText, { color: cfg.color }]}>
-                  {tournament.finalResult}
+                  {t('palmaresResults', tournament.finalResult)}
                 </Text>
               </View>
             );
@@ -664,7 +672,7 @@ export default function TournamentDetailScreen() {
                     <View style={styles.matchHeader}>
                       <View style={[styles.matchBadge, { backgroundColor: isWin ? theme.success + '20' : theme.error + '20' }]}>
                         <Text style={[styles.matchBadgeText, { color: isWin ? theme.success : theme.error }]}>
-                          {match.tournamentPhase || 'Match'}
+                          {match.tournamentPhase ? t('tournamentPhases', match.tournamentPhase) : t('tournamentPhases', 'Match')}
                         </Text>
                       </View>
                       {match.tournamentBracket && (
@@ -1018,7 +1026,7 @@ export default function TournamentDetailScreen() {
                       <MaterialIcons name="workspace-premium" size={28} color="#C0C0C0" />
                     </View>
                     <View style={[styles.podiumBlock, styles.podiumBlock2nd]}>
-                      <Text style={[styles.podiumLabel, { color: '#C0C0C0' }]}>2ème</Text>
+                      <Text style={[styles.podiumLabel, { color: '#C0C0C0' }]}>{t('palmaresResults', '2ème')}</Text>
                     </View>
                   </Pressable>
                   {/* 1st place */}
@@ -1027,7 +1035,7 @@ export default function TournamentDetailScreen() {
                       <MaterialIcons name="emoji-events" size={36} color="#FFD700" />
                     </View>
                     <View style={[styles.podiumBlock, styles.podiumBlock1st]}>
-                      <Text style={[styles.podiumLabel, { color: '#FFD700' }]}>1er</Text>
+                      <Text style={[styles.podiumLabel, { color: '#FFD700' }]}>{t('palmaresResults', '1er')}</Text>
                     </View>
                   </Pressable>
                   {/* 3rd place */}
@@ -1036,7 +1044,7 @@ export default function TournamentDetailScreen() {
                       <MaterialIcons name="military-tech" size={28} color="#CD7F32" />
                     </View>
                     <View style={[styles.podiumBlock, styles.podiumBlock3rd]}>
-                      <Text style={[styles.podiumLabel, { color: '#CD7F32' }]}>3ème</Text>
+                      <Text style={[styles.podiumLabel, { color: '#CD7F32' }]}>{t('palmaresResults', '3ème')}</Text>
                     </View>
                   </Pressable>
                 </View>
@@ -1187,7 +1195,7 @@ export default function TournamentDetailScreen() {
                           <View style={[styles.endSummaryIcon, { backgroundColor: cfg.color + '20' }]}>
                             <MaterialIcons name={cfg.icon as any} size={36} color={cfg.color} />
                           </View>
-                          <Text style={styles.endSummaryResult}>{selectedFinalResult}</Text>
+                          <Text style={styles.endSummaryResult}>{t('palmaresResults', selectedFinalResult)}</Text>
                           <Text style={styles.endSummaryTournament}>{tournament.name}</Text>
                         </View>
                       )}
@@ -1197,7 +1205,7 @@ export default function TournamentDetailScreen() {
                         <View style={styles.endSummaryRow}>
                           <MaterialIcons name="emoji-events" size={18} color={theme.textSecondary} />
                           <Text style={styles.endSummaryRowLabel}>{t('tournament', 'rankingLabel')}</Text>
-                          <Text style={[styles.endSummaryRowValue, { color: cfg.color }]}>{selectedFinalResult}</Text>
+                          <Text style={[styles.endSummaryRowValue, { color: cfg.color }]}>{t('palmaresResults', selectedFinalResult)}</Text>
                         </View>
                         <View style={styles.endSummaryDivider} />
                         <View style={styles.endSummaryRow}>

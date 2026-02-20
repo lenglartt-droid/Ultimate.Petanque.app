@@ -492,7 +492,7 @@ export default function EditMatchScreen() {
                 </View>
                 {match.tournamentPhase && (
                   <View style={styles.phaseBadge}>
-                    <Text style={styles.phaseBadgeText}>{match.tournamentPhase}</Text>
+                    <Text style={styles.phaseBadgeText}>{t('tournamentPhases', match.tournamentPhase)}</Text>
                   </View>
                 )}
               </View>

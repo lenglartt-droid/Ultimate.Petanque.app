@@ -374,7 +374,7 @@ const ChallengeCard = React.memo(({ challenge, onPress, t, language }: { challen
           {challenge.carreauCount && challenge.carreauCount > 0 ? (
             <View style={[styles.modeBadge, { backgroundColor: theme.carreauColor + '15' }]}>
               <MaterialIcons name="stars" size={10} color={theme.carreauColor} />
-              <Text style={[styles.modeBadgeText, { color: theme.carreauColor }]}>{challenge.carreauCount} carreau{challenge.carreauCount > 1 ? 'x' : ''}</Text>
+              <Text style={[styles.modeBadgeText, { color: theme.carreauColor }]}>{challenge.carreauCount} {challenge.carreauCount > 1 ? t('history', 'carreauxPlural') : t('history', 'carreauSingular')}</Text>
             </View>
           ) : null}
           <Text style={styles.challengeTime}>

@@ -22,62 +22,62 @@ import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { SimplifiedShotNotation, SimpleShotRecord } from '@/components';
 
-// Tournament phases configuration
-const BASE_PHASES = [
-  { id: 'Poules', label: 'Poules', short: 'PL' },
-  { id: '1/16 finale', label: '1/16 finale', short: '1/16' },
-  { id: '1/8 finale', label: '1/8 finale', short: '1/8' },
-  { id: 'Quart de finale', label: 'Quarts', short: 'QF' },
-  { id: 'Demi-finale', label: 'Demis', short: 'DF' },
-  { id: 'Petite finale', label: 'Petite F.', short: 'PF' },
-  { id: 'Finale', label: 'Finale', short: 'F' },
-];
-
-const PHASES_BY_CADRAGE: Record<TournamentType, { id: string; label: string; short: string }[]> = {
-  'Poules': [
-    { id: 'Poule 1', label: 'Poule 1', short: 'P1' },
-    { id: 'Poule 2', label: 'Poule 2', short: 'P2' },
-    { id: 'Poule 3', label: 'Poule 3', short: 'P3' },
-    { id: 'Classement', label: 'Classement', short: 'CL' },
+// Tournament phases configuration - IDs are DB values (French), labels translated at display time
+const PHASE_IDS = {
+  BASE: [
+    { id: 'Poules', labelKey: 'Poules', shortKey: 'PL' },
+    { id: '1/16 finale', labelKey: '1/16 finale', shortKey: '1/16' },
+    { id: '1/8 finale', labelKey: '1/8 finale', shortKey: '1/8' },
+    { id: 'Quart de finale', labelKey: 'Quarts', shortKey: 'QF' },
+    { id: 'Demi-finale', labelKey: 'Demis', shortKey: 'DF' },
+    { id: 'Petite finale', labelKey: 'Petite F.', shortKey: 'PF' },
+    { id: 'Finale', labelKey: 'Finale', shortKey: 'F' },
   ],
-  'Élimination directe': [
-    { id: '1/16 finale', label: '1/16 finale', short: '1/16' },
-    { id: '1/8 finale', label: '1/8 finale', short: '1/8' },
-    { id: 'Quart de finale', label: 'Quarts', short: 'QF' },
-    { id: 'Demi-finale', label: 'Demis', short: 'DF' },
-    { id: 'Finale', label: 'Finale', short: 'F' },
-  ],
-  'Mixte': [
-    { id: 'Poules', label: 'Poules', short: 'PL' },
-    { id: '1/8 finale', label: '1/8 finale', short: '1/8' },
-    { id: 'Quart de finale', label: 'Quarts', short: 'QF' },
-    { id: 'Demi-finale', label: 'Demis', short: 'DF' },
-    { id: 'Finale', label: 'Finale', short: 'F' },
-  ],
-  'Suisse': [
-    { id: 'Ronde 1', label: 'Ronde 1', short: 'R1' },
-    { id: 'Ronde 2', label: 'Ronde 2', short: 'R2' },
-    { id: 'Ronde 3', label: 'Ronde 3', short: 'R3' },
-    { id: 'Ronde 4', label: 'Ronde 4', short: 'R4' },
-    { id: 'Ronde 5', label: 'Ronde 5', short: 'R5' },
-    { id: 'Classement', label: 'Classement', short: 'CL' },
-  ],
-  'A/B/C': [
-    { id: 'Poules', label: 'Poules', short: 'PL' },
-    { id: 'Tableau A', label: 'Tableau A', short: 'A' },
-    { id: 'Tableau B', label: 'Tableau B', short: 'B' },
-    { id: 'Tableau C', label: 'Tableau C', short: 'C' },
-    { id: 'Finale', label: 'Finale', short: 'F' },
-  ],
-  'Tirage intégral': [
-    { id: 'Tour 1', label: 'Tour 1', short: 'T1' },
-    { id: 'Tour 2', label: 'Tour 2', short: 'T2' },
-    { id: 'Tour 3', label: 'Tour 3', short: 'T3' },
-    { id: 'Demi-finale', label: 'Demis', short: 'DF' },
-    { id: 'Finale', label: 'Finale', short: 'F' },
-  ],
-  'Autre': BASE_PHASES,
-};
+  BY_CADRAGE: {
+    'Poules': [
+      { id: 'Poule 1', labelKey: 'Poule 1', shortKey: 'P1' },
+      { id: 'Poule 2', labelKey: 'Poule 2', shortKey: 'P2' },
+      { id: 'Poule 3', labelKey: 'Poule 3', shortKey: 'P3' },
+      { id: 'Classement', labelKey: 'Classement', shortKey: 'CL' },
+    ],
+    'Élimination directe': [
+      { id: '1/16 finale', labelKey: '1/16 finale', shortKey: '1/16' },
+      { id: '1/8 finale', labelKey: '1/8 finale', shortKey: '1/8' },
+      { id: 'Quart de finale', labelKey: 'Quarts', shortKey: 'QF' },
+      { id: 'Demi-finale', labelKey: 'Demis', shortKey: 'DF' },
+      { id: 'Finale', labelKey: 'Finale', shortKey: 'F' },
+    ],
+    'Mixte': [
+      { id: 'Poules', labelKey: 'Poules', shortKey: 'PL' },
+      { id: '1/8 finale', labelKey: '1/8 finale', shortKey: '1/8' },
+      { id: 'Quart de finale', labelKey: 'Quarts', shortKey: 'QF' },
+      { id: 'Demi-finale', labelKey: 'Demis', shortKey: 'DF' },
+      { id: 'Finale', labelKey: 'Finale', shortKey: 'F' },
+    ],
+    'Suisse': [
+      { id: 'Ronde 1', labelKey: 'Ronde 1', shortKey: 'R1' },
+      { id: 'Ronde 2', labelKey: 'Ronde 2', shortKey: 'R2' },
+      { id: 'Ronde 3', labelKey: 'Ronde 3', shortKey: 'R3' },
+      { id: 'Ronde 4', labelKey: 'Ronde 4', shortKey: 'R4' },
+      { id: 'Ronde 5', labelKey: 'Ronde 5', shortKey: 'R5' },
+      { id: 'Classement', labelKey: 'Class.', shortKey: 'CL' },
+    ],
+    'A/B/C': [
+      { id: 'Poules', labelKey: 'Poules', shortKey: 'PL' },
+      { id: 'Tableau A', labelKey: 'Tab. A', shortKey: 'A' },
+      { id: 'Tableau B', labelKey: 'Tab. B', shortKey: 'B' },
+      { id: 'Tableau C', labelKey: 'Tab. C', shortKey: 'C' },
+      { id: 'Finale', labelKey: 'Finale', shortKey: 'F' },
+    ],
+    'Tirage intégral': [
+      { id: 'Tour 1', labelKey: 'Tour 1', shortKey: 'T1' },
+      { id: 'Tour 2', labelKey: 'Tour 2', shortKey: 'T2' },
+      { id: 'Tour 3', labelKey: 'Tour 3', shortKey: 'T3' },
+      { id: 'Demi-finale', labelKey: 'Demis', shortKey: 'DF' },
+      { id: 'Finale', labelKey: 'Finale', shortKey: 'F' },
+    ],
+  } as Record<TournamentType, { id: string; labelKey: string; shortKey: string }[]>,
+} as const;
 
 const TOURNAMENT_BRACKETS = ['A', 'B', 'C', 'D'] as const;
 type TournamentBracket = typeof TOURNAMENT_BRACKETS[number];
@@ -143,10 +143,18 @@ export default function NewMatchScreen() {
   const linkedTournament = tournamentId ? tournaments.find(t => t.id === tournamentId) : null;
   const isTournamentMode = !!linkedTournament;
   
+  const buildPhases = useCallback((phaseList: { id: string; labelKey: string; shortKey: string }[]) => {
+    return phaseList.map(p => ({ id: p.id, label: t('tournamentPhases', p.labelKey), short: t('tournamentPhases', p.shortKey) }));
+  }, [t]);
+
+  const BASE_PHASES = useMemo(() => buildPhases(PHASE_IDS.BASE), [buildPhases]);
+
   const tournamentPhases = useMemo(() => {
     if (!linkedTournament) return BASE_PHASES;
-    return PHASES_BY_CADRAGE[linkedTournament.type] || BASE_PHASES;
-  }, [linkedTournament]);
+    const cadragePhases = PHASE_IDS.BY_CADRAGE[linkedTournament.type];
+    if (!cadragePhases) return BASE_PHASES;
+    return buildPhases(cadragePhases);
+  }, [linkedTournament, BASE_PHASES, buildPhases]);
 
   const tournamentHistory = useMemo(() => {
     if (!linkedTournament) return { lastPhase: null, lastBracket: null, lastTeamAPlayers: [] as string[] };
