@@ -89,7 +89,7 @@ export default function TerrainDetailScreen() {
     );
   }
 
-  const typeConfig = config.terrainTypes.find(t => t.id === terrain.type) || config.terrainTypes[0];
+  const typeConfig = config.terrainTypes.find(tc => tc.id === terrain.type) || config.terrainTypes[0];
   
   const typeColors: Record<string, { bg: string; text: string; light: string }> = {
     'Stabilisé': { bg: theme.primary, text: '#FFF', light: theme.primary + '15' },
@@ -237,7 +237,7 @@ export default function TerrainDetailScreen() {
               <MaterialIcons name={typeConfig.icon as any} size={16} color={colors.bg} />
               <Text style={[styles.typeBadgeText, { color: colors.bg }]}>{t('terrainTypes', terrain.type)}</Text>
             </View>
-            <Text style={styles.typeDescription}>{typeConfig.description}</Text>
+            <Text style={styles.typeDescription}>{t('terrainTypeDescs', terrain.type)}</Text>
           </Animated.View>
         )}
 
@@ -249,7 +249,7 @@ export default function TerrainDetailScreen() {
               <MaterialIcons name={typeConfig.icon as any} size={16} color={colors.bg} />
               <Text style={[styles.typeBadgeText, { color: colors.bg }]}>{t('terrainTypes', terrain.type)}</Text>
             </View>
-            <Text style={styles.typeDescription}>{typeConfig.description}</Text>
+            <Text style={styles.typeDescription}>{t('terrainTypeDescs', terrain.type)}</Text>
           </Animated.View>
         )}
 

@@ -341,7 +341,7 @@ export default function EditTerrainScreen() {
                     {t('terrainTypes', tt.id)}
                   </Text>
                   <Text style={styles.typeDescription} numberOfLines={2}>
-                    {tt.description}
+                    {t('terrainTypeDescs', tt.id)}
                   </Text>
                 </Pressable>
               ))}
@@ -584,10 +584,10 @@ export default function EditTerrainScreen() {
                     styles.environmentName,
                     environment === env.id && styles.environmentNameActive
                   ]}>
-                    {env.label}
+                    {t('terrainEnv', env.id + 'Label')}
                   </Text>
                   <Text style={styles.environmentDescription}>
-                    {env.description}
+                    {t('terrainEnv', env.id + 'Desc')}
                   </Text>
                 </Pressable>
               ))}

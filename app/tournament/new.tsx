@@ -25,14 +25,14 @@ import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 // ============================================
 // CONFIGURATION
 // ============================================
-const CADRAGE_CONFIG: Record<TournamentType, { icon: string; description: string; matches: string; points: string; specifics: string[] }> = {
-  'Poules': { icon: 'grid-view', description: 'Phase de qualification en groupes', matches: '2-3 matchs par équipe', points: '13 pts', specifics: ['3-4 équipes par poule', 'Tous contre tous', 'Top 1-2 qualifiés'] },
-  'Élimination directe': { icon: 'call-split', description: 'Tableau à élimination simple', matches: '1 match = 1 chance', points: '13 pts', specifics: ['Perdant éliminé', 'Pas de repêchage', 'Avancement direct'] },
-  'Mixte': { icon: 'merge-type', description: 'Poules + Élimination directe', matches: '3-5 matchs min.', points: '13 pts', specifics: ['Phase poules puis tableau', 'Qualifiés selon classement', 'Format le plus courant'] },
-  'Suisse': { icon: 'sync-alt', description: 'Système suisse par rondes', matches: '5-7 rondes fixes', points: '13 pts', specifics: ['Adversaires de niveau similaire', 'Pas d\'élimination', 'Classement par points'] },
-  'A/B/C': { icon: 'account-tree', description: 'Tableaux multiples avec repêchage', matches: '4-6 matchs garantis', points: '13 pts', specifics: ['Tableau A (principal)', 'Tableaux B/C (consolante)', 'Perdants repêchés'] },
-  'Tirage intégral': { icon: 'shuffle', description: 'Tirage au sort complet', matches: 'Variable', points: '13 pts', specifics: ['Tableau fixé au départ', 'Parcours aléatoire', 'Format rapide'] },
-  'Autre': { icon: 'tune', description: 'Format personnalisé', matches: 'À définir', points: 'À définir', specifics: ['Règles libres', 'Adaptable'] },
+const CADRAGE_ICONS: Record<TournamentType, string> = {
+  'Poules': 'grid-view',
+  'Élimination directe': 'call-split',
+  'Mixte': 'merge-type',
+  'Suisse': 'sync-alt',
+  'A/B/C': 'account-tree',
+  'Tirage intégral': 'shuffle',
+  'Autre': 'tune',
 };
 
 const FORMAT_CONFIG: Record<string, { icon: string; players: string; boules: string }> = {
@@ -145,6 +145,16 @@ export default function NewTournamentScreen() {
     if (!terrainId && !manualLocation.city.trim()) return t('tournament', 'chooseLocation');
     return t('tournament', 'readyToCreate');
   }, [name, terrainId, manualLocation.city]);
+
+  const CADRAGE_CONFIG = useMemo(() => ({
+    'Poules': { icon: 'grid-view', description: t('cadrage', 'poulesDesc'), matches: t('cadrage', 'poulesMatches'), points: t('cadrage', 'poulesPoints'), specifics: [t('cadrage', 'poulesSpec1'), t('cadrage', 'poulesSpec2'), t('cadrage', 'poulesSpec3')] },
+    'Élimination directe': { icon: 'call-split', description: t('cadrage', 'elimDesc'), matches: t('cadrage', 'elimMatches'), points: t('cadrage', 'elimPoints'), specifics: [t('cadrage', 'elimSpec1'), t('cadrage', 'elimSpec2'), t('cadrage', 'elimSpec3')] },
+    'Mixte': { icon: 'merge-type', description: t('cadrage', 'mixteDesc'), matches: t('cadrage', 'mixteMatches'), points: t('cadrage', 'mixtePoints'), specifics: [t('cadrage', 'mixteSpec1'), t('cadrage', 'mixteSpec2'), t('cadrage', 'mixteSpec3')] },
+    'Suisse': { icon: 'sync-alt', description: t('cadrage', 'suisseDesc'), matches: t('cadrage', 'suisseMatches'), points: t('cadrage', 'suissePoints'), specifics: [t('cadrage', 'suisseSpec1'), t('cadrage', 'suisseSpec2'), t('cadrage', 'suisseSpec3')] },
+    'A/B/C': { icon: 'account-tree', description: t('cadrage', 'abcDesc'), matches: t('cadrage', 'abcMatches'), points: t('cadrage', 'abcPoints'), specifics: [t('cadrage', 'abcSpec1'), t('cadrage', 'abcSpec2'), t('cadrage', 'abcSpec3')] },
+    'Tirage intégral': { icon: 'shuffle', description: t('cadrage', 'tirageDesc'), matches: t('cadrage', 'tirageMatches'), points: t('cadrage', 'tiragePoints'), specifics: [t('cadrage', 'tirageSpec1'), t('cadrage', 'tirageSpec2'), t('cadrage', 'tirageSpec3')] },
+    'Autre': { icon: 'tune', description: t('cadrage', 'autreDesc'), matches: t('cadrage', 'autreMatches'), points: t('cadrage', 'autrePoints'), specifics: [t('cadrage', 'autreSpec1'), t('cadrage', 'autreSpec2')] },
+  } as Record<TournamentType, { icon: string; description: string; matches: string; points: string; specifics: string[] }>), [t]);
 
   const canSave = name.trim() && (terrainId || manualLocation.city.trim());
 
@@ -353,6 +363,7 @@ export default function NewTournamentScreen() {
             <View style={styles.cadrageGrid}>
               {config.tournamentTypes.map(ct => {
                 const cfg = CADRAGE_CONFIG[ct];
+                const cadrageIcon = CADRAGE_ICONS[ct] || 'tune';
                 const isActive = type === ct;
                 return (
                   <Pressable
@@ -360,7 +371,7 @@ export default function NewTournamentScreen() {
                     style={[styles.cadrageChip, isActive && styles.cadrageChipActive]}
                     onPress={() => { Haptics.selectionAsync(); setType(ct); }}
                   >
-                    <MaterialIcons name={cfg.icon as any} size={16} color={isActive ? theme.tirColor : theme.textMuted} />
+                    <MaterialIcons name={cadrageIcon as any} size={16} color={isActive ? theme.tirColor : theme.textMuted} />
                     <Text style={[styles.cadrageChipText, isActive && styles.cadrageChipTextActive]}>{t('tournamentTypes', ct)}</Text>
                   </Pressable>
                 );

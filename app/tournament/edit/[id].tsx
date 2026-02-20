@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,51 +19,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import theme from '@/constants/theme';
 import config, { GameFormat, TournamentType, TournamentLevel, TournamentCategory, RegistrationType, TournamentScope } from '@/constants/config';
 
-// Cadrage rules configuration
-const CADRAGE_RULES: Record<TournamentType, { description: string; matches: string; points: string; specifics: string[] }> = {
-  'Poules': {
-    description: 'Phase de qualification en groupes',
-    matches: '2-3 matchs par équipe',
-    points: '13 points',
-    specifics: ['3-4 équipes par poule', 'Tous contre tous', 'Top 1-2 qualifiés'],
-  },
-  'Élimination directe': {
-    description: 'Tableau à élimination simple',
-    matches: '1 match = 1 chance',
-    points: '13 points',
-    specifics: ['Perdant éliminé', 'Pas de repêchage', 'Avancement direct'],
-  },
-  'Mixte': {
-    description: 'Poules + Élimination directe',
-    matches: '3-5 matchs minimum',
-    points: '13 points',
-    specifics: ['Phase poules puis tableau', 'Qualifiés selon classement', 'Format le plus courant'],
-  },
-  'Suisse': {
-    description: 'Système suisse par rondes',
-    matches: '5-7 rondes fixes',
-    points: '13 points',
-    specifics: ['Adversaires de niveau similaire', 'Pas d\'élimination', 'Classement par points'],
-  },
-  'A/B/C': {
-    description: 'Tableaux multiples avec repêchage',
-    matches: '4-6 matchs garantis',
-    points: '13 points',
-    specifics: ['Tableau A (principal)', 'Tableaux B/C (consolante)', 'Perdants repêchés'],
-  },
-  'Tirage intégral': {
-    description: 'Tirage au sort complet dès le départ',
-    matches: 'Variable selon place',
-    points: '13 points',
-    specifics: ['Tableau fixé au départ', 'Parcours aléatoire', 'Format rapide'],
-  },
-  'Autre': {
-    description: 'Format personnalisé',
-    matches: 'À définir',
-    points: 'À définir',
-    specifics: ['Règles libres', 'Adaptable selon besoin'],
-  },
-};
+// Cadrage rules - icons only (descriptions moved to i18n)
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
@@ -77,6 +33,16 @@ export default function EditTournamentScreen() {
   const { t, language } = useLanguage();
 
   const tournament = getTournamentById(id!);
+
+  const CADRAGE_RULES = useMemo(() => ({
+    'Poules': { description: t('cadrage', 'poulesDesc'), matches: t('cadrage', 'poulesMatches'), points: t('cadrage', 'poulesPoints'), specifics: [t('cadrage', 'poulesSpec1'), t('cadrage', 'poulesSpec2'), t('cadrage', 'poulesSpec3')] },
+    'Élimination directe': { description: t('cadrage', 'elimDesc'), matches: t('cadrage', 'elimMatches'), points: t('cadrage', 'elimPoints'), specifics: [t('cadrage', 'elimSpec1'), t('cadrage', 'elimSpec2'), t('cadrage', 'elimSpec3')] },
+    'Mixte': { description: t('cadrage', 'mixteDesc'), matches: t('cadrage', 'mixteMatches'), points: t('cadrage', 'mixtePoints'), specifics: [t('cadrage', 'mixteSpec1'), t('cadrage', 'mixteSpec2'), t('cadrage', 'mixteSpec3')] },
+    'Suisse': { description: t('cadrage', 'suisseDesc'), matches: t('cadrage', 'suisseMatches'), points: t('cadrage', 'suissePoints'), specifics: [t('cadrage', 'suisseSpec1'), t('cadrage', 'suisseSpec2'), t('cadrage', 'suisseSpec3')] },
+    'A/B/C': { description: t('cadrage', 'abcDesc'), matches: t('cadrage', 'abcMatches'), points: t('cadrage', 'abcPoints'), specifics: [t('cadrage', 'abcSpec1'), t('cadrage', 'abcSpec2'), t('cadrage', 'abcSpec3')] },
+    'Tirage intégral': { description: t('cadrage', 'tirageDesc'), matches: t('cadrage', 'tirageMatches'), points: t('cadrage', 'tiragePoints'), specifics: [t('cadrage', 'tirageSpec1'), t('cadrage', 'tirageSpec2'), t('cadrage', 'tirageSpec3')] },
+    'Autre': { description: t('cadrage', 'autreDesc'), matches: t('cadrage', 'autreMatches'), points: t('cadrage', 'autrePoints'), specifics: [t('cadrage', 'autreSpec1'), t('cadrage', 'autreSpec2')] },
+  } as Record<TournamentType, { description: string; matches: string; points: string; specifics: string[] }>), [t]);
 
   const [name, setName] = useState('');
   const [date, setDate] = useState(new Date());
