@@ -35,10 +35,10 @@ const CADRAGE_ICONS: Record<TournamentType, string> = {
   'Autre': 'tune',
 };
 
-const FORMAT_CONFIG: Record<string, { icon: string; players: string; boules: string }> = {
-  'Tête-à-tête': { icon: 'person', players: '1 vs 1', boules: '3 boules' },
-  'Doublette': { icon: 'people', players: '2 vs 2', boules: '3 boules' },
-  'Triplette': { icon: 'groups', players: '3 vs 3', boules: '2 boules' },
+const FORMAT_CONFIG_KEYS: Record<string, { icon: string; playersKey: string; boulesKey: string }> = {
+  'Tête-à-tête': { icon: 'person', playersKey: '1vs1', boulesKey: '3boules' },
+  'Doublette': { icon: 'people', playersKey: '2vs2', boulesKey: '3boules' },
+  'Triplette': { icon: 'groups', playersKey: '3vs3', boulesKey: '2boules' },
 };
 
 const LEVEL_ICONS: Record<string, string> = {
@@ -338,7 +338,7 @@ export default function NewTournamentScreen() {
           <SectionCard title={t('tournament', 'gameFormat')} icon="groups" color={theme.accent} delay={150} required>
             <View style={styles.formatGrid}>
               {config.game.formats.map(f => {
-                const cfg = FORMAT_CONFIG[f];
+                const cfg = FORMAT_CONFIG_KEYS[f];
                 const isActive = format === f;
                 return (
                   <Pressable
@@ -350,8 +350,8 @@ export default function NewTournamentScreen() {
                       <MaterialIcons name={cfg.icon as any} size={22} color={isActive ? '#FFF' : theme.textSecondary} />
                     </View>
                     <Text style={[styles.formatCardName, isActive && styles.formatCardNameActive]}>{t('formats', f)}</Text>
-                    <Text style={styles.formatCardMeta}>{cfg.players}</Text>
-                    <Text style={styles.formatCardMeta}>{cfg.boules}</Text>
+                    <Text style={styles.formatCardMeta}>{t('formatDetails', cfg.playersKey)}</Text>
+                    <Text style={styles.formatCardMeta}>{t('formatDetails', cfg.boulesKey)}</Text>
                   </Pressable>
                 );
               })}

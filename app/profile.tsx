@@ -724,7 +724,7 @@ export default function ProfileScreen() {
                         <>
                           <View style={styles.financialButtonDot} />
                           <MaterialIcons name="emoji-events" size={12} color={theme.carreauColor} />
-                          <Text style={styles.financialButtonPodiums}>{podiums} podium{podiums > 1 ? 's' : ''}</Text>
+                          <Text style={styles.financialButtonPodiums}>{podiums} {t('palmares', 'podiums')}</Text>
                         </>
                       )}
                     </View>

@@ -743,8 +743,8 @@ export default function DirectoryScreen() {
             </Pressable>
             {activeTab === 'players' && (
               <>
-                {filters.playerRole !== 'all' && <ActiveFilterChip label={filters.playerRole} onRemove={() => setFilters(f => ({ ...f, playerRole: 'all' }))} />}
-                {filters.playerLevel !== 'all' && <ActiveFilterChip label={filters.playerLevel} onRemove={() => setFilters(f => ({ ...f, playerLevel: 'all' }))} />}
+                {filters.playerRole !== 'all' && <ActiveFilterChip label={t('roles', filters.playerRole)} onRemove={() => setFilters(f => ({ ...f, playerRole: 'all' }))} />}
+                {filters.playerLevel !== 'all' && <ActiveFilterChip label={t('levels', filters.playerLevel)} onRemove={() => setFilters(f => ({ ...f, playerLevel: 'all' }))} />}
                 {filters.playerClub !== 'all' && <ActiveFilterChip label={filters.playerClub} onRemove={() => setFilters(f => ({ ...f, playerClub: 'all' }))} />}
                 {filters.playerCity !== 'all' && <ActiveFilterChip label={filters.playerCity} onRemove={() => setFilters(f => ({ ...f, playerCity: 'all' }))} />}
                 {filters.playerCountry !== 'all' && <ActiveFilterChip label={filters.playerCountry} onRemove={() => setFilters(f => ({ ...f, playerCountry: 'all' }))} />}
@@ -769,7 +769,7 @@ export default function DirectoryScreen() {
               <>
                 {filters.tournamentStatus !== 'all' && <ActiveFilterChip label={getStatusLabel(filters.tournamentStatus)} onRemove={() => setFilters(f => ({ ...f, tournamentStatus: 'all' }))} icon="event" />}
                 {filters.tournamentCity !== 'all' && <ActiveFilterChip label={filters.tournamentCity} onRemove={() => setFilters(f => ({ ...f, tournamentCity: 'all' }))} icon="place" />}
-                {filters.tournamentFormat !== 'all' && <ActiveFilterChip label={filters.tournamentFormat} onRemove={() => setFilters(f => ({ ...f, tournamentFormat: 'all' }))} />}
+                {filters.tournamentFormat !== 'all' && <ActiveFilterChip label={t('formats', filters.tournamentFormat)} onRemove={() => setFilters(f => ({ ...f, tournamentFormat: 'all' }))} />}
                 {filters.tournamentLevel !== 'all' && <ActiveFilterChip label={t('tournamentLevels', filters.tournamentLevel)} onRemove={() => setFilters(f => ({ ...f, tournamentLevel: 'all' }))} icon="star" />}
                 {filters.tournamentCategory !== 'all' && <ActiveFilterChip label={t('tournamentCategories', filters.tournamentCategory)} onRemove={() => setFilters(f => ({ ...f, tournamentCategory: 'all' }))} />}
                 {filters.tournamentRegistration !== 'all' && <ActiveFilterChip label={t('registrationTypes', filters.tournamentRegistration)} onRemove={() => setFilters(f => ({ ...f, tournamentRegistration: 'all' }))} />}

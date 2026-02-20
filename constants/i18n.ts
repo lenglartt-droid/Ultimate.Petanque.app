@@ -644,6 +644,14 @@ export const translations = {
     'Cailloux': { fr: 'Gros cailloux, rebonds imprévisibles', en: 'Large pebbles, unpredictable bounces' },
     'Terre battue': { fr: 'Terre nue, évolue selon la météo', en: 'Bare earth, changes with weather' },
   },
+  // Format details (for tournament/new)
+  formatDetails: {
+    '1vs1': { fr: '1 vs 1', en: '1 vs 1' },
+    '2vs2': { fr: '2 vs 2', en: '2 vs 2' },
+    '3vs3': { fr: '3 vs 3', en: '3 vs 3' },
+    '3boules': { fr: '3 boules', en: '3 bowls' },
+    '2boules': { fr: '2 boules', en: '2 bowls' },
+  },
   // Stats categories
   statsCategories: {
     global: { fr: 'Global', en: 'Overall' },
