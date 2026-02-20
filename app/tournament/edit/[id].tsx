@@ -458,7 +458,7 @@ export default function EditTournamentScreen() {
                     styles.levelChipText,
                     tournamentLevel === level && !showCustomLevelInput && styles.levelChipTextActive
                   ]}>
-                    {level}
+                    {t('tournamentLevels', level)}
                   </Text>
                 </Pressable>
               ))}
@@ -534,7 +534,7 @@ export default function EditTournamentScreen() {
                     styles.categoryChipText,
                     tournamentCategory === cat && styles.categoryChipTextActive
                   ]}>
-                    {cat}
+                    {t('tournamentCategories', cat)}
                   </Text>
                 </Pressable>
               ))}
@@ -561,7 +561,7 @@ export default function EditTournamentScreen() {
                     styles.registrationChipText,
                     registrationType === reg && styles.registrationChipTextActive
                   ]}>
-                    {reg}
+                    {t('registrationTypes', reg)}
                   </Text>
                 </Pressable>
               ))}
@@ -588,7 +588,7 @@ export default function EditTournamentScreen() {
                     styles.scopeChipText,
                     tournamentScope === scope && styles.scopeChipTextActive
                   ]}>
-                    {scope}
+                    {t('tournamentScopes', scope)}
                   </Text>
                 </Pressable>
               ))}

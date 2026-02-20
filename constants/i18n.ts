@@ -709,6 +709,48 @@ export const translations = {
     'Tirage intégral': { fr: 'Tirage intégral', en: 'Full draw' },
     'Autre': { fr: 'Autre', en: 'Other' },
   },
+  // ============================================
+  // TOURNAMENT LEVELS
+  // ============================================
+  tournamentLevels: {
+    'Loisir / Amical': { fr: 'Loisir / Amical', en: 'Leisure / Friendly' },
+    'Promotion': { fr: 'Promotion', en: 'Promotion' },
+    'Honneur': { fr: 'Honneur', en: 'Honour' },
+    'Élite': { fr: 'Élite', en: 'Elite' },
+    'Vétérans': { fr: 'Vétérans', en: 'Veterans' },
+    'Jeunes (Minimes)': { fr: 'Jeunes (Minimes)', en: 'Youth (Under 13)' },
+    'Jeunes (Cadets)': { fr: 'Jeunes (Cadets)', en: 'Youth (Under 15)' },
+    'Jeunes (Juniors)': { fr: 'Jeunes (Juniors)', en: 'Youth (Under 18)' },
+  },
+  // ============================================
+  // TOURNAMENT CATEGORIES
+  // ============================================
+  tournamentCategories: {
+    'Officiel / FFPJP': { fr: 'Officiel / FFPJP', en: 'Official / FFPJP' },
+    'Concours officiel': { fr: 'Concours officiel', en: 'Official competition' },
+    'Concours amical': { fr: 'Concours amical', en: 'Friendly competition' },
+    'Concours à la mêlée': { fr: 'Concours à la mêlée', en: 'Random draw competition' },
+  },
+  // ============================================
+  // REGISTRATION TYPES
+  // ============================================
+  registrationTypes: {
+    'Inscription libre': { fr: 'Inscription libre', en: 'Open registration' },
+    'Sur invitation': { fr: 'Sur invitation', en: 'By invitation' },
+    'Réservé aux licenciés': { fr: 'Réservé aux licenciés', en: 'Licensed players only' },
+    'Ouvert': { fr: 'Ouvert', en: 'Open' },
+  },
+  // ============================================
+  // TOURNAMENT SCOPES
+  // ============================================
+  tournamentScopes: {
+    'Championnat départemental': { fr: 'Championnat départemental', en: 'Departmental championship' },
+    'Championnat régional': { fr: 'Championnat régional', en: 'Regional championship' },
+    'Championnat national': { fr: 'Championnat national', en: 'National championship' },
+    'Championnat international': { fr: 'Championnat international', en: 'International championship' },
+    'Tournoi de club': { fr: 'Tournoi de club', en: 'Club tournament' },
+    'Concours à la montée': { fr: 'Concours à la montée', en: 'Promotion competition' },
+  },
 
   // ============================================
   // GAME MODES
@@ -872,6 +914,65 @@ export const translations = {
     statisticsCat: { fr: 'Statistiques', en: 'Statistics' },
     directorySharing: { fr: 'Annuaire & Partage', en: 'Directory & Sharing' },
     accountProfile: { fr: 'Compte & Profil', en: 'Account & Profile' },
+    // FAQ Questions & Answers
+    gs1Q: { fr: 'Comment bien démarrer avec Ultimate Petanque ?', en: 'How to get started with Ultimate Petanque?' },
+    gs1A: { fr: '1. Complétez votre profil (rôle, niveau, club)\n2. Ajoutez vos partenaires de jeu dans l\'annuaire\n3. Lancez votre premier match ou défi\n4. Consultez vos stats après quelques parties\n\nToutes vos données sont sauvegardées automatiquement dans le cloud.', en: '1. Complete your profile (role, level, club)\n2. Add your playing partners in the directory\n3. Start your first match or challenge\n4. Check your stats after a few games\n\nAll your data is automatically saved to the cloud.' },
+    gs2Q: { fr: 'L\'application fonctionne-t-elle hors connexion ?', en: 'Does the app work offline?' },
+    gs2A: { fr: 'Vos données sont synchronisées avec le cloud lorsque vous avez une connexion. Pour garantir la sauvegarde de vos matchs et statistiques, il est recommandé d\'être connecté.', en: 'Your data is synced with the cloud when you have a connection. To ensure your matches and statistics are saved, it is recommended to be connected.' },
+    gs3Q: { fr: 'Comment personnaliser mon profil ?', en: 'How to customize my profile?' },
+    gs3A: { fr: 'Allez dans Profil (icône en haut à droite de l\'accueil) → Modifier. Vous pouvez changer votre photo, nom, rôle préféré (Tireur/Pointeur/Milieu), niveau, club, et informations de contact.', en: 'Go to Profile (icon at the top right of the home screen) → Edit. You can change your photo, name, preferred role (Shooter/Pointer/Middle), level, club, and contact information.' },
+    m1Q: { fr: 'Comment créer et scorer un match ?', en: 'How to create and score a match?' },
+    m1A: { fr: 'Depuis l\'accueil, appuyez sur "Match". Choisissez le mode (Entraînement/Tournoi), le format (Tête-à-tête, Doublette, Triplette), sélectionnez vos équipes puis démarrez.\n\nEn plein écran, utilisez les boutons + et - pour scorer chaque mène. Le chronomètre se lance automatiquement.', en: 'From the home screen, tap "Match". Choose the mode (Training/Tournament), format (Singles, Doubles, Triples), select your teams then start.\n\nIn fullscreen, use the + and - buttons to score each end. The timer starts automatically.' },
+    m2Q: { fr: 'Comment fonctionne la notation détaillée des tirs ?', en: 'How does detailed shot notation work?' },
+    m2A: { fr: 'Pendant un match, appuyez sur TIR ou POINT pour ouvrir la notation en étapes :\n\n\u2022 Tir : Résultat → Type (tendu, en cloche, en rafle) → Si raté : où est tombée la boule → Impact\n\u2022 Point : Résultat → Type (roulé, plombé, portée) → Qualité/Distance\n\nCes données alimentent vos statistiques avancées et l\'analyse des erreurs.', en: 'During a match, tap SHOT or POINT to open step-by-step notation:\n\n\u2022 Shot: Result → Type (direct, lob, rolling) → If missed: where the ball landed → Impact\n\u2022 Point: Result → Type (rolled, dropped, carried) → Quality/Distance\n\nThis data feeds your advanced statistics and error analysis.' },
+    m3Q: { fr: 'Comment fonctionne le mode série (Best of 3) ?', en: 'How does the series mode (Best of 3) work?' },
+    m3A: { fr: 'Activez "Série" avant de commencer. Après chaque match, vous pouvez lancer une revanche. Le premier à 2 victoires gagne la série. Si c\'est 1-1, le 3ème match est la Finale.\n\nLes séries sont suivies automatiquement dans vos statistiques.', en: 'Enable "Series" before starting. After each match, you can launch a rematch. The first to 2 wins takes the series. If it is 1-1, the 3rd match is the Final.\n\nSeries are automatically tracked in your statistics.' },
+    m4Q: { fr: 'Comment modifier les actions pendant un match ?', en: 'How to edit actions during a match?' },
+    m4A: { fr: 'Appuyez sur le bouton "Édition" (icône crayon) pendant le match. Vous pourrez :\n\u2022 Ajuster les scores de mènes\n\u2022 Modifier le chronomètre\n\u2022 Ajouter ou corriger des actions de tir/point\n\u2022 Assigner les rôles des joueurs', en: 'Tap the "Edit" button (pencil icon) during the match. You can:\n\u2022 Adjust end scores\n\u2022 Modify the timer\n\u2022 Add or correct shot/point actions\n\u2022 Assign player roles' },
+    c1Q: { fr: 'Quels types de défis puis-je faire ?', en: 'What types of challenges can I do?' },
+    c1A: { fr: '3 types de défis disponibles :\n\n\ud83c\udfaf 10 Tirs — Tirs classiques, comptez vos réussites\n\ud83c\udfaf 10 Tirs Sautée — Tirs en cloche uniquement\n\ud83c\udfaf Tir de Précision — 5 ateliers × 4 tirs avec notation par distance (0/1/3/5 pts)\n\nChaque défi peut être joué en solo ou en 1v1 contre un autre joueur.', en: '3 types of challenges available:\n\n\ud83c\udfaf 10 Shots — Classic shots, count your successes\n\ud83c\udfaf 10 Lob Shots — Lob shots only\n\ud83c\udfaf Precision Shot — 5 workshops × 4 shots with distance scoring (0/1/3/5 pts)\n\nEach challenge can be played solo or 1v1 against another player.' },
+    c2Q: { fr: 'Comment fonctionne le défi Précision ?', en: 'How does the Precision challenge work?' },
+    c2A: { fr: '5 ateliers : Boule seule, Derrière le but, Entre 2 boules, Sautée, Tir de but.\n\nPour chaque atelier : 4 tirs à distances croissantes (6-9m) avec un chrono de 30 secondes par tir.\n\nBarème : Raté = 0 pts, Touché = 1 pt, Sorti = 3 pts, Carreau = 5 pts.\nScore max possible : 100 points.', en: '5 workshops: Single ball, Behind the jack, Between 2 balls, Lob, Jack shot.\n\nFor each workshop: 4 shots at increasing distances (6-9m) with a 30-second timer per shot.\n\nScoring: Missed = 0 pts, Hit = 1 pt, Knocked out = 3 pts, Carreau = 5 pts.\nMax possible score: 100 points.' },
+    c3Q: { fr: 'Comment défier un autre joueur en 1v1 ?', en: 'How to challenge another player in 1v1?' },
+    c3A: { fr: 'Lors de la création du défi, choisissez le mode "1 contre 1" puis sélectionnez votre adversaire parmi vos joueurs enregistrés. Vous alternez les tirs et l\'app compare automatiquement les scores.', en: 'When creating the challenge, choose the "1 vs 1" mode then select your opponent from your registered players. You alternate shots and the app automatically compares the scores.' },
+    t1Q: { fr: 'Comment suivre mon parcours en tournoi ?', en: 'How to track my tournament journey?' },
+    t1A: { fr: '1. Créez le tournoi (Accueil → Tournoi) avec les infos (nom, date, lieu, cadrage)\n2. Depuis la page du tournoi, ajoutez chaque match joué\n3. La progression par phases s\'affiche automatiquement\n4. En fin de tournoi, enregistrez votre classement final\n\nVotre parcours, statistiques et résultat sont conservés dans le palmarès.', en: '1. Create the tournament (Home → Tournament) with details (name, date, location, bracket)\n2. From the tournament page, add each match played\n3. Phase progression is displayed automatically\n4. At the end of the tournament, record your final ranking\n\nYour journey, statistics and result are kept in your achievements.' },
+    t2Q: { fr: 'Quels formats de cadrage sont supportés ?', en: 'What bracket formats are supported?' },
+    t2A: { fr: '6 formats disponibles :\n\n\u2022 Poules — Matchs en groupes + classement\n\u2022 Élimination directe — Un match perdu = éliminé\n\u2022 Mixte — Poules puis élimination\n\u2022 Suisse — Rondes contre adversaires de même niveau\n\u2022 A/B/C — Tableaux multiples avec repêchage\n\u2022 Tirage intégral — Tableau fixé au tirage\n\nChaque format a ses propres phases de progression.', en: '6 formats available:\n\n\u2022 Pools — Group matches + standings\n\u2022 Single elimination — One loss = eliminated\n\u2022 Mixed — Pools then elimination\n\u2022 Swiss — Rounds against same-level opponents\n\u2022 A/B/C — Multiple brackets with repechage\n\u2022 Full draw — Fixed bracket from the draw\n\nEach format has its own progression phases.' },
+    t3Q: { fr: 'Comment activer les rappels de tournoi ?', en: 'How to enable tournament reminders?' },
+    t3A: { fr: 'Sur la page du tournoi, appuyez sur l\'icône cloche (\ud83d\udd14). Configurez vos rappels :\n\n\u2022 1 semaine avant\n\u2022 3 jours avant\n\u2022 La veille (à 18h)\n\nLes rappels fonctionnent en notifications push locales, même sans internet.', en: 'On the tournament page, tap the bell icon (\ud83d\udd14). Configure your reminders:\n\n\u2022 1 week before\n\u2022 3 days before\n\u2022 The day before (at 6 PM)\n\nReminders work as local push notifications, even without internet.' },
+    t4Q: { fr: 'Comment enregistrer mon classement final ?', en: 'How to record my final ranking?' },
+    t4A: { fr: 'Sur la page du tournoi, appuyez sur le drapeau (\ud83c\udfc1) en bas à gauche. Un assistant en 3 étapes vous guide :\n\n1. Sélectionnez votre classement (podium ou autre)\n2. Renseignez vos gains (optionnel)\n3. Confirmez — le tournoi passe en "Terminé"\n\nLe résultat apparaît dans votre palmarès et bilan financier.', en: 'On the tournament page, tap the flag (\ud83c\udfc1) at the bottom left. A 3-step wizard guides you:\n\n1. Select your ranking (podium or other)\n2. Enter your winnings (optional)\n3. Confirm — the tournament changes to "Completed"\n\nThe result appears in your achievements and financial summary.' },
+    s1Q: { fr: 'Quelles statistiques sont disponibles ?', en: 'What statistics are available?' },
+    s1A: { fr: '4 catégories dans l\'onglet Stats :\n\n\ud83d\udcca Performance — Taux de victoire, scores, séries, durées\n\ud83c\udfaf Tir — Réussite, carreaux, types de tir × impact\n\ud83c\udfb1 Point — Réussite, qualité, types × précision\n\u274c Erreurs — Analyse par durée, format, contexte, coaching\n\nTous les filtres temporels : Aujourd\'hui, 7j, 30j, 3 mois, 6 mois, 1 an, Tout.', en: '4 categories in the Stats tab:\n\n\ud83d\udcca Performance — Win rate, scores, series, durations\n\ud83c\udfaf Shot — Success, carreaux, shot types × impact\n\ud83c\udfb1 Point — Success, quality, types × precision\n\u274c Errors — Analysis by duration, format, context, coaching\n\nAll time filters: Today, 7d, 30d, 3 months, 6 months, 1 year, All.' },
+    s2Q: { fr: 'Comment fonctionne la progression ?', en: 'How does progression work?' },
+    s2A: { fr: 'Appuyez sur "Progression" en haut de la page Stats. Des graphiques montrent l\'évolution de vos taux (victoire, tir, point, carreaux) sur la période choisie : 4 sem., 8 sem., 3 mois, 6 mois ou 1 an.\n\nLes flèches de tendance (\u2191\u2193\u2192) indiquent si vos performances s\'améliorent.', en: 'Tap "Progression" at the top of the Stats page. Charts show the evolution of your rates (win, shot, point, carreaux) over the selected period: 4 wks, 8 wks, 3 months, 6 months or 1 year.\n\nTrend arrows (\u2191\u2193\u2192) indicate whether your performance is improving.' },
+    s3Q: { fr: 'Comment l\'analyse des erreurs m\'aide ?', en: 'How does error analysis help me?' },
+    s3A: { fr: 'L\'onglet "Erreurs" identifie vos faiblesses et donne des conseils personnalisés :\n\n\u2022 Où tombent vos tirs ratés (court droite/gauche, long, bouchon)\n\u2022 Si la fatigue affecte votre jeu (parties longues vs courtes)\n\u2022 La différence entraînement vs tournoi\n\u2022 Les séries d\'erreurs consécutives\n\nChaque type d\'erreur est accompagné d\'un conseil technique pour s\'améliorer.', en: 'The "Errors" tab identifies your weaknesses and provides personalized advice:\n\n\u2022 Where your missed shots land (short right/left, long, jack)\n\u2022 Whether fatigue affects your game (long vs short games)\n\u2022 The difference between training and tournament\n\u2022 Consecutive error streaks\n\nEach error type comes with a technical tip for improvement.' },
+    d1Q: { fr: 'Comment gérer mes joueurs et clubs ?', en: 'How to manage my players and clubs?' },
+    d1A: { fr: 'L\'onglet Annuaire regroupe :\n\n\ud83d\udc64 Joueurs — Ajoutez des joueurs avec nom, rôle, niveau, club, boules, contact\n\ud83c\udfe0 Clubs — Créez des clubs avec adresse, équipements, cotisation\n\u26f3 Terrains — Enregistrez les terrains avec type, éclairage, photos\n\nChaque fiche joueur calcule automatiquement ses statistiques à partir des matchs.', en: 'The Directory tab groups:\n\n\ud83d\udc64 Players — Add players with name, role, level, club, balls, contact\n\ud83c\udfe0 Clubs — Create clubs with address, facilities, membership fee\n\u26f3 Terrains — Register terrains with type, lighting, photos\n\nEach player card automatically calculates statistics from matches.' },
+    d2Q: { fr: 'Comment partager une fiche avec un autre joueur ?', en: 'How to share a card with another player?' },
+    d2A: { fr: '1. Ouvrez la fiche (joueur, club, terrain ou tournoi)\n2. Appuyez sur l\'icône de partage\n3. Choisissez la permission (lecture seule ou modification)\n4. Copiez et envoyez le code à votre partenaire\n\nVotre partenaire saisit le code dans Profil → Partage → Code de partage.', en: '1. Open the card (player, club, terrain or tournament)\n2. Tap the share icon\n3. Choose the permission (read-only or edit)\n4. Copy and send the code to your partner\n\nYour partner enters the code in Profile → Sharing → Share code.' },
+    d3Q: { fr: 'Comment gérer les fiches partagées ?', en: 'How to manage shared cards?' },
+    d3A: { fr: 'Profil → Partage → Gestion des partages :\n\n\u2022 Onglet "Mes partages" : voir vos codes actifs, copier, basculer les permissions, révoquer\n\u2022 Onglet "Reçus" : voir les fiches qu\'on vous a partagées, les enregistrer dans votre annuaire\n\nVous recevez une notification quand quelqu\'un utilise un de vos codes.', en: 'Profile → Sharing → Share management:\n\n\u2022 "My shares" tab: view your active codes, copy, toggle permissions, revoke\n\u2022 "Received" tab: view cards shared with you, save them to your directory\n\nYou receive a notification when someone uses one of your codes.' },
+    d4Q: { fr: 'Puis-je enregistrer une fiche partagée ?', en: 'Can I save a shared card?' },
+    d4A: { fr: 'Oui ! Sur toute fiche reçue en partage, un bouton "Enregistrer" (\ud83d\udcbe) apparaît. La fiche est copiée intégralement dans votre annuaire personnel. Vous pouvez ensuite la modifier librement.', en: 'Yes! On any card received through sharing, a "Save" button (\ud83d\udcbe) appears. The card is fully copied into your personal directory. You can then edit it freely.' },
+    a1Q: { fr: 'Comment changer mon mot de passe ?', en: 'How to change my password?' },
+    a1A: { fr: 'Profil → Paramètres → Mot de passe. Saisissez votre ancien mot de passe, puis le nouveau (minimum 6 caractères) et confirmez.', en: 'Profile → Settings → Password. Enter your old password, then the new one (minimum 6 characters) and confirm.' },
+    a2Q: { fr: 'Où trouver mon palmarès et bilan financier ?', en: 'Where to find my achievements and financial summary?' },
+    a2A: { fr: 'Depuis votre Profil :\n\n\ud83c\udfc6 Mon Palmarès — Tous vos résultats de tournois, badges de performance, classement par saison\n\ud83d\udcb0 Bilan financier — Résumé des gains, inscriptions, cotisations club, balance nette\n\nCes pages se mettent à jour automatiquement.', en: 'From your Profile:\n\n\ud83c\udfc6 My Achievements — All your tournament results, performance badges, season rankings\n\ud83d\udcb0 Financial summary — Summary of winnings, registrations, club fees, net balance\n\nThese pages update automatically.' },
+    a3Q: { fr: 'Comment configurer les notifications ?', en: 'How to configure notifications?' },
+    a3A: { fr: 'Profil → Paramètres → Notifications :\n\n\u2022 Notifications de partage — Alertes quand quelqu\'un accède à vos fiches\n\u2022 Notifications de tournois — Rappels programmés avant vos tournois\n\nLes notifications push locales fonctionnent sans connexion internet.', en: 'Profile → Settings → Notifications:\n\n\u2022 Sharing notifications — Alerts when someone accesses your cards\n\u2022 Tournament notifications — Scheduled reminders before your tournaments\n\nLocal push notifications work without internet connection.' },
+    // Quick action steps
+    qaMatchSteps: { fr: 'Accueil → "Match"|Choisir le format|Sélectionner les équipes|Commencer', en: 'Home → "Match"|Choose the format|Select teams|Start' },
+    qaChallengeSteps: { fr: 'Accueil → "Défi"|Choisir le type|Solo ou 1v1|Tirer !', en: 'Home → "Challenge"|Choose the type|Solo or 1v1|Shoot!' },
+    qaTournamentSteps: { fr: 'Accueil → "Tournoi"|Remplir les infos|Ajouter des matchs|Voir le parcours', en: 'Home → "Tournament"|Fill in details|Add matches|View journey' },
+    qaShareSteps: { fr: 'Ouvrir la fiche|Icône partage|Copier le code|Envoyer au joueur', en: 'Open the card|Share icon|Copy the code|Send to the player' },
+    // Tips
+    tip1: { fr: 'Utilisez la notation détaillée pour des statistiques d\'erreurs personnalisées', en: 'Use detailed notation for personalized error statistics' },
+    tip2: { fr: 'Le chronomètre se met en pause automatiquement entre les mènes', en: 'The timer pauses automatically between ends' },
+    tip3: { fr: 'Jouez régulièrement pour voir votre courbe de progression évoluer', en: 'Play regularly to see your progression curve evolve' },
+    tip4: { fr: 'Partagez votre fiche joueur pour que vos coéquipiers voient vos stats', en: 'Share your player card so your teammates can see your stats' },
   },
 
   // ============================================

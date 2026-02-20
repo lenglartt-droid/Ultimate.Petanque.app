@@ -595,6 +595,7 @@ export default function DirectoryScreen() {
                 value={filters.tournamentLevel}
                 onChange={(v) => setFilters(f => ({ ...f, tournamentLevel: v }))}
                 icons={{ 'Loisir / Amical': 'mood', 'Promotion': 'trending-up', 'Honneur': 'star', 'Élite': 'emoji-events' }}
+                labels={Object.fromEntries(uniqueValues.tournamentLevels.map(l => [l, l === 'all' ? t('directory', 'allLabel') : t('tournamentLevels', l)]))}
                 allLabel={t('directory', 'allLabel')}
               />
             )}
@@ -602,6 +603,7 @@ export default function DirectoryScreen() {
               <FilterSection
                 title={t('directory', 'tournamentType')}
                 options={uniqueValues.tournamentCategories}
+                labels={Object.fromEntries(uniqueValues.tournamentCategories.map(c => [c, c === 'all' ? t('directory', 'allLabel') : t('tournamentCategories', c)]))}
                 value={filters.tournamentCategory}
                 onChange={(v) => setFilters(f => ({ ...f, tournamentCategory: v }))}
                 allLabel={t('directory', 'allLabel')}
@@ -613,6 +615,7 @@ export default function DirectoryScreen() {
                 options={uniqueValues.tournamentRegistrations}
                 value={filters.tournamentRegistration}
                 onChange={(v) => setFilters(f => ({ ...f, tournamentRegistration: v }))}
+                labels={Object.fromEntries(uniqueValues.tournamentRegistrations.map(r => [r, r === 'all' ? t('directory', 'allLabel') : t('registrationTypes', r)]))}
                 icons={{ 'Inscription libre': 'lock-open', 'Sur invitation': 'mail', 'Réservé aux licenciés': 'verified', 'Ouvert': 'public' }}
                 allLabel={t('directory', 'allLabel')}
               />
@@ -623,6 +626,7 @@ export default function DirectoryScreen() {
                 options={uniqueValues.tournamentScopes}
                 value={filters.tournamentScope}
                 onChange={(v) => setFilters(f => ({ ...f, tournamentScope: v }))}
+                labels={Object.fromEntries(uniqueValues.tournamentScopes.map(s => [s, s === 'all' ? t('directory', 'allLabel') : t('tournamentScopes', s)]))}
                 icons={{ 'Tournoi de club': 'home', 'Championnat départemental': 'place', 'Championnat régional': 'map', 'Championnat national': 'flag', 'Championnat international': 'public' }}
                 allLabel={t('directory', 'allLabel')}
               />
@@ -766,10 +770,10 @@ export default function DirectoryScreen() {
                 {filters.tournamentStatus !== 'all' && <ActiveFilterChip label={getStatusLabel(filters.tournamentStatus)} onRemove={() => setFilters(f => ({ ...f, tournamentStatus: 'all' }))} icon="event" />}
                 {filters.tournamentCity !== 'all' && <ActiveFilterChip label={filters.tournamentCity} onRemove={() => setFilters(f => ({ ...f, tournamentCity: 'all' }))} icon="place" />}
                 {filters.tournamentFormat !== 'all' && <ActiveFilterChip label={filters.tournamentFormat} onRemove={() => setFilters(f => ({ ...f, tournamentFormat: 'all' }))} />}
-                {filters.tournamentLevel !== 'all' && <ActiveFilterChip label={filters.tournamentLevel} onRemove={() => setFilters(f => ({ ...f, tournamentLevel: 'all' }))} icon="star" />}
-                {filters.tournamentCategory !== 'all' && <ActiveFilterChip label={filters.tournamentCategory} onRemove={() => setFilters(f => ({ ...f, tournamentCategory: 'all' }))} />}
-                {filters.tournamentRegistration !== 'all' && <ActiveFilterChip label={filters.tournamentRegistration} onRemove={() => setFilters(f => ({ ...f, tournamentRegistration: 'all' }))} />}
-                {filters.tournamentScope !== 'all' && <ActiveFilterChip label={filters.tournamentScope} onRemove={() => setFilters(f => ({ ...f, tournamentScope: 'all' }))} icon="flag" />}
+                {filters.tournamentLevel !== 'all' && <ActiveFilterChip label={t('tournamentLevels', filters.tournamentLevel)} onRemove={() => setFilters(f => ({ ...f, tournamentLevel: 'all' }))} icon="star" />}
+                {filters.tournamentCategory !== 'all' && <ActiveFilterChip label={t('tournamentCategories', filters.tournamentCategory)} onRemove={() => setFilters(f => ({ ...f, tournamentCategory: 'all' }))} />}
+                {filters.tournamentRegistration !== 'all' && <ActiveFilterChip label={t('registrationTypes', filters.tournamentRegistration)} onRemove={() => setFilters(f => ({ ...f, tournamentRegistration: 'all' }))} />}
+                {filters.tournamentScope !== 'all' && <ActiveFilterChip label={t('tournamentScopes', filters.tournamentScope)} onRemove={() => setFilters(f => ({ ...f, tournamentScope: 'all' }))} icon="flag" />}
               </>
             )}
           </ScrollView>

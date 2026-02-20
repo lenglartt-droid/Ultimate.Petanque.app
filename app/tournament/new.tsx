@@ -515,7 +515,7 @@ export default function NewTournamentScreen() {
                     onPress={() => { Haptics.selectionAsync(); setShowCustomLevelInput(false); setCustomLevel(''); setTournamentLevel(tournamentLevel === level ? undefined : level); }}
                   >
                     <MaterialIcons name={ico as any} size={14} color={isActive ? theme.success : theme.textMuted} />
-                    <Text style={[styles.levelChipText, isActive && styles.levelChipTextActive]} numberOfLines={1}>{level}</Text>
+                    <Text style={[styles.levelChipText, isActive && styles.levelChipTextActive]} numberOfLines={1}>{t('tournamentLevels', level)}</Text>
                   </Pressable>
                 );
               })}
@@ -553,7 +553,7 @@ export default function NewTournamentScreen() {
                     style={[styles.chipOutline, isActive && styles.chipOutlineActiveWarn]}
                     onPress={() => { Haptics.selectionAsync(); setTournamentCategory(tournamentCategory === cat ? undefined : cat); }}
                   >
-                    <Text style={[styles.chipOutlineText, isActive && styles.chipOutlineTextWarn]}>{cat}</Text>
+                    <Text style={[styles.chipOutlineText, isActive && styles.chipOutlineTextWarn]}>{t('tournamentCategories', cat)}</Text>
                   </Pressable>
                 );
               })}
@@ -572,7 +572,7 @@ export default function NewTournamentScreen() {
                       style={[styles.chipOutline, isActive && styles.chipOutlineActivePrimary]}
                       onPress={() => { Haptics.selectionAsync(); setRegistrationType(registrationType === reg ? undefined : reg); }}
                     >
-                      <Text style={[styles.chipOutlineText, isActive && styles.chipOutlineTextPrimary]}>{reg}</Text>
+                      <Text style={[styles.chipOutlineText, isActive && styles.chipOutlineTextPrimary]}>{t('registrationTypes', reg)}</Text>
                     </Pressable>
                   );
                 })}
@@ -590,7 +590,7 @@ export default function NewTournamentScreen() {
                     style={[styles.chipBtn, isActive && styles.chipBtnActiveAccent]}
                     onPress={() => { Haptics.selectionAsync(); setTournamentScope(tournamentScope === scope ? undefined : scope); }}
                   >
-                    <Text style={[styles.chipBtnText, isActive && styles.chipBtnTextAccent]}>{scope}</Text>
+                    <Text style={[styles.chipBtnText, isActive && styles.chipBtnTextAccent]}>{t('tournamentScopes', scope)}</Text>
                   </Pressable>
                 );
               })}

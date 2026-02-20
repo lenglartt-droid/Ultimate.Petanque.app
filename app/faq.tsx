@@ -18,338 +18,138 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { Language } from '@/constants/i18n';
 
 // ============================================
-// QUICK ACTIONS - Translated
+// QUICK ACTIONS - i18n
 // ============================================
-function getQuickActions(lang: Language) {
+function getQuickActions(tFn: (s: string, k: string) => string) {
   return [
     {
       id: 'new_match',
-      title: lang === 'fr' ? 'Créer un match' : 'Create a match',
+      title: tFn('faq', 'createMatch'),
       icon: 'sports',
       color: theme.primary,
-      steps: lang === 'fr'
-        ? ['Accueil → "Match"', 'Choisir le format', 'Sélectionner les équipes', 'Commencer']
-        : ['Home → "Match"', 'Choose the format', 'Select teams', 'Start'],
+      steps: tFn('faq', 'qaMatchSteps').split('|'),
     },
     {
       id: 'new_challenge',
-      title: lang === 'fr' ? 'Lancer un défi' : 'Launch a challenge',
+      title: tFn('faq', 'launchChallenge'),
       icon: 'track-changes',
       color: theme.carreauColor,
-      steps: lang === 'fr'
-        ? ['Accueil → "Défi"', 'Choisir le type', 'Solo ou 1v1', 'Tirer !']
-        : ['Home → "Challenge"', 'Choose the type', 'Solo or 1v1', 'Shoot!'],
+      steps: tFn('faq', 'qaChallengeSteps').split('|'),
     },
     {
       id: 'new_tournament',
-      title: lang === 'fr' ? 'Suivre un tournoi' : 'Track a tournament',
+      title: tFn('faq', 'trackTournament'),
       icon: 'emoji-events',
       color: theme.success,
-      steps: lang === 'fr'
-        ? ['Accueil → "Tournoi"', 'Remplir les infos', 'Ajouter des matchs', 'Voir le parcours']
-        : ['Home → "Tournament"', 'Fill in details', 'Add matches', 'View journey'],
+      steps: tFn('faq', 'qaTournamentSteps').split('|'),
     },
     {
       id: 'share_card',
-      title: lang === 'fr' ? 'Partager une fiche' : 'Share a card',
+      title: tFn('faq', 'shareCard'),
       icon: 'share',
       color: theme.accent,
-      steps: lang === 'fr'
-        ? ['Ouvrir la fiche', 'Icône partage', 'Copier le code', 'Envoyer au joueur']
-        : ['Open the card', 'Share icon', 'Copy the code', 'Send to the player'],
+      steps: tFn('faq', 'qaShareSteps').split('|'),
     },
   ];
 }
 
 // ============================================
-// FAQ DATA - Translated
+// FAQ DATA - i18n
 // ============================================
-function getFaqData(lang: Language) {
+function getFaqData(tFn: (s: string, k: string) => string) {
   return [
     {
       id: 'getting_started',
-      category: lang === 'fr' ? 'Premiers pas' : 'Getting started',
+      category: tFn('faq', 'gettingStarted'),
       icon: 'play-circle-filled',
       color: theme.primary,
       questions: [
-        {
-          id: 'gs1',
-          question: lang === 'fr'
-            ? "Comment bien démarrer avec Ultimate Petanque ?"
-            : "How to get started with Ultimate Petanque?",
-          answer: lang === 'fr'
-            ? "1. Complétez votre profil (rôle, niveau, club)\n2. Ajoutez vos partenaires de jeu dans l'annuaire\n3. Lancez votre premier match ou défi\n4. Consultez vos stats après quelques parties\n\nToutes vos données sont sauvegardées automatiquement dans le cloud."
-            : "1. Complete your profile (role, level, club)\n2. Add your playing partners in the directory\n3. Start your first match or challenge\n4. Check your stats after a few games\n\nAll your data is automatically saved to the cloud.",
-        },
-        {
-          id: 'gs2',
-          question: lang === 'fr'
-            ? "L'application fonctionne-t-elle hors connexion ?"
-            : "Does the app work offline?",
-          answer: lang === 'fr'
-            ? "Vos données sont synchronisées avec le cloud lorsque vous avez une connexion. Pour garantir la sauvegarde de vos matchs et statistiques, il est recommandé d'être connecté."
-            : "Your data is synced with the cloud when you have a connection. To ensure your matches and statistics are saved, it is recommended to be connected.",
-        },
-        {
-          id: 'gs3',
-          question: lang === 'fr'
-            ? "Comment personnaliser mon profil ?"
-            : "How to customize my profile?",
-          answer: lang === 'fr'
-            ? "Allez dans Profil (icône en haut à droite de l'accueil) → Modifier. Vous pouvez changer votre photo, nom, rôle préféré (Tireur/Pointeur/Milieu), niveau, club, et informations de contact."
-            : "Go to Profile (icon at the top right of the home screen) → Edit. You can change your photo, name, preferred role (Shooter/Pointer/Middle), level, club, and contact information.",
-        },
+        { id: 'gs1', question: tFn('faq', 'gs1Q'), answer: tFn('faq', 'gs1A') },
+        { id: 'gs2', question: tFn('faq', 'gs2Q'), answer: tFn('faq', 'gs2A') },
+        { id: 'gs3', question: tFn('faq', 'gs3Q'), answer: tFn('faq', 'gs3A') },
       ],
     },
     {
       id: 'matches',
-      category: lang === 'fr' ? 'Matchs & Scoring' : 'Matches & Scoring',
+      category: tFn('faq', 'matchesScoring'),
       icon: 'sports',
       color: theme.accent,
       questions: [
-        {
-          id: 'm1',
-          question: lang === 'fr'
-            ? "Comment créer et scorer un match ?"
-            : "How to create and score a match?",
-          answer: lang === 'fr'
-            ? "Depuis l'accueil, appuyez sur \"Match\". Choisissez le mode (Entraînement/Tournoi), le format (Tête-à-tête, Doublette, Triplette), sélectionnez vos équipes puis démarrez.\n\nEn plein écran, utilisez les boutons + et - pour scorer chaque mène. Le chronomètre se lance automatiquement."
-            : "From the home screen, tap \"Match\". Choose the mode (Training/Tournament), format (Singles, Doubles, Triples), select your teams then start.\n\nIn fullscreen, use the + and - buttons to score each end. The timer starts automatically.",
-        },
-        {
-          id: 'm2',
-          question: lang === 'fr'
-            ? "Comment fonctionne la notation détaillée des tirs ?"
-            : "How does detailed shot notation work?",
-          answer: lang === 'fr'
-            ? "Pendant un match, appuyez sur TIR ou POINT pour ouvrir la notation en étapes :\n\n• Tir : Résultat → Type (tendu, en cloche, en rafle) → Si raté : où est tombée la boule → Impact\n• Point : Résultat → Type (roulé, plombé, portée) → Qualité/Distance\n\nCes données alimentent vos statistiques avancées et l'analyse des erreurs."
-            : "During a match, tap SHOT or POINT to open step-by-step notation:\n\n• Shot: Result → Type (direct, lob, rolling) → If missed: where the ball landed → Impact\n• Point: Result → Type (rolled, dropped, carried) → Quality/Distance\n\nThis data feeds your advanced statistics and error analysis.",
-        },
-        {
-          id: 'm3',
-          question: lang === 'fr'
-            ? "Comment fonctionne le mode série (Best of 3) ?"
-            : "How does the series mode (Best of 3) work?",
-          answer: lang === 'fr'
-            ? "Activez \"Série\" avant de commencer. Après chaque match, vous pouvez lancer une revanche. Le premier à 2 victoires gagne la série. Si c'est 1-1, le 3ème match est la Finale.\n\nLes séries sont suivies automatiquement dans vos statistiques."
-            : "Enable \"Series\" before starting. After each match, you can launch a rematch. The first to 2 wins takes the series. If it is 1-1, the 3rd match is the Final.\n\nSeries are automatically tracked in your statistics.",
-        },
-        {
-          id: 'm4',
-          question: lang === 'fr'
-            ? "Comment modifier les actions pendant un match ?"
-            : "How to edit actions during a match?",
-          answer: lang === 'fr'
-            ? "Appuyez sur le bouton \"Édition\" (icône crayon) pendant le match. Vous pourrez :\n• Ajuster les scores de mènes\n• Modifier le chronomètre\n• Ajouter ou corriger des actions de tir/point\n• Assigner les rôles des joueurs"
-            : "Tap the \"Edit\" button (pencil icon) during the match. You can:\n• Adjust end scores\n• Modify the timer\n• Add or correct shot/point actions\n• Assign player roles",
-        },
+        { id: 'm1', question: tFn('faq', 'm1Q'), answer: tFn('faq', 'm1A') },
+        { id: 'm2', question: tFn('faq', 'm2Q'), answer: tFn('faq', 'm2A') },
+        { id: 'm3', question: tFn('faq', 'm3Q'), answer: tFn('faq', 'm3A') },
+        { id: 'm4', question: tFn('faq', 'm4Q'), answer: tFn('faq', 'm4A') },
       ],
     },
     {
       id: 'challenges',
-      category: lang === 'fr' ? 'Défis' : 'Challenges',
+      category: tFn('faq', 'challengesCat'),
       icon: 'track-changes',
       color: theme.carreauColor,
       questions: [
-        {
-          id: 'c1',
-          question: lang === 'fr'
-            ? "Quels types de défis puis-je faire ?"
-            : "What types of challenges can I do?",
-          answer: lang === 'fr'
-            ? "3 types de défis disponibles :\n\n🎯 10 Tirs — Tirs classiques, comptez vos réussites\n🎯 10 Tirs Sautée — Tirs en cloche uniquement\n🎯 Tir de Précision — 5 ateliers × 4 tirs avec notation par distance (0/1/3/5 pts)\n\nChaque défi peut être joué en solo ou en 1v1 contre un autre joueur."
-            : "3 types of challenges available:\n\n🎯 10 Shots — Classic shots, count your successes\n🎯 10 Lob Shots — Lob shots only\n🎯 Precision Shot — 5 workshops × 4 shots with distance scoring (0/1/3/5 pts)\n\nEach challenge can be played solo or 1v1 against another player.",
-        },
-        {
-          id: 'c2',
-          question: lang === 'fr'
-            ? "Comment fonctionne le défi Précision ?"
-            : "How does the Precision challenge work?",
-          answer: lang === 'fr'
-            ? "5 ateliers : Boule seule, Derrière le but, Entre 2 boules, Sautée, Tir de but.\n\nPour chaque atelier : 4 tirs à distances croissantes (6-9m) avec un chrono de 30 secondes par tir.\n\nBarème : Raté = 0 pts, Touché = 1 pt, Sorti = 3 pts, Carreau = 5 pts.\nScore max possible : 100 points."
-            : "5 workshops: Single ball, Behind the jack, Between 2 balls, Lob, Jack shot.\n\nFor each workshop: 4 shots at increasing distances (6-9m) with a 30-second timer per shot.\n\nScoring: Missed = 0 pts, Hit = 1 pt, Knocked out = 3 pts, Carreau = 5 pts.\nMax possible score: 100 points.",
-        },
-        {
-          id: 'c3',
-          question: lang === 'fr'
-            ? "Comment défier un autre joueur en 1v1 ?"
-            : "How to challenge another player in 1v1?",
-          answer: lang === 'fr'
-            ? "Lors de la création du défi, choisissez le mode \"1 contre 1\" puis sélectionnez votre adversaire parmi vos joueurs enregistrés. Vous alternez les tirs et l'app compare automatiquement les scores."
-            : "When creating the challenge, choose the \"1 vs 1\" mode then select your opponent from your registered players. You alternate shots and the app automatically compares the scores.",
-        },
+        { id: 'c1', question: tFn('faq', 'c1Q'), answer: tFn('faq', 'c1A') },
+        { id: 'c2', question: tFn('faq', 'c2Q'), answer: tFn('faq', 'c2A') },
+        { id: 'c3', question: tFn('faq', 'c3Q'), answer: tFn('faq', 'c3A') },
       ],
     },
     {
       id: 'tournaments',
-      category: lang === 'fr' ? 'Tournois' : 'Tournaments',
+      category: tFn('faq', 'tournamentsCat'),
       icon: 'emoji-events',
       color: theme.success,
       questions: [
-        {
-          id: 't1',
-          question: lang === 'fr'
-            ? "Comment suivre mon parcours en tournoi ?"
-            : "How to track my tournament journey?",
-          answer: lang === 'fr'
-            ? "1. Créez le tournoi (Accueil → Tournoi) avec les infos (nom, date, lieu, cadrage)\n2. Depuis la page du tournoi, ajoutez chaque match joué\n3. La progression par phases s'affiche automatiquement\n4. En fin de tournoi, enregistrez votre classement final\n\nVotre parcours, statistiques et résultat sont conservés dans le palmarès."
-            : "1. Create the tournament (Home → Tournament) with details (name, date, location, bracket)\n2. From the tournament page, add each match played\n3. Phase progression is displayed automatically\n4. At the end of the tournament, record your final ranking\n\nYour journey, statistics and result are kept in your achievements.",
-        },
-        {
-          id: 't2',
-          question: lang === 'fr'
-            ? "Quels formats de cadrage sont supportés ?"
-            : "What bracket formats are supported?",
-          answer: lang === 'fr'
-            ? "6 formats disponibles :\n\n• Poules — Matchs en groupes + classement\n• Élimination directe — Un match perdu = éliminé\n• Mixte — Poules puis élimination\n• Suisse — Rondes contre adversaires de même niveau\n• A/B/C — Tableaux multiples avec repêchage\n• Tirage intégral — Tableau fixé au tirage\n\nChaque format a ses propres phases de progression."
-            : "6 formats available:\n\n• Pools — Group matches + standings\n• Single elimination — One loss = eliminated\n• Mixed — Pools then elimination\n• Swiss — Rounds against same-level opponents\n• A/B/C — Multiple brackets with repechage\n• Full draw — Fixed bracket from the draw\n\nEach format has its own progression phases.",
-        },
-        {
-          id: 't3',
-          question: lang === 'fr'
-            ? "Comment activer les rappels de tournoi ?"
-            : "How to enable tournament reminders?",
-          answer: lang === 'fr'
-            ? "Sur la page du tournoi, appuyez sur l'icône cloche (🔔). Configurez vos rappels :\n\n• 1 semaine avant\n• 3 jours avant\n• La veille (à 18h)\n\nLes rappels fonctionnent en notifications push locales, même sans internet."
-            : "On the tournament page, tap the bell icon (🔔). Configure your reminders:\n\n• 1 week before\n• 3 days before\n• The day before (at 6 PM)\n\nReminders work as local push notifications, even without internet.",
-        },
-        {
-          id: 't4',
-          question: lang === 'fr'
-            ? "Comment enregistrer mon classement final ?"
-            : "How to record my final ranking?",
-          answer: lang === 'fr'
-            ? "Sur la page du tournoi, appuyez sur le drapeau (🏁) en bas à gauche. Un assistant en 3 étapes vous guide :\n\n1. Sélectionnez votre classement (podium ou autre)\n2. Renseignez vos gains (optionnel)\n3. Confirmez — le tournoi passe en \"Terminé\"\n\nLe résultat apparaît dans votre palmarès et bilan financier."
-            : "On the tournament page, tap the flag (🏁) at the bottom left. A 3-step wizard guides you:\n\n1. Select your ranking (podium or other)\n2. Enter your winnings (optional)\n3. Confirm — the tournament changes to \"Completed\"\n\nThe result appears in your achievements and financial summary.",
-        },
+        { id: 't1', question: tFn('faq', 't1Q'), answer: tFn('faq', 't1A') },
+        { id: 't2', question: tFn('faq', 't2Q'), answer: tFn('faq', 't2A') },
+        { id: 't3', question: tFn('faq', 't3Q'), answer: tFn('faq', 't3A') },
+        { id: 't4', question: tFn('faq', 't4Q'), answer: tFn('faq', 't4A') },
       ],
     },
     {
       id: 'stats',
-      category: lang === 'fr' ? 'Statistiques' : 'Statistics',
+      category: tFn('faq', 'statisticsCat'),
       icon: 'bar-chart',
       color: theme.tirColor,
       questions: [
-        {
-          id: 's1',
-          question: lang === 'fr'
-            ? "Quelles statistiques sont disponibles ?"
-            : "What statistics are available?",
-          answer: lang === 'fr'
-            ? "4 catégories dans l'onglet Stats :\n\n📊 Performance — Taux de victoire, scores, séries, durées\n🎯 Tir — Réussite, carreaux, types de tir × impact\n🎱 Point — Réussite, qualité, types × précision\n❌ Erreurs — Analyse par durée, format, contexte, coaching\n\nTous les filtres temporels : Aujourd'hui, 7j, 30j, 3 mois, 6 mois, 1 an, Tout."
-            : "4 categories in the Stats tab:\n\n📊 Performance — Win rate, scores, series, durations\n🎯 Shot — Success, carreaux, shot types × impact\n🎱 Point — Success, quality, types × precision\n❌ Errors — Analysis by duration, format, context, coaching\n\nAll time filters: Today, 7d, 30d, 3 months, 6 months, 1 year, All.",
-        },
-        {
-          id: 's2',
-          question: lang === 'fr'
-            ? "Comment fonctionne la progression ?"
-            : "How does progression work?",
-          answer: lang === 'fr'
-            ? "Appuyez sur \"Progression\" en haut de la page Stats. Des graphiques montrent l'évolution de vos taux (victoire, tir, point, carreaux) sur la période choisie : 4 sem., 8 sem., 3 mois, 6 mois ou 1 an.\n\nLes flèches de tendance (↑↓→) indiquent si vos performances s'améliorent."
-            : "Tap \"Progression\" at the top of the Stats page. Charts show the evolution of your rates (win, shot, point, carreaux) over the selected period: 4 wks, 8 wks, 3 months, 6 months or 1 year.\n\nTrend arrows (↑↓→) indicate whether your performance is improving.",
-        },
-        {
-          id: 's3',
-          question: lang === 'fr'
-            ? "Comment l'analyse des erreurs m'aide ?"
-            : "How does error analysis help me?",
-          answer: lang === 'fr'
-            ? "L'onglet \"Erreurs\" identifie vos faiblesses et donne des conseils personnalisés :\n\n• Où tombent vos tirs ratés (court droite/gauche, long, bouchon)\n• Si la fatigue affecte votre jeu (parties longues vs courtes)\n• La différence entraînement vs tournoi\n• Les séries d'erreurs consécutives\n\nChaque type d'erreur est accompagné d'un conseil technique pour s'améliorer."
-            : "The \"Errors\" tab identifies your weaknesses and provides personalized advice:\n\n• Where your missed shots land (short right/left, long, jack)\n• Whether fatigue affects your game (long vs short games)\n• The difference between training and tournament\n• Consecutive error streaks\n\nEach error type comes with a technical tip for improvement.",
-        },
+        { id: 's1', question: tFn('faq', 's1Q'), answer: tFn('faq', 's1A') },
+        { id: 's2', question: tFn('faq', 's2Q'), answer: tFn('faq', 's2A') },
+        { id: 's3', question: tFn('faq', 's3Q'), answer: tFn('faq', 's3A') },
       ],
     },
     {
       id: 'directory',
-      category: lang === 'fr' ? 'Annuaire & Partage' : 'Directory & Sharing',
+      category: tFn('faq', 'directorySharing'),
       icon: 'people',
       color: theme.accent,
       questions: [
-        {
-          id: 'd1',
-          question: lang === 'fr'
-            ? "Comment gérer mes joueurs et clubs ?"
-            : "How to manage my players and clubs?",
-          answer: lang === 'fr'
-            ? "L'onglet Annuaire regroupe :\n\n👤 Joueurs — Ajoutez des joueurs avec nom, rôle, niveau, club, boules, contact\n🏠 Clubs — Créez des clubs avec adresse, équipements, cotisation\n⛳ Terrains — Enregistrez les terrains avec type, éclairage, photos\n\nChaque fiche joueur calcule automatiquement ses statistiques à partir des matchs."
-            : "The Directory tab groups:\n\n👤 Players — Add players with name, role, level, club, balls, contact\n🏠 Clubs — Create clubs with address, facilities, membership fee\n⛳ Terrains — Register terrains with type, lighting, photos\n\nEach player card automatically calculates statistics from matches.",
-        },
-        {
-          id: 'd2',
-          question: lang === 'fr'
-            ? "Comment partager une fiche avec un autre joueur ?"
-            : "How to share a card with another player?",
-          answer: lang === 'fr'
-            ? "1. Ouvrez la fiche (joueur, club, terrain ou tournoi)\n2. Appuyez sur l'icône de partage\n3. Choisissez la permission (lecture seule ou modification)\n4. Copiez et envoyez le code à votre partenaire\n\nVotre partenaire saisit le code dans Profil → Partage → Code de partage."
-            : "1. Open the card (player, club, terrain or tournament)\n2. Tap the share icon\n3. Choose the permission (read-only or edit)\n4. Copy and send the code to your partner\n\nYour partner enters the code in Profile → Sharing → Share code.",
-        },
-        {
-          id: 'd3',
-          question: lang === 'fr'
-            ? "Comment gérer les fiches partagées ?"
-            : "How to manage shared cards?",
-          answer: lang === 'fr'
-            ? "Profil → Partage → Gestion des partages :\n\n• Onglet \"Mes partages\" : voir vos codes actifs, copier, basculer les permissions, révoquer\n• Onglet \"Reçus\" : voir les fiches qu'on vous a partagées, les enregistrer dans votre annuaire\n\nVous recevez une notification quand quelqu'un utilise un de vos codes."
-            : "Profile → Sharing → Share management:\n\n• \"My shares\" tab: view your active codes, copy, toggle permissions, revoke\n• \"Received\" tab: view cards shared with you, save them to your directory\n\nYou receive a notification when someone uses one of your codes.",
-        },
-        {
-          id: 'd4',
-          question: lang === 'fr'
-            ? "Puis-je enregistrer une fiche partagée ?"
-            : "Can I save a shared card?",
-          answer: lang === 'fr'
-            ? "Oui ! Sur toute fiche reçue en partage, un bouton \"Enregistrer\" (💾) apparaît. La fiche est copiée intégralement dans votre annuaire personnel. Vous pouvez ensuite la modifier librement."
-            : "Yes! On any card received through sharing, a \"Save\" button (💾) appears. The card is fully copied into your personal directory. You can then edit it freely.",
-        },
+        { id: 'd1', question: tFn('faq', 'd1Q'), answer: tFn('faq', 'd1A') },
+        { id: 'd2', question: tFn('faq', 'd2Q'), answer: tFn('faq', 'd2A') },
+        { id: 'd3', question: tFn('faq', 'd3Q'), answer: tFn('faq', 'd3A') },
+        { id: 'd4', question: tFn('faq', 'd4Q'), answer: tFn('faq', 'd4A') },
       ],
     },
     {
       id: 'account',
-      category: lang === 'fr' ? 'Compte & Profil' : 'Account & Profile',
+      category: tFn('faq', 'accountProfile'),
       icon: 'person',
       color: '#8B5CF6',
       questions: [
-        {
-          id: 'a1',
-          question: lang === 'fr'
-            ? "Comment changer mon mot de passe ?"
-            : "How to change my password?",
-          answer: lang === 'fr'
-            ? "Profil → Paramètres → Mot de passe. Saisissez votre ancien mot de passe, puis le nouveau (minimum 6 caractères) et confirmez."
-            : "Profile → Settings → Password. Enter your old password, then the new one (minimum 6 characters) and confirm.",
-        },
-        {
-          id: 'a2',
-          question: lang === 'fr'
-            ? "Où trouver mon palmarès et bilan financier ?"
-            : "Where to find my achievements and financial summary?",
-          answer: lang === 'fr'
-            ? "Depuis votre Profil :\n\n🏆 Mon Palmarès — Tous vos résultats de tournois, badges de performance, classement par saison\n💰 Bilan financier — Résumé des gains, inscriptions, cotisations club, balance nette\n\nCes pages se mettent à jour automatiquement."
-            : "From your Profile:\n\n🏆 My Achievements — All your tournament results, performance badges, season rankings\n💰 Financial summary — Summary of winnings, registrations, club fees, net balance\n\nThese pages update automatically.",
-        },
-        {
-          id: 'a3',
-          question: lang === 'fr'
-            ? "Comment configurer les notifications ?"
-            : "How to configure notifications?",
-          answer: lang === 'fr'
-            ? "Profil → Paramètres → Notifications :\n\n• Notifications de partage — Alertes quand quelqu'un accède à vos fiches\n• Notifications de tournois — Rappels programmés avant vos tournois\n\nLes notifications push locales fonctionnent sans connexion internet."
-            : "Profile → Settings → Notifications:\n\n• Sharing notifications — Alerts when someone accesses your cards\n• Tournament notifications — Scheduled reminders before your tournaments\n\nLocal push notifications work without internet connection.",
-        },
+        { id: 'a1', question: tFn('faq', 'a1Q'), answer: tFn('faq', 'a1A') },
+        { id: 'a2', question: tFn('faq', 'a2Q'), answer: tFn('faq', 'a2A') },
+        { id: 'a3', question: tFn('faq', 'a3Q'), answer: tFn('faq', 'a3A') },
       ],
     },
   ];
 }
 
 // ============================================
-// TIPS - Translated
+// TIPS - i18n
 // ============================================
-function getTips(lang: Language) {
+function getTips(tFn: (s: string, k: string) => string) {
   return [
-    { icon: 'lightbulb', text: lang === 'fr' ? "Utilisez la notation détaillée pour des statistiques d'erreurs personnalisées" : 'Use detailed notation for personalized error statistics', color: theme.carreauColor },
-    { icon: 'timer', text: lang === 'fr' ? 'Le chronomètre se met en pause automatiquement entre les mènes' : 'The timer pauses automatically between ends', color: theme.primary },
-    { icon: 'trending-up', text: lang === 'fr' ? 'Jouez régulièrement pour voir votre courbe de progression évoluer' : 'Play regularly to see your progression curve evolve', color: theme.success },
-    { icon: 'share', text: lang === 'fr' ? 'Partagez votre fiche joueur pour que vos coéquipiers voient vos stats' : 'Share your player card so your teammates can see your stats', color: theme.accent },
+    { icon: 'lightbulb', text: tFn('faq', 'tip1'), color: theme.carreauColor },
+    { icon: 'timer', text: tFn('faq', 'tip2'), color: theme.primary },
+    { icon: 'trending-up', text: tFn('faq', 'tip3'), color: theme.success },
+    { icon: 'share', text: tFn('faq', 'tip4'), color: theme.accent },
   ];
 }
 
@@ -451,9 +251,9 @@ export default function FAQScreen() {
   const [openQuestions, setOpenQuestions] = useState<Set<string>>(new Set());
   const [showAllTips, setShowAllTips] = useState(false);
 
-  const QUICK_ACTIONS = useMemo(() => getQuickActions(language), [language]);
-  const FAQ_DATA = useMemo(() => getFaqData(language), [language]);
-  const TIPS = useMemo(() => getTips(language), [language]);
+  const QUICK_ACTIONS = useMemo(() => getQuickActions(t), [t]);
+  const FAQ_DATA = useMemo(() => getFaqData(t), [t]);
+  const TIPS = useMemo(() => getTips(t), [t]);
 
   // Filter questions
   const filteredData = useMemo(() => {

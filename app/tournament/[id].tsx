@@ -500,25 +500,25 @@ export default function TournamentDetailScreen() {
               {tournament.tournamentLevel && (
                 <View style={[styles.classificationBadge, { backgroundColor: theme.success + '15' }]}>
                   <MaterialIcons name="signal-cellular-alt" size={12} color={theme.success} />
-                  <Text style={[styles.classificationBadgeText, { color: theme.success }]}>{tournament.tournamentLevel}</Text>
+                  <Text style={[styles.classificationBadgeText, { color: theme.success }]}>{t('tournamentLevels', tournament.tournamentLevel)}</Text>
                 </View>
               )}
               {tournament.tournamentCategory && (
                 <View style={[styles.classificationBadge, { backgroundColor: theme.warning + '15' }]}>
                   <MaterialIcons name="category" size={12} color={theme.warning} />
-                  <Text style={[styles.classificationBadgeText, { color: theme.warning }]}>{tournament.tournamentCategory}</Text>
+                  <Text style={[styles.classificationBadgeText, { color: theme.warning }]}>{t('tournamentCategories', tournament.tournamentCategory)}</Text>
                 </View>
               )}
               {tournament.registrationType && (
                 <View style={[styles.classificationBadge, { backgroundColor: theme.primary + '15' }]}>
                   <MaterialIcons name="how-to-reg" size={12} color={theme.primary} />
-                  <Text style={[styles.classificationBadgeText, { color: theme.primary }]}>{tournament.registrationType}</Text>
+                  <Text style={[styles.classificationBadgeText, { color: theme.primary }]}>{t('registrationTypes', tournament.registrationType)}</Text>
                 </View>
               )}
               {tournament.tournamentScope && (
                 <View style={[styles.classificationBadge, { backgroundColor: theme.accent + '15' }]}>
                   <MaterialIcons name="public" size={12} color={theme.accent} />
-                  <Text style={[styles.classificationBadgeText, { color: theme.accent }]}>{tournament.tournamentScope}</Text>
+                  <Text style={[styles.classificationBadgeText, { color: theme.accent }]}>{t('tournamentScopes', tournament.tournamentScope)}</Text>
                 </View>
               )}
             </View>
