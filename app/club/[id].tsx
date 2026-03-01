@@ -23,7 +23,7 @@ import { useAlert } from '@/template';
 export default function ClubDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getClubById, players, tournaments, deleteClub } = useApp();
+  const { getClubById, players, tournaments, deleteClub, getSharedPermission } = useApp();
   const { t, language } = useLanguage();
 
   const club = getClubById(id!);
@@ -33,6 +33,9 @@ export default function ClubDetailScreen() {
   const [isShared, setIsShared] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   const { showAlert } = useAlert();
+  const sharedPermission = getSharedPermission(id!);
+  const isReadOnly = sharedPermission === 'read';
+  const canEdit = !isReadOnly;
 
   React.useEffect(() => {
     if (id) {
@@ -101,15 +104,19 @@ export default function ClubDetailScreen() {
           <Pressable style={styles.shareButton} onPress={() => setShowShareModal(true)}>
             <MaterialIcons name="share" size={22} color={theme.success} />
           </Pressable>
-          <Pressable 
-            style={styles.editButton} 
-            onPress={() => router.push(`/club/edit/${id}`)}
-          >
-            <MaterialIcons name="edit" size={22} color={theme.primary} />
-          </Pressable>
-          <Pressable style={styles.deleteButton} onPress={handleDelete}>
-            <MaterialIcons name="delete" size={22} color={theme.error} />
-          </Pressable>
+          {canEdit && (
+            <Pressable 
+              style={styles.editButton} 
+              onPress={() => router.push(`/club/edit/${id}`)}
+            >
+              <MaterialIcons name="edit" size={22} color={theme.primary} />
+            </Pressable>
+          )}
+          {canEdit && (
+            <Pressable style={styles.deleteButton} onPress={handleDelete}>
+              <MaterialIcons name="delete" size={22} color={theme.error} />
+            </Pressable>
+          )}
         </View>
       </View>
 

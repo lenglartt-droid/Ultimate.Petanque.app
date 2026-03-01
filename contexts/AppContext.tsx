@@ -70,6 +70,9 @@ interface AppContextType {
   toggleTournamentNotification: (tournamentId: string) => void;
   isTournamentNotificationEnabled: (tournamentId: string) => boolean;
   
+  // Shared items permissions
+  getSharedPermission: (itemId: string) => 'read' | 'write' | null;
+  
   // Getters
   getPlayerById: (id: string) => Player | undefined;
   getClubById: (id: string) => Club | undefined;
@@ -100,6 +103,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [terrains, setTerrains] = useState<Terrain[]>([]);
   const [favoriteTerrainIds, setFavoriteTerrainIds] = useState<string[]>([]);
+  const [sharedItemPermissions, setSharedItemPermissions] = useState<Record<string, 'read' | 'write'>>({});
   const [tournamentNotifications, setTournamentNotifications] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -231,18 +235,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
         supabase.from('challenges').select('*').order('date', { ascending: false }),
         supabase.from('terrains').select('*').order('created_at', { ascending: false }),
         supabase.from('user_profiles').select('*').eq('id', user.id).single(),
-        supabase.from('shared_items').select('item_type, item_id').eq('shared_with_id', user.id),
+        supabase.from('shared_items').select('item_type, item_id, permission').eq('shared_with_id', user.id),
       ]);
 
-      // Group shared item IDs by type for batch fetching
+      // Group shared item IDs by type for batch fetching + build permissions map
       const sharedIds: Record<string, string[]> = { player: [], club: [], terrain: [], tournament: [] };
+      const permissionsMap: Record<string, 'read' | 'write'> = {};
       if (sharedWithMeRes.data) {
         sharedWithMeRes.data.forEach((si: any) => {
           if (sharedIds[si.item_type]) {
             sharedIds[si.item_type].push(si.item_id);
           }
+          permissionsMap[si.item_id] = si.permission as 'read' | 'write';
         });
       }
+      setSharedItemPermissions(permissionsMap);
 
       // Fetch shared records in parallel (RLS shared_select policies allow this)
       const [sharedPlayersRes, sharedClubsRes, sharedTerrainsRes, sharedTournamentsRes] = await Promise.all([
@@ -1202,6 +1209,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return tournamentNotifications.includes(tournamentId);
   };
 
+  // Shared permission getter
+  const getSharedPermission = useCallback((itemId: string): 'read' | 'write' | null => {
+    return sharedItemPermissions[itemId] || null;
+  }, [sharedItemPermissions]);
+
   // Getters
   const getPlayerById = (id: string) => players.find(p => p.id === id);
   const getClubById = (id: string) => clubs.find(c => c.id === id);
@@ -1337,6 +1349,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         tournamentNotifications,
         toggleTournamentNotification,
         isTournamentNotificationEnabled,
+        getSharedPermission,
         getPlayerById,
         getClubById,
         getTournamentById,

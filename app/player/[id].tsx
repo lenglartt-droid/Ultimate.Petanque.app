@@ -46,7 +46,7 @@ function StatRing({ value, color, size = 80 }: { value: number; color: string; s
 export default function PlayerDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getPlayerById, getMatchesByPlayer, getClubById, getTerrainById, deletePlayer, selfPlayer, matches } = useApp();
+  const { getPlayerById, getMatchesByPlayer, getClubById, getTerrainById, deletePlayer, selfPlayer, matches, getSharedPermission } = useApp();
   const { t, language } = useLanguage();
 
   const player = getPlayerById(id!);
@@ -54,6 +54,9 @@ export default function PlayerDetailScreen() {
   const club = player?.clubId ? getClubById(player.clubId) : null;
   const terrain = player?.terrainId ? getTerrainById(player.terrainId) : null;
   const isSelf = selfPlayer && player?.id === selfPlayer.id;
+  const sharedPermission = getSharedPermission(id!);
+  const isReadOnly = sharedPermission === 'read';
+  const canEdit = !isReadOnly;
 
 
   // Calculate preferred role from match history
@@ -144,10 +147,12 @@ export default function PlayerDetailScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>{t('player', 'playerProfile')}</Text>
         <View style={styles.headerActions}>
-          <Pressable style={styles.editButton} onPress={() => router.push(`/player/edit/${id}`)}>
-            <MaterialIcons name="edit" size={22} color={theme.primary} />
-          </Pressable>
-          {!isSelf && (
+          {canEdit && (
+            <Pressable style={styles.editButton} onPress={() => router.push(`/player/edit/${id}`)}>
+              <MaterialIcons name="edit" size={22} color={theme.primary} />
+            </Pressable>
+          )}
+          {canEdit && !isSelf && (
             <Pressable style={styles.deleteButton} onPress={handleDelete}>
               <MaterialIcons name="delete" size={22} color={theme.error} />
             </Pressable>

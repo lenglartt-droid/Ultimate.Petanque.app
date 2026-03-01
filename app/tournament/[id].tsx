@@ -94,7 +94,7 @@ const PHASE_IDS = {
 export default function TournamentDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getTournamentById, getClubById, getTerrainById, getMatchesByTournament, updateTournament, tournamentNotifications, toggleTournamentNotification, isTournamentNotificationEnabled } = useApp();
+  const { getTournamentById, getClubById, getTerrainById, getMatchesByTournament, updateTournament, tournamentNotifications, toggleTournamentNotification, isTournamentNotificationEnabled, getSharedPermission } = useApp();
   const { t, language } = useLanguage();
 
   const tournament = getTournamentById(id!);
@@ -135,6 +135,9 @@ export default function TournamentDetailScreen() {
   const [isShared, setIsShared] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const { showAlert: showShareAlert } = useAlert();
+  const sharedPermission = getSharedPermission(id!);
+  const isReadOnly = sharedPermission === 'read';
+  const canEdit = !isReadOnly;
 
   useEffect(() => {
     if (id) {
@@ -444,12 +447,14 @@ export default function TournamentDetailScreen() {
               color={isNotificationEnabled ? theme.warning : theme.textSecondary} 
             />
           </Pressable>
-          <Pressable 
-            style={styles.editButton}
-            onPress={() => router.push(`/tournament/edit/${tournament.id}`)}
-          >
-            <MaterialIcons name="edit" size={20} color={theme.textSecondary} />
-          </Pressable>
+          {canEdit && (
+            <Pressable 
+              style={styles.editButton}
+              onPress={() => router.push(`/tournament/edit/${tournament.id}`)}
+            >
+              <MaterialIcons name="edit" size={20} color={theme.textSecondary} />
+            </Pressable>
+          )}
         </View>
       </View>
 
@@ -733,24 +738,26 @@ export default function TournamentDetailScreen() {
       </ScrollView>
 
       {/* Action Buttons */}
-      <Animated.View 
-        entering={FadeIn.duration(300).delay(300)}
-        style={[styles.fabContainer, { bottom: insets.bottom + 24 }]}
-      >
-        <Pressable 
-          style={styles.fabSecondary}
-          onPress={() => setEndTournamentStep(1)}
+      {canEdit && (
+        <Animated.View 
+          entering={FadeIn.duration(300).delay(300)}
+          style={[styles.fabContainer, { bottom: insets.bottom + 24 }]}
         >
-          <MaterialIcons name="flag" size={22} color={theme.error} />
-        </Pressable>
-        <Pressable 
-          style={styles.fab} 
-          onPress={() => router.push(`/match/new?tournamentId=${tournament.id}`)}
-        >
-          <MaterialIcons name="add" size={28} color="#FFF" />
-          <Text style={styles.fabText}>{t('tournament', 'newMatch')}</Text>
-        </Pressable>
-      </Animated.View>
+          <Pressable 
+            style={styles.fabSecondary}
+            onPress={() => setEndTournamentStep(1)}
+          >
+            <MaterialIcons name="flag" size={22} color={theme.error} />
+          </Pressable>
+          <Pressable 
+            style={styles.fab} 
+            onPress={() => router.push(`/match/new?tournamentId=${tournament.id}`)}
+          >
+            <MaterialIcons name="add" size={28} color="#FFF" />
+            <Text style={styles.fabText}>{t('tournament', 'newMatch')}</Text>
+          </Pressable>
+        </Animated.View>
+      )}
 
       {/* Notification Settings Modal */}
       <Modal

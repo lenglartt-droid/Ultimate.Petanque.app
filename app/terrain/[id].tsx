@@ -26,7 +26,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 export default function TerrainDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { getTerrainById, tournaments, deleteTerrain, isFavoriteTerrain, toggleFavoriteTerrain } = useApp();
+  const { getTerrainById, tournaments, deleteTerrain, isFavoriteTerrain, toggleFavoriteTerrain, getSharedPermission } = useApp();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -34,6 +34,9 @@ export default function TerrainDetailScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const { showAlert } = useAlert();
   const { t, language } = useLanguage();
+  const sharedPermission = getSharedPermission(id || '');
+  const isReadOnly = sharedPermission === 'read';
+  const canEdit = !isReadOnly;
 
   useEffect(() => {
     if (id) {
@@ -159,18 +162,22 @@ export default function TerrainDetailScreen() {
               color={isFavorite ? theme.error : theme.textSecondary} 
             />
           </Pressable>
-          <Pressable 
-            style={styles.editButton} 
-            onPress={() => router.push(`/terrain/edit/${terrain.id}`)}
-          >
-            <MaterialIcons name="edit" size={22} color={theme.primary} />
-          </Pressable>
-          <Pressable 
-            style={styles.deleteButton} 
-            onPress={handleDelete}
-          >
-            <MaterialIcons name="delete" size={22} color={theme.error} />
-          </Pressable>
+          {canEdit && (
+            <Pressable 
+              style={styles.editButton} 
+              onPress={() => router.push(`/terrain/edit/${terrain.id}`)}
+            >
+              <MaterialIcons name="edit" size={22} color={theme.primary} />
+            </Pressable>
+          )}
+          {canEdit && (
+            <Pressable 
+              style={styles.deleteButton} 
+              onPress={handleDelete}
+            >
+              <MaterialIcons name="delete" size={22} color={theme.error} />
+            </Pressable>
+          )}
         </View>
       </View>
 
