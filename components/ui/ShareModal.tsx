@@ -38,9 +38,10 @@ interface ShareModalProps {
   itemType: ShareItemType;
   itemId: string;
   itemName: string;
+  forceReadOnly?: boolean;
 }
 
-export default function ShareModal({ visible, onClose, itemType, itemId, itemName }: ShareModalProps) {
+export default function ShareModal({ visible, onClose, itemType, itemId, itemName, forceReadOnly = false }: ShareModalProps) {
   const { t } = useLanguage();
   const [permission, setPermission] = useState<SharePermission>('read');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -152,6 +153,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                     </View>
                   </Pressable>
 
+                  {!forceReadOnly ? (
                   <Pressable
                     style={[styles.permissionOption, permission === 'write' && styles.permissionOptionActive]}
                     onPress={() => { Haptics.selectionAsync(); setPermission('write'); }}
@@ -167,6 +169,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                       {permission === 'write' ? <View style={[styles.radioDot, { backgroundColor: theme.accent }]} /> : null}
                     </View>
                   </Pressable>
+                  ) : null}
                 </View>
               </Animated.View>
 

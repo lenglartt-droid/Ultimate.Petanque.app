@@ -439,6 +439,7 @@ export default function MyPlayerCardScreen() {
           itemType="player"
           itemId={selfPlayer.id}
           itemName={selfPlayer.name}
+          forceReadOnly
         />
       )}
     </SafeAreaView>
