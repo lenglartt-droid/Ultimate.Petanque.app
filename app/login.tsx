@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import { router } from 'expo-router';
 import { useAuth, useAlert } from '@/template';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -340,9 +341,11 @@ export default function LoginScreen() {
 
           {/* Footer */}
           <Animated.View entering={FadeInDown.duration(500).delay(300)} style={styles.footer}>
-            <Text style={styles.footerText}>
-              {t('login', 'termsText')}
-            </Text>
+            <Pressable onPress={() => router.push('/privacy-policy')}>
+              <Text style={styles.footerText}>
+                {t('login', 'termsText')}
+              </Text>
+            </Pressable>
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>

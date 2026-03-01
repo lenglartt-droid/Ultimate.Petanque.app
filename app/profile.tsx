@@ -1011,6 +1011,23 @@ export default function ProfileScreen() {
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </Pressable>
 
+            <Pressable 
+              style={styles.menuItem}
+              onPress={() => {
+                Haptics.selectionAsync();
+                router.push('/privacy-policy');
+              }}
+            >
+              <View style={[styles.menuIcon, { backgroundColor: theme.warning + '15' }]}>
+                <MaterialIcons name="policy" size={20} color={theme.warning} />
+              </View>
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuItemText}>{t('privacy', 'title')}</Text>
+                <Text style={styles.menuItemSubtext}>{t('profile', 'privacySubtext')}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+            </Pressable>
+
             {/* Language Switcher */}
             <Pressable 
               style={styles.menuItem}

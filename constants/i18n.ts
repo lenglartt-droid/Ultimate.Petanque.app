@@ -210,6 +210,7 @@ export const translations = {
     challenges: { fr: 'Défis', en: 'Challenges' },
     language: { fr: 'Langue', en: 'Language' },
     languageSubtext: { fr: 'Français / English', en: 'French / English' },
+    privacySubtext: { fr: 'Traitement et protection des donn\u00e9es', en: 'Data processing and protection' },
   },
 
   // ============================================
@@ -2262,6 +2263,71 @@ export const translations = {
   // ============================================
   // LOCATION PICKER
   // ============================================
+  // ============================================
+  // PRIVACY POLICY
+  // ============================================
+  privacy: {
+    title: { fr: 'Politique de confidentialit\u00e9', en: 'Privacy Policy' },
+    effectiveDate: { fr: 'Date d\'effet', en: 'Effective date' },
+    introTitle: { fr: 'Introduction', en: 'Introduction' },
+    introContent: {
+      fr: 'Ultimate Petanque ("l\'Application") est une application mobile d\u00e9di\u00e9e au suivi de matchs, statistiques et tournois de p\u00e9tanque. Nous nous engageons \u00e0 prot\u00e9ger votre vie priv\u00e9e. Cette politique explique quelles donn\u00e9es nous collectons, comment nous les utilisons et quels sont vos droits.',
+      en: 'Ultimate Petanque ("the App") is a mobile application dedicated to tracking p\u00e9tanque matches, statistics, and tournaments. We are committed to protecting your privacy. This policy explains what data we collect, how we use it, and what your rights are.',
+    },
+    dataCollectedTitle: { fr: 'Donn\u00e9es collect\u00e9es', en: 'Data collected' },
+    dataCollectedContent: {
+      fr: '\u2022 Informations de compte : adresse email, nom d\'utilisateur, mot de passe (chiffr\u00e9)\n\u2022 Informations de profil : r\u00f4le, niveau, club, photo de profil, t\u00e9l\u00e9phone (optionnel), email de contact (optionnel)\n\u2022 Donn\u00e9es de jeu : matchs, scores, statistiques de tir/point, d\u00e9fis, tournois, mènes\n\u2022 Donn\u00e9es de l\'annuaire : joueurs, clubs, terrains, tournois cr\u00e9\u00e9s\n\u2022 Donn\u00e9es de localisation : adresses des terrains et clubs (saisies manuellement)\n\u2022 Photos : images de profil et photos de terrains (optionnel)',
+      en: '\u2022 Account information: email address, username, password (encrypted)\n\u2022 Profile information: role, level, club, profile photo, phone (optional), contact email (optional)\n\u2022 Game data: matches, scores, shot/point statistics, challenges, tournaments, ends\n\u2022 Directory data: players, clubs, courts, tournaments created\n\u2022 Location data: addresses of courts and clubs (manually entered)\n\u2022 Photos: profile images and court photos (optional)',
+    },
+    dataUsageTitle: { fr: 'Utilisation des donn\u00e9es', en: 'How we use your data' },
+    dataUsageContent: {
+      fr: 'Vos donn\u00e9es sont utilis\u00e9es exclusivement pour :\n\n\u2022 Fournir les fonctionnalit\u00e9s de l\'application (matchs, stats, d\u00e9fis, tournois)\n\u2022 Synchroniser vos donn\u00e9es entre vos appareils\n\u2022 Permettre le partage de fiches entre joueurs (uniquement \u00e0 votre initiative)\n\u2022 Am\u00e9liorer l\'exp\u00e9rience utilisateur\n\nNous ne vendons jamais vos donn\u00e9es. Nous n\'utilisons pas vos donn\u00e9es \u00e0 des fins publicitaires. Aucune publicit\u00e9 n\'est affich\u00e9e dans l\'application.',
+      en: 'Your data is used exclusively to:\n\n\u2022 Provide app functionality (matches, stats, challenges, tournaments)\n\u2022 Synchronize your data across your devices\n\u2022 Enable card sharing between players (only at your initiative)\n\u2022 Improve user experience\n\nWe never sell your data. We do not use your data for advertising purposes. No ads are displayed in the app.',
+    },
+    dataSharingTitle: { fr: 'Partage des donn\u00e9es', en: 'Data sharing' },
+    dataSharingContent: {
+      fr: 'Vos donn\u00e9es ne sont partag\u00e9es avec aucun tiers, sauf :\n\n\u2022 Notre h\u00e9bergeur cloud (infrastructure s\u00e9curis\u00e9e) pour le stockage des donn\u00e9es\n\u2022 Les autres joueurs avec qui vous choisissez explicitement de partager vos fiches via un code de partage\n\nLe partage de fiches est toujours initi\u00e9 par vous et peut \u00eatre r\u00e9voqu\u00e9 \u00e0 tout moment.',
+      en: 'Your data is not shared with any third party, except:\n\n\u2022 Our cloud hosting provider (secure infrastructure) for data storage\n\u2022 Other players with whom you explicitly choose to share your cards via a share code\n\nCard sharing is always initiated by you and can be revoked at any time.',
+    },
+    dataStorageTitle: { fr: 'Stockage des donn\u00e9es', en: 'Data storage' },
+    dataStorageContent: {
+      fr: 'Vos donn\u00e9es sont stock\u00e9es sur des serveurs s\u00e9curis\u00e9s dans le cloud. Les mots de passe sont chiffr\u00e9s et ne sont jamais stock\u00e9s en clair. Les photos de profil sont stock\u00e9es dans un espace de stockage s\u00e9curis\u00e9 accessible uniquement via des URL autoris\u00e9es.',
+      en: 'Your data is stored on secure cloud servers. Passwords are encrypted and never stored in plain text. Profile photos are stored in secure storage accessible only through authorized URLs.',
+    },
+    dataSecurityTitle: { fr: 'S\u00e9curit\u00e9 des donn\u00e9es', en: 'Data security' },
+    dataSecurityContent: {
+      fr: 'Nous mettons en \u0153uvre des mesures de s\u00e9curit\u00e9 adapt\u00e9es :\n\n\u2022 Authentification s\u00e9curis\u00e9e (email + OTP ou mot de passe)\n\u2022 Chiffrement des mots de passe\n\u2022 Politiques de s\u00e9curit\u00e9 au niveau des lignes (RLS) pour isoler les donn\u00e9es entre utilisateurs\n\u2022 Communications HTTPS chiffr\u00e9es\n\u2022 Tokens d\'authentification avec expiration automatique',
+      en: 'We implement appropriate security measures:\n\n\u2022 Secure authentication (email + OTP or password)\n\u2022 Password encryption\n\u2022 Row-Level Security (RLS) policies to isolate data between users\n\u2022 Encrypted HTTPS communications\n\u2022 Authentication tokens with automatic expiration',
+    },
+    userRightsTitle: { fr: 'Vos droits', en: 'Your rights' },
+    userRightsContent: {
+      fr: 'Vous disposez des droits suivants :\n\n\u2022 Acc\u00e8s : consultez toutes vos donn\u00e9es depuis l\'application\n\u2022 Modification : modifiez vos informations de profil \u00e0 tout moment\n\u2022 Suppression : supprimez votre compte et toutes vos donn\u00e9es depuis Profil > Supprimer mon compte\n\u2022 Portabilit\u00e9 : vos donn\u00e9es sont accessibles et consultables dans l\'application\n\u2022 R\u00e9vocation du partage : r\u00e9voquez tout partage de fiche \u00e0 tout moment\n\nLa suppression du compte entra\u00eene la suppression irr\u00e9versible de toutes vos donn\u00e9es.',
+      en: 'You have the following rights:\n\n\u2022 Access: view all your data from within the app\n\u2022 Modification: edit your profile information at any time\n\u2022 Deletion: delete your account and all your data from Profile > Delete my account\n\u2022 Portability: your data is accessible and viewable in the app\n\u2022 Revoke sharing: revoke any card sharing at any time\n\nAccount deletion results in the irreversible removal of all your data.',
+    },
+    sharingFeatureTitle: { fr: 'Fonctionnalit\u00e9 de partage', en: 'Sharing feature' },
+    sharingFeatureContent: {
+      fr: 'L\'application permet de partager des fiches (joueur, club, terrain, tournoi) avec d\'autres utilisateurs via un code de partage. Lorsque vous partagez une fiche :\n\n\u2022 Seules les informations de la fiche sont accessibles au destinataire\n\u2022 Vous choisissez la permission : lecture seule ou lecture + modification\n\u2022 Vous pouvez r\u00e9voquer l\'acc\u00e8s \u00e0 tout moment\n\u2022 Les modifications sont trac\u00e9es et visibles par le propri\u00e9taire',
+      en: 'The app allows sharing cards (player, club, court, tournament) with other users via a share code. When you share a card:\n\n\u2022 Only the card information is accessible to the recipient\n\u2022 You choose the permission: read-only or read + edit\n\u2022 You can revoke access at any time\n\u2022 Modifications are tracked and visible to the owner',
+    },
+    childrenTitle: { fr: 'Enfants', en: 'Children' },
+    childrenContent: {
+      fr: 'L\'application n\'est pas destin\u00e9e aux enfants de moins de 13 ans. Nous ne collectons pas sciemment de donn\u00e9es personnelles aupr\u00e8s d\'enfants. Si vous \u00eates parent et pensez que votre enfant nous a fourni des informations, contactez-nous pour que nous les supprimions.',
+      en: 'The app is not intended for children under 13. We do not knowingly collect personal data from children. If you are a parent and believe your child has provided us with information, contact us so we can delete it.',
+    },
+    changesTitle: { fr: 'Modifications de cette politique', en: 'Changes to this policy' },
+    changesContent: {
+      fr: 'Nous pouvons mettre \u00e0 jour cette politique de confidentialit\u00e9 pour refl\u00e9ter des changements dans nos pratiques. Vous serez inform\u00e9 de tout changement significatif via l\'application. La date d\'entr\u00e9e en vigueur sera mise \u00e0 jour en cons\u00e9quence.',
+      en: 'We may update this privacy policy to reflect changes in our practices. You will be notified of any significant changes through the app. The effective date will be updated accordingly.',
+    },
+    contactTitle: { fr: 'Nous contacter', en: 'Contact us' },
+    contactContent: {
+      fr: 'Pour toute question concernant cette politique de confidentialit\u00e9 ou le traitement de vos donn\u00e9es, contactez-nous :\n\n\u2022 Email : ultimate.petanque.app@gmail.com\n\u2022 Depuis l\'application : Profil > Aide > Envoyer un email',
+      en: 'For any questions about this privacy policy or the processing of your data, contact us:\n\n\u2022 Email: ultimate.petanque.app@gmail.com\n\u2022 From the app: Profile > Help > Send an email',
+    },
+    questionsLabel: { fr: 'Des questions sur vos donn\u00e9es ?', en: 'Questions about your data?' },
+    contactUs: { fr: 'Nous contacter', en: 'Contact us' },
+  },
+
   locationPicker: {
     searchPlace: { fr: 'Rechercher un lieu', en: 'Search a place' },
     searchAddress: { fr: 'Rechercher une adresse...', en: 'Search an address...' },
