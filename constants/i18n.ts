@@ -2232,6 +2232,15 @@ export const translations = {
   },
 
   // ============================================
+  // SHARED BADGE
+  // ============================================
+  sharedBadge: {
+    shared: { fr: 'Partagé', en: 'Shared' },
+    readOnly: { fr: 'Lecture', en: 'Read' },
+    write: { fr: 'Écriture', en: 'Edit' },
+  },
+
+  // ============================================
   // LOCATION PICKER
   // ============================================
   locationPicker: {

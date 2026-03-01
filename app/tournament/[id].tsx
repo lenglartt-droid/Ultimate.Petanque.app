@@ -25,6 +25,7 @@ import { TextInput } from 'react-native';
 import { TournamentType } from '@/constants/config';
 import ShareModal from '@/components/ui/ShareModal';
 import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
+import SharedBadge from '@/components/ui/SharedBadge';
 import { isSharedWithMe, saveSharedItemToMyAccount } from '@/services/shareService';
 import { useAlert } from '@/template';
 import { useAuth } from '@/template';
@@ -475,6 +476,11 @@ export default function TournamentDetailScreen() {
             </View>
             <View style={styles.tournamentInfo}>
               <Text style={styles.tournamentName} numberOfLines={2}>{tournament.name}</Text>
+              {sharedPermission ? (
+                <View style={{ marginBottom: 4 }}>
+                  <SharedBadge permission={sharedPermission} size="small" />
+                </View>
+              ) : null}
               <View style={styles.tournamentMeta}>
                 <MaterialIcons name="event" size={14} color={theme.textSecondary} />
                 <Text style={styles.tournamentMetaText}>

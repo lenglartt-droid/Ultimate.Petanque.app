@@ -20,6 +20,7 @@ import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import ShareModal from '@/components/ui/ShareModal';
 import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
+import SharedBadge from '@/components/ui/SharedBadge';
 import { isSharedWithMe, saveSharedItemToMyAccount } from '@/services/shareService';
 import { useAlert } from '@/template';
 import { useAuth } from '@/template';
@@ -244,6 +245,11 @@ export default function TerrainDetailScreen() {
               <MaterialIcons name={typeConfig.icon as any} size={56} color="#FFF" />
             </View>
             <Text style={styles.terrainName}>{terrain.name}</Text>
+            {sharedPermission ? (
+              <View style={{ marginBottom: 8 }}>
+                <SharedBadge permission={sharedPermission} />
+              </View>
+            ) : null}
             <View style={[styles.typeBadge, { backgroundColor: colors.light }]}>
               <MaterialIcons name={typeConfig.icon as any} size={16} color={colors.bg} />
               <Text style={[styles.typeBadgeText, { color: colors.bg }]}>{t('terrainTypes', terrain.type)}</Text>
@@ -256,6 +262,11 @@ export default function TerrainDetailScreen() {
         {hasPhotos && (
           <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.nameSection}>
             <Text style={styles.terrainNameLarge}>{terrain.name}</Text>
+            {sharedPermission ? (
+              <View style={{ marginBottom: 8 }}>
+                <SharedBadge permission={sharedPermission} />
+              </View>
+            ) : null}
             <View style={[styles.typeBadge, { backgroundColor: colors.light }]}>
               <MaterialIcons name={typeConfig.icon as any} size={16} color={colors.bg} />
               <Text style={[styles.typeBadgeText, { color: colors.bg }]}>{t('terrainTypes', terrain.type)}</Text>

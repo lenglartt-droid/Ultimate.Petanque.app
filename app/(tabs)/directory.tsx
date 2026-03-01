@@ -21,6 +21,7 @@ import { useApp } from '@/contexts/AppContext';
 import { Terrain, Player, Club, Tournament } from '@/services/mockData';
 import { TerrainType } from '@/constants/config';
 import { useLanguage } from '@/hooks/useLanguage';
+import { SharedOverlayBadge } from '@/components/ui/SharedBadge';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -29,7 +30,7 @@ type TournamentStatus = 'all' | 'À venir' | 'En cours' | 'Terminé';
 
 export default function DirectoryScreen() {
   const insets = useSafeAreaInsets();
-  const { players, clubs, tournaments, terrains, selfPlayer, favoriteTerrainIds } = useApp();
+  const { players, clubs, tournaments, terrains, selfPlayer, favoriteTerrainIds, getSharedPermission } = useApp();
   const { t, language } = useLanguage();
   const [activeTab, setActiveTab] = useState<DirectoryTab>('players');
   const [searchQuery, setSearchQuery] = useState('');
@@ -234,6 +235,7 @@ export default function DirectoryScreen() {
   // Render functions
   const renderPlayer = ({ item }: { item: Player }) => {
     const isSelf = selfPlayer && item.id === selfPlayer.id;
+    const sharedPerm = getSharedPermission(item.id);
     return (
       <Pressable
         style={[styles.itemCard, isSelf && styles.selfCard]}
@@ -243,11 +245,13 @@ export default function DirectoryScreen() {
           <Text style={styles.avatarText}>
             {item.name.split(' ').map(n => n[0]).join('')}
           </Text>
-          {isSelf && (
+          {isSelf ? (
             <View style={styles.selfBadge}>
               <MaterialIcons name="star" size={10} color="#FFF" />
             </View>
-          )}
+          ) : sharedPerm ? (
+            <SharedOverlayBadge permission={sharedPerm} />
+          ) : null}
         </View>
         <View style={styles.itemContent}>
           <View style={styles.itemHeader}>
@@ -291,14 +295,17 @@ export default function DirectoryScreen() {
     );
   };
 
-  const renderClub = ({ item }: { item: Club }) => (
-    <Pressable
-      style={styles.itemCard}
-      onPress={() => router.push(`/club/${item.id}`)}
-    >
-      <View style={[styles.itemAvatar, { backgroundColor: theme.accent }]}>
-        <MaterialIcons name="home" size={24} color="#FFF" />
-      </View>
+  const renderClub = ({ item }: { item: Club }) => {
+    const sharedPerm = getSharedPermission(item.id);
+    return (
+      <Pressable
+        style={styles.itemCard}
+        onPress={() => router.push(`/club/${item.id}`)}
+      >
+        <View style={[styles.itemAvatar, { backgroundColor: theme.accent }]}>
+          <MaterialIcons name="home" size={24} color="#FFF" />
+          {sharedPerm ? <SharedOverlayBadge permission={sharedPerm} /> : null}
+        </View>
       <View style={styles.itemContent}>
         <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
         <View style={styles.itemMeta}>
@@ -326,12 +333,14 @@ export default function DirectoryScreen() {
         </View>
       </View>
       <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
-    </Pressable>
-  );
+      </Pressable>
+    );
+  };
 
   const renderTerrain = ({ item }: { item: Terrain }) => {
     const typeConfig = getTerrainTypeConfig(item.type);
     const isFavorite = favoriteTerrainIds.includes(item.id);
+    const sharedPerm = getSharedPermission(item.id);
     return (
       <Pressable
         style={[styles.itemCard, isFavorite && styles.favoriteCard]}
@@ -339,11 +348,13 @@ export default function DirectoryScreen() {
       >
         <View style={[styles.itemAvatar, { backgroundColor: theme.success }]}>
           <MaterialIcons name={typeConfig.icon as any} size={24} color="#FFF" />
-          {isFavorite && (
+          {isFavorite ? (
             <View style={styles.favoriteBadge}>
               <MaterialIcons name="favorite" size={10} color={theme.error} />
             </View>
-          )}
+          ) : sharedPerm ? (
+            <SharedOverlayBadge permission={sharedPerm} />
+          ) : null}
         </View>
         <View style={styles.itemContent}>
           <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
@@ -392,6 +403,7 @@ export default function DirectoryScreen() {
       'Terminé': { bg: theme.backgroundSecondary, color: theme.textSecondary },
     };
     const status = statusConfig[item.status] || statusConfig['Terminé'];
+    const sharedPerm = getSharedPermission(item.id);
     
     return (
       <Pressable
@@ -400,6 +412,7 @@ export default function DirectoryScreen() {
       >
         <View style={[styles.itemAvatar, { backgroundColor: theme.carreauColor }]}>
           <MaterialIcons name="emoji-events" size={24} color="#FFF" />
+          {sharedPerm ? <SharedOverlayBadge permission={sharedPerm} /> : null}
         </View>
         <View style={styles.itemContent}>
           <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>

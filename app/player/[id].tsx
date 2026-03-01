@@ -17,6 +17,7 @@ import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
 import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
+import SharedBadge from '@/components/ui/SharedBadge';
 import Svg, { Circle } from 'react-native-svg';
 import * as Linking from 'expo-linking';
 
@@ -177,6 +178,11 @@ export default function PlayerDetailScreen() {
             </Text>
           </View>
           <Text style={styles.playerName}>{player.name}</Text>
+          {sharedPermission ? (
+            <View style={{ marginBottom: 8 }}>
+              <SharedBadge permission={sharedPermission} />
+            </View>
+          ) : null}
           <View style={styles.profileBadges}>
             <View style={[styles.badge, { backgroundColor: levelColors[player.level] + '20' }]}>
               <Text style={[styles.badgeText, { color: levelColors[player.level] }]}>{t('levels', player.level)}</Text>

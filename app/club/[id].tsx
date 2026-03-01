@@ -18,6 +18,7 @@ import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import ShareModal from '@/components/ui/ShareModal';
 import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
+import SharedBadge from '@/components/ui/SharedBadge';
 import { isSharedWithMe, saveSharedItemToMyAccount } from '@/services/shareService';
 import { useAlert } from '@/template';
 import { useAuth } from '@/template';
@@ -135,6 +136,11 @@ export default function ClubDetailScreen() {
             <MaterialIcons name="home" size={48} color="#FFF" />
           </View>
           <Text style={styles.clubName}>{club.name}</Text>
+          {sharedPermission ? (
+            <View style={{ marginBottom: 8 }}>
+              <SharedBadge permission={sharedPermission} />
+            </View>
+          ) : null}
           <View style={styles.clubMeta}>
             <MaterialIcons name="place" size={16} color={theme.textSecondary} />
             <Text style={styles.clubMetaText}>{club.city}</Text>
