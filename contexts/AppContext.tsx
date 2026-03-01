@@ -222,8 +222,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     setLoading(true);
     try {
-      // Fetch all user data in parallel
-      const [playersRes, clubsRes, tournamentsRes, matchesRes, challengesRes, terrainsRes, profileRes] = await Promise.all([
+      // Fetch all user data + shared items in parallel
+      const [playersRes, clubsRes, tournamentsRes, matchesRes, challengesRes, terrainsRes, profileRes, sharedWithMeRes] = await Promise.all([
         supabase.from('players').select('*').order('created_at', { ascending: false }),
         supabase.from('clubs').select('*').order('created_at', { ascending: false }),
         supabase.from('tournaments').select('*').order('date', { ascending: false }),
@@ -231,6 +231,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
         supabase.from('challenges').select('*').order('date', { ascending: false }),
         supabase.from('terrains').select('*').order('created_at', { ascending: false }),
         supabase.from('user_profiles').select('*').eq('id', user.id).single(),
+        supabase.from('shared_items').select('item_type, item_id').eq('shared_with_id', user.id),
+      ]);
+
+      // Group shared item IDs by type for batch fetching
+      const sharedIds: Record<string, string[]> = { player: [], club: [], terrain: [], tournament: [] };
+      if (sharedWithMeRes.data) {
+        sharedWithMeRes.data.forEach((si: any) => {
+          if (sharedIds[si.item_type]) {
+            sharedIds[si.item_type].push(si.item_id);
+          }
+        });
+      }
+
+      // Fetch shared records in parallel (RLS shared_select policies allow this)
+      const [sharedPlayersRes, sharedClubsRes, sharedTerrainsRes, sharedTournamentsRes] = await Promise.all([
+        sharedIds.player.length > 0
+          ? supabase.from('players').select('*').in('id', sharedIds.player)
+          : Promise.resolve({ data: [] as any[] }),
+        sharedIds.club.length > 0
+          ? supabase.from('clubs').select('*').in('id', sharedIds.club)
+          : Promise.resolve({ data: [] as any[] }),
+        sharedIds.terrain.length > 0
+          ? supabase.from('terrains').select('*').in('id', sharedIds.terrain)
+          : Promise.resolve({ data: [] as any[] }),
+        sharedIds.tournament.length > 0
+          ? supabase.from('tournaments').select('*').in('id', sharedIds.tournament)
+          : Promise.resolve({ data: [] as any[] }),
       ]);
 
       // Transform database records to app format
@@ -295,82 +322,144 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      // Helper to transform a raw player DB row
+      const mapPlayer = (p: any): Player => ({
+        id: p.id,
+        name: p.name,
+        nickname: p.nickname,
+        avatar: p.avatar,
+        club: p.club,
+        clubId: p.club_id,
+        role: p.role,
+        level: p.level,
+        location: p.location,
+        phone: p.phone,
+        email: p.email,
+        country: p.country,
+        boules: p.boules,
+        stats: p.stats || {
+          matchesPlayed: 0, wins: 0, losses: 0, winRate: 0,
+          tirRate: 0, pointRate: 0, carreauRate: 0,
+          avgPointsScored: 0, avgPointsConceded: 0
+        },
+        createdAt: p.created_at,
+      });
+
+      // Merge shared players (always fetch latest from owner)
+      const ownPlayerIds = new Set(dbPlayers.map(p => p.id));
+      if (sharedPlayersRes.data) {
+        sharedPlayersRes.data.forEach((p: any) => {
+          if (!ownPlayerIds.has(p.id)) {
+            dbPlayers.push(mapPlayer(p));
+          }
+        });
+      }
       setPlayers(dbPlayers.length > 0 ? dbPlayers : mockPlayers);
 
+      // Helper to transform a raw club DB row
+      const mapClub = (c: any): Club => ({
+        id: c.id,
+        name: c.name,
+        logo: c.logo,
+        address: c.address,
+        city: c.city,
+        country: c.country || 'France',
+        location: c.location || { latitude: 0, longitude: 0 },
+        membersCount: c.members_count || 0,
+        foundedYear: c.founded_year,
+        description: c.description,
+        facilities: c.facilities || [],
+        contactEmail: c.contact_email,
+        contactPhone: c.contact_phone,
+        terrainId: c.terrain_id,
+        terrainName: c.terrain_name,
+        membershipCost: c.membership_cost ? parseFloat(c.membership_cost) : undefined,
+      });
+
       if (clubsRes.data) {
-        const dbClubs: Club[] = clubsRes.data.map(c => ({
-          id: c.id,
-          name: c.name,
-          logo: c.logo,
-          address: c.address,
-          city: c.city,
-          country: c.country || 'France',
-          location: c.location || { latitude: 0, longitude: 0 },
-          membersCount: c.members_count || 0,
-          foundedYear: c.founded_year,
-          description: c.description,
-          facilities: c.facilities || [],
-          contactEmail: c.contact_email,
-          contactPhone: c.contact_phone,
-          terrainId: c.terrain_id,
-          terrainName: c.terrain_name,
-          membershipCost: c.membership_cost ? parseFloat(c.membership_cost) : undefined,
-        }));
+        const dbClubs: Club[] = clubsRes.data.map(mapClub);
+        // Merge shared clubs
+        const ownClubIds = new Set(dbClubs.map(c => c.id));
+        if (sharedClubsRes.data) {
+          sharedClubsRes.data.forEach((c: any) => {
+            if (!ownClubIds.has(c.id)) dbClubs.push(mapClub(c));
+          });
+        }
         setClubs(dbClubs.length > 0 ? dbClubs : mockClubs);
       }
 
+      // Helper to transform a raw terrain DB row
+      const mapTerrain = (t: any): Terrain => ({
+        id: t.id,
+        name: t.name,
+        address: t.address,
+        city: t.city,
+        location: t.location || { latitude: 0, longitude: 0 },
+        type: t.type,
+        description: t.description,
+        facilities: t.facilities || [],
+        photos: t.photos || [],
+        clubId: t.club_id,
+        clubName: t.club_name,
+        isPublic: t.is_public ?? true,
+        courtsCount: t.courts_count || 1,
+        lighting: t.lighting ?? false,
+        covered: t.covered ?? false,
+        createdAt: t.created_at,
+      });
+
       if (terrainsRes.data) {
-        const dbTerrains: Terrain[] = terrainsRes.data.map(t => ({
-          id: t.id,
-          name: t.name,
-          address: t.address,
-          city: t.city,
-          location: t.location || { latitude: 0, longitude: 0 },
-          type: t.type,
-          description: t.description,
-          facilities: t.facilities || [],
-          photos: t.photos || [],
-          clubId: t.club_id,
-          clubName: t.club_name,
-          isPublic: t.is_public ?? true,
-          courtsCount: t.courts_count || 1,
-          lighting: t.lighting ?? false,
-          covered: t.covered ?? false,
-          createdAt: t.created_at,
-        }));
+        const dbTerrains: Terrain[] = terrainsRes.data.map(mapTerrain);
+        // Merge shared terrains
+        const ownTerrainIds = new Set(dbTerrains.map(t => t.id));
+        if (sharedTerrainsRes.data) {
+          sharedTerrainsRes.data.forEach((t: any) => {
+            if (!ownTerrainIds.has(t.id)) dbTerrains.push(mapTerrain(t));
+          });
+        }
         setTerrains(dbTerrains.length > 0 ? dbTerrains : mockTerrains);
       }
 
+      // Helper to transform a raw tournament DB row
+      const mapTournament = (t: any): Tournament => ({
+        id: t.id,
+        name: t.name,
+        date: t.date,
+        endDate: t.end_date,
+        type: t.type,
+        format: t.format,
+        location: t.location,
+        terrainId: t.terrain_id,
+        terrainName: t.terrain_name,
+        terrainType: t.terrain_type,
+        clubId: t.club_id,
+        clubName: t.club_name,
+        status: t.status,
+        participants: t.participants || 0,
+        maxParticipants: t.max_participants || 32,
+        prize: t.prize,
+        description: t.description,
+        teams: t.teams,
+        phases: t.phases,
+        currentPhaseId: t.current_phase_id,
+        tournamentLevel: t.tournament_level,
+        tournamentCategory: t.tournament_category,
+        registrationType: t.registration_type,
+        tournamentScope: t.tournament_scope,
+        registrationCost: t.registration_cost ? parseFloat(t.registration_cost) : undefined,
+        prizeWon: t.prize_won ? parseFloat(t.prize_won) : undefined,
+        finalResult: t.final_result,
+      });
+
       if (tournamentsRes.data) {
-        const dbTournaments: Tournament[] = tournamentsRes.data.map(t => ({
-          id: t.id,
-          name: t.name,
-          date: t.date,
-          endDate: t.end_date,
-          type: t.type,
-          format: t.format,
-          location: t.location,
-          terrainId: t.terrain_id,
-          terrainName: t.terrain_name,
-          terrainType: t.terrain_type,
-          clubId: t.club_id,
-          clubName: t.club_name,
-          status: t.status,
-          participants: t.participants || 0,
-          maxParticipants: t.max_participants || 32,
-          prize: t.prize,
-          description: t.description,
-          teams: t.teams,
-          phases: t.phases,
-          currentPhaseId: t.current_phase_id,
-          tournamentLevel: t.tournament_level,
-          tournamentCategory: t.tournament_category,
-          registrationType: t.registration_type,
-          tournamentScope: t.tournament_scope,
-          registrationCost: t.registration_cost ? parseFloat(t.registration_cost) : undefined,
-          prizeWon: t.prize_won ? parseFloat(t.prize_won) : undefined,
-          finalResult: t.final_result,
-        }));
+        const dbTournaments: Tournament[] = tournamentsRes.data.map(mapTournament);
+        // Merge shared tournaments
+        const ownTournamentIds = new Set(dbTournaments.map(t => t.id));
+        if (sharedTournamentsRes.data) {
+          sharedTournamentsRes.data.forEach((t: any) => {
+            if (!ownTournamentIds.has(t.id)) dbTournaments.push(mapTournament(t));
+          });
+        }
         setTournaments(dbTournaments.length > 0 ? dbTournaments : mockTournaments);
       }
 
