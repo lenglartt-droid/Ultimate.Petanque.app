@@ -515,14 +515,14 @@ export default function FAQScreen() {
 
           <Pressable
             style={styles.contactButton}
-            onPress={() => Linking.openURL('mailto:contact@onspace.ai?subject=Ultimate%20Petanque%20-%20Aide')}
+            onPress={() => Linking.openURL('mailto:ultimate.petanque.app@gmail.com?subject=Ultimate%20Petanque%20-%20Aide')}
           >
             <View style={[styles.contactButtonIcon, { backgroundColor: theme.primary + '15' }]}>
               <MaterialIcons name="email" size={22} color={theme.primary} />
             </View>
             <View style={styles.contactButtonInfo}>
               <Text style={styles.contactButtonTitle}>{t('faq', 'sendEmail')}</Text>
-              <Text style={styles.contactButtonSubtitle}>contact@onspace.ai</Text>
+              <Text style={styles.contactButtonSubtitle}>ultimate.petanque.app@gmail.com</Text>
             </View>
             <View style={styles.contactButtonArrow}>
               <MaterialIcons name="arrow-forward" size={18} color={theme.primary} />
