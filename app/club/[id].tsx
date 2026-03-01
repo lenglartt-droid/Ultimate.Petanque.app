@@ -34,6 +34,7 @@ export default function ClubDetailScreen() {
   const [isSaving, setIsSaving] = React.useState(false);
   const { showAlert } = useAlert();
   const sharedPermission = getSharedPermission(id!);
+  const isSharedItem = sharedPermission !== null;
   const isReadOnly = sharedPermission === 'read';
   const canEdit = !isReadOnly;
 
@@ -112,7 +113,7 @@ export default function ClubDetailScreen() {
               <MaterialIcons name="edit" size={22} color={theme.primary} />
             </Pressable>
           )}
-          {canEdit && (
+          {canEdit && !isSharedItem && (
             <Pressable style={styles.deleteButton} onPress={handleDelete}>
               <MaterialIcons name="delete" size={22} color={theme.error} />
             </Pressable>

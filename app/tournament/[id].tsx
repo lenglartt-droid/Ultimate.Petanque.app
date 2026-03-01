@@ -136,6 +136,7 @@ export default function TournamentDetailScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const { showAlert: showShareAlert } = useAlert();
   const sharedPermission = getSharedPermission(id!);
+  const isSharedItem = sharedPermission !== null;
   const isReadOnly = sharedPermission === 'read';
   const canEdit = !isReadOnly;
 
@@ -737,8 +738,8 @@ export default function TournamentDetailScreen() {
         </Animated.View>
       </ScrollView>
 
-      {/* Action Buttons */}
-      {canEdit && (
+      {/* Action Buttons - only for own tournaments (not shared) */}
+      {canEdit && !isSharedItem && (
         <Animated.View 
           entering={FadeIn.duration(300).delay(300)}
           style={[styles.fabContainer, { bottom: insets.bottom + 24 }]}

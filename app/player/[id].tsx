@@ -55,6 +55,7 @@ export default function PlayerDetailScreen() {
   const terrain = player?.terrainId ? getTerrainById(player.terrainId) : null;
   const isSelf = selfPlayer && player?.id === selfPlayer.id;
   const sharedPermission = getSharedPermission(id!);
+  const isSharedItem = sharedPermission !== null;
   const isReadOnly = sharedPermission === 'read';
   const canEdit = !isReadOnly;
 
@@ -152,7 +153,7 @@ export default function PlayerDetailScreen() {
               <MaterialIcons name="edit" size={22} color={theme.primary} />
             </Pressable>
           )}
-          {canEdit && !isSelf && (
+          {canEdit && !isSelf && !isSharedItem && (
             <Pressable style={styles.deleteButton} onPress={handleDelete}>
               <MaterialIcons name="delete" size={22} color={theme.error} />
             </Pressable>

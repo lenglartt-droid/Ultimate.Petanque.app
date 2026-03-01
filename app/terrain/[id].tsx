@@ -35,6 +35,7 @@ export default function TerrainDetailScreen() {
   const { showAlert } = useAlert();
   const { t, language } = useLanguage();
   const sharedPermission = getSharedPermission(id || '');
+  const isSharedItem = sharedPermission !== null;
   const isReadOnly = sharedPermission === 'read';
   const canEdit = !isReadOnly;
 
@@ -170,7 +171,7 @@ export default function TerrainDetailScreen() {
               <MaterialIcons name="edit" size={22} color={theme.primary} />
             </Pressable>
           )}
-          {canEdit && (
+          {canEdit && !isSharedItem && (
             <Pressable 
               style={styles.deleteButton} 
               onPress={handleDelete}
