@@ -30,7 +30,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { user, logout, operationLoading } = useAuth();
+  const { user, logout, operationLoading, sendOTP } = useAuth();
   const { showAlert } = useAlert();
   const { clubs, addClub, updatePlayer, selfPlayer, userStats, matches, challenges, tournaments, refreshData } = useApp();
   const supabase = getSupabaseClient();
@@ -69,6 +69,9 @@ export default function ProfileScreen() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteStep, setDeleteStep] = useState<'confirm' | 'otp'>('confirm');
+  const [otpCode, setOtpCode] = useState('');
+  const [sendingOtp, setSendingOtp] = useState(false);
   
   // Load unread share notification count
   useEffect(() => {
@@ -393,12 +396,46 @@ export default function ProfileScreen() {
     setClubId(null);
   };
 
-  const handleDeleteAccount = async () => {
+  const handleSendDeleteOtp = async () => {
     const confirmWord = t('profile', 'deleteConfirmWord');
     if (deleteConfirmText.trim().toUpperCase() !== confirmWord) return;
+    if (!user?.email) {
+      showAlert(t('common', 'error'), 'Email not found');
+      return;
+    }
+    setSendingOtp(true);
+    try {
+      const { error } = await sendOTP(user.email);
+      if (error) {
+        showAlert(t('common', 'error'), error);
+        return;
+      }
+      setDeleteStep('otp');
+    } catch (e: any) {
+      showAlert(t('common', 'error'), e.message || 'Unknown error');
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (otpCode.trim().length < 4) return;
 
     setDeletingAccount(true);
     try {
+      // Verify OTP first
+      const { error: otpError } = await supabase.auth.verifyOtp({
+        email: user?.email || '',
+        token: otpCode.trim(),
+        type: 'email',
+      });
+      if (otpError) {
+        showAlert(t('profile', 'deleteAccountOtpError'), otpError.message);
+        setDeletingAccount(false);
+        return;
+      }
+
+      // OTP verified, proceed with deletion
       const { data, error } = await supabase.functions.invoke('delete-account');
       if (error) {
         let errorMessage = error.message;
@@ -1034,9 +1071,11 @@ export default function ProfileScreen() {
         animationType="slide"
         presentationStyle="pageSheet"
         onRequestClose={() => {
-          if (!deletingAccount) {
+          if (!deletingAccount && !sendingOtp) {
             setShowDeleteModal(false);
             setDeleteConfirmText('');
+            setDeleteStep('confirm');
+            setOtpCode('');
           }
         }}
       >
@@ -1045,12 +1084,14 @@ export default function ProfileScreen() {
             <Pressable
               style={styles.modalCloseBtn}
               onPress={() => {
-                if (!deletingAccount) {
+                if (!deletingAccount && !sendingOtp) {
                   setShowDeleteModal(false);
                   setDeleteConfirmText('');
+                  setDeleteStep('confirm');
+                  setOtpCode('');
                 }
               }}
-              disabled={deletingAccount}
+              disabled={deletingAccount || sendingOtp}
             >
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>
@@ -1059,45 +1100,115 @@ export default function ProfileScreen() {
           </View>
 
           <View style={styles.deleteModalContent}>
-            <View style={styles.deleteWarningIcon}>
-              <MaterialIcons name="warning" size={48} color={theme.error} />
-            </View>
-            <Text style={styles.deleteWarningTitle}>{t('profile', 'deleteAccountConfirm')}</Text>
-            <Text style={styles.deleteWarningText}>{t('profile', 'deleteAccountWarning')}</Text>
-
-            <View style={styles.deleteConfirmInput}>
-              <Text style={styles.deleteConfirmLabel}>{t('profile', 'deleteAccountTyping')}</Text>
-              <TextInput
-                style={styles.deleteConfirmField}
-                value={deleteConfirmText}
-                onChangeText={setDeleteConfirmText}
-                placeholder={t('profile', 'deleteConfirmWord')}
-                placeholderTextColor={theme.textMuted}
-                autoCapitalize="characters"
-                editable={!deletingAccount}
-              />
-            </View>
-
-            <Pressable
-              style={[
-                styles.deleteConfirmButton,
-                deleteConfirmText.trim().toUpperCase() !== t('profile', 'deleteConfirmWord') && styles.deleteConfirmButtonDisabled,
-              ]}
-              onPress={handleDeleteAccount}
-              disabled={deleteConfirmText.trim().toUpperCase() !== t('profile', 'deleteConfirmWord') || deletingAccount}
-            >
-              {deletingAccount ? (
-                <View style={styles.deleteConfirmButtonInner}>
-                  <ActivityIndicator size="small" color="#FFF" />
-                  <Text style={styles.deleteConfirmButtonText}>{t('profile', 'deletingAccount')}</Text>
+            {deleteStep === 'confirm' ? (
+              <>
+                <View style={styles.deleteWarningIcon}>
+                  <MaterialIcons name="warning" size={48} color={theme.error} />
                 </View>
-              ) : (
-                <View style={styles.deleteConfirmButtonInner}>
-                  <MaterialIcons name="delete-forever" size={20} color="#FFF" />
-                  <Text style={styles.deleteConfirmButtonText}>{t('profile', 'deleteAccountButton')}</Text>
+                <Text style={styles.deleteWarningTitle}>{t('profile', 'deleteAccountConfirm')}</Text>
+                <Text style={styles.deleteWarningText}>{t('profile', 'deleteAccountWarning')}</Text>
+
+                <View style={styles.deleteConfirmInput}>
+                  <Text style={styles.deleteConfirmLabel}>{t('profile', 'deleteAccountTyping')}</Text>
+                  <TextInput
+                    style={styles.deleteConfirmField}
+                    value={deleteConfirmText}
+                    onChangeText={setDeleteConfirmText}
+                    placeholder={t('profile', 'deleteConfirmWord')}
+                    placeholderTextColor={theme.textMuted}
+                    autoCapitalize="characters"
+                    editable={!sendingOtp}
+                  />
                 </View>
-              )}
-            </Pressable>
+
+                <Pressable
+                  style={[
+                    styles.deleteOtpSendButton,
+                    deleteConfirmText.trim().toUpperCase() !== t('profile', 'deleteConfirmWord') && styles.deleteConfirmButtonDisabled,
+                  ]}
+                  onPress={handleSendDeleteOtp}
+                  disabled={deleteConfirmText.trim().toUpperCase() !== t('profile', 'deleteConfirmWord') || sendingOtp}
+                >
+                  {sendingOtp ? (
+                    <View style={styles.deleteConfirmButtonInner}>
+                      <ActivityIndicator size="small" color="#FFF" />
+                      <Text style={styles.deleteConfirmButtonText}>{t('profile', 'deleteAccountSendingOtp')}</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.deleteConfirmButtonInner}>
+                      <MaterialIcons name="email" size={20} color="#FFF" />
+                      <Text style={styles.deleteConfirmButtonText}>{t('profile', 'deleteAccountSendOtp')}</Text>
+                    </View>
+                  )}
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <View style={[styles.deleteWarningIcon, { backgroundColor: theme.primary + '15' }]}>
+                  <MaterialIcons name="mark-email-read" size={48} color={theme.primary} />
+                </View>
+                <Text style={styles.deleteWarningTitle}>{t('profile', 'deleteAccountOtpTitle')}</Text>
+                <Text style={styles.deleteWarningText}>
+                  {t('profile', 'deleteAccountOtpDesc')}{' '}
+                  <Text style={{ fontWeight: '700', color: theme.textPrimary }}>{user?.email}</Text>
+                </Text>
+
+                <View style={styles.deleteConfirmInput}>
+                  <TextInput
+                    style={[styles.deleteConfirmField, { borderColor: theme.primary + '30' }]}
+                    value={otpCode}
+                    onChangeText={setOtpCode}
+                    placeholder={t('profile', 'deleteAccountOtpPlaceholder')}
+                    placeholderTextColor={theme.textMuted}
+                    keyboardType="number-pad"
+                    maxLength={4}
+                    editable={!deletingAccount}
+                    autoFocus
+                  />
+                </View>
+
+                <Pressable
+                  style={styles.otpResendBtn}
+                  onPress={handleSendDeleteOtp}
+                  disabled={sendingOtp}
+                >
+                  <MaterialIcons name="refresh" size={16} color={theme.primary} />
+                  <Text style={styles.otpResendBtnText}>
+                    {sendingOtp ? t('profile', 'deleteAccountSendingOtp') : t('profile', 'deleteAccountResendOtp')}
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  style={[
+                    styles.deleteConfirmButton,
+                    otpCode.trim().length < 4 && styles.deleteConfirmButtonDisabled,
+                  ]}
+                  onPress={handleDeleteAccount}
+                  disabled={otpCode.trim().length < 4 || deletingAccount}
+                >
+                  {deletingAccount ? (
+                    <View style={styles.deleteConfirmButtonInner}>
+                      <ActivityIndicator size="small" color="#FFF" />
+                      <Text style={styles.deleteConfirmButtonText}>{t('profile', 'deletingAccount')}</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.deleteConfirmButtonInner}>
+                      <MaterialIcons name="delete-forever" size={20} color="#FFF" />
+                      <Text style={styles.deleteConfirmButtonText}>{t('profile', 'deleteAccountVerifyAndDelete')}</Text>
+                    </View>
+                  )}
+                </Pressable>
+
+                <Pressable
+                  style={styles.otpBackBtn}
+                  onPress={() => { setDeleteStep('confirm'); setOtpCode(''); }}
+                  disabled={deletingAccount}
+                >
+                  <MaterialIcons name="arrow-back" size={18} color={theme.textSecondary} />
+                  <Text style={styles.otpBackBtnText}>{t('common', 'back')}</Text>
+                </Pressable>
+              </>
+            )}
           </View>
         </SafeAreaView>
       </Modal>
@@ -1762,6 +1873,13 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: theme.error + '30',
   },
+  deleteOtpSendButton: {
+    width: '100%',
+    backgroundColor: theme.primary,
+    paddingVertical: 16,
+    borderRadius: theme.borderRadius.lg,
+    alignItems: 'center',
+  },
   deleteConfirmButton: {
     width: '100%',
     backgroundColor: theme.error,
@@ -1782,6 +1900,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#FFF',
+  },
+  otpResendBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  otpResendBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.primary,
+  },
+  otpBackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 14,
+    marginTop: 12,
+  },
+  otpBackBtnText: {
+    fontSize: 14,
+    color: theme.textSecondary,
   },
   versionText: {
     fontSize: 12,
