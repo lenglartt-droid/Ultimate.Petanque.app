@@ -1102,7 +1102,7 @@ export default function ProfileScreen() {
         </SafeAreaView>
       </Modal>
 
-      {/* Club Picker Modal */
+      {/* Club Picker Modal */}
       <Modal
         visible={showClubPicker}
         animationType="slide"
