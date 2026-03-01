@@ -17,6 +17,7 @@ import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { decode } from 'base64-arraybuffer';
 import { useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
@@ -63,6 +64,11 @@ export default function ProfileScreen() {
   // Expandable settings sections
   const [showNotifSection, setShowNotifSection] = useState(false);
   const [showShareSection, setShowShareSection] = useState(false);
+  
+  // Delete account state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
   
   // Load unread share notification count
   useEffect(() => {
@@ -385,6 +391,43 @@ export default function ProfileScreen() {
     Haptics.selectionAsync();
     setClub('');
     setClubId(null);
+  };
+
+  const handleDeleteAccount = async () => {
+    const confirmWord = t('profile', 'deleteConfirmWord');
+    if (deleteConfirmText.trim().toUpperCase() !== confirmWord) return;
+
+    setDeletingAccount(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('delete-account');
+      if (error) {
+        let errorMessage = error.message;
+        if (error instanceof FunctionsHttpError) {
+          try {
+            const textContent = await error.context?.text();
+            const parsed = textContent ? JSON.parse(textContent) : null;
+            errorMessage = parsed?.error || textContent || error.message;
+          } catch {
+            errorMessage = error.message || 'Failed to read response';
+          }
+        }
+        showAlert(t('profile', 'deleteAccountError'), errorMessage);
+        setDeletingAccount(false);
+        return;
+      }
+
+      // Account deleted successfully - close modal and logout
+      setShowDeleteModal(false);
+      setDeleteConfirmText('');
+      showAlert(t('profile', 'deleteAccountSuccess'), t('profile', 'deleteAccountSuccessMsg'));
+      // Small delay so the user sees the success message
+      setTimeout(async () => {
+        await logout();
+      }, 1500);
+    } catch (e: any) {
+      showAlert(t('profile', 'deleteAccountError'), e.message || 'Unknown error');
+      setDeletingAccount(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -953,7 +996,7 @@ export default function ProfileScreen() {
           </Animated.View>
         )}
 
-        {/* Logout Button */}
+        {/* Logout & Delete Account */}
         {!isEditing && (
           <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.logoutSection}>
             <Pressable 
@@ -970,6 +1013,14 @@ export default function ProfileScreen() {
                 </>
               )}
             </Pressable>
+
+            <Pressable 
+              style={styles.deleteAccountButton}
+              onPress={() => setShowDeleteModal(true)}
+            >
+              <MaterialIcons name="delete-forever" size={18} color={theme.textMuted} />
+              <Text style={styles.deleteAccountButtonText}>{t('profile', 'deleteAccount')}</Text>
+            </Pressable>
           </Animated.View>
         )}
 
@@ -977,7 +1028,81 @@ export default function ProfileScreen() {
         <Text style={styles.versionText}>{t('common', 'version')}</Text>
       </ScrollView>
 
-      {/* Club Picker Modal */}
+      {/* Delete Account Confirmation Modal */}
+      <Modal
+        visible={showDeleteModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => {
+          if (!deletingAccount) {
+            setShowDeleteModal(false);
+            setDeleteConfirmText('');
+          }
+        }}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Pressable
+              style={styles.modalCloseBtn}
+              onPress={() => {
+                if (!deletingAccount) {
+                  setShowDeleteModal(false);
+                  setDeleteConfirmText('');
+                }
+              }}
+              disabled={deletingAccount}
+            >
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+            <Text style={styles.modalTitle}>{t('profile', 'deleteAccount')}</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <View style={styles.deleteModalContent}>
+            <View style={styles.deleteWarningIcon}>
+              <MaterialIcons name="warning" size={48} color={theme.error} />
+            </View>
+            <Text style={styles.deleteWarningTitle}>{t('profile', 'deleteAccountConfirm')}</Text>
+            <Text style={styles.deleteWarningText}>{t('profile', 'deleteAccountWarning')}</Text>
+
+            <View style={styles.deleteConfirmInput}>
+              <Text style={styles.deleteConfirmLabel}>{t('profile', 'deleteAccountTyping')}</Text>
+              <TextInput
+                style={styles.deleteConfirmField}
+                value={deleteConfirmText}
+                onChangeText={setDeleteConfirmText}
+                placeholder={t('profile', 'deleteConfirmWord')}
+                placeholderTextColor={theme.textMuted}
+                autoCapitalize="characters"
+                editable={!deletingAccount}
+              />
+            </View>
+
+            <Pressable
+              style={[
+                styles.deleteConfirmButton,
+                deleteConfirmText.trim().toUpperCase() !== t('profile', 'deleteConfirmWord') && styles.deleteConfirmButtonDisabled,
+              ]}
+              onPress={handleDeleteAccount}
+              disabled={deleteConfirmText.trim().toUpperCase() !== t('profile', 'deleteConfirmWord') || deletingAccount}
+            >
+              {deletingAccount ? (
+                <View style={styles.deleteConfirmButtonInner}>
+                  <ActivityIndicator size="small" color="#FFF" />
+                  <Text style={styles.deleteConfirmButtonText}>{t('profile', 'deletingAccount')}</Text>
+                </View>
+              ) : (
+                <View style={styles.deleteConfirmButtonInner}>
+                  <MaterialIcons name="delete-forever" size={20} color="#FFF" />
+                  <Text style={styles.deleteConfirmButtonText}>{t('profile', 'deleteAccountButton')}</Text>
+                </View>
+              )}
+            </Pressable>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Club Picker Modal */
       <Modal
         visible={showClubPicker}
         animationType="slide"
@@ -1572,6 +1697,91 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: theme.error,
+  },
+  deleteAccountButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    marginTop: 12,
+  },
+  deleteAccountButtonText: {
+    fontSize: 14,
+    color: theme.textMuted,
+    textDecorationLine: 'underline',
+  },
+  // Delete modal
+  deleteModalContent: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  deleteWarningIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: theme.error + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  deleteWarningTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: theme.textPrimary,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  deleteWarningText: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  deleteConfirmInput: {
+    width: '100%',
+    marginBottom: 24,
+  },
+  deleteConfirmLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textSecondary,
+    marginBottom: 8,
+  },
+  deleteConfirmField: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.error,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    textAlign: 'center',
+    letterSpacing: 2,
+    borderWidth: 2,
+    borderColor: theme.error + '30',
+  },
+  deleteConfirmButton: {
+    width: '100%',
+    backgroundColor: theme.error,
+    paddingVertical: 16,
+    borderRadius: theme.borderRadius.lg,
+    alignItems: 'center',
+  },
+  deleteConfirmButtonDisabled: {
+    backgroundColor: theme.textMuted,
+    opacity: 0.5,
+  },
+  deleteConfirmButtonInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  deleteConfirmButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFF',
   },
   versionText: {
     fontSize: 12,
