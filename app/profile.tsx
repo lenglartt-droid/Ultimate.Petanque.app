@@ -64,6 +64,10 @@ export default function ProfileScreen() {
   // Expandable settings sections
   const [showNotifSection, setShowNotifSection] = useState(false);
   const [showShareSection, setShowShareSection] = useState(false);
+  const [showConsentDetail, setShowConsentDetail] = useState(false);
+  
+  // Consent date
+  const [consentDate, setConsentDate] = useState<string | null>(null);
   
   // Delete account state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -130,6 +134,7 @@ export default function ProfileScreen() {
           setLevel(data.level || 'Intermédiaire');
           setClub(data.club || '');
           setAvatarUrl(data.avatar || null);
+          setConsentDate(data.consent_date || null);
         }
         
         // Load club ID from player record if available
@@ -1044,6 +1049,64 @@ export default function ProfileScreen() {
               </View>
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </Pressable>
+
+            {/* Consent date */}
+            <Pressable 
+              style={styles.menuItem}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setShowConsentDetail(prev => !prev);
+              }}
+            >
+              <View style={[styles.menuIcon, { backgroundColor: theme.success + '15' }]}>
+                <MaterialIcons name="verified-user" size={20} color={theme.success} />
+              </View>
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuItemText}>{t('profile', 'consentDate')}</Text>
+                <Text style={styles.menuItemSubtext}>
+                  {consentDate 
+                    ? `${t('profile', 'consentAccepted')} ${new Date(consentDate).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                    : t('profile', 'consentNotYet')}
+                </Text>
+              </View>
+              <MaterialIcons name={showConsentDetail ? 'expand-less' : 'expand-more'} size={20} color={theme.textMuted} />
+            </Pressable>
+
+            {showConsentDetail && (
+              <View style={styles.subMenuContainer}>
+                <Pressable 
+                  style={styles.subMenuItem}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    router.push('/terms');
+                  }}
+                >
+                  <View style={[styles.subMenuIcon, { backgroundColor: theme.accent + '15' }]}>
+                    <MaterialIcons name="description" size={16} color={theme.accent} />
+                  </View>
+                  <View style={styles.menuItemContent}>
+                    <Text style={styles.subMenuItemText}>{t('profile', 'termsOfUse')}</Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+                </Pressable>
+
+                <Pressable 
+                  style={styles.subMenuItem}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    router.push('/privacy-policy');
+                  }}
+                >
+                  <View style={[styles.subMenuIcon, { backgroundColor: theme.warning + '15' }]}>
+                    <MaterialIcons name="policy" size={16} color={theme.warning} />
+                  </View>
+                  <View style={styles.menuItemContent}>
+                    <Text style={styles.subMenuItemText}>{t('profile', 'privacyPolicy')}</Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+                </Pressable>
+              </View>
+            )}
 
             {/* Language Switcher */}
             <Pressable 

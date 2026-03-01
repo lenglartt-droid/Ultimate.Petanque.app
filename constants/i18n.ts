@@ -211,6 +211,13 @@ export const translations = {
     language: { fr: 'Langue', en: 'Language' },
     languageSubtext: { fr: 'Français / English', en: 'French / English' },
     privacySubtext: { fr: 'Traitement et protection des donn\u00e9es', en: 'Data processing and protection' },
+    consentDate: { fr: 'Consentement CGU', en: 'Terms consent' },
+    consentAccepted: { fr: 'Accept\u00e9 le', en: 'Accepted on' },
+    consentSubtext: { fr: 'Consulter les documents accept\u00e9s', en: 'Review accepted documents' },
+    consentNotYet: { fr: 'Non encore accept\u00e9', en: 'Not yet accepted' },
+    reviewDocuments: { fr: 'Documents accept\u00e9s', en: 'Accepted documents' },
+    termsOfUse: { fr: "Conditions G\u00e9n\u00e9rales d'Utilisation", en: 'Terms of Use' },
+    privacyPolicy: { fr: 'Politique de confidentialit\u00e9', en: 'Privacy Policy' },
   },
 
   // ============================================
