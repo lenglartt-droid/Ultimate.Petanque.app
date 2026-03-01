@@ -2413,6 +2413,28 @@ export const translations = {
     termsSubtext: { fr: "R\u00e8gles d'utilisation de l'application", en: 'App usage rules' },
   },
 
+  // ============================================
+  // CONSENT
+  // ============================================
+  consent: {
+    title: { fr: 'Avant de commencer', en: 'Before we start' },
+    subtitle: { fr: 'Veuillez lire et accepter nos conditions pour utiliser Ultimate Petanque', en: 'Please read and accept our terms to use Ultimate Petanque' },
+    summaryText: {
+      fr: 'Ultimate Petanque collecte vos donn\u00e9es de matchs, statistiques et profil pour vous offrir une exp\u00e9rience personnalis\u00e9e. Vos donn\u00e9es ne sont jamais vendues.',
+      en: 'Ultimate Petanque collects your match data, statistics, and profile to provide a personalized experience. Your data is never sold.',
+    },
+    keyPointsTitle: { fr: 'Points cl\u00e9s', en: 'Key points' },
+    keyPoint1: { fr: 'Vos donn\u00e9es sont stock\u00e9es de mani\u00e8re s\u00e9curis\u00e9e et chiffr\u00e9e', en: 'Your data is stored securely and encrypted' },
+    keyPoint2: { fr: 'Synchronisation cloud pour acc\u00e9der \u00e0 vos donn\u00e9es partout', en: 'Cloud sync to access your data anywhere' },
+    keyPoint3: { fr: 'Partage de fiches uniquement \u00e0 votre initiative', en: 'Card sharing only at your initiative' },
+    keyPoint4: { fr: 'Suppression compl\u00e8te de votre compte \u00e0 tout moment', en: 'Complete account deletion at any time' },
+    acceptCgu: { fr: "J'ai lu et j'accepte les", en: 'I have read and accept the' },
+    acceptPrivacy: { fr: "J'ai lu et j'accepte la", en: 'I have read and accept the' },
+    acceptButton: { fr: 'Accepter et continuer', en: 'Accept and continue' },
+    footerNote: { fr: 'Vous pouvez retirer votre consentement \u00e0 tout moment en supprimant votre compte depuis les param\u00e8tres.', en: 'You can withdraw your consent at any time by deleting your account from the settings.' },
+    errorSaving: { fr: 'Impossible de sauvegarder votre consentement', en: 'Unable to save your consent' },
+  },
+
   locationPicker: {
     searchPlace: { fr: 'Rechercher un lieu', en: 'Search a place' },
     searchAddress: { fr: 'Rechercher une adresse...', en: 'Search an address...' },

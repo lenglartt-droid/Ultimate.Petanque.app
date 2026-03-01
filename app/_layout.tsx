@@ -214,6 +214,14 @@ export default function RootLayout() {
                 }} 
               />
               <Stack.Screen 
+                name="consent" 
+                options={{ 
+                  headerShown: false,
+                  animation: 'fade',
+                  gestureEnabled: false,
+                }} 
+              />
+              <Stack.Screen 
                 name="share" 
                 options={{ 
                   presentation: 'card',

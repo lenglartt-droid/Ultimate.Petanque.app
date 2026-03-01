@@ -176,7 +176,7 @@ export default function OnboardingScreen() {
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace('/(tabs)');
+      router.replace('/consent');
     } catch (error: any) {
       showAlert(t('common', 'error'), error.message || t('onboarding', 'unableToCreateProfile'));
     } finally {

@@ -11,6 +11,8 @@ function ProfileChecker() {
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const supabase = getSupabaseClient();
 
+  const [needsConsent, setNeedsConsent] = useState(false);
+
   useEffect(() => {
     const checkProfile = async () => {
       if (!user?.id) {
@@ -21,14 +23,18 @@ function ProfileChecker() {
       try {
         const { data, error } = await supabase
           .from('user_profiles')
-          .select('username')
+          .select('username, consent_accepted')
           .eq('id', user.id)
           .single();
 
         if (error) throw error;
 
         // If no username set, redirect to onboarding
-        setNeedsOnboarding(!data?.username || data.username.trim() === '');
+        if (!data?.username || data.username.trim() === '') {
+          setNeedsOnboarding(true);
+        } else if (!data?.consent_accepted) {
+          setNeedsConsent(true);
+        }
       } catch (err) {
         console.log('Profile check error:', err);
         setNeedsOnboarding(true);
@@ -50,6 +56,10 @@ function ProfileChecker() {
 
   if (needsOnboarding) {
     return <Redirect href="/onboarding" />;
+  }
+
+  if (needsConsent) {
+    return <Redirect href="/consent" />;
   }
 
   return <Redirect href="/(tabs)" />;
