@@ -1,0 +1,267 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import theme from '@/constants/theme';
+import { useLanguage } from '@/hooks/useLanguage';
+import { getModificationLogs, ModificationLog, ModLogItemType } from '@/services/modificationLogService';
+
+interface ModificationLogsSectionProps {
+  itemType: ModLogItemType;
+  itemId: string;
+  isOwner: boolean; // Only show to the item owner
+}
+
+export default function ModificationLogsSection({ itemType, itemId, isOwner }: ModificationLogsSectionProps) {
+  const { t, language } = useLanguage();
+  const [logs, setLogs] = useState<ModificationLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAll, setShowAll] = useState(false);
+
+  const loadLogs = useCallback(async () => {
+    if (!isOwner || !itemId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const { logs: fetchedLogs } = await getModificationLogs(itemType, itemId, 20);
+    setLogs(fetchedLogs);
+    setLoading(false);
+  }, [itemType, itemId, isOwner]);
+
+  useEffect(() => {
+    loadLogs();
+  }, [loadLogs]);
+
+  // Don't render if not owner or no logs and not loading
+  if (!isOwner) return null;
+  if (!loading && logs.length === 0) return null;
+
+  const displayedLogs = showAll ? logs : logs.slice(0, 3);
+
+  const formatTimeAgo = (dateStr: string): string => {
+    const now = new Date();
+    const date = new Date(dateStr);
+    const diffMs = now.getTime() - date.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    const diffH = Math.floor(diffMs / 3600000);
+    const diffD = Math.floor(diffMs / 86400000);
+
+    if (diffMin < 1) return t('share', 'justNow');
+    if (diffMin < 60) return language === 'fr' ? `Il y a ${diffMin} min` : `${diffMin} min ago`;
+    if (diffH < 24) return language === 'fr' ? `Il y a ${diffH}h` : `${diffH}h ago`;
+    if (diffD < 7) return language === 'fr' ? `Il y a ${diffD}j` : `${diffD}d ago`;
+    return date.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', {
+      day: 'numeric',
+      month: 'short',
+    });
+  };
+
+  const getFieldLabel = (field: string): string => {
+    // Try to get a translated label for the field name
+    const translated = t('modificationLogs', field);
+    return translated !== field ? translated : field;
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t('modificationLogs', 'recentModifications')}</Text>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color={theme.primary} />
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <View style={styles.sectionTitleRow}>
+          <MaterialIcons name="history" size={16} color={theme.textSecondary} />
+          <Text style={styles.sectionTitle}>{t('modificationLogs', 'recentModifications')}</Text>
+        </View>
+        <View style={styles.logCountBadge}>
+          <Text style={styles.logCountText}>{logs.length}</Text>
+        </View>
+      </View>
+
+      <View style={styles.logsCard}>
+        {displayedLogs.map((log, index) => {
+          const changesCount = log.changes.length;
+          const changesPreview = log.changes
+            .slice(0, 3)
+            .map(c => getFieldLabel(c.field))
+            .join(', ');
+
+          return (
+            <View
+              key={log.id}
+              style={[
+                styles.logItem,
+                index < displayedLogs.length - 1 && styles.logItemBorder,
+              ]}
+            >
+              {/* Modifier avatar */}
+              <View style={styles.logAvatar}>
+                <Text style={styles.logAvatarText}>
+                  {(log.modifierName || 'U').charAt(0).toUpperCase()}
+                </Text>
+              </View>
+
+              {/* Log content */}
+              <View style={styles.logContent}>
+                <View style={styles.logHeaderRow}>
+                  <Text style={styles.logModifierName} numberOfLines={1}>
+                    {log.modifierName || t('share', 'userFallback')}
+                  </Text>
+                  <Text style={styles.logTime}>{formatTimeAgo(log.createdAt)}</Text>
+                </View>
+
+                <View style={styles.logChangesRow}>
+                  <MaterialIcons name="edit" size={12} color={theme.textMuted} />
+                  <Text style={styles.logChangesText} numberOfLines={2}>
+                    {changesCount === 1
+                      ? `${t('modificationLogs', 'fieldChanged')} ${changesPreview}`
+                      : `${changesCount} ${t('modificationLogs', 'fieldsChanged')} : ${changesPreview}${changesCount > 3 ? '...' : ''}`}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          );
+        })}
+
+        {/* Show more/less toggle */}
+        {logs.length > 3 && (
+          <Pressable style={styles.toggleBtn} onPress={() => setShowAll(!showAll)}>
+            <Text style={styles.toggleBtnText}>
+              {showAll ? t('modificationLogs', 'seeLess') : `${t('modificationLogs', 'seeAll')} (${logs.length})`}
+            </Text>
+            <MaterialIcons
+              name={showAll ? 'expand-less' : 'expand-more'}
+              size={18}
+              color={theme.primary}
+            />
+          </Pressable>
+        )}
+      </View>
+    </Animated.View>
+  );
+}
+
+const styles = StyleSheet.create({
+  section: {
+    marginTop: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.textSecondary,
+    letterSpacing: 1,
+  },
+  logCountBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: theme.warning + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  logCountText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.warning,
+  },
+  loadingContainer: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 24,
+    alignItems: 'center',
+  },
+  logsCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    overflow: 'hidden',
+    ...theme.shadows.card,
+  },
+  logItem: {
+    flexDirection: 'row',
+    padding: 14,
+    gap: 12,
+  },
+  logItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  logAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: theme.warning + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logAvatarText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.warning,
+  },
+  logContent: {
+    flex: 1,
+  },
+  logHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  logModifierName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textPrimary,
+    flex: 1,
+    marginRight: 8,
+  },
+  logTime: {
+    fontSize: 11,
+    color: theme.textMuted,
+  },
+  logChangesRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginTop: 2,
+  },
+  logChangesText: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    flex: 1,
+    lineHeight: 18,
+  },
+  toggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  toggleBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.primary,
+  },
+});

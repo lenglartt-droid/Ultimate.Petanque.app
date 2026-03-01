@@ -17,13 +17,16 @@ import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import ShareModal from '@/components/ui/ShareModal';
+import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
 import { isSharedWithMe, saveSharedItemToMyAccount } from '@/services/shareService';
 import { useAlert } from '@/template';
+import { useAuth } from '@/template';
 
 export default function ClubDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getClubById, players, tournaments, deleteClub, getSharedPermission } = useApp();
+  const { user } = useAuth();
   const { t, language } = useLanguage();
 
   const club = getClubById(id!);
@@ -288,6 +291,12 @@ export default function ClubDetailScreen() {
             ))}
           </Animated.View>
         )}
+        {/* Modification Logs - only visible to owner */}
+        <ModificationLogsSection
+          itemType="club"
+          itemId={id!}
+          isOwner={!isSharedItem && !!user?.id}
+        />
       </ScrollView>
 
       <ShareModal

@@ -24,8 +24,10 @@ import { useApp } from '@/contexts/AppContext';
 import { TextInput } from 'react-native';
 import { TournamentType } from '@/constants/config';
 import ShareModal from '@/components/ui/ShareModal';
+import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
 import { isSharedWithMe, saveSharedItemToMyAccount } from '@/services/shareService';
 import { useAlert } from '@/template';
+import { useAuth } from '@/template';
 import {
   requestNotificationPermissions,
   areNotificationsEnabled,
@@ -95,6 +97,7 @@ export default function TournamentDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getTournamentById, getClubById, getTerrainById, getMatchesByTournament, updateTournament, tournamentNotifications, toggleTournamentNotification, isTournamentNotificationEnabled, getSharedPermission } = useApp();
+  const { user } = useAuth();
   const { t, language } = useLanguage();
 
   const tournament = getTournamentById(id!);
@@ -664,6 +667,13 @@ export default function TournamentDetailScreen() {
             <Text style={styles.sectionCount}>{myMatches.length}</Text>
           </View>
           
+          {/* Modification Logs - only visible to owner */}
+          <ModificationLogsSection
+            itemType="tournament"
+            itemId={id!}
+            isOwner={!isSharedItem && !!user?.id}
+          />
+
           {myMatches.length > 0 ? (
             <View style={styles.matchList}>
               {myMatches.map((match) => {

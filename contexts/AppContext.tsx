@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { getSupabaseClient } from '@/template';
 import { useAuth } from '@/template';
+import { logModification } from '@/services/modificationLogService';
 import {
   mockPlayers,
   mockClubs,
@@ -960,6 +961,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const updatePlayer = async (id: string, updates: Partial<Player>) => {
+    const oldPlayer = players.find(p => p.id === id);
     setPlayers(prev => prev.map(player => 
       player.id === id ? { ...player, ...updates } : player
     ));
@@ -984,12 +986,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dbUpdates.updated_at = new Date().toISOString();
 
       await supabase.from('players').update(dbUpdates).eq('id', id);
+
+      // Log modification for shared items
+      if (sharedItemPermissions[id] === 'write' && oldPlayer) {
+        const { data: row } = await supabase.from('players').select('user_id').eq('id', id).single();
+        if (row?.user_id) {
+          const changes = Object.keys(updates).filter(k => k !== 'stats' && (oldPlayer as any)[k] !== (updates as any)[k]).map(k => ({ field: k, oldValue: (oldPlayer as any)[k], newValue: (updates as any)[k] }));
+          logModification({ itemType: 'player', itemId: id, ownerId: row.user_id, changes }).catch(() => {});
+        }
+      }
     } catch (error) {
       console.log('Error updating player:', error);
     }
   };
 
   const updateClub = async (id: string, updates: Partial<Club>) => {
+    const oldClub = clubs.find(c => c.id === id);
     setClubs(prev => prev.map(club => 
       club.id === id ? { ...club, ...updates } : club
     ));
@@ -1016,12 +1028,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dbUpdates.updated_at = new Date().toISOString();
 
       await supabase.from('clubs').update(dbUpdates).eq('id', id);
+
+      // Log modification for shared items
+      if (sharedItemPermissions[id] === 'write' && oldClub) {
+        const { data: row } = await supabase.from('clubs').select('user_id').eq('id', id).single();
+        if (row?.user_id) {
+          const changes = Object.keys(updates).filter(k => (oldClub as any)[k] !== (updates as any)[k]).map(k => ({ field: k, oldValue: (oldClub as any)[k], newValue: (updates as any)[k] }));
+          logModification({ itemType: 'club', itemId: id, ownerId: row.user_id, changes }).catch(() => {});
+        }
+      }
     } catch (error) {
       console.log('Error updating club:', error);
     }
   };
 
   const updateTournament = async (id: string, updates: Partial<Tournament>) => {
+    const oldTournament = tournaments.find(t => t.id === id);
     setTournaments(prev => prev.map(tournament => 
       tournament.id === id ? { ...tournament, ...updates } : tournament
     ));
@@ -1059,12 +1081,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dbUpdates.updated_at = new Date().toISOString();
 
       await supabase.from('tournaments').update(dbUpdates).eq('id', id);
+
+      // Log modification for shared items
+      if (sharedItemPermissions[id] === 'write' && oldTournament) {
+        const { data: row } = await supabase.from('tournaments').select('user_id').eq('id', id).single();
+        if (row?.user_id) {
+          const ignoreFields = ['teams', 'phases', 'currentPhaseId'];
+          const changes = Object.keys(updates).filter(k => !ignoreFields.includes(k) && (oldTournament as any)[k] !== (updates as any)[k]).map(k => ({ field: k, oldValue: (oldTournament as any)[k], newValue: (updates as any)[k] }));
+          logModification({ itemType: 'tournament', itemId: id, ownerId: row.user_id, changes }).catch(() => {});
+        }
+      }
     } catch (error) {
       console.log('Error updating tournament:', error);
     }
   };
 
   const updateTerrain = async (id: string, updates: Partial<Terrain>) => {
+    const oldTerrain = terrains.find(t => t.id === id);
     setTerrains(prev => prev.map(terrain => 
       terrain.id === id ? { ...terrain, ...updates } : terrain
     ));
@@ -1090,6 +1123,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dbUpdates.updated_at = new Date().toISOString();
 
       await supabase.from('terrains').update(dbUpdates).eq('id', id);
+
+      // Log modification for shared items
+      if (sharedItemPermissions[id] === 'write' && oldTerrain) {
+        const { data: row } = await supabase.from('terrains').select('user_id').eq('id', id).single();
+        if (row?.user_id) {
+          const changes = Object.keys(updates).filter(k => k !== 'location' && (oldTerrain as any)[k] !== (updates as any)[k]).map(k => ({ field: k, oldValue: (oldTerrain as any)[k], newValue: (updates as any)[k] }));
+          logModification({ itemType: 'terrain', itemId: id, ownerId: row.user_id, changes }).catch(() => {});
+        }
+      }
     } catch (error) {
       console.log('Error updating terrain:', error);
     }

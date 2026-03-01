@@ -2188,6 +2188,50 @@ export const translations = {
   },
 
   // ============================================
+  // MODIFICATION LOGS
+  // ============================================
+  modificationLogs: {
+    recentModifications: { fr: 'DERNIÈRES MODIFICATIONS', en: 'RECENT MODIFICATIONS' },
+    modifiedBy: { fr: 'Modifié par', en: 'Modified by' },
+    noModifications: { fr: 'Aucune modification', en: 'No modifications' },
+    noModificationsDesc: { fr: 'Les modifications faites par les utilisateurs partagés apparaîtront ici', en: 'Modifications made by shared users will appear here' },
+    fieldChanged: { fr: 'a modifié', en: 'changed' },
+    fieldsChanged: { fr: 'champs modifiés', en: 'fields changed' },
+    seeAll: { fr: 'Voir tout', en: 'See all' },
+    seeLess: { fr: 'Voir moins', en: 'See less' },
+    name: { fr: 'Nom', en: 'Name' },
+    role: { fr: 'Rôle', en: 'Role' },
+    level: { fr: 'Niveau', en: 'Level' },
+    club: { fr: 'Club', en: 'Club' },
+    description: { fr: 'Description', en: 'Description' },
+    address: { fr: 'Adresse', en: 'Address' },
+    city: { fr: 'Ville', en: 'City' },
+    phone: { fr: 'Téléphone', en: 'Phone' },
+    email: { fr: 'Email', en: 'Email' },
+    nickname: { fr: 'Surnom', en: 'Nickname' },
+    facilities: { fr: 'Équipements', en: 'Facilities' },
+    type: { fr: 'Type', en: 'Type' },
+    status: { fr: 'Statut', en: 'Status' },
+    format: { fr: 'Format', en: 'Format' },
+    lighting: { fr: 'Éclairage', en: 'Lighting' },
+    covered: { fr: 'Couvert', en: 'Covered' },
+    location: { fr: 'Localisation', en: 'Location' },
+    stats: { fr: 'Statistiques', en: 'Statistics' },
+    boules: { fr: 'Boules', en: 'Boules' },
+    photos: { fr: 'Photos', en: 'Photos' },
+    date: { fr: 'Date', en: 'Date' },
+    prize: { fr: 'Dotation', en: 'Prize' },
+    participants: { fr: 'Participants', en: 'Participants' },
+    contactEmail: { fr: 'Email contact', en: 'Contact email' },
+    contactPhone: { fr: 'Téléphone contact', en: 'Contact phone' },
+    membersCount: { fr: 'Nombre de membres', en: 'Members count' },
+    foundedYear: { fr: 'Année de fondation', en: 'Year founded' },
+    membershipCost: { fr: 'Cotisation', en: 'Membership cost' },
+    courtsCount: { fr: 'Nombre de terrains', en: 'Number of courts' },
+    isPublic: { fr: 'Accès public', en: 'Public access' },
+  },
+
+  // ============================================
   // LOCATION PICKER
   // ============================================
   locationPicker: {

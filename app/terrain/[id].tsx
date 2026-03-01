@@ -19,8 +19,10 @@ import theme from '@/constants/theme';
 import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import ShareModal from '@/components/ui/ShareModal';
+import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
 import { isSharedWithMe, saveSharedItemToMyAccount } from '@/services/shareService';
 import { useAlert } from '@/template';
+import { useAuth } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 
 export default function TerrainDetailScreen() {
@@ -33,6 +35,7 @@ export default function TerrainDetailScreen() {
   const [isShared, setIsShared] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const { showAlert } = useAlert();
+  const { user } = useAuth();
   const { t, language } = useLanguage();
   const sharedPermission = getSharedPermission(id || '');
   const isSharedItem = sharedPermission !== null;
@@ -429,6 +432,12 @@ export default function TerrainDetailScreen() {
             ))}
           </Animated.View>
         )}
+        {/* Modification Logs - only visible to owner */}
+        <ModificationLogsSection
+          itemType="terrain"
+          itemId={id!}
+          isOwner={!isSharedItem && !!user?.id}
+        />
       </ScrollView>
 
       {terrain && (

@@ -15,6 +15,8 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useAuth } from '@/template';
+import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
 import Svg, { Circle } from 'react-native-svg';
 import * as Linking from 'expo-linking';
 
@@ -47,6 +49,7 @@ export default function PlayerDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getPlayerById, getMatchesByPlayer, getClubById, getTerrainById, deletePlayer, selfPlayer, matches, getSharedPermission } = useApp();
+  const { user } = useAuth();
   const { t, language } = useLanguage();
 
   const player = getPlayerById(id!);
@@ -417,6 +420,12 @@ export default function PlayerDetailScreen() {
             })}
           </Animated.View>
         )}
+        {/* Modification Logs - only visible to owner */}
+        <ModificationLogsSection
+          itemType="player"
+          itemId={id!}
+          isOwner={!isSharedItem && !!user?.id}
+        />
       </ScrollView>
 
     </SafeAreaView>
