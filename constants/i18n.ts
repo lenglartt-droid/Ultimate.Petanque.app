@@ -2328,6 +2328,91 @@ export const translations = {
     contactUs: { fr: 'Nous contacter', en: 'Contact us' },
   },
 
+  // ============================================
+  // TERMS OF USE (CGU)
+  // ============================================
+  terms: {
+    title: { fr: "Conditions G\u00e9n\u00e9rales d'Utilisation", en: 'Terms of Use' },
+    effectiveDate: { fr: "Date d'effet", en: 'Effective date' },
+    acceptanceNotice: {
+      fr: "En utilisant Ultimate Petanque, vous acceptez les pr\u00e9sentes conditions. Si vous n'\u00eates pas d'accord, veuillez ne pas utiliser l'application.",
+      en: 'By using Ultimate Petanque, you accept these terms. If you do not agree, please do not use the app.',
+    },
+    objectTitle: { fr: 'Objet', en: 'Purpose' },
+    objectContent: {
+      fr: "Les pr\u00e9sentes Conditions G\u00e9n\u00e9rales d'Utilisation (CGU) r\u00e9gissent l'acc\u00e8s et l'utilisation de l'application mobile Ultimate Petanque. L'application permet de suivre vos matchs de p\u00e9tanque, g\u00e9rer vos statistiques, organiser des tournois et partager des fiches avec d'autres joueurs.",
+      en: 'These Terms of Use govern the access and use of the Ultimate Petanque mobile application. The app allows you to track your p\u00e9tanque matches, manage your statistics, organize tournaments, and share cards with other players.',
+    },
+    accountTitle: { fr: 'Compte et inscription', en: 'Account and registration' },
+    accountContent: {
+      fr: "\u2022 L'inscription n\u00e9cessite une adresse email valide et un mot de passe (min. 6 caract\u00e8res)\n\u2022 Vous \u00eates responsable de la confidentialit\u00e9 de vos identifiants\n\u2022 Un seul compte par personne est autoris\u00e9\n\u2022 Les informations fournies doivent \u00eatre exactes\n\u2022 Vous devez avoir au moins 13 ans pour utiliser l'application",
+      en: '\u2022 Registration requires a valid email address and password (min. 6 characters)\n\u2022 You are responsible for the confidentiality of your credentials\n\u2022 Only one account per person is allowed\n\u2022 Information provided must be accurate\n\u2022 You must be at least 13 years old to use the app',
+    },
+    featuresTitle: { fr: "Fonctionnalit\u00e9s de l'application", en: 'App features' },
+    featuresContent: {
+      fr: "L'application propose les fonctionnalit\u00e9s suivantes :\n\n\u2022 Suivi de matchs en temps r\u00e9el (entra\u00eenement et tournoi)\n\u2022 Notation d\u00e9taill\u00e9e des tirs et points\n\u2022 D\u00e9fis individuels et 1 contre 1\n\u2022 Gestion de tournois avec cadrage et phases\n\u2022 Statistiques avanc\u00e9es et progression\n\u2022 Annuaire de joueurs, clubs, terrains\n\u2022 Carte interactive des terrains\n\u2022 Partage de fiches entre joueurs\n\u2022 Bilan financier et palmar\u00e8s",
+      en: 'The app offers the following features:\n\n\u2022 Real-time match tracking (training and tournament)\n\u2022 Detailed shot and point notation\n\u2022 Individual and 1v1 challenges\n\u2022 Tournament management with brackets and phases\n\u2022 Advanced statistics and progression\n\u2022 Directory of players, clubs, courts\n\u2022 Interactive court map\n\u2022 Card sharing between players\n\u2022 Financial summary and achievements',
+    },
+    userResponsibilitiesTitle: { fr: "Responsabilit\u00e9s de l'utilisateur", en: 'User responsibilities' },
+    userResponsibilitiesContent: {
+      fr: "En tant qu'utilisateur, vous vous engagez \u00e0 :\n\n\u2022 Utiliser l'application conform\u00e9ment \u00e0 sa destination (suivi de p\u00e9tanque)\n\u2022 Ne pas saisir de contenu ill\u00e9gal, offensant ou inappropri\u00e9\n\u2022 Respecter les autres utilisateurs dans le cadre du partage\n\u2022 Ne pas tenter de compromettre la s\u00e9curit\u00e9 de l'application\n\u2022 Maintenir vos informations de compte \u00e0 jour",
+      en: 'As a user, you agree to:\n\n\u2022 Use the app in accordance with its purpose (p\u00e9tanque tracking)\n\u2022 Not enter illegal, offensive, or inappropriate content\n\u2022 Respect other users when sharing\n\u2022 Not attempt to compromise the app security\n\u2022 Keep your account information up to date',
+    },
+    sharingRulesTitle: { fr: 'R\u00e8gles de partage', en: 'Sharing rules' },
+    sharingRulesContent: {
+      fr: "Le partage de fiches est soumis aux r\u00e8gles suivantes :\n\n\u2022 Vous \u00eates responsable du contenu que vous partagez\n\u2022 Le partage se fait via un code unique que vous g\u00e9n\u00e9rez\n\u2022 Vous pouvez choisir la permission : lecture seule ou modification\n\u2022 Vous pouvez r\u00e9voquer un partage \u00e0 tout moment\n\u2022 Les modifications sur les fiches partag\u00e9es en \u00e9criture sont trac\u00e9es\n\u2022 La fiche profil personnelle ne peut \u00eatre partag\u00e9e qu'en lecture seule",
+      en: 'Card sharing is subject to the following rules:\n\n\u2022 You are responsible for the content you share\n\u2022 Sharing is done via a unique code that you generate\n\u2022 You can choose the permission: read-only or edit\n\u2022 You can revoke a share at any time\n\u2022 Modifications on write-shared cards are tracked\n\u2022 Personal profile card can only be shared as read-only',
+    },
+    intellectualPropertyTitle: { fr: 'Propri\u00e9t\u00e9 intellectuelle', en: 'Intellectual property' },
+    intellectualPropertyContent: {
+      fr: "\u2022 L'application Ultimate Petanque, son design, son code et son contenu sont prot\u00e9g\u00e9s par le droit d'auteur\n\u2022 Les donn\u00e9es que vous saisissez (matchs, joueurs, clubs) vous appartiennent\n\u2022 Vous accordez \u00e0 l'application le droit de stocker et traiter vos donn\u00e9es pour fournir le service\n\u2022 Toute reproduction ou redistribution de l'application est interdite sans autorisation",
+      en: '\u2022 The Ultimate Petanque app, its design, code, and content are protected by copyright\n\u2022 The data you enter (matches, players, clubs) belongs to you\n\u2022 You grant the app the right to store and process your data to provide the service\n\u2022 Any reproduction or redistribution of the app is prohibited without authorization',
+    },
+    dataPrivacyTitle: { fr: 'Donn\u00e9es et confidentialit\u00e9', en: 'Data and privacy' },
+    dataPrivacyContent: {
+      fr: "Le traitement de vos donn\u00e9es personnelles est d\u00e9crit dans notre Politique de Confidentialit\u00e9 accessible depuis l'application. En r\u00e9sum\u00e9 :\n\n\u2022 Vos donn\u00e9es sont stock\u00e9es de mani\u00e8re s\u00e9curis\u00e9e dans le cloud\n\u2022 Nous ne vendons pas vos donn\u00e9es\n\u2022 Vous pouvez supprimer votre compte et toutes vos donn\u00e9es \u00e0 tout moment",
+      en: 'The processing of your personal data is described in our Privacy Policy accessible from the app. In summary:\n\n\u2022 Your data is securely stored in the cloud\n\u2022 We do not sell your data\n\u2022 You can delete your account and all your data at any time',
+    },
+    prohibitedTitle: { fr: 'Comportements interdits', en: 'Prohibited behavior' },
+    prohibitedContent: {
+      fr: "Il est strictement interdit de :\n\n\u2022 Utiliser l'application \u00e0 des fins frauduleuses\n\u2022 Tenter d'acc\u00e9der aux comptes d'autres utilisateurs\n\u2022 Envoyer du contenu malveillant ou des virus\n\u2022 Exploiter des failles de s\u00e9curit\u00e9\n\u2022 Utiliser des robots ou scripts automatis\u00e9s\n\u2022 Usurper l'identit\u00e9 d'un autre utilisateur",
+      en: 'It is strictly prohibited to:\n\n\u2022 Use the app for fraudulent purposes\n\u2022 Attempt to access other users accounts\n\u2022 Send malicious content or viruses\n\u2022 Exploit security vulnerabilities\n\u2022 Use bots or automated scripts\n\u2022 Impersonate another user',
+    },
+    warrantyTitle: { fr: 'Limitations de garantie', en: 'Warranty limitations' },
+    warrantyContent: {
+      fr: "L'application est fournie \"en l'\u00e9tat\" sans garantie d'aucune sorte :\n\n\u2022 Nous ne garantissons pas un fonctionnement ininterrompu ou sans erreur\n\u2022 Les statistiques sont calcul\u00e9es \u00e0 partir des donn\u00e9es saisies par l'utilisateur\n\u2022 La synchronisation d\u00e9pend de la connexion internet disponible\n\u2022 Nous nous r\u00e9servons le droit de modifier ou interrompre le service\n\u2022 Les mises \u00e0 jour peuvent modifier les fonctionnalit\u00e9s disponibles",
+      en: 'The app is provided "as is" without warranty of any kind:\n\n\u2022 We do not guarantee uninterrupted or error-free operation\n\u2022 Statistics are calculated from user-entered data\n\u2022 Synchronization depends on available internet connection\n\u2022 We reserve the right to modify or discontinue the service\n\u2022 Updates may change available features',
+    },
+    liabilityTitle: { fr: 'Limitation de responsabilit\u00e9', en: 'Limitation of liability' },
+    liabilityContent: {
+      fr: "\u2022 L'application n'est pas responsable des pertes de donn\u00e9es dues \u00e0 des circonstances hors de notre contr\u00f4le\n\u2022 Nous ne sommes pas responsables des d\u00e9cisions prises sur la base des statistiques affich\u00e9es\n\u2022 La responsabilit\u00e9 totale est limit\u00e9e au montant pay\u00e9 pour l'application (le cas \u00e9ch\u00e9ant)\n\u2022 Nous ne sommes pas responsables du contenu partag\u00e9 entre utilisateurs",
+      en: '\u2022 The app is not responsible for data loss due to circumstances beyond our control\n\u2022 We are not liable for decisions made based on displayed statistics\n\u2022 Total liability is limited to the amount paid for the app (if any)\n\u2022 We are not responsible for content shared between users',
+    },
+    terminationTitle: { fr: 'R\u00e9siliation', en: 'Termination' },
+    terminationContent: {
+      fr: "\u2022 Vous pouvez supprimer votre compte \u00e0 tout moment depuis Profil > Supprimer mon compte\n\u2022 La suppression entra\u00eene l'effacement irr\u00e9versible de toutes vos donn\u00e9es\n\u2022 Nous nous r\u00e9servons le droit de suspendre ou supprimer un compte en cas de violation des CGU\n\u2022 En cas de suspension, vous serez inform\u00e9 par email",
+      en: '\u2022 You can delete your account at any time from Profile > Delete my account\n\u2022 Deletion results in the irreversible erasure of all your data\n\u2022 We reserve the right to suspend or delete an account in case of Terms violation\n\u2022 In case of suspension, you will be notified by email',
+    },
+    changesTitle: { fr: 'Modifications des CGU', en: 'Changes to Terms' },
+    changesContent: {
+      fr: "Nous pouvons modifier ces conditions \u00e0 tout moment. Les modifications significatives seront communiqu\u00e9es via l'application. L'utilisation continue de l'application apr\u00e8s modification vaut acceptation des nouvelles conditions.",
+      en: 'We may modify these terms at any time. Significant changes will be communicated through the app. Continued use of the app after modification constitutes acceptance of the new terms.',
+    },
+    governingLawTitle: { fr: 'Droit applicable', en: 'Governing law' },
+    governingLawContent: {
+      fr: "Les pr\u00e9sentes CGU sont r\u00e9gies par le droit fran\u00e7ais. En cas de litige, les tribunaux fran\u00e7ais seront seuls comp\u00e9tents, sauf disposition l\u00e9gale contraire.",
+      en: 'These Terms are governed by French law. In case of dispute, French courts shall have sole jurisdiction, unless otherwise required by law.',
+    },
+    contactTitle: { fr: 'Nous contacter', en: 'Contact us' },
+    contactContent: {
+      fr: "Pour toute question concernant ces Conditions G\u00e9n\u00e9rales d'Utilisation :\n\n\u2022 Email : ultimate.petanque.app@gmail.com\n\u2022 Depuis l'application : Profil > Aide > Envoyer un email",
+      en: 'For any questions about these Terms of Use:\n\n\u2022 Email: ultimate.petanque.app@gmail.com\n\u2022 From the app: Profile > Help > Send an email',
+    },
+    questionsLabel: { fr: 'Des questions sur les CGU ?', en: 'Questions about the Terms?' },
+    contactUs: { fr: 'Nous contacter', en: 'Contact us' },
+    termsSubtext: { fr: "R\u00e8gles d'utilisation de l'application", en: 'App usage rules' },
+  },
+
   locationPicker: {
     searchPlace: { fr: 'Rechercher un lieu', en: 'Search a place' },
     searchAddress: { fr: 'Rechercher une adresse...', en: 'Search an address...' },

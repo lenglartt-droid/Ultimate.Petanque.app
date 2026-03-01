@@ -341,11 +341,20 @@ export default function LoginScreen() {
 
           {/* Footer */}
           <Animated.View entering={FadeInDown.duration(500).delay(300)} style={styles.footer}>
-            <Pressable onPress={() => router.push('/privacy-policy')}>
+            <Pressable onPress={() => router.push('/terms')}>
               <Text style={styles.footerText}>
                 {t('login', 'termsText')}
               </Text>
             </Pressable>
+            <View style={styles.footerLinks}>
+              <Pressable onPress={() => router.push('/terms')}>
+                <Text style={styles.footerLink}>{t('terms', 'title')}</Text>
+              </Pressable>
+              <Text style={styles.footerSeparator}>•</Text>
+              <Pressable onPress={() => router.push('/privacy-policy')}>
+                <Text style={styles.footerLink}>{t('privacy', 'title')}</Text>
+              </Pressable>
+            </View>
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -495,6 +504,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: theme.textMuted,
     textAlign: 'center',
+  },
+  footerLinks: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  footerLink: {
+    fontSize: 12,
+    color: theme.primary,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
+  },
+  footerSeparator: {
+    fontSize: 12,
+    color: theme.textMuted,
   },
   // Divider styles
   dividerContainer: {

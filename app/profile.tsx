@@ -1028,6 +1028,23 @@ export default function ProfileScreen() {
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </Pressable>
 
+            <Pressable 
+              style={styles.menuItem}
+              onPress={() => {
+                Haptics.selectionAsync();
+                router.push('/terms');
+              }}
+            >
+              <View style={[styles.menuIcon, { backgroundColor: theme.accent + '15' }]}>
+                <MaterialIcons name="description" size={20} color={theme.accent} />
+              </View>
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuItemText}>{t('terms', 'title')}</Text>
+                <Text style={styles.menuItemSubtext}>{t('terms', 'termsSubtext')}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+            </Pressable>
+
             {/* Language Switcher */}
             <Pressable 
               style={styles.menuItem}
