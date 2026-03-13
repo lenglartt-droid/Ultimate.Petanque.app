@@ -82,6 +82,7 @@ export default function EditMatchScreen() {
   const [showShotNotation, setShowShotNotation] = useState(false);
   const [editingActionPlayer, setEditingActionPlayer] = useState<{ id: string; name: string; team: 'A' | 'B' } | null>(null);
   const [editingActionType, setEditingActionType] = useState<'tir' | 'point'>('tir');
+  const [expandedPlayerShots, setExpandedPlayerShots] = useState<Set<string>>(new Set());
 
   const maxScore = config.game.maxScore;
   const locale = language === 'en' ? 'en-US' : 'fr-FR';
@@ -231,6 +232,70 @@ export default function EditMatchScreen() {
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [editingActionPlayer]);
+
+  const deleteDetailedShot = useCallback((playerId: string, shotId: string) => {
+    setPlayerActions(prev => prev.map(pa => {
+      if (pa.playerId !== playerId || !pa.detailedShots) return pa;
+      const shot = pa.detailedShots.find(s => s.id === shotId);
+      if (!shot) return pa;
+      const newActions = { ...pa.actions };
+      if (shot.actionType === 'tir') {
+        newActions.tirs = Math.max(0, newActions.tirs - 1);
+        if (shot.success) newActions.tirsSuccess = Math.max(0, newActions.tirsSuccess - 1);
+        if (shot.carreau) newActions.carreaux = Math.max(0, newActions.carreaux - 1);
+      } else {
+        newActions.points = Math.max(0, newActions.points - 1);
+        if (shot.success) newActions.pointsSuccess = Math.max(0, newActions.pointsSuccess - 1);
+      }
+      return { ...pa, actions: newActions, detailedShots: pa.detailedShots.filter(s => s.id !== shotId) };
+    }));
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  }, []);
+
+  const togglePlayerShots = useCallback((playerId: string) => {
+    setExpandedPlayerShots(prev => {
+      const next = new Set(prev);
+      if (next.has(playerId)) next.delete(playerId);
+      else next.add(playerId);
+      return next;
+    });
+  }, []);
+
+  const getShotLabel = useCallback((shot: DetailedShotRecord): string => {
+    const parts: string[] = [];
+    if (shot.actionType === 'tir') {
+      if (shot.carreau) parts.push(t('notation', 'carreauLabel'));
+      else if (shot.shotType) {
+        const typeMap: Record<string, string> = { au_fer: 'tirTendu', au_plomb: 'tirCloche', en_rafle: 'enRafleSimple', court_ramasse: 'courtRamasse', carreau: 'carreauLabel' };
+        parts.push(t('notation', typeMap[shot.shotType] || shot.shotType));
+      }
+      if (!shot.success && shot.shotResult) {
+        const resultMap: Record<string, string> = { court_droite: 'courtDroite', court_gauche: 'courtGauche', long: 'longResult', tir_bouchon: 'tirBouchon' };
+        parts.push(t('notation', resultMap[shot.shotResult] || shot.shotResult));
+      }
+      if (shot.shotQuality) {
+        const qualMap: Record<string, string> = { gain_point: 'gainPoint', sans_effet: 'noEffect', negatif: 'negative', decisif: 'decisive' };
+        parts.push(t('notation', qualMap[shot.shotQuality] || shot.shotQuality));
+      }
+    } else {
+      if (shot.pointType) {
+        const ptMap: Record<string, string> = { roule: 'rouleSimple', plombe: 'plombeSimple', demi_portee: 'demiPorteeSimple', portee: 'portee' };
+        parts.push(t('notation', ptMap[shot.pointType] || shot.pointType));
+      }
+      if (shot.pointQuality) {
+        const pqMap: Record<string, string> = { excellent: 'excellent', bon: 'bon', moyen: 'moyen', au_bouchon: 'auBouchon', devant_boule: 'devantBoule', rate: 'rate', crochete: 'crochete', sorti: 'sorti' };
+        parts.push(t('notation', pqMap[shot.pointQuality] || shot.pointQuality));
+      }
+    }
+    return parts.join(' \u2022 ');
+  }, [t]);
+
+  const handleDeleteShot = useCallback((playerId: string, shotId: string, shotLabel: string) => {
+    Alert.alert(t('matchEdit', 'deleteShot'), `${shotLabel}`, [
+      { text: t('common', 'cancel'), style: 'cancel' },
+      { text: t('common', 'delete'), style: 'destructive', onPress: () => deleteDetailedShot(playerId, shotId) },
+    ]);
+  }, [deleteDetailedShot, t]);
 
   if (!match) {
     return (
@@ -436,6 +501,48 @@ export default function EditMatchScreen() {
             <Text style={[styles.detailedBtnText, { color: theme.pointColor }]}>+ {t('match', 'point')}</Text>
           </Pressable>
         </View>
+
+        {/* Detailed shots list */}
+        {detailedCount > 0 && (
+          <View style={styles.detailedShotsSection}>
+            <Pressable style={styles.detailedShotsToggle} onPress={() => togglePlayerShots(player.id)}>
+              <MaterialIcons name="playlist-play" size={16} color={theme.textSecondary} />
+              <Text style={styles.detailedShotsToggleText}>{t('matchEdit', 'detailedShotsList')} ({detailedCount})</Text>
+              <MaterialIcons name={expandedPlayerShots.has(player.id) ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} size={18} color={theme.textMuted} />
+            </Pressable>
+            {expandedPlayerShots.has(player.id) && (
+              <View style={styles.detailedShotsList}>
+                {(pa?.detailedShots || []).map((shot, idx) => {
+                  const isTir = shot.actionType === 'tir';
+                  const shotLabel = getShotLabel(shot);
+                  const timeStr = new Date(shot.timestamp).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+                  return (
+                    <View key={shot.id} style={[styles.detailedShotItem, idx === 0 && { borderTopWidth: 0 }]}>
+                      <View style={[styles.detailedShotIcon, { backgroundColor: (isTir ? theme.tirColor : theme.pointColor) + '15' }]}>
+                        <MaterialIcons name={isTir ? 'gps-fixed' : 'adjust'} size={14} color={isTir ? theme.tirColor : theme.pointColor} />
+                      </View>
+                      <View style={styles.detailedShotContent}>
+                        <View style={styles.detailedShotTopRow}>
+                          <View style={[styles.detailedShotBadge, { backgroundColor: shot.success ? theme.success + '20' : theme.error + '20' }]}>
+                            <MaterialIcons name={shot.success ? 'check' : 'close'} size={10} color={shot.success ? theme.success : theme.error} />
+                            <Text style={[styles.detailedShotBadgeText, { color: shot.success ? theme.success : theme.error }]}>
+                              {shot.success ? (shot.carreau ? t('notation', 'carreauLabel') : t('notation', 'succeeded')) : t('notation', 'missed')}
+                            </Text>
+                          </View>
+                          <Text style={styles.detailedShotTime}>{timeStr}</Text>
+                        </View>
+                        {shotLabel ? <Text style={styles.detailedShotLabel} numberOfLines={2}>{shotLabel}</Text> : null}
+                      </View>
+                      <Pressable style={styles.detailedShotDeleteBtn} onPress={() => handleDeleteShot(player.id, shot.id, `${isTir ? t('notation', 'tirLabel') : t('notation', 'pointLabel')} - ${shot.success ? t('notation', 'succeeded') : t('notation', 'missed')}`)} hitSlop={8}>
+                        <MaterialIcons name="delete-outline" size={16} color={theme.error + '80'} />
+                      </Pressable>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        )}
       </View>
     );
   };
@@ -939,6 +1046,20 @@ const styles = StyleSheet.create({
   detailedBtnRow: { flexDirection: 'row', gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border },
   detailedBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: theme.borderRadius.md, borderWidth: 1 },
   detailedBtnText: { fontSize: 12, fontWeight: '600' },
+  // Detailed shots list
+  detailedShotsSection: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border },
+  detailedShotsToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 },
+  detailedShotsToggleText: { flex: 1, fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  detailedShotsList: { marginTop: 6 },
+  detailedShotItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, borderTopWidth: 1, borderTopColor: theme.border + '60' },
+  detailedShotIcon: { width: 28, height: 28, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
+  detailedShotContent: { flex: 1 },
+  detailedShotTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
+  detailedShotBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
+  detailedShotBadgeText: { fontSize: 10, fontWeight: '600' },
+  detailedShotTime: { fontSize: 10, color: theme.textMuted },
+  detailedShotLabel: { fontSize: 11, color: theme.textSecondary, lineHeight: 15 },
+  detailedShotDeleteBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
   // Menes
   addMeneBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.primary + '20', borderRadius: theme.borderRadius.full },
   addMeneBtnText: { fontSize: 13, fontWeight: '600', color: theme.primary },

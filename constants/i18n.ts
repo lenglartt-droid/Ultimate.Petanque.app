@@ -2484,6 +2484,8 @@ export const translations = {
   matchEdit: {
     selectTournament: { fr: 'S\u00e9lectionner un tournoi', en: 'Select a tournament' },
     actionsDesc: { fr: 'Modifiez les compteurs ou ajoutez un tir/point d\u00e9taill\u00e9', en: 'Edit counters or add a detailed shot/point' },
+    detailedShotsList: { fr: 'Tirs d\u00e9taill\u00e9s', en: 'Detailed shots' },
+    deleteShot: { fr: 'Supprimer ce tir ?', en: 'Delete this shot?' },
   },
 
   locationPicker: {
