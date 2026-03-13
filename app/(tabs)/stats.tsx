@@ -7,6 +7,8 @@ import {
   StyleSheet,
   Dimensions,
   Modal,
+  FlatList,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -271,9 +273,11 @@ function NAPlaceholder({ message }: { message: string }) {
 // ============================================
 // MAIN COMPONENT
 // ============================================
+type ItemFilterType = 'all' | 'match' | 'challenge' | 'tournament';
+
 export default function StatsScreen() {
   const insets = useSafeAreaInsets();
-  const { matches, challenges } = useApp();
+  const { matches, challenges, tournaments, getMatchesByTournament } = useApp();
   const { t, language } = useLanguage();
 
   // Translated filter/tab arrays
@@ -286,9 +290,103 @@ export default function StatsScreen() {
   const [showProgressionModal, setShowProgressionModal] = useState(false);
   const [progressionFilter, setProgressionFilter] = useState<ProgressionFilter>('8weeks');
 
-  // Filter data
-  const filteredMatches = filterByTime(matches, timeFilter);
-  const filteredChallenges = filterByTime(challenges, timeFilter);
+  // Item filter state
+  const [itemFilterType, setItemFilterType] = useState<ItemFilterType>('all');
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const [selectedChallengeId, setSelectedChallengeId] = useState<string | null>(null);
+  const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null);
+  const [showItemPickerModal, setShowItemPickerModal] = useState(false);
+  const [itemPickerType, setItemPickerType] = useState<'match' | 'challenge' | 'tournament'>('match');
+  const [itemPickerSearch, setItemPickerSearch] = useState('');
+
+  // Time-filtered base data
+  const timeFilteredMatches = filterByTime(matches, timeFilter);
+  const timeFilteredChallenges = filterByTime(challenges, timeFilter);
+
+  // Apply item filter on top of time filter
+  const filteredMatches = useMemo(() => {
+    if (itemFilterType === 'match' && selectedMatchId) {
+      return timeFilteredMatches.filter(m => m.id === selectedMatchId);
+    }
+    if (itemFilterType === 'tournament' && selectedTournamentId) {
+      return timeFilteredMatches.filter(m => m.tournamentId === selectedTournamentId);
+    }
+    return timeFilteredMatches;
+  }, [timeFilteredMatches, itemFilterType, selectedMatchId, selectedTournamentId]);
+
+  const filteredChallenges = useMemo(() => {
+    if (itemFilterType === 'challenge' && selectedChallengeId) {
+      return timeFilteredChallenges.filter(c => c.id === selectedChallengeId);
+    }
+    // When filtering by match or tournament, don't include challenges in stats
+    if (itemFilterType === 'match' || itemFilterType === 'tournament') {
+      return [];
+    }
+    return timeFilteredChallenges;
+  }, [timeFilteredChallenges, itemFilterType, selectedChallengeId, selectedMatchId, selectedTournamentId]);
+
+  // Active filter label
+  const activeFilterLabel = useMemo(() => {
+    if (itemFilterType === 'match' && selectedMatchId) {
+      const m = matches.find(m => m.id === selectedMatchId);
+      if (m) {
+        const dateStr = new Date(m.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' });
+        return `${m.teamA.playerNames[0]?.split(' ')[0] || '?'} vs ${m.teamB.playerNames[0]?.split(' ')[0] || '?'} (${dateStr})`;
+      }
+    }
+    if (itemFilterType === 'challenge' && selectedChallengeId) {
+      const c = challenges.find(c => c.id === selectedChallengeId);
+      if (c) {
+        const dateStr = new Date(c.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' });
+        return `${t('challengeNames', c.type)} (${dateStr})`;
+      }
+    }
+    if (itemFilterType === 'tournament' && selectedTournamentId) {
+      const tour = tournaments.find(t => t.id === selectedTournamentId);
+      if (tour) return tour.name;
+    }
+    return null;
+  }, [itemFilterType, selectedMatchId, selectedChallengeId, selectedTournamentId, matches, challenges, tournaments, language]);
+
+  const clearItemFilter = () => {
+    setItemFilterType('all');
+    setSelectedMatchId(null);
+    setSelectedChallengeId(null);
+    setSelectedTournamentId(null);
+  };
+
+  const openItemPicker = (type: 'match' | 'challenge' | 'tournament') => {
+    setItemPickerType(type);
+    setItemPickerSearch('');
+    setShowItemPickerModal(true);
+  };
+
+  const selectMatch = (id: string) => {
+    setItemFilterType('match');
+    setSelectedMatchId(id);
+    setSelectedChallengeId(null);
+    setSelectedTournamentId(null);
+    setShowItemPickerModal(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const selectChallenge = (id: string) => {
+    setItemFilterType('challenge');
+    setSelectedChallengeId(id);
+    setSelectedMatchId(null);
+    setSelectedTournamentId(null);
+    setShowItemPickerModal(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const selectTournament = (id: string) => {
+    setItemFilterType('tournament');
+    setSelectedTournamentId(id);
+    setSelectedMatchId(null);
+    setSelectedChallengeId(null);
+    setShowItemPickerModal(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
 
   // ============================================
   // PERFORMANCE STATS CALCULATION
@@ -945,6 +1043,63 @@ export default function StatsScreen() {
             </Pressable>
           ))}
         </ScrollView>
+
+        {/* Item Filter Bar */}
+        <View style={styles.itemFilterBar}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.itemFilterScroll}>
+            <Pressable
+              style={[styles.itemFilterChip, itemFilterType !== 'all' && styles.itemFilterChipInactive]}
+              onPress={() => { Haptics.selectionAsync(); clearItemFilter(); }}
+            >
+              <MaterialIcons name="select-all" size={14} color={itemFilterType === 'all' ? '#FFF' : theme.textSecondary} />
+              <Text style={[styles.itemFilterChipText, itemFilterType !== 'all' && styles.itemFilterChipTextInactive]}>
+                {t('profile', 'statsFilterAll')}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.itemFilterChip, itemFilterType === 'match' ? styles.itemFilterChipMatch : styles.itemFilterChipInactive]}
+              onPress={() => { Haptics.selectionAsync(); openItemPicker('match'); }}
+            >
+              <MaterialIcons name="sports" size={14} color={itemFilterType === 'match' ? '#FFF' : theme.textSecondary} />
+              <Text style={[styles.itemFilterChipText, itemFilterType !== 'match' && styles.itemFilterChipTextInactive]}>
+                {t('profile', 'statsFilterMatch')}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.itemFilterChip, itemFilterType === 'challenge' ? styles.itemFilterChipChallenge : styles.itemFilterChipInactive]}
+              onPress={() => { Haptics.selectionAsync(); openItemPicker('challenge'); }}
+            >
+              <MaterialIcons name="flag" size={14} color={itemFilterType === 'challenge' ? '#FFF' : theme.textSecondary} />
+              <Text style={[styles.itemFilterChipText, itemFilterType !== 'challenge' && styles.itemFilterChipTextInactive]}>
+                {t('profile', 'statsFilterChallenge')}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.itemFilterChip, itemFilterType === 'tournament' ? styles.itemFilterChipTournament : styles.itemFilterChipInactive]}
+              onPress={() => { Haptics.selectionAsync(); openItemPicker('tournament'); }}
+            >
+              <MaterialIcons name="emoji-events" size={14} color={itemFilterType === 'tournament' ? '#FFF' : theme.textSecondary} />
+              <Text style={[styles.itemFilterChipText, itemFilterType !== 'tournament' && styles.itemFilterChipTextInactive]}>
+                {t('profile', 'statsFilterTournament')}
+              </Text>
+            </Pressable>
+          </ScrollView>
+        </View>
+
+        {/* Active Filter Indicator */}
+        {activeFilterLabel && (
+          <View style={styles.activeFilterBanner}>
+            <MaterialIcons 
+              name={itemFilterType === 'match' ? 'sports' : itemFilterType === 'challenge' ? 'flag' : 'emoji-events'} 
+              size={14} 
+              color={itemFilterType === 'match' ? theme.tirColor : itemFilterType === 'challenge' ? theme.accent : theme.carreauColor} 
+            />
+            <Text style={styles.activeFilterText} numberOfLines={1}>{activeFilterLabel}</Text>
+            <Pressable style={styles.activeFilterClear} onPress={clearItemFilter}>
+              <MaterialIcons name="close" size={16} color={theme.textMuted} />
+            </Pressable>
+          </View>
+        )}
 
         {/* Category Tabs */}
         <View style={styles.categoryTabs}>
@@ -2042,6 +2197,202 @@ export default function StatsScreen() {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+      {/* Item Picker Modal */}
+      <Modal visible={showItemPickerModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowItemPickerModal(false)}>
+        <SafeAreaView edges={['top']} style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <View>
+              <Text style={styles.modalTitle}>
+                {itemPickerType === 'match' ? t('profile', 'selectMatch') : itemPickerType === 'challenge' ? t('profile', 'selectChallenge') : t('profile', 'selectTournament')}
+              </Text>
+            </View>
+            <Pressable style={styles.modalCloseButton} onPress={() => setShowItemPickerModal(false)}>
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+          </View>
+
+          {/* Search */}
+          <View style={styles.pickerSearchContainer}>
+            <MaterialIcons name="search" size={20} color={theme.textMuted} />
+            <TextInput
+              style={styles.pickerSearchInput}
+              value={itemPickerSearch}
+              onChangeText={setItemPickerSearch}
+              placeholder={t('common', 'search') + '...'}
+              placeholderTextColor={theme.textMuted}
+            />
+            {itemPickerSearch.length > 0 && (
+              <Pressable onPress={() => setItemPickerSearch('')}>
+                <MaterialIcons name="close" size={18} color={theme.textMuted} />
+              </Pressable>
+            )}
+          </View>
+
+          {/* Match Picker */}
+          {itemPickerType === 'match' && (() => {
+            const search = itemPickerSearch.toLowerCase();
+            const items = timeFilteredMatches.filter(m => {
+              if (!search) return true;
+              const allNames = [...m.teamA.playerNames, ...m.teamB.playerNames].join(' ').toLowerCase();
+              const modeName = m.mode.toLowerCase();
+              const formatName = m.format.toLowerCase();
+              const tName = (m.tournamentName || '').toLowerCase();
+              return allNames.includes(search) || modeName.includes(search) || formatName.includes(search) || tName.includes(search);
+            });
+            return items.length > 0 ? (
+              <FlatList
+                data={items}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+                renderItem={({ item: m }) => {
+                  const dateStr = new Date(m.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+                  const isWin = m.winner === 'A';
+                  const isSelected = selectedMatchId === m.id;
+                  return (
+                    <Pressable
+                      style={[styles.pickerItem, isSelected && styles.pickerItemSelected]}
+                      onPress={() => selectMatch(m.id)}
+                    >
+                      <View style={[styles.pickerItemIndicator, { backgroundColor: isWin ? theme.success : theme.error }]} />
+                      <View style={styles.pickerItemContent}>
+                        <View style={styles.pickerItemRow}>
+                          <Text style={styles.pickerItemTitle} numberOfLines={1}>
+                            {m.teamA.playerNames.join(', ')}
+                          </Text>
+                          <Text style={[styles.pickerItemScore, { color: isWin ? theme.success : theme.error }]}>
+                            {m.teamA.score} - {m.teamB.score}
+                          </Text>
+                        </View>
+                        <Text style={styles.pickerItemSubtitle} numberOfLines={1}>
+                          vs {m.teamB.playerNames.join(', ')}
+                        </Text>
+                        <View style={styles.pickerItemMeta}>
+                          <Text style={styles.pickerItemMetaText}>{dateStr}</Text>
+                          <View style={styles.pickerItemDot} />
+                          <Text style={styles.pickerItemMetaText}>{t('formats', m.format)}</Text>
+                          <View style={styles.pickerItemDot} />
+                          <Text style={styles.pickerItemMetaText}>{m.mode === 'Tournoi' ? (m.tournamentName || t('modes', 'tournament')) : t('modes', 'training')}</Text>
+                        </View>
+                      </View>
+                      {isSelected && <MaterialIcons name="check-circle" size={22} color={theme.primary} />}
+                    </Pressable>
+                  );
+                }}
+              />
+            ) : (
+              <View style={styles.pickerEmpty}>
+                <MaterialIcons name="sports" size={48} color={theme.textMuted} />
+                <Text style={styles.pickerEmptyText}>{t('profile', 'noMatchesAvailable')}</Text>
+              </View>
+            );
+          })()}
+
+          {/* Challenge Picker */}
+          {itemPickerType === 'challenge' && (() => {
+            const search = itemPickerSearch.toLowerCase();
+            const items = timeFilteredChallenges.filter(c => {
+              if (!search) return true;
+              const typeName = (t('challengeNames', c.type) || c.type).toLowerCase();
+              const playerName = (c.playerName || '').toLowerCase();
+              const oppName = (c.opponentName || '').toLowerCase();
+              return typeName.includes(search) || playerName.includes(search) || oppName.includes(search);
+            });
+            return items.length > 0 ? (
+              <FlatList
+                data={items}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+                renderItem={({ item: c }) => {
+                  const dateStr = new Date(c.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+                  const isSelected = selectedChallengeId === c.id;
+                  const successLabel = c.type === 'precision' 
+                    ? `${c.totalPoints || 0}/${c.maxPoints || 100} pts` 
+                    : `${c.successCount || 0}/${c.totalShots || 10}`;
+                  return (
+                    <Pressable
+                      style={[styles.pickerItem, isSelected && styles.pickerItemSelected]}
+                      onPress={() => selectChallenge(c.id)}
+                    >
+                      <View style={[styles.pickerItemIndicator, { backgroundColor: theme.accent }]} />
+                      <View style={styles.pickerItemContent}>
+                        <View style={styles.pickerItemRow}>
+                          <Text style={styles.pickerItemTitle}>{t('challengeNames', c.type)}</Text>
+                          <Text style={[styles.pickerItemScore, { color: theme.accent }]}>{successLabel}</Text>
+                        </View>
+                        <View style={styles.pickerItemMeta}>
+                          <Text style={styles.pickerItemMetaText}>{dateStr}</Text>
+                          <View style={styles.pickerItemDot} />
+                          <Text style={styles.pickerItemMetaText}>{c.mode === '1v1' ? `vs ${c.opponentName || '?'}` : 'Solo'}</Text>
+                          {c.carreauCount ? <><View style={styles.pickerItemDot} /><Text style={[styles.pickerItemMetaText, { color: theme.carreauColor }]}>{c.carreauCount} C</Text></> : null}
+                        </View>
+                      </View>
+                      {isSelected && <MaterialIcons name="check-circle" size={22} color={theme.accent} />}
+                    </Pressable>
+                  );
+                }}
+              />
+            ) : (
+              <View style={styles.pickerEmpty}>
+                <MaterialIcons name="flag" size={48} color={theme.textMuted} />
+                <Text style={styles.pickerEmptyText}>{t('profile', 'noChallengesAvailable')}</Text>
+              </View>
+            );
+          })()}
+
+          {/* Tournament Picker */}
+          {itemPickerType === 'tournament' && (() => {
+            const search = itemPickerSearch.toLowerCase();
+            // Only show tournaments that have matches
+            const tournamentsWithMatches = tournaments.filter(tour => {
+              const tourMatches = timeFilteredMatches.filter(m => m.tournamentId === tour.id);
+              return tourMatches.length > 0;
+            });
+            const items = tournamentsWithMatches.filter(tour => {
+              if (!search) return true;
+              return tour.name.toLowerCase().includes(search) || (tour.location?.city || '').toLowerCase().includes(search);
+            });
+            return items.length > 0 ? (
+              <FlatList
+                data={items}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+                renderItem={({ item: tour }) => {
+                  const tourMatchCount = timeFilteredMatches.filter(m => m.tournamentId === tour.id).length;
+                  const dateStr = new Date(tour.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+                  const isSelected = selectedTournamentId === tour.id;
+                  return (
+                    <Pressable
+                      style={[styles.pickerItem, isSelected && styles.pickerItemSelected]}
+                      onPress={() => selectTournament(tour.id)}
+                    >
+                      <View style={[styles.pickerItemIndicator, { backgroundColor: theme.carreauColor }]} />
+                      <View style={styles.pickerItemContent}>
+                        <View style={styles.pickerItemRow}>
+                          <Text style={styles.pickerItemTitle} numberOfLines={1}>{tour.name}</Text>
+                          {tour.finalResult ? <Text style={[styles.pickerItemScore, { color: theme.carreauColor }]}>{t('palmaresResults', tour.finalResult)}</Text> : null}
+                        </View>
+                        <View style={styles.pickerItemMeta}>
+                          <Text style={styles.pickerItemMetaText}>{dateStr}</Text>
+                          <View style={styles.pickerItemDot} />
+                          <Text style={styles.pickerItemMetaText}>{tourMatchCount} {t('profile', 'matchesInTournament')}</Text>
+                          <View style={styles.pickerItemDot} />
+                          <Text style={styles.pickerItemMetaText}>{t('formats', tour.format)}</Text>
+                        </View>
+                      </View>
+                      {isSelected && <MaterialIcons name="check-circle" size={22} color={theme.carreauColor} />}
+                    </Pressable>
+                  );
+                }}
+              />
+            ) : (
+              <View style={styles.pickerEmpty}>
+                <MaterialIcons name="emoji-events" size={48} color={theme.textMuted} />
+                <Text style={styles.pickerEmptyText}>{t('profile', 'noTournamentsAvailable')}</Text>
+              </View>
+            );
+          })()}
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -2059,7 +2410,36 @@ const styles = StyleSheet.create({
   progressionButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: theme.primary + '15', borderRadius: theme.borderRadius.md },
   progressionButtonText: { fontSize: 12, fontWeight: '600', color: theme.primary },
   historyButton: { padding: 8, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md },
-  filterBar: { paddingHorizontal: 16, gap: 8, marginBottom: 12 },
+  filterBar: { paddingHorizontal: 16, gap: 8, marginBottom: 8 },
+  // Item filter bar
+  itemFilterBar: { marginBottom: 8 },
+  itemFilterScroll: { paddingHorizontal: 16, gap: 6 },
+  itemFilterChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: theme.borderRadius.full, backgroundColor: theme.primary },
+  itemFilterChipInactive: { backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
+  itemFilterChipMatch: { backgroundColor: theme.tirColor },
+  itemFilterChipChallenge: { backgroundColor: theme.accent },
+  itemFilterChipTournament: { backgroundColor: theme.carreauColor },
+  itemFilterChipText: { fontSize: 12, fontWeight: '600', color: '#FFF' },
+  itemFilterChipTextInactive: { color: theme.textSecondary },
+  activeFilterBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.border },
+  activeFilterText: { flex: 1, fontSize: 12, fontWeight: '600', color: theme.textPrimary },
+  activeFilterClear: { padding: 4 },
+  // Picker modal
+  pickerSearchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, marginHorizontal: 16, marginVertical: 12, paddingHorizontal: 14, paddingVertical: 10, borderRadius: theme.borderRadius.md, gap: 10, borderWidth: 1, borderColor: theme.border },
+  pickerSearchInput: { flex: 1, fontSize: 15, color: theme.textPrimary, padding: 0 },
+  pickerItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 14, marginBottom: 8, ...theme.shadows.card },
+  pickerItemSelected: { borderWidth: 2, borderColor: theme.primary },
+  pickerItemIndicator: { width: 4, height: '80%', borderRadius: 2, marginRight: 12 },
+  pickerItemContent: { flex: 1 },
+  pickerItemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  pickerItemTitle: { fontSize: 14, fontWeight: '600', color: theme.textPrimary, flex: 1, marginRight: 8 },
+  pickerItemScore: { fontSize: 15, fontWeight: '700' },
+  pickerItemSubtitle: { fontSize: 12, color: theme.textSecondary, marginBottom: 4 },
+  pickerItemMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' },
+  pickerItemMetaText: { fontSize: 11, color: theme.textMuted },
+  pickerItemDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: theme.textMuted },
+  pickerEmpty: { alignItems: 'center', paddingVertical: 48 },
+  pickerEmptyText: { fontSize: 15, color: theme.textMuted, marginTop: 12 },
   filterPill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: theme.borderRadius.full, backgroundColor: theme.backgroundSecondary },
   filterPillActive: { backgroundColor: theme.primary },
   filterPillText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
