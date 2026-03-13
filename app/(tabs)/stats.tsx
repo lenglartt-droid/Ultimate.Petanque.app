@@ -617,6 +617,45 @@ export default function StatsScreen() {
         challengeCarreaux += c.carreauCount || 0;
       }
     });
+
+    // Process challenge detailed shots for advanced analysis
+    filteredChallenges.forEach(c => {
+      if (c.detailedShots) {
+        c.detailedShots.filter(s => s.actionType === 'tir').forEach((shot: any) => {
+          if (shot.shotType && shotTypeStats[shot.shotType]) {
+            shotTypeStats[shot.shotType].total++;
+            if (shot.success) shotTypeStats[shot.shotType].success++;
+          }
+          if (shot.shotResult && shotResultStats[shot.shotResult] !== undefined) {
+            shotResultStats[shot.shotResult]++;
+          }
+          if (!shot.shotResult && !shot.success && shot.shotType) {
+            if (shotResultStats[shot.shotType] !== undefined) {
+              shotResultStats[shot.shotType]++;
+            }
+          }
+          if (shot.carreau) { shotTypeStats.carreau.total++; shotTypeStats.carreau.success++; }
+          if (shot.shotQuality && shotQualityStats[shot.shotQuality] !== undefined) {
+            shotQualityStats[shot.shotQuality]++;
+            if (shot.shotType && crossTypeImpact[shot.shotType]) {
+              const impactKey = shot.shotQuality as keyof typeof crossTypeImpact['au_fer'];
+              if (impactKey !== 'total' && crossTypeImpact[shot.shotType][impactKey] !== undefined) {
+                crossTypeImpact[shot.shotType][impactKey]++;
+                crossTypeImpact[shot.shotType].total++;
+              }
+            }
+          }
+          if (!shot.success && shot.shotType && crossTypeResult[shot.shotType]) {
+            const resultKey = shot.shotResult || shot.shotType;
+            if (resultKey && crossTypeResult[shot.shotType][resultKey as keyof typeof crossTypeResult['au_fer']] !== undefined) {
+              const rk = resultKey as 'court_droite' | 'court_gauche' | 'long' | 'tir_bouchon';
+              crossTypeResult[shot.shotType][rk]++;
+              crossTypeResult[shot.shotType].total++;
+            }
+          }
+        });
+      }
+    });
     
     const combinedTirs = totalTirs + challengeTirs;
     const combinedSuccess = tirsSuccess + challengeSuccess;
@@ -1183,6 +1222,75 @@ export default function StatsScreen() {
             {/* PERFORMANCE */}
             {category === 'performance' && (
               <>
+                {/* Challenge-specific performance when filtering by challenge */}
+                {itemFilterType === 'challenge' && filteredChallenges.length > 0 && performanceStats.total === 0 ? (
+                  <>
+                    {filteredChallenges.map((ch, idx) => {
+                      const isPrecision = ch.type === 'precision';
+                      const successRate = isPrecision
+                        ? (ch.maxPoints && ch.maxPoints > 0 ? Math.round(((ch.totalPoints || 0) / ch.maxPoints) * 100) : 0)
+                        : (ch.successRate ? Math.round(ch.successRate) : 0);
+                      const heroLabel = isPrecision ? `${ch.totalPoints || 0}/${ch.maxPoints || 100} pts` : `${ch.successCount || 0}/${ch.totalShots || 10}`;
+                      return (
+                        <Animated.View key={ch.id} entering={FadeInDown.duration(400).delay(idx * 50)} style={[styles.heroCard, { borderLeftWidth: 4, borderLeftColor: theme.accent }]}>
+                          <View style={styles.heroContent}>
+                            <ProgressRing value={successRate} size={110} strokeWidth={9} color={theme.accent} label={t('stats', 'successLabel')} />
+                            <View style={styles.heroStats}>
+                              <View style={styles.heroStatItem}>
+                                <Text style={[styles.heroStatValue, { color: theme.accent }]}>{heroLabel}</Text>
+                                <Text style={styles.heroStatLabel}>{t('challengeNames', ch.type)}</Text>
+                              </View>
+                              {!isPrecision && ch.carreauCount ? (
+                                <View style={styles.heroStatItem}>
+                                  <Text style={[styles.heroStatValue, { color: theme.carreauColor }]}>{ch.carreauCount}</Text>
+                                  <Text style={styles.heroStatLabel}>{t('stats', 'carreauxLabel')}</Text>
+                                </View>
+                              ) : null}
+                              {ch.duration ? (
+                                <View style={styles.heroStatItem}>
+                                  <Text style={styles.heroStatValue}>{formatDuration(Math.round((ch.duration || 0) / 60))}</Text>
+                                  <Text style={styles.heroStatLabel}>{t('match', 'durationLabel')}</Text>
+                                </View>
+                              ) : null}
+                            </View>
+                          </View>
+                          {ch.mode === '1v1' && ch.opponentName ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border }}>
+                              <MaterialIcons name="people" size={16} color={theme.textMuted} />
+                              <Text style={{ fontSize: 12, color: theme.textSecondary }}>vs {ch.opponentName}</Text>
+                              {ch.winner ? (
+                                <View style={{ marginLeft: 'auto', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10, backgroundColor: ch.winner === 'player' ? theme.success + '20' : ch.winner === 'opponent' ? theme.error + '20' : theme.warning + '20' }}>
+                                  <Text style={{ fontSize: 11, fontWeight: '600', color: ch.winner === 'player' ? theme.success : ch.winner === 'opponent' ? theme.error : theme.warning }}>
+                                    {ch.winner === 'player' ? t('history', 'victory') : ch.winner === 'opponent' ? t('history', 'defeat') : t('history', 'draw')}
+                                  </Text>
+                                </View>
+                              ) : null}
+                            </View>
+                          ) : null}
+                          {isPrecision && ch.atelierScores ? (
+                            <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border }}>
+                              <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginBottom: 8 }}>{t('stats', 'challengeAtelierScores')}</Text>
+                              {Object.entries(ch.atelierScores).map(([atelier, score]) => (
+                                <StatRow key={atelier} label={t('precisionWorkshops', atelier)} value={`${score} pts`} icon="sports-score" color={theme.accent} />
+                              ))}
+                            </View>
+                          ) : null}
+                        </Animated.View>
+                      );
+                    })}
+                    {/* Tir stats summary for challenge */}
+                    {tirStats.totalTirs > 0 && (
+                      <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+                        <SectionHeader title={t('stats', 'challengeTirSummary')} icon="gps-fixed" color={theme.tirColor} />
+                        <View style={styles.card}>
+                          <StatRow label={t('stats', 'shotsAttempted')} value={tirStats.totalTirs} icon="radio-button-unchecked" color={theme.textSecondary} />
+                          <StatRow label={t('stats', 'successPercent')} value={`${tirStats.successRate}%`} icon="percent" color={theme.tirColor} />
+                          <StatRow label={t('stats', 'carreauPercent')} value={`${tirStats.carreauRate}%`} icon="stars" color={theme.carreauColor} />
+                        </View>
+                      </Animated.View>
+                    )}
+                  </>
+                ) : (
                 <Animated.View entering={FadeInDown.duration(400)} style={styles.heroCard}>
                   <View style={styles.heroContent}>
                     <ProgressRing value={performanceStats.winRate} size={110} strokeWidth={9} color={theme.primary} label={t('stats', 'victoriesLabel')} />
@@ -1336,6 +1444,7 @@ export default function StatsScreen() {
                       })}
                     </View>
                   </Animated.View>
+                )}
                 )}
               </>
             )}
@@ -1538,6 +1647,18 @@ export default function StatsScreen() {
             {/* POINT */}
             {category === 'point' && (
               <>
+                {itemFilterType === 'challenge' && filteredChallenges.length > 0 && pointStats.totalPoints === 0 ? (
+                  <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
+                    <View style={styles.card}>
+                      <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+                        <MaterialIcons name="info-outline" size={40} color={theme.textMuted} />
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginTop: 12 }}>{t('stats', 'challengeNoPointData')}</Text>
+                        <Text style={{ fontSize: 12, color: theme.textSecondary, textAlign: 'center', marginTop: 6, maxWidth: 260 }}>{t('stats', 'challengeNoPointDataDesc')}</Text>
+                      </View>
+                    </View>
+                  </Animated.View>
+                ) : (
+                <>
                 <Animated.View entering={FadeInDown.duration(400)} style={styles.heroCard}>
                   <View style={styles.heroContent}>
                     <ProgressRing value={pointStats.successRate} size={110} strokeWidth={9} color={theme.pointColor} label={t('stats', 'successLabel')} />
@@ -1706,6 +1827,8 @@ export default function StatsScreen() {
                       })}
                     </View>
                   </Animated.View>
+                )}
+                </>
                 )}
               </>
             )}

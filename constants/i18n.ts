@@ -503,6 +503,11 @@ export const translations = {
     insightMainly: { fr: 'Surtout', en: 'Mainly' },
     yourLabel: { fr: 'Votre', en: 'Your' },
     typeLabel: { fr: 'Type', en: 'Type' },
+    // Challenge-specific stats
+    challengeTirSummary: { fr: 'Tirs du d\u00e9fi', en: 'Challenge shots' },
+    challengeAtelierScores: { fr: 'Scores par atelier', en: 'Workshop scores' },
+    challengeNoPointData: { fr: 'Pas de donn\u00e9es de pointage', en: 'No pointing data' },
+    challengeNoPointDataDesc: { fr: 'Les d\u00e9fis ne contiennent pas de donn\u00e9es de pointage. Consultez l\'onglet Tir pour les statistiques de tir du d\u00e9fi.', en: 'Challenges do not contain pointing data. Check the Shot tab for challenge shooting statistics.' },
     // Terrain type stats
     statsByTerrainSection: { fr: 'Par type de terrain', en: 'By terrain type' },
     terrainColumn: { fr: 'Terrain', en: 'Terrain' },
