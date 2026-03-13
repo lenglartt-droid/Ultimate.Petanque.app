@@ -1417,7 +1417,7 @@ export default function NewMatchScreen() {
                       <Text style={styles.playerChipName}>{getPlayerName(p.playerId)}</Text>
                       {availableRoles.length > 0 && (
                         <View style={[styles.playerChipRole, { backgroundColor: p.role === 'Tireur' ? theme.tirColor : p.role === 'Pointeur' ? theme.pointColor : theme.accent }]}>
-                          <Text style={styles.playerChipRoleText}>{p.role.charAt(0)}</Text>
+                          <Text style={styles.playerChipRoleText}>{t('roles', p.role).charAt(0)}</Text>
                         </View>
                       )}
                     </View>
@@ -1443,7 +1443,7 @@ export default function NewMatchScreen() {
                       <Text style={styles.playerChipName}>{getPlayerName(p.playerId)}</Text>
                       {availableRoles.length > 0 && (
                         <View style={[styles.playerChipRole, { backgroundColor: p.role === 'Tireur' ? theme.tirColor : p.role === 'Pointeur' ? theme.pointColor : theme.accent }]}>
-                          <Text style={styles.playerChipRoleText}>{p.role.charAt(0)}</Text>
+                          <Text style={styles.playerChipRoleText}>{t('roles', p.role).charAt(0)}</Text>
                         </View>
                       )}
                     </View>
@@ -1868,7 +1868,7 @@ export default function NewMatchScreen() {
                           style={[styles.roleButton, p.role === role && (showPlayerPicker === 'A' ? styles.roleButtonActiveA : styles.roleButtonActiveB)]}
                           onPress={() => updatePlayerRole(p.playerId, showPlayerPicker!, role)}
                         >
-                          <Text style={[styles.roleButtonText, p.role === role && styles.roleButtonTextActive]}>{role.slice(0, 1)}</Text>
+                          <Text style={[styles.roleButtonText, p.role === role && styles.roleButtonTextActive]}>{t('roles', role).charAt(0)}</Text>
                         </Pressable>
                       ))}
                     </View>
