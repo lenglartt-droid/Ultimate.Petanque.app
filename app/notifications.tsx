@@ -650,11 +650,13 @@ const styles = StyleSheet.create({
   // Info Card
   infoCard: {
     flexDirection: 'row',
-    backgroundColor: theme.backgroundSecondary,
+    backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.md,
     padding: 14,
     gap: 12,
     marginTop: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
   },
   infoText: {
     flex: 1,

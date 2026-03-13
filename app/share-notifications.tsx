@@ -317,6 +317,7 @@ export default function ShareNotificationsScreen() {
             {t('share', 'longPressInfo')}
           </Text>
         </View>
+        <View style={{ height: 8 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -405,7 +406,8 @@ const styles = StyleSheet.create({
   // Info
   infoBox: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 8, padding: 12,
-    backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.surface, borderRadius: theme.borderRadius.md,
+    borderWidth: 1, borderColor: theme.border, marginTop: 4,
   },
   infoText: { flex: 1, fontSize: 12, color: theme.textMuted, lineHeight: 17 },
 });

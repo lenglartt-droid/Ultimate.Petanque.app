@@ -268,13 +268,13 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                 </Pressable>
               </Animated.View>
 
-              {/* Info */}
-              <Animated.View entering={FadeInDown.duration(300).delay(150)} style={styles.infoBox}>
-                <MaterialIcons name="info-outline" size={18} color={theme.textMuted} />
+              {/* Info — separated from content above */}
+              <View style={styles.infoBox}>
+                <MaterialIcons name="info-outline" size={16} color={theme.textMuted} />
                 <Text style={styles.infoText}>
                   {t('shareModal', 'infoText')}
                 </Text>
-              </Animated.View>
+              </View>
             </>
           )}
         </ScrollView>
@@ -353,7 +353,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.full, marginTop: 12,
   },
   permissionBadgeText: { fontSize: 12, fontWeight: '600' },
-  shareActions: { flexDirection: 'row', gap: 12, marginBottom: 16 },
+  shareActions: { flexDirection: 'row', gap: 12, marginBottom: 20 },
   shareActionBtn: {
     flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8,
     backgroundColor: theme.surface, paddingVertical: 20, borderRadius: theme.borderRadius.lg,
@@ -361,8 +361,8 @@ const styles = StyleSheet.create({
   },
   shareActionBtnText: { fontSize: 13, fontWeight: '600', color: theme.textPrimary },
   infoBox: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: theme.backgroundSecondary,
-    padding: 14, borderRadius: theme.borderRadius.md,
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: theme.surface,
+    padding: 14, borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.border,
   },
   infoText: { flex: 1, fontSize: 12, color: theme.textMuted, lineHeight: 18 },
 });
