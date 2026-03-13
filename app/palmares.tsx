@@ -19,6 +19,7 @@ import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { Tournament, Match } from '@/services/mockData';
+import AdBanner from '@/components/ui/AdBanner';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -656,6 +657,9 @@ export default function PalmaresScreen() {
               </Animated.View>
             ) : null}
 
+            {/* Ad Banner */}
+            <AdBanner position="inline" />
+
             {/* ============ BADGES ============ */}
             <Animated.View entering={FadeInDown.duration(400).delay(80)}>
               <Pressable style={styles.badgesSectionHeader} onPress={() => { Haptics.selectionAsync(); setShowBadges(!showBadges); }}>
@@ -708,6 +712,9 @@ export default function PalmaresScreen() {
                 </Pressable>
               </View>
             </View>
+
+            {/* Ad Banner */}
+            <AdBanner position="inline" />
 
             {/* ============ GROUP MODE ============ */}
             <View style={styles.groupToggleContainer}>

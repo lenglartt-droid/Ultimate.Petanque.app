@@ -23,6 +23,7 @@ import { Terrain, Player, Club, Tournament } from '@/services/mockData';
 import { TerrainType } from '@/constants/config';
 import { useLanguage } from '@/hooks/useLanguage';
 import { SharedOverlayBadge } from '@/components/ui/SharedBadge';
+import AdBanner from '@/components/ui/AdBanner';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -832,6 +833,9 @@ export default function DirectoryScreen() {
           <Text style={styles.searchingFor}>{t('directory', 'forSearch')} "{searchQuery}"</Text>
         ) : null}
       </View>
+
+      {/* Ad Banner */}
+      <AdBanner position="inline" />
 
       {/* List */}
       <View style={styles.listContainer}>

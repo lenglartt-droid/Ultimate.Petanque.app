@@ -29,6 +29,7 @@ import {
   fetchPublicPlayers, fetchPublicClubs, fetchPublicTerrains, fetchPublicTournaments,
   toggleItemPublic, importPublicItemToDirectory, getMyPublicableItems,
 } from '@/services/publicItemsService';
+import AdBanner from '@/components/ui/AdBanner';
 
 type MarkerType = 'all' | 'terrains' | 'clubs' | 'tournaments' | 'players';
 type MapMode = 'all' | 'public';
@@ -520,6 +521,7 @@ export default function MapScreen() {
         <Text style={styles.listTitle}>{t('map', 'interactiveMap')}</Text>
         <Text style={styles.listSubtitle}>{t('map', 'availableOnMobile')}</Text>
       </View>
+      <AdBanner position="inline" />
       <FlatList
         data={results}
         renderItem={renderItem}
