@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   Switch,
   ActivityIndicator,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -41,6 +42,133 @@ if (Platform.OS !== 'web') {
   MarkerComponent = Maps.Marker;
 }
 
+// ============================================
+// CLUSTERING LOGIC
+// ============================================
+interface ClusterItem {
+  id: string;
+  latitude: number;
+  longitude: number;
+  itemType: string;
+  _isPublic: boolean;
+  [key: string]: any;
+}
+
+interface Cluster {
+  id: string;
+  latitude: number;
+  longitude: number;
+  items: ClusterItem[];
+  isCluster: boolean;
+}
+
+function clusterMarkers(items: ClusterItem[], region: { latitudeDelta: number; longitudeDelta: number } | null): Cluster[] {
+  if (!region || items.length === 0) return items.map(item => ({
+    id: `single-${item.itemType}-${item.id}`,
+    latitude: item.location?.latitude || 0,
+    longitude: item.location?.longitude || 0,
+    items: [item],
+    isCluster: false,
+  }));
+
+  // Grid cell size based on zoom level
+  const cellLat = region.latitudeDelta * 0.08;
+  const cellLng = region.longitudeDelta * 0.08;
+
+  // If zoomed in enough, don't cluster
+  if (region.latitudeDelta < 0.05) {
+    return items.map(item => ({
+      id: `single-${item.itemType}-${item.id}`,
+      latitude: item.location?.latitude || 0,
+      longitude: item.location?.longitude || 0,
+      items: [item],
+      isCluster: false,
+    }));
+  }
+
+  const grid: Record<string, ClusterItem[]> = {};
+
+  items.forEach(item => {
+    const lat = item.location?.latitude;
+    const lng = item.location?.longitude;
+    if (!lat && !lng) return;
+    const cellKey = `${Math.floor(lat / cellLat)}_${Math.floor(lng / cellLng)}`;
+    if (!grid[cellKey]) grid[cellKey] = [];
+    grid[cellKey].push(item);
+  });
+
+  const clusters: Cluster[] = [];
+
+  Object.entries(grid).forEach(([key, cellItems]) => {
+    if (cellItems.length === 1) {
+      const item = cellItems[0];
+      clusters.push({
+        id: `single-${item.itemType}-${item.id}`,
+        latitude: item.location?.latitude || 0,
+        longitude: item.location?.longitude || 0,
+        items: [item],
+        isCluster: false,
+      });
+    } else {
+      // Calculate centroid
+      let sumLat = 0, sumLng = 0;
+      cellItems.forEach(item => {
+        sumLat += item.location?.latitude || 0;
+        sumLng += item.location?.longitude || 0;
+      });
+      clusters.push({
+        id: `cluster-${key}`,
+        latitude: sumLat / cellItems.length,
+        longitude: sumLng / cellItems.length,
+        items: cellItems,
+        isCluster: true,
+      });
+    }
+  });
+
+  return clusters;
+}
+
+// ============================================
+// CLUSTER MARKER COMPONENT
+// ============================================
+const ClusterMarkerView = React.memo(({ count, typeCounts }: { count: number; typeCounts: Record<string, number> }) => {
+  // Determine dominant type color
+  const colorMap: Record<string, string> = {
+    terrains: theme.success,
+    clubs: theme.accent,
+    tournaments: theme.carreauColor,
+    players: theme.primary,
+  };
+  
+  const dominantType = Object.entries(typeCounts).reduce((a, b) => b[1] > a[1] ? b : a, ['', 0] as [string, number]);
+  const dominantColor = colorMap[dominantType[0]] || theme.primary;
+  const typeCount = Object.keys(typeCounts).filter(k => typeCounts[k] > 0).length;
+  
+  // Size based on count
+  const size = count <= 5 ? 44 : count <= 15 ? 52 : 60;
+  const fontSize = count <= 5 ? 15 : count <= 15 ? 17 : 19;
+
+  return (
+    <View style={[styles.clusterOuter, { width: size + 12, height: size + 12, borderRadius: (size + 12) / 2, backgroundColor: dominantColor + '20' }]}>
+      <View style={[styles.clusterInner, { width: size, height: size, borderRadius: size / 2, backgroundColor: dominantColor }]}>
+        <Text style={[styles.clusterCount, { fontSize }]}>{count}</Text>
+      </View>
+      {/* Type indicator dots */}
+      {typeCount > 1 ? (
+        <View style={styles.clusterDots}>
+          {Object.entries(typeCounts).filter(([, c]) => c > 0).map(([type]) => (
+            <View key={type} style={[styles.clusterDot, { backgroundColor: colorMap[type] || theme.textMuted }]} />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+});
+
+// ============================================
+// LIST ITEM COMPONENT
+// ============================================
 const ListItem = React.memo(({ item, onPress, singularLabel, terrainTypeLabel, isPublicItem, onImport, t }: any) => {
   const MARKER_COLORS: Record<string, string> = { terrains: theme.success, clubs: theme.accent, tournaments: theme.carreauColor, players: theme.primary };
   const MARKER_ICONS: Record<string, string> = { terrains: 'sports-soccer', clubs: 'home', tournaments: 'emoji-events', players: 'person' };
@@ -82,6 +210,9 @@ const ListItem = React.memo(({ item, onPress, singularLabel, terrainTypeLabel, i
   );
 });
 
+// ============================================
+// MAIN COMPONENT
+// ============================================
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const { clubs, tournaments, terrains, players } = useApp();
@@ -94,6 +225,8 @@ export default function MapScreen() {
   const [showSearch, setShowSearch] = useState(false);
   const [mapMode, setMapMode] = useState<MapMode>('all');
   const [showManageModal, setShowManageModal] = useState(false);
+  const [currentRegion, setCurrentRegion] = useState(config.map.defaultRegion);
+  const mapRef = useRef<any>(null);
 
   // Public items state
   const [publicPlayers, setPublicPlayers] = useState<any[]>([]);
@@ -163,7 +296,7 @@ export default function MapScreen() {
     };
 
     const showOwn = mapMode === 'all';
-    const showPublic = true; // Always show public items on map
+    const showPublic = true;
 
     if (filter === 'all' || filter === 'terrains') {
       if (showOwn) addItems(ownData.terrains, 'terrains', false);
@@ -192,6 +325,11 @@ export default function MapScreen() {
     });
   }, [ownData, pubData, filter, search, mapMode]);
 
+  // Compute clusters
+  const clusters = useMemo(() => {
+    return clusterMarkers(results, currentRegion);
+  }, [results, currentRegion]);
+
   const counts = useMemo(() => {
     const countType = (type: string) => results.filter(r => r.itemType === type).length;
     return {
@@ -209,12 +347,35 @@ export default function MapScreen() {
     setSelected({ ...item, itemType: type });
   }, []);
 
+  const handleClusterPress = useCallback((cluster: Cluster) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (!mapRef.current) return;
+
+    // Calculate bounding region for cluster items
+    let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+    cluster.items.forEach(item => {
+      const lat = item.location?.latitude || 0;
+      const lng = item.location?.longitude || 0;
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+    });
+
+    const padLat = Math.max((maxLat - minLat) * 0.4, 0.01);
+    const padLng = Math.max((maxLng - minLng) * 0.4, 0.01);
+
+    mapRef.current.animateToRegion({
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+      latitudeDelta: (maxLat - minLat) + padLat,
+      longitudeDelta: (maxLng - minLng) + padLng,
+    }, 400);
+  }, []);
+
   const handleNavigate = useCallback(() => {
     if (!selected) return;
-    if (selected._isPublic) {
-      // For public items, show info but don't navigate (user doesn't own it)
-      return;
-    }
+    if (selected._isPublic) return;
     const routes: Record<string, string> = {
       clubs: `/club/${selected.id}`, terrains: `/terrain/${selected.id}`,
       tournaments: `/tournament/${selected.id}`, players: `/player/${selected.id}`,
@@ -246,6 +407,10 @@ export default function MapScreen() {
     setSelected(null);
   }, []);
 
+  const handleRegionChange = useCallback((region: any) => {
+    setCurrentRegion(region);
+  }, []);
+
   const loadManageData = useCallback(async () => {
     setLoadingManage(true);
     const data = await getMyPublicableItems();
@@ -263,7 +428,6 @@ export default function MapScreen() {
         ...prev,
         [table]: prev[table].map((it: any) => it.id === id ? { ...it, isPublic: !current } : it),
       }));
-      // Refresh public items
       const refreshers: Record<string, () => Promise<any>> = {
         players: fetchPublicPlayers, clubs: fetchPublicClubs,
         terrains: fetchPublicTerrains, tournaments: fetchPublicTournaments,
@@ -301,24 +465,49 @@ export default function MapScreen() {
     if (!MapViewComponent || !MarkerComponent) return renderList();
     return (
       <MapViewComponent
+        ref={mapRef}
         style={StyleSheet.absoluteFillObject}
         initialRegion={config.map.defaultRegion}
         showsUserLocation showsMyLocationButton={false}
         onPress={() => setSelected(null)}
+        onRegionChangeComplete={handleRegionChange}
       >
-        {results.map(item => {
-          const coord = item.location;
-          if (!coord?.latitude && !coord?.longitude) return null;
-          const cfg = MARKER_CONFIG[item.itemType as keyof typeof MARKER_CONFIG];
-          if (!cfg) return null;
-          const tc = item.itemType === 'terrains' ? config.terrainTypes.find(tt => tt.id === item.type) : null;
-          return (
-            <MarkerComponent key={`${item.itemType}-${item.id}-${item._isPublic}`} coordinate={coord} onPress={() => handleSelect(item, item.itemType)}>
-              <View style={[styles.marker, { backgroundColor: cfg.color }, item._isPublic && styles.markerPublic]}>
-                <MaterialIcons name={(tc?.icon || cfg.icon) as any} size={14} color="#FFF" />
-              </View>
-            </MarkerComponent>
-          );
+        {clusters.map(cluster => {
+          if (cluster.isCluster) {
+            // Cluster marker
+            const typeCounts: Record<string, number> = {};
+            cluster.items.forEach(item => {
+              typeCounts[item.itemType] = (typeCounts[item.itemType] || 0) + 1;
+            });
+            return (
+              <MarkerComponent
+                key={cluster.id}
+                coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
+                onPress={() => handleClusterPress(cluster)}
+                tracksViewChanges={false}
+              >
+                <ClusterMarkerView count={cluster.items.length} typeCounts={typeCounts} />
+              </MarkerComponent>
+            );
+          } else {
+            // Single marker
+            const item = cluster.items[0];
+            const cfg = MARKER_CONFIG[item.itemType as keyof typeof MARKER_CONFIG];
+            if (!cfg) return null;
+            const tc = item.itemType === 'terrains' ? config.terrainTypes.find(tt => tt.id === item.type) : null;
+            return (
+              <MarkerComponent
+                key={cluster.id}
+                coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
+                onPress={() => handleSelect(item, item.itemType)}
+                tracksViewChanges={false}
+              >
+                <View style={[styles.marker, { backgroundColor: cfg.color }, item._isPublic && styles.markerPublic]}>
+                  <MaterialIcons name={(tc?.icon || cfg.icon) as any} size={14} color="#FFF" />
+                </View>
+              </MarkerComponent>
+            );
+          }
         })}
       </MapViewComponent>
     );
@@ -607,8 +796,28 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: theme.primary },
   chipText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
   chipTextActive: { color: '#FFF' },
+  // Single markers
   marker: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF', ...theme.shadows.card },
   markerPublic: { borderColor: theme.success, borderWidth: 3 },
+  // Cluster markers
+  clusterOuter: {
+    alignItems: 'center', justifyContent: 'center',
+  },
+  clusterInner: {
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 3, borderColor: '#FFF',
+    ...theme.shadows.cardElevated,
+  },
+  clusterCount: {
+    fontWeight: '800', color: '#FFF',
+  },
+  clusterDots: {
+    position: 'absolute', bottom: -2,
+    flexDirection: 'row', gap: 3,
+  },
+  clusterDot: {
+    width: 7, height: 7, borderRadius: 3.5, borderWidth: 1.5, borderColor: '#FFF',
+  },
   // Selected card
   selectedCard: { position: 'absolute', left: 16, right: 16, backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, ...theme.shadows.cardElevated },
   selectedInner: { flexDirection: 'row', alignItems: 'center', padding: 14 },
