@@ -63,7 +63,7 @@ export default function HomeScreen() {
         {/* Banner */}
         <Animated.View entering={FadeInDown.duration(400)} style={styles.bannerContainer}>
           <Image
-            source={require('@/assets/images/banner-ppss.png')}
+            source={require('@/assets/images/banner-home.png')}
             style={styles.bannerImage}
             contentFit="cover"
           />
