@@ -1,5 +1,4 @@
 import { getSupabaseClient } from '@/template';
-import * as Linking from 'expo-linking';
 
 export type ShareItemType = 'player' | 'club' | 'terrain' | 'tournament' | 'match' | 'challenge';
 export type SharePermission = 'read' | 'write';
@@ -37,7 +36,7 @@ export async function createShareLink(
   // Retry up to 3 times in case of share_code collision
   for (let attempt = 0; attempt < 3; attempt++) {
     const shareCode = generateShareCode();
-    const shareUrl = Linking.createURL(`share/${shareCode}`);
+    const shareUrl = `ultimatepetanque://share/${shareCode}`;
     const { error } = await supabase.from('shared_items').insert({
       owner_id: userData.user.id, share_code: shareCode, item_type: itemType,
       item_id: itemId, permission, is_public_link: true,
