@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,13 +14,19 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useAlert } from '@/template';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
+import {
+  checkDuplicatePublicClubsExcluding,
+  fetchPublicClubById,
+  PublicClub,
+} from '@/services/publicItemsService';
 
 const FACILITY_KEYS: { id: string; key: string; icon: string }[] = [
   { id: 'terrains', key: 'facilityOutdoor', icon: 'sports' },
@@ -38,6 +44,7 @@ export default function EditClubScreen() {
   const insets = useSafeAreaInsets();
   const { getClubById, updateClub, terrains } = useApp();
   const { t } = useLanguage();
+  const { showAlert } = useAlert();
 
   const club = getClubById(id || '');
 
@@ -59,6 +66,12 @@ export default function EditClubScreen() {
   const [selectedTerrainId, setSelectedTerrainId] = useState<string | undefined>();
   
   const [isSaving, setIsSaving] = useState(false);
+
+  // Duplicate detection state
+  const [duplicates, setDuplicates] = useState<(PublicClub & { matchType: 'exact' | 'city' })[]>([]);
+  const [checkingDuplicates, setCheckingDuplicates] = useState(false);
+  const [duplicatesDismissed, setDuplicatesDismissed] = useState(false);
+  const [mergingId, setMergingId] = useState<string | null>(null);
 
   // Load club data
   useEffect(() => {
@@ -85,6 +98,66 @@ export default function EditClubScreen() {
       setMembershipCost(club.membershipCost ? String(club.membershipCost) : '');
     }
   }, [club]);
+
+  // Check for duplicates when city/name changes
+  useEffect(() => {
+    const trimmedCity = location.city.trim();
+    if (trimmedCity.length < 2 || !club) {
+      setDuplicates([]);
+      setDuplicatesDismissed(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setCheckingDuplicates(true);
+      const { duplicates: found } = await checkDuplicatePublicClubsExcluding(trimmedCity, name.trim(), club.id);
+      setDuplicates(found);
+      setDuplicatesDismissed(false);
+      setCheckingDuplicates(false);
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [location.city, name, club?.id]);
+
+  const handleMergeDuplicate = useCallback(async (dup: PublicClub) => {
+    setMergingId(dup.id);
+    Haptics.selectionAsync();
+    const { item, error } = await fetchPublicClubById(dup.id);
+    setMergingId(null);
+    if (error || !item) {
+      showAlert(t('common', 'error'), error || 'Not found');
+      return;
+    }
+    // Merge: fill empty fields from public item, keep existing values
+    if (!name.trim() && item.name) setName(item.name);
+    if (!location.address.trim() && item.address) {
+      setLocation(prev => ({ ...prev, address: item.address }));
+    }
+    if (!location.city.trim() && item.city) {
+      setLocation(prev => ({ ...prev, city: item.city }));
+    }
+    if ((!location.latitude && !location.longitude) && item.location) {
+      setLocation(prev => ({
+        ...prev,
+        latitude: item.location?.latitude || 0,
+        longitude: item.location?.longitude || 0,
+      }));
+    }
+    if (!description.trim() && item.description) setDescription(item.description);
+    if (!foundedYear && item.founded_year) setFoundedYear(String(item.founded_year));
+    if (!contactEmail.trim() && item.contact_email) setContactEmail(item.contact_email);
+    if (!contactPhone.trim() && item.contact_phone) setContactPhone(item.contact_phone);
+    if (!membershipCost && item.membership_cost) setMembershipCost(String(item.membership_cost));
+    if (item.facilities && item.facilities.length > 0 && selectedFacilities.length === 0) {
+      const facilityIds = FACILITY_KEYS
+        .filter(f => item.facilities.some((label: string) => label === t('club', f.key) || label === f.id))
+        .map(f => f.id);
+      if (facilityIds.length > 0) setSelectedFacilities(facilityIds);
+    }
+    setDuplicatesDismissed(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    showAlert(t('common', 'success'), t('map', 'mergeSuccess'));
+  }, [name, location, description, foundedYear, contactEmail, contactPhone, membershipCost, selectedFacilities, showAlert, t]);
 
   const toggleFacility = (id: string) => {
     Haptics.selectionAsync();
@@ -206,6 +279,90 @@ export default function EditClubScreen() {
               showAddressField
             />
           </Animated.View>
+
+          {/* Duplicate Detection Banner */}
+          {checkingDuplicates ? (
+            <Animated.View entering={FadeIn.duration(200)} style={styles.duplicateCheckingRow}>
+              <ActivityIndicator size="small" color={theme.primary} />
+              <Text style={styles.duplicateCheckingText}>{t('map', 'checkingDuplicates')}</Text>
+            </Animated.View>
+          ) : null}
+
+          {duplicates.length > 0 && !duplicatesDismissed ? (
+            <Animated.View entering={FadeInDown.duration(400)} style={styles.duplicateSection}>
+              <View style={styles.duplicateHeader}>
+                <View style={styles.duplicateHeaderLeft}>
+                  <MaterialIcons name="info" size={20} color={theme.warning} />
+                  <Text style={styles.duplicateTitle}>
+                    {duplicates.length === 1 ? t('map', 'duplicateFound') : t('map', 'duplicatesFound')}
+                  </Text>
+                </View>
+                <Pressable onPress={() => setDuplicatesDismissed(true)} hitSlop={8}>
+                  <MaterialIcons name="close" size={18} color={theme.textMuted} />
+                </Pressable>
+              </View>
+              <Text style={styles.duplicateDesc}>{t('map', 'duplicateClubDesc')}</Text>
+
+              {duplicates.slice(0, 3).map((dup) => (
+                <View key={dup.id} style={styles.duplicateCard}>
+                  <View style={styles.duplicateCardTop}>
+                    <View style={[styles.duplicateIcon, { backgroundColor: theme.accent }]}>
+                      <MaterialIcons name="home" size={16} color="#FFF" />
+                    </View>
+                    <View style={styles.duplicateCardInfo}>
+                      <Text style={styles.duplicateCardName} numberOfLines={1}>{dup.name}</Text>
+                      <Text style={styles.duplicateCardMeta} numberOfLines={1}>
+                        {dup.city}{dup.country ? `, ${dup.country}` : ''} {dup.address ? `\u2022 ${dup.address}` : ''}
+                      </Text>
+                    </View>
+                    <View style={[styles.matchBadge, dup.matchType === 'exact' ? styles.matchBadgeExact : styles.matchBadgeCity]}>
+                      <Text style={[styles.matchBadgeText, dup.matchType === 'exact' ? styles.matchBadgeTextExact : styles.matchBadgeTextCity]}>
+                        {dup.matchType === 'exact' ? t('map', 'nameMatch') : t('map', 'cityMatch')}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.duplicateCardDetails}>
+                    {dup.membersCount > 0 ? (
+                      <View style={styles.duplicateDetailChip}>
+                        <MaterialIcons name="people" size={12} color={theme.textSecondary} />
+                        <Text style={styles.duplicateDetailText}>{dup.membersCount}</Text>
+                      </View>
+                    ) : null}
+                    {dup.foundedYear ? (
+                      <View style={styles.duplicateDetailChip}>
+                        <Text style={styles.duplicateDetailText}>{t('common', 'since')} {dup.foundedYear}</Text>
+                      </View>
+                    ) : null}
+                    {dup.terrainName ? (
+                      <View style={styles.duplicateDetailChip}>
+                        <MaterialIcons name="sports-soccer" size={12} color={theme.success} />
+                        <Text style={styles.duplicateDetailText} numberOfLines={1}>{dup.terrainName}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Pressable
+                    style={styles.mergeDuplicateBtn}
+                    onPress={() => handleMergeDuplicate(dup)}
+                    disabled={mergingId === dup.id}
+                  >
+                    {mergingId === dup.id ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <>
+                        <MaterialIcons name="merge-type" size={16} color="#FFF" />
+                        <Text style={styles.mergeDuplicateBtnText}>{t('map', 'mergeWithPublic')}</Text>
+                      </>
+                    )}
+                  </Pressable>
+                </View>
+              ))}
+
+              <Pressable style={styles.continueEditBtn} onPress={() => setDuplicatesDismissed(true)}>
+                <Text style={styles.continueEditBtnText}>{t('map', 'keepMine')}</Text>
+                <MaterialIcons name="arrow-forward" size={16} color={theme.textSecondary} />
+              </Pressable>
+            </Animated.View>
+          ) : null}
 
           {/* Description */}
           <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
@@ -580,4 +737,43 @@ const styles = StyleSheet.create({
   terrainChipSubtextActive: {
     color: 'rgba(255,255,255,0.7)',
   },
+  // Duplicate detection styles
+  duplicateCheckingRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 16 },
+  duplicateCheckingText: { fontSize: 13, color: theme.textMuted },
+  duplicateSection: {
+    backgroundColor: theme.warning + '08', borderRadius: theme.borderRadius.lg, padding: 16,
+    marginBottom: 24, borderWidth: 1, borderColor: theme.warning + '30',
+  },
+  duplicateHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  duplicateHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  duplicateTitle: { fontSize: 15, fontWeight: '700', color: theme.warning },
+  duplicateDesc: { fontSize: 13, color: theme.textSecondary, lineHeight: 18, marginBottom: 14 },
+  duplicateCard: {
+    backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 14,
+    marginBottom: 10, ...theme.shadows.card,
+  },
+  duplicateCardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  duplicateIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  duplicateCardInfo: { flex: 1, marginRight: 8 },
+  duplicateCardName: { fontSize: 14, fontWeight: '600', color: theme.textPrimary },
+  duplicateCardMeta: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  matchBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: theme.borderRadius.full },
+  matchBadgeExact: { backgroundColor: theme.warning + '20' },
+  matchBadgeCity: { backgroundColor: theme.primary + '15' },
+  matchBadgeText: { fontSize: 10, fontWeight: '600' },
+  matchBadgeTextExact: { color: theme.warning },
+  matchBadgeTextCity: { color: theme.primary },
+  duplicateCardDetails: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
+  duplicateDetailChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: theme.borderRadius.sm },
+  duplicateDetailText: { fontSize: 11, color: theme.textSecondary, fontWeight: '500' },
+  mergeDuplicateBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    backgroundColor: theme.accent, paddingVertical: 10, borderRadius: theme.borderRadius.md,
+  },
+  mergeDuplicateBtnText: { fontSize: 13, fontWeight: '600', color: '#FFF' },
+  continueEditBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 10, marginTop: 4,
+  },
+  continueEditBtnText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
 });

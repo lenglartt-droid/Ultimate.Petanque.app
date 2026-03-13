@@ -299,6 +299,50 @@ export async function checkDuplicatePublicClubs(
   return { duplicates, error: null };
 }
 
+// Check for duplicate public terrains excluding a specific item (for edit pages)
+export async function checkDuplicatePublicTerrainsExcluding(
+  city: string,
+  address?: string,
+  excludeId?: string,
+): Promise<{ duplicates: (PublicTerrain & { matchType: 'exact' | 'city' })[]; error: string | null }> {
+  const result = await checkDuplicatePublicTerrains(city, address);
+  if (result.error) return result;
+  return {
+    duplicates: result.duplicates.filter(d => d.id !== excludeId),
+    error: null,
+  };
+}
+
+// Check for duplicate public clubs excluding a specific item (for edit pages)
+export async function checkDuplicatePublicClubsExcluding(
+  city: string,
+  name?: string,
+  excludeId?: string,
+): Promise<{ duplicates: (PublicClub & { matchType: 'exact' | 'city' })[]; error: string | null }> {
+  const result = await checkDuplicatePublicClubs(city, name);
+  if (result.error) return result;
+  return {
+    duplicates: result.duplicates.filter(d => d.id !== excludeId),
+    error: null,
+  };
+}
+
+// Fetch full public terrain data for merging
+export async function fetchPublicTerrainById(itemId: string): Promise<{ item: any | null; error: string | null }> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.from('terrains').select('*').eq('id', itemId).single();
+  if (error) return { item: null, error: error.message };
+  return { item: data, error: null };
+}
+
+// Fetch full public club data for merging
+export async function fetchPublicClubById(itemId: string): Promise<{ item: any | null; error: string | null }> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.from('clubs').select('*').eq('id', itemId).single();
+  if (error) return { item: null, error: error.message };
+  return { item: data, error: null };
+}
+
 // Get the user's own items that can be made public
 export async function getMyPublicableItems(): Promise<{
   players: { id: string; name: string; isPublic: boolean }[];
