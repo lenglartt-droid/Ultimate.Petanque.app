@@ -503,6 +503,16 @@ export const translations = {
     insightMainly: { fr: 'Surtout', en: 'Mainly' },
     yourLabel: { fr: 'Votre', en: 'Your' },
     typeLabel: { fr: 'Type', en: 'Type' },
+    // Terrain type stats
+    statsByTerrainSection: { fr: 'Par type de terrain', en: 'By terrain type' },
+    terrainColumn: { fr: 'Terrain', en: 'Terrain' },
+    matchesColumn: { fr: 'Matchs', en: 'Games' },
+    winRateColumn: { fr: 'Vict.', en: 'Wins' },
+    shotSuccessColumn: { fr: 'Tir %', en: 'Shot %' },
+    carreauShortColumn: { fr: 'Car. %', en: 'Car. %' },
+    pointSuccessColumn: { fr: 'Point %', en: 'Point %' },
+    errorRateColumn: { fr: 'Err. %', en: 'Err. %' },
+    terrainMatchesSubtitle: { fr: 'matchs avec terrain identifié', en: 'matches with identified terrain' },
     // Progression units
     shotsUnit: { fr: 'tirs', en: 'shots' },
     pointsUnit: { fr: 'points', en: 'points' },

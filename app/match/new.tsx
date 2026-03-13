@@ -684,6 +684,8 @@ export default function NewMatchScreen() {
       tournamentName: linkedTournament?.name,
       tournamentPhase: isTournamentMode ? (selectedPhase || undefined) : undefined,
       tournamentBracket: isTournamentMode && selectedPhase !== 'Poules' ? selectedBracket || undefined : undefined,
+      terrainId: selectedTerrainId || linkedTournament?.terrainId || undefined,
+      terrainType: selectedTerrain?.type || linkedTournament?.terrainType || undefined,
       teamA: {
         players: teamAPlayerIds.length > 0 ? teamAPlayerIds : ['1'],
         playerNames: teamAPlayerNames,

@@ -897,6 +897,48 @@ export default function StatsScreen() {
   }, [filteredMatches, tirStats, pointStats, language]);
 
   // ============================================
+  // TERRAIN TYPE STATS
+  // ============================================
+  const terrainTypeStats = useMemo(() => {
+    const getTerrainType = (match: typeof filteredMatches[0]): string | null => {
+      if ((match as any).terrainType) return (match as any).terrainType;
+      if (match.tournamentId) {
+        const tour = tournaments.find(t => t.id === match.tournamentId);
+        if (tour?.terrainType) return tour.terrainType;
+      }
+      return null;
+    };
+
+    const byTerrain: Record<string, {
+      matches: number; wins: number;
+      tirs: number; tirsSuccess: number; carreaux: number;
+      points: number; pointsSuccess: number;
+    }> = {};
+
+    filteredMatches.forEach(match => {
+      const tt = getTerrainType(match);
+      if (!tt) return;
+      if (!byTerrain[tt]) byTerrain[tt] = { matches: 0, wins: 0, tirs: 0, tirsSuccess: 0, carreaux: 0, points: 0, pointsSuccess: 0 };
+      const s = byTerrain[tt];
+      s.matches++;
+      if (match.winner === 'A') s.wins++;
+      if (match.playerActions) {
+        match.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
+          s.tirs += pa.actions.tirs;
+          s.tirsSuccess += pa.actions.tirsSuccess;
+          s.carreaux += pa.actions.carreaux;
+          s.points += pa.actions.points;
+          s.pointsSuccess += pa.actions.pointsSuccess;
+        });
+      }
+    });
+
+    const types = Object.keys(byTerrain).sort((a, b) => byTerrain[b].matches - byTerrain[a].matches);
+    const totalTerrainMatches = types.reduce((sum, t) => sum + byTerrain[t].matches, 0);
+    return { byTerrain, types, hasData: types.length > 0, totalTerrainMatches };
+  }, [filteredMatches, tournaments]);
+
+  // ============================================
   // PROGRESSION DATA
   // ============================================
   const progressionData = useMemo(() => {
@@ -1266,6 +1308,35 @@ export default function StatsScreen() {
                     </View>
                   </Animated.View>
                 )}
+                {terrainTypeStats.hasData && (
+                  <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
+                    <SectionHeader title={t('stats', 'statsByTerrainSection')} subtitle={`${terrainTypeStats.totalTerrainMatches} ${t('stats', 'terrainMatchesSubtitle')}`} icon="terrain" color={theme.success} />
+                    <View style={styles.card}>
+                      <View style={styles.crossTableHeader}>
+                        <View style={styles.crossTableHeaderLabel}><Text style={styles.crossTableHeaderText}>{t('stats', 'terrainColumn')}</Text></View>
+                        <View style={styles.crossTableHeaderCell}><Text style={styles.crossTableHeaderCellText}>{t('stats', 'matchesColumn')}</Text></View>
+                        <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: theme.primary }]}>{t('stats', 'winRateColumn')}</Text></View>
+                      </View>
+                      {terrainTypeStats.types.map((type, idx) => {
+                        const data = terrainTypeStats.byTerrain[type];
+                        const winRate = data.matches > 0 ? Math.round((data.wins / data.matches) * 100) : 0;
+                        return (
+                          <View key={type} style={[styles.crossTableRow, idx % 2 === 0 && styles.crossTableRowAlt]}>
+                            <View style={styles.crossTableRowLabel}>
+                              <Text style={styles.crossTableRowLabelText} numberOfLines={1}>{t('terrainTypes', type)}</Text>
+                            </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={styles.crossTableCellValue}>{data.matches}</Text>
+                            </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={[styles.crossTableCellValue, { color: winRate >= 60 ? theme.success : winRate >= 45 ? theme.warning : theme.error }]}>{winRate}%</Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </Animated.View>
+                )}
               </>
             )}
 
@@ -1430,6 +1501,37 @@ export default function StatsScreen() {
                     </View>
                   </Animated.View>
                 )}
+                {terrainTypeStats.hasData && (
+                  <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
+                    <SectionHeader title={t('stats', 'statsByTerrainSection')} subtitle={`${terrainTypeStats.totalTerrainMatches} ${t('stats', 'terrainMatchesSubtitle')}`} icon="terrain" color={theme.tirColor} />
+                    <View style={styles.card}>
+                      <View style={styles.crossTableHeader}>
+                        <View style={styles.crossTableHeaderLabel}><Text style={styles.crossTableHeaderText}>{t('stats', 'terrainColumn')}</Text></View>
+                        <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: theme.tirColor }]}>{t('stats', 'shotSuccessColumn')}</Text></View>
+                        <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: theme.carreauColor }]}>{t('stats', 'carreauShortColumn')}</Text></View>
+                      </View>
+                      {terrainTypeStats.types.map((type, idx) => {
+                        const data = terrainTypeStats.byTerrain[type];
+                        const tirRate = data.tirs > 0 ? Math.round((data.tirsSuccess / data.tirs) * 100) : 0;
+                        const carRate = data.tirs > 0 ? Math.round((data.carreaux / data.tirs) * 100) : 0;
+                        return (
+                          <View key={type} style={[styles.crossTableRow, idx % 2 === 0 && styles.crossTableRowAlt]}>
+                            <View style={styles.crossTableRowLabel}>
+                              <Text style={styles.crossTableRowLabelText} numberOfLines={1}>{t('terrainTypes', type)}</Text>
+                              <Text style={styles.crossTableCellPct}>{data.tirs} {t('stats', 'shotsUnit')}</Text>
+                            </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={[styles.crossTableCellValue, { color: theme.tirColor }]}>{tirRate}%</Text>
+                            </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={[styles.crossTableCellValue, { color: theme.carreauColor }]}>{carRate}%</Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </Animated.View>
+                )}
               </>
             )}
 
@@ -1572,6 +1674,36 @@ export default function StatsScreen() {
                           </View>
                         );
                       })()}
+                    </View>
+                  </Animated.View>
+                )}
+                {terrainTypeStats.hasData && (
+                  <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
+                    <SectionHeader title={t('stats', 'statsByTerrainSection')} subtitle={`${terrainTypeStats.totalTerrainMatches} ${t('stats', 'terrainMatchesSubtitle')}`} icon="terrain" color={theme.pointColor} />
+                    <View style={styles.card}>
+                      <View style={styles.crossTableHeader}>
+                        <View style={styles.crossTableHeaderLabel}><Text style={styles.crossTableHeaderText}>{t('stats', 'terrainColumn')}</Text></View>
+                        <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: theme.pointColor }]}>{t('stats', 'pointSuccessColumn')}</Text></View>
+                        <View style={styles.crossTableHeaderCell}><Text style={styles.crossTableHeaderCellText}>{t('stats', 'matchesColumn')}</Text></View>
+                      </View>
+                      {terrainTypeStats.types.map((type, idx) => {
+                        const data = terrainTypeStats.byTerrain[type];
+                        const ptRate = data.points > 0 ? Math.round((data.pointsSuccess / data.points) * 100) : 0;
+                        return (
+                          <View key={type} style={[styles.crossTableRow, idx % 2 === 0 && styles.crossTableRowAlt]}>
+                            <View style={styles.crossTableRowLabel}>
+                              <Text style={styles.crossTableRowLabelText} numberOfLines={1}>{t('terrainTypes', type)}</Text>
+                              <Text style={styles.crossTableCellPct}>{data.points} {t('stats', 'pointsUnit')}</Text>
+                            </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={[styles.crossTableCellValue, { color: theme.pointColor }]}>{ptRate}%</Text>
+                            </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={styles.crossTableCellValue}>{data.matches}</Text>
+                            </View>
+                          </View>
+                        );
+                      })}
                     </View>
                   </Animated.View>
                 )}
@@ -1951,6 +2083,38 @@ export default function StatsScreen() {
                   <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
                     <View style={styles.card}>
                       <NAPlaceholder message={t('stats', 'useDetailedNotationLabel')} />
+                    </View>
+                  </Animated.View>
+                )}
+
+                {terrainTypeStats.hasData && (
+                  <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
+                    <SectionHeader title={t('stats', 'statsByTerrainSection')} subtitle={`${terrainTypeStats.totalTerrainMatches} ${t('stats', 'terrainMatchesSubtitle')}`} icon="terrain" color={theme.error} />
+                    <View style={styles.card}>
+                      <View style={styles.crossTableHeader}>
+                        <View style={styles.crossTableHeaderLabel}><Text style={styles.crossTableHeaderText}>{t('stats', 'terrainColumn')}</Text></View>
+                        <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: theme.error }]}>{t('stats', 'errorRateColumn')}</Text></View>
+                        <View style={styles.crossTableHeaderCell}><Text style={styles.crossTableHeaderCellText}>{t('stats', 'matchesColumn')}</Text></View>
+                      </View>
+                      {terrainTypeStats.types.map((type, idx) => {
+                        const data = terrainTypeStats.byTerrain[type];
+                        const totalActions = data.tirs + data.points;
+                        const totalSuccess = data.tirsSuccess + data.pointsSuccess;
+                        const errRate = totalActions > 0 ? Math.round(((totalActions - totalSuccess) / totalActions) * 100) : 0;
+                        return (
+                          <View key={type} style={[styles.crossTableRow, idx % 2 === 0 && styles.crossTableRowAlt]}>
+                            <View style={styles.crossTableRowLabel}>
+                              <Text style={styles.crossTableRowLabelText} numberOfLines={1}>{t('terrainTypes', type)}</Text>
+                            </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={[styles.crossTableCellValue, { color: errRate > 40 ? theme.error : errRate > 25 ? theme.warning : theme.success }]}>{errRate}%</Text>
+                            </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={styles.crossTableCellValue}>{data.matches}</Text>
+                            </View>
+                          </View>
+                        );
+                      })}
                     </View>
                   </Animated.View>
                 )}

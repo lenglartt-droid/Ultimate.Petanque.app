@@ -482,6 +482,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           tournamentPhase: m.tournament_phase,
           tournamentBracket: m.tournament_bracket,
           bracketMatchId: m.bracket_match_id,
+          terrainId: m.terrain_id,
+          terrainType: m.terrain_type,
           teamA: m.team_a,
           teamB: m.team_b,
           winner: m.winner,
@@ -575,6 +577,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         tournament_phase: match.tournamentPhase,
         tournament_bracket: match.tournamentBracket,
         bracket_match_id: match.bracketMatchId,
+        terrain_id: match.terrainId,
+        terrain_type: match.terrainType,
         team_a: match.teamA,
         team_b: match.teamB,
         winner: match.winner,
@@ -597,6 +601,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           tournamentPhase: data.tournament_phase,
           tournamentBracket: data.tournament_bracket,
           bracketMatchId: data.bracket_match_id,
+          terrainId: data.terrain_id,
+          terrainType: data.terrain_type,
           teamA: data.team_a,
           teamB: data.team_b,
           winner: data.winner,
@@ -952,6 +958,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.duration !== undefined) dbUpdates.duration = updates.duration;
       if (updates.menes !== undefined) dbUpdates.menes = updates.menes;
       if (updates.playerActions !== undefined) dbUpdates.player_actions = updates.playerActions;
+      if (updates.terrainId !== undefined) dbUpdates.terrain_id = updates.terrainId;
+      if (updates.terrainType !== undefined) dbUpdates.terrain_type = updates.terrainType;
       dbUpdates.updated_at = new Date().toISOString();
 
       await supabase.from('matches').update(dbUpdates).eq('id', id);

@@ -201,6 +201,8 @@ export interface Match {
   tournamentPhase?: string;
   tournamentBracket?: 'A' | 'B' | 'C' | 'D';
   bracketMatchId?: string;
+  terrainId?: string;
+  terrainType?: string;
   teamA: {
     players: string[];
     playerNames: string[];
