@@ -1,9 +1,9 @@
 // ============================================
 // AdBanner - Native implementation with Google AdMob
+// Gracefully degrades if native module is not linked
 // ============================================
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 import { AD_UNIT_IDS } from '@/services/adService';
 import theme from '@/constants/theme';
 
@@ -12,19 +12,45 @@ interface AdBannerProps {
   bottomOffset?: number;
 }
 
+// Lazy-load the ads module to avoid crash if native module is missing
+let BannerAdComponent: any = null;
+let BannerAdSizeEnum: any = null;
+let adsModuleLoaded = false;
+let adsModuleAvailable = false;
+
+function loadAdsModule() {
+  if (adsModuleLoaded) return;
+  adsModuleLoaded = true;
+  try {
+    const mod = require('react-native-google-mobile-ads');
+    BannerAdComponent = mod.BannerAd;
+    BannerAdSizeEnum = mod.BannerAdSize;
+    adsModuleAvailable = true;
+  } catch {
+    adsModuleAvailable = false;
+  }
+}
+
 const AdBanner = React.memo(({ position = 'inline', bottomOffset = 0 }: AdBannerProps) => {
   const [isAvailable, setIsAvailable] = useState(true);
 
-  if (!isAvailable || !AD_UNIT_IDS.banner) {
+  useEffect(() => {
+    loadAdsModule();
+    if (!adsModuleAvailable) {
+      setIsAvailable(false);
+    }
+  }, []);
+
+  if (!isAvailable || !adsModuleAvailable || !BannerAdComponent || !AD_UNIT_IDS.banner) {
     return null;
   }
 
   if (position === 'sticky') {
     return (
       <View style={[styles.stickyContainer, { paddingBottom: bottomOffset }]}>
-        <BannerAd
+        <BannerAdComponent
           unitId={AD_UNIT_IDS.banner}
-          size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+          size={BannerAdSizeEnum.ANCHORED_ADAPTIVE_BANNER}
           requestOptions={{ requestNonPersonalizedAdsOnly: true }}
           onAdFailedToLoad={() => setIsAvailable(false)}
         />
@@ -34,9 +60,9 @@ const AdBanner = React.memo(({ position = 'inline', bottomOffset = 0 }: AdBanner
 
   return (
     <View style={styles.inlineContainer}>
-      <BannerAd
+      <BannerAdComponent
         unitId={AD_UNIT_IDS.banner}
-        size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+        size={BannerAdSizeEnum.ANCHORED_ADAPTIVE_BANNER}
         requestOptions={{ requestNonPersonalizedAdsOnly: true }}
         onAdFailedToLoad={() => setIsAvailable(false)}
       />
