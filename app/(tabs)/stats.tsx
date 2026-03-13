@@ -19,6 +19,7 @@ import { useApp } from '@/contexts/AppContext';
 import Svg, { Circle, Line, G, Text as SvgText, Rect } from 'react-native-svg';
 import { router } from 'expo-router';
 import { useLanguage } from '@/hooks/useLanguage';
+import AdBanner from '@/components/ui/AdBanner';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -1406,6 +1407,9 @@ export default function StatsScreen() {
                   </View>
                 </Animated.View>
 
+                {/* Ad Banner */}
+                <AdBanner position="inline" />
+
                 <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
                   <SectionHeader title={t('stats', 'winRateByFormatSection')} icon="group" color={theme.accent} />
                   <View style={styles.card}>
@@ -1561,6 +1565,9 @@ export default function StatsScreen() {
                     ]} />
                   </View>
                 </Animated.View>
+
+                {/* Ad Banner */}
+                <AdBanner position="inline" />
 
                 {tirStats.hasDetailedData && (
                   <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
@@ -1770,6 +1777,9 @@ export default function StatsScreen() {
                     </View>
                   </Animated.View>
                 )}
+
+                {/* Ad Banner */}
+                <AdBanner position="inline" />
 
                 {pointStats.successQualitiesTotal > 0 && (
                   <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
@@ -2173,6 +2183,9 @@ export default function StatsScreen() {
                     </View>
                   </Animated.View>
                 )}
+
+                {/* Ad Banner */}
+                <AdBanner position="inline" />
 
                 {/* Detailed point errors */}
                 {errorStats.totalPointErrorTyped > 0 && (
