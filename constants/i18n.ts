@@ -1024,6 +1024,18 @@ export const translations = {
     podiumCount: { fr: 'podiums', en: 'podiums' },
     matchCount: { fr: 'matchs', en: 'matches' },
     resultLabel: { fr: 'Résultat', en: 'Result' },
+    compareSeasonsTitle: { fr: 'Comparer les saisons', en: 'Compare seasons' },
+    selectSeasonsToCompare: { fr: 'Sélectionnez 2-3 saisons à comparer', en: 'Select 2-3 seasons to compare' },
+    compare: { fr: 'Comparer', en: 'Compare' },
+    seasonComparison: { fr: 'Comparaison des saisons', en: 'Season comparison' },
+    tournamentsLabel: { fr: 'Tournois', en: 'Tournaments' },
+    matchsLabel: { fr: 'Matchs', en: 'Matches' },
+    winRateLabel: { fr: 'Taux victoire', en: 'Win rate' },
+    podiumsLabel: { fr: 'Podiums', en: 'Podiums' },
+    titresLabel: { fr: 'Titres', en: 'Titles' },
+    avgDiffLabel: { fr: 'Diff. moy.', en: 'Avg. diff.' },
+    showTournaments: { fr: 'Voir les tournois', en: 'Show tournaments' },
+    hideTournaments: { fr: 'Masquer les tournois', en: 'Hide tournaments' },
   },
 
   // ============================================
