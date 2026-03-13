@@ -17,6 +17,7 @@ import { useApp } from '@/contexts/AppContext';
 import { Match, Challenge, SeriesInfo } from '@/services/mockData';
 import { useLanguage } from '@/hooks/useLanguage';
 import ShareModal from '@/components/ui/ShareModal';
+import AdBanner from '@/components/ui/AdBanner';
 
 // Constants
 const CHALLENGE_CONFIG = {
@@ -85,7 +86,8 @@ type HistoryItem =
   | { type: 'match'; data: Match; date: string }
   | { type: 'series'; data: SeriesGroup; date: string }
   | { type: 'challenge'; data: Challenge; date: string }
-  | { type: 'header'; title: string; date: string };
+  | { type: 'header'; title: string; date: string }
+  | { type: 'ad'; date: string; adIndex: number };
 
 // Utility functions
 const getDateKey = (date: Date, lang: 'fr' | 'en'): string => {
@@ -589,9 +591,11 @@ export default function HistoryScreen() {
       return true;
     });
 
-    // Group by date with headers
+    // Group by date with headers and inject ads
     const listData: HistoryItem[] = [];
     let currentDateKey = '';
+    let contentCount = 0;
+    const AD_INTERVAL = 5;
     
     items.forEach(item => {
       const dateKey = getDateKey(new Date(item.date), language);
@@ -600,6 +604,10 @@ export default function HistoryScreen() {
         listData.push({ type: 'header', title: dateKey, date: item.date });
       }
       listData.push(item as HistoryItem);
+      contentCount++;
+      if (contentCount % AD_INTERVAL === 0) {
+        listData.push({ type: 'ad', date: item.date, adIndex: contentCount });
+      }
     });
 
     return {
@@ -665,6 +673,10 @@ export default function HistoryScreen() {
         </Animated.View>
       );
     }
+
+    if (item.type === 'ad') {
+      return <AdBanner position="inline" />;
+    }
     
     if (item.type === 'series') {
       return (
@@ -691,6 +703,7 @@ export default function HistoryScreen() {
 
   const keyExtractor = useCallback((item: HistoryItem) => {
     if (item.type === 'header') return `header-${item.title}`;
+    if (item.type === 'ad') return `ad-${(item as any).adIndex}`;
     if (item.type === 'series') return `series-${(item.data as SeriesGroup).seriesId}`;
     if (item.type === 'match') return `match-${(item.data as Match).id}`;
     return `challenge-${(item.data as Challenge).id}`;
