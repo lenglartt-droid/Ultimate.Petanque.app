@@ -2478,6 +2478,14 @@ export const translations = {
     errorSaving: { fr: 'Impossible de sauvegarder votre consentement', en: 'Unable to save your consent' },
   },
 
+  // ============================================
+  // MATCH EDIT
+  // ============================================
+  matchEdit: {
+    selectTournament: { fr: 'S\u00e9lectionner un tournoi', en: 'Select a tournament' },
+    actionsDesc: { fr: 'Modifiez les compteurs ou ajoutez un tir/point d\u00e9taill\u00e9', en: 'Edit counters or add a detailed shot/point' },
+  },
+
   locationPicker: {
     searchPlace: { fr: 'Rechercher un lieu', en: 'Search a place' },
     searchAddress: { fr: 'Rechercher une adresse...', en: 'Search an address...' },

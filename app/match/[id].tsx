@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Platform,
   Alert,
   TextInput,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -20,6 +22,8 @@ import theme from '@/constants/theme';
 import config, { GameFormat, PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
+import { PlayerAction, DetailedShotRecord } from '@/services/mockData';
+import { SimplifiedShotNotation, SimpleShotRecord } from '@/components/ui/SimplifiedShotNotation';
 
 interface MeneEdit {
   teamAPoints: number;
@@ -30,44 +34,25 @@ interface MeneEdit {
 export default function EditMatchScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getMatchById, updateMatch, deleteMatch, players, matches } = useApp();
+  const { getMatchById, updateMatch, deleteMatch, players, matches, terrains, tournaments } = useApp();
   const { t, language } = useLanguage();
 
   const match = getMatchById(id!);
-  
+
   // Get all matches in the same series
   const seriesMatches = useMemo(() => {
     if (!match?.seriesInfo?.seriesId) return [];
     return matches
       .filter(m => m.seriesInfo?.seriesId === match.seriesInfo?.seriesId)
-      .sort((a, b) => {
-        const aNum = a.seriesInfo?.matchNumber || 1;
-        const bNum = b.seriesInfo?.matchNumber || 1;
-        return aNum - bNum;
-      });
+      .sort((a, b) => (a.seriesInfo?.matchNumber || 1) - (b.seriesInfo?.matchNumber || 1));
   }, [match, matches]);
-  
-  // Calculate series stats
+
   const seriesStats = useMemo(() => {
     if (seriesMatches.length === 0) return null;
-    
-    let winsA = 0;
-    let winsB = 0;
-    seriesMatches.forEach(m => {
-      if (m.winner === 'A') winsA++;
-      else if (m.winner === 'B') winsB++;
-    });
-    
+    let winsA = 0, winsB = 0;
+    seriesMatches.forEach(m => { if (m.winner === 'A') winsA++; else if (m.winner === 'B') winsB++; });
     const isComplete = winsA >= 2 || winsB >= 2;
-    const seriesWinner = isComplete ? (winsA >= 2 ? 'A' : 'B') : null;
-    
-    return {
-      totalMatches: seriesMatches.length,
-      winsA,
-      winsB,
-      isComplete,
-      seriesWinner,
-    };
+    return { totalMatches: seriesMatches.length, winsA, winsB, isComplete, seriesWinner: isComplete ? (winsA >= 2 ? 'A' : 'B') : null };
   }, [seriesMatches]);
 
   const [mode, setMode] = useState<'Entraînement' | 'Tournoi'>('Entraînement');
@@ -81,10 +66,25 @@ export default function EditMatchScreen() {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [duration, setDuration] = useState(0);
   const [menes, setMenes] = useState<MeneEdit[]>([]);
-  const [editingMeneIndex, setEditingMeneIndex] = useState<number | null>(null);
   const [location, setLocation] = useState('');
+  const [showSeriesPanel, setShowSeriesPanel] = useState(true);
+
+  // Terrain & Tournament selection
+  const [selectedTerrainId, setSelectedTerrainId] = useState<string | null>(null);
+  const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null);
+  const [showTerrainPicker, setShowTerrainPicker] = useState(false);
+  const [showTournamentPicker, setShowTournamentPicker] = useState(false);
+  const [terrainSearch, setTerrainSearch] = useState('');
+  const [tournamentSearch, setTournamentSearch] = useState('');
+
+  // Player actions editor
+  const [playerActions, setPlayerActions] = useState<PlayerAction[]>([]);
+  const [showShotNotation, setShowShotNotation] = useState(false);
+  const [editingActionPlayer, setEditingActionPlayer] = useState<{ id: string; name: string; team: 'A' | 'B' } | null>(null);
+  const [editingActionType, setEditingActionType] = useState<'tir' | 'point'>('tir');
 
   const maxScore = config.game.maxScore;
+  const locale = language === 'en' ? 'en-US' : 'fr-FR';
 
   const ROLE_CONFIG: Record<PlayerRole, { icon: string; color: string; labelKey: string }> = {
     'Pointeur': { icon: 'radio-button-on', color: '#3B82F6', labelKey: 'pointeur' },
@@ -102,19 +102,135 @@ export default function EditMatchScreen() {
       setTeamBNames(match.teamB.playerNames.join(', '));
       setMatchDate(new Date(match.date));
       setDuration(match.duration);
-      setMenes(match.menes?.map(m => ({
-        teamAPoints: m.teamAPoints || 0,
-        teamBPoints: m.teamBPoints || 0,
-        duration: m.duration || 0,
-      })) || []);
+      setMenes(match.menes?.map(m => ({ teamAPoints: m.teamAPoints || 0, teamBPoints: m.teamBPoints || 0, duration: m.duration || 0 })) || []);
       setLocation(match.tournamentName || '');
+      setSelectedTerrainId(match.terrainId || null);
+      setSelectedTournamentId(match.tournamentId || null);
+      setPlayerActions(match.playerActions ? JSON.parse(JSON.stringify(match.playerActions)) : []);
     }
   }, [match]);
 
-  // State to show series panel
-  const [showSeriesPanel, setShowSeriesPanel] = useState(true);
+  const selectedTerrain = useMemo(() => selectedTerrainId ? terrains.find(t => t.id === selectedTerrainId) : null, [selectedTerrainId, terrains]);
+  const selectedTournament = useMemo(() => selectedTournamentId ? tournaments.find(t => t.id === selectedTournamentId) : null, [selectedTournamentId, tournaments]);
 
-  const locale = language === 'en' ? 'en-US' : 'fr-FR';
+  const filteredTerrains = useMemo(() => {
+    const search = terrainSearch.toLowerCase();
+    return terrains.filter(t => !search || t.name.toLowerCase().includes(search) || t.city.toLowerCase().includes(search));
+  }, [terrains, terrainSearch]);
+
+  const filteredTournaments = useMemo(() => {
+    const search = tournamentSearch.toLowerCase();
+    return tournaments.filter(t => !search || t.name.toLowerCase().includes(search) || (t.location?.city || '').toLowerCase().includes(search));
+  }, [tournaments, tournamentSearch]);
+
+  // Build a list of team A and team B players for actions editing
+  const teamAPlayersList = useMemo(() => {
+    if (!match) return [];
+    return match.teamA.players.map((pid, idx) => ({
+      id: pid,
+      name: match.teamA.playerNames[idx] || t('match', 'playerDefault'),
+      team: 'A' as const,
+    }));
+  }, [match, t]);
+
+  const teamBPlayersList = useMemo(() => {
+    if (!match) return [];
+    return match.teamB.players.map((pid, idx) => ({
+      id: pid,
+      name: match.teamB.playerNames[idx] || t('match', 'playerDefault'),
+      team: 'B' as const,
+    }));
+  }, [match, t]);
+
+  const getPlayerAction = useCallback((playerId: string): PlayerAction | undefined => {
+    return playerActions.find(pa => pa.playerId === playerId);
+  }, [playerActions]);
+
+  const updatePlayerActionCount = useCallback((playerId: string, playerName: string, team: 'A' | 'B', field: keyof PlayerAction['actions'], delta: number) => {
+    setPlayerActions(prev => {
+      const existing = prev.find(pa => pa.playerId === playerId);
+      if (existing) {
+        return prev.map(pa => {
+          if (pa.playerId !== playerId) return pa;
+          const newVal = Math.max(0, pa.actions[field] + delta);
+          // Ensure success counts don't exceed totals
+          let newActions = { ...pa.actions, [field]: newVal };
+          if (field === 'tirsSuccess' && newActions.tirsSuccess > newActions.tirs) newActions.tirs = newActions.tirsSuccess;
+          if (field === 'pointsSuccess' && newActions.pointsSuccess > newActions.points) newActions.points = newActions.pointsSuccess;
+          if (field === 'tirs' && newActions.tirs < newActions.tirsSuccess) newActions.tirsSuccess = newActions.tirs;
+          if (field === 'points' && newActions.points < newActions.pointsSuccess) newActions.points = newActions.pointsSuccess;
+          if (field === 'carreaux' && newActions.carreaux > newActions.tirsSuccess) newActions.carreaux = newActions.tirsSuccess;
+          return { ...pa, actions: newActions };
+        });
+      } else {
+        const newActions = { tirs: 0, tirsSuccess: 0, points: 0, pointsSuccess: 0, carreaux: 0, [field]: Math.max(0, delta) };
+        return [...prev, { playerId, playerName, team, actions: newActions }];
+      }
+    });
+  }, []);
+
+  const openDetailedNotation = useCallback((playerId: string, playerName: string, team: 'A' | 'B', actionType: 'tir' | 'point') => {
+    setEditingActionPlayer({ id: playerId, name: playerName, team });
+    setEditingActionType(actionType);
+    setShowShotNotation(true);
+  }, []);
+
+  const handleShotSubmit = useCallback((record: SimpleShotRecord) => {
+    if (!editingActionPlayer) return;
+    const { id: playerId, name: playerName, team } = editingActionPlayer;
+
+    setPlayerActions(prev => {
+      const existing = prev.find(pa => pa.playerId === playerId);
+      const detailedShot: DetailedShotRecord = {
+        id: record.id,
+        timestamp: record.timestamp,
+        playerId: record.playerId,
+        playerName: record.playerName,
+        team: record.team,
+        actionType: record.actionType,
+        success: record.success,
+        carreau: record.carreau,
+        shotType: record.shotType as any,
+        shotResult: record.shotResult as any,
+        shotQuality: record.shotQuality as any,
+        pointType: record.pointType as any,
+        pointQuality: record.pointQuality as any,
+      };
+
+      if (existing) {
+        return prev.map(pa => {
+          if (pa.playerId !== playerId) return pa;
+          const newActions = { ...pa.actions };
+          if (record.actionType === 'tir') {
+            newActions.tirs++;
+            if (record.success) newActions.tirsSuccess++;
+            if (record.carreau) newActions.carreaux++;
+          } else {
+            newActions.points++;
+            if (record.success) newActions.pointsSuccess++;
+          }
+          return {
+            ...pa,
+            actions: newActions,
+            detailedShots: [...(pa.detailedShots || []), detailedShot],
+          };
+        });
+      } else {
+        const newActions = { tirs: 0, tirsSuccess: 0, points: 0, pointsSuccess: 0, carreaux: 0 };
+        if (record.actionType === 'tir') {
+          newActions.tirs = 1;
+          if (record.success) newActions.tirsSuccess = 1;
+          if (record.carreau) newActions.carreaux = 1;
+        } else {
+          newActions.points = 1;
+          if (record.success) newActions.pointsSuccess = 1;
+        }
+        return [...prev, { playerId, playerName, team, actions: newActions, detailedShots: [detailedShot] }];
+      }
+    });
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [editingActionPlayer]);
 
   if (!match) {
     return (
@@ -132,88 +248,75 @@ export default function EditMatchScreen() {
 
   const handleScoreChange = (team: 'A' | 'B', delta: number) => {
     Haptics.selectionAsync();
-    if (team === 'A') {
-      setTeamAScore(prev => Math.max(0, Math.min(maxScore, prev + delta)));
-    } else {
-      setTeamBScore(prev => Math.max(0, Math.min(maxScore, prev + delta)));
-    }
+    if (team === 'A') setTeamAScore(prev => Math.max(0, Math.min(maxScore, prev + delta)));
+    else setTeamBScore(prev => Math.max(0, Math.min(maxScore, prev + delta)));
   };
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(false);
-    if (selectedDate) {
-      const newDate = new Date(matchDate);
-      newDate.setFullYear(selectedDate.getFullYear());
-      newDate.setMonth(selectedDate.getMonth());
-      newDate.setDate(selectedDate.getDate());
-      setMatchDate(newDate);
-    }
+    if (selectedDate) { const d = new Date(matchDate); d.setFullYear(selectedDate.getFullYear()); d.setMonth(selectedDate.getMonth()); d.setDate(selectedDate.getDate()); setMatchDate(d); }
   };
 
   const handleTimeChange = (event: any, selectedTime?: Date) => {
     setShowTimePicker(false);
-    if (selectedTime) {
-      const newDate = new Date(matchDate);
-      newDate.setHours(selectedTime.getHours());
-      newDate.setMinutes(selectedTime.getMinutes());
-      setMatchDate(newDate);
-    }
+    if (selectedTime) { const d = new Date(matchDate); d.setHours(selectedTime.getHours()); d.setMinutes(selectedTime.getMinutes()); setMatchDate(d); }
   };
 
   const handleMeneEdit = (index: number, field: 'teamAPoints' | 'teamBPoints', value: number) => {
-    setMenes(prev => prev.map((mene, i) => 
-      i === index ? { ...mene, [field]: Math.max(0, Math.min(6, value)) } : mene
-    ));
+    setMenes(prev => prev.map((mene, i) => i === index ? { ...mene, [field]: Math.max(0, Math.min(6, value)) } : mene));
   };
 
-  const handleAddMene = () => {
-    setMenes(prev => [...prev, { teamAPoints: 0, teamBPoints: 0, duration: 0 }]);
-  };
+  const handleAddMene = () => { setMenes(prev => [...prev, { teamAPoints: 0, teamBPoints: 0, duration: 0 }]); };
 
   const handleDeleteMene = (index: number) => {
     Alert.alert(t('common', 'delete'), t('match', 'deleteThisMene'), [
       { text: t('common', 'cancel'), style: 'cancel' },
-      { 
-        text: t('common', 'delete'), 
-        style: 'destructive',
-        onPress: () => setMenes(prev => prev.filter((_, i) => i !== index))
-      },
+      { text: t('common', 'delete'), style: 'destructive', onPress: () => setMenes(prev => prev.filter((_, i) => i !== index)) },
     ]);
   };
 
+  const handleSelectTerrain = (terrainId: string) => {
+    const terrain = terrains.find(t => t.id === terrainId);
+    setSelectedTerrainId(terrainId);
+    if (terrain) setLocation(terrain.name);
+    setShowTerrainPicker(false);
+    Haptics.selectionAsync();
+  };
+
+  const handleSelectTournament = (tournamentId: string) => {
+    const tour = tournaments.find(t => t.id === tournamentId);
+    setSelectedTournamentId(tournamentId);
+    if (tour) {
+      setLocation(tour.name);
+      setMode('Tournoi');
+    }
+    setShowTournamentPicker(false);
+    Haptics.selectionAsync();
+  };
+
   const handleSave = () => {
-    // Recalculate scores from menes if there are any
     let finalTeamAScore = teamAScore;
     let finalTeamBScore = teamBScore;
-    
     if (menes.length > 0) {
       finalTeamAScore = menes.reduce((sum, m) => sum + m.teamAPoints, 0);
       finalTeamBScore = menes.reduce((sum, m) => sum + m.teamBPoints, 0);
     }
-
     const winner: 'A' | 'B' = finalTeamAScore > finalTeamBScore ? 'A' : 'B';
 
     updateMatch(id!, {
       date: matchDate.toISOString(),
       mode,
       format,
-      teamA: {
-        ...match.teamA,
-        playerNames: teamANames.split(',').map(n => n.trim()).filter(n => n),
-        score: finalTeamAScore,
-      },
-      teamB: {
-        ...match.teamB,
-        playerNames: teamBNames.split(',').map(n => n.trim()).filter(n => n),
-        score: finalTeamBScore,
-      },
+      teamA: { ...match.teamA, playerNames: teamANames.split(',').map(n => n.trim()).filter(n => n), score: finalTeamAScore },
+      teamB: { ...match.teamB, playerNames: teamBNames.split(',').map(n => n.trim()).filter(n => n), score: finalTeamBScore },
       winner,
       duration,
-      menes: menes.map((m, i) => ({
-        ...m,
-        number: i + 1,
-      })),
+      menes: menes.map((m, i) => ({ ...m, number: i + 1 })),
       tournamentName: location || undefined,
+      tournamentId: selectedTournamentId || undefined,
+      terrainId: selectedTerrainId || undefined,
+      terrainType: selectedTerrain?.type || undefined,
+      playerActions: playerActions.length > 0 ? playerActions : undefined,
     });
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -221,27 +324,124 @@ export default function EditMatchScreen() {
   };
 
   const handleDelete = () => {
-    Alert.alert(
-      t('match', 'deleteMatch'),
-      t('match', 'deleteMatchConfirm'),
-      [
-        { text: t('common', 'cancel'), style: 'cancel' },
-        {
-          text: t('common', 'delete'),
-          style: 'destructive',
-          onPress: () => {
-            deleteMatch(id!);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-            router.back();
-          },
-        },
-      ]
+    Alert.alert(t('match', 'deleteMatch'), t('match', 'deleteMatchConfirm'), [
+      { text: t('common', 'cancel'), style: 'cancel' },
+      { text: t('common', 'delete'), style: 'destructive', onPress: () => { deleteMatch(id!); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); router.back(); } },
+    ]);
+  };
+
+  const renderPlayerActionEditor = (player: { id: string; name: string; team: 'A' | 'B' }) => {
+    const pa = getPlayerAction(player.id);
+    const actions = pa?.actions || { tirs: 0, tirsSuccess: 0, points: 0, pointsSuccess: 0, carreaux: 0 };
+    const detailedCount = pa?.detailedShots?.length || 0;
+
+    return (
+      <View key={player.id} style={styles.playerActionCard}>
+        <View style={styles.playerActionHeader}>
+          <View style={[styles.playerActionDot, { backgroundColor: player.team === 'A' ? theme.primary : theme.accent }]} />
+          <Text style={styles.playerActionName} numberOfLines={1}>{player.name}</Text>
+          {detailedCount > 0 && (
+            <View style={styles.detailedBadge}>
+              <MaterialIcons name="playlist-add-check" size={12} color={theme.success} />
+              <Text style={styles.detailedBadgeText}>{detailedCount}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Tir counters */}
+        <View style={styles.actionRow}>
+          <View style={styles.actionLabelGroup}>
+            <MaterialIcons name="gps-fixed" size={16} color={theme.tirColor} />
+            <Text style={styles.actionLabel}>{t('match', 'shot')}</Text>
+          </View>
+          <View style={styles.actionCounters}>
+            <View style={styles.counterGroup}>
+              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'tirs', -1)}>
+                <MaterialIcons name="remove" size={14} color={theme.textMuted} />
+              </Pressable>
+              <Text style={styles.counterValue}>{actions.tirs}</Text>
+              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'tirs', 1)}>
+                <MaterialIcons name="add" size={14} color={theme.primary} />
+              </Pressable>
+            </View>
+            <View style={styles.counterSep}><Text style={styles.counterSepText}>/</Text></View>
+            <View style={styles.counterGroup}>
+              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'tirsSuccess', -1)}>
+                <MaterialIcons name="remove" size={14} color={theme.textMuted} />
+              </Pressable>
+              <Text style={[styles.counterValue, { color: theme.success }]}>{actions.tirsSuccess}</Text>
+              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'tirsSuccess', 1)}>
+                <MaterialIcons name="add" size={14} color={theme.success} />
+              </Pressable>
+            </View>
+          </View>
+        </View>
+
+        {/* Point counters */}
+        <View style={styles.actionRow}>
+          <View style={styles.actionLabelGroup}>
+            <MaterialIcons name="adjust" size={16} color={theme.pointColor} />
+            <Text style={styles.actionLabel}>{t('match', 'point')}</Text>
+          </View>
+          <View style={styles.actionCounters}>
+            <View style={styles.counterGroup}>
+              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'points', -1)}>
+                <MaterialIcons name="remove" size={14} color={theme.textMuted} />
+              </Pressable>
+              <Text style={styles.counterValue}>{actions.points}</Text>
+              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'points', 1)}>
+                <MaterialIcons name="add" size={14} color={theme.primary} />
+              </Pressable>
+            </View>
+            <View style={styles.counterSep}><Text style={styles.counterSepText}>/</Text></View>
+            <View style={styles.counterGroup}>
+              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'pointsSuccess', -1)}>
+                <MaterialIcons name="remove" size={14} color={theme.textMuted} />
+              </Pressable>
+              <Text style={[styles.counterValue, { color: theme.success }]}>{actions.pointsSuccess}</Text>
+              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'pointsSuccess', 1)}>
+                <MaterialIcons name="add" size={14} color={theme.success} />
+              </Pressable>
+            </View>
+          </View>
+        </View>
+
+        {/* Carreau counter */}
+        <View style={styles.actionRow}>
+          <View style={styles.actionLabelGroup}>
+            <MaterialIcons name="stars" size={16} color={theme.carreauColor} />
+            <Text style={styles.actionLabel}>{t('match', 'carreau')}</Text>
+          </View>
+          <View style={styles.actionCounters}>
+            <View style={styles.counterGroup}>
+              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'carreaux', -1)}>
+                <MaterialIcons name="remove" size={14} color={theme.textMuted} />
+              </Pressable>
+              <Text style={[styles.counterValue, { color: theme.carreauColor }]}>{actions.carreaux}</Text>
+              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'carreaux', 1)}>
+                <MaterialIcons name="add" size={14} color={theme.carreauColor} />
+              </Pressable>
+            </View>
+          </View>
+        </View>
+
+        {/* Detailed notation buttons */}
+        <View style={styles.detailedBtnRow}>
+          <Pressable style={[styles.detailedBtn, { borderColor: theme.tirColor + '40' }]} onPress={() => openDetailedNotation(player.id, player.name, player.team, 'tir')}>
+            <MaterialIcons name="gps-fixed" size={14} color={theme.tirColor} />
+            <Text style={[styles.detailedBtnText, { color: theme.tirColor }]}>+ {t('match', 'shot')}</Text>
+          </Pressable>
+          <Pressable style={[styles.detailedBtn, { borderColor: theme.pointColor + '40' }]} onPress={() => openDetailedNotation(player.id, player.name, player.team, 'point')}>
+            <MaterialIcons name="adjust" size={14} color={theme.pointColor} />
+            <Text style={[styles.detailedBtnText, { color: theme.pointColor }]}>+ {t('match', 'point')}</Text>
+          </Pressable>
+        </View>
+      </View>
     );
   };
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="close" size={24} color={theme.textPrimary} />
@@ -252,139 +452,59 @@ export default function EditMatchScreen() {
         </Pressable>
       </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Series Panel - Show all matches in the series */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          
+          {/* Series Panel */}
           {seriesMatches.length > 1 && seriesStats && (
             <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
-              <Pressable 
-                style={styles.seriesPanelHeader}
-                onPress={() => setShowSeriesPanel(!showSeriesPanel)}
-              >
+              <Pressable style={styles.seriesPanelHeader} onPress={() => setShowSeriesPanel(!showSeriesPanel)}>
                 <View style={styles.seriesPanelHeaderLeft}>
                   <View style={[styles.seriesIcon, seriesStats.seriesWinner === 'A' && styles.seriesIconWin, seriesStats.seriesWinner === 'B' && styles.seriesIconLoss]}>
-                    <MaterialIcons 
-                      name={seriesStats.isComplete ? 'emoji-events' : 'repeat'} 
-                      size={20} 
-                      color="#FFF" 
-                    />
+                    <MaterialIcons name={seriesStats.isComplete ? 'emoji-events' : 'repeat'} size={20} color="#FFF" />
                   </View>
                   <View>
-                    <Text style={styles.seriesPanelTitle}>
-                      {t('match', 'seriesLabel')} ({seriesMatches.length} {t('match', 'matchesCount')})
-                    </Text>
+                    <Text style={styles.seriesPanelTitle}>{t('match', 'seriesLabel')} ({seriesMatches.length} {t('match', 'matchesCount')})</Text>
                     <Text style={styles.seriesPanelSubtitle}>
-                      {seriesStats.isComplete 
-                        ? (seriesStats.seriesWinner === 'A' ? t('match', 'seriesWon') : t('match', 'seriesLost'))
-                        : t('match', 'inProgressLabel')
-                      } • {seriesStats.winsA} - {seriesStats.winsB}
+                      {seriesStats.isComplete ? (seriesStats.seriesWinner === 'A' ? t('match', 'seriesWon') : t('match', 'seriesLost')) : t('match', 'inProgressLabel')} • {seriesStats.winsA} - {seriesStats.winsB}
                     </Text>
                   </View>
                 </View>
-                <MaterialIcons 
-                  name={showSeriesPanel ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} 
-                  size={24} 
-                  color={theme.textSecondary} 
-                />
+                <MaterialIcons name={showSeriesPanel ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} size={24} color={theme.textSecondary} />
               </Pressable>
-
               {showSeriesPanel && (
                 <Animated.View entering={FadeIn.duration(200)} style={styles.seriesMatchesList}>
-                  {seriesMatches.map((seriesMatch, idx) => {
-                    const isCurrentMatch = seriesMatch.id === match.id;
-                    const isWin = seriesMatch.winner === 'A';
-                    const isFinale = seriesMatch.seriesInfo?.isFinale;
-                    
+                  {seriesMatches.map((sm, idx) => {
+                    const isCurrent = sm.id === match.id;
+                    const isWin = sm.winner === 'A';
+                    const isFinale = sm.seriesInfo?.isFinale;
                     return (
-                      <Pressable 
-                        key={seriesMatch.id}
-                        style={[
-                          styles.seriesMatchCard,
-                          isCurrentMatch && styles.seriesMatchCardCurrent,
-                          isFinale && styles.seriesMatchCardFinale,
-                        ]}
-                        onPress={() => {
-                          if (!isCurrentMatch) {
-                            Haptics.selectionAsync();
-                            router.replace(`/match/${seriesMatch.id}`);
-                          }
-                        }}
-                      >
+                      <Pressable key={sm.id} style={[styles.seriesMatchCard, isCurrent && styles.seriesMatchCardCurrent, isFinale && styles.seriesMatchCardFinale]}
+                        onPress={() => { if (!isCurrent) { Haptics.selectionAsync(); router.replace(`/match/${sm.id}`); } }}>
                         <View style={styles.seriesMatchCardLeft}>
-                          <View style={[
-                            styles.seriesMatchIndicator,
-                            isWin ? styles.seriesMatchIndicatorWin : styles.seriesMatchIndicatorLoss,
-                            isFinale && styles.seriesMatchIndicatorFinale,
-                          ]}>
-                            <Text style={styles.seriesMatchIndicatorText}>
-                              {isFinale ? 'F' : idx + 1}
-                            </Text>
+                          <View style={[styles.seriesMatchIndicator, isWin ? styles.seriesMatchIndicatorWin : styles.seriesMatchIndicatorLoss, isFinale && styles.seriesMatchIndicatorFinale]}>
+                            <Text style={styles.seriesMatchIndicatorText}>{isFinale ? 'F' : idx + 1}</Text>
                           </View>
                           <View>
-                            <Text style={styles.seriesMatchLabel}>
-                              {isFinale ? t('match', 'finaleLabel') : `${t('match', 'matchNumber')} ${idx + 1}`}
-                              {isCurrentMatch ? ` (${t('match', 'currentLabel')})` : ''}
-                            </Text>
-                            <Text style={styles.seriesMatchDate}>
-                              {new Date(seriesMatch.date).toLocaleDateString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                            </Text>
+                            <Text style={styles.seriesMatchLabel}>{isFinale ? t('match', 'finaleLabel') : `${t('match', 'matchNumber')} ${idx + 1}`}{isCurrent ? ` (${t('match', 'currentLabel')})` : ''}</Text>
+                            <Text style={styles.seriesMatchDate}>{new Date(sm.date).toLocaleDateString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</Text>
                           </View>
                         </View>
                         <View style={styles.seriesMatchCardRight}>
-                          <Text style={[
-                            styles.seriesMatchScore,
-                            isWin && styles.seriesMatchScoreWin,
-                            !isWin && styles.seriesMatchScoreLoss,
-                          ]}>
-                            {seriesMatch.teamA.score} - {seriesMatch.teamB.score}
-                          </Text>
+                          <Text style={[styles.seriesMatchScore, isWin && styles.seriesMatchScoreWin, !isWin && styles.seriesMatchScoreLoss]}>{sm.teamA.score} - {sm.teamB.score}</Text>
                           <View style={[styles.seriesMatchBadge, isWin ? styles.seriesMatchBadgeWin : styles.seriesMatchBadgeLoss]}>
-                            <Text style={[styles.seriesMatchBadgeText, { color: isWin ? theme.success : theme.error }]}>
-                              {isWin ? 'V' : 'D'}
-                            </Text>
+                            <Text style={[styles.seriesMatchBadgeText, { color: isWin ? theme.success : theme.error }]}>{isWin ? 'V' : 'D'}</Text>
                           </View>
                         </View>
                       </Pressable>
                     );
                   })}
-                  
-                  {/* Series Summary */}
                   <View style={styles.seriesSummary}>
                     <View style={styles.seriesSummaryScore}>
-                      <Text style={[styles.seriesSummaryValue, seriesStats.winsA > seriesStats.winsB && styles.seriesSummaryValueWin]}>
-                        {seriesStats.winsA}
-                      </Text>
+                      <Text style={[styles.seriesSummaryValue, seriesStats.winsA > seriesStats.winsB && styles.seriesSummaryValueWin]}>{seriesStats.winsA}</Text>
                       <Text style={styles.seriesSummarySep}>{t('match', 'victoriesLabel')}</Text>
-                      <Text style={[styles.seriesSummaryValue, seriesStats.winsB > seriesStats.winsA && styles.seriesSummaryValueLoss]}>
-                        {seriesStats.winsB}
-                      </Text>
+                      <Text style={[styles.seriesSummaryValue, seriesStats.winsB > seriesStats.winsA && styles.seriesSummaryValueLoss]}>{seriesStats.winsB}</Text>
                     </View>
-                    {seriesStats.isComplete && (
-                      <View style={[
-                        styles.seriesFinalBadge,
-                        seriesStats.seriesWinner === 'A' ? styles.seriesFinalBadgeWin : styles.seriesFinalBadgeLoss
-                      ]}>
-                        <MaterialIcons 
-                          name={seriesStats.seriesWinner === 'A' ? 'check-circle' : 'cancel'} 
-                          size={16} 
-                          color={seriesStats.seriesWinner === 'A' ? theme.success : theme.error} 
-                        />
-                        <Text style={[
-                          styles.seriesFinalBadgeText,
-                          { color: seriesStats.seriesWinner === 'A' ? theme.success : theme.error }
-                        ]}>
-                          {seriesStats.seriesWinner === 'A' ? t('match', 'seriesWon') : t('match', 'seriesLost')}
-                        </Text>
-                      </View>
-                    )}
                   </View>
                 </Animated.View>
               )}
@@ -395,90 +515,87 @@ export default function EditMatchScreen() {
           <Animated.View entering={FadeInDown.duration(400).delay(seriesMatches.length > 1 ? 50 : 0)} style={styles.section}>
             <Text style={styles.sectionTitle}>{t('match', 'dateAndTime')}</Text>
             <View style={styles.dateTimeContainer}>
-              <Pressable 
-                style={styles.dateButton}
-                onPress={() => setShowDatePicker(true)}
-              >
+              <Pressable style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
                 <MaterialIcons name="event" size={20} color={theme.primary} />
-                <Text style={styles.dateText}>
-                  {matchDate.toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' })}
-                </Text>
+                <Text style={styles.dateText}>{matchDate.toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
               </Pressable>
-              <Pressable 
-                style={styles.timeButton}
-                onPress={() => setShowTimePicker(true)}
-              >
+              <Pressable style={styles.timeButton} onPress={() => setShowTimePicker(true)}>
                 <MaterialIcons name="access-time" size={20} color={theme.primary} />
-                <Text style={styles.dateText}>
-                  {matchDate.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
-                </Text>
+                <Text style={styles.dateText}>{matchDate.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}</Text>
               </Pressable>
             </View>
-            {showDatePicker && (
-              <DateTimePicker
-                value={matchDate}
-                mode="date"
-                display="default"
-                onChange={handleDateChange}
-              />
-            )}
-            {showTimePicker && (
-              <DateTimePicker
-                value={matchDate}
-                mode="time"
-                display="default"
-                onChange={handleTimeChange}
-              />
-            )}
+            {showDatePicker && <DateTimePicker value={matchDate} mode="date" display="default" onChange={handleDateChange} />}
+            {showTimePicker && <DateTimePicker value={matchDate} mode="time" display="default" onChange={handleTimeChange} />}
           </Animated.View>
 
-          {/* Location */}
+          {/* Location / Terrain */}
           <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('match', 'locationTournament')}</Text>
-            <TextInput
-              style={styles.textInput}
-              value={location}
-              onChangeText={setLocation}
-              placeholder={t('match', 'locationPlaceholder')}
-              placeholderTextColor={theme.textMuted}
-            />
+            <Text style={styles.sectionTitle}>{t('match', 'terrain')}</Text>
+            <Pressable style={styles.pickerButton} onPress={() => { setTerrainSearch(''); setShowTerrainPicker(true); }}>
+              {selectedTerrain ? (
+                <View style={styles.pickerSelected}>
+                  <MaterialIcons name="place" size={20} color={theme.success} />
+                  <View style={styles.pickerSelectedInfo}>
+                    <Text style={styles.pickerSelectedName}>{selectedTerrain.name}</Text>
+                    <Text style={styles.pickerSelectedSub}>{selectedTerrain.city} • {t('terrainTypes', selectedTerrain.type)}</Text>
+                  </View>
+                  <Pressable onPress={(e) => { e.stopPropagation(); setSelectedTerrainId(null); Haptics.selectionAsync(); }}>
+                    <MaterialIcons name="close" size={18} color={theme.textMuted} />
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={styles.pickerPlaceholder}>
+                  <MaterialIcons name="place" size={20} color={theme.textMuted} />
+                  <Text style={styles.pickerPlaceholderText}>{t('match', 'chooseTerrain')}</Text>
+                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                </View>
+              )}
+            </Pressable>
           </Animated.View>
 
-          {/* Mode Selection - Only show if not a tournament match */}
+          {/* Mode Selection */}
           {!match.tournamentId && (
             <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
               <Text style={styles.sectionTitle}>{t('match', 'modeLabel')}</Text>
               <View style={styles.modeContainer}>
                 {config.matchModes.map(m => (
-                  <Pressable
-                    key={m}
-                    style={[
-                      styles.modeButton,
-                      mode === m && styles.modeButtonActive
-                    ]}
-                    onPress={() => {
-                      Haptics.selectionAsync();
-                      setMode(m);
-                    }}
-                  >
-                    <MaterialIcons 
-                      name={m === 'Entraînement' ? 'fitness-center' : 'emoji-events'} 
-                      size={20} 
-                      color={mode === m ? '#FFF' : theme.textSecondary} 
-                    />
-                    <Text style={[
-                      styles.modeText,
-                      mode === m && styles.modeTextActive
-                    ]}>
+                  <Pressable key={m} style={[styles.modeButton, mode === m && styles.modeButtonActive]}
+                    onPress={() => { Haptics.selectionAsync(); setMode(m); if (m === 'Tournoi' && !selectedTournamentId) { setTournamentSearch(''); setShowTournamentPicker(true); } }}>
+                    <MaterialIcons name={m === 'Entraînement' ? 'fitness-center' : 'emoji-events'} size={20} color={mode === m ? '#FFF' : theme.textSecondary} />
+                    <Text style={[styles.modeText, mode === m && styles.modeTextActive]}>
                       {m === 'Entraînement' ? t('modes', 'training') : t('modes', 'tournament')}
                     </Text>
                   </Pressable>
                 ))}
               </View>
+
+              {/* Tournament selection */}
+              {mode === 'Tournoi' && (
+                <Pressable style={[styles.pickerButton, { marginTop: 12 }]} onPress={() => { setTournamentSearch(''); setShowTournamentPicker(true); }}>
+                  {selectedTournament ? (
+                    <View style={styles.pickerSelected}>
+                      <MaterialIcons name="emoji-events" size={20} color={theme.carreauColor} />
+                      <View style={styles.pickerSelectedInfo}>
+                        <Text style={styles.pickerSelectedName}>{selectedTournament.name}</Text>
+                        <Text style={styles.pickerSelectedSub}>{selectedTournament.location?.city} • {t('formats', selectedTournament.format)}</Text>
+                      </View>
+                      <Pressable onPress={(e) => { e.stopPropagation(); setSelectedTournamentId(null); Haptics.selectionAsync(); }}>
+                        <MaterialIcons name="close" size={18} color={theme.textMuted} />
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View style={styles.pickerPlaceholder}>
+                      <MaterialIcons name="emoji-events" size={20} color={theme.textMuted} />
+                      <Text style={styles.pickerPlaceholderText}>{t('matchEdit', 'selectTournament')}</Text>
+                      <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                    </View>
+                  )}
+                </Pressable>
+              )}
             </Animated.View>
           )}
 
-          {/* Tournament Badge - Show if it's a tournament match */}
+          {/* Tournament Badge for tournament matches */}
           {match.tournamentId && (
             <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
               <Text style={styles.sectionTitle}>{t('match', 'modeLabel')}</Text>
@@ -499,28 +616,14 @@ export default function EditMatchScreen() {
             </Animated.View>
           )}
 
-          {/* Format Selection */}
+          {/* Format */}
           <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
             <Text style={styles.sectionTitle}>{t('match', 'formatLabel')}</Text>
             <View style={styles.formatContainer}>
               {config.game.formats.map(f => (
-                <Pressable
-                  key={f}
-                  style={[
-                    styles.formatChip,
-                    format === f && styles.formatChipActive
-                  ]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setFormat(f);
-                  }}
-                >
-                  <Text style={[
-                    styles.formatChipText,
-                    format === f && styles.formatChipTextActive
-                  ]}>
-                    {t('formats', f)}
-                  </Text>
+                <Pressable key={f} style={[styles.formatChip, format === f && styles.formatChipActive]}
+                  onPress={() => { Haptics.selectionAsync(); setFormat(f); }}>
+                  <Text style={[styles.formatChipText, format === f && styles.formatChipTextActive]}>{t('formats', f)}</Text>
                 </Pressable>
               ))}
             </View>
@@ -532,25 +635,15 @@ export default function EditMatchScreen() {
             <View style={styles.teamsCard}>
               <View style={styles.teamInputGroup}>
                 <Text style={styles.teamLabel}>{t('match', 'myTeam')}</Text>
-                <TextInput
-                  style={styles.teamInput}
-                  value={teamANames}
-                  onChangeText={setTeamANames}
-                  placeholder={t('match', 'namesSeparatedByCommas')}
-                  placeholderTextColor={theme.textMuted}
-                />
-                {/* Display roles if available */}
+                <TextInput style={styles.teamInput} value={teamANames} onChangeText={setTeamANames} placeholder={t('match', 'namesSeparatedByCommas')} placeholderTextColor={theme.textMuted} />
                 {match?.teamA.playerRoles && match.teamA.playerRoles.length > 0 && (
                   <View style={styles.rolesDisplay}>
                     {match.teamA.playerRoles.map((pr, idx) => {
-                      const roleConfig = ROLE_CONFIG[pr.role as PlayerRole];
-                      const playerName = match.teamA.playerNames[idx]?.split(' ')[0] || t('match', 'playerDefault');
+                      const rc = ROLE_CONFIG[pr.role as PlayerRole];
                       return (
-                        <View key={pr.playerId} style={[styles.roleDisplayBadge, { backgroundColor: roleConfig.color + '15' }]}>
-                          <MaterialIcons name={roleConfig.icon as any} size={12} color={roleConfig.color} />
-                          <Text style={[styles.roleDisplayText, { color: roleConfig.color }]}>
-                            {playerName} - {t('roles', roleConfig.labelKey)}
-                          </Text>
+                        <View key={pr.playerId} style={[styles.roleDisplayBadge, { backgroundColor: rc.color + '15' }]}>
+                          <MaterialIcons name={rc.icon as any} size={12} color={rc.color} />
+                          <Text style={[styles.roleDisplayText, { color: rc.color }]}>{match.teamA.playerNames[idx]?.split(' ')[0] || ''} - {t('roles', rc.labelKey)}</Text>
                         </View>
                       );
                     })}
@@ -560,25 +653,15 @@ export default function EditMatchScreen() {
               <View style={styles.teamDivider} />
               <View style={styles.teamInputGroup}>
                 <Text style={styles.teamLabel}>{t('match', 'opponent')}</Text>
-                <TextInput
-                  style={styles.teamInput}
-                  value={teamBNames}
-                  onChangeText={setTeamBNames}
-                  placeholder={t('match', 'namesSeparatedByCommas')}
-                  placeholderTextColor={theme.textMuted}
-                />
-                {/* Display roles if available */}
+                <TextInput style={styles.teamInput} value={teamBNames} onChangeText={setTeamBNames} placeholder={t('match', 'namesSeparatedByCommas')} placeholderTextColor={theme.textMuted} />
                 {match?.teamB.playerRoles && match.teamB.playerRoles.length > 0 && (
                   <View style={styles.rolesDisplay}>
                     {match.teamB.playerRoles.map((pr, idx) => {
-                      const roleConfig = ROLE_CONFIG[pr.role as PlayerRole];
-                      const playerName = match.teamB.playerNames[idx]?.split(' ')[0] || t('match', 'playerDefault');
+                      const rc = ROLE_CONFIG[pr.role as PlayerRole];
                       return (
-                        <View key={pr.playerId} style={[styles.roleDisplayBadge, { backgroundColor: roleConfig.color + '15' }]}>
-                          <MaterialIcons name={roleConfig.icon as any} size={12} color={roleConfig.color} />
-                          <Text style={[styles.roleDisplayText, { color: roleConfig.color }]}>
-                            {playerName} - {t('roles', roleConfig.labelKey)}
-                          </Text>
+                        <View key={pr.playerId} style={[styles.roleDisplayBadge, { backgroundColor: rc.color + '15' }]}>
+                          <MaterialIcons name={rc.icon as any} size={12} color={rc.color} />
+                          <Text style={[styles.roleDisplayText, { color: rc.color }]}>{match.teamB.playerNames[idx]?.split(' ')[0] || ''} - {t('roles', rc.labelKey)}</Text>
                         </View>
                       );
                     })}
@@ -595,52 +678,18 @@ export default function EditMatchScreen() {
               <View style={styles.teamScore}>
                 <Text style={styles.scoreLabel}>{t('match', 'myTeam')}</Text>
                 <View style={styles.scoreControls}>
-                  <Pressable 
-                    style={styles.scoreButton}
-                    onPress={() => handleScoreChange('A', -1)}
-                  >
-                    <MaterialIcons name="remove" size={24} color={theme.textSecondary} />
-                  </Pressable>
-                  <Text style={[
-                    styles.scoreValue,
-                    teamAScore > teamBScore && styles.scoreValueWin
-                  ]}>
-                    {teamAScore}
-                  </Text>
-                  <Pressable 
-                    style={styles.scoreButton}
-                    onPress={() => handleScoreChange('A', 1)}
-                  >
-                    <MaterialIcons name="add" size={24} color={theme.primary} />
-                  </Pressable>
+                  <Pressable style={styles.scoreButton} onPress={() => handleScoreChange('A', -1)}><MaterialIcons name="remove" size={24} color={theme.textSecondary} /></Pressable>
+                  <Text style={[styles.scoreValue, teamAScore > teamBScore && styles.scoreValueWin]}>{teamAScore}</Text>
+                  <Pressable style={styles.scoreButton} onPress={() => handleScoreChange('A', 1)}><MaterialIcons name="add" size={24} color={theme.primary} /></Pressable>
                 </View>
               </View>
-
-              <View style={styles.vsContainer}>
-                <Text style={styles.vsText}>-</Text>
-              </View>
-
+              <View style={styles.vsContainer}><Text style={styles.vsText}>-</Text></View>
               <View style={styles.teamScore}>
                 <Text style={styles.scoreLabel}>{t('match', 'opponent')}</Text>
                 <View style={styles.scoreControls}>
-                  <Pressable 
-                    style={styles.scoreButton}
-                    onPress={() => handleScoreChange('B', -1)}
-                  >
-                    <MaterialIcons name="remove" size={24} color={theme.textSecondary} />
-                  </Pressable>
-                  <Text style={[
-                    styles.scoreValue,
-                    teamBScore > teamAScore && styles.scoreValueWin
-                  ]}>
-                    {teamBScore}
-                  </Text>
-                  <Pressable 
-                    style={styles.scoreButton}
-                    onPress={() => handleScoreChange('B', 1)}
-                  >
-                    <MaterialIcons name="add" size={24} color={theme.primary} />
-                  </Pressable>
+                  <Pressable style={styles.scoreButton} onPress={() => handleScoreChange('B', -1)}><MaterialIcons name="remove" size={24} color={theme.textSecondary} /></Pressable>
+                  <Text style={[styles.scoreValue, teamBScore > teamAScore && styles.scoreValueWin]}>{teamBScore}</Text>
+                  <Pressable style={styles.scoreButton} onPress={() => handleScoreChange('B', 1)}><MaterialIcons name="add" size={24} color={theme.primary} /></Pressable>
                 </View>
               </View>
             </View>
@@ -650,29 +699,32 @@ export default function EditMatchScreen() {
           <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
             <Text style={styles.sectionTitle}>{t('match', 'durationMinutes')}</Text>
             <View style={styles.durationContainer}>
-              <Pressable 
-                style={styles.durationButton}
-                onPress={() => setDuration(prev => Math.max(0, prev - 5))}
-              >
-                <MaterialIcons name="remove" size={24} color={theme.textSecondary} />
-              </Pressable>
-              <TextInput
-                style={styles.durationInput}
-                value={duration.toString()}
-                onChangeText={(text) => setDuration(parseInt(text) || 0)}
-                keyboardType="number-pad"
-              />
-              <Pressable 
-                style={styles.durationButton}
-                onPress={() => setDuration(prev => prev + 5)}
-              >
-                <MaterialIcons name="add" size={24} color={theme.primary} />
-              </Pressable>
+              <Pressable style={styles.durationButton} onPress={() => setDuration(prev => Math.max(0, prev - 5))}><MaterialIcons name="remove" size={24} color={theme.textSecondary} /></Pressable>
+              <TextInput style={styles.durationInput} value={duration.toString()} onChangeText={(text) => setDuration(parseInt(text) || 0)} keyboardType="number-pad" />
+              <Pressable style={styles.durationButton} onPress={() => setDuration(prev => prev + 5)}><MaterialIcons name="add" size={24} color={theme.primary} /></Pressable>
             </View>
           </Animated.View>
 
-          {/* Mènes */}
+          {/* Player Actions */}
           <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('match', 'playerActions')}</Text>
+            <Text style={styles.sectionSubtitle}>{t('matchEdit', 'actionsDesc')}</Text>
+            {teamAPlayersList.length > 0 && (
+              <View style={styles.teamActionsGroup}>
+                <Text style={styles.teamActionsLabel}>{t('match', 'myTeam')}</Text>
+                {teamAPlayersList.map(p => renderPlayerActionEditor(p))}
+              </View>
+            )}
+            {teamBPlayersList.length > 0 && (
+              <View style={styles.teamActionsGroup}>
+                <Text style={[styles.teamActionsLabel, { color: theme.accent }]}>{t('match', 'opponent')}</Text>
+                {teamBPlayersList.map(p => renderPlayerActionEditor(p))}
+              </View>
+            )}
+          </Animated.View>
+
+          {/* Menes */}
+          <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>{t('match', 'menesCount')} ({menes.length})</Text>
               <Pressable style={styles.addMeneBtn} onPress={handleAddMene}>
@@ -680,77 +732,38 @@ export default function EditMatchScreen() {
                 <Text style={styles.addMeneBtnText}>{t('match', 'addLabel')}</Text>
               </Pressable>
             </View>
-
             {menes.length > 0 ? (
               <View style={styles.menesCard}>
                 {menes.map((mene, index) => (
                   <View key={index} style={styles.meneEditRow}>
                     <Text style={styles.meneNumber}>#{index + 1}</Text>
                     <View style={styles.meneScoreEdit}>
-                      <Pressable
-                        style={styles.meneScoreBtn}
-                        onPress={() => handleMeneEdit(index, 'teamAPoints', mene.teamAPoints - 1)}
-                      >
-                        <MaterialIcons name="remove" size={16} color={theme.textMuted} />
-                      </Pressable>
-                      <Text style={[styles.meneScoreValue, mene.teamAPoints > 0 && { color: theme.success }]}>
-                        {mene.teamAPoints}
-                      </Text>
-                      <Pressable
-                        style={styles.meneScoreBtn}
-                        onPress={() => handleMeneEdit(index, 'teamAPoints', mene.teamAPoints + 1)}
-                      >
-                        <MaterialIcons name="add" size={16} color={theme.primary} />
-                      </Pressable>
+                      <Pressable style={styles.meneScoreBtn} onPress={() => handleMeneEdit(index, 'teamAPoints', mene.teamAPoints - 1)}><MaterialIcons name="remove" size={16} color={theme.textMuted} /></Pressable>
+                      <Text style={[styles.meneScoreValue, mene.teamAPoints > 0 && { color: theme.success }]}>{mene.teamAPoints}</Text>
+                      <Pressable style={styles.meneScoreBtn} onPress={() => handleMeneEdit(index, 'teamAPoints', mene.teamAPoints + 1)}><MaterialIcons name="add" size={16} color={theme.primary} /></Pressable>
                     </View>
                     <Text style={styles.meneSeparator}>-</Text>
                     <View style={styles.meneScoreEdit}>
-                      <Pressable
-                        style={styles.meneScoreBtn}
-                        onPress={() => handleMeneEdit(index, 'teamBPoints', mene.teamBPoints - 1)}
-                      >
-                        <MaterialIcons name="remove" size={16} color={theme.textMuted} />
-                      </Pressable>
-                      <Text style={[styles.meneScoreValue, mene.teamBPoints > 0 && { color: theme.error }]}>
-                        {mene.teamBPoints}
-                      </Text>
-                      <Pressable
-                        style={styles.meneScoreBtn}
-                        onPress={() => handleMeneEdit(index, 'teamBPoints', mene.teamBPoints + 1)}
-                      >
-                        <MaterialIcons name="add" size={16} color={theme.primary} />
-                      </Pressable>
+                      <Pressable style={styles.meneScoreBtn} onPress={() => handleMeneEdit(index, 'teamBPoints', mene.teamBPoints - 1)}><MaterialIcons name="remove" size={16} color={theme.textMuted} /></Pressable>
+                      <Text style={[styles.meneScoreValue, mene.teamBPoints > 0 && { color: theme.error }]}>{mene.teamBPoints}</Text>
+                      <Pressable style={styles.meneScoreBtn} onPress={() => handleMeneEdit(index, 'teamBPoints', mene.teamBPoints + 1)}><MaterialIcons name="add" size={16} color={theme.primary} /></Pressable>
                     </View>
-                    <Pressable
-                      style={styles.meneDeleteBtn}
-                      onPress={() => handleDeleteMene(index)}
-                    >
-                      <MaterialIcons name="close" size={18} color={theme.error} />
-                    </Pressable>
+                    <Pressable style={styles.meneDeleteBtn} onPress={() => handleDeleteMene(index)}><MaterialIcons name="close" size={18} color={theme.error} /></Pressable>
                   </View>
                 ))}
-                
-                {/* Totals */}
                 <View style={styles.meneTotalRow}>
                   <Text style={styles.meneTotalLabel}>{t('match', 'totalLabel')}</Text>
-                  <Text style={[styles.meneTotalValue, { color: theme.success }]}>
-                    {menes.reduce((sum, m) => sum + m.teamAPoints, 0)}
-                  </Text>
+                  <Text style={[styles.meneTotalValue, { color: theme.success }]}>{menes.reduce((sum, m) => sum + m.teamAPoints, 0)}</Text>
                   <Text style={styles.meneTotalSeparator}>-</Text>
-                  <Text style={[styles.meneTotalValue, { color: theme.error }]}>
-                    {menes.reduce((sum, m) => sum + m.teamBPoints, 0)}
-                  </Text>
+                  <Text style={[styles.meneTotalValue, { color: theme.error }]}>{menes.reduce((sum, m) => sum + m.teamBPoints, 0)}</Text>
                 </View>
               </View>
             ) : (
-              <View style={styles.noMenesCard}>
-                <Text style={styles.noMenesText}>{t('match', 'noMenesRecorded')}</Text>
-              </View>
+              <View style={styles.noMenesCard}><Text style={styles.noMenesText}>{t('match', 'noMenesRecorded')}</Text></View>
             )}
           </Animated.View>
         </ScrollView>
 
-        {/* Save Button */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
           <Pressable style={styles.saveButton} onPress={handleSave}>
             <MaterialIcons name="check" size={24} color="#FFF" />
@@ -758,617 +771,250 @@ export default function EditMatchScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Terrain Picker Modal */}
+      <Modal visible={showTerrainPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowTerrainPicker(false)}>
+        <SafeAreaView edges={['top']} style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('match', 'chooseTerrain')}</Text>
+            <Pressable style={styles.modalCloseBtn} onPress={() => setShowTerrainPicker(false)}><MaterialIcons name="close" size={24} color={theme.textPrimary} /></Pressable>
+          </View>
+          <View style={styles.modalSearchContainer}>
+            <MaterialIcons name="search" size={20} color={theme.textMuted} />
+            <TextInput style={styles.modalSearchInput} value={terrainSearch} onChangeText={setTerrainSearch} placeholder={t('common', 'search') + '...'} placeholderTextColor={theme.textMuted} autoFocus />
+          </View>
+          {filteredTerrains.length > 0 ? (
+            <FlatList data={filteredTerrains} keyExtractor={(item) => item.id} contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+              renderItem={({ item: terrain }) => (
+                <Pressable style={[styles.modalItem, selectedTerrainId === terrain.id && styles.modalItemSelected]} onPress={() => handleSelectTerrain(terrain.id)}>
+                  <View style={[styles.modalItemIndicator, { backgroundColor: theme.success }]} />
+                  <View style={styles.modalItemContent}>
+                    <Text style={styles.modalItemTitle}>{terrain.name}</Text>
+                    <View style={styles.modalItemMeta}>
+                      <Text style={styles.modalItemMetaText}>{terrain.city}</Text>
+                      <View style={styles.modalItemDot} />
+                      <Text style={styles.modalItemMetaText}>{t('terrainTypes', terrain.type)}</Text>
+                      <View style={styles.modalItemDot} />
+                      <Text style={styles.modalItemMetaText}>{terrain.courtsCount} {t('map', 'courts')}</Text>
+                    </View>
+                  </View>
+                  {selectedTerrainId === terrain.id && <MaterialIcons name="check-circle" size={22} color={theme.success} />}
+                </Pressable>
+              )}
+            />
+          ) : (
+            <View style={styles.modalEmpty}><MaterialIcons name="place" size={48} color={theme.textMuted} /><Text style={styles.modalEmptyText}>{t('match', 'noTerrains')}</Text></View>
+          )}
+        </SafeAreaView>
+      </Modal>
+
+      {/* Tournament Picker Modal */}
+      <Modal visible={showTournamentPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowTournamentPicker(false)}>
+        <SafeAreaView edges={['top']} style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('matchEdit', 'selectTournament')}</Text>
+            <Pressable style={styles.modalCloseBtn} onPress={() => setShowTournamentPicker(false)}><MaterialIcons name="close" size={24} color={theme.textPrimary} /></Pressable>
+          </View>
+          <View style={styles.modalSearchContainer}>
+            <MaterialIcons name="search" size={20} color={theme.textMuted} />
+            <TextInput style={styles.modalSearchInput} value={tournamentSearch} onChangeText={setTournamentSearch} placeholder={t('common', 'search') + '...'} placeholderTextColor={theme.textMuted} autoFocus />
+          </View>
+          {filteredTournaments.length > 0 ? (
+            <FlatList data={filteredTournaments} keyExtractor={(item) => item.id} contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+              renderItem={({ item: tour }) => {
+                const dateStr = new Date(tour.date).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
+                return (
+                  <Pressable style={[styles.modalItem, selectedTournamentId === tour.id && styles.modalItemSelected]} onPress={() => handleSelectTournament(tour.id)}>
+                    <View style={[styles.modalItemIndicator, { backgroundColor: theme.carreauColor }]} />
+                    <View style={styles.modalItemContent}>
+                      <Text style={styles.modalItemTitle}>{tour.name}</Text>
+                      <View style={styles.modalItemMeta}>
+                        <Text style={styles.modalItemMetaText}>{dateStr}</Text>
+                        <View style={styles.modalItemDot} />
+                        <Text style={styles.modalItemMetaText}>{tour.location?.city}</Text>
+                        <View style={styles.modalItemDot} />
+                        <Text style={styles.modalItemMetaText}>{t('formats', tour.format)}</Text>
+                      </View>
+                    </View>
+                    {selectedTournamentId === tour.id && <MaterialIcons name="check-circle" size={22} color={theme.carreauColor} />}
+                  </Pressable>
+                );
+              }}
+            />
+          ) : (
+            <View style={styles.modalEmpty}><MaterialIcons name="emoji-events" size={48} color={theme.textMuted} /><Text style={styles.modalEmptyText}>{t('profile', 'noTournamentsAvailable')}</Text></View>
+          )}
+        </SafeAreaView>
+      </Modal>
+
+      {/* Detailed Shot Notation Modal */}
+      {editingActionPlayer && (
+        <SimplifiedShotNotation
+          visible={showShotNotation}
+          onClose={() => setShowShotNotation(false)}
+          actionType={editingActionType}
+          playerId={editingActionPlayer.id}
+          playerName={editingActionPlayer.name}
+          team={editingActionPlayer.team}
+          onSubmit={handleShotSubmit}
+        />
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.backgroundSecondary,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: theme.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textSecondary,
-    letterSpacing: 1,
-    marginBottom: 12,
-  },
-  dateTimeContainer: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  dateButton: {
-    flex: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: theme.surface,
-    padding: 16,
-    borderRadius: theme.borderRadius.md,
-    ...theme.shadows.card,
-  },
-  timeButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: theme.surface,
-    padding: 16,
-    borderRadius: theme.borderRadius.md,
-    ...theme.shadows.card,
-  },
-  dateText: {
-    fontSize: 15,
-    color: theme.textPrimary,
-    fontWeight: '500',
-  },
-  textInput: {
-    backgroundColor: theme.surface,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: theme.borderRadius.md,
-    fontSize: 15,
-    color: theme.textPrimary,
-    ...theme.shadows.card,
-  },
-  modeContainer: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  modeButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: theme.surface,
-    paddingVertical: 14,
-    borderRadius: theme.borderRadius.md,
-    ...theme.shadows.card,
-  },
-  modeButtonActive: {
-    backgroundColor: theme.primary,
-  },
-  modeText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  modeTextActive: {
-    color: '#FFF',
-  },
-  formatContainer: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  formatChip: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 12,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    ...theme.shadows.card,
-  },
-  formatChipActive: {
-    borderColor: theme.primary,
-    backgroundColor: theme.primary + '10',
-  },
-  formatChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  formatChipTextActive: {
-    color: theme.primary,
-  },
-  teamsCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    ...theme.shadows.card,
-  },
-  teamInputGroup: {
-    marginBottom: 4,
-  },
-  teamLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textSecondary,
-    marginBottom: 8,
-  },
-  teamInput: {
-    backgroundColor: theme.backgroundSecondary,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: theme.borderRadius.md,
-    fontSize: 15,
-    color: theme.textPrimary,
-  },
-  teamDivider: {
-    height: 1,
-    backgroundColor: theme.border,
-    marginVertical: 16,
-  },
-  rolesDisplay: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 10,
-  },
-  roleDisplayBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  roleDisplayText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  scoreContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    ...theme.shadows.card,
-  },
-  teamScore: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  scoreLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textSecondary,
-    marginBottom: 12,
-  },
-  scoreControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  scoreButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: 20,
-  },
-  scoreValue: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: theme.textPrimary,
-    width: 60,
-    textAlign: 'center',
-  },
-  scoreValueWin: {
-    color: theme.success,
-  },
-  vsContainer: {
-    paddingHorizontal: 8,
-  },
-  vsText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: theme.textMuted,
-  },
-  durationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: 12,
-    gap: 16,
-    ...theme.shadows.card,
-  },
-  durationButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: 22,
-  },
-  durationInput: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: theme.textPrimary,
-    width: 80,
-    textAlign: 'center',
-  },
-  addMeneBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: theme.primaryLight + '20',
-    borderRadius: theme.borderRadius.full,
-  },
-  addMeneBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.primary,
-  },
-  menesCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    overflow: 'hidden',
-    ...theme.shadows.card,
-  },
-  meneEditRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  meneNumber: {
-    width: 36,
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  meneScoreEdit: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  meneScoreBtn: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: 14,
-  },
-  meneScoreValue: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.textSecondary,
-    width: 28,
-    textAlign: 'center',
-  },
-  meneSeparator: {
-    fontSize: 16,
-    color: theme.textMuted,
-    marginHorizontal: 12,
-  },
-  meneDeleteBtn: {
-    marginLeft: 'auto',
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  meneTotalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: theme.backgroundSecondary,
-  },
-  meneTotalLabel: {
-    width: 36,
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  meneTotalValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    width: 60,
-    textAlign: 'center',
-  },
-  meneTotalSeparator: {
-    fontSize: 16,
-    color: theme.textMuted,
-    marginHorizontal: 12,
-  },
-  noMenesCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: 24,
-    alignItems: 'center',
-    ...theme.shadows.card,
-  },
-  noMenesText: {
-    fontSize: 14,
-    color: theme.textMuted,
-  },
-  // Series Panel Styles
-  seriesPanelHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    marginBottom: 12,
-    ...theme.shadows.card,
-  },
-  seriesPanelHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  seriesIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: theme.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  seriesIconWin: {
-    backgroundColor: theme.success,
-  },
-  seriesIconLoss: {
-    backgroundColor: theme.error,
-  },
-  seriesPanelTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: theme.textPrimary,
-  },
-  seriesPanelSubtitle: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    marginTop: 2,
-  },
-  seriesMatchesList: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 12,
-    marginBottom: 12,
-    ...theme.shadows.card,
-  },
-  seriesMatchCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.md,
-    marginBottom: 8,
-  },
-  seriesMatchCardCurrent: {
-    borderWidth: 2,
-    borderColor: theme.primary,
-    backgroundColor: theme.primary + '10',
-  },
-  seriesMatchCardFinale: {
-    borderWidth: 2,
-    borderColor: theme.carreauColor + '50',
-  },
-  seriesMatchCardLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  seriesMatchIndicator: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: theme.textMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  seriesMatchIndicatorWin: {
-    backgroundColor: theme.success,
-  },
-  seriesMatchIndicatorLoss: {
-    backgroundColor: theme.error,
-  },
-  seriesMatchIndicatorFinale: {
-    backgroundColor: theme.carreauColor,
-  },
-  seriesMatchIndicatorText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  seriesMatchLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  seriesMatchDate: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    marginTop: 2,
-  },
-  seriesMatchCardRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  seriesMatchScore: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: theme.textSecondary,
-  },
-  seriesMatchScoreWin: {
-    color: theme.success,
-  },
-  seriesMatchScoreLoss: {
-    color: theme.error,
-  },
-  seriesMatchBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  seriesMatchBadgeWin: {
-    backgroundColor: theme.success + '20',
-  },
-  seriesMatchBadgeLoss: {
-    backgroundColor: theme.error + '20',
-  },
-  seriesMatchBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  seriesSummary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 8,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: theme.border,
-  },
-  seriesSummaryScore: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  seriesSummaryValue: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: theme.textMuted,
-  },
-  seriesSummaryValueWin: {
-    color: theme.success,
-  },
-  seriesSummaryValueLoss: {
-    color: theme.error,
-  },
-  seriesSummarySep: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textMuted,
-    textTransform: 'uppercase',
-  },
-  seriesFinalBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: theme.borderRadius.full,
-  },
-  seriesFinalBadgeWin: {
-    backgroundColor: theme.success + '15',
-  },
-  seriesFinalBadgeLoss: {
-    backgroundColor: theme.error + '15',
-  },
-  seriesFinalBadgeText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  tournamentBadgeContainer: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: theme.carreauColor + '30',
-    ...theme.shadows.card,
-  },
-  tournamentBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  tournamentBadgeInfo: {
-    flex: 1,
-  },
-  tournamentBadgeLabel: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    marginBottom: 2,
-  },
-  tournamentBadgeName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.carreauColor,
-  },
-  phaseBadge: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: theme.border,
-  },
-  phaseBadgeText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  footer: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    backgroundColor: theme.backgroundSecondary,
-    borderTopWidth: 1,
-    borderTopColor: theme.border,
-  },
-  saveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: theme.primary,
-    paddingVertical: 18,
-    borderRadius: theme.borderRadius.md,
-  },
-  saveButtonText: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#FFF',
-  },
+  container: { flex: 1, backgroundColor: theme.backgroundSecondary },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  deleteButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
+  section: { marginBottom: 24 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  sectionTitle: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, letterSpacing: 1, marginBottom: 12 },
+  sectionSubtitle: { fontSize: 12, color: theme.textMuted, marginTop: -8, marginBottom: 12 },
+  dateTimeContainer: { flexDirection: 'row', gap: 12 },
+  dateButton: { flex: 2, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.surface, padding: 16, borderRadius: theme.borderRadius.md, ...theme.shadows.card },
+  timeButton: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.surface, padding: 16, borderRadius: theme.borderRadius.md, ...theme.shadows.card },
+  dateText: { fontSize: 15, color: theme.textPrimary, fontWeight: '500' },
+  // Picker button
+  pickerButton: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, ...theme.shadows.card, overflow: 'hidden' },
+  pickerSelected: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
+  pickerSelectedInfo: { flex: 1 },
+  pickerSelectedName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  pickerSelectedSub: { fontSize: 12, color: theme.textMuted, marginTop: 2 },
+  pickerPlaceholder: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
+  pickerPlaceholderText: { flex: 1, fontSize: 15, color: theme.textMuted },
+  // Mode
+  modeContainer: { flexDirection: 'row', gap: 12 },
+  modeButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.surface, paddingVertical: 14, borderRadius: theme.borderRadius.md, ...theme.shadows.card },
+  modeButtonActive: { backgroundColor: theme.primary },
+  modeText: { fontSize: 14, fontWeight: '600', color: theme.textSecondary },
+  modeTextActive: { color: '#FFF' },
+  formatContainer: { flexDirection: 'row', gap: 10 },
+  formatChip: { flex: 1, alignItems: 'center', paddingVertical: 12, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, borderWidth: 2, borderColor: 'transparent', ...theme.shadows.card },
+  formatChipActive: { borderColor: theme.primary, backgroundColor: theme.primary + '10' },
+  formatChipText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
+  formatChipTextActive: { color: theme.primary },
+  teamsCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, ...theme.shadows.card },
+  teamInputGroup: { marginBottom: 4 },
+  teamLabel: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginBottom: 8 },
+  teamInput: { backgroundColor: theme.backgroundSecondary, paddingHorizontal: 14, paddingVertical: 12, borderRadius: theme.borderRadius.md, fontSize: 15, color: theme.textPrimary },
+  teamDivider: { height: 1, backgroundColor: theme.border, marginVertical: 16 },
+  rolesDisplay: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  roleDisplayBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+  roleDisplayText: { fontSize: 11, fontWeight: '600' },
+  scoreContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, ...theme.shadows.card },
+  teamScore: { flex: 1, alignItems: 'center' },
+  scoreLabel: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginBottom: 12 },
+  scoreControls: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  scoreButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: 20 },
+  scoreValue: { fontSize: 36, fontWeight: '700', color: theme.textPrimary, width: 60, textAlign: 'center' },
+  scoreValueWin: { color: theme.success },
+  vsContainer: { paddingHorizontal: 8 },
+  vsText: { fontSize: 20, fontWeight: '600', color: theme.textMuted },
+  durationContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 12, gap: 16, ...theme.shadows.card },
+  durationButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: 22 },
+  durationInput: { fontSize: 28, fontWeight: '700', color: theme.textPrimary, width: 80, textAlign: 'center' },
+  // Player actions
+  teamActionsGroup: { marginBottom: 16 },
+  teamActionsLabel: { fontSize: 11, fontWeight: '700', color: theme.primary, letterSpacing: 0.5, marginBottom: 8 },
+  playerActionCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 14, marginBottom: 10, ...theme.shadows.card },
+  playerActionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: theme.border },
+  playerActionDot: { width: 8, height: 8, borderRadius: 4 },
+  playerActionName: { flex: 1, fontSize: 14, fontWeight: '600', color: theme.textPrimary },
+  detailedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.success + '15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
+  detailedBadgeText: { fontSize: 11, fontWeight: '600', color: theme.success },
+  actionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 },
+  actionLabelGroup: { flexDirection: 'row', alignItems: 'center', gap: 6, width: 60 },
+  actionLabel: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  actionCounters: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  counterGroup: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  counterBtn: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: 13 },
+  counterValue: { fontSize: 16, fontWeight: '700', color: theme.textPrimary, width: 28, textAlign: 'center' },
+  counterSep: { paddingHorizontal: 2 },
+  counterSepText: { fontSize: 14, color: theme.textMuted },
+  detailedBtnRow: { flexDirection: 'row', gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border },
+  detailedBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: theme.borderRadius.md, borderWidth: 1 },
+  detailedBtnText: { fontSize: 12, fontWeight: '600' },
+  // Menes
+  addMeneBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.primary + '20', borderRadius: theme.borderRadius.full },
+  addMeneBtnText: { fontSize: 13, fontWeight: '600', color: theme.primary },
+  menesCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, overflow: 'hidden', ...theme.shadows.card },
+  meneEditRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: theme.border },
+  meneNumber: { width: 36, fontSize: 14, fontWeight: '600', color: theme.textSecondary },
+  meneScoreEdit: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  meneScoreBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: 14 },
+  meneScoreValue: { fontSize: 18, fontWeight: '600', color: theme.textSecondary, width: 28, textAlign: 'center' },
+  meneSeparator: { fontSize: 16, color: theme.textMuted, marginHorizontal: 12 },
+  meneDeleteBtn: { marginLeft: 'auto', width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  meneTotalRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, backgroundColor: theme.backgroundSecondary },
+  meneTotalLabel: { width: 36, fontSize: 13, fontWeight: '600', color: theme.textSecondary },
+  meneTotalValue: { fontSize: 18, fontWeight: '700', width: 60, textAlign: 'center' },
+  meneTotalSeparator: { fontSize: 16, color: theme.textMuted, marginHorizontal: 12 },
+  noMenesCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 24, alignItems: 'center', ...theme.shadows.card },
+  noMenesText: { fontSize: 14, color: theme.textMuted },
+  // Series
+  seriesPanelHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 12, ...theme.shadows.card },
+  seriesPanelHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  seriesIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center' },
+  seriesIconWin: { backgroundColor: theme.success },
+  seriesIconLoss: { backgroundColor: theme.error },
+  seriesPanelTitle: { fontSize: 16, fontWeight: '700', color: theme.textPrimary },
+  seriesPanelSubtitle: { fontSize: 13, color: theme.textSecondary, marginTop: 2 },
+  seriesMatchesList: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 12, marginBottom: 12, ...theme.shadows.card },
+  seriesMatchCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 12, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, marginBottom: 8 },
+  seriesMatchCardCurrent: { borderWidth: 2, borderColor: theme.primary, backgroundColor: theme.primary + '10' },
+  seriesMatchCardFinale: { borderWidth: 2, borderColor: theme.carreauColor + '50' },
+  seriesMatchCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  seriesMatchIndicator: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.textMuted, alignItems: 'center', justifyContent: 'center' },
+  seriesMatchIndicatorWin: { backgroundColor: theme.success },
+  seriesMatchIndicatorLoss: { backgroundColor: theme.error },
+  seriesMatchIndicatorFinale: { backgroundColor: theme.carreauColor },
+  seriesMatchIndicatorText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
+  seriesMatchLabel: { fontSize: 14, fontWeight: '600', color: theme.textPrimary },
+  seriesMatchDate: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  seriesMatchCardRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  seriesMatchScore: { fontSize: 18, fontWeight: '700', color: theme.textSecondary },
+  seriesMatchScoreWin: { color: theme.success },
+  seriesMatchScoreLoss: { color: theme.error },
+  seriesMatchBadge: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  seriesMatchBadgeWin: { backgroundColor: theme.success + '20' },
+  seriesMatchBadgeLoss: { backgroundColor: theme.error + '20' },
+  seriesMatchBadgeText: { fontSize: 12, fontWeight: '700' },
+  seriesSummary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border },
+  seriesSummaryScore: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  seriesSummaryValue: { fontSize: 28, fontWeight: '800', color: theme.textMuted },
+  seriesSummaryValueWin: { color: theme.success },
+  seriesSummaryValueLoss: { color: theme.error },
+  seriesSummarySep: { fontSize: 12, fontWeight: '600', color: theme.textMuted, textTransform: 'uppercase' },
+  tournamentBadgeContainer: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, borderWidth: 2, borderColor: theme.carreauColor + '30', ...theme.shadows.card },
+  tournamentBadge: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  tournamentBadgeInfo: { flex: 1 },
+  tournamentBadgeLabel: { fontSize: 12, color: theme.textSecondary, marginBottom: 2 },
+  tournamentBadgeName: { fontSize: 16, fontWeight: '600', color: theme.carreauColor },
+  phaseBadge: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border },
+  phaseBadgeText: { fontSize: 14, fontWeight: '600', color: theme.textPrimary },
+  footer: { paddingHorizontal: 16, paddingTop: 16, backgroundColor: theme.backgroundSecondary, borderTopWidth: 1, borderTopColor: theme.border },
+  saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.primary, paddingVertical: 18, borderRadius: theme.borderRadius.md },
+  saveButtonText: { fontSize: 17, fontWeight: '600', color: '#FFF' },
+  // Modal
+  modalContainer: { flex: 1, backgroundColor: theme.backgroundSecondary },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: theme.textPrimary },
+  modalCloseBtn: { padding: 8 },
+  modalSearchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, marginHorizontal: 16, marginVertical: 12, paddingHorizontal: 14, paddingVertical: 10, borderRadius: theme.borderRadius.md, gap: 10, borderWidth: 1, borderColor: theme.border },
+  modalSearchInput: { flex: 1, fontSize: 15, color: theme.textPrimary, padding: 0 },
+  modalItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 14, marginBottom: 8, ...theme.shadows.card },
+  modalItemSelected: { borderWidth: 2, borderColor: theme.primary },
+  modalItemIndicator: { width: 4, height: '80%', borderRadius: 2, marginRight: 12 },
+  modalItemContent: { flex: 1 },
+  modalItemTitle: { fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginBottom: 4 },
+  modalItemMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' },
+  modalItemMetaText: { fontSize: 11, color: theme.textMuted },
+  modalItemDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: theme.textMuted },
+  modalEmpty: { alignItems: 'center', paddingVertical: 48 },
+  modalEmptyText: { fontSize: 15, color: theme.textMuted, marginTop: 12 },
 });
