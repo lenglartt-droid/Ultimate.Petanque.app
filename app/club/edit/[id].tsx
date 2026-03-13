@@ -27,6 +27,7 @@ import {
   fetchPublicClubById,
   PublicClub,
 } from '@/services/publicItemsService';
+import MergeComparisonModal, { MergeField } from '@/components/ui/MergeComparisonModal';
 
 const FACILITY_KEYS: { id: string; key: string; icon: string }[] = [
   { id: 'terrains', key: 'facilityOutdoor', icon: 'sports' },
@@ -72,6 +73,10 @@ export default function EditClubScreen() {
   const [checkingDuplicates, setCheckingDuplicates] = useState(false);
   const [duplicatesDismissed, setDuplicatesDismissed] = useState(false);
   const [mergingId, setMergingId] = useState<string | null>(null);
+  const [showCompareModal, setShowCompareModal] = useState(false);
+  const [compareFields, setCompareFields] = useState<MergeField[]>([]);
+  const [comparePublicData, setComparePublicData] = useState<any>(null);
+  const [comparePublicName, setComparePublicName] = useState('');
 
   // Load club data
   useEffect(() => {
@@ -128,36 +133,60 @@ export default function EditClubScreen() {
       showAlert(t('common', 'error'), error || 'Not found');
       return;
     }
-    // Merge: fill empty fields from public item, keep existing values
-    if (!name.trim() && item.name) setName(item.name);
-    if (!location.address.trim() && item.address) {
-      setLocation(prev => ({ ...prev, address: item.address }));
-    }
-    if (!location.city.trim() && item.city) {
-      setLocation(prev => ({ ...prev, city: item.city }));
-    }
-    if ((!location.latitude && !location.longitude) && item.location) {
-      setLocation(prev => ({
-        ...prev,
-        latitude: item.location?.latitude || 0,
-        longitude: item.location?.longitude || 0,
-      }));
-    }
-    if (!description.trim() && item.description) setDescription(item.description);
-    if (!foundedYear && item.founded_year) setFoundedYear(String(item.founded_year));
-    if (!contactEmail.trim() && item.contact_email) setContactEmail(item.contact_email);
-    if (!contactPhone.trim() && item.contact_phone) setContactPhone(item.contact_phone);
-    if (!membershipCost && item.membership_cost) setMembershipCost(String(item.membership_cost));
-    if (item.facilities && item.facilities.length > 0 && selectedFacilities.length === 0) {
+    // Build comparison fields
+    const facilityLabels = selectedFacilities.map(
+      fid => FACILITY_KEYS.find(f => f.id === fid) ? t('club', FACILITY_KEYS.find(f => f.id === fid)!.key) : ''
+    ).filter(Boolean).join(', ');
+    const pubFacilityLabels = (item.facilities || []).join(', ');
+
+    const fields: MergeField[] = [
+      { key: 'name', label: t('modificationLogs', 'name'), myValue: name, publicValue: item.name || '', icon: 'label' },
+      { key: 'address', label: t('modificationLogs', 'address'), myValue: location.address, publicValue: item.address || '', icon: 'place' },
+      { key: 'city', label: t('modificationLogs', 'city'), myValue: location.city, publicValue: item.city || '', icon: 'location-city' },
+      { key: 'country', label: t('directory', 'country'), myValue: location.country || 'France', publicValue: item.country || 'France', icon: 'flag' },
+      { key: 'description', label: t('modificationLogs', 'description'), myValue: description, publicValue: item.description || '', icon: 'notes' },
+      { key: 'foundedYear', label: t('modificationLogs', 'foundedYear'), myValue: foundedYear, publicValue: item.founded_year ? String(item.founded_year) : '', icon: 'event' },
+      { key: 'contactEmail', label: t('modificationLogs', 'contactEmail'), myValue: contactEmail, publicValue: item.contact_email || '', icon: 'email' },
+      { key: 'contactPhone', label: t('modificationLogs', 'contactPhone'), myValue: contactPhone, publicValue: item.contact_phone || '', icon: 'phone' },
+      { key: 'membershipCost', label: t('modificationLogs', 'membershipCost'), myValue: membershipCost, publicValue: item.membership_cost ? String(item.membership_cost) : '', icon: 'euro' },
+      { key: 'facilities', label: t('modificationLogs', 'facilities'), myValue: facilityLabels, publicValue: pubFacilityLabels, icon: 'sports' },
+      { key: 'location', label: t('modificationLogs', 'location'), myValue: (location.latitude || location.longitude) ? `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}` : '', publicValue: item.location ? `${(item.location.latitude || 0).toFixed(4)}, ${(item.location.longitude || 0).toFixed(4)}` : '', icon: 'my-location' },
+    ];
+    setCompareFields(fields);
+    setComparePublicData(item);
+    setComparePublicName(item.name || dup.name);
+    setShowCompareModal(true);
+  }, [name, location, description, foundedYear, contactEmail, contactPhone, membershipCost, selectedFacilities, showAlert, t]);
+
+  const handleApplyMerge = useCallback((selections: Record<string, 'mine' | 'public'>) => {
+    if (!comparePublicData) return;
+    const pub = comparePublicData;
+    if (selections.name === 'public' && pub.name) setName(pub.name);
+    if (selections.address === 'public' && pub.address) setLocation(prev => ({ ...prev, address: pub.address }));
+    if (selections.city === 'public' && pub.city) setLocation(prev => ({ ...prev, city: pub.city }));
+    if (selections.country === 'public' && pub.country) setLocation(prev => ({ ...prev, country: pub.country }));
+    if (selections.description === 'public') setDescription(pub.description || '');
+    if (selections.foundedYear === 'public' && pub.founded_year) setFoundedYear(String(pub.founded_year));
+    if (selections.contactEmail === 'public') setContactEmail(pub.contact_email || '');
+    if (selections.contactPhone === 'public') setContactPhone(pub.contact_phone || '');
+    if (selections.membershipCost === 'public' && pub.membership_cost) setMembershipCost(String(pub.membership_cost));
+    if (selections.facilities === 'public' && pub.facilities && pub.facilities.length > 0) {
       const facilityIds = FACILITY_KEYS
-        .filter(f => item.facilities.some((label: string) => label === t('club', f.key) || label === f.id))
+        .filter(f => pub.facilities.some((label: string) => label === t('club', f.key) || label === f.id))
         .map(f => f.id);
       if (facilityIds.length > 0) setSelectedFacilities(facilityIds);
     }
+    if (selections.location === 'public' && pub.location) {
+      setLocation(prev => ({
+        ...prev,
+        latitude: pub.location?.latitude || 0,
+        longitude: pub.location?.longitude || 0,
+      }));
+    }
+    setShowCompareModal(false);
     setDuplicatesDismissed(true);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     showAlert(t('common', 'success'), t('map', 'mergeSuccess'));
-  }, [name, location, description, foundedYear, contactEmail, contactPhone, membershipCost, selectedFacilities, showAlert, t]);
+  }, [comparePublicData, showAlert, t]);
 
   const toggleFacility = (id: string) => {
     Haptics.selectionAsync();
@@ -551,6 +580,17 @@ export default function EditClubScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+      {/* Merge Comparison Modal */}
+      <MergeComparisonModal
+        visible={showCompareModal}
+        onClose={() => setShowCompareModal(false)}
+        onApply={handleApplyMerge}
+        fields={compareFields}
+        myLabel={t('map', 'myData')}
+        publicLabel={t('map', 'publicData')}
+        publicItemName={comparePublicName}
+        t={t}
+      />
     </SafeAreaView>
   );
 }

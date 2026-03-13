@@ -31,6 +31,7 @@ import {
   fetchPublicTerrainById,
   PublicTerrain,
 } from '@/services/publicItemsService';
+import MergeComparisonModal, { MergeField } from '@/components/ui/MergeComparisonModal';
 
 export default function EditTerrainScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -64,6 +65,10 @@ export default function EditTerrainScreen() {
   const [checkingDuplicates, setCheckingDuplicates] = useState(false);
   const [duplicatesDismissed, setDuplicatesDismissed] = useState(false);
   const [mergingId, setMergingId] = useState<string | null>(null);
+  const [showCompareModal, setShowCompareModal] = useState(false);
+  const [compareFields, setCompareFields] = useState<MergeField[]>([]);
+  const [comparePublicData, setComparePublicData] = useState<any>(null);
+  const [comparePublicName, setComparePublicName] = useState('');
 
   // Load terrain data
   useEffect(() => {
@@ -122,27 +127,49 @@ export default function EditTerrainScreen() {
       showAlert(t('common', 'error'), error || 'Not found');
       return;
     }
-    // Merge: fill empty fields from public item, keep existing values
-    if (!name.trim() && item.name) setName(item.name);
-    if (!address.trim() && item.address) setAddress(item.address);
-    if (!city.trim() && item.city) setCity(item.city);
-    if (!description.trim() && item.description) setDescription(item.description);
-    if ((!latitude && !longitude) && item.location) {
-      setLatitude(item.location.latitude || 0);
-      setLongitude(item.location.longitude || 0);
-    }
-    if (item.type) setType(item.type);
-    if (item.courts_count && courtsCount === '1') setCourtsCount(String(item.courts_count));
-    if (item.lighting) setLighting(true);
-    if (item.covered) setCovered(true);
-    if (item.club_name && !clubId) {
-      const matchedClub = clubs.find(c => c.name === item.club_name);
+    // Build comparison fields
+    const selectedClubName = clubs.find(c => c.id === clubId)?.name || '';
+    const fields: MergeField[] = [
+      { key: 'name', label: t('modificationLogs', 'name'), myValue: name, publicValue: item.name || '', icon: 'label' },
+      { key: 'address', label: t('modificationLogs', 'address'), myValue: address, publicValue: item.address || '', icon: 'place' },
+      { key: 'city', label: t('modificationLogs', 'city'), myValue: city, publicValue: item.city || '', icon: 'location-city' },
+      { key: 'type', label: t('modificationLogs', 'type'), myValue: t('terrainTypes', type), publicValue: item.type ? t('terrainTypes', item.type) : '', icon: 'landscape' },
+      { key: 'description', label: t('modificationLogs', 'description'), myValue: description, publicValue: item.description || '', icon: 'notes' },
+      { key: 'courtsCount', label: t('modificationLogs', 'courtsCount'), myValue: courtsCount, publicValue: item.courts_count ? String(item.courts_count) : '', icon: 'grid-view' },
+      { key: 'lighting', label: t('modificationLogs', 'lighting'), myValue: String(lighting), publicValue: String(item.lighting ?? false), icon: 'lightbulb' },
+      { key: 'covered', label: t('modificationLogs', 'covered'), myValue: String(covered), publicValue: String(item.covered ?? false), icon: 'roofing' },
+      { key: 'clubName', label: t('club', 'clubLabel'), myValue: selectedClubName, publicValue: item.club_name || '', icon: 'home' },
+      { key: 'location', label: t('modificationLogs', 'location'), myValue: (latitude || longitude) ? `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` : '', publicValue: item.location ? `${(item.location.latitude || 0).toFixed(4)}, ${(item.location.longitude || 0).toFixed(4)}` : '', icon: 'my-location' },
+    ];
+    setCompareFields(fields);
+    setComparePublicData(item);
+    setComparePublicName(item.name || dup.name);
+    setShowCompareModal(true);
+  }, [name, address, city, description, latitude, longitude, courtsCount, clubId, clubs, type, lighting, covered, showAlert, t]);
+
+  const handleApplyMerge = useCallback((selections: Record<string, 'mine' | 'public'>) => {
+    if (!comparePublicData) return;
+    const pub = comparePublicData;
+    if (selections.name === 'public' && pub.name) setName(pub.name);
+    if (selections.address === 'public' && pub.address) setAddress(pub.address);
+    if (selections.city === 'public' && pub.city) setCity(pub.city);
+    if (selections.type === 'public' && pub.type) setType(pub.type);
+    if (selections.description === 'public') setDescription(pub.description || '');
+    if (selections.courtsCount === 'public' && pub.courts_count) setCourtsCount(String(pub.courts_count));
+    if (selections.lighting === 'public') setLighting(pub.lighting ?? false);
+    if (selections.covered === 'public') setCovered(pub.covered ?? false);
+    if (selections.clubName === 'public' && pub.club_name) {
+      const matchedClub = clubs.find(c => c.name === pub.club_name);
       if (matchedClub) setClubId(matchedClub.id);
     }
+    if (selections.location === 'public' && pub.location) {
+      setLatitude(pub.location.latitude || 0);
+      setLongitude(pub.location.longitude || 0);
+    }
+    setShowCompareModal(false);
     setDuplicatesDismissed(true);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     showAlert(t('common', 'success'), t('map', 'mergeSuccess'));
-  }, [name, address, city, description, latitude, longitude, courtsCount, clubId, clubs, showAlert, t]);
+  }, [comparePublicData, clubs, showAlert, t]);
 
   // Geocode address when city and address change
   const geocodeAddress = async () => {
@@ -780,6 +807,17 @@ export default function EditTerrainScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+      {/* Merge Comparison Modal */}
+      <MergeComparisonModal
+        visible={showCompareModal}
+        onClose={() => setShowCompareModal(false)}
+        onApply={handleApplyMerge}
+        fields={compareFields}
+        myLabel={t('map', 'myData')}
+        publicLabel={t('map', 'publicData')}
+        publicItemName={comparePublicName}
+        t={t}
+      />
     </SafeAreaView>
   );
 }
