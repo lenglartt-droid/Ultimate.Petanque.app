@@ -282,6 +282,7 @@ interface SimplifiedShotNotationProps {
   team: 'A' | 'B';
   onSubmit: (record: SimpleShotRecord) => void;
   quickMode?: boolean;
+  initialRecord?: Partial<SimpleShotRecord>;
 }
 
 export function SimplifiedShotNotation({
@@ -293,8 +294,10 @@ export function SimplifiedShotNotation({
   team,
   onSubmit,
   quickMode = false,
+  initialRecord,
 }: SimplifiedShotNotationProps) {
   const { t } = useLanguage();
+  const isEditMode = !!initialRecord;
 
   // Translated config arrays
   const translatedShotTypesSuccess = useTranslatedConfig(SHOT_TYPES_SUCCESS_CONFIG, t);
@@ -343,11 +346,21 @@ export function SimplifiedShotNotation({
     }
   }, [success, actionType, shotResult, shotType, shotQuality, pointType, pointQuality]);
 
+  // Pre-fill state when opening in edit mode
   useEffect(() => {
+    if (visible && initialRecord) {
+      if (initialRecord.success !== undefined && initialRecord.success !== null) {
+        setSuccess(initialRecord.success);
+      }
+      if (initialRecord.shotResult) setShotResult(initialRecord.shotResult as SimpleShotResult);
+      if (initialRecord.shotType) setShotType(initialRecord.shotType as SimpleShotType);
+      if (initialRecord.pointType) setPointType(initialRecord.pointType as SimplePointType);
+      // Don't pre-fill quality — user must re-confirm to save
+    }
     if (visible) {
       progressWidth.value = withTiming(0, { duration: 0 });
     }
-  }, [visible, progressWidth]);
+  }, [visible]);
 
   useEffect(() => {
     const currentStep = getCurrentStep();
@@ -427,8 +440,8 @@ export function SimplifiedShotNotation({
     const isCarreau = shotType === 'carreau';
     
     const record: SimpleShotRecord = {
-      id: Date.now().toString(),
-      timestamp: new Date().toISOString(),
+      id: initialRecord?.id || Date.now().toString(),
+      timestamp: initialRecord?.timestamp || new Date().toISOString(),
       playerId,
       playerName,
       team,
@@ -444,7 +457,7 @@ export function SimplifiedShotNotation({
     
     onSubmit(record);
     handleClose();
-  }, [playerId, playerName, team, actionType, success, shotType, pointType, onSubmit, handleClose, shotResult]);
+  }, [playerId, playerName, team, actionType, success, shotType, pointType, onSubmit, handleClose, shotResult, initialRecord]);
 
   const handleSkip = useCallback(() => {
     if (success !== null) {
@@ -596,12 +609,14 @@ export function SimplifiedShotNotation({
                 </Pressable>
               </View>
 
-              <View style={styles.quickModeHint}>
-                <MaterialIcons name="info-outline" size={16} color={theme.textMuted} />
-                <Text style={styles.quickModeHintText}>
-                  {t('notation', 'optionalContinue')}
-                </Text>
-              </View>
+              {!isEditMode && (
+                <View style={styles.quickModeHint}>
+                  <MaterialIcons name="info-outline" size={16} color={theme.textMuted} />
+                  <Text style={styles.quickModeHintText}>
+                    {t('notation', 'optionalContinue')}
+                  </Text>
+                </View>
+              )}
             </Animated.View>
           )}
 

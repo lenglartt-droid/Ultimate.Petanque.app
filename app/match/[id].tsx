@@ -82,6 +82,8 @@ export default function EditMatchScreen() {
   const [showShotNotation, setShowShotNotation] = useState(false);
   const [editingActionPlayer, setEditingActionPlayer] = useState<{ id: string; name: string; team: 'A' | 'B' } | null>(null);
   const [editingActionType, setEditingActionType] = useState<'tir' | 'point'>('tir');
+  const [editingShotId, setEditingShotId] = useState<string | null>(null);
+  const [editingShotRecord, setEditingShotRecord] = useState<any>(null);
   const [expandedPlayerShots, setExpandedPlayerShots] = useState<Set<string>>(new Set());
 
   const maxScore = config.game.maxScore;
@@ -180,58 +182,96 @@ export default function EditMatchScreen() {
     if (!editingActionPlayer) return;
     const { id: playerId, name: playerName, team } = editingActionPlayer;
 
-    setPlayerActions(prev => {
-      const existing = prev.find(pa => pa.playerId === playerId);
-      const detailedShot: DetailedShotRecord = {
-        id: record.id,
-        timestamp: record.timestamp,
-        playerId: record.playerId,
-        playerName: record.playerName,
-        team: record.team,
-        actionType: record.actionType,
-        success: record.success,
-        carreau: record.carreau,
-        shotType: record.shotType as any,
-        shotResult: record.shotResult as any,
-        shotQuality: record.shotQuality as any,
-        pointType: record.pointType as any,
-        pointQuality: record.pointQuality as any,
-      };
+    const detailedShot: DetailedShotRecord = {
+      id: record.id,
+      timestamp: record.timestamp,
+      playerId: record.playerId,
+      playerName: record.playerName,
+      team: record.team,
+      actionType: record.actionType,
+      success: record.success,
+      carreau: record.carreau,
+      shotType: record.shotType as any,
+      shotResult: record.shotResult as any,
+      shotQuality: record.shotQuality as any,
+      pointType: record.pointType as any,
+      pointQuality: record.pointQuality as any,
+    };
 
-      if (existing) {
-        return prev.map(pa => {
-          if (pa.playerId !== playerId) return pa;
-          const newActions = { ...pa.actions };
-          if (record.actionType === 'tir') {
-            newActions.tirs++;
-            if (record.success) newActions.tirsSuccess++;
-            if (record.carreau) newActions.carreaux++;
-          } else {
-            newActions.points++;
-            if (record.success) newActions.pointsSuccess++;
-          }
-          return {
-            ...pa,
-            actions: newActions,
-            detailedShots: [...(pa.detailedShots || []), detailedShot],
-          };
-        });
-      } else {
-        const newActions = { tirs: 0, tirsSuccess: 0, points: 0, pointsSuccess: 0, carreaux: 0 };
-        if (record.actionType === 'tir') {
-          newActions.tirs = 1;
-          if (record.success) newActions.tirsSuccess = 1;
-          if (record.carreau) newActions.carreaux = 1;
+    if (editingShotId) {
+      // EDIT MODE: replace existing shot and adjust counters
+      setPlayerActions(prev => prev.map(pa => {
+        if (pa.playerId !== playerId || !pa.detailedShots) return pa;
+        const oldShot = pa.detailedShots.find(s => s.id === editingShotId);
+        if (!oldShot) return pa;
+
+        const newActions = { ...pa.actions };
+        // Subtract old shot
+        if (oldShot.actionType === 'tir') {
+          newActions.tirs = Math.max(0, newActions.tirs - 1);
+          if (oldShot.success) newActions.tirsSuccess = Math.max(0, newActions.tirsSuccess - 1);
+          if (oldShot.carreau) newActions.carreaux = Math.max(0, newActions.carreaux - 1);
         } else {
-          newActions.points = 1;
-          if (record.success) newActions.pointsSuccess = 1;
+          newActions.points = Math.max(0, newActions.points - 1);
+          if (oldShot.success) newActions.pointsSuccess = Math.max(0, newActions.pointsSuccess - 1);
         }
-        return [...prev, { playerId, playerName, team, actions: newActions, detailedShots: [detailedShot] }];
-      }
-    });
+        // Add new shot
+        if (record.actionType === 'tir') {
+          newActions.tirs++;
+          if (record.success) newActions.tirsSuccess++;
+          if (record.carreau) newActions.carreaux++;
+        } else {
+          newActions.points++;
+          if (record.success) newActions.pointsSuccess++;
+        }
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [editingActionPlayer]);
+        return {
+          ...pa,
+          actions: newActions,
+          detailedShots: pa.detailedShots.map(s => s.id === editingShotId ? detailedShot : s),
+        };
+      }));
+      setEditingShotId(null);
+      setEditingShotRecord(null);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else {
+      // ADD MODE
+      setPlayerActions(prev => {
+        const existing = prev.find(pa => pa.playerId === playerId);
+        if (existing) {
+          return prev.map(pa => {
+            if (pa.playerId !== playerId) return pa;
+            const newActions = { ...pa.actions };
+            if (record.actionType === 'tir') {
+              newActions.tirs++;
+              if (record.success) newActions.tirsSuccess++;
+              if (record.carreau) newActions.carreaux++;
+            } else {
+              newActions.points++;
+              if (record.success) newActions.pointsSuccess++;
+            }
+            return {
+              ...pa,
+              actions: newActions,
+              detailedShots: [...(pa.detailedShots || []), detailedShot],
+            };
+          });
+        } else {
+          const newActions = { tirs: 0, tirsSuccess: 0, points: 0, pointsSuccess: 0, carreaux: 0 };
+          if (record.actionType === 'tir') {
+            newActions.tirs = 1;
+            if (record.success) newActions.tirsSuccess = 1;
+            if (record.carreau) newActions.carreaux = 1;
+          } else {
+            newActions.points = 1;
+            if (record.success) newActions.pointsSuccess = 1;
+          }
+          return [...prev, { playerId, playerName, team, actions: newActions, detailedShots: [detailedShot] }];
+        }
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  }, [editingActionPlayer, editingShotId]);
 
   const deleteDetailedShot = useCallback((playerId: string, shotId: string) => {
     setPlayerActions(prev => prev.map(pa => {
@@ -296,6 +336,28 @@ export default function EditMatchScreen() {
       { text: t('common', 'delete'), style: 'destructive', onPress: () => deleteDetailedShot(playerId, shotId) },
     ]);
   }, [deleteDetailedShot, t]);
+
+  const handleEditDetailedShot = useCallback((playerId: string, playerName: string, team: 'A' | 'B', shot: DetailedShotRecord) => {
+    setEditingActionPlayer({ id: playerId, name: playerName, team });
+    setEditingActionType(shot.actionType);
+    setEditingShotId(shot.id);
+    setEditingShotRecord({
+      id: shot.id,
+      timestamp: shot.timestamp,
+      playerId: shot.playerId,
+      playerName: shot.playerName,
+      team: shot.team,
+      actionType: shot.actionType,
+      success: shot.success,
+      carreau: shot.carreau,
+      shotType: shot.shotType,
+      shotResult: shot.shotResult,
+      shotQuality: shot.shotQuality,
+      pointType: shot.pointType,
+      pointQuality: shot.pointQuality,
+    });
+    setShowShotNotation(true);
+  }, []);
 
   if (!match) {
     return (
@@ -517,7 +579,7 @@ export default function EditMatchScreen() {
                   const shotLabel = getShotLabel(shot);
                   const timeStr = new Date(shot.timestamp).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
                   return (
-                    <View key={shot.id} style={[styles.detailedShotItem, idx === 0 && { borderTopWidth: 0 }]}>
+                    <Pressable key={shot.id} style={[styles.detailedShotItem, idx === 0 && { borderTopWidth: 0 }]} onPress={() => handleEditDetailedShot(player.id, player.name, player.team, shot)}>
                       <View style={[styles.detailedShotIcon, { backgroundColor: (isTir ? theme.tirColor : theme.pointColor) + '15' }]}>
                         <MaterialIcons name={isTir ? 'gps-fixed' : 'adjust'} size={14} color={isTir ? theme.tirColor : theme.pointColor} />
                       </View>
@@ -529,14 +591,17 @@ export default function EditMatchScreen() {
                               {shot.success ? (shot.carreau ? t('notation', 'carreauLabel') : t('notation', 'succeeded')) : t('notation', 'missed')}
                             </Text>
                           </View>
-                          <Text style={styles.detailedShotTime}>{timeStr}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <MaterialIcons name="edit" size={12} color={theme.primary + '80'} />
+                            <Text style={styles.detailedShotTime}>{timeStr}</Text>
+                          </View>
                         </View>
                         {shotLabel ? <Text style={styles.detailedShotLabel} numberOfLines={2}>{shotLabel}</Text> : null}
                       </View>
                       <Pressable style={styles.detailedShotDeleteBtn} onPress={() => handleDeleteShot(player.id, shot.id, `${isTir ? t('notation', 'tirLabel') : t('notation', 'pointLabel')} - ${shot.success ? t('notation', 'succeeded') : t('notation', 'missed')}`)} hitSlop={8}>
                         <MaterialIcons name="delete-outline" size={16} color={theme.error + '80'} />
                       </Pressable>
-                    </View>
+                    </Pressable>
                   );
                 })}
               </View>
@@ -958,12 +1023,13 @@ export default function EditMatchScreen() {
       {editingActionPlayer && (
         <SimplifiedShotNotation
           visible={showShotNotation}
-          onClose={() => setShowShotNotation(false)}
+          onClose={() => { setShowShotNotation(false); setEditingShotId(null); setEditingShotRecord(null); }}
           actionType={editingActionType}
           playerId={editingActionPlayer.id}
           playerName={editingActionPlayer.name}
           team={editingActionPlayer.team}
           onSubmit={handleShotSubmit}
+          initialRecord={editingShotRecord || undefined}
         />
       )}
     </SafeAreaView>

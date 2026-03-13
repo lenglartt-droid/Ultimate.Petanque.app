@@ -2486,6 +2486,7 @@ export const translations = {
     actionsDesc: { fr: 'Modifiez les compteurs ou ajoutez un tir/point d\u00e9taill\u00e9', en: 'Edit counters or add a detailed shot/point' },
     detailedShotsList: { fr: 'Tirs d\u00e9taill\u00e9s', en: 'Detailed shots' },
     deleteShot: { fr: 'Supprimer ce tir ?', en: 'Delete this shot?' },
+    editShotHint: { fr: 'Appuyez sur un tir pour le modifier', en: 'Tap a shot to edit it' },
   },
 
   locationPicker: {
