@@ -58,7 +58,23 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
   const typeLabel = t('shareModal', config.labelKey);
   const typeLabelLower = t('shareModal', TYPE_LOWER_KEY[itemType]);
 
+  // Reset state when modal opens with new item
+  React.useEffect(() => {
+    if (visible) {
+      setShareCode(null);
+      setShareUrl(null);
+      setError(null);
+      setCopied(false);
+      setPermission('read');
+      setIsGenerating(false);
+    }
+  }, [visible, itemId, itemType]);
+
   const handleGenerate = useCallback(async () => {
+    if (!itemId) {
+      setError('Item ID is missing');
+      return;
+    }
     setIsGenerating(true);
     setError(null);
     try {
@@ -70,8 +86,9 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
         setShareUrl(result.shareUrl);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-    } catch (e) {
-      setError(t('shareModal', 'errorCreating'));
+    } catch (e: any) {
+      console.log('Share link creation error:', e);
+      setError(e?.message || t('shareModal', 'errorCreating'));
     } finally {
       setIsGenerating(false);
     }

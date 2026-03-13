@@ -768,7 +768,10 @@ export default function NewMatchScreen() {
     setIsSavingForShare(false);
     if (newId) {
       setSavedMatchIdForShare(newId);
-      setShowPostMatchShare(true);
+      // Exit fullscreen first to avoid nested modals
+      setFullscreenMode(false);
+      setHasExitedFullscreen(true);
+      setTimeout(() => setShowPostMatchShare(true), 300);
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [teamAScore, teamBScore, isTournamentMode, selectedPhase, isTimerRunning, matchTime,
@@ -1371,22 +1374,6 @@ export default function NewMatchScreen() {
                   </View>
                 </View>
 
-                {/* Post-match Share Modal */}
-                {savedMatchIdForShare ? (
-                  <ShareModal
-                    visible={showPostMatchShare}
-                    onClose={() => {
-                      setShowPostMatchShare(false);
-                      setFullscreenMode(false);
-                      setHasExitedFullscreen(true);
-                      setTimeout(() => router.replace('/(tabs)'), 100);
-                    }}
-                    itemType="match"
-                    itemId={savedMatchIdForShare}
-                    itemName={`${teamAPlayers.map(p => getPlayerName(p.playerId)).join(', ')} vs ${teamBPlayers.map(p => getPlayerName(p.playerId)).join(', ')}`}
-                    forceReadOnly
-                  />
-                ) : null}
               </Animated.View>
             )}
           </SafeAreaView>
@@ -1830,6 +1817,21 @@ export default function NewMatchScreen() {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      {/* Post-match Share Modal (outside fullscreen modal to avoid nested modals) */}
+      {savedMatchIdForShare ? (
+        <ShareModal
+          visible={showPostMatchShare}
+          onClose={() => {
+            setShowPostMatchShare(false);
+            setTimeout(() => router.replace('/(tabs)'), 100);
+          }}
+          itemType="match"
+          itemId={savedMatchIdForShare}
+          itemName={`${teamAPlayers.map(p => getPlayerName(p.playerId)).join(', ')} vs ${teamBPlayers.map(p => getPlayerName(p.playerId)).join(', ')}`}
+          forceReadOnly
+        />
+      ) : null}
 
       {/* Terrain Picker Modal */}
       <Modal

@@ -30,16 +30,24 @@ export async function createShareLink(
   itemType: ShareItemType, itemId: string, permission: SharePermission = 'read',
 ): Promise<{ shareCode: string; shareUrl: string; error: string | null }> {
   const supabase = getSupabaseClient();
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData?.user) return { shareCode: '', shareUrl: '', error: 'Not connected' };
-  const shareCode = generateShareCode();
-  const shareUrl = Linking.createURL(`share/${shareCode}`);
-  const { error } = await supabase.from('shared_items').insert({
-    owner_id: userData.user.id, share_code: shareCode, item_type: itemType,
-    item_id: itemId, permission, is_public_link: true,
-  });
-  if (error) return { shareCode: '', shareUrl: '', error: error.message };
-  return { shareCode, shareUrl, error: null };
+  const { data: userData, error: authError } = await supabase.auth.getUser();
+  if (authError || !userData?.user) return { shareCode: '', shareUrl: '', error: 'Not connected' };
+  if (!itemId) return { shareCode: '', shareUrl: '', error: 'Item ID is required' };
+
+  // Retry up to 3 times in case of share_code collision
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const shareCode = generateShareCode();
+    const shareUrl = Linking.createURL(`share/${shareCode}`);
+    const { error } = await supabase.from('shared_items').insert({
+      owner_id: userData.user.id, share_code: shareCode, item_type: itemType,
+      item_id: itemId, permission, is_public_link: true,
+    });
+    if (!error) return { shareCode, shareUrl, error: null };
+    // If it's a unique constraint violation on share_code, retry with new code
+    if (error.code === '23505' && error.message?.includes('share_code')) continue;
+    return { shareCode: '', shareUrl: '', error: error.message };
+  }
+  return { shareCode: '', shareUrl: '', error: 'Failed to generate unique share code' };
 }
 
 export async function redeemShareCode(
