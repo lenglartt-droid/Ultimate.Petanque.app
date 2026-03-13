@@ -1113,7 +1113,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.md,
     marginBottom: 10,
-    overflow: 'hidden',
     ...theme.shadows.card,
   },
   seriesHeader: { flexDirection: 'row' },
@@ -1142,7 +1141,7 @@ const styles = StyleSheet.create({
   matchDot: { width: 10, height: 10, borderRadius: 5 },
   expandButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   expandText: { fontSize: 12, fontWeight: '600', color: theme.primary },
-  seriesMatchList: { paddingHorizontal: 12, paddingBottom: 12, gap: 8, borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 10 },
+  seriesMatchList: { paddingHorizontal: 12, paddingBottom: 12, gap: 8, borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 10, backgroundColor: theme.surface, borderBottomLeftRadius: theme.borderRadius.md, borderBottomRightRadius: theme.borderRadius.md },
   
   // Compact Match Card
   compactMatchCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.sm, padding: 10, gap: 10 },

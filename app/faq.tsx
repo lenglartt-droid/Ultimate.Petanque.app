@@ -205,7 +205,7 @@ function QuickActionCard({ action, index }: { action: ReturnType<typeof getQuick
   return (
     <View>
       <Pressable
-        style={[styles.quickActionCard, expanded && { borderColor: action.color + '40', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }]}
+        style={[styles.quickActionCard, expanded && { borderColor: action.color + '40', borderBottomLeftRadius: 0, borderBottomRightRadius: 0, borderBottomWidth: 0 }]}
         onPress={() => {
           Haptics.selectionAsync();
           setExpanded(!expanded);
@@ -838,6 +838,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.md,
     borderWidth: 1,
     borderColor: theme.border,
+    overflow: 'hidden',
   },
   faqQuestion: {
     flexDirection: 'row',
@@ -861,6 +862,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   faqAnswerContainer: {
+    overflow: 'hidden',
   },
   faqAnswerText: {
     fontSize: 14,
@@ -868,7 +870,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     paddingHorizontal: 16,
     paddingBottom: 16,
-    paddingTop: 0,
+    paddingTop: 4,
   },
   // Empty State
   emptyState: {

@@ -140,7 +140,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
           <View style={{ width: 40 }} />
         </View>
 
-        <View style={styles.content}>
+        <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {/* Item preview */}
           <Animated.View entering={FadeInDown.duration(300)} style={styles.itemPreview}>
             <View style={[styles.itemIcon, { backgroundColor: config.color + '15' }]}>
@@ -276,7 +276,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
               </Animated.View>
             </>
           )}
-        </View>
+        </ScrollView>
       </SafeAreaView>
     </Modal>
   );
@@ -291,7 +291,8 @@ const styles = StyleSheet.create({
   },
   closeBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
-  content: { flex: 1, padding: 16 },
+  content: { flex: 1 },
+  contentInner: { padding: 16, paddingBottom: 40 },
   itemPreview: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 20, gap: 14,
@@ -331,16 +332,16 @@ const styles = StyleSheet.create({
     backgroundColor: theme.primary, paddingVertical: 16, borderRadius: theme.borderRadius.lg,
   },
   generateBtnText: { fontSize: 16, fontWeight: '600', color: '#FFF' },
-  resultSection: { alignItems: 'center', marginBottom: 24 },
+  resultSection: { alignItems: 'center', marginBottom: 20 },
   resultIcon: { marginBottom: 12 },
   resultTitle: { fontSize: 20, fontWeight: '700', color: theme.textPrimary, marginBottom: 6 },
-  resultDesc: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginBottom: 20 },
+  resultDesc: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 16, paddingHorizontal: 8 },
   codeBox: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg, padding: 16, gap: 14, width: '100%',
+    borderRadius: theme.borderRadius.lg, padding: 16, gap: 10, width: '100%',
     borderWidth: 2, borderColor: theme.primary + '30', borderStyle: 'dashed',
   },
-  codeText: { flex: 1, fontSize: 24, fontWeight: '800', color: theme.primary, letterSpacing: 2, textAlign: 'center' },
+  codeText: { flex: 1, fontSize: 22, fontWeight: '800', color: theme.primary, letterSpacing: 1.5, textAlign: 'center' },
   copyBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8,
     backgroundColor: theme.primary + '15', borderRadius: theme.borderRadius.md,
@@ -351,7 +352,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.full, marginTop: 12,
   },
   permissionBadgeText: { fontSize: 12, fontWeight: '600' },
-  shareActions: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+  shareActions: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   shareActionBtn: {
     flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8,
     backgroundColor: theme.surface, paddingVertical: 20, borderRadius: theme.borderRadius.lg,

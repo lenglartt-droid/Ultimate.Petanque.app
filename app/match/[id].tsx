@@ -1130,10 +1130,10 @@ const styles = StyleSheet.create({
   detailedBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: theme.borderRadius.md, borderWidth: 1 },
   detailedBtnText: { fontSize: 12, fontWeight: '600' },
   // Detailed shots list
-  detailedShotsSection: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border },
+  detailedShotsSection: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border, overflow: 'hidden' },
   detailedShotsToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 },
   detailedShotsToggleText: { flex: 1, fontSize: 12, fontWeight: '600', color: theme.textSecondary },
-  detailedShotsList: { marginTop: 6 },
+  detailedShotsList: { marginTop: 6, overflow: 'hidden' },
   detailedShotItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, borderTopWidth: 1, borderTopColor: theme.border + '60' },
   detailedShotIcon: { width: 28, height: 28, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
   detailedShotContent: { flex: 1 },
