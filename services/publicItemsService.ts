@@ -216,6 +216,89 @@ export async function importPublicItemToDirectory(
   }
 }
 
+// Check for duplicate public terrains by city + address similarity
+export async function checkDuplicatePublicTerrains(
+  city: string,
+  address?: string,
+): Promise<{ duplicates: (PublicTerrain & { matchType: 'exact' | 'city' })[]; error: string | null }> {
+  const supabase = getSupabaseClient();
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData?.user?.id;
+
+  const normalizedCity = city.trim().toLowerCase();
+  if (!normalizedCity) return { duplicates: [], error: null };
+
+  const { data, error } = await supabase.from('terrains').select('*').eq('is_public', true);
+  if (error) return { duplicates: [], error: error.message };
+
+  const normalizedAddress = (address || '').trim().toLowerCase();
+
+  const duplicates = (data || [])
+    .filter((t: any) => t.user_id !== userId)
+    .filter((t: any) => {
+      const tCity = (t.city || '').trim().toLowerCase();
+      return tCity === normalizedCity;
+    })
+    .map((t: any) => {
+      const tAddress = (t.address || '').trim().toLowerCase();
+      const isExact = normalizedAddress && tAddress && (
+        tAddress.includes(normalizedAddress) || normalizedAddress.includes(tAddress)
+      );
+      return {
+        id: t.id, userId: t.user_id, name: t.name, address: t.address, city: t.city,
+        location: t.location || { latitude: 0, longitude: 0 }, type: t.type,
+        description: t.description, facilities: t.facilities, clubName: t.club_name,
+        courtsCount: t.courts_count || 1, lighting: t.lighting ?? false, covered: t.covered ?? false,
+        matchType: isExact ? 'exact' as const : 'city' as const,
+      };
+    })
+    .sort((a: any, b: any) => (a.matchType === 'exact' ? -1 : 1) - (b.matchType === 'exact' ? -1 : 1));
+
+  return { duplicates, error: null };
+}
+
+// Check for duplicate public clubs by city + name similarity
+export async function checkDuplicatePublicClubs(
+  city: string,
+  name?: string,
+): Promise<{ duplicates: (PublicClub & { matchType: 'exact' | 'city' })[]; error: string | null }> {
+  const supabase = getSupabaseClient();
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData?.user?.id;
+
+  const normalizedCity = city.trim().toLowerCase();
+  if (!normalizedCity) return { duplicates: [], error: null };
+
+  const { data, error } = await supabase.from('clubs').select('*').eq('is_public', true);
+  if (error) return { duplicates: [], error: error.message };
+
+  const normalizedName = (name || '').trim().toLowerCase();
+
+  const duplicates = (data || [])
+    .filter((c: any) => c.user_id !== userId)
+    .filter((c: any) => {
+      const cCity = (c.city || '').trim().toLowerCase();
+      return cCity === normalizedCity;
+    })
+    .map((c: any) => {
+      const cName = (c.name || '').trim().toLowerCase();
+      const isExact = normalizedName && cName && (
+        cName.includes(normalizedName) || normalizedName.includes(cName)
+      );
+      return {
+        id: c.id, userId: c.user_id, name: c.name, address: c.address, city: c.city,
+        country: c.country, location: c.location || { latitude: 0, longitude: 0 },
+        membersCount: c.members_count || 0, foundedYear: c.founded_year,
+        description: c.description, facilities: c.facilities,
+        terrainName: c.terrain_name, membershipCost: c.membership_cost ? parseFloat(c.membership_cost) : undefined,
+        matchType: isExact ? 'exact' as const : 'city' as const,
+      };
+    })
+    .sort((a: any, b: any) => (a.matchType === 'exact' ? -1 : 1) - (b.matchType === 'exact' ? -1 : 1));
+
+  return { duplicates, error: null };
+}
+
 // Get the user's own items that can be made public
 export async function getMyPublicableItems(): Promise<{
   players: { id: string; name: string; isPublic: boolean }[];
