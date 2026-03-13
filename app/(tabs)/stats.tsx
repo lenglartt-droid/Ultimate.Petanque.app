@@ -311,6 +311,9 @@ export default function StatsScreen() {
     if (itemFilterType === 'tournament' && selectedTournamentId) {
       return timeFilteredMatches.filter(m => m.tournamentId === selectedTournamentId);
     }
+    if (itemFilterType === 'challenge') {
+      return [];
+    }
     return timeFilteredMatches;
   }, [timeFilteredMatches, itemFilterType, selectedMatchId, selectedTournamentId]);
 
@@ -995,7 +998,7 @@ export default function StatsScreen() {
     };
   }, [progressionData]);
 
-  const hasData = performanceStats.total > 0;
+  const hasData = performanceStats.total > 0 || filteredChallenges.length > 0;
 
   const formatDuration = (minutes: number) => {
     if (minutes < 60) return `${minutes}min`;
