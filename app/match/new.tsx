@@ -10,6 +10,7 @@ import {
   Alert,
   Modal,
   TextInput,
+  Share,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -21,6 +22,7 @@ import config, { GameFormat, TournamentType } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import ShareModal from '@/components/ui/ShareModal';
+import { createShareLink } from '@/services/shareService';
 import { SimplifiedShotNotation, SimpleShotRecord } from '@/components';
 
 // Tournament phases configuration - IDs are DB values (French), labels translated at display time
@@ -216,6 +218,7 @@ export default function NewMatchScreen() {
   const [savedMatchIdForShare, setSavedMatchIdForShare] = useState<string | null>(null);
   const [showPostMatchShare, setShowPostMatchShare] = useState(false);
   const [isSavingForShare, setIsSavingForShare] = useState(false);
+  const [isSharingSeries, setIsSharingSeries] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const maxScore = config.game.maxScore;
@@ -779,6 +782,103 @@ export default function NewMatchScreen() {
       selectedTerrain, selectedBracket, menes, playerActions, seriesId, seriesWinsA,
       seriesWinsB, currentMatchNumber, isFinale, addMatch, t]);
 
+  // Detect if this match completes the series
+  const seriesCompletionInfo = useMemo(() => {
+    if (!seriesId) return null;
+    const w = teamAScore > teamBScore ? 'A' : 'B';
+    const fA = seriesWinsA + (w === 'A' ? 1 : 0);
+    const fB = seriesWinsB + (w === 'B' ? 1 : 0);
+    const done = fA >= 2 || fB >= 2;
+    return { isComplete: done, finalWinsA: fA, finalWinsB: fB };
+  }, [seriesId, seriesWinsA, seriesWinsB, teamAScore, teamBScore]);
+
+  // Share the entire series (all matches)
+  const handleShareSeries = useCallback(async () => {
+    if (teamAScore === 0 && teamBScore === 0) return;
+    if (isTimerRunning) setIsTimerRunning(false);
+    setIsSharingSeries(true);
+
+    const winner = teamAScore > teamBScore ? 'A' : 'B';
+    const dur = matchTime > 0 ? Math.round(matchTime / 60) : Math.floor(Math.random() * 30) + 30;
+    const tAIds = getTeamPlayerIds(teamAPlayers);
+    const tBIds = getTeamPlayerIds(teamBPlayers);
+    const tANames = teamAPlayers.length > 0
+      ? teamAPlayers.map(p => { const pl = players.find(x => x.id === p.playerId); return pl?.name || '?'; })
+      : [t('match', 'myTeam')];
+    const tBNames = teamBPlayers.length > 0
+      ? teamBPlayers.map(p => { const pl = players.find(x => x.id === p.playerId); return pl?.name || '?'; })
+      : [t('match', 'opponent')];
+    const tARoles = teamAPlayers.map(p => ({ playerId: p.playerId, role: p.role }));
+    const tBRoles = teamBPlayers.map(p => ({ playerId: p.playerId, role: p.role }));
+
+    let sInfo: any = undefined;
+    if (seriesId) {
+      const nA = seriesWinsA + (winner === 'A' ? 1 : 0);
+      const nB = seriesWinsB + (winner === 'B' ? 1 : 0);
+      sInfo = {
+        seriesId, matchNumber: currentMatchNumber,
+        winsBeforeThisMatch: { teamA: seriesWinsA, teamB: seriesWinsB },
+        isFinale, seriesComplete: nA >= 2 || nB >= 2,
+        seriesWinner: (nA >= 2 || nB >= 2) ? (nA >= 2 ? 'A' : 'B') : undefined,
+      };
+    }
+
+    const newId = await addMatch({
+      date: new Date().toISOString(), mode: isTournamentMode ? 'Tournoi' : 'Entraînement', format,
+      tournamentId: linkedTournament?.id, tournamentName: linkedTournament?.name,
+      tournamentPhase: isTournamentMode ? (selectedPhase || undefined) : undefined,
+      tournamentBracket: isTournamentMode && selectedPhase !== 'Poules' ? selectedBracket || undefined : undefined,
+      terrainId: selectedTerrainId || linkedTournament?.terrainId || undefined,
+      terrainType: selectedTerrain?.type || linkedTournament?.terrainType || undefined,
+      teamA: { players: tAIds.length > 0 ? tAIds : ['1'], playerNames: tANames, playerRoles: tARoles.length > 0 ? tARoles : undefined, score: teamAScore },
+      teamB: { players: tBIds.length > 0 ? tBIds : ['2'], playerNames: tBNames, playerRoles: tBRoles.length > 0 ? tBRoles : undefined, score: teamBScore },
+      winner, duration: dur,
+      menes: menes.map(m => ({ teamAPoints: m.teamAPoints, teamBPoints: m.teamBPoints, duration: m.duration })),
+      playerActions: playerActions.length > 0 ? playerActions : undefined,
+      seriesInfo: sInfo,
+    });
+
+    if (!newId) { setIsSharingSeries(false); return; }
+
+    // Collect all series match IDs (previous + current)
+    const prevSeriesMatches = matches
+      .filter(m => m.seriesInfo?.seriesId === seriesId && m.id !== newId)
+      .sort((a, b) => (a.seriesInfo?.matchNumber || 1) - (b.seriesInfo?.matchNumber || 1));
+    const allIds = [...prevSeriesMatches.map(m => m.id), newId];
+
+    // Create share codes for each match
+    const codes: string[] = [];
+    for (const mid of allIds) {
+      const res = await createShareLink('match', mid, 'read');
+      if (res.error) { setIsSharingSeries(false); Alert.alert(t('common', 'error'), res.error); return; }
+      codes.push(res.shareCode);
+    }
+
+    setIsSharingSeries(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    // Build share message
+    const teamALabel = teamAPlayers.map(p => getPlayerName(p.playerId)).join(', ');
+    const teamBLabel = teamBPlayers.map(p => getPlayerName(p.playerId)).join(', ');
+    const seriesScore = `${seriesCompletionInfo?.finalWinsA || 0} - ${seriesCompletionInfo?.finalWinsB || 0}`;
+    let msg = `${t('matchEdit', 'seriesShareIntro')} (${teamALabel} vs ${teamBLabel}) - ${seriesScore}\n\n`;
+    codes.forEach((code, idx) => {
+      const isLast = idx === codes.length - 1 && codes.length >= 3;
+      const label = isLast ? t('history', 'finale') : `${t('match', 'matchNumber')} ${idx + 1}`;
+      msg += `${label}: ${code}\n`;
+    });
+    msg += `\n${t('matchEdit', 'seriesShareSuffix')}`;
+
+    try { await Share.share({ message: msg, title: `Best of 3 - ${teamALabel} vs ${teamBLabel}` }); } catch {}
+
+    setFullscreenMode(false);
+    setHasExitedFullscreen(true);
+    setTimeout(() => router.replace('/(tabs)'), 100);
+  }, [teamAScore, teamBScore, isTimerRunning, matchTime, teamAPlayers, teamBPlayers, players,
+      format, linkedTournament, selectedPhase, selectedBracket, selectedTerrainId, selectedTerrain,
+      menes, playerActions, seriesId, seriesWinsA, seriesWinsB, currentMatchNumber, isFinale,
+      addMatch, isTournamentMode, matches, t, seriesCompletionInfo, getPlayerName]);
+
   const teamsReady = teamAPlayers.length > 0 || teamBPlayers.length > 0;
   const isMatchReady = teamAScore > 0 || teamBScore > 0;
 
@@ -1279,22 +1379,37 @@ export default function NewMatchScreen() {
                       <Text style={styles.fsWinnerBtnText}>{t('match', 'saveAndFinish')}</Text>
                     </Pressable>
                     
-                    <Pressable 
-                      style={styles.fsWinnerBtnShare}
-                      onPress={() => {
-                        handleSaveAndShare();
-                      }}
-                      disabled={isSavingForShare}
-                    >
-                      {isSavingForShare ? (
-                        <Text style={styles.fsWinnerBtnShareText}>{t('matchEdit', 'savingMatch')}</Text>
-                      ) : (
-                        <>
-                          <MaterialIcons name="share" size={22} color="rgba(255,255,255,0.9)" />
-                          <Text style={styles.fsWinnerBtnShareText}>{t('matchEdit', 'shareWithParticipants')}</Text>
-                        </>
-                      )}
-                    </Pressable>
+                    {seriesCompletionInfo?.isComplete ? (
+                      <Pressable 
+                        style={[styles.fsWinnerBtnShare, { borderColor: 'rgba(251, 191, 36, 0.4)', backgroundColor: 'rgba(251, 191, 36, 0.12)' }]}
+                        onPress={handleShareSeries}
+                        disabled={isSharingSeries}
+                      >
+                        {isSharingSeries ? (
+                          <Text style={[styles.fsWinnerBtnShareText, { color: theme.warning }]}>{t('matchEdit', 'sharingSeriesProgress')}</Text>
+                        ) : (
+                          <>
+                            <MaterialIcons name="share" size={22} color={theme.warning} />
+                            <Text style={[styles.fsWinnerBtnShareText, { color: theme.warning }]}>{t('matchEdit', 'shareEntireSeries')}</Text>
+                          </>
+                        )}
+                      </Pressable>
+                    ) : (
+                      <Pressable 
+                        style={styles.fsWinnerBtnShare}
+                        onPress={() => { handleSaveAndShare(); }}
+                        disabled={isSavingForShare}
+                      >
+                        {isSavingForShare ? (
+                          <Text style={styles.fsWinnerBtnShareText}>{t('matchEdit', 'savingMatch')}</Text>
+                        ) : (
+                          <>
+                            <MaterialIcons name="share" size={22} color="rgba(255,255,255,0.9)" />
+                            <Text style={styles.fsWinnerBtnShareText}>{t('matchEdit', 'shareWithParticipants')}</Text>
+                          </>
+                        )}
+                      </Pressable>
+                    )}
 
                     {!isTournamentMode && (
                       <Pressable 
