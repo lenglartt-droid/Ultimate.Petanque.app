@@ -1958,6 +1958,10 @@ export const translations = {
     clubLabel: { fr: 'Club', en: 'Club' },
     terrainLabel: { fr: 'Terrain', en: 'Court' },
     tournamentLabel: { fr: 'Tournoi', en: 'Tournament' },
+    matchLabel: { fr: 'Match', en: 'Match' },
+    challengeLabel: { fr: 'D\u00e9fi', en: 'Challenge' },
+    importToMyAccount: { fr: 'Importer dans mon compte', en: 'Import to my account' },
+    importedToAccount: { fr: 'Match/d\u00e9fi import\u00e9 dans votre compte avec les \u00e9quipes adapt\u00e9es', en: 'Match/challenge imported to your account with adapted teams' },
   },
   // ============================================
   // NOTATION (Shot & Point notation components)
@@ -2163,6 +2167,10 @@ export const translations = {
     clubLabelUpper: { fr: 'Club', en: 'Club' },
     terrainLabelUpper: { fr: 'Terrain', en: 'Court' },
     tournamentLabelUpper: { fr: 'Tournoi', en: 'Tournament' },
+    matchLabel: { fr: 'match', en: 'match' },
+    challengeLabel: { fr: 'd\u00e9fi', en: 'challenge' },
+    matchLabelUpper: { fr: 'Match', en: 'Match' },
+    challengeLabelUpper: { fr: 'D\u00e9fi', en: 'Challenge' },
   },
   // ============================================
   // ONBOARDING
