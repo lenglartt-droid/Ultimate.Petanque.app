@@ -18,13 +18,35 @@ import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
 import ShareModal from '@/components/ui/ShareModal';
+import { toggleItemPublic } from '@/services/publicItemsService';
 
 export default function MyPlayerCardScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { t } = useLanguage();
   const { selfPlayer, userStats, challengeStats, matches, challenges } = useApp();
+  const { showAlert } = useAlert();
   const [showShareModal, setShowShareModal] = React.useState(false);
+  const [isPublic, setIsPublic] = React.useState(selfPlayer?.isPublic ?? false);
+  const [togglingPublic, setTogglingPublic] = React.useState(false);
+
+  React.useEffect(() => {
+    if (selfPlayer) setIsPublic(selfPlayer.isPublic ?? false);
+  }, [selfPlayer?.isPublic]);
+
+  const handleTogglePublic = React.useCallback(async () => {
+    if (!selfPlayer || togglingPublic) return;
+    setTogglingPublic(true);
+    Haptics.selectionAsync();
+    const newVal = !isPublic;
+    const { error } = await toggleItemPublic('players', selfPlayer.id, newVal);
+    if (error) {
+      showAlert(t('common', 'error'), error);
+    } else {
+      setIsPublic(newVal);
+    }
+    setTogglingPublic(false);
+  }, [selfPlayer, isPublic, togglingPublic, showAlert, t]);
 
   // Calculate preferred role from match history
   const roleAnalysis = React.useMemo(() => {
@@ -415,6 +437,31 @@ export default function MyPlayerCardScreen() {
               </View>
             </View>
           </View>
+        </Animated.View>
+
+        {/* Visibility Toggle */}
+        <Animated.View entering={FadeInDown.duration(400).delay(450)} style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('map', 'visibility').toUpperCase()}</Text>
+          <Pressable
+            style={styles.visibilityCard}
+            onPress={handleTogglePublic}
+            disabled={togglingPublic}
+          >
+            <View style={[styles.visibilityIcon, { backgroundColor: isPublic ? theme.success + '15' : theme.textMuted + '15' }]}>
+              <MaterialIcons name={isPublic ? 'public' : 'lock'} size={22} color={isPublic ? theme.success : theme.textMuted} />
+            </View>
+            <View style={styles.visibilityInfo}>
+              <Text style={styles.visibilityTitle}>{t('map', 'visibilityToggle')}</Text>
+              <Text style={styles.visibilityDesc}>
+                {isPublic ? t('map', 'publicItemsDesc') : t('map', 'makePublic')}
+              </Text>
+            </View>
+            <View style={[styles.visibilityBadge, { backgroundColor: isPublic ? theme.success + '20' : theme.textMuted + '15' }]}>
+              <Text style={[styles.visibilityBadgeText, { color: isPublic ? theme.success : theme.textMuted }]}>
+                {isPublic ? t('map', 'publicLabel') : t('map', 'privateLabel')}
+              </Text>
+            </View>
+          </Pressable>
         </Animated.View>
 
         {/* Edit Profile Button */}
@@ -897,5 +944,43 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     color: '#FFF',
+  },
+  visibilityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    ...theme.shadows.card,
+  },
+  visibilityIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  visibilityInfo: {
+    flex: 1,
+  },
+  visibilityTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  visibilityDesc: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 2,
+  },
+  visibilityBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.full,
+  },
+  visibilityBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

@@ -22,6 +22,7 @@ import ShareModal from '@/components/ui/ShareModal';
 import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
 import SharedBadge from '@/components/ui/SharedBadge';
 import { isSharedWithMe, saveSharedItemToMyAccount } from '@/services/shareService';
+import { toggleItemPublic } from '@/services/publicItemsService';
 import { useAlert } from '@/template';
 import { useAuth } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -35,6 +36,8 @@ export default function TerrainDetailScreen() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [isShared, setIsShared] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPublicState, setIsPublicState] = useState(terrain?.isPublic ?? false);
+  const [togglingPublic, setTogglingPublic] = useState(false);
   const { showAlert } = useAlert();
   const { user } = useAuth();
   const { t, language } = useLanguage();
@@ -48,6 +51,24 @@ export default function TerrainDetailScreen() {
       isSharedWithMe('terrain', id).then(setIsShared);
     }
   }, [id]);
+
+  useEffect(() => {
+    if (terrain) setIsPublicState(terrain.isPublic ?? false);
+  }, [terrain?.isPublic]);
+
+  const handleTogglePublic = async () => {
+    if (!terrain || togglingPublic || isSharedItem) return;
+    setTogglingPublic(true);
+    Haptics.selectionAsync();
+    const newVal = !isPublicState;
+    const { error } = await toggleItemPublic('terrains', terrain.id, newVal);
+    if (error) {
+      showAlert(t('common', 'error'), error);
+    } else {
+      setIsPublicState(newVal);
+    }
+    setTogglingPublic(false);
+  };
   
   const isFavorite = id ? isFavoriteTerrain(id) : false;
 
@@ -443,6 +464,33 @@ export default function TerrainDetailScreen() {
             ))}
           </Animated.View>
         )}
+        {/* Visibility Toggle - only for owner */}
+        {canEdit && !isSharedItem && (
+          <Animated.View entering={FadeInDown.duration(400).delay(420)} style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('map', 'visibility').toUpperCase()}</Text>
+            <Pressable
+              style={styles.visibilityCard}
+              onPress={handleTogglePublic}
+              disabled={togglingPublic}
+            >
+              <View style={[styles.visibilityIcon, { backgroundColor: isPublicState ? theme.success + '15' : theme.textMuted + '15' }]}>
+                <MaterialIcons name={isPublicState ? 'public' : 'lock'} size={22} color={isPublicState ? theme.success : theme.textMuted} />
+              </View>
+              <View style={styles.visibilityInfo}>
+                <Text style={styles.visibilityTitle}>{t('map', 'visibilityToggle')}</Text>
+                <Text style={styles.visibilityDesc}>
+                  {isPublicState ? t('map', 'publicItemsDesc') : t('map', 'makePublic')}
+                </Text>
+              </View>
+              <View style={[styles.visibilityBadge, { backgroundColor: isPublicState ? theme.success + '20' : theme.textMuted + '15' }]}>
+                <Text style={[styles.visibilityBadgeText, { color: isPublicState ? theme.success : theme.textMuted }]}>
+                  {isPublicState ? t('map', 'publicLabel') : t('map', 'privateLabel')}
+                </Text>
+              </View>
+            </Pressable>
+          </Animated.View>
+        )}
+
         {/* Modification Logs - only visible to owner */}
         <ModificationLogsSection
           itemType="terrain"
@@ -824,5 +872,43 @@ const styles = StyleSheet.create({
   tournamentDate: {
     fontSize: 12,
     color: theme.textSecondary,
+  },
+  visibilityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    ...theme.shadows.card,
+  },
+  visibilityIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  visibilityInfo: {
+    flex: 1,
+  },
+  visibilityTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  visibilityDesc: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 2,
+  },
+  visibilityBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.full,
+  },
+  visibilityBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
 });
