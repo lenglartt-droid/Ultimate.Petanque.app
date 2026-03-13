@@ -1,10 +1,10 @@
 // ============================================
-// AdMob Service - Google Mobile Ads Integration
+// Ad Service - Native implementation with Google AdMob
 // ============================================
-// NOTE: Ads only work in custom dev builds (not Expo Go/Live Preview)
-// Replace test IDs with real AdMob unit IDs before publishing
+// NOTE: Replace test IDs with real AdMob unit IDs before publishing
 
 import { Platform } from 'react-native';
+import { InterstitialAd, AdEventType, TestIds } from 'react-native-google-mobile-ads';
 
 // ============================================
 // AD UNIT IDS
@@ -31,55 +31,32 @@ export const AD_UNIT_IDS = {
 // ============================================
 // INTERSTITIAL AD MANAGER
 // ============================================
-let interstitialAd: any = null;
+let interstitialAd: ReturnType<typeof InterstitialAd.createForAdRequest> | null = null;
 let isInterstitialLoaded = false;
-let isAdMobAvailable = false;
-let InterstitialAdClass: any = null;
-let AdEventTypeEnum: any = null;
-let TestIdsRef: any = null;
-
-// Lazy-load the library to prevent crashes in Expo Go/Live Preview
-async function ensureAdMobLoaded(): Promise<boolean> {
-  if (isAdMobAvailable) return true;
-  
-  try {
-    const admob = await import('react-native-google-mobile-ads');
-    InterstitialAdClass = admob.InterstitialAd;
-    AdEventTypeEnum = admob.AdEventType;
-    TestIdsRef = admob.TestIds;
-    isAdMobAvailable = true;
-    return true;
-  } catch {
-    // Library not available (Expo Go, web, or not installed)
-    isAdMobAvailable = false;
-    return false;
-  }
-}
 
 /**
  * Pre-load an interstitial ad so it is ready to show immediately
  */
 export async function preloadInterstitial(): Promise<void> {
-  const available = await ensureAdMobLoaded();
-  if (!available || !InterstitialAdClass || !AdEventTypeEnum) return;
-
   try {
     const adUnitId = AD_UNIT_IDS.interstitial;
-    interstitialAd = InterstitialAdClass.createForAdRequest(adUnitId, {
+    if (!adUnitId) return;
+
+    interstitialAd = InterstitialAd.createForAdRequest(adUnitId, {
       requestNonPersonalizedAdsOnly: true,
     });
 
-    interstitialAd.addAdEventListener(AdEventTypeEnum.LOADED, () => {
+    interstitialAd.addAdEventListener(AdEventType.LOADED, () => {
       isInterstitialLoaded = true;
     });
 
-    interstitialAd.addAdEventListener(AdEventTypeEnum.CLOSED, () => {
+    interstitialAd.addAdEventListener(AdEventType.CLOSED, () => {
       isInterstitialLoaded = false;
       // Preload the next one
       preloadInterstitial();
     });
 
-    interstitialAd.addAdEventListener(AdEventTypeEnum.ERROR, () => {
+    interstitialAd.addAdEventListener(AdEventType.ERROR, () => {
       isInterstitialLoaded = false;
     });
 
@@ -91,11 +68,9 @@ export async function preloadInterstitial(): Promise<void> {
 
 /**
  * Show the interstitial ad if loaded, otherwise skip
- * Returns true if ad was shown, false otherwise
  */
 export async function showInterstitial(): Promise<boolean> {
-  if (!isAdMobAvailable || !isInterstitialLoaded || !interstitialAd) {
-    // Ad not ready, preload for next time
+  if (!isInterstitialLoaded || !interstitialAd) {
     preloadInterstitial();
     return false;
   }
@@ -111,15 +86,15 @@ export async function showInterstitial(): Promise<boolean> {
 }
 
 /**
- * Check if AdMob library is available (not in Expo Go/web)
+ * Check if AdMob library is available
  */
 export async function checkAdMobAvailability(): Promise<boolean> {
-  return ensureAdMobLoaded();
+  return true;
 }
 
 /**
  * Check if an interstitial is ready to show
  */
 export function isInterstitialReady(): boolean {
-  return isAdMobAvailable && isInterstitialLoaded;
+  return isInterstitialLoaded;
 }
