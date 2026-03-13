@@ -1,7 +1,7 @@
 import { getSupabaseClient } from '@/template';
 import * as Linking from 'expo-linking';
 
-export type ShareItemType = 'player' | 'club' | 'terrain' | 'tournament';
+export type ShareItemType = 'player' | 'club' | 'terrain' | 'tournament' | 'match' | 'challenge';
 export type SharePermission = 'read' | 'write';
 
 export interface SharedItem {
@@ -59,7 +59,6 @@ export async function redeemShareCode(
   const { data: userData } = await supabase.auth.getUser();
   if (!userData?.user) return { itemType: 'player', itemId: '', permission: 'read', error: 'Not connected' };
 
-  // Look up the share
   const { data, error } = await supabase
     .from('shared_items')
     .select('*')
@@ -69,17 +68,14 @@ export async function redeemShareCode(
 
   if (error || !data) return { itemType: 'player', itemId: '', permission: 'read', error: 'Invalid share code' };
 
-  // Check expiration
   if (data.expires_at && new Date(data.expires_at) < new Date()) {
     return { itemType: 'player', itemId: '', permission: 'read', error: 'This share link has expired' };
   }
 
-  // Don't share with yourself
   if (data.owner_id === userData.user.id) {
     return { itemType: data.item_type, itemId: data.item_id, permission: data.permission, error: null };
   }
 
-  // Check if already shared with this user
   const { data: existing } = await supabase
     .from('shared_items')
     .select('id')
@@ -89,7 +85,6 @@ export async function redeemShareCode(
     .maybeSingle();
 
   if (!existing) {
-    // Create personal share entry
     await supabase.from('shared_items').insert({
       owner_id: data.owner_id,
       shared_with_id: userData.user.id,
@@ -101,15 +96,12 @@ export async function redeemShareCode(
     });
   }
 
-  // Create a notification for the owner (regardless of existing share)
-  // Fetch accessor info
   const { data: accessorProfile } = await supabase
     .from('user_profiles')
     .select('username, email')
     .eq('id', userData.user.id)
     .single();
 
-  // Fetch item name based on type
   let itemName: string | null = null;
   try {
     if (data.item_type === 'player') {
@@ -124,10 +116,23 @@ export async function redeemShareCode(
     } else if (data.item_type === 'tournament') {
       const { data: t } = await supabase.from('tournaments').select('name').eq('id', data.item_id).single();
       itemName = t?.name || null;
+    } else if (data.item_type === 'match') {
+      const { data: m } = await supabase.from('matches').select('team_a, team_b, date').eq('id', data.item_id).single();
+      if (m) {
+        const dateStr = new Date(m.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+        const teamAName = m.team_a?.playerNames?.[0] || 'A';
+        const teamBName = m.team_b?.playerNames?.[0] || 'B';
+        itemName = `${teamAName} vs ${teamBName} (${dateStr})`;
+      }
+    } else if (data.item_type === 'challenge') {
+      const { data: c } = await supabase.from('challenges').select('type, date, player_name').eq('id', data.item_id).single();
+      if (c) {
+        const dateStr = new Date(c.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+        itemName = `${c.type} - ${c.player_name || ''} (${dateStr})`;
+      }
     }
   } catch { /* ignore */ }
 
-  // Insert notification for owner
   await supabase.from('share_notifications').insert({
     owner_id: data.owner_id,
     accessor_id: userData.user.id,
@@ -174,7 +179,6 @@ export async function getMySharedItems(): Promise<{ items: SharedItem[]; error: 
   return { items, error: null };
 }
 
-// Share notifications
 export interface ShareNotification {
   id: string;
   ownerId: string;
@@ -292,12 +296,21 @@ export async function fetchItemName(itemType: ShareItemType, itemId: string): Pr
     } else if (itemType === 'tournament') {
       const { data } = await supabase.from('tournaments').select('name').eq('id', itemId).single();
       return data?.name || 'Unknown tournament';
+    } else if (itemType === 'match') {
+      const { data } = await supabase.from('matches').select('team_a, team_b, date').eq('id', itemId).single();
+      if (data) {
+        const teamA = data.team_a?.playerNames?.[0] || '?';
+        const teamB = data.team_b?.playerNames?.[0] || '?';
+        return `${teamA} vs ${teamB}`;
+      }
+    } else if (itemType === 'challenge') {
+      const { data } = await supabase.from('challenges').select('type, player_name').eq('id', itemId).single();
+      if (data) return `${data.type} - ${data.player_name || '?'}`;
     }
   } catch { /* ignore */ }
   return 'Unknown';
 }
 
-// Check if user is viewing a shared item (not their own)
 export async function isSharedWithMe(itemType: ShareItemType, itemId: string): Promise<boolean> {
   const supabase = getSupabaseClient();
   const { data: userData } = await supabase.auth.getUser();
@@ -314,7 +327,186 @@ export async function isSharedWithMe(itemType: ShareItemType, itemId: string): P
   return !!data;
 }
 
-// Duplicate a shared item into the current user's own data
+// Import a shared match into the user's own account with team perspective swapped
+async function importSharedMatch(
+  userId: string,
+  matchId: string,
+): Promise<{ newItemId: string | null; error: string | null }> {
+  const supabase = getSupabaseClient();
+  try {
+    const { data: source, error: fetchErr } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('id', matchId)
+      .single();
+    if (fetchErr || !source) return { newItemId: null, error: 'Match not found' };
+
+    const { data: profile } = await supabase.from('user_profiles').select('username').eq('id', userId).single();
+    const recipientName = (profile?.username || '').toLowerCase();
+
+    // Check if recipient is in team B → swap teams
+    const isInTeamB = source.team_b?.players?.includes(userId) ||
+      (recipientName && source.team_b?.playerNames?.some((n: string) => n.toLowerCase().includes(recipientName)));
+    const isInTeamA = source.team_a?.players?.includes(userId) ||
+      (recipientName && source.team_a?.playerNames?.some((n: string) => n.toLowerCase().includes(recipientName)));
+
+    const shouldSwap = isInTeamB || (!isInTeamA && !isInTeamB);
+
+    const teamA = shouldSwap ? source.team_b : source.team_a;
+    const teamB = shouldSwap ? source.team_a : source.team_b;
+    const winner = shouldSwap ? (source.winner === 'A' ? 'B' : 'A') : source.winner;
+
+    let playerActions = source.player_actions;
+    if (playerActions && shouldSwap) {
+      playerActions = playerActions.map((pa: any) => ({
+        ...pa,
+        team: pa.team === 'A' ? 'B' : 'A',
+      }));
+    }
+
+    let menes = source.menes;
+    if (menes && shouldSwap) {
+      menes = menes.map((m: any) => ({
+        ...m,
+        teamAPoints: m.teamBPoints || m.scoreB || 0,
+        teamBPoints: m.teamAPoints || m.scoreA || 0,
+        scoreA: m.scoreB,
+        scoreB: m.scoreA,
+      }));
+    }
+
+    let seriesInfo = source.series_info;
+    if (seriesInfo && shouldSwap) {
+      seriesInfo = {
+        ...seriesInfo,
+        winsBeforeThisMatch: {
+          teamA: seriesInfo.winsBeforeThisMatch?.teamB || 0,
+          teamB: seriesInfo.winsBeforeThisMatch?.teamA || 0,
+        },
+        seriesWinner: seriesInfo.seriesWinner === 'A' ? 'B' : seriesInfo.seriesWinner === 'B' ? 'A' : seriesInfo.seriesWinner,
+      };
+    }
+
+    const { data: newItem, error: insertErr } = await supabase.from('matches').insert({
+      user_id: userId,
+      date: source.date,
+      mode: source.mode,
+      format: source.format,
+      tournament_name: source.tournament_name,
+      tournament_phase: source.tournament_phase,
+      tournament_bracket: source.tournament_bracket,
+      terrain_type: source.terrain_type,
+      team_a: teamA,
+      team_b: teamB,
+      winner,
+      duration: source.duration,
+      menes,
+      player_actions: playerActions,
+      series_info: seriesInfo,
+    }).select('id').single();
+
+    if (insertErr) return { newItemId: null, error: insertErr.message };
+    return { newItemId: newItem?.id || null, error: null };
+  } catch (e: any) {
+    return { newItemId: null, error: e.message || 'Error importing match' };
+  }
+}
+
+// Import a shared challenge into the user's own account with perspective adapted
+async function importSharedChallenge(
+  userId: string,
+  challengeId: string,
+): Promise<{ newItemId: string | null; error: string | null }> {
+  const supabase = getSupabaseClient();
+  try {
+    const { data: source, error: fetchErr } = await supabase
+      .from('challenges')
+      .select('*')
+      .eq('id', challengeId)
+      .single();
+    if (fetchErr || !source) return { newItemId: null, error: 'Challenge not found' };
+
+    const { data: profile } = await supabase.from('user_profiles').select('username').eq('id', userId).single();
+    const recipientName = (profile?.username || '').toLowerCase();
+
+    const isOpponent = source.opponent_id === userId ||
+      (recipientName && source.opponent_name?.toLowerCase().includes(recipientName));
+
+    if (isOpponent && source.mode === '1v1') {
+      const swappedWinner = source.winner === 'player' ? 'opponent' : source.winner === 'opponent' ? 'player' : source.winner;
+
+      const opponentResult = {
+        playerId: source.player_id,
+        playerName: source.player_name,
+        shots: source.shots,
+        precisionShots: source.precision_shots,
+        successCount: source.success_count,
+        totalShots: source.total_shots,
+        carreauCount: source.carreau_count,
+        successRate: source.success_rate,
+        totalPoints: source.total_points,
+        atelierScores: source.atelier_scores,
+      };
+
+      const { data: newItem, error: insertErr } = await supabase.from('challenges').insert({
+        user_id: userId,
+        type: source.type,
+        mode: source.mode,
+        date: source.date,
+        player_id: source.opponent_id || userId,
+        player_name: source.opponent_name || profile?.username || '',
+        opponent_id: source.player_id,
+        opponent_name: source.player_name,
+        opponent_result: opponentResult,
+        winner: swappedWinner,
+        shots: source.opponent_result?.shots || null,
+        success_count: source.opponent_result?.successCount || 0,
+        total_shots: source.opponent_result?.totalShots || source.total_shots,
+        carreau_count: source.opponent_result?.carreauCount || 0,
+        success_rate: source.opponent_result?.successRate || 0,
+        precision_shots: source.opponent_result?.precisionShots || null,
+        total_points: source.opponent_result?.totalPoints || null,
+        max_points: source.max_points,
+        atelier_scores: source.opponent_result?.atelierScores || null,
+        duration: source.duration,
+        detailed_shots: source.detailed_shots,
+      }).select('id').single();
+
+      if (insertErr) return { newItemId: null, error: insertErr.message };
+      return { newItemId: newItem?.id || null, error: null };
+    } else {
+      const { data: newItem, error: insertErr } = await supabase.from('challenges').insert({
+        user_id: userId,
+        type: source.type,
+        mode: source.mode,
+        date: source.date,
+        player_id: source.player_id,
+        player_name: source.player_name,
+        opponent_id: source.opponent_id,
+        opponent_name: source.opponent_name,
+        opponent_result: source.opponent_result,
+        winner: source.winner,
+        shots: source.shots,
+        success_count: source.success_count,
+        total_shots: source.total_shots,
+        carreau_count: source.carreau_count,
+        success_rate: source.success_rate,
+        precision_shots: source.precision_shots,
+        total_points: source.total_points,
+        max_points: source.max_points,
+        atelier_scores: source.atelier_scores,
+        duration: source.duration,
+        detailed_shots: source.detailed_shots,
+      }).select('id').single();
+
+      if (insertErr) return { newItemId: null, error: insertErr.message };
+      return { newItemId: newItem?.id || null, error: null };
+    }
+  } catch (e: any) {
+    return { newItemId: null, error: e.message || 'Error importing challenge' };
+  }
+}
+
 export async function saveSharedItemToMyAccount(
   itemType: ShareItemType,
   itemId: string,
@@ -323,127 +515,64 @@ export async function saveSharedItemToMyAccount(
   const { data: userData } = await supabase.auth.getUser();
   if (!userData?.user) return { newItemId: null, error: 'Not connected' };
 
+  // For match and challenge, use the specialized import functions
+  if (itemType === 'match') {
+    return importSharedMatch(userData.user.id, itemId);
+  }
+  if (itemType === 'challenge') {
+    return importSharedChallenge(userData.user.id, itemId);
+  }
+
   try {
     if (itemType === 'player') {
-      const { data: source, error: fetchErr } = await supabase
-        .from('players')
-        .select('*')
-        .eq('id', itemId)
-        .single();
+      const { data: source, error: fetchErr } = await supabase.from('players').select('*').eq('id', itemId).single();
       if (fetchErr || !source) return { newItemId: null, error: 'Player not found' };
-
       const { data: newItem, error: insertErr } = await supabase.from('players').insert({
-        user_id: userData.user.id,
-        name: source.name,
-        nickname: source.nickname,
-        avatar: source.avatar,
-        club: source.club,
-        club_id: null,
-        role: source.role,
-        level: source.level,
-        location: source.location,
-        phone: source.phone,
-        email: source.email,
-        country: source.country,
-        boules: source.boules,
-        stats: source.stats,
+        user_id: userData.user.id, name: source.name, nickname: source.nickname, avatar: source.avatar,
+        club: source.club, club_id: null, role: source.role, level: source.level, location: source.location,
+        phone: source.phone, email: source.email, country: source.country, boules: source.boules, stats: source.stats,
       }).select('id').single();
       if (insertErr) return { newItemId: null, error: insertErr.message };
       return { newItemId: newItem?.id || null, error: null };
-
     } else if (itemType === 'club') {
-      const { data: source, error: fetchErr } = await supabase
-        .from('clubs')
-        .select('*')
-        .eq('id', itemId)
-        .single();
+      const { data: source, error: fetchErr } = await supabase.from('clubs').select('*').eq('id', itemId).single();
       if (fetchErr || !source) return { newItemId: null, error: 'Club not found' };
-
       const { data: newItem, error: insertErr } = await supabase.from('clubs').insert({
-        user_id: userData.user.id,
-        name: source.name,
-        logo: source.logo,
-        address: source.address,
-        city: source.city,
-        country: source.country,
-        location: source.location,
-        members_count: source.members_count,
-        founded_year: source.founded_year,
-        description: source.description,
-        facilities: source.facilities,
-        contact_email: source.contact_email,
-        contact_phone: source.contact_phone,
-        terrain_id: null,
-        terrain_name: source.terrain_name,
-        membership_cost: source.membership_cost,
+        user_id: userData.user.id, name: source.name, logo: source.logo, address: source.address,
+        city: source.city, country: source.country, location: source.location, members_count: source.members_count,
+        founded_year: source.founded_year, description: source.description, facilities: source.facilities,
+        contact_email: source.contact_email, contact_phone: source.contact_phone, terrain_id: null,
+        terrain_name: source.terrain_name, membership_cost: source.membership_cost,
       }).select('id').single();
       if (insertErr) return { newItemId: null, error: insertErr.message };
       return { newItemId: newItem?.id || null, error: null };
-
     } else if (itemType === 'terrain') {
-      const { data: source, error: fetchErr } = await supabase
-        .from('terrains')
-        .select('*')
-        .eq('id', itemId)
-        .single();
+      const { data: source, error: fetchErr } = await supabase.from('terrains').select('*').eq('id', itemId).single();
       if (fetchErr || !source) return { newItemId: null, error: 'Terrain not found' };
-
       const { data: newItem, error: insertErr } = await supabase.from('terrains').insert({
-        user_id: userData.user.id,
-        name: source.name,
-        address: source.address,
-        city: source.city,
-        location: source.location,
-        type: source.type,
-        description: source.description,
-        facilities: source.facilities,
-        photos: source.photos,
-        club_id: null,
-        club_name: source.club_name,
-        is_public: source.is_public,
-        courts_count: source.courts_count,
-        lighting: source.lighting,
-        covered: source.covered,
+        user_id: userData.user.id, name: source.name, address: source.address, city: source.city,
+        location: source.location, type: source.type, description: source.description, facilities: source.facilities,
+        photos: source.photos, club_id: null, club_name: source.club_name, is_public: source.is_public,
+        courts_count: source.courts_count, lighting: source.lighting, covered: source.covered,
       }).select('id').single();
       if (insertErr) return { newItemId: null, error: insertErr.message };
       return { newItemId: newItem?.id || null, error: null };
-
     } else if (itemType === 'tournament') {
-      const { data: source, error: fetchErr } = await supabase
-        .from('tournaments')
-        .select('*')
-        .eq('id', itemId)
-        .single();
+      const { data: source, error: fetchErr } = await supabase.from('tournaments').select('*').eq('id', itemId).single();
       if (fetchErr || !source) return { newItemId: null, error: 'Tournament not found' };
-
       const { data: newItem, error: insertErr } = await supabase.from('tournaments').insert({
-        user_id: userData.user.id,
-        name: source.name,
-        date: source.date,
-        end_date: source.end_date,
-        type: source.type,
-        format: source.format,
-        location: source.location,
-        terrain_id: null,
-        terrain_name: source.terrain_name,
-        terrain_type: source.terrain_type,
-        club_id: null,
-        club_name: source.club_name,
-        status: source.status,
-        participants: source.participants,
-        max_participants: source.max_participants,
-        prize: source.prize,
-        description: source.description,
-        tournament_level: source.tournament_level,
-        tournament_category: source.tournament_category,
-        registration_type: source.registration_type,
-        tournament_scope: source.tournament_scope,
+        user_id: userData.user.id, name: source.name, date: source.date, end_date: source.end_date,
+        type: source.type, format: source.format, location: source.location, terrain_id: null,
+        terrain_name: source.terrain_name, terrain_type: source.terrain_type, club_id: null,
+        club_name: source.club_name, status: source.status, participants: source.participants,
+        max_participants: source.max_participants, prize: source.prize, description: source.description,
+        tournament_level: source.tournament_level, tournament_category: source.tournament_category,
+        registration_type: source.registration_type, tournament_scope: source.tournament_scope,
         registration_cost: source.registration_cost,
       }).select('id').single();
       if (insertErr) return { newItemId: null, error: insertErr.message };
       return { newItemId: newItem?.id || null, error: null };
     }
-
     return { newItemId: null, error: 'Unsupported type' };
   } catch (e: any) {
     return { newItemId: null, error: e.message || 'Error during copy' };
@@ -464,17 +593,25 @@ export async function getSharedWithMe(): Promise<{ items: SharedItem[]; error: s
   if (error) return { items: [], error: error.message };
 
   const items: SharedItem[] = (data || []).map((s: any) => ({
-    id: s.id,
-    ownerId: s.owner_id,
-    sharedWithId: s.shared_with_id,
-    shareCode: s.share_code,
-    itemType: s.item_type,
-    itemId: s.item_id,
-    permission: s.permission,
-    isPublicLink: s.is_public_link,
-    expiresAt: s.expires_at,
-    createdAt: s.created_at,
+    id: s.id, ownerId: s.owner_id, sharedWithId: s.shared_with_id, shareCode: s.share_code,
+    itemType: s.item_type, itemId: s.item_id, permission: s.permission, isPublicLink: s.is_public_link,
+    expiresAt: s.expires_at, createdAt: s.created_at,
   }));
 
   return { items, error: null };
+}
+
+export async function revokeShare(shareId: string): Promise<{ error: string | null }> {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.from('shared_items').delete().eq('id', shareId);
+  return { error: error?.message || null };
+}
+
+export async function updateSharePermission(shareId: string, permission: SharePermission): Promise<{ error: string | null }> {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from('shared_items')
+    .update({ permission, updated_at: new Date().toISOString() })
+    .eq('id', shareId);
+  return { error: error?.message || null };
 }

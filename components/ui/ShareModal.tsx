@@ -23,6 +23,8 @@ const TYPE_CONFIG: Record<ShareItemType, { labelKey: string; icon: string; color
   club: { labelKey: 'clubLabelUpper', icon: 'home', color: theme.accent },
   terrain: { labelKey: 'terrainLabelUpper', icon: 'landscape', color: theme.success },
   tournament: { labelKey: 'tournamentLabelUpper', icon: 'emoji-events', color: theme.carreauColor },
+  match: { labelKey: 'matchLabelUpper', icon: 'sports', color: theme.tirColor },
+  challenge: { labelKey: 'challengeLabelUpper', icon: 'flag', color: theme.warning },
 };
 
 const TYPE_LOWER_KEY: Record<ShareItemType, string> = {
@@ -30,6 +32,8 @@ const TYPE_LOWER_KEY: Record<ShareItemType, string> = {
   club: 'clubLabel',
   terrain: 'terrainLabel',
   tournament: 'tournamentLabel',
+  match: 'matchLabel',
+  challenge: 'challengeLabel',
 };
 
 interface ShareModalProps {

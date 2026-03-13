@@ -24,6 +24,8 @@ const ROUTE_MAP: Record<ShareItemType, string> = {
   club: '/club/',
   terrain: '/terrain/',
   tournament: '/tournament/',
+  match: '/match/',
+  challenge: '',
 };
 
 const TYPE_LABEL_KEY: Record<ShareItemType, string> = {
@@ -31,6 +33,8 @@ const TYPE_LABEL_KEY: Record<ShareItemType, string> = {
   club: 'clubLabel',
   terrain: 'terrainLabel',
   tournament: 'tournamentLabel',
+  match: 'matchLabel',
+  challenge: 'challengeLabel',
 };
 
 const TYPE_ICON: Record<ShareItemType, string> = {
@@ -38,6 +42,8 @@ const TYPE_ICON: Record<ShareItemType, string> = {
   club: 'home',
   terrain: 'landscape',
   tournament: 'emoji-events',
+  match: 'sports',
+  challenge: 'flag',
 };
 
 const TYPE_COLOR: Record<ShareItemType, string> = {
@@ -45,6 +51,8 @@ const TYPE_COLOR: Record<ShareItemType, string> = {
   club: theme.accent,
   terrain: theme.success,
   tournament: theme.carreauColor,
+  match: theme.tirColor,
+  challenge: theme.warning,
 };
 
 export default function RedeemShareScreen() {
@@ -152,10 +160,12 @@ export default function RedeemShareScreen() {
               </Text>.
             </Text>
 
+            {redeemResult.itemType !== 'challenge' && (
             <Pressable style={[styles.navigateBtn, { backgroundColor: typeColor }]} onPress={handleNavigate}>
               <MaterialIcons name="open-in-new" size={20} color="#FFF" />
               <Text style={styles.navigateBtnText}>{t('share', 'viewCard')}</Text>
             </Pressable>
+            )}
 
             <Pressable
               style={[styles.saveBtn, isSavingCopy && { opacity: 0.6 }]}
@@ -168,14 +178,23 @@ export default function RedeemShareScreen() {
                   showAlert(t('common', 'error'), error);
                 } else {
                   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  showAlert(t('share', 'saved'), t('share', 'copiedToDirectory'));
-                  if (newItemId) router.replace(`${ROUTE_MAP[redeemResult.itemType]}${newItemId}` as any);
+                  const isMatchOrChallenge = redeemResult.itemType === 'match' || redeemResult.itemType === 'challenge';
+                  showAlert(t('share', 'saved'), isMatchOrChallenge ? t('share', 'importedToAccount') : t('share', 'copiedToDirectory'));
+                  if (newItemId && ROUTE_MAP[redeemResult.itemType]) {
+                    router.replace(`${ROUTE_MAP[redeemResult.itemType]}${newItemId}` as any);
+                  } else {
+                    router.replace('/(tabs)' as any);
+                  }
                 }
               }}
               disabled={isSavingCopy}
             >
               <MaterialIcons name="save-alt" size={20} color={theme.accent} />
-              <Text style={styles.saveBtnText}>{t('share', 'saveToDirectory')}</Text>
+              <Text style={styles.saveBtnText}>
+                {(redeemResult.itemType === 'match' || redeemResult.itemType === 'challenge') 
+                  ? t('share', 'importToMyAccount') 
+                  : t('share', 'saveToDirectory')}
+              </Text>
             </Pressable>
           </Animated.View>
         )}

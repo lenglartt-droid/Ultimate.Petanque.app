@@ -24,6 +24,7 @@ import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { PlayerAction, DetailedShotRecord } from '@/services/mockData';
 import { SimplifiedShotNotation, SimpleShotRecord } from '@/components/ui/SimplifiedShotNotation';
+import ShareModal from '@/components/ui/ShareModal';
 
 interface MeneEdit {
   teamAPoints: number;
@@ -85,6 +86,7 @@ export default function EditMatchScreen() {
   const [editingShotId, setEditingShotId] = useState<string | null>(null);
   const [editingShotRecord, setEditingShotRecord] = useState<any>(null);
   const [expandedPlayerShots, setExpandedPlayerShots] = useState<Set<string>>(new Set());
+  const [showShareModal, setShowShareModal] = useState(false);
 
   const maxScore = config.game.maxScore;
   const locale = language === 'en' ? 'en-US' : 'fr-FR';
@@ -619,9 +621,14 @@ export default function EditMatchScreen() {
           <MaterialIcons name="close" size={24} color={theme.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>{t('match', 'editMatch')}</Text>
-        <Pressable style={styles.deleteButton} onPress={handleDelete}>
-          <MaterialIcons name="delete" size={24} color={theme.error} />
-        </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Pressable style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }} onPress={() => setShowShareModal(true)}>
+            <MaterialIcons name="share" size={22} color={theme.primary} />
+          </Pressable>
+          <Pressable style={styles.deleteButton} onPress={handleDelete}>
+            <MaterialIcons name="delete" size={24} color={theme.error} />
+          </Pressable>
+        </View>
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -1018,6 +1025,16 @@ export default function EditMatchScreen() {
           )}
         </SafeAreaView>
       </Modal>
+
+      {/* Share Modal */}
+      <ShareModal
+        visible={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        itemType="match"
+        itemId={id!}
+        itemName={`${match.teamA.playerNames.join(', ')} vs ${match.teamB.playerNames.join(', ')}`}
+        forceReadOnly
+      />
 
       {/* Detailed Shot Notation Modal */}
       {editingActionPlayer && (
