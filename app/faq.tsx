@@ -50,6 +50,13 @@ function getQuickActions(tFn: (s: string, k: string) => string) {
       color: theme.accent,
       steps: tFn('faq', 'qaShareSteps').split('|'),
     },
+    {
+      id: 'publish_map',
+      title: tFn('faq', 'publishOnMap'),
+      icon: 'public',
+      color: theme.success,
+      steps: tFn('faq', 'qaPublishSteps').split('|'),
+    },
   ];
 }
 
@@ -125,6 +132,20 @@ function getFaqData(tFn: (s: string, k: string) => string) {
         { id: 'd2', question: tFn('faq', 'd2Q'), answer: tFn('faq', 'd2A') },
         { id: 'd3', question: tFn('faq', 'd3Q'), answer: tFn('faq', 'd3A') },
         { id: 'd4', question: tFn('faq', 'd4Q'), answer: tFn('faq', 'd4A') },
+        { id: 'd5', question: tFn('faq', 'd5Q'), answer: tFn('faq', 'd5A') },
+        { id: 'd6', question: tFn('faq', 'd6Q'), answer: tFn('faq', 'd6A') },
+      ],
+    },
+    {
+      id: 'map_public',
+      category: tFn('faq', 'mapPublicItems'),
+      icon: 'public',
+      color: theme.success,
+      questions: [
+        { id: 'mp1', question: tFn('faq', 'mp1Q'), answer: tFn('faq', 'mp1A') },
+        { id: 'mp2', question: tFn('faq', 'mp2Q'), answer: tFn('faq', 'mp2A') },
+        { id: 'mp3', question: tFn('faq', 'mp3Q'), answer: tFn('faq', 'mp3A') },
+        { id: 'mp4', question: tFn('faq', 'mp4Q'), answer: tFn('faq', 'mp4A') },
       ],
     },
     {
@@ -150,6 +171,8 @@ function getTips(tFn: (s: string, k: string) => string) {
     { icon: 'timer', text: tFn('faq', 'tip2'), color: theme.primary },
     { icon: 'trending-up', text: tFn('faq', 'tip3'), color: theme.success },
     { icon: 'share', text: tFn('faq', 'tip4'), color: theme.accent },
+    { icon: 'public', text: tFn('faq', 'tip5'), color: theme.success },
+    { icon: 'content-copy', text: tFn('faq', 'tip6'), color: theme.warning },
   ];
 }
 
@@ -313,7 +336,7 @@ export default function FAQScreen() {
           </View>
           <Text style={styles.heroTitle}>{t('faq', 'howCanWeHelp')}</Text>
           <Text style={styles.heroSubtitle}>
-            {totalQuestions} {t('faq', 'answersAndGuides')} • 4 {t('faq', 'quickGuides')}
+            {totalQuestions} {t('faq', 'answersAndGuides')} • 5 {t('faq', 'quickGuides')}
           </Text>
         </Animated.View>
 

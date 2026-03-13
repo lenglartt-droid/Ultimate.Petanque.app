@@ -101,6 +101,12 @@ export default function TermsScreen() {
       content: t('terms', 'governingLawContent'),
     },
     {
+      icon: 'public',
+      color: theme.success,
+      title: t('terms', 'publicItemsRulesTitle'),
+      content: t('terms', 'publicItemsRulesContent'),
+    },
+    {
       icon: 'email',
       color: theme.primary,
       title: t('terms', 'contactTitle'),

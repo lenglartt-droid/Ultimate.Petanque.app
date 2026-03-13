@@ -1059,6 +1059,7 @@ export const translations = {
     tournamentsCat: { fr: 'Tournois', en: 'Tournaments' },
     statisticsCat: { fr: 'Statistiques', en: 'Statistics' },
     directorySharing: { fr: 'Annuaire & Partage', en: 'Directory & Sharing' },
+    mapPublicItems: { fr: 'Carte & Fiches publiques', en: 'Map & Public Items' },
     accountProfile: { fr: 'Compte & Profil', en: 'Account & Profile' },
     // FAQ Questions & Answers
     gs1Q: { fr: 'Comment bien démarrer avec Ultimate Petanque ?', en: 'How to get started with Ultimate Petanque?' },
@@ -1104,6 +1105,18 @@ export const translations = {
     d4Q: { fr: 'Puis-je enregistrer une fiche partagée ?', en: 'Can I save a shared card?' },
     d4A: { fr: 'Oui ! Sur toute fiche reçue en partage, un bouton "Enregistrer" (\ud83d\udcbe) apparaît. La fiche est copiée intégralement dans votre annuaire personnel. Vous pouvez ensuite la modifier librement.', en: 'Yes! On any card received through sharing, a "Save" button (\ud83d\udcbe) appears. The card is fully copied into your personal directory. You can then edit it freely.' },
     a1Q: { fr: 'Comment changer mon mot de passe ?', en: 'How to change my password?' },
+    d5Q: { fr: 'Comment rendre une fiche publique ?', en: 'How to make an item public?' },
+    d5A: { fr: 'Ouvrez la fiche et faites defiler vers Visibilite. Activez Public pour que la fiche apparaisse sur la carte.', en: 'Open the item and scroll to Visibility. Enable Public so the item appears on the map.' },
+    d6Q: { fr: 'Comment importer une fiche publique ?', en: 'How to import a public item?' },
+    d6A: { fr: 'Sur la Carte, les fiches publiques ont une bordure verte. Appuyez sur + pour importer.', en: 'On the Map, public items have a green border. Tap + to import.' },
+    mp1Q: { fr: 'Comment fonctionne la carte interactive ?', en: 'How does the interactive map work?' },
+    mp1A: { fr: 'La carte affiche vos fiches et celles de la communaute. Filtrez par type et gerez la visibilite via le globe vert.', en: 'The map shows your items and community items. Filter by type and manage visibility via the green globe.' },
+    mp2Q: { fr: 'Comment fonctionne la detection de doublons ?', en: 'How does duplicate detection work?' },
+    mp2A: { fr: 'En creant ou modifiant un terrain/club, une recherche detecte les fiches publiques similaires et propose import ou fusion.', en: 'When creating/editing a court/club, a search detects similar public items and offers import or merge.' },
+    mp3Q: { fr: 'Comment fusionner deux fiches ?', en: 'How to merge two items?' },
+    mp3A: { fr: 'Appuyez sur Fusionner. Un comparatif cote a cote permet de choisir champ par champ.', en: 'Tap Merge. A side-by-side comparison lets you choose field by field.' },
+    mp4Q: { fr: 'Peut-on modifier mes fiches publiques ?', en: 'Can others modify my public items?' },
+    mp4A: { fr: 'Non. Public = visible mais pas modifiable. Seul le partage par code avec permission modification le permet.', en: 'No. Public = visible but not editable. Only code sharing with edit permission allows it.' },
     a1A: { fr: 'Profil → Paramètres → Mot de passe. Saisissez votre ancien mot de passe, puis le nouveau (minimum 6 caractères) et confirmez.', en: 'Profile → Settings → Password. Enter your old password, then the new one (minimum 6 characters) and confirm.' },
     a2Q: { fr: 'Où trouver mon palmarès et bilan financier ?', en: 'Where to find my achievements and financial summary?' },
     a2A: { fr: 'Depuis votre Profil :\n\n\ud83c\udfc6 Mon Palmarès — Tous vos résultats de tournois, badges de performance, classement par saison\n\ud83d\udcb0 Bilan financier — Résumé des gains, inscriptions, cotisations club, balance nette\n\nCes pages se mettent à jour automatiquement.', en: 'From your Profile:\n\n\ud83c\udfc6 My Achievements — All your tournament results, performance badges, season rankings\n\ud83d\udcb0 Financial summary — Summary of winnings, registrations, club fees, net balance\n\nThese pages update automatically.' },
@@ -1114,11 +1127,15 @@ export const translations = {
     qaChallengeSteps: { fr: 'Accueil → "Défi"|Choisir le type|Solo ou 1v1|Tirer !', en: 'Home → "Challenge"|Choose the type|Solo or 1v1|Shoot!' },
     qaTournamentSteps: { fr: 'Accueil → "Tournoi"|Remplir les infos|Ajouter des matchs|Voir le parcours', en: 'Home → "Tournament"|Fill in details|Add matches|View journey' },
     qaShareSteps: { fr: 'Ouvrir la fiche|Icône partage|Copier le code|Envoyer au joueur', en: 'Open the card|Share icon|Copy the code|Send to the player' },
+     publishOnMap: { fr: 'Publier sur la carte', en: 'Publish on Map' },
+     qaPublishSteps: { fr: 'Ouvrir la fiche|Defiler vers Visibilite|Activer Public|Visible sur la carte', en: 'Open the item|Scroll to Visibility|Enable Public|Visible on map' },
     // Tips
     tip1: { fr: 'Utilisez la notation détaillée pour des statistiques d\'erreurs personnalisées', en: 'Use detailed notation for personalized error statistics' },
     tip2: { fr: 'Le chronomètre se met en pause automatiquement entre les mènes', en: 'The timer pauses automatically between ends' },
     tip3: { fr: 'Jouez régulièrement pour voir votre courbe de progression évoluer', en: 'Play regularly to see your progression curve evolve' },
     tip4: { fr: 'Partagez votre fiche joueur pour que vos coéquipiers voient vos stats', en: 'Share your player card so your teammates can see your stats' },
+     tip5: { fr: 'Rendez vos terrains publics pour aider la communaute a trouver des lieux de jeu', en: 'Make your courts public to help the community find playing spots' },
+     tip6: { fr: 'Lors de la creation d\'un terrain ou club, verifiez les doublons pour eviter les fiches en double', en: 'When creating a court or club, check for duplicates to avoid duplicate entries' },
   },
 
   // ============================================
@@ -2421,6 +2438,11 @@ export const translations = {
       fr: 'L\'application permet de partager des fiches (joueur, club, terrain, tournoi) avec d\'autres utilisateurs via un code de partage. Lorsque vous partagez une fiche :\n\n\u2022 Seules les informations de la fiche sont accessibles au destinataire\n\u2022 Vous choisissez la permission : lecture seule ou lecture + modification\n\u2022 Vous pouvez r\u00e9voquer l\'acc\u00e8s \u00e0 tout moment\n\u2022 Les modifications sont trac\u00e9es et visibles par le propri\u00e9taire',
       en: 'The app allows sharing cards (player, club, court, tournament) with other users via a share code. When you share a card:\n\n\u2022 Only the card information is accessible to the recipient\n\u2022 You choose the permission: read-only or read + edit\n\u2022 You can revoke access at any time\n\u2022 Modifications are tracked and visible to the owner',
     },
+    publicItemsTitle: { fr: 'Fiches publiques et carte', en: 'Public items and map' },
+    publicItemsContent: {
+      fr: 'L\'application permet de rendre des fiches (joueur, club, terrain, tournoi) publiques pour les afficher sur la carte interactive :\n\n\u2022 Seules les informations de la fiche sont visibles (pas vos matchs ni statistiques personnelles)\n\u2022 Vous choisissez individuellement quelles fiches rendre publiques\n\u2022 Les fiches publiques sont en lecture seule pour les autres utilisateurs\n\u2022 Vous pouvez retirer la visibilit\u00e9 publique \u00e0 tout moment\n\u2022 Les autres utilisateurs peuvent importer une copie dans leur annuaire\n\u2022 Lors de la cr\u00e9ation de terrains ou clubs, une d\u00e9tection de doublons recherche les fiches publiques similaires',
+      en: 'The app allows making items (player, club, court, tournament) public to display them on the interactive map:\n\n\u2022 Only item information is visible (not your matches or personal statistics)\n\u2022 You individually choose which items to make public\n\u2022 Public items are read-only for other users\n\u2022 You can remove public visibility at any time\n\u2022 Other users can import a copy to their directory\n\u2022 When creating courts or clubs, duplicate detection searches for similar public items',
+    },
     childrenTitle: { fr: 'Enfants', en: 'Children' },
     childrenContent: {
       fr: 'L\'application n\'est pas destin\u00e9e aux enfants de moins de 13 ans. Nous ne collectons pas sciemment de donn\u00e9es personnelles aupr\u00e8s d\'enfants. Si vous \u00eates parent et pensez que votre enfant nous a fourni des informations, contactez-nous pour que nous les supprimions.',
@@ -2511,6 +2533,11 @@ export const translations = {
       en: 'We may modify these terms at any time. Significant changes will be communicated through the app. Continued use of the app after modification constitutes acceptance of the new terms.',
     },
     governingLawTitle: { fr: 'Droit applicable', en: 'Governing law' },
+    publicItemsRulesTitle: { fr: 'Fiches publiques', en: 'Public items' },
+    publicItemsRulesContent: {
+      fr: 'La fonctionnalit\u00e9 de fiches publiques est soumise aux r\u00e8gles suivantes :\n\n\u2022 Vous \u00eates responsable du contenu que vous rendez public\n\u2022 Les fiches publiques sont visibles par tous les utilisateurs connect\u00e9s\n\u2022 Les fiches publiques sont en lecture seule — personne ne peut les modifier\n\u2022 Les autres utilisateurs peuvent importer une copie priv\u00e9e dans leur annuaire\n\u2022 Vous pouvez retirer la visibilit\u00e9 publique \u00e0 tout moment\n\u2022 La d\u00e9tection de doublons compare vos cr\u00e9ations avec les fiches publiques existantes\n\u2022 La fusion de fiches ne modifie que votre copie locale',
+      en: 'The public items feature is subject to the following rules:\n\n\u2022 You are responsible for content you make public\n\u2022 Public items are visible to all connected users\n\u2022 Public items are read-only — no one can modify them\n\u2022 Other users can import a private copy to their directory\n\u2022 You can remove public visibility at any time\n\u2022 Duplicate detection compares your creations with existing public items\n\u2022 Merging items only modifies your local copy',
+    },
     governingLawContent: {
       fr: "Les pr\u00e9sentes CGU sont r\u00e9gies par le droit fran\u00e7ais. En cas de litige, les tribunaux fran\u00e7ais seront seuls comp\u00e9tents, sauf disposition l\u00e9gale contraire.",
       en: 'These Terms are governed by French law. In case of dispute, French courts shall have sole jurisdiction, unless otherwise required by law.',

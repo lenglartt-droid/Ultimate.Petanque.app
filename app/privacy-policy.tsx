@@ -71,6 +71,12 @@ export default function PrivacyPolicyScreen() {
       content: t('privacy', 'sharingFeatureContent'),
     },
     {
+      icon: 'public',
+      color: theme.success,
+      title: t('privacy', 'publicItemsTitle'),
+      content: t('privacy', 'publicItemsContent'),
+    },
+    {
       icon: 'child-care',
       color: theme.success,
       title: t('privacy', 'childrenTitle'),
