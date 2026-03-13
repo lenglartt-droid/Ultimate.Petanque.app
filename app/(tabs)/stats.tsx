@@ -1291,6 +1291,7 @@ export default function StatsScreen() {
                     )}
                   </>
                 ) : (
+                <>
                 <Animated.View entering={FadeInDown.duration(400)} style={styles.heroCard}>
                   <View style={styles.heroContent}>
                     <ProgressRing value={performanceStats.winRate} size={110} strokeWidth={9} color={theme.primary} label={t('stats', 'victoriesLabel')} />
@@ -1445,6 +1446,7 @@ export default function StatsScreen() {
                     </View>
                   </Animated.View>
                 )}
+                </>
                 )}
               </>
             )}
