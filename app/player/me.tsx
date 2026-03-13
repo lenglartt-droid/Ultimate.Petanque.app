@@ -16,7 +16,7 @@ import * as Linking from 'expo-linking';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
-import { useAuth } from '@/template';
+import { useAuth, useAlert } from '@/template';
 import ShareModal from '@/components/ui/ShareModal';
 import { toggleItemPublic } from '@/services/publicItemsService';
 
