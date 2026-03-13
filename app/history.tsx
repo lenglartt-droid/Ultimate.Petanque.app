@@ -16,6 +16,7 @@ import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { Match, Challenge, SeriesInfo } from '@/services/mockData';
 import { useLanguage } from '@/hooks/useLanguage';
+import ShareModal from '@/components/ui/ShareModal';
 
 // Constants
 const CHALLENGE_CONFIG = {
@@ -462,6 +463,7 @@ export default function HistoryScreen() {
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodOption>('all');
   const [showPeriodModal, setShowPeriodModal] = useState(false);
   const [editingChallenge, setEditingChallenge] = useState<Challenge | null>(null);
+  const [showChallengeShare, setShowChallengeShare] = useState(false);
 
   // Group matches by series
   const groupMatchesBySeries = useCallback((matchList: Match[]): (Match | SeriesGroup)[] => {
@@ -961,6 +963,18 @@ export default function HistoryScreen() {
                 </View>
               )}
 
+              {/* Share button */}
+              <Pressable
+                style={styles.shareParticipantsBtn}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setShowChallengeShare(true);
+                }}
+              >
+                <MaterialIcons name="share" size={18} color={theme.primary} />
+                <Text style={styles.shareParticipantsBtnText}>{t('matchEdit', 'shareWithParticipants')}</Text>
+              </Pressable>
+
               {/* Actions */}
               <View style={styles.detailActions}>
                 <Pressable style={styles.deleteBtn} onPress={handleDeleteChallenge}>
@@ -975,6 +989,17 @@ export default function HistoryScreen() {
           )}
         </SafeAreaView>
       </Modal>
+
+      {/* Challenge Share Modal */}
+      {editingChallenge ? (
+        <ShareModal
+          visible={showChallengeShare}
+          onClose={() => setShowChallengeShare(false)}
+          itemType="challenge"
+          itemId={editingChallenge.id}
+          itemName={`${t('challenge', CHALLENGE_CONFIG[editingChallenge.type].nameKey)} - ${editingChallenge.playerName || ''}`}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -1305,6 +1330,23 @@ const styles = StyleSheet.create({
   shotDot: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   shotDotText: { fontSize: 11, fontWeight: '700', color: '#FFF' },
   detailActions: { flexDirection: 'row', gap: 12, marginTop: 'auto' },
+  shareParticipantsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    backgroundColor: theme.primary + '12',
+    borderRadius: theme.borderRadius.md,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: theme.primary + '30',
+  },
+  shareParticipantsBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.primary,
+  },
   deleteBtn: {
     flex: 1,
     flexDirection: 'row',
