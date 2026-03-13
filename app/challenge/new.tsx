@@ -27,6 +27,7 @@ import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { SimplifiedShotNotation, SimpleShotRecord } from '@/components';
 import ShareModal from '@/components/ui/ShareModal';
+import { showInterstitial } from '@/services/adService';
 import { 
   ChallengeType, 
   ChallengeShot,
@@ -563,7 +564,10 @@ export default function NewChallengeScreen() {
     if (!data) return;
     addChallenge(data);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.back();
+    // Show interstitial ad after saving challenge
+    showInterstitial().finally(() => {
+      router.back();
+    });
   }, [buildChallengeData, addChallenge]);
 
   const handleSaveAndShare = useCallback(async () => {

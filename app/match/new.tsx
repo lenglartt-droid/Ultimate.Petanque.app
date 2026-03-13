@@ -24,6 +24,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import ShareModal from '@/components/ui/ShareModal';
 import { createShareLink } from '@/services/shareService';
 import { SimplifiedShotNotation, SimpleShotRecord } from '@/components';
+import { showInterstitial } from '@/services/adService';
 
 // Tournament phases configuration - IDs are DB values (French), labels translated at display time
 const PHASE_IDS = {
@@ -717,7 +718,10 @@ export default function NewMatchScreen() {
     });
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.back();
+    // Show interstitial ad after saving match
+    showInterstitial().finally(() => {
+      router.back();
+    });
   };
 
   // Save match and open share modal

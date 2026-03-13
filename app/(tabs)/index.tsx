@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,8 @@ import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
+import AdBanner from '@/components/ui/AdBanner';
+import { preloadInterstitial } from '@/services/adService';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -46,6 +48,11 @@ export default function HomeScreen() {
 
   // Get display name
   const displayName = user?.username || selfPlayer?.name || user?.email?.split('@')[0] || (language === 'en' ? 'Player' : 'Joueur');
+
+  // Preload interstitial ad on app start
+  useEffect(() => {
+    preloadInterstitial();
+  }, []);
 
 
 
@@ -193,6 +200,9 @@ export default function HomeScreen() {
             </Pressable>
           </Animated.View>
         )}
+
+        {/* Ad Banner */}
+        <AdBanner position="inline" />
 
         {/* History Button */}
         <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.historySection}>
