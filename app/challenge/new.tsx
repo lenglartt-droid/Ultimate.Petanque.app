@@ -26,6 +26,7 @@ import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { SimplifiedShotNotation, SimpleShotRecord } from '@/components';
+import ShareModal from '@/components/ui/ShareModal';
 import { 
   ChallengeType, 
   ChallengeShot,
@@ -230,6 +231,9 @@ export default function NewChallengeScreen() {
   const [showNotation, setShowNotation] = useState(false);
   const [notationRecords, setNotationRecords] = useState<SimpleShotRecord[]>([]);
   const [pendingNotationIsOpponent, setPendingNotationIsOpponent] = useState(false);
+  const [savedChallengeIdForShare, setSavedChallengeIdForShare] = useState<string | null>(null);
+  const [showPostChallengeShare, setShowPostChallengeShare] = useState(false);
+  const [isSavingForShare, setIsSavingForShare] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const config = selectedType ? CHALLENGE_CONFIG[selectedType] : null;
@@ -482,8 +486,8 @@ export default function NewChallengeScreen() {
     return 'draw';
   }, [selectedType, playerStats, opponentStats]);
 
-  const saveChallenge = useCallback(() => {
-    if (!selectedType || !challengeMode) return;
+  const buildChallengeData = useCallback(() => {
+    if (!selectedType || !challengeMode) return null;
     
     const opponentResult: ChallengePlayerResult | undefined = challengeMode === '1v1' && selectedOpponent ? {
       playerId: selectedOpponent.id,
@@ -514,7 +518,7 @@ export default function NewChallengeScreen() {
     }));
 
     if (selectedType === 'precision') {
-      addChallenge({
+      return {
         type: selectedType,
         mode: challengeMode,
         date: new Date().toISOString(),
@@ -529,9 +533,9 @@ export default function NewChallengeScreen() {
         maxPoints: 100,
         atelierScores,
         duration: elapsedTime,
-      });
+      };
     } else {
-      addChallenge({
+      return {
         type: selectedType,
         mode: challengeMode,
         date: new Date().toISOString(),
@@ -548,14 +552,32 @@ export default function NewChallengeScreen() {
         successRate: playerStats.successRate,
         duration: elapsedTime,
         detailedShots: detailedShots.length > 0 ? detailedShots : undefined,
-      });
+      };
     }
-
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.back();
   }, [selectedType, challengeMode, selectedOpponent, opponentShots, opponentPrecisionShots,
       opponentStats, opponentAtelierScores, getWinner, notationRecords, precisionShots,
-      playerStats, atelierScores, elapsedTime, shots, addChallenge, selfPlayer, userStats]);
+      playerStats, atelierScores, elapsedTime, shots, selfPlayer, userStats]);
+
+  const saveChallenge = useCallback(() => {
+    const data = buildChallengeData();
+    if (!data) return;
+    addChallenge(data);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    router.back();
+  }, [buildChallengeData, addChallenge]);
+
+  const handleSaveAndShare = useCallback(async () => {
+    const data = buildChallengeData();
+    if (!data) return;
+    setIsSavingForShare(true);
+    const newId = await addChallenge(data);
+    setIsSavingForShare(false);
+    if (newId) {
+      setSavedChallengeIdForShare(newId);
+      setShowPostChallengeShare(true);
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [buildChallengeData, addChallenge]);
 
   const cancelChallenge = useCallback(() => {
     Alert.alert(t('challenge', 'quitChallenge'), t('challenge', 'challengeWillBeLost'), [
@@ -1009,6 +1031,35 @@ export default function NewChallengeScreen() {
               <Text style={styles.saveBtnText}>{t('challenge', 'saveChallenge')}</Text>
             </Pressable>
           </View>
+
+          <Pressable 
+            style={styles.shareParticipantsBtn} 
+            onPress={handleSaveAndShare}
+            disabled={isSavingForShare}
+          >
+            {isSavingForShare ? (
+              <Text style={styles.shareParticipantsBtnText}>{t('matchEdit', 'savingMatch')}</Text>
+            ) : (
+              <>
+                <MaterialIcons name="share" size={20} color={theme.primary} />
+                <Text style={styles.shareParticipantsBtnText}>{t('matchEdit', 'shareWithParticipants')}</Text>
+              </>
+            )}
+          </Pressable>
+
+          {savedChallengeIdForShare ? (
+            <ShareModal
+              visible={showPostChallengeShare}
+              onClose={() => {
+                setShowPostChallengeShare(false);
+                router.back();
+              }}
+              itemType="challenge"
+              itemId={savedChallengeIdForShare}
+              itemName={`${config?.name || ''} - ${selfPlayer?.name || userStats.playerName}`}
+              forceReadOnly
+            />
+          ) : null}
         </ScrollView>
       </SafeAreaView>
     );
@@ -1373,6 +1424,8 @@ const styles = StyleSheet.create({
   retryBtnText: { fontSize: 15, fontWeight: '600', color: theme.primary },
   saveBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.primary, paddingVertical: 14, borderRadius: 12 },
   saveBtnText: { fontSize: 15, fontWeight: '600', color: '#FFF' },
+  shareParticipantsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 12, paddingVertical: 14, borderRadius: 12, backgroundColor: theme.primary + '12', borderWidth: 1.5, borderColor: theme.primary + '35' },
+  shareParticipantsBtnText: { fontSize: 15, fontWeight: '600', color: theme.primary },
   
   // In Progress
   turnIndicator: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.primary, paddingVertical: 10 },

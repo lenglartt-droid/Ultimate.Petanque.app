@@ -20,6 +20,7 @@ import theme from '@/constants/theme';
 import config, { GameFormat, TournamentType } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
+import ShareModal from '@/components/ui/ShareModal';
 import { SimplifiedShotNotation, SimpleShotRecord } from '@/components';
 
 // Tournament phases configuration - IDs are DB values (French), labels translated at display time
@@ -212,6 +213,9 @@ export default function NewMatchScreen() {
   const [advancedShotRecords, setAdvancedShotRecords] = useState<SimpleShotRecord[]>([]);
   const [selectedTerrainId, setSelectedTerrainId] = useState<string | null>(null);
   const [showTerrainPicker, setShowTerrainPicker] = useState(false);
+  const [savedMatchIdForShare, setSavedMatchIdForShare] = useState<string | null>(null);
+  const [showPostMatchShare, setShowPostMatchShare] = useState(false);
+  const [isSavingForShare, setIsSavingForShare] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const maxScore = config.game.maxScore;
@@ -713,6 +717,65 @@ export default function NewMatchScreen() {
     router.back();
   };
 
+  // Save match and open share modal
+  const handleSaveAndShare = useCallback(async () => {
+    if (teamAScore === 0 && teamBScore === 0) return;
+    if (isTournamentMode && !selectedPhase) return;
+    if (isTimerRunning) setIsTimerRunning(false);
+
+    setIsSavingForShare(true);
+    const winner = teamAScore > teamBScore ? 'A' : 'B';
+    const duration = matchTime > 0 ? Math.round(matchTime / 60) : Math.floor(Math.random() * 30) + 30;
+    const teamAPlayerIds = getTeamPlayerIds(teamAPlayers);
+    const teamBPlayerIds = getTeamPlayerIds(teamBPlayers);
+    const teamAPlayerNames = teamAPlayers.length > 0 
+      ? teamAPlayers.map(p => { const player = players.find(pl => pl.id === p.playerId); return player?.name || '?'; })
+      : [t('match', 'myTeam')];
+    const teamBPlayerNames = teamBPlayers.length > 0 
+      ? teamBPlayers.map(p => { const player = players.find(pl => pl.id === p.playerId); return player?.name || '?'; })
+      : [t('match', 'opponent')];
+    const teamAPlayerRoles = teamAPlayers.map(p => ({ playerId: p.playerId, role: p.role }));
+    const teamBPlayerRoles = teamBPlayers.map(p => ({ playerId: p.playerId, role: p.role }));
+
+    let seriesInfoData: any = undefined;
+    if (!isTournamentMode && seriesId) {
+      const newWinsA = seriesWinsA + (winner === 'A' ? 1 : 0);
+      const newWinsB = seriesWinsB + (winner === 'A' ? 0 : 1);
+      const isSeriesComplete = newWinsA >= 2 || newWinsB >= 2;
+      seriesInfoData = {
+        seriesId, matchNumber: currentMatchNumber,
+        winsBeforeThisMatch: { teamA: seriesWinsA, teamB: seriesWinsB },
+        isFinale, seriesComplete: isSeriesComplete,
+        seriesWinner: isSeriesComplete ? (newWinsA >= 2 ? 'A' : 'B') : undefined,
+      };
+    }
+
+    const newId = await addMatch({
+      date: new Date().toISOString(), mode: isTournamentMode ? 'Tournoi' : 'Entraînement', format,
+      tournamentId: linkedTournament?.id, tournamentName: linkedTournament?.name,
+      tournamentPhase: isTournamentMode ? (selectedPhase || undefined) : undefined,
+      tournamentBracket: isTournamentMode && selectedPhase !== 'Poules' ? selectedBracket || undefined : undefined,
+      terrainId: selectedTerrainId || linkedTournament?.terrainId || undefined,
+      terrainType: selectedTerrain?.type || linkedTournament?.terrainType || undefined,
+      teamA: { players: teamAPlayerIds.length > 0 ? teamAPlayerIds : ['1'], playerNames: teamAPlayerNames, playerRoles: teamAPlayerRoles.length > 0 ? teamAPlayerRoles : undefined, score: teamAScore },
+      teamB: { players: teamBPlayerIds.length > 0 ? teamBPlayerIds : ['2'], playerNames: teamBPlayerNames, playerRoles: teamBPlayerRoles.length > 0 ? teamBPlayerRoles : undefined, score: teamBScore },
+      winner, duration,
+      menes: menes.map(m => ({ teamAPoints: m.teamAPoints, teamBPoints: m.teamBPoints, duration: m.duration })),
+      playerActions: playerActions.length > 0 ? playerActions : undefined,
+      seriesInfo: seriesInfoData,
+    });
+
+    setIsSavingForShare(false);
+    if (newId) {
+      setSavedMatchIdForShare(newId);
+      setShowPostMatchShare(true);
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [teamAScore, teamBScore, isTournamentMode, selectedPhase, isTimerRunning, matchTime,
+      teamAPlayers, teamBPlayers, players, format, linkedTournament, selectedTerrainId,
+      selectedTerrain, selectedBracket, menes, playerActions, seriesId, seriesWinsA,
+      seriesWinsB, currentMatchNumber, isFinale, addMatch, t]);
+
   const teamsReady = teamAPlayers.length > 0 || teamBPlayers.length > 0;
   const isMatchReady = teamAScore > 0 || teamBScore > 0;
 
@@ -1213,6 +1276,23 @@ export default function NewMatchScreen() {
                       <Text style={styles.fsWinnerBtnText}>{t('match', 'saveAndFinish')}</Text>
                     </Pressable>
                     
+                    <Pressable 
+                      style={styles.fsWinnerBtnShare}
+                      onPress={() => {
+                        handleSaveAndShare();
+                      }}
+                      disabled={isSavingForShare}
+                    >
+                      {isSavingForShare ? (
+                        <Text style={styles.fsWinnerBtnShareText}>{t('matchEdit', 'savingMatch')}</Text>
+                      ) : (
+                        <>
+                          <MaterialIcons name="share" size={22} color="rgba(255,255,255,0.9)" />
+                          <Text style={styles.fsWinnerBtnShareText}>{t('matchEdit', 'shareWithParticipants')}</Text>
+                        </>
+                      )}
+                    </Pressable>
+
                     {!isTournamentMode && (
                       <Pressable 
                         style={styles.fsWinnerBtnRevanche}
@@ -1290,6 +1370,23 @@ export default function NewMatchScreen() {
                     )}
                   </View>
                 </View>
+
+                {/* Post-match Share Modal */}
+                {savedMatchIdForShare ? (
+                  <ShareModal
+                    visible={showPostMatchShare}
+                    onClose={() => {
+                      setShowPostMatchShare(false);
+                      setFullscreenMode(false);
+                      setHasExitedFullscreen(true);
+                      setTimeout(() => router.replace('/(tabs)'), 100);
+                    }}
+                    itemType="match"
+                    itemId={savedMatchIdForShare}
+                    itemName={`${teamAPlayers.map(p => getPlayerName(p.playerId)).join(', ')} vs ${teamBPlayers.map(p => getPlayerName(p.playerId)).join(', ')}`}
+                    forceReadOnly
+                  />
+                ) : null}
               </Animated.View>
             )}
           </SafeAreaView>
@@ -2191,6 +2288,8 @@ const styles = StyleSheet.create({
   fsWinnerBtnText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
   fsWinnerBtnRevanche: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 32, paddingVertical: 16, backgroundColor: 'rgba(251, 191, 36, 0.15)', borderRadius: 20, borderWidth: 2, borderColor: 'rgba(251, 191, 36, 0.4)' },
   fsWinnerBtnRevancheText: { fontSize: 16, fontWeight: '700', color: theme.warning },
+  fsWinnerBtnShare: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 32, paddingVertical: 14, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
+  fsWinnerBtnShareText: { fontSize: 15, fontWeight: '600', color: 'rgba(255,255,255,0.9)' },
   fsWinnerSeriesInfo: { marginTop: 12, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12 },
   fsWinnerSeriesText: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.7)' },
   fsWinnerSeriesBadge: { marginLeft: 8, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: theme.warning, borderRadius: 10 },

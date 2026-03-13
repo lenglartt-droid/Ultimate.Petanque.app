@@ -2495,6 +2495,10 @@ export const translations = {
     detailedShotsList: { fr: 'Tirs d\u00e9taill\u00e9s', en: 'Detailed shots' },
     deleteShot: { fr: 'Supprimer ce tir ?', en: 'Delete this shot?' },
     editShotHint: { fr: 'Appuyez sur un tir pour le modifier', en: 'Tap a shot to edit it' },
+    shareWithParticipants: { fr: 'Partager avec les participants', en: 'Share with participants' },
+    savingMatch: { fr: 'Enregistrement...', en: 'Saving...' },
+    matchSavedShareReady: { fr: 'Match enregistr\u00e9, partagez-le !', en: 'Match saved, share it!' },
+    challengeSavedShareReady: { fr: 'D\u00e9fi enregistr\u00e9, partagez-le !', en: 'Challenge saved, share it!' },
   },
 
   locationPicker: {

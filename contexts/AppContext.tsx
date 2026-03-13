@@ -39,11 +39,11 @@ interface AppContextType {
   selfPlayer: Player | null;
   
   // Add Actions
-  addMatch: (match: Omit<Match, 'id'>) => Promise<void>;
+  addMatch: (match: Omit<Match, 'id'>) => Promise<string | null>;
   addPlayer: (player: Omit<Player, 'id'>) => Promise<void>;
   addClub: (club: Omit<Club, 'id'>) => Promise<void>;
   addTournament: (tournament: Omit<Tournament, 'id'>) => Promise<void>;
-  addChallenge: (challenge: Omit<Challenge, 'id'>) => Promise<void>;
+  addChallenge: (challenge: Omit<Challenge, 'id'>) => Promise<string | null>;
   addTerrain: (terrain: Omit<Terrain, 'id'>) => Promise<void>;
   
   // Update Actions
@@ -558,12 +558,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [loadData]);
 
   // Add functions with cloud sync
-  const addMatch = async (match: Omit<Match, 'id'>) => {
+  const addMatch = async (match: Omit<Match, 'id'>): Promise<string | null> => {
     if (!user?.id) {
       // Offline mode - just add locally with temp ID
-      const newMatch: Match = { ...match, id: Date.now().toString() };
+      const tempId = Date.now().toString();
+      const newMatch: Match = { ...match, id: tempId };
       setMatches(prev => [newMatch, ...prev]);
-      return;
+      return tempId;
     }
 
     try {
@@ -612,12 +613,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
           seriesInfo: data.series_info,
         };
         setMatches(prev => [newMatch, ...prev]);
+        return data.id;
       }
+      return null;
     } catch (error) {
       console.log('Error adding match:', error);
       // Fallback to local
-      const newMatch: Match = { ...match, id: Date.now().toString() };
+      const tempId = Date.now().toString();
+      const newMatch: Match = { ...match, id: tempId };
       setMatches(prev => [newMatch, ...prev]);
+      return tempId;
     }
   };
 
@@ -865,11 +870,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const addChallenge = async (challenge: Omit<Challenge, 'id'>) => {
+  const addChallenge = async (challenge: Omit<Challenge, 'id'>): Promise<string | null> => {
     if (!user?.id) {
-      const newChallenge: Challenge = { ...challenge, id: Date.now().toString() };
+      const tempId = Date.now().toString();
+      const newChallenge: Challenge = { ...challenge, id: tempId };
       setChallenges(prev => [newChallenge, ...prev]);
-      return;
+      return tempId;
     }
 
     try {
@@ -926,11 +932,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
           detailedShots: data.detailed_shots,
         };
         setChallenges(prev => [newChallenge, ...prev]);
+        return data.id;
       }
+      return null;
     } catch (error) {
       console.log('Error adding challenge:', error);
-      const newChallenge: Challenge = { ...challenge, id: Date.now().toString() };
+      const tempId = Date.now().toString();
+      const newChallenge: Challenge = { ...challenge, id: tempId };
       setChallenges(prev => [newChallenge, ...prev]);
+      return tempId;
     }
   };
 
