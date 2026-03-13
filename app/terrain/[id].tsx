@@ -30,7 +30,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 export default function TerrainDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { getTerrainById, tournaments, deleteTerrain, isFavoriteTerrain, toggleFavoriteTerrain, getSharedPermission } = useApp();
+  const { getTerrainById, tournaments, deleteTerrain, isFavoriteTerrain, toggleFavoriteTerrain, getSharedPermission, setItemPublic } = useApp();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -66,6 +66,7 @@ export default function TerrainDetailScreen() {
       showAlert(t('common', 'error'), error);
     } else {
       setIsPublicState(newVal);
+      setItemPublic('terrains', terrain.id, newVal);
     }
     setTogglingPublic(false);
   };

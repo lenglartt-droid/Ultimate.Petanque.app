@@ -24,7 +24,7 @@ export default function MyPlayerCardScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { t } = useLanguage();
-  const { selfPlayer, userStats, challengeStats, matches, challenges } = useApp();
+  const { selfPlayer, userStats, challengeStats, matches, challenges, setItemPublic } = useApp();
   const { showAlert } = useAlert();
   const [showShareModal, setShowShareModal] = React.useState(false);
   const [isPublic, setIsPublic] = React.useState(selfPlayer?.isPublic ?? false);
@@ -44,6 +44,7 @@ export default function MyPlayerCardScreen() {
       showAlert(t('common', 'error'), error);
     } else {
       setIsPublic(newVal);
+      setItemPublic('players', selfPlayer.id, newVal);
     }
     setTogglingPublic(false);
   }, [selfPlayer, isPublic, togglingPublic, showAlert, t]);

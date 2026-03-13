@@ -87,6 +87,9 @@ interface AppContextType {
   getHeadToHead: (player1Id: string, player2Id: string) => HeadToHead;
   getCommonOpponents: (player1Id: string, player2Id: string) => string[];
 
+  // Toggle public/private
+  setItemPublic: (type: 'players' | 'clubs' | 'terrains' | 'tournaments', itemId: string, isPublic: boolean) => void;
+
   // Refresh
   refreshData: () => Promise<void>;
 }
@@ -1277,6 +1280,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return sharedItemPermissions[itemId] || null;
   }, [sharedItemPermissions]);
 
+  // Toggle public/private in local state (DB is already updated by the caller)
+  const setItemPublic = useCallback((type: 'players' | 'clubs' | 'terrains' | 'tournaments', itemId: string, isPublic: boolean) => {
+    switch (type) {
+      case 'players':
+        setPlayers(prev => prev.map(p => p.id === itemId ? { ...p, isPublic } : p));
+        break;
+      case 'clubs':
+        setClubs(prev => prev.map(c => c.id === itemId ? { ...c, isPublic } : c));
+        break;
+      case 'terrains':
+        setTerrains(prev => prev.map(t => t.id === itemId ? { ...t, isPublic } : t));
+        break;
+      case 'tournaments':
+        setTournaments(prev => prev.map(t => t.id === itemId ? { ...t, isPublic } : t));
+        break;
+    }
+  }, []);
+
   // Getters
   const getPlayerById = (id: string) => players.find(p => p.id === id);
   const getClubById = (id: string) => clubs.find(c => c.id === id);
@@ -1424,6 +1445,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         getCommonOpponents,
         refreshData,
         selfPlayer,
+        setItemPublic,
       }}
     >
       {children}

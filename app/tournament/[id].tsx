@@ -98,7 +98,7 @@ const PHASE_IDS = {
 export default function TournamentDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getTournamentById, getClubById, getTerrainById, getMatchesByTournament, updateTournament, tournamentNotifications, toggleTournamentNotification, isTournamentNotificationEnabled, getSharedPermission } = useApp();
+  const { getTournamentById, getClubById, getTerrainById, getMatchesByTournament, updateTournament, tournamentNotifications, toggleTournamentNotification, isTournamentNotificationEnabled, getSharedPermission, setItemPublic } = useApp();
   const { user } = useAuth();
   const { t, language } = useLanguage();
 
@@ -167,6 +167,7 @@ export default function TournamentDetailScreen() {
       showShareAlert(t('common', 'error'), error);
     } else {
       setIsPublicState(newVal);
+      setItemPublic('tournaments', tournament.id, newVal);
     }
     setTogglingPublic(false);
   }, [tournament, isPublicState, togglingPublic, isSharedItem, showShareAlert, t]);

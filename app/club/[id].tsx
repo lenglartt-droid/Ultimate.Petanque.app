@@ -27,7 +27,7 @@ import { useAuth } from '@/template';
 export default function ClubDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getClubById, players, tournaments, deleteClub, getSharedPermission } = useApp();
+  const { getClubById, players, tournaments, deleteClub, getSharedPermission, setItemPublic } = useApp();
   const { user } = useAuth();
   const { t, language } = useLanguage();
 
@@ -65,6 +65,7 @@ export default function ClubDetailScreen() {
       showAlert(t('common', 'error'), error);
     } else {
       setIsPublicState(newVal);
+      setItemPublic('clubs', club.id, newVal);
     }
     setTogglingPublic(false);
   }, [club, isPublicState, togglingPublic, isSharedItem, showAlert, t]);
