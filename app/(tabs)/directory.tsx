@@ -12,6 +12,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -242,9 +243,18 @@ export default function DirectoryScreen() {
         onPress={() => isSelf ? router.push('/player/me') : router.push(`/player/${item.id}`)}
       >
         <View style={[styles.itemAvatar, isSelf && styles.selfAvatar]}>
-          <Text style={styles.avatarText}>
-            {item.name.split(' ').map(n => n[0]).join('')}
-          </Text>
+          {item.avatar ? (
+            <Image
+              source={{ uri: item.avatar }}
+              style={styles.avatarImage}
+              contentFit="cover"
+              transition={200}
+            />
+          ) : (
+            <Text style={styles.avatarText}>
+              {item.name.split(' ').map(n => n[0]).join('')}
+            </Text>
+          )}
           {isSelf ? (
             <View style={styles.selfBadge}>
               <MaterialIcons name="star" size={10} color="#FFF" />
@@ -1165,6 +1175,11 @@ const styles = StyleSheet.create({
   },
   selfAvatar: {
     backgroundColor: theme.primary,
+  },
+  avatarImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
   },
   avatarText: {
     fontSize: 16,
