@@ -237,6 +237,7 @@ export default function DirectoryScreen() {
   const renderPlayer = ({ item }: { item: Player }) => {
     const isSelf = selfPlayer && item.id === selfPlayer.id;
     const sharedPerm = getSharedPermission(item.id);
+    const isPublicItem = (item as any).isPublic;
     return (
       <Pressable
         style={[styles.itemCard, isSelf && styles.selfCard]}
@@ -258,6 +259,10 @@ export default function DirectoryScreen() {
           {isSelf ? (
             <View style={styles.selfBadge}>
               <MaterialIcons name="star" size={10} color="#FFF" />
+            </View>
+          ) : isPublicItem ? (
+            <View style={styles.publicOverlay}>
+              <MaterialIcons name="public" size={10} color={theme.success} />
             </View>
           ) : sharedPerm ? (
             <SharedOverlayBadge permission={sharedPerm} />
@@ -307,6 +312,7 @@ export default function DirectoryScreen() {
 
   const renderClub = ({ item }: { item: Club }) => {
     const sharedPerm = getSharedPermission(item.id);
+    const isPublicItem = (item as any).isPublic;
     return (
       <Pressable
         style={styles.itemCard}
@@ -314,7 +320,11 @@ export default function DirectoryScreen() {
       >
         <View style={[styles.itemAvatar, { backgroundColor: theme.accent }]}>
           <MaterialIcons name="home" size={24} color="#FFF" />
-          {sharedPerm ? <SharedOverlayBadge permission={sharedPerm} /> : null}
+          {isPublicItem ? (
+            <View style={styles.publicOverlay}>
+              <MaterialIcons name="public" size={10} color={theme.success} />
+            </View>
+          ) : sharedPerm ? <SharedOverlayBadge permission={sharedPerm} /> : null}
         </View>
       <View style={styles.itemContent}>
         <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
@@ -351,6 +361,7 @@ export default function DirectoryScreen() {
     const typeConfig = getTerrainTypeConfig(item.type);
     const isFavorite = favoriteTerrainIds.includes(item.id);
     const sharedPerm = getSharedPermission(item.id);
+    const isPublicItem = (item as any).isPublic;
     return (
       <Pressable
         style={[styles.itemCard, isFavorite && styles.favoriteCard]}
@@ -361,6 +372,10 @@ export default function DirectoryScreen() {
           {isFavorite ? (
             <View style={styles.favoriteBadge}>
               <MaterialIcons name="favorite" size={10} color={theme.error} />
+            </View>
+          ) : isPublicItem ? (
+            <View style={styles.publicOverlay}>
+              <MaterialIcons name="public" size={10} color={theme.success} />
             </View>
           ) : sharedPerm ? (
             <SharedOverlayBadge permission={sharedPerm} />
@@ -414,6 +429,7 @@ export default function DirectoryScreen() {
     };
     const status = statusConfig[item.status] || statusConfig['Terminé'];
     const sharedPerm = getSharedPermission(item.id);
+    const isPublicItem = (item as any).isPublic;
     
     return (
       <Pressable
@@ -422,7 +438,11 @@ export default function DirectoryScreen() {
       >
         <View style={[styles.itemAvatar, { backgroundColor: theme.carreauColor }]}>
           <MaterialIcons name="emoji-events" size={24} color="#FFF" />
-          {sharedPerm ? <SharedOverlayBadge permission={sharedPerm} /> : null}
+          {isPublicItem ? (
+            <View style={styles.publicOverlay}>
+              <MaterialIcons name="public" size={10} color={theme.success} />
+            </View>
+          ) : sharedPerm ? <SharedOverlayBadge permission={sharedPerm} /> : null}
         </View>
         <View style={styles.itemContent}>
           <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
@@ -1200,6 +1220,19 @@ const styles = StyleSheet.create({
     borderColor: theme.surface,
   },
   favoriteBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#FFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: theme.surface,
+  },
+  publicOverlay: {
     position: 'absolute',
     bottom: -2,
     right: -2,

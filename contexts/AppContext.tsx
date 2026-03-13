@@ -345,6 +345,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         email: p.email,
         country: p.country,
         boules: p.boules,
+        isPublic: p.is_public ?? false,
         stats: p.stats || {
           matchesPlayed: 0, wins: 0, losses: 0, winRate: 0,
           tirRate: 0, pointRate: 0, carreauRate: 0,
@@ -382,6 +383,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         terrainId: c.terrain_id,
         terrainName: c.terrain_name,
         membershipCost: c.membership_cost ? parseFloat(c.membership_cost) : undefined,
+        isPublic: c.is_public ?? false,
       });
 
       if (clubsRes.data) {
@@ -457,6 +459,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         registrationCost: t.registration_cost ? parseFloat(t.registration_cost) : undefined,
         prizeWon: t.prize_won ? parseFloat(t.prize_won) : undefined,
         finalResult: t.final_result,
+        isPublic: t.is_public ?? false,
       });
 
       if (tournamentsRes.data) {

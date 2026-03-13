@@ -24,6 +24,7 @@ export interface Player {
   terrainName?: string;
   country?: string;
   boules?: BoulesInfo;
+  isPublic?: boolean;
   location?: {
     latitude: number;
     longitude: number;
@@ -67,6 +68,7 @@ export interface Club {
   terrainId?: string;
   terrainName?: string;
   membershipCost?: number;
+  isPublic?: boolean;
 }
 
 export interface TournamentNotification {
@@ -175,6 +177,7 @@ export interface Tournament {
   registrationCost?: number;
   prizeWon?: number;
   finalResult?: string;
+  isPublic?: boolean;
 }
 
 export interface MatchPlayerRole {
