@@ -12,7 +12,11 @@ interface AdBannerProps {
   bottomOffset?: number;
 }
 
-// Lazy-load the ads module to avoid crash if native module is missing
+import { NativeModules } from 'react-native';
+
+// Lazy-load the ads module to avoid crash if native module is missing.
+// On Hermes, require() of unlinked TurboModules throws an uncatchable
+// Invariant Violation. Check NativeModules first (safe, returns undefined).
 let BannerAdComponent: any = null;
 let BannerAdSizeEnum: any = null;
 let adsModuleLoaded = false;
@@ -21,6 +25,11 @@ let adsModuleAvailable = false;
 function loadAdsModule() {
   if (adsModuleLoaded) return;
   adsModuleLoaded = true;
+  // NativeModules safely returns undefined for missing modules
+  if (!NativeModules.RNGoogleMobileAdsModule) {
+    adsModuleAvailable = false;
+    return;
+  }
   try {
     const mod = require('react-native-google-mobile-ads');
     BannerAdComponent = mod.BannerAd;

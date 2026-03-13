@@ -29,7 +29,12 @@ export const AD_UNIT_IDS = {
 
 // ============================================
 // LAZY LOADING - avoid crash if native module missing
+// On Hermes, require() of unlinked native modules throws
+// an uncatchable Invariant Violation. We must check
+// NativeModules first (safe, returns undefined).
 // ============================================
+import { NativeModules } from 'react-native';
+
 let adsModule: any = null;
 let moduleChecked = false;
 let moduleAvailable = false;
@@ -37,6 +42,12 @@ let moduleAvailable = false;
 function getAdsModule(): any {
   if (moduleChecked) return adsModule;
   moduleChecked = true;
+  // NativeModules safely returns undefined for missing modules
+  if (!NativeModules.RNGoogleMobileAdsModule) {
+    adsModule = null;
+    moduleAvailable = false;
+    return adsModule;
+  }
   try {
     adsModule = require('react-native-google-mobile-ads');
     moduleAvailable = true;
