@@ -273,11 +273,11 @@ function NAPlaceholder({ message }: { message: string }) {
 // ============================================
 // MAIN COMPONENT
 // ============================================
-type ItemFilterType = 'all' | 'match' | 'challenge' | 'tournament';
+type ItemFilterType = 'all' | 'match' | 'challenge' | 'tournament' | 'opponent';
 
 export default function StatsScreen() {
   const insets = useSafeAreaInsets();
-  const { matches, challenges, tournaments, getMatchesByTournament } = useApp();
+  const { matches, challenges, tournaments, players, getMatchesByTournament } = useApp();
   const { t, language } = useLanguage();
 
   // Translated filter/tab arrays
@@ -295,8 +295,9 @@ export default function StatsScreen() {
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [selectedChallengeId, setSelectedChallengeId] = useState<string | null>(null);
   const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null);
+  const [selectedOpponentId, setSelectedOpponentId] = useState<string | null>(null);
   const [showItemPickerModal, setShowItemPickerModal] = useState(false);
-  const [itemPickerType, setItemPickerType] = useState<'match' | 'challenge' | 'tournament'>('match');
+  const [itemPickerType, setItemPickerType] = useState<'match' | 'challenge' | 'tournament' | 'opponent'>('match');
   const [itemPickerSearch, setItemPickerSearch] = useState('');
 
   // Time-filtered base data
@@ -314,19 +315,25 @@ export default function StatsScreen() {
     if (itemFilterType === 'challenge') {
       return [];
     }
+    if (itemFilterType === 'opponent' && selectedOpponentId) {
+      return timeFilteredMatches.filter(m => m.teamB.players.includes(selectedOpponentId));
+    }
     return timeFilteredMatches;
-  }, [timeFilteredMatches, itemFilterType, selectedMatchId, selectedTournamentId]);
+  }, [timeFilteredMatches, itemFilterType, selectedMatchId, selectedTournamentId, selectedOpponentId]);
 
   const filteredChallenges = useMemo(() => {
     if (itemFilterType === 'challenge' && selectedChallengeId) {
       return timeFilteredChallenges.filter(c => c.id === selectedChallengeId);
+    }
+    if (itemFilterType === 'opponent' && selectedOpponentId) {
+      return timeFilteredChallenges.filter(c => c.mode === '1v1' && c.opponentId === selectedOpponentId);
     }
     // When filtering by match or tournament, don't include challenges in stats
     if (itemFilterType === 'match' || itemFilterType === 'tournament') {
       return [];
     }
     return timeFilteredChallenges;
-  }, [timeFilteredChallenges, itemFilterType, selectedChallengeId, selectedMatchId, selectedTournamentId]);
+  }, [timeFilteredChallenges, itemFilterType, selectedChallengeId, selectedMatchId, selectedTournamentId, selectedOpponentId]);
 
   // Active filter label
   const activeFilterLabel = useMemo(() => {
@@ -348,17 +355,22 @@ export default function StatsScreen() {
       const tour = tournaments.find(t => t.id === selectedTournamentId);
       if (tour) return tour.name;
     }
+    if (itemFilterType === 'opponent' && selectedOpponentId) {
+      const opp = players.find(p => p.id === selectedOpponentId);
+      if (opp) return `vs ${opp.name}`;
+    }
     return null;
-  }, [itemFilterType, selectedMatchId, selectedChallengeId, selectedTournamentId, matches, challenges, tournaments, language]);
+  }, [itemFilterType, selectedMatchId, selectedChallengeId, selectedTournamentId, selectedOpponentId, matches, challenges, tournaments, players, language]);
 
   const clearItemFilter = () => {
     setItemFilterType('all');
     setSelectedMatchId(null);
     setSelectedChallengeId(null);
     setSelectedTournamentId(null);
+    setSelectedOpponentId(null);
   };
 
-  const openItemPicker = (type: 'match' | 'challenge' | 'tournament') => {
+  const openItemPicker = (type: 'match' | 'challenge' | 'tournament' | 'opponent') => {
     setItemPickerType(type);
     setItemPickerSearch('');
     setShowItemPickerModal(true);
@@ -369,6 +381,7 @@ export default function StatsScreen() {
     setSelectedMatchId(id);
     setSelectedChallengeId(null);
     setSelectedTournamentId(null);
+    setSelectedOpponentId(null);
     setShowItemPickerModal(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
@@ -378,6 +391,7 @@ export default function StatsScreen() {
     setSelectedChallengeId(id);
     setSelectedMatchId(null);
     setSelectedTournamentId(null);
+    setSelectedOpponentId(null);
     setShowItemPickerModal(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
@@ -387,6 +401,17 @@ export default function StatsScreen() {
     setSelectedTournamentId(id);
     setSelectedMatchId(null);
     setSelectedChallengeId(null);
+    setSelectedOpponentId(null);
+    setShowItemPickerModal(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const selectOpponent = (id: string) => {
+    setItemFilterType('opponent');
+    setSelectedOpponentId(id);
+    setSelectedMatchId(null);
+    setSelectedChallengeId(null);
+    setSelectedTournamentId(null);
     setShowItemPickerModal(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
@@ -1167,6 +1192,15 @@ export default function StatsScreen() {
                 {t('profile', 'statsFilterTournament')}
               </Text>
             </Pressable>
+            <Pressable
+              style={[styles.itemFilterChip, itemFilterType === 'opponent' ? styles.itemFilterChipOpponent : styles.itemFilterChipInactive]}
+              onPress={() => { Haptics.selectionAsync(); openItemPicker('opponent'); }}
+            >
+              <MaterialIcons name="people" size={14} color={itemFilterType === 'opponent' ? '#FFF' : theme.textSecondary} />
+              <Text style={[styles.itemFilterChipText, itemFilterType !== 'opponent' && styles.itemFilterChipTextInactive]}>
+                {t('profile', 'statsFilterOpponent')}
+              </Text>
+            </Pressable>
           </ScrollView>
         </View>
 
@@ -1174,9 +1208,9 @@ export default function StatsScreen() {
         {activeFilterLabel && (
           <View style={styles.activeFilterBanner}>
             <MaterialIcons 
-              name={itemFilterType === 'match' ? 'sports' : itemFilterType === 'challenge' ? 'flag' : 'emoji-events'} 
+              name={itemFilterType === 'match' ? 'sports' : itemFilterType === 'challenge' ? 'flag' : itemFilterType === 'opponent' ? 'people' : 'emoji-events'} 
               size={14} 
-              color={itemFilterType === 'match' ? theme.tirColor : itemFilterType === 'challenge' ? theme.accent : theme.carreauColor} 
+              color={itemFilterType === 'match' ? theme.tirColor : itemFilterType === 'challenge' ? theme.accent : itemFilterType === 'opponent' ? theme.pointColor : theme.carreauColor} 
             />
             <Text style={styles.activeFilterText} numberOfLines={1}>{activeFilterLabel}</Text>
             <Pressable style={styles.activeFilterClear} onPress={clearItemFilter}>
@@ -2495,7 +2529,7 @@ export default function StatsScreen() {
           <View style={styles.modalHeader}>
             <View>
               <Text style={styles.modalTitle}>
-                {itemPickerType === 'match' ? t('profile', 'selectMatch') : itemPickerType === 'challenge' ? t('profile', 'selectChallenge') : t('profile', 'selectTournament')}
+                {itemPickerType === 'match' ? t('profile', 'selectMatch') : itemPickerType === 'challenge' ? t('profile', 'selectChallenge') : itemPickerType === 'opponent' ? t('profile', 'selectOpponent') : t('profile', 'selectTournament')}
               </Text>
             </View>
             <Pressable style={styles.modalCloseButton} onPress={() => setShowItemPickerModal(false)}>
@@ -2683,6 +2717,59 @@ export default function StatsScreen() {
               </View>
             );
           })()}
+
+          {/* Opponent Picker */}
+          {itemPickerType === 'opponent' && (() => {
+            const search = itemPickerSearch.toLowerCase();
+            const opponentIds = new Set<string>();
+            timeFilteredMatches.forEach(m => { m.teamB.players.forEach(pid => opponentIds.add(pid)); });
+            timeFilteredChallenges.forEach(c => { if (c.opponentId) opponentIds.add(c.opponentId); });
+            const opponentPlayers = players.filter(p => opponentIds.has(p.id));
+            const items = opponentPlayers.filter(p => {
+              if (!search) return true;
+              return p.name.toLowerCase().includes(search) || (p.club || '').toLowerCase().includes(search);
+            });
+            return items.length > 0 ? (
+              <FlatList
+                data={items}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+                renderItem={({ item: p }) => {
+                  const matchCount = timeFilteredMatches.filter(m => m.teamB.players.includes(p.id)).length;
+                  const challengeCount = timeFilteredChallenges.filter(c => c.mode === '1v1' && c.opponentId === p.id).length;
+                  const isSelected = selectedOpponentId === p.id;
+                  const wins = timeFilteredMatches.filter(m => m.teamB.players.includes(p.id) && m.winner === 'A').length;
+                  return (
+                    <Pressable
+                      style={[styles.pickerItem, isSelected && styles.pickerItemSelected]}
+                      onPress={() => selectOpponent(p.id)}
+                    >
+                      <View style={[styles.pickerItemIndicator, { backgroundColor: theme.pointColor }]} />
+                      <View style={styles.pickerItemContent}>
+                        <View style={styles.pickerItemRow}>
+                          <Text style={styles.pickerItemTitle} numberOfLines={1}>{p.name}</Text>
+                          <Text style={[styles.pickerItemScore, { color: wins >= matchCount - wins ? theme.success : theme.error }]}>{wins}W-{matchCount - wins}L</Text>
+                        </View>
+                        <View style={styles.pickerItemMeta}>
+                          <Text style={styles.pickerItemMetaText}>{t('roles', p.role)}</Text>
+                          <View style={styles.pickerItemDot} />
+                          <Text style={styles.pickerItemMetaText}>{matchCount} {t('stats', 'matches')}</Text>
+                          {challengeCount > 0 ? <><View style={styles.pickerItemDot} /><Text style={[styles.pickerItemMetaText, { color: theme.accent }]}>{challengeCount} {t('profile', 'challenges')}</Text></> : null}
+                          {p.club ? <><View style={styles.pickerItemDot} /><Text style={styles.pickerItemMetaText}>{p.club}</Text></> : null}
+                        </View>
+                      </View>
+                      {isSelected && <MaterialIcons name="check-circle" size={22} color={theme.pointColor} />}
+                    </Pressable>
+                  );
+                }}
+              />
+            ) : (
+              <View style={styles.pickerEmpty}>
+                <MaterialIcons name="people" size={48} color={theme.textMuted} />
+                <Text style={styles.pickerEmptyText}>{t('profile', 'noOpponentsAvailable')}</Text>
+              </View>
+            );
+          })()}
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -2711,6 +2798,7 @@ const styles = StyleSheet.create({
   itemFilterChipMatch: { backgroundColor: theme.tirColor },
   itemFilterChipChallenge: { backgroundColor: theme.accent },
   itemFilterChipTournament: { backgroundColor: theme.carreauColor },
+  itemFilterChipOpponent: { backgroundColor: theme.pointColor },
   itemFilterChipText: { fontSize: 12, fontWeight: '600', color: '#FFF' },
   itemFilterChipTextInactive: { color: theme.textSecondary },
   activeFilterBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.border },
