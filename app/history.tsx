@@ -1024,7 +1024,7 @@ export default function HistoryScreen() {
           </View>
           
           {editingChallenge && (
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} enabled={Platform.OS === 'ios' ? isEditingChallengeFields : true}>
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} enabled={isEditingChallengeFields}>
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 80 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" bounces nestedScrollEnabled>
               {/* Challenge Header Card */}
               <View style={styles.detailHeaderCard}>
