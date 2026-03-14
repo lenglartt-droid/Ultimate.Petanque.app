@@ -465,7 +465,7 @@ const ChallengeStatsSummary = React.memo(({ challenges, t }: { challenges: Chall
 
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
-  const { matches, challenges, deleteChallenge, updateChallenge, refreshData } = useApp();
+  const { matches, challenges, deleteChallenge, updateChallenge, refreshData, boulesSets } = useApp();
   const { t, language } = useLanguage();
   
   const [contentFilter, setContentFilter] = useState<ContentFilter>('all');
@@ -1077,6 +1077,18 @@ export default function HistoryScreen() {
                       <Text style={[styles.detailModeBadgeText, { color: theme.textSecondary }]} numberOfLines={1}>{editingChallenge.playerName}</Text>
                     </View>
                   ) : null}
+                  {(() => {
+                    const bs = editingChallenge.boulesSetId ? boulesSets.find(b => b.id === editingChallenge.boulesSetId) : null;
+                    if (!bs) return null;
+                    return (
+                      <View style={[styles.detailModeBadge, { backgroundColor: '#D97706' + '15' }]}>
+                        <MaterialIcons name="sports-baseball" size={13} color={'#D97706'} />
+                        <Text style={[styles.detailModeBadgeText, { color: '#D97706' }]} numberOfLines={1}>
+                          {bs.name}{bs.diameter ? ` \u2022 ${bs.diameter}mm` : ''}{bs.weight ? ` \u2022 ${bs.weight}g` : ''}
+                        </Text>
+                      </View>
+                    );
+                  })()}
                 </View>
               </View>
 

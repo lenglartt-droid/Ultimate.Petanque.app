@@ -36,7 +36,7 @@ interface MeneEdit {
 export default function EditMatchScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getMatchById, updateMatch, deleteMatch, players, matches, terrains, tournaments, loading: appLoading } = useApp();
+  const { getMatchById, updateMatch, deleteMatch, players, matches, terrains, tournaments, boulesSets, loading: appLoading } = useApp();
   const { t, language } = useLanguage();
 
   const match = getMatchById(id!);
@@ -117,6 +117,7 @@ export default function EditMatchScreen() {
   }, [match]);
 
   const selectedTerrain = useMemo(() => selectedTerrainId ? terrains.find(t => t.id === selectedTerrainId) : null, [selectedTerrainId, terrains]);
+  const matchBoulesSet = useMemo(() => match?.boulesSetId ? boulesSets.find(bs => bs.id === match.boulesSetId) : null, [match?.boulesSetId, boulesSets]);
   const selectedTournament = useMemo(() => selectedTournamentId ? tournaments.find(t => t.id === selectedTournamentId) : null, [selectedTournamentId, tournaments]);
 
   const filteredTerrains = useMemo(() => {
@@ -716,6 +717,24 @@ export default function EditMatchScreen() {
             {showDatePicker && <DateTimePicker value={matchDate} mode="date" display="default" onChange={handleDateChange} />}
             {showTimePicker && <DateTimePicker value={matchDate} mode="time" display="default" onChange={handleTimeChange} />}
           </Animated.View>
+
+          {/* Boules Set (read-only display) */}
+          {matchBoulesSet ? (
+            <Animated.View entering={FadeInDown.duration(400).delay(25)} style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('match', 'boulesSet').toUpperCase()}</Text>
+              <View style={styles.pickerButton}>
+                <View style={styles.pickerSelected}>
+                  <MaterialIcons name="sports-baseball" size={20} color={theme.accent} />
+                  <View style={styles.pickerSelectedInfo}>
+                    <Text style={styles.pickerSelectedName}>{matchBoulesSet.name}</Text>
+                    <Text style={styles.pickerSelectedSub}>
+                      {[matchBoulesSet.brand, matchBoulesSet.diameter ? `${matchBoulesSet.diameter} mm` : '', matchBoulesSet.weight ? `${matchBoulesSet.weight} g` : ''].filter(Boolean).join(' \u2022 ')}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </Animated.View>
+          ) : null}
 
           {/* Location / Terrain */}
           <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
