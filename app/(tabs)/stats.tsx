@@ -293,6 +293,9 @@ export default function StatsScreen() {
     return () => sub?.remove();
   }, []);
   const isTablet = screenWidth >= 600;
+  const modalChartWidth = isTablet ? Math.floor((Math.min(screenWidth, 960) - 112) / 2) : screenWidth - 64;
+  const modalChartHeight = isTablet ? 190 : 160;
+  const modalBarChartHeight = isTablet ? 160 : 140;
 
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
   const [category, setCategory] = useState<StatsCategory>('performance');
@@ -2452,67 +2455,69 @@ export default function StatsScreen() {
             </ScrollView>
           </View>
           
-          <ScrollView style={styles.modalContent} contentContainerStyle={styles.modalScrollContent} showsVerticalScrollIndicator={false}>
+          <ScrollView style={styles.modalContent} contentContainerStyle={[styles.modalScrollContent, isTablet && styles.modalScrollContentTablet]} showsVerticalScrollIndicator={false}>
             {progressionData.weeklyData.length > 0 ? (
               <>
                 {/* Trend Summary Cards */}
-                <View style={styles.trendCardsRow}>
-                  <View style={[styles.trendCard, { borderLeftColor: theme.primary }]}>
+                <View style={[styles.trendCardsRow, isTablet && styles.trendCardsRowTablet]}>
+                  <View style={[styles.trendCard, { borderLeftColor: theme.primary }, isTablet && styles.trendCardTablet]}>
                     <View style={styles.trendCardHeader}>
-                      <MaterialIcons name="emoji-events" size={18} color={theme.primary} />
-                      <MaterialIcons name={trends.winRate === 'up' ? 'trending-up' : trends.winRate === 'down' ? 'trending-down' : 'remove'} size={16} color={trends.winRate === 'up' ? theme.success : trends.winRate === 'down' ? theme.error : theme.textMuted} />
+                      <MaterialIcons name="emoji-events" size={isTablet ? 22 : 18} color={theme.primary} />
+                      <MaterialIcons name={trends.winRate === 'up' ? 'trending-up' : trends.winRate === 'down' ? 'trending-down' : 'remove'} size={isTablet ? 20 : 16} color={trends.winRate === 'up' ? theme.success : trends.winRate === 'down' ? theme.error : theme.textMuted} />
                     </View>
-                    <Text style={styles.trendCardValue}>{performanceStats.winRate}%</Text>
-                    <Text style={styles.trendCardLabel}>{t('stats', 'victoriesLabel')}</Text>
+                    <Text style={[styles.trendCardValue, isTablet && styles.trendCardValueTablet]}>{performanceStats.winRate}%</Text>
+                    <Text style={[styles.trendCardLabel, isTablet && styles.trendCardLabelTablet]}>{t('stats', 'victoriesLabel')}</Text>
                   </View>
-                  <View style={[styles.trendCard, { borderLeftColor: theme.tirColor }]}>
+                  <View style={[styles.trendCard, { borderLeftColor: theme.tirColor }, isTablet && styles.trendCardTablet]}>
                     <View style={styles.trendCardHeader}>
-                      <MaterialIcons name="gps-fixed" size={18} color={theme.tirColor} />
-                      <MaterialIcons name={trends.tirRate === 'up' ? 'trending-up' : trends.tirRate === 'down' ? 'trending-down' : 'remove'} size={16} color={trends.tirRate === 'up' ? theme.success : trends.tirRate === 'down' ? theme.error : theme.textMuted} />
+                      <MaterialIcons name="gps-fixed" size={isTablet ? 22 : 18} color={theme.tirColor} />
+                      <MaterialIcons name={trends.tirRate === 'up' ? 'trending-up' : trends.tirRate === 'down' ? 'trending-down' : 'remove'} size={isTablet ? 20 : 16} color={trends.tirRate === 'up' ? theme.success : trends.tirRate === 'down' ? theme.error : theme.textMuted} />
                     </View>
-                    <Text style={styles.trendCardValue}>{tirStats.successRate}%</Text>
-                    <Text style={styles.trendCardLabel}>{t('stats', 'shotShort')}</Text>
+                    <Text style={[styles.trendCardValue, isTablet && styles.trendCardValueTablet]}>{tirStats.successRate}%</Text>
+                    <Text style={[styles.trendCardLabel, isTablet && styles.trendCardLabelTablet]}>{t('stats', 'shotShort')}</Text>
                   </View>
-                  <View style={[styles.trendCard, { borderLeftColor: theme.pointColor }]}>
+                  <View style={[styles.trendCard, { borderLeftColor: theme.pointColor }, isTablet && styles.trendCardTablet]}>
                     <View style={styles.trendCardHeader}>
-                      <MaterialIcons name="adjust" size={18} color={theme.pointColor} />
-                      <MaterialIcons name={trends.pointRate === 'up' ? 'trending-up' : trends.pointRate === 'down' ? 'trending-down' : 'remove'} size={16} color={trends.pointRate === 'up' ? theme.success : trends.pointRate === 'down' ? theme.error : theme.textMuted} />
+                      <MaterialIcons name="adjust" size={isTablet ? 22 : 18} color={theme.pointColor} />
+                      <MaterialIcons name={trends.pointRate === 'up' ? 'trending-up' : trends.pointRate === 'down' ? 'trending-down' : 'remove'} size={isTablet ? 20 : 16} color={trends.pointRate === 'up' ? theme.success : trends.pointRate === 'down' ? theme.error : theme.textMuted} />
                     </View>
-                    <Text style={styles.trendCardValue}>{pointStats.successRate}%</Text>
-                    <Text style={styles.trendCardLabel}>{t('stats', 'pointageLabel')}</Text>
+                    <Text style={[styles.trendCardValue, isTablet && styles.trendCardValueTablet]}>{pointStats.successRate}%</Text>
+                    <Text style={[styles.trendCardLabel, isTablet && styles.trendCardLabelTablet]}>{t('stats', 'pointageLabel')}</Text>
                   </View>
                 </View>
 
+                {/* Charts Row 1: Win Rate + Tir */}
+                <View style={isTablet ? styles.modalTabletRow : undefined}>
                 {/* Win Rate Evolution */}
-                <View style={styles.progressionSection}>
+                <View style={[styles.progressionSection, isTablet && styles.modalTabletHalf]}>
                   <View style={styles.progressionSectionHeader}>
                     <View style={[styles.progressionSectionIcon, { backgroundColor: theme.primary + '15' }]}>
                       <MaterialIcons name="emoji-events" size={20} color={theme.primary} />
                     </View>
                     <View>
-                      <Text style={styles.progressionSectionTitle}>{t('stats', 'winRateLabel')}</Text>
-                      <Text style={styles.progressionSectionSubtitle}>{progressionData.weeklyData.reduce((sum, d) => sum + d.matches, 0)} {t('stats', 'gamesUnit')}</Text>
+                      <Text style={[styles.progressionSectionTitle, isTablet && styles.progressionSectionTitleTablet]}>{t('stats', 'winRateLabel')}</Text>
+                      <Text style={[styles.progressionSectionSubtitle, isTablet && styles.progressionSectionSubtitleTablet]}>{progressionData.weeklyData.reduce((sum, d) => sum + d.matches, 0)} {t('stats', 'gamesUnit')}</Text>
                     </View>
                   </View>
                   <View style={styles.chartContainer}>
-                    <Svg width={screenWidth - 64} height={160}>
+                    <Svg width={modalChartWidth} height={modalChartHeight}>
                       {[0, 50, 100].map((v, i) => (
                         <G key={i}>
-                          <Line x1="35" y1={140 - (v / 100) * 120} x2={screenWidth - 64} y2={140 - (v / 100) * 120} stroke={theme.border} strokeWidth="1" strokeDasharray="4,4" />
-                          <SvgText x="30" y={145 - (v / 100) * 120} fontSize="10" fill={theme.textMuted} textAnchor="end">{v}%</SvgText>
+                          <Line x1="35" y1={(modalChartHeight - 20) - (v / 100) * (modalChartHeight - 40)} x2={modalChartWidth} y2={(modalChartHeight - 20) - (v / 100) * (modalChartHeight - 40)} stroke={theme.border} strokeWidth="1" strokeDasharray="4,4" />
+                          <SvgText x="30" y={(modalChartHeight - 15) - (v / 100) * (modalChartHeight - 40)} fontSize={isTablet ? '12' : '10'} fill={theme.textMuted} textAnchor="end">{v}%</SvgText>
                         </G>
                       ))}
                       {progressionData.weeklyData.map((data, i) => {
-                        const x = 45 + (i * ((screenWidth - 109) / Math.max(progressionData.weeklyData.length - 1, 1)));
-                        const y = 140 - (data.winRate / 100) * 120;
+                        const x = 45 + (i * ((modalChartWidth - 45) / Math.max(progressionData.weeklyData.length - 1, 1)));
+                        const y = (modalChartHeight - 20) - (data.winRate / 100) * (modalChartHeight - 40);
                         const prevData = progressionData.weeklyData[i - 1];
-                        const prevX = prevData ? 45 + ((i - 1) * ((screenWidth - 109) / Math.max(progressionData.weeklyData.length - 1, 1))) : x;
-                        const prevY = prevData ? 140 - (prevData.winRate / 100) * 120 : y;
+                        const prevX = prevData ? 45 + ((i - 1) * ((modalChartWidth - 45) / Math.max(progressionData.weeklyData.length - 1, 1))) : x;
+                        const prevY = prevData ? (modalChartHeight - 20) - (prevData.winRate / 100) * (modalChartHeight - 40) : y;
                         return (
                           <G key={i}>
                             {i > 0 && <Line x1={prevX} y1={prevY} x2={x} y2={y} stroke={theme.primary} strokeWidth="2.5" />}
-                            <Circle cx={x} cy={y} r="5" fill={theme.primary} />
-                            {data.matches > 0 && <SvgText x={x} y={y - 10} fontSize="9" fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.winRate}%</SvgText>}
+                            <Circle cx={x} cy={y} r={isTablet ? 6 : 5} fill={theme.primary} />
+                            {data.matches > 0 && <SvgText x={x} y={y - 10} fontSize={isTablet ? '11' : '9'} fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.winRate}%</SvgText>}
                           </G>
                         );
                       })}
@@ -2521,72 +2526,75 @@ export default function StatsScreen() {
                 </View>
 
                 {/* Tir Evolution */}
-                <View style={styles.progressionSection}>
+                <View style={[styles.progressionSection, isTablet && styles.modalTabletHalf]}>
                   <View style={styles.progressionSectionHeader}>
                     <View style={[styles.progressionSectionIcon, { backgroundColor: theme.tirColor + '15' }]}>
                       <MaterialIcons name="gps-fixed" size={20} color={theme.tirColor} />
                     </View>
                     <View>
-                      <Text style={styles.progressionSectionTitle}>{t('stats', 'shotRateLabel')}</Text>
-                      <Text style={styles.progressionSectionSubtitle}>{progressionData.weeklyData.reduce((sum, d) => sum + d.tirTotal, 0)} {t('stats', 'shotsUnit')}</Text>
+                      <Text style={[styles.progressionSectionTitle, isTablet && styles.progressionSectionTitleTablet]}>{t('stats', 'shotRateLabel')}</Text>
+                      <Text style={[styles.progressionSectionSubtitle, isTablet && styles.progressionSectionSubtitleTablet]}>{progressionData.weeklyData.reduce((sum, d) => sum + d.tirTotal, 0)} {t('stats', 'shotsUnit')}</Text>
                     </View>
                   </View>
                   <View style={styles.chartContainer}>
-                    <Svg width={screenWidth - 64} height={160}>
+                    <Svg width={modalChartWidth} height={modalChartHeight}>
                       {[0, 50, 100].map((v, i) => (
                         <G key={i}>
-                          <Line x1="35" y1={140 - (v / 100) * 120} x2={screenWidth - 64} y2={140 - (v / 100) * 120} stroke={theme.border} strokeWidth="1" strokeDasharray="4,4" />
-                          <SvgText x="30" y={145 - (v / 100) * 120} fontSize="10" fill={theme.textMuted} textAnchor="end">{v}%</SvgText>
+                          <Line x1="35" y1={(modalChartHeight - 20) - (v / 100) * (modalChartHeight - 40)} x2={modalChartWidth} y2={(modalChartHeight - 20) - (v / 100) * (modalChartHeight - 40)} stroke={theme.border} strokeWidth="1" strokeDasharray="4,4" />
+                          <SvgText x="30" y={(modalChartHeight - 15) - (v / 100) * (modalChartHeight - 40)} fontSize={isTablet ? '12' : '10'} fill={theme.textMuted} textAnchor="end">{v}%</SvgText>
                         </G>
                       ))}
                       {progressionData.weeklyData.map((data, i) => {
-                        const x = 45 + (i * ((screenWidth - 109) / Math.max(progressionData.weeklyData.length - 1, 1)));
-                        const y = 140 - (data.tirRate / 100) * 120;
+                        const x = 45 + (i * ((modalChartWidth - 45) / Math.max(progressionData.weeklyData.length - 1, 1)));
+                        const y = (modalChartHeight - 20) - (data.tirRate / 100) * (modalChartHeight - 40);
                         const prevData = progressionData.weeklyData[i - 1];
-                        const prevX = prevData ? 45 + ((i - 1) * ((screenWidth - 109) / Math.max(progressionData.weeklyData.length - 1, 1))) : x;
-                        const prevY = prevData ? 140 - (prevData.tirRate / 100) * 120 : y;
+                        const prevX = prevData ? 45 + ((i - 1) * ((modalChartWidth - 45) / Math.max(progressionData.weeklyData.length - 1, 1))) : x;
+                        const prevY = prevData ? (modalChartHeight - 20) - (prevData.tirRate / 100) * (modalChartHeight - 40) : y;
                         return (
                           <G key={i}>
                             {i > 0 && <Line x1={prevX} y1={prevY} x2={x} y2={y} stroke={theme.tirColor} strokeWidth="2.5" />}
-                            <Circle cx={x} cy={y} r="5" fill={theme.tirColor} />
-                            {data.tirTotal > 0 && <SvgText x={x} y={y - 10} fontSize="9" fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.tirRate}%</SvgText>}
+                            <Circle cx={x} cy={y} r={isTablet ? 6 : 5} fill={theme.tirColor} />
+                            {data.tirTotal > 0 && <SvgText x={x} y={y - 10} fontSize={isTablet ? '11' : '9'} fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.tirRate}%</SvgText>}
                           </G>
                         );
                       })}
                     </Svg>
                   </View>
                 </View>
+                </View>
 
+                {/* Charts Row 2: Point + Carreaux */}
+                <View style={isTablet ? styles.modalTabletRow : undefined}>
                 {/* Point Evolution */}
-                <View style={styles.progressionSection}>
+                <View style={[styles.progressionSection, isTablet && styles.modalTabletHalf]}>
                   <View style={styles.progressionSectionHeader}>
                     <View style={[styles.progressionSectionIcon, { backgroundColor: theme.pointColor + '15' }]}>
                       <MaterialIcons name="adjust" size={20} color={theme.pointColor} />
                     </View>
                     <View>
-                      <Text style={styles.progressionSectionTitle}>{t('stats', 'pointRateLabel')}</Text>
-                      <Text style={styles.progressionSectionSubtitle}>{progressionData.weeklyData.reduce((sum, d) => sum + d.pointTotal, 0)} {t('stats', 'pointsUnit')}</Text>
+                      <Text style={[styles.progressionSectionTitle, isTablet && styles.progressionSectionTitleTablet]}>{t('stats', 'pointRateLabel')}</Text>
+                      <Text style={[styles.progressionSectionSubtitle, isTablet && styles.progressionSectionSubtitleTablet]}>{progressionData.weeklyData.reduce((sum, d) => sum + d.pointTotal, 0)} {t('stats', 'pointsUnit')}</Text>
                     </View>
                   </View>
                   <View style={styles.chartContainer}>
-                    <Svg width={screenWidth - 64} height={160}>
+                    <Svg width={modalChartWidth} height={modalChartHeight}>
                       {[0, 50, 100].map((v, i) => (
                         <G key={i}>
-                          <Line x1="35" y1={140 - (v / 100) * 120} x2={screenWidth - 64} y2={140 - (v / 100) * 120} stroke={theme.border} strokeWidth="1" strokeDasharray="4,4" />
-                          <SvgText x="30" y={145 - (v / 100) * 120} fontSize="10" fill={theme.textMuted} textAnchor="end">{v}%</SvgText>
+                          <Line x1="35" y1={(modalChartHeight - 20) - (v / 100) * (modalChartHeight - 40)} x2={modalChartWidth} y2={(modalChartHeight - 20) - (v / 100) * (modalChartHeight - 40)} stroke={theme.border} strokeWidth="1" strokeDasharray="4,4" />
+                          <SvgText x="30" y={(modalChartHeight - 15) - (v / 100) * (modalChartHeight - 40)} fontSize={isTablet ? '12' : '10'} fill={theme.textMuted} textAnchor="end">{v}%</SvgText>
                         </G>
                       ))}
                       {progressionData.weeklyData.map((data, i) => {
-                        const x = 45 + (i * ((screenWidth - 109) / Math.max(progressionData.weeklyData.length - 1, 1)));
-                        const y = 140 - (data.pointRate / 100) * 120;
+                        const x = 45 + (i * ((modalChartWidth - 45) / Math.max(progressionData.weeklyData.length - 1, 1)));
+                        const y = (modalChartHeight - 20) - (data.pointRate / 100) * (modalChartHeight - 40);
                         const prevData = progressionData.weeklyData[i - 1];
-                        const prevX = prevData ? 45 + ((i - 1) * ((screenWidth - 109) / Math.max(progressionData.weeklyData.length - 1, 1))) : x;
-                        const prevY = prevData ? 140 - (prevData.pointRate / 100) * 120 : y;
+                        const prevX = prevData ? 45 + ((i - 1) * ((modalChartWidth - 45) / Math.max(progressionData.weeklyData.length - 1, 1))) : x;
+                        const prevY = prevData ? (modalChartHeight - 20) - (prevData.pointRate / 100) * (modalChartHeight - 40) : y;
                         return (
                           <G key={i}>
                             {i > 0 && <Line x1={prevX} y1={prevY} x2={x} y2={y} stroke={theme.pointColor} strokeWidth="2.5" />}
-                            <Circle cx={x} cy={y} r="5" fill={theme.pointColor} />
-                            {data.pointTotal > 0 && <SvgText x={x} y={y - 10} fontSize="9" fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.pointRate}%</SvgText>}
+                            <Circle cx={x} cy={y} r={isTablet ? 6 : 5} fill={theme.pointColor} />
+                            {data.pointTotal > 0 && <SvgText x={x} y={y - 10} fontSize={isTablet ? '11' : '9'} fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.pointRate}%</SvgText>}
                           </G>
                         );
                       })}
@@ -2595,33 +2603,35 @@ export default function StatsScreen() {
                 </View>
 
                 {/* Carreaux Bar Chart */}
-                <View style={styles.progressionSection}>
+                <View style={[styles.progressionSection, isTablet && styles.modalTabletHalf]}>
                   <View style={styles.progressionSectionHeader}>
                     <View style={[styles.progressionSectionIcon, { backgroundColor: theme.carreauColor + '15' }]}>
                       <MaterialIcons name="stars" size={20} color={theme.carreauColor} />
                     </View>
                     <View>
-                      <Text style={styles.progressionSectionTitle}>{t('stats', 'carreauxLabel')}</Text>
-                      <Text style={styles.progressionSectionSubtitle}>{progressionData.weeklyData.reduce((sum, d) => sum + d.carreaux, 0)} {t('stats', 'inTotal')}</Text>
+                      <Text style={[styles.progressionSectionTitle, isTablet && styles.progressionSectionTitleTablet]}>{t('stats', 'carreauxLabel')}</Text>
+                      <Text style={[styles.progressionSectionSubtitle, isTablet && styles.progressionSectionSubtitleTablet]}>{progressionData.weeklyData.reduce((sum, d) => sum + d.carreaux, 0)} {t('stats', 'inTotal')}</Text>
                     </View>
                   </View>
                   <View style={styles.chartContainer}>
-                    <Svg width={screenWidth - 64} height={140}>
+                    <Svg width={modalChartWidth} height={modalBarChartHeight}>
                       {progressionData.weeklyData.map((data, i) => {
-                        const barWidth = Math.max((screenWidth - 104) / progressionData.weeklyData.length - 6, 8);
-                        const x = 40 + (i * ((screenWidth - 80) / progressionData.weeklyData.length));
+                        const barWidth = Math.max((modalChartWidth - 40) / progressionData.weeklyData.length - 6, 8);
+                        const x = 40 + (i * ((modalChartWidth - 16) / progressionData.weeklyData.length));
                         const maxCarreaux = Math.max(...progressionData.weeklyData.map(d => d.carreaux), 1);
-                        const barHeight = Math.max((data.carreaux / maxCarreaux) * 90, data.carreaux > 0 ? 4 : 0);
+                        const barAreaH = modalBarChartHeight - 50;
+                        const barHeight = Math.max((data.carreaux / maxCarreaux) * barAreaH, data.carreaux > 0 ? 4 : 0);
                         return (
                           <G key={i}>
-                            <Rect x={x} y={110 - barHeight} width={barWidth} height={barHeight} fill={theme.carreauColor} rx="3" />
-                            {data.carreaux > 0 && <SvgText x={x + barWidth / 2} y={105 - barHeight} fontSize="10" fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.carreaux}</SvgText>}
-                            <SvgText x={x + barWidth / 2} y={130} fontSize="8" fill={theme.textMuted} textAnchor="middle">{data.week}</SvgText>
+                            <Rect x={x} y={(modalBarChartHeight - 30) - barHeight} width={barWidth} height={barHeight} fill={theme.carreauColor} rx="3" />
+                            {data.carreaux > 0 && <SvgText x={x + barWidth / 2} y={(modalBarChartHeight - 35) - barHeight} fontSize={isTablet ? '12' : '10'} fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.carreaux}</SvgText>}
+                            <SvgText x={x + barWidth / 2} y={modalBarChartHeight - 10} fontSize={isTablet ? '10' : '8'} fill={theme.textMuted} textAnchor="middle">{data.week}</SvgText>
                           </G>
                         );
                       })}
                     </Svg>
                   </View>
+                </View>
                 </View>
 
                 {/* Summary Table */}
@@ -2630,7 +2640,7 @@ export default function StatsScreen() {
                     <View style={[styles.progressionSectionIcon, { backgroundColor: theme.textSecondary + '15' }]}>
                       <MaterialIcons name="table-chart" size={20} color={theme.textSecondary} />
                     </View>
-                    <Text style={styles.progressionSectionTitle}>{t('stats', 'summaryLabel')}</Text>
+                    <Text style={[styles.progressionSectionTitle, isTablet && styles.progressionSectionTitleTablet]}>{t('stats', 'summaryLabel')}</Text>
                   </View>
                   <View style={styles.summaryTable}>
                     <View style={styles.summaryHeader}>
@@ -3150,7 +3160,11 @@ const styles = StyleSheet.create({
   progressionFilterText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
   progressionFilterTextActive: { color: '#FFF' },
   trendCardsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  trendCardsRowTablet: { gap: 16, marginBottom: 24 },
   trendCard: { flex: 1, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 12, borderLeftWidth: 3, ...theme.shadows.card },
+  trendCardTablet: { padding: 18, borderLeftWidth: 4 },
+  trendCardValueTablet: { fontSize: 28 },
+  trendCardLabelTablet: { fontSize: 13 },
   trendCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   trendCardValue: { fontSize: 22, fontWeight: '700', color: theme.textPrimary },
   trendCardLabel: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
@@ -3158,7 +3172,12 @@ const styles = StyleSheet.create({
   progressionSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
   progressionSectionIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   progressionSectionTitle: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  progressionSectionTitleTablet: { fontSize: 17 },
   progressionSectionSubtitle: { fontSize: 11, color: theme.textMuted },
+  progressionSectionSubtitleTablet: { fontSize: 13 },
+  modalScrollContentTablet: { maxWidth: 960, alignSelf: 'center' as const, width: '100%', paddingHorizontal: 24 },
+  modalTabletRow: { flexDirection: 'row' as const, gap: 16, marginBottom: 0 },
+  modalTabletHalf: { flex: 1 },
   chartContainer: { alignItems: 'center', marginBottom: 8 },
   summaryTable: { borderRadius: theme.borderRadius.md, overflow: 'hidden', borderWidth: 1, borderColor: theme.border },
   summaryHeader: { flexDirection: 'row', backgroundColor: theme.backgroundSecondary, paddingVertical: 10 },
