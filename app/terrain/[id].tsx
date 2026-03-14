@@ -22,6 +22,7 @@ import { useApp } from '@/contexts/AppContext';
 import ShareModal from '@/components/ui/ShareModal';
 import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
 import SharedBadge from '@/components/ui/SharedBadge';
+import MergePickerModal from '@/components/ui/MergePickerModal';
 import { isSharedWithMe, saveSharedItemToMyAccount } from '@/services/shareService';
 import { toggleItemPublic } from '@/services/publicItemsService';
 import { useAlert } from '@/template';
@@ -38,6 +39,7 @@ export default function TerrainDetailScreen() {
   const [isShared, setIsShared] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isPublicState, setIsPublicState] = useState(terrain?.isPublic ?? false);
+  const [showMergePicker, setShowMergePicker] = useState(false);
   const [togglingPublic, setTogglingPublic] = useState(false);
   const { showAlert } = useAlert();
   const { user } = useAuth();
@@ -188,6 +190,11 @@ export default function TerrainDetailScreen() {
           <Pressable style={styles.shareButton} onPress={() => setShowShareModal(true)}>
             <MaterialIcons name="share" size={22} color={theme.success} />
           </Pressable>
+          {canEdit && (
+            <Pressable style={styles.editButton} onPress={() => setShowMergePicker(true)}>
+              <MaterialIcons name="compare-arrows" size={22} color={theme.accent} />
+            </Pressable>
+          )}
           <Pressable 
             style={[styles.favoriteButton, isFavorite && styles.favoriteButtonActive]} 
             onPress={handleToggleFavorite}
@@ -518,6 +525,13 @@ export default function TerrainDetailScreen() {
           itemName={terrain.name}
         />
       )}
+
+      <MergePickerModal
+        visible={showMergePicker}
+        onClose={() => setShowMergePicker(false)}
+        itemType="terrain"
+        currentItemId={id!}
+      />
     </SafeAreaView>
   );
 }

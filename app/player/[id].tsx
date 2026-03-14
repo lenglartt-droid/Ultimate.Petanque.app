@@ -19,6 +19,8 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
 import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
 import SharedBadge from '@/components/ui/SharedBadge';
+import ShareModal from '@/components/ui/ShareModal';
+import MergePickerModal from '@/components/ui/MergePickerModal';
 import Svg, { Circle } from 'react-native-svg';
 import * as Linking from 'expo-linking';
 
@@ -67,6 +69,9 @@ export default function PlayerDetailScreen() {
   const isSharedItem = sharedPermission !== null;
   const isReadOnly = sharedPermission === 'read';
   const canEdit = !isReadOnly;
+
+  const [showShareModal, setShowShareModal] = React.useState(false);
+  const [showMergePicker, setShowMergePicker] = React.useState(false);
 
 
   // Calculate preferred role from match history
@@ -240,6 +245,14 @@ export default function PlayerDetailScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>{t('player', 'playerProfile')}</Text>
         <View style={styles.headerActions}>
+          <Pressable style={styles.editButton} onPress={() => setShowShareModal(true)}>
+            <MaterialIcons name="share" size={22} color={theme.success} />
+          </Pressable>
+          {canEdit && (
+            <Pressable style={styles.editButton} onPress={() => setShowMergePicker(true)}>
+              <MaterialIcons name="compare-arrows" size={22} color={theme.accent} />
+            </Pressable>
+          )}
           {canEdit && (
             <Pressable style={styles.editButton} onPress={() => router.push(`/player/edit/${id}`)}>
               <MaterialIcons name="edit" size={22} color={theme.primary} />
@@ -633,6 +646,22 @@ export default function PlayerDetailScreen() {
         />
       </ScrollView>
 
+      {player ? (
+        <ShareModal
+          visible={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          itemType="player"
+          itemId={player.id}
+          itemName={player.name}
+        />
+      ) : null}
+
+      <MergePickerModal
+        visible={showMergePicker}
+        onClose={() => setShowMergePicker(false)}
+        itemType="player"
+        currentItemId={id!}
+      />
     </SafeAreaView>
   );
 }
