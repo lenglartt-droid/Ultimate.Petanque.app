@@ -10,16 +10,21 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useAuth } from '@/template';
 import { BoulesSet } from '@/services/mockData';
+import { uploadBoulesSetPhoto } from '@/services/storageService';
 
 const HARDNESS_OPTIONS = ['Tendre', 'Demi-tendre', 'Dure'] as const;
 
@@ -27,6 +32,7 @@ export default function EquipmentScreen() {
   const insets = useSafeAreaInsets();
   const { boulesSets, addBoulesSet, updateBoulesSet, deleteBoulesSet, setPrimaryBoulesSet, matches, challenges } = useApp();
   const { t, language } = useLanguage();
+  const { user } = useAuth();
 
   const [showForm, setShowForm] = useState(false);
   const [editingSet, setEditingSet] = useState<BoulesSet | null>(null);
@@ -40,6 +46,8 @@ export default function EquipmentScreen() {
   const [formHardness, setFormHardness] = useState('');
   const [formNotes, setFormNotes] = useState('');
   const [formIsPrimary, setFormIsPrimary] = useState(false);
+  const [formPhoto, setFormPhoto] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   // Stats per set
   const setStats = useMemo(() => {
@@ -65,6 +73,7 @@ export default function EquipmentScreen() {
     setFormHardness('');
     setFormNotes('');
     setFormIsPrimary(false);
+    setFormPhoto(null);
     setEditingSet(null);
   }, []);
 
@@ -85,9 +94,75 @@ export default function EquipmentScreen() {
     setFormHardness(set.hardness || '');
     setFormNotes(set.notes || '');
     setFormIsPrimary(set.isPrimary || false);
+    setFormPhoto(set.photo || null);
     setShowForm(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, []);
+
+  const handlePickPhoto = useCallback(async () => {
+    Alert.alert(
+      language === 'fr' ? 'Photo du set' : 'Set photo',
+      language === 'fr' ? 'Choisissez une option' : 'Choose an option',
+      [
+        {
+          text: language === 'fr' ? 'Prendre une photo' : 'Take a photo',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert(t('profile', 'permissionRequired'), t('profile', 'cameraPermission'));
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [4, 3], quality: 0.8 });
+            if (!result.canceled && result.assets[0]) {
+              await uploadPhoto(result.assets[0].uri);
+            }
+          },
+        },
+        {
+          text: language === 'fr' ? 'Choisir dans la galerie' : 'Choose from gallery',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert(t('profile', 'permissionRequired'), t('profile', 'galleryPermission'));
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [4, 3], quality: 0.8 });
+            if (!result.canceled && result.assets[0]) {
+              await uploadPhoto(result.assets[0].uri);
+            }
+          },
+        },
+        ...(formPhoto ? [{
+          text: language === 'fr' ? 'Supprimer la photo' : 'Remove photo',
+          style: 'destructive' as const,
+          onPress: () => {
+            setFormPhoto(null);
+            Haptics.selectionAsync();
+          },
+        }] : []),
+        { text: t('common', 'cancel'), style: 'cancel' as const },
+      ]
+    );
+  }, [formPhoto, language, t]);
+
+  const uploadPhoto = useCallback(async (uri: string) => {
+    if (!user?.id) return;
+    setUploadingPhoto(true);
+    try {
+      const publicUrl = await uploadBoulesSetPhoto(user.id, uri);
+      if (publicUrl) {
+        setFormPhoto(publicUrl);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Alert.alert(t('common', 'error'), language === 'fr' ? 'Impossible de charger la photo' : 'Unable to upload photo');
+      }
+    } catch (e) {
+      console.log('Error uploading boules photo:', e);
+      Alert.alert(t('common', 'error'), language === 'fr' ? 'Erreur lors du chargement' : 'Upload error');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }, [user?.id, t, language]);
 
   const handleSave = useCallback(async () => {
     if (!formName.trim()) {
@@ -104,6 +179,7 @@ export default function EquipmentScreen() {
       hardness: formHardness || undefined,
       isPrimary: formIsPrimary,
       notes: formNotes.trim() || undefined,
+      photo: formPhoto || undefined,
     };
 
     if (editingSet) {
@@ -118,7 +194,7 @@ export default function EquipmentScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setShowForm(false);
     resetForm();
-  }, [formName, formBrand, formDiameter, formWeight, formSerialNumber, formHardness, formNotes, formIsPrimary, editingSet, addBoulesSet, updateBoulesSet, setPrimaryBoulesSet, resetForm, t, language]);
+  }, [formName, formBrand, formDiameter, formWeight, formSerialNumber, formHardness, formNotes, formIsPrimary, formPhoto, editingSet, addBoulesSet, updateBoulesSet, setPrimaryBoulesSet, resetForm, t, language]);
 
   const handleDelete = useCallback((set: BoulesSet) => {
     Alert.alert(
@@ -218,11 +294,17 @@ export default function EquipmentScreen() {
                     </View>
                   ) : null}
 
-                  {/* Header row */}
+                  {/* Header row with photo */}
                   <View style={styles.setHeader}>
-                    <View style={[styles.setIconBg, set.isPrimary && { backgroundColor: theme.accent + '20' }]}>
-                      <MaterialIcons name="sports-baseball" size={24} color={set.isPrimary ? theme.accent : theme.textSecondary} />
-                    </View>
+                    {set.photo ? (
+                      <View style={styles.setPhotoBg}>
+                        <Image source={{ uri: set.photo }} style={styles.setPhoto} contentFit="cover" transition={200} />
+                      </View>
+                    ) : (
+                      <View style={[styles.setIconBg, set.isPrimary && { backgroundColor: theme.accent + '20' }]}>
+                        <MaterialIcons name="sports-baseball" size={24} color={set.isPrimary ? theme.accent : theme.textSecondary} />
+                      </View>
+                    )}
                     <View style={styles.setInfo}>
                       <Text style={styles.setName}>{set.name}</Text>
                       <Text style={styles.setMeta}>
@@ -378,6 +460,34 @@ export default function EquipmentScreen() {
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
+              {/* Photo */}
+              <Pressable style={styles.photoPickerContainer} onPress={handlePickPhoto} disabled={uploadingPhoto}>
+                {uploadingPhoto ? (
+                  <View style={styles.photoPickerLoading}>
+                    <ActivityIndicator size="large" color={theme.primary} />
+                    <Text style={styles.photoPickerLoadingText}>{language === 'fr' ? 'Envoi...' : 'Uploading...'}</Text>
+                  </View>
+                ) : formPhoto ? (
+                  <View style={styles.photoPickerFilled}>
+                    <Image source={{ uri: formPhoto }} style={styles.photoPickerImage} contentFit="cover" transition={200} />
+                    <View style={styles.photoPickerOverlay}>
+                      <View style={styles.photoPickerOverlayBadge}>
+                        <MaterialIcons name="camera-alt" size={16} color="#FFF" />
+                        <Text style={styles.photoPickerOverlayText}>{language === 'fr' ? 'Modifier' : 'Change'}</Text>
+                      </View>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.photoPickerEmpty}>
+                    <View style={styles.photoPickerEmptyIcon}>
+                      <MaterialIcons name="add-a-photo" size={28} color={theme.primary} />
+                    </View>
+                    <Text style={styles.photoPickerEmptyTitle}>{language === 'fr' ? 'Ajouter une photo' : 'Add a photo'}</Text>
+                    <Text style={styles.photoPickerEmptyDesc}>{language === 'fr' ? 'Photo de vos boules' : 'Photo of your boules'}</Text>
+                  </View>
+                )}
+              </Pressable>
+
               {/* Name */}
               <View style={styles.formField}>
                 <Text style={styles.formLabel}>{language === 'fr' ? 'NOM DU SET *' : 'SET NAME *'}</Text>
@@ -387,7 +497,7 @@ export default function EquipmentScreen() {
                   onChangeText={setFormName}
                   placeholder={language === 'fr' ? 'Ex: Obut ATX Compétition' : 'Ex: Obut ATX Competition'}
                   placeholderTextColor={theme.textMuted}
-                  autoFocus
+                  autoFocus={!editingSet}
                 />
               </View>
 
@@ -544,6 +654,8 @@ const styles = StyleSheet.create({
   primaryBadgeText: { fontSize: 10, fontWeight: '700', color: '#FFF' },
   setHeader: { flexDirection: 'row', alignItems: 'center' },
   setIconBg: { width: 48, height: 48, borderRadius: 14, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  setPhotoBg: { width: 48, height: 48, borderRadius: 14, overflow: 'hidden', marginRight: 12 },
+  setPhoto: { width: 48, height: 48 },
   setInfo: { flex: 1 },
   setName: { fontSize: 16, fontWeight: '600', color: theme.textPrimary, marginBottom: 2 },
   setMeta: { fontSize: 13, color: theme.textSecondary },
@@ -594,6 +706,20 @@ const styles = StyleSheet.create({
   hardnessChipActive: { borderColor: theme.primary, backgroundColor: theme.primary + '10' },
   hardnessChipText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
   hardnessChipTextActive: { color: theme.primary },
+
+  // Photo picker
+  photoPickerContainer: { borderRadius: theme.borderRadius.lg, overflow: 'hidden', ...theme.shadows.card },
+  photoPickerLoading: { height: 160, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center', gap: 10 },
+  photoPickerLoadingText: { fontSize: 13, color: theme.textSecondary },
+  photoPickerFilled: { position: 'relative', height: 180 },
+  photoPickerImage: { width: '100%', height: '100%' },
+  photoPickerOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingVertical: 8, paddingHorizontal: 12, flexDirection: 'row', justifyContent: 'flex-end' },
+  photoPickerOverlayBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: theme.borderRadius.full },
+  photoPickerOverlayText: { fontSize: 12, fontWeight: '600', color: '#FFF' },
+  photoPickerEmpty: { height: 140, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: theme.primary + '25', borderStyle: 'dashed', borderRadius: theme.borderRadius.lg },
+  photoPickerEmptyIcon: { width: 52, height: 52, borderRadius: 26, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  photoPickerEmptyTitle: { fontSize: 14, fontWeight: '600', color: theme.primary },
+  photoPickerEmptyDesc: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
 
   // Primary toggle
   primaryToggle: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, borderWidth: 2, borderColor: 'transparent', ...theme.shadows.card },

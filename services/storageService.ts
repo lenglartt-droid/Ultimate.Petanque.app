@@ -80,6 +80,17 @@ export async function uploadPlayerAvatar(
 }
 
 /**
+ * Upload a boules set photo to Supabase Storage.
+ * Returns the public URL on success, or null on failure.
+ */
+export async function uploadBoulesSetPhoto(
+  userId: string,
+  fileUri: string,
+): Promise<string | null> {
+  return uploadImageToStorage('boules-photos', userId, fileUri);
+}
+
+/**
  * Upload multiple terrain photos to Supabase Storage.
  * Local URIs are uploaded; remote URLs are kept as-is.
  * Returns array of public URLs (failed uploads are filtered out).

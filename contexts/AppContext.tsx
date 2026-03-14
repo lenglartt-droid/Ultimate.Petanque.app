@@ -697,7 +697,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           id: s.id, name: s.name, brand: s.brand,
           diameter: s.diameter ? parseFloat(s.diameter) : undefined,
           weight: s.weight || undefined, serialNumber: s.serial_number,
-          hardness: s.hardness, isPrimary: s.is_primary, notes: s.notes,
+          hardness: s.hardness, isPrimary: s.is_primary, notes: s.notes, photo: s.photo,
         }));
         setBoulesSets(dbSets);
       }
@@ -1849,6 +1849,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         hardness: set.hardness || null,
         is_primary: set.isPrimary || false,
         notes: set.notes || null,
+        photo: set.photo || null,
       }).select().single();
       if (error) throw error;
       if (data) {
@@ -1885,6 +1886,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.hardness !== undefined) dbUpdates.hardness = updates.hardness || null;
       if (updates.isPrimary !== undefined) dbUpdates.is_primary = updates.isPrimary;
       if (updates.notes !== undefined) dbUpdates.notes = updates.notes || null;
+      if (updates.photo !== undefined) dbUpdates.photo = updates.photo || null;
       dbUpdates.updated_at = new Date().toISOString();
       await supabase.from('boules_sets').update(dbUpdates).eq('id', id);
       // If updated set is primary, sync to player

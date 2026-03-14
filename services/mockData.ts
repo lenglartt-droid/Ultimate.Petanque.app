@@ -13,6 +13,7 @@ export interface BoulesSet {
   hardness?: string;
   isPrimary?: boolean;
   notes?: string;
+  photo?: string;
 }
 
 // Boules info for player
