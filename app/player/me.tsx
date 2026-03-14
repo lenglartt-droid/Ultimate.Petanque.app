@@ -34,7 +34,7 @@ export default function MyPlayerCardScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { t } = useLanguage();
-  const { selfPlayer, userStats, challengeStats, matches, challenges, setItemPublic } = useApp();
+  const { selfPlayer, userStats, challengeStats, matches, challenges, setItemPublic, getTerrainById } = useApp();
   const { showAlert } = useAlert();
   const supabase = getSupabaseClient();
   const [showShareModal, setShowShareModal] = React.useState(false);
@@ -255,6 +255,9 @@ export default function MyPlayerCardScreen() {
       setShowFullscreen(true);
     }
   };
+
+  // Resolve profile terrain
+  const profileTerrain = selfPlayer?.terrainId ? getTerrainById(selfPlayer.terrainId) : null;
 
   // Calculate preferred role from match history
   const roleAnalysis = React.useMemo(() => {
@@ -497,6 +500,18 @@ export default function MyPlayerCardScreen() {
             </Pressable>
           )}
           
+          {/* Terrain de pratique */}
+          {profileTerrain ? (
+            <Pressable 
+              style={styles.terrainBadge}
+              onPress={() => router.push(`/terrain/${profileTerrain.id}`)}
+            >
+              <MaterialIcons name="sports-soccer" size={16} color={theme.success} />
+              <Text style={styles.terrainBadgeText}>{profileTerrain.name}</Text>
+              <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
+            </Pressable>
+          ) : null}
+
           {/* Handedness */}
           {selfPlayer.handedness ? (
             <View style={styles.handednessContainer}>
@@ -1151,6 +1166,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#6366F1',
+  },
+  terrainBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: theme.success + '15',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: theme.borderRadius.full,
+    marginBottom: 8,
+  },
+  terrainBadgeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.success,
   },
   contactSection: {
     flexDirection: 'row',
