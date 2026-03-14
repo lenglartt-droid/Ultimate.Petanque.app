@@ -20,7 +20,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 
 export default function FinancialScreen() {
   const insets = useSafeAreaInsets();
-  const { tournaments, clubs, selfPlayer } = useApp();
+  const { tournaments, clubs, selfPlayer, boulesSets } = useApp();
   const { t, language } = useLanguage();
 
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
@@ -35,12 +35,14 @@ export default function FinancialScreen() {
     const membershipCost = myClub?.membershipCost || 0;
     const totalRegistrationCosts = tournaments.reduce((sum, t) => sum + (t.registrationCost || 0), 0);
     const totalPrizesWon = tournaments.reduce((sum, t) => sum + (t.prizeWon || 0), 0);
-    const totalCosts = membershipCost + totalRegistrationCosts;
+    const totalEquipmentCost = boulesSets.reduce((sum, bs) => sum + (bs.purchasePrice || 0), 0);
+    const setsWithPrice = boulesSets.filter(bs => bs.purchasePrice && bs.purchasePrice > 0);
+    const totalCosts = membershipCost + totalRegistrationCosts + totalEquipmentCost;
     const balance = totalPrizesWon - totalCosts;
     const tournamentsWithCost = tournaments.filter(t => t.registrationCost && t.registrationCost > 0);
     const tournamentsWithPrize = tournaments.filter(t => t.prizeWon && t.prizeWon > 0);
-    return { membershipCost, totalRegistrationCosts, totalPrizesWon, totalCosts, balance, clubName: myClub?.name, tournamentsWithCost, tournamentsWithPrize };
-  }, [tournaments, clubs, selfPlayer]);
+    return { membershipCost, totalRegistrationCosts, totalPrizesWon, totalCosts, balance, clubName: myClub?.name, tournamentsWithCost, tournamentsWithPrize, totalEquipmentCost, setsWithPrice };
+  }, [tournaments, clubs, selfPlayer, boulesSets]);
 
   // Monthly breakdown for chart
   const monthlyData = useMemo(() => {
@@ -264,6 +266,36 @@ export default function FinancialScreen() {
           )}
         </Animated.View>
 
+        {/* Equipment Costs */}
+        {financialData.setsWithPrice.length > 0 && (
+          <Animated.View entering={FadeInDown.duration(400).delay(175)} style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <View style={[styles.sectionIcon, { backgroundColor: '#D97706' + '15' }]}>
+                <MaterialIcons name="sports-baseball" size={20} color={'#D97706'} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionTitle}>{language === 'fr' ? 'Equipement (Boules)' : 'Equipment (Boules)'}</Text>
+                <Text style={styles.sectionSubtitle}>{financialData.setsWithPrice.length} set(s)</Text>
+              </View>
+              <Text style={[styles.sectionTotal, { color: theme.error }]}>-{financialData.totalEquipmentCost.toFixed(0)} \u20AC</Text>
+            </View>
+            <View style={styles.detailList}>
+              {financialData.setsWithPrice.map(bs => (
+                <Pressable key={bs.id} style={styles.detailRow} onPress={() => { Haptics.selectionAsync(); router.push('/equipment'); }}>
+                  <View style={styles.detailInfo}>
+                    <Text style={styles.detailName} numberOfLines={1}>{bs.name}</Text>
+                    <Text style={styles.detailDate}>
+                      {[bs.brand, bs.diameter ? `${bs.diameter}mm` : '', bs.weight ? `${bs.weight}g` : ''].filter(Boolean).join(' \u2022 ')}
+                    </Text>
+                  </View>
+                  <Text style={[styles.detailAmount, { color: theme.error }]}>-{bs.purchasePrice} \u20AC</Text>
+                  <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+                </Pressable>
+              ))}
+            </View>
+          </Animated.View>
+        )}
+
         {/* Club Membership */}
         {financialData.membershipCost > 0 && (
           <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.sectionCard}>
@@ -297,8 +329,18 @@ export default function FinancialScreen() {
               <MaterialIcons name="arrow-downward" size={16} color={theme.error} />
               <Text style={styles.summaryRowLabel}>{t('financial', 'totalExpenses')}</Text>
             </View>
-            <Text style={[styles.summaryRowValue, { color: theme.error }]}>-{financialData.totalCosts.toFixed(0)} €</Text>
+            <Text style={[styles.summaryRowValue, { color: theme.error }]}>-{financialData.totalCosts.toFixed(0)} \u20AC</Text>
           </View>
+
+          {financialData.totalEquipmentCost > 0 && (
+            <View style={[styles.summaryRow, { paddingLeft: 24 }]}>
+              <View style={styles.summaryRowLeft}>
+                <MaterialIcons name="sports-baseball" size={14} color={'#D97706'} />
+                <Text style={[styles.summaryRowLabel, { fontSize: 13 }]}>{language === 'fr' ? 'dont Equipement' : 'incl. Equipment'}</Text>
+              </View>
+              <Text style={[styles.summaryRowValue, { color: '#D97706', fontSize: 14 }]}>-{financialData.totalEquipmentCost.toFixed(0)} \u20AC</Text>
+            </View>
+          )}
 
           <View style={styles.summaryDivider} />
 

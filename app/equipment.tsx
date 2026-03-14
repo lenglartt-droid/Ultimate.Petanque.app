@@ -14,7 +14,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Polyline, Line, Circle as SvgCircle, Path } from 'react-native-svg';
+import Svg, { Polyline, Line, Circle as SvgCircle, Path, Polygon, G, Text as SvgText } from 'react-native-svg';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
@@ -28,6 +28,9 @@ import { useAuth } from '@/template';
 import { BoulesSet } from '@/services/mockData';
 import { uploadBoulesSetPhoto } from '@/services/storageService';
 
+// ============================================
+// Mini Win Chart
+// ============================================
 function MiniWinChart({ data, chartWidth }: { data: { cumWinRate: number }[]; chartWidth: number }) {
   if (data.length < 2) return null;
   const W = Math.max(100, chartWidth);
@@ -54,6 +57,77 @@ function MiniWinChart({ data, chartWidth }: { data: { cumWinRate: number }[]; ch
   );
 }
 
+// ============================================
+// Radar Chart for Comparison
+// ============================================
+function RadarChart({ setA, setB, labels, size, colorA, colorB }: {
+  setA: number[];
+  setB: number[];
+  labels: string[];
+  size: number;
+  colorA: string;
+  colorB: string;
+}) {
+  const cx = size / 2;
+  const cy = size / 2;
+  const R = (size - 60) / 2;
+  const n = labels.length;
+  const angleStep = (2 * Math.PI) / n;
+  const levels = [25, 50, 75, 100];
+
+  const getPoint = (angle: number, value: number) => ({
+    x: cx + (value / 100) * R * Math.sin(angle),
+    y: cy - (value / 100) * R * Math.cos(angle),
+  });
+
+  const makePolygon = (values: number[]) =>
+    values.map((v, i) => {
+      const p = getPoint(i * angleStep, v);
+      return `${p.x},${p.y}`;
+    }).join(' ');
+
+  return (
+    <Svg width={size} height={size}>
+      {/* Grid levels */}
+      {levels.map(level => {
+        const pts = Array.from({ length: n }, (_, i) => {
+          const p = getPoint(i * angleStep, level);
+          return `${p.x},${p.y}`;
+        }).join(' ');
+        return <Polygon key={level} points={pts} fill="none" stroke={theme.border} strokeWidth={0.8} opacity={0.5} />;
+      })}
+      {/* Axes */}
+      {labels.map((_, i) => {
+        const p = getPoint(i * angleStep, 100);
+        return <Line key={i} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke={theme.border} strokeWidth={0.8} opacity={0.5} />;
+      })}
+      {/* Set B polygon */}
+      <Polygon points={makePolygon(setB)} fill={colorB + '15'} stroke={colorB} strokeWidth={2} opacity={0.8} />
+      {/* Set A polygon */}
+      <Polygon points={makePolygon(setA)} fill={colorA + '15'} stroke={colorA} strokeWidth={2} opacity={0.8} />
+      {/* Data points A */}
+      {setA.map((v, i) => {
+        const p = getPoint(i * angleStep, v);
+        return <SvgCircle key={`a-${i}`} cx={p.x} cy={p.y} r={4} fill={colorA} stroke="#FFF" strokeWidth={1.5} />;
+      })}
+      {/* Data points B */}
+      {setB.map((v, i) => {
+        const p = getPoint(i * angleStep, v);
+        return <SvgCircle key={`b-${i}`} cx={p.x} cy={p.y} r={4} fill={colorB} stroke="#FFF" strokeWidth={1.5} />;
+      })}
+      {/* Labels */}
+      {labels.map((label, i) => {
+        const p = getPoint(i * angleStep, 115);
+        return (
+          <SvgText key={`l-${i}`} x={p.x} y={p.y + 4} fontSize="11" fill={theme.textSecondary} textAnchor="middle" fontWeight="600">
+            {label}
+          </SvgText>
+        );
+      })}
+    </Svg>
+  );
+}
+
 const HARDNESS_OPTIONS = ['Tendre', 'Demi-tendre', 'Dure'] as const;
 
 export default function EquipmentScreen() {
@@ -65,6 +139,11 @@ export default function EquipmentScreen() {
   const [showForm, setShowForm] = useState(false);
   const [editingSet, setEditingSet] = useState<BoulesSet | null>(null);
 
+  // Comparison mode
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareSetA, setCompareSetA] = useState<string | null>(null);
+  const [compareSetB, setCompareSetB] = useState<string | null>(null);
+
   // Form state
   const [formName, setFormName] = useState('');
   const [formBrand, setFormBrand] = useState('');
@@ -75,6 +154,7 @@ export default function EquipmentScreen() {
   const [formNotes, setFormNotes] = useState('');
   const [formIsPrimary, setFormIsPrimary] = useState(false);
   const [formPhoto, setFormPhoto] = useState<string | null>(null);
+  const [formPurchasePrice, setFormPurchasePrice] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   // Detailed stats per set
@@ -124,6 +204,7 @@ export default function EquipmentScreen() {
     setFormNotes('');
     setFormIsPrimary(false);
     setFormPhoto(null);
+    setFormPurchasePrice('');
     setEditingSet(null);
   }, []);
 
@@ -145,6 +226,7 @@ export default function EquipmentScreen() {
     setFormNotes(set.notes || '');
     setFormIsPrimary(set.isPrimary || false);
     setFormPhoto(set.photo || null);
+    setFormPurchasePrice(set.purchasePrice ? String(set.purchasePrice) : '');
     setShowForm(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, []);
@@ -158,38 +240,21 @@ export default function EquipmentScreen() {
           text: language === 'fr' ? 'Prendre une photo' : 'Take a photo',
           onPress: async () => {
             const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            if (status !== 'granted') {
-              Alert.alert(t('profile', 'permissionRequired'), t('profile', 'cameraPermission'));
-              return;
-            }
+            if (status !== 'granted') { Alert.alert(t('profile', 'permissionRequired'), t('profile', 'cameraPermission')); return; }
             const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [4, 3], quality: 0.8 });
-            if (!result.canceled && result.assets[0]) {
-              await uploadPhoto(result.assets[0].uri);
-            }
+            if (!result.canceled && result.assets[0]) await uploadPhoto(result.assets[0].uri);
           },
         },
         {
           text: language === 'fr' ? 'Choisir dans la galerie' : 'Choose from gallery',
           onPress: async () => {
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (status !== 'granted') {
-              Alert.alert(t('profile', 'permissionRequired'), t('profile', 'galleryPermission'));
-              return;
-            }
+            if (status !== 'granted') { Alert.alert(t('profile', 'permissionRequired'), t('profile', 'galleryPermission')); return; }
             const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [4, 3], quality: 0.8 });
-            if (!result.canceled && result.assets[0]) {
-              await uploadPhoto(result.assets[0].uri);
-            }
+            if (!result.canceled && result.assets[0]) await uploadPhoto(result.assets[0].uri);
           },
         },
-        ...(formPhoto ? [{
-          text: language === 'fr' ? 'Supprimer la photo' : 'Remove photo',
-          style: 'destructive' as const,
-          onPress: () => {
-            setFormPhoto(null);
-            Haptics.selectionAsync();
-          },
-        }] : []),
+        ...(formPhoto ? [{ text: language === 'fr' ? 'Supprimer la photo' : 'Remove photo', style: 'destructive' as const, onPress: () => { setFormPhoto(null); Haptics.selectionAsync(); } }] : []),
         { text: t('common', 'cancel'), style: 'cancel' as const },
       ]
     );
@@ -200,26 +265,16 @@ export default function EquipmentScreen() {
     setUploadingPhoto(true);
     try {
       const publicUrl = await uploadBoulesSetPhoto(user.id, uri);
-      if (publicUrl) {
-        setFormPhoto(publicUrl);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else {
-        Alert.alert(t('common', 'error'), language === 'fr' ? 'Impossible de charger la photo' : 'Unable to upload photo');
-      }
+      if (publicUrl) { setFormPhoto(publicUrl); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }
+      else Alert.alert(t('common', 'error'), language === 'fr' ? 'Impossible de charger la photo' : 'Unable to upload photo');
     } catch (e) {
       console.log('Error uploading boules photo:', e);
       Alert.alert(t('common', 'error'), language === 'fr' ? 'Erreur lors du chargement' : 'Upload error');
-    } finally {
-      setUploadingPhoto(false);
-    }
+    } finally { setUploadingPhoto(false); }
   }, [user?.id, t, language]);
 
   const handleSave = useCallback(async () => {
-    if (!formName.trim()) {
-      Alert.alert(t('common', 'error'), language === 'fr' ? 'Le nom est obligatoire' : 'Name is required');
-      return;
-    }
-
+    if (!formName.trim()) { Alert.alert(t('common', 'error'), language === 'fr' ? 'Le nom est obligatoire' : 'Name is required'); return; }
     const setData: Omit<BoulesSet, 'id'> = {
       name: formName.trim(),
       brand: formBrand.trim() || undefined,
@@ -230,38 +285,24 @@ export default function EquipmentScreen() {
       isPrimary: formIsPrimary,
       notes: formNotes.trim() || undefined,
       photo: formPhoto || undefined,
+      purchasePrice: formPurchasePrice ? parseFloat(formPurchasePrice) : undefined,
     };
-
     if (editingSet) {
       await updateBoulesSet(editingSet.id, setData);
-      if (formIsPrimary && !editingSet.isPrimary) {
-        await setPrimaryBoulesSet(editingSet.id);
-      }
+      if (formIsPrimary && !editingSet.isPrimary) await setPrimaryBoulesSet(editingSet.id);
     } else {
       await addBoulesSet(setData);
     }
-
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setShowForm(false);
     resetForm();
-  }, [formName, formBrand, formDiameter, formWeight, formSerialNumber, formHardness, formNotes, formIsPrimary, formPhoto, editingSet, addBoulesSet, updateBoulesSet, setPrimaryBoulesSet, resetForm, t, language]);
+  }, [formName, formBrand, formDiameter, formWeight, formSerialNumber, formHardness, formNotes, formIsPrimary, formPhoto, formPurchasePrice, editingSet, addBoulesSet, updateBoulesSet, setPrimaryBoulesSet, resetForm, t, language]);
 
   const handleDelete = useCallback((set: BoulesSet) => {
-    Alert.alert(
-      t('common', 'delete'),
-      language === 'fr' ? `Supprimer "${set.name}" ?` : `Delete "${set.name}"?`,
-      [
-        { text: t('common', 'cancel'), style: 'cancel' },
-        {
-          text: t('common', 'delete'),
-          style: 'destructive',
-          onPress: async () => {
-            await deleteBoulesSet(set.id);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          },
-        },
-      ]
-    );
+    Alert.alert(t('common', 'delete'), language === 'fr' ? `Supprimer "${set.name}" ?` : `Delete "${set.name}"?`, [
+      { text: t('common', 'cancel'), style: 'cancel' },
+      { text: t('common', 'delete'), style: 'destructive', onPress: async () => { await deleteBoulesSet(set.id); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } },
+    ]);
   }, [deleteBoulesSet, t, language]);
 
   const handleSetPrimary = useCallback(async (set: BoulesSet) => {
@@ -269,7 +310,29 @@ export default function EquipmentScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [setPrimaryBoulesSet]);
 
+  // Toggle compare set selection
+  const toggleCompareSet = useCallback((id: string) => {
+    Haptics.selectionAsync();
+    if (compareSetA === id) { setCompareSetA(compareSetB); setCompareSetB(null); }
+    else if (compareSetB === id) { setCompareSetB(null); }
+    else if (!compareSetA) { setCompareSetA(id); }
+    else if (!compareSetB) { setCompareSetB(id); }
+    else { setCompareSetA(compareSetB); setCompareSetB(id); }
+  }, [compareSetA, compareSetB]);
+
   const primarySet = boulesSets.find(s => s.isPrimary);
+  const setsWithMatches = boulesSets.filter(s => (setStats[s.id]?.matches || 0) > 0);
+
+  // Comparison data
+  const comparisonData = useMemo(() => {
+    if (!compareSetA || !compareSetB) return null;
+    const a = setStats[compareSetA];
+    const b = setStats[compareSetB];
+    const nameA = boulesSets.find(s => s.id === compareSetA)?.name || 'Set A';
+    const nameB = boulesSets.find(s => s.id === compareSetB)?.name || 'Set B';
+    if (!a || !b) return null;
+    return { a, b, nameA, nameB };
+  }, [compareSetA, compareSetB, setStats, boulesSets]);
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
@@ -278,10 +341,24 @@ export default function EquipmentScreen() {
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>{language === 'fr' ? 'Équipement' : 'Equipment'}</Text>
-        <Pressable style={styles.addBtn} onPress={openNewForm}>
-          <MaterialIcons name="add" size={24} color={theme.primary} />
-        </Pressable>
+        <Text style={styles.headerTitle}>{language === 'fr' ? 'Equipement' : 'Equipment'}</Text>
+        <View style={styles.headerRight}>
+          {setsWithMatches.length >= 2 ? (
+            <Pressable
+              style={[styles.compareToggleBtn, compareMode && styles.compareToggleBtnActive]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setCompareMode(prev => !prev);
+                if (compareMode) { setCompareSetA(null); setCompareSetB(null); }
+              }}
+            >
+              <MaterialIcons name="compare" size={18} color={compareMode ? '#FFF' : theme.primary} />
+            </Pressable>
+          ) : null}
+          <Pressable style={styles.addBtn} onPress={openNewForm}>
+            <MaterialIcons name="add" size={24} color={theme.primary} />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView
@@ -296,17 +373,91 @@ export default function EquipmentScreen() {
           </View>
           <Text style={styles.heroTitle}>{language === 'fr' ? 'Mes Sets de Boules' : 'My Boules Sets'}</Text>
           <Text style={styles.heroSubtitle}>
-            {boulesSets.length} {language === 'fr' ? 'set(s) enregistré(s)' : 'set(s) registered'}
+            {boulesSets.length} {language === 'fr' ? 'set(s) enregistre(s)' : 'set(s) registered'}
           </Text>
           {primarySet ? (
             <View style={styles.heroPrimaryBadge}>
               <MaterialIcons name="star" size={14} color={theme.carreauColor} />
-              <Text style={styles.heroPrimaryText}>
-                {language === 'fr' ? 'Principal' : 'Primary'}: {primarySet.name}
-              </Text>
+              <Text style={styles.heroPrimaryText}>{language === 'fr' ? 'Principal' : 'Primary'}: {primarySet.name}</Text>
             </View>
           ) : null}
         </Animated.View>
+
+        {/* Compare Mode Banner */}
+        {compareMode ? (
+          <Animated.View entering={FadeIn.duration(300)} style={styles.compareBanner}>
+            <MaterialIcons name="compare" size={18} color={theme.primary} />
+            <Text style={styles.compareBannerText}>
+              {language === 'fr'
+                ? `Selectionnez 2 sets (${[compareSetA, compareSetB].filter(Boolean).length}/2)`
+                : `Select 2 sets (${[compareSetA, compareSetB].filter(Boolean).length}/2)`}
+            </Text>
+            {compareSetA && compareSetB ? (
+              <View style={styles.compareBannerBadge}>
+                <MaterialIcons name="check" size={14} color="#FFF" />
+              </View>
+            ) : null}
+          </Animated.View>
+        ) : null}
+
+        {/* Comparison Radar Chart */}
+        {compareMode && comparisonData ? (
+          <Animated.View entering={FadeInDown.duration(400)} style={styles.compareCard}>
+            <View style={styles.compareHeader}>
+              <MaterialIcons name="radar" size={18} color={theme.primary} />
+              <Text style={styles.compareTitle}>{language === 'fr' ? 'Comparaison' : 'Comparison'}</Text>
+            </View>
+
+            <View style={styles.radarContainer}>
+              <RadarChart
+                setA={[comparisonData.a.winRate, comparisonData.a.tirRate, comparisonData.a.pointRate, comparisonData.a.carreauRate]}
+                setB={[comparisonData.b.winRate, comparisonData.b.tirRate, comparisonData.b.pointRate, comparisonData.b.carreauRate]}
+                labels={[language === 'fr' ? 'Victoires' : 'Wins', language === 'fr' ? 'Tirs' : 'Shots', 'Points', language === 'fr' ? 'Carreaux' : 'Carreaux']}
+                size={Math.min(Dimensions.get('window').width - 64, 280)}
+                colorA="#D97706"
+                colorB="#3B82F6"
+              />
+            </View>
+
+            {/* Legend */}
+            <View style={styles.compareLegend}>
+              <View style={styles.compareLegendItem}>
+                <View style={[styles.compareLegendDot, { backgroundColor: '#D97706' }]} />
+                <Text style={styles.compareLegendText} numberOfLines={1}>{comparisonData.nameA}</Text>
+              </View>
+              <View style={styles.compareLegendItem}>
+                <View style={[styles.compareLegendDot, { backgroundColor: '#3B82F6' }]} />
+                <Text style={styles.compareLegendText} numberOfLines={1}>{comparisonData.nameB}</Text>
+              </View>
+            </View>
+
+            {/* Side-by-side stats */}
+            <View style={styles.compareTable}>
+              <View style={styles.compareTableHeader}>
+                <Text style={[styles.compareTableCell, { flex: 1.5, textAlign: 'left' }]}> </Text>
+                <Text style={[styles.compareTableCell, { color: '#D97706', fontWeight: '700' }]} numberOfLines={1}>{comparisonData.nameA.substring(0, 10)}</Text>
+                <Text style={[styles.compareTableCell, { color: '#3B82F6', fontWeight: '700' }]} numberOfLines={1}>{comparisonData.nameB.substring(0, 10)}</Text>
+              </View>
+              {[
+                { label: language === 'fr' ? 'Matchs' : 'Matches', va: comparisonData.a.matches, vb: comparisonData.b.matches, suffix: '' },
+                { label: language === 'fr' ? 'Victoires' : 'Wins', va: comparisonData.a.winRate, vb: comparisonData.b.winRate, suffix: '%' },
+                { label: language === 'fr' ? 'Tirs' : 'Shots', va: comparisonData.a.tirRate, vb: comparisonData.b.tirRate, suffix: '%' },
+                { label: 'Points', va: comparisonData.a.pointRate, vb: comparisonData.b.pointRate, suffix: '%' },
+                { label: language === 'fr' ? 'Carreaux' : 'Carreaux', va: comparisonData.a.carreauRate, vb: comparisonData.b.carreauRate, suffix: '%' },
+              ].map((row, idx) => {
+                const aWins = row.va > row.vb;
+                const bWins = row.vb > row.va;
+                return (
+                  <View key={idx} style={[styles.compareTableRow, idx % 2 === 0 && styles.compareTableRowAlt]}>
+                    <Text style={[styles.compareTableCell, { flex: 1.5, textAlign: 'left', color: theme.textSecondary, fontWeight: '600' }]}>{row.label}</Text>
+                    <Text style={[styles.compareTableCell, { color: aWins ? '#D97706' : theme.textPrimary, fontWeight: aWins ? '700' : '500' }]}>{row.va}{row.suffix}</Text>
+                    <Text style={[styles.compareTableCell, { color: bWins ? '#3B82F6' : theme.textPrimary, fontWeight: bWins ? '700' : '500' }]}>{row.vb}{row.suffix}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </Animated.View>
+        ) : null}
 
         {/* Sets List */}
         {boulesSets.length === 0 ? (
@@ -314,11 +465,9 @@ export default function EquipmentScreen() {
             <View style={styles.emptyIconBg}>
               <MaterialIcons name="sports-baseball" size={48} color={theme.textMuted} />
             </View>
-            <Text style={styles.emptyTitle}>{language === 'fr' ? 'Aucun set enregistré' : 'No sets registered'}</Text>
+            <Text style={styles.emptyTitle}>{language === 'fr' ? 'Aucun set enregistre' : 'No sets registered'}</Text>
             <Text style={styles.emptyDesc}>
-              {language === 'fr'
-                ? 'Ajoutez vos sets de boules pour suivre vos performances par équipement'
-                : 'Add your boules sets to track performance by equipment'}
+              {language === 'fr' ? 'Ajoutez vos sets de boules pour suivre vos performances par equipement' : 'Add your boules sets to track performance by equipment'}
             </Text>
             <Pressable style={styles.emptyBtn} onPress={openNewForm}>
               <MaterialIcons name="add" size={20} color="#FFF" />
@@ -329,22 +478,36 @@ export default function EquipmentScreen() {
           boulesSets.map((set, idx) => {
             const stats = setStats[set.id] || { matches: 0, wins: 0, challenges: 0, totalTirs: 0, tirsSuccess: 0, totalPoints: 0, pointsSuccess: 0, carreaux: 0, winRate: 0, tirRate: 0, pointRate: 0, carreauRate: 0, evolution: [] };
             const chartWidth = Dimensions.get('window').width - 96;
+            const isSelectedA = compareSetA === set.id;
+            const isSelectedB = compareSetB === set.id;
+            const isSelected = isSelectedA || isSelectedB;
 
             return (
               <Animated.View key={set.id} entering={FadeInDown.duration(400).delay(100 + idx * 60)}>
                 <Pressable
-                  style={[styles.setCard, set.isPrimary && styles.setCardPrimary]}
-                  onPress={() => openEditForm(set)}
+                  style={[
+                    styles.setCard,
+                    set.isPrimary && styles.setCardPrimary,
+                    compareMode && isSelected && { borderWidth: 2, borderColor: isSelectedA ? '#D97706' : '#3B82F6' },
+                  ]}
+                  onPress={() => compareMode ? toggleCompareSet(set.id) : openEditForm(set)}
                 >
+                  {/* Compare selection indicator */}
+                  {compareMode ? (
+                    <View style={[styles.compareCheckbox, isSelected && { backgroundColor: isSelectedA ? '#D97706' : '#3B82F6', borderColor: isSelectedA ? '#D97706' : '#3B82F6' }]}>
+                      {isSelected ? <MaterialIcons name="check" size={14} color="#FFF" /> : null}
+                    </View>
+                  ) : null}
+
                   {/* Primary badge */}
-                  {set.isPrimary ? (
+                  {set.isPrimary && !compareMode ? (
                     <View style={styles.primaryBadge}>
                       <MaterialIcons name="star" size={12} color="#FFF" />
                       <Text style={styles.primaryBadgeText}>{language === 'fr' ? 'Principal' : 'Primary'}</Text>
                     </View>
                   ) : null}
 
-                  {/* Header row with photo */}
+                  {/* Header row */}
                   <View style={styles.setHeader}>
                     {set.photo ? (
                       <View style={styles.setPhotoBg}>
@@ -358,39 +521,38 @@ export default function EquipmentScreen() {
                     <View style={styles.setInfo}>
                       <Text style={styles.setName}>{set.name}</Text>
                       <Text style={styles.setMeta}>
-                        {[
-                          set.brand,
-                          set.diameter ? `${set.diameter} mm` : '',
-                          set.weight ? `${set.weight} g` : '',
-                          set.hardness,
-                        ].filter(Boolean).join(' \u2022 ')}
+                        {[set.brand, set.diameter ? `${set.diameter} mm` : '', set.weight ? `${set.weight} g` : '', set.hardness].filter(Boolean).join(' \u2022 ')}
                       </Text>
                     </View>
-                    <View style={styles.setActions}>
-                      {!set.isPrimary ? (
-                        <Pressable
-                          style={styles.setActionBtn}
-                          onPress={(e) => { e.stopPropagation(); handleSetPrimary(set); }}
-                          hitSlop={8}
-                        >
-                          <MaterialIcons name="star-outline" size={20} color={theme.textMuted} />
+                    {!compareMode ? (
+                      <View style={styles.setActions}>
+                        {!set.isPrimary ? (
+                          <Pressable style={styles.setActionBtn} onPress={(e) => { e.stopPropagation(); handleSetPrimary(set); }} hitSlop={8}>
+                            <MaterialIcons name="star-outline" size={20} color={theme.textMuted} />
+                          </Pressable>
+                        ) : null}
+                        <Pressable style={[styles.setActionBtn, { backgroundColor: theme.error + '10' }]} onPress={(e) => { e.stopPropagation(); handleDelete(set); }} hitSlop={8}>
+                          <MaterialIcons name="delete-outline" size={20} color={theme.error} />
                         </Pressable>
-                      ) : null}
-                      <Pressable
-                        style={[styles.setActionBtn, { backgroundColor: theme.error + '10' }]}
-                        onPress={(e) => { e.stopPropagation(); handleDelete(set); }}
-                        hitSlop={8}
-                      >
-                        <MaterialIcons name="delete-outline" size={20} color={theme.error} />
-                      </Pressable>
-                    </View>
+                      </View>
+                    ) : null}
                   </View>
 
-                  {/* Serial number */}
-                  {set.serialNumber ? (
+                  {/* Serial + Price */}
+                  {(set.serialNumber || set.purchasePrice) ? (
                     <View style={styles.serialRow}>
-                      <MaterialIcons name="tag" size={14} color={theme.textMuted} />
-                      <Text style={styles.serialText}>N\u00B0{set.serialNumber}</Text>
+                      {set.serialNumber ? (
+                        <View style={styles.serialItem}>
+                          <MaterialIcons name="tag" size={14} color={theme.textMuted} />
+                          <Text style={styles.serialText}>N\u00B0{set.serialNumber}</Text>
+                        </View>
+                      ) : null}
+                      {set.purchasePrice ? (
+                        <View style={styles.serialItem}>
+                          <MaterialIcons name="sell" size={14} color={theme.textMuted} />
+                          <Text style={styles.serialText}>{set.purchasePrice} \u20AC</Text>
+                        </View>
+                      ) : null}
                     </View>
                   ) : null}
 
@@ -400,7 +562,7 @@ export default function EquipmentScreen() {
                       {set.diameter ? (
                         <View style={styles.specBar}>
                           <View style={styles.specHeader}>
-                            <Text style={styles.specLabel}>{language === 'fr' ? 'Diamètre' : 'Diameter'}</Text>
+                            <Text style={styles.specLabel}>{language === 'fr' ? 'Diametre' : 'Diameter'}</Text>
                             <Text style={styles.specValue}>{set.diameter} mm</Text>
                           </View>
                           <View style={styles.specTrack}>
@@ -436,51 +598,28 @@ export default function EquipmentScreen() {
                       <View style={styles.perfHeader}>
                         <MaterialIcons name="analytics" size={14} color={theme.textSecondary} />
                         <Text style={styles.perfTitle}>{language === 'fr' ? 'Performances' : 'Performance'}</Text>
-                        <Text style={styles.perfMatchCount}>{stats.matches} {language === 'fr' ? 'matchs' : 'matches'}{stats.challenges > 0 ? ` \u2022 ${stats.challenges} ${language === 'fr' ? 'défis' : 'challenges'}` : ''}</Text>
+                        <Text style={styles.perfMatchCount}>{stats.matches} {language === 'fr' ? 'matchs' : 'matches'}{stats.challenges > 0 ? ` \u2022 ${stats.challenges} ${language === 'fr' ? 'defis' : 'challenges'}` : ''}</Text>
                       </View>
                       <View style={styles.perfBars}>
-                        <View style={styles.perfBarRow}>
-                          <MaterialIcons name="emoji-events" size={13} color={theme.success} />
-                          <Text style={styles.perfBarLabel}>{language === 'fr' ? 'Victoires' : 'Wins'}</Text>
-                          <View style={styles.perfBarTrack}>
-                            <View style={[styles.perfBarFill, { width: `${stats.winRate}%`, backgroundColor: theme.success }]} />
-                          </View>
-                          <Text style={[styles.perfBarValue, { color: stats.winRate >= 50 ? theme.success : theme.error }]}>{stats.winRate}%</Text>
-                        </View>
-                        {stats.totalTirs > 0 ? (
-                          <View style={styles.perfBarRow}>
-                            <MaterialIcons name="gps-fixed" size={13} color={theme.accent} />
-                            <Text style={styles.perfBarLabel}>{language === 'fr' ? 'Tirs' : 'Shots'}</Text>
+                        {[
+                          { icon: 'emoji-events', label: language === 'fr' ? 'Victoires' : 'Wins', rate: stats.winRate, color: theme.success },
+                          stats.totalTirs > 0 ? { icon: 'gps-fixed', label: language === 'fr' ? 'Tirs' : 'Shots', rate: stats.tirRate, color: theme.accent } : null,
+                          stats.totalPoints > 0 ? { icon: 'adjust', label: 'Points', rate: stats.pointRate, color: theme.primary } : null,
+                          stats.tirsSuccess > 0 ? { icon: 'stars', label: 'Carreaux', rate: stats.carreauRate, color: theme.carreauColor } : null,
+                        ].filter(Boolean).map((bar: any, i) => (
+                          <View key={i} style={styles.perfBarRow}>
+                            <MaterialIcons name={bar.icon} size={13} color={bar.color} />
+                            <Text style={styles.perfBarLabel}>{bar.label}</Text>
                             <View style={styles.perfBarTrack}>
-                              <View style={[styles.perfBarFill, { width: `${stats.tirRate}%`, backgroundColor: theme.accent }]} />
+                              <View style={[styles.perfBarFill, { width: `${bar.rate}%`, backgroundColor: bar.color }]} />
                             </View>
-                            <Text style={[styles.perfBarValue, { color: theme.accent }]}>{stats.tirRate}%</Text>
+                            <Text style={[styles.perfBarValue, { color: bar.color }]}>{bar.rate}%</Text>
                           </View>
-                        ) : null}
-                        {stats.totalPoints > 0 ? (
-                          <View style={styles.perfBarRow}>
-                            <MaterialIcons name="adjust" size={13} color={theme.primary} />
-                            <Text style={styles.perfBarLabel}>Points</Text>
-                            <View style={styles.perfBarTrack}>
-                              <View style={[styles.perfBarFill, { width: `${stats.pointRate}%`, backgroundColor: theme.primary }]} />
-                            </View>
-                            <Text style={[styles.perfBarValue, { color: theme.primary }]}>{stats.pointRate}%</Text>
-                          </View>
-                        ) : null}
-                        {stats.tirsSuccess > 0 ? (
-                          <View style={styles.perfBarRow}>
-                            <MaterialIcons name="stars" size={13} color={theme.carreauColor} />
-                            <Text style={styles.perfBarLabel}>{language === 'fr' ? 'Carreaux' : 'Carreaux'}</Text>
-                            <View style={styles.perfBarTrack}>
-                              <View style={[styles.perfBarFill, { width: `${stats.carreauRate}%`, backgroundColor: theme.carreauColor }]} />
-                            </View>
-                            <Text style={[styles.perfBarValue, { color: theme.carreauColor }]}>{stats.carreauRate}%</Text>
-                          </View>
-                        ) : null}
+                        ))}
                       </View>
                       {stats.evolution.length >= 2 ? (
                         <View style={styles.perfChartSection}>
-                          <Text style={styles.perfChartTitle}>{language === 'fr' ? 'Évolution du taux de victoire' : 'Win rate evolution'}</Text>
+                          <Text style={styles.perfChartTitle}>{language === 'fr' ? 'Evolution du taux de victoire' : 'Win rate evolution'}</Text>
                           <View style={styles.perfChartContainer}>
                             <View style={{ flex: 1 }}>
                               <MiniWinChart data={stats.evolution} chartWidth={chartWidth} />
@@ -523,7 +662,7 @@ export default function EquipmentScreen() {
                       <View style={styles.statItem}>
                         <MaterialIcons name="flag" size={14} color={theme.accent} />
                         <Text style={styles.statValue}>{stats.challenges}</Text>
-                        <Text style={styles.statLabel}>{language === 'fr' ? 'défis' : 'challenges'}</Text>
+                        <Text style={styles.statLabel}>{language === 'fr' ? 'defis' : 'challenges'}</Text>
                       </View>
                     </View>
                   ) : null}
@@ -542,7 +681,7 @@ export default function EquipmentScreen() {
         )}
 
         {/* Add button at bottom */}
-        {boulesSets.length > 0 ? (
+        {boulesSets.length > 0 && !compareMode ? (
           <Pressable style={styles.addSetBtn} onPress={openNewForm}>
             <MaterialIcons name="add-circle-outline" size={22} color={theme.primary} />
             <Text style={styles.addSetBtnText}>{language === 'fr' ? 'Ajouter un set de boules' : 'Add a boules set'}</Text>
@@ -551,21 +690,14 @@ export default function EquipmentScreen() {
       </ScrollView>
 
       {/* Form Modal */}
-      <Modal
-        visible={showForm}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => { setShowForm(false); resetForm(); }}
-      >
+      <Modal visible={showForm} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { setShowForm(false); resetForm(); }}>
         <SafeAreaView edges={['top']} style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Pressable style={styles.modalCloseBtn} onPress={() => { setShowForm(false); resetForm(); }}>
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>
             <Text style={styles.modalTitle}>
-              {editingSet
-                ? (language === 'fr' ? 'Modifier le set' : 'Edit set')
-                : (language === 'fr' ? 'Nouveau set' : 'New set')}
+              {editingSet ? (language === 'fr' ? 'Modifier le set' : 'Edit set') : (language === 'fr' ? 'Nouveau set' : 'New set')}
             </Text>
             <Pressable style={styles.modalSaveBtn} onPress={handleSave}>
               <Text style={styles.modalSaveBtnText}>{t('common', 'save')}</Text>
@@ -573,12 +705,7 @@ export default function EquipmentScreen() {
           </View>
 
           <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-            <ScrollView
-              style={styles.formScroll}
-              contentContainerStyle={styles.formContent}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-            >
+            <ScrollView style={styles.formScroll} contentContainerStyle={styles.formContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               {/* Photo */}
               <Pressable style={styles.photoPickerContainer} onPress={handlePickPhoto} disabled={uploadingPhoto}>
                 {uploadingPhoto ? (
@@ -610,109 +737,57 @@ export default function EquipmentScreen() {
               {/* Name */}
               <View style={styles.formField}>
                 <Text style={styles.formLabel}>{language === 'fr' ? 'NOM DU SET *' : 'SET NAME *'}</Text>
-                <TextInput
-                  style={styles.formInput}
-                  value={formName}
-                  onChangeText={setFormName}
-                  placeholder={language === 'fr' ? 'Ex: Obut ATX Compétition' : 'Ex: Obut ATX Competition'}
-                  placeholderTextColor={theme.textMuted}
-                  autoFocus={!editingSet}
-                />
+                <TextInput style={styles.formInput} value={formName} onChangeText={setFormName} placeholder={language === 'fr' ? 'Ex: Obut ATX Competition' : 'Ex: Obut ATX Competition'} placeholderTextColor={theme.textMuted} autoFocus={!editingSet} />
               </View>
 
               {/* Brand */}
               <View style={styles.formField}>
                 <Text style={styles.formLabel}>{language === 'fr' ? 'MARQUE' : 'BRAND'}</Text>
-                <TextInput
-                  style={styles.formInput}
-                  value={formBrand}
-                  onChangeText={setFormBrand}
-                  placeholder={language === 'fr' ? 'Ex: Obut, MS Pétanque, La Boule Noire...' : 'Ex: Obut, MS Pétanque, La Boule Noire...'}
-                  placeholderTextColor={theme.textMuted}
-                />
+                <TextInput style={styles.formInput} value={formBrand} onChangeText={setFormBrand} placeholder={language === 'fr' ? 'Ex: Obut, MS Petanque...' : 'Ex: Obut, MS Petanque...'} placeholderTextColor={theme.textMuted} />
               </View>
 
               {/* Diameter & Weight */}
               <View style={styles.formRow}>
                 <View style={styles.formRowField}>
-                  <Text style={styles.formLabel}>{language === 'fr' ? 'DIAMÈTRE (mm)' : 'DIAMETER (mm)'}</Text>
-                  <TextInput
-                    style={styles.formInput}
-                    value={formDiameter}
-                    onChangeText={setFormDiameter}
-                    placeholder="70.5 - 80.0"
-                    placeholderTextColor={theme.textMuted}
-                    keyboardType="decimal-pad"
-                  />
+                  <Text style={styles.formLabel}>{language === 'fr' ? 'DIAMETRE (mm)' : 'DIAMETER (mm)'}</Text>
+                  <TextInput style={styles.formInput} value={formDiameter} onChangeText={setFormDiameter} placeholder="70.5 - 80.0" placeholderTextColor={theme.textMuted} keyboardType="decimal-pad" />
                 </View>
                 <View style={styles.formRowField}>
                   <Text style={styles.formLabel}>{language === 'fr' ? 'POIDS (g)' : 'WEIGHT (g)'}</Text>
-                  <TextInput
-                    style={styles.formInput}
-                    value={formWeight}
-                    onChangeText={setFormWeight}
-                    placeholder="650 - 800"
-                    placeholderTextColor={theme.textMuted}
-                    keyboardType="number-pad"
-                  />
+                  <TextInput style={styles.formInput} value={formWeight} onChangeText={setFormWeight} placeholder="650 - 800" placeholderTextColor={theme.textMuted} keyboardType="number-pad" />
                 </View>
               </View>
 
               {/* Serial Number */}
               <View style={styles.formField}>
-                <Text style={styles.formLabel}>{language === 'fr' ? 'NUMÉRO DE SÉRIE' : 'SERIAL NUMBER'}</Text>
-                <TextInput
-                  style={styles.formInput}
-                  value={formSerialNumber}
-                  onChangeText={setFormSerialNumber}
-                  placeholder={language === 'fr' ? 'Optionnel' : 'Optional'}
-                  placeholderTextColor={theme.textMuted}
-                />
+                <Text style={styles.formLabel}>{language === 'fr' ? 'NUMERO DE SERIE' : 'SERIAL NUMBER'}</Text>
+                <TextInput style={styles.formInput} value={formSerialNumber} onChangeText={setFormSerialNumber} placeholder={language === 'fr' ? 'Optionnel' : 'Optional'} placeholderTextColor={theme.textMuted} />
+              </View>
+
+              {/* Purchase Price */}
+              <View style={styles.formField}>
+                <Text style={styles.formLabel}>{language === 'fr' ? "PRIX D'ACHAT (\u20AC)" : 'PURCHASE PRICE (\u20AC)'}</Text>
+                <TextInput style={styles.formInput} value={formPurchasePrice} onChangeText={setFormPurchasePrice} placeholder={language === 'fr' ? 'Ex: 350' : 'Ex: 350'} placeholderTextColor={theme.textMuted} keyboardType="decimal-pad" />
               </View>
 
               {/* Hardness */}
               <View style={styles.formField}>
-                <Text style={styles.formLabel}>{language === 'fr' ? 'DURETÉ' : 'HARDNESS'}</Text>
+                <Text style={styles.formLabel}>{language === 'fr' ? 'DURETE' : 'HARDNESS'}</Text>
                 <View style={styles.hardnessRow}>
                   {HARDNESS_OPTIONS.map(h => (
-                    <Pressable
-                      key={h}
-                      style={[styles.hardnessChip, formHardness === h && styles.hardnessChipActive]}
-                      onPress={() => {
-                        Haptics.selectionAsync();
-                        setFormHardness(formHardness === h ? '' : h);
-                      }}
-                    >
-                      <Text style={[styles.hardnessChipText, formHardness === h && styles.hardnessChipTextActive]}>
-                        {h}
-                      </Text>
+                    <Pressable key={h} style={[styles.hardnessChip, formHardness === h && styles.hardnessChipActive]} onPress={() => { Haptics.selectionAsync(); setFormHardness(formHardness === h ? '' : h); }}>
+                      <Text style={[styles.hardnessChipText, formHardness === h && styles.hardnessChipTextActive]}>{h}</Text>
                     </Pressable>
                   ))}
                 </View>
               </View>
 
               {/* Primary toggle */}
-              <Pressable
-                style={[styles.primaryToggle, formIsPrimary && styles.primaryToggleActive]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setFormIsPrimary(!formIsPrimary);
-                }}
-              >
-                <MaterialIcons
-                  name={formIsPrimary ? 'star' : 'star-outline'}
-                  size={22}
-                  color={formIsPrimary ? theme.carreauColor : theme.textMuted}
-                />
+              <Pressable style={[styles.primaryToggle, formIsPrimary && styles.primaryToggleActive]} onPress={() => { Haptics.selectionAsync(); setFormIsPrimary(!formIsPrimary); }}>
+                <MaterialIcons name={formIsPrimary ? 'star' : 'star-outline'} size={22} color={formIsPrimary ? theme.carreauColor : theme.textMuted} />
                 <View style={styles.primaryToggleContent}>
-                  <Text style={[styles.primaryToggleTitle, formIsPrimary && { color: theme.carreauColor }]}>
-                    {language === 'fr' ? 'Set principal' : 'Primary set'}
-                  </Text>
-                  <Text style={styles.primaryToggleDesc}>
-                    {language === 'fr'
-                      ? 'Synchronisé avec votre profil joueur'
-                      : 'Synced with your player profile'}
-                  </Text>
+                  <Text style={[styles.primaryToggleTitle, formIsPrimary && { color: theme.carreauColor }]}>{language === 'fr' ? 'Set principal' : 'Primary set'}</Text>
+                  <Text style={styles.primaryToggleDesc}>{language === 'fr' ? 'Synchronise avec votre profil joueur' : 'Synced with your player profile'}</Text>
                 </View>
                 <View style={[styles.toggleIndicator, formIsPrimary && styles.toggleIndicatorActive]}>
                   <View style={[styles.toggleDot, formIsPrimary && styles.toggleDotActive]} />
@@ -721,17 +796,8 @@ export default function EquipmentScreen() {
 
               {/* Notes */}
               <View style={styles.formField}>
-                <Text style={styles.formLabel}>{language === 'fr' ? 'NOTES' : 'NOTES'}</Text>
-                <TextInput
-                  style={[styles.formInput, styles.formTextArea]}
-                  value={formNotes}
-                  onChangeText={setFormNotes}
-                  placeholder={language === 'fr' ? 'Remarques, sensations, préférences...' : 'Remarks, feelings, preferences...'}
-                  placeholderTextColor={theme.textMuted}
-                  multiline
-                  numberOfLines={3}
-                  textAlignVertical="top"
-                />
+                <Text style={styles.formLabel}>NOTES</Text>
+                <TextInput style={[styles.formInput, styles.formTextArea]} value={formNotes} onChangeText={setFormNotes} placeholder={language === 'fr' ? 'Remarques, sensations, preferences...' : 'Remarks, feelings, preferences...'} placeholderTextColor={theme.textMuted} multiline numberOfLines={3} textAlignVertical="top" />
               </View>
             </ScrollView>
           </KeyboardAvoidingView>
@@ -746,7 +812,10 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '700', color: theme.textPrimary },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   addBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.primary + '15', borderRadius: 20 },
+  compareToggleBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.primary + '15', borderRadius: 18 },
+  compareToggleBtnActive: { backgroundColor: theme.primary },
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 20 },
 
@@ -757,6 +826,29 @@ const styles = StyleSheet.create({
   heroSubtitle: { fontSize: 14, color: theme.textSecondary },
   heroPrimaryBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, backgroundColor: theme.carreauColor + '12', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
   heroPrimaryText: { fontSize: 13, fontWeight: '600', color: theme.carreauColor },
+
+  // Compare banner
+  compareBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.primary + '10', paddingVertical: 12, paddingHorizontal: 16, borderRadius: theme.borderRadius.lg, marginBottom: 16, borderWidth: 1, borderColor: theme.primary + '25' },
+  compareBannerText: { flex: 1, fontSize: 14, fontWeight: '600', color: theme.primary },
+  compareBannerBadge: { width: 24, height: 24, borderRadius: 12, backgroundColor: theme.success, alignItems: 'center', justifyContent: 'center' },
+
+  // Compare card
+  compareCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 16, ...theme.shadows.card },
+  compareHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  compareTitle: { fontSize: 16, fontWeight: '700', color: theme.textPrimary },
+  radarContainer: { alignItems: 'center', marginBottom: 12 },
+  compareLegend: { flexDirection: 'row', justifyContent: 'center', gap: 24, marginBottom: 16 },
+  compareLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: 140 },
+  compareLegendDot: { width: 10, height: 10, borderRadius: 5 },
+  compareLegendText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
+  compareTable: { borderRadius: theme.borderRadius.md, overflow: 'hidden', borderWidth: 1, borderColor: theme.border },
+  compareTableHeader: { flexDirection: 'row', backgroundColor: theme.backgroundSecondary, paddingVertical: 10, paddingHorizontal: 12 },
+  compareTableRow: { flexDirection: 'row', paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: 1, borderTopColor: theme.border },
+  compareTableRowAlt: { backgroundColor: theme.backgroundSecondary + '50' },
+  compareTableCell: { flex: 1, fontSize: 13, textAlign: 'center', color: theme.textPrimary },
+
+  // Compare checkbox
+  compareCheckbox: { position: 'absolute', top: 12, right: 12, width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: theme.border, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
 
   // Empty
   emptyState: { alignItems: 'center', paddingVertical: 48 },
@@ -780,7 +872,8 @@ const styles = StyleSheet.create({
   setMeta: { fontSize: 13, color: theme.textSecondary },
   setActions: { flexDirection: 'row', gap: 8 },
   setActionBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
-  serialRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border },
+  serialRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border },
+  serialItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   serialText: { fontSize: 12, color: theme.textMuted, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
 
   // Specs bars

@@ -698,6 +698,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           diameter: s.diameter ? parseFloat(s.diameter) : undefined,
           weight: s.weight || undefined, serialNumber: s.serial_number,
           hardness: s.hardness, isPrimary: s.is_primary, notes: s.notes, photo: s.photo,
+          purchasePrice: s.purchase_price ? parseFloat(s.purchase_price) : undefined,
         }));
         setBoulesSets(dbSets);
       }
@@ -1850,6 +1851,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         is_primary: set.isPrimary || false,
         notes: set.notes || null,
         photo: set.photo || null,
+        purchase_price: set.purchasePrice || null,
       }).select().single();
       if (error) throw error;
       if (data) {
@@ -1858,6 +1860,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           diameter: data.diameter ? parseFloat(data.diameter) : undefined,
           weight: data.weight || undefined, serialNumber: data.serial_number,
           hardness: data.hardness, isPrimary: data.is_primary, notes: data.notes,
+          purchasePrice: data.purchase_price ? parseFloat(data.purchase_price) : undefined,
         };
         // If this is primary, unset others
         if (newSet.isPrimary) {
@@ -1887,6 +1890,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.isPrimary !== undefined) dbUpdates.is_primary = updates.isPrimary;
       if (updates.notes !== undefined) dbUpdates.notes = updates.notes || null;
       if (updates.photo !== undefined) dbUpdates.photo = updates.photo || null;
+      if (updates.purchasePrice !== undefined) dbUpdates.purchase_price = updates.purchasePrice || null;
       dbUpdates.updated_at = new Date().toISOString();
       await supabase.from('boules_sets').update(dbUpdates).eq('id', id);
       // If updated set is primary, sync to player

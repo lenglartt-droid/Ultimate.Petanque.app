@@ -14,6 +14,7 @@ export interface BoulesSet {
   isPrimary?: boolean;
   notes?: string;
   photo?: string;
+  purchasePrice?: number;
 }
 
 // Boules info for player
