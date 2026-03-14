@@ -60,6 +60,7 @@ export default function PlayerDetailScreen() {
   const { getPlayerById, getMatchesByPlayer, getClubById, getTerrainById, deletePlayer, updatePlayer, selfPlayer, matches, getSharedPermission, loading: appLoading } = useApp();
   const player = getPlayerById(id!);
   const playerMatches = getMatchesByPlayer(id!).slice(0, 5);
+  const { clubs, terrains: allTerrains } = useApp();
   const clubEntity = player?.clubId ? getClubById(player.clubId) : null;
   const terrainEntity = player?.terrainId ? getTerrainById(player.terrainId) : null;
   // For shared players, the club/terrain may not exist in recipient's local context
@@ -339,6 +340,61 @@ export default function PlayerDetailScreen() {
             )
           ) : null}
           
+          {/* Location with fallback indicator */}
+          {(() => {
+            const hasOwnLocation = player.location?.city || (player.location?.latitude && player.location.latitude !== 0) || (player.location?.longitude && player.location.longitude !== 0);
+            if (hasOwnLocation) return null;
+            // Check if location can be derived from terrain or club
+            let fallbackSource: 'terrain' | 'club' | null = null;
+            let fallbackName = '';
+            let fallbackCity = '';
+            if (player.terrainId) {
+              const tr = allTerrains.find(t => t.id === player.terrainId);
+              if (tr && tr.location && (tr.location.latitude || tr.location.longitude)) {
+                fallbackSource = 'terrain';
+                fallbackName = tr.name;
+                fallbackCity = tr.city;
+              }
+            }
+            if (!fallbackSource && player.clubId) {
+              const cl = clubs.find(c => c.id === player.clubId);
+              if (cl && cl.location && (cl.location.latitude || cl.location.longitude)) {
+                fallbackSource = 'club';
+                fallbackName = cl.name;
+                fallbackCity = cl.city;
+              }
+            }
+            if (!fallbackSource) return null;
+            return (
+              <Pressable
+                style={styles.fallbackLocationBanner}
+                onPress={() => {
+                  if (canEdit) {
+                    Haptics.selectionAsync();
+                    router.push(`/player/edit/${id}`);
+                  }
+                }}
+              >
+                <View style={[styles.fallbackLocationIcon, { backgroundColor: fallbackSource === 'terrain' ? theme.success + '15' : theme.accent + '15' }]}>
+                  <MaterialIcons name={fallbackSource === 'terrain' ? 'sports-soccer' : 'home'} size={16} color={fallbackSource === 'terrain' ? theme.success : theme.accent} />
+                </View>
+                <View style={styles.fallbackLocationInfo}>
+                  <Text style={styles.fallbackLocationTitle}>
+                    {fallbackCity} <Text style={styles.fallbackLocationVia}>{t('player', 'locationFrom')} {fallbackName}</Text>
+                  </Text>
+                  <Text style={styles.fallbackLocationDesc}>
+                    {fallbackSource === 'terrain' ? t('player', 'locationFallbackTerrain') : t('player', 'locationFallbackClub')}
+                  </Text>
+                </View>
+                {canEdit ? (
+                  <View style={styles.fallbackLocationEditBtn}>
+                    <MaterialIcons name="edit-location-alt" size={16} color={theme.primary} />
+                  </View>
+                ) : null}
+              </Pressable>
+            );
+          })()}
+
           {/* Handedness */}
           {player.handedness ? (
             <View style={styles.handednessContainer}>
@@ -1190,5 +1246,51 @@ const styles = StyleSheet.create({
     color: theme.textSecondary,
     minWidth: 50,
     textAlign: 'right',
+  },
+  // Fallback location indicator
+  fallbackLocationBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.warning + '08',
+    borderRadius: theme.borderRadius.md,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: theme.warning + '25',
+    gap: 10,
+    width: '100%',
+  },
+  fallbackLocationIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fallbackLocationInfo: {
+    flex: 1,
+  },
+  fallbackLocationTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  fallbackLocationVia: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: theme.textSecondary,
+  },
+  fallbackLocationDesc: {
+    fontSize: 11,
+    color: theme.textMuted,
+    marginTop: 2,
+  },
+  fallbackLocationEditBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
