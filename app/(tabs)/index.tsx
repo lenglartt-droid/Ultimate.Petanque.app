@@ -27,7 +27,6 @@ export default function HomeScreen() {
   const { userStats, tournaments, matches, challenges, selfPlayer, refreshData } = useApp();
   const { user } = useAuth();
   const { t, language } = useLanguage();
-  const { refreshData } = useApp();
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'À venir' | 'En cours' | 'Terminé'>('all');
   const [refreshing, setRefreshing] = useState(false);
