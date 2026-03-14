@@ -1624,6 +1624,7 @@ export const translations = {
     best: { fr: 'Meilleur', en: 'Best' },
     editMyProfile: { fr: 'Modifier mon profil', en: 'Edit my profile' },
     preferredTerrain: { fr: 'Terrain préféré', en: 'Preferred court' },
+    preferredPartner: { fr: 'Partenaire préféré', en: 'Preferred partner' },
     federationCard: { fr: 'Carte Fédération', en: 'Federation Card' },
     addFederationCard: { fr: 'Ajouter ma carte fédération', en: 'Add my federation card' },
     federationCardDesc: { fr: 'Photo ou scan de votre licence fédérale', en: 'Photo or scan of your federation license' },

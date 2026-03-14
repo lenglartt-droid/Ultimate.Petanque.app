@@ -306,6 +306,49 @@ export default function MyPlayerCardScreen() {
     return { terrainCounts, totalWithTerrain, preferredTerrain };
   }, [matches, selfPlayer]);
 
+  // Partner analysis from match history
+  const partnerAnalysis = React.useMemo(() => {
+    if (!selfPlayer) return { partnerCounts: {} as Record<string, { count: number; name: string }>, totalWithPartners: 0, preferredPartner: { id: '', name: '', count: 0 } };
+
+    const partnerCounts: Record<string, { count: number; name: string }> = {};
+
+    matches.forEach(match => {
+      const inTeamA = match.teamA.players.includes(selfPlayer.id);
+      const inTeamB = match.teamB.players.includes(selfPlayer.id);
+
+      if (inTeamA && match.teamA.players.length > 1) {
+        match.teamA.players.forEach((pid, idx) => {
+          if (pid !== selfPlayer.id) {
+            if (!partnerCounts[pid]) {
+              partnerCounts[pid] = { count: 0, name: match.teamA.playerNames[idx] || pid };
+            }
+            partnerCounts[pid].count++;
+          }
+        });
+      } else if (inTeamB && match.teamB.players.length > 1) {
+        match.teamB.players.forEach((pid, idx) => {
+          if (pid !== selfPlayer.id) {
+            if (!partnerCounts[pid]) {
+              partnerCounts[pid] = { count: 0, name: match.teamB.playerNames[idx] || pid };
+            }
+            partnerCounts[pid].count++;
+          }
+        });
+      }
+    });
+
+    const totalWithPartners = Object.values(partnerCounts).reduce((a, b) => a + b.count, 0);
+    let preferredPartner = { id: '', name: '', count: 0 };
+    if (totalWithPartners > 0) {
+      const best = Object.entries(partnerCounts).reduce((a, b) => b[1].count > a[1].count ? b : a);
+      preferredPartner = { id: best[0], name: best[1].name, count: best[1].count };
+    }
+
+    return { partnerCounts, totalWithPartners, preferredPartner };
+  }, [matches, selfPlayer]);
+
+  const partnerColors = ['#3B82F6', '#8B5CF6', '#F97316', '#10B981', '#EC4899', '#6366F1', '#14B8A6'];
+
   const terrainTypeIcons: Record<string, { icon: string; color: string }> = {
     'Stabilisé': { icon: 'landscape', color: '#6B7280' },
     'Graviers': { icon: 'grain', color: '#92400E' },
@@ -526,6 +569,51 @@ export default function MyPlayerCardScreen() {
                     </View>
                   );
                 })}
+              </View>
+            </View>
+          )}
+
+          {/* Preferred Partner from Match History */}
+          {partnerAnalysis.totalWithPartners > 0 && (
+            <View style={styles.preferredRoleCard}>
+              <Text style={styles.preferredRoleTitle}>{t('player', 'preferredPartner')}</Text>
+              <View style={styles.preferredRoleContent}>
+                <View style={[styles.preferredRoleIcon, { backgroundColor: partnerColors[0] }]}>
+                  <MaterialIcons name="people" size={20} color="#FFF" />
+                </View>
+                <View style={styles.preferredRoleInfo}>
+                  <Text style={styles.preferredRoleName}>{partnerAnalysis.preferredPartner.name}</Text>
+                  <Text style={styles.preferredRoleStats}>
+                    {partnerAnalysis.preferredPartner.count} {t('player', 'outOf')} {partnerAnalysis.totalWithPartners} {t('player', 'matchesLabel')}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.partnerBreakdown}>
+                {Object.entries(partnerAnalysis.partnerCounts)
+                  .sort((a, b) => b[1].count - a[1].count)
+                  .slice(0, 5)
+                  .map(([pid, info], idx) => {
+                    const pct = partnerAnalysis.totalWithPartners > 0 ? Math.round((info.count / partnerAnalysis.totalWithPartners) * 100) : 0;
+                    const color = partnerColors[idx % partnerColors.length];
+                    return (
+                      <View key={pid} style={styles.partnerBreakdownItem}>
+                        <View style={[styles.partnerAvatar, { backgroundColor: color + '20' }]}>
+                          <Text style={[styles.partnerAvatarText, { color }]}>
+                            {info.name.charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={styles.partnerInfoCol}>
+                          <Text style={styles.partnerName} numberOfLines={1}>{info.name}</Text>
+                          <View style={styles.partnerBarRow}>
+                            <View style={styles.roleBreakdownBarBg}>
+                              <View style={[styles.roleBreakdownBar, { width: `${pct}%`, backgroundColor: color }]} />
+                            </View>
+                            <Text style={styles.partnerPct}>{info.count} ({pct}%)</Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
               </View>
             </View>
           )}
@@ -1528,5 +1616,51 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Partner breakdown
+  partnerBreakdown: {
+    gap: 10,
+    marginTop: 4,
+  },
+  partnerBreakdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: theme.backgroundSecondary,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: theme.borderRadius.md,
+  },
+  partnerAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  partnerAvatarText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  partnerInfoCol: {
+    flex: 1,
+    gap: 4,
+  },
+  partnerName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  partnerBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  partnerPct: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textSecondary,
+    minWidth: 50,
+    textAlign: 'right',
   },
 });
