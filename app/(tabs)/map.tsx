@@ -365,6 +365,14 @@ export default function MapScreen() {
     return clusterMarkers(results, currentRegion);
   }, [results, currentRegion]);
 
+  // Total items in directory (regardless of location)
+  const totalCounts = useMemo(() => ({
+    terrains: terrains.length,
+    clubs: clubs.length,
+    players: players.length,
+    tournaments: tournaments.length,
+  }), [terrains.length, clubs.length, players.length, tournaments.length]);
+
   const counts = useMemo(() => {
     const countType = (type: string) => results.filter(r => r.itemType === type).length;
     return {
@@ -713,7 +721,7 @@ export default function MapScreen() {
             {(Object.keys(MARKER_CONFIG) as (keyof typeof MARKER_CONFIG)[]).map(k => (
               <Pressable key={k} style={styles.miniStat} onPress={() => handleFilterPress(k)}>
                 <MaterialIcons name={MARKER_CONFIG[k].icon as any} size={12} color={MARKER_CONFIG[k].color} />
-                <Text style={[styles.miniStatValue, { color: MARKER_CONFIG[k].color }]}>{counts[k]}</Text>
+                <Text style={[styles.miniStatValue, { color: MARKER_CONFIG[k].color }]}>{counts[k]}/{totalCounts[k]}</Text>
               </Pressable>
             ))}
             {counts.publicTotal > 0 ? (
