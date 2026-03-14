@@ -18,7 +18,15 @@ import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import Svg, { Circle, Line, G, Text as SvgText, Rect, Polygon } from 'react-native-svg';
 import * as Sharing from 'expo-sharing';
-import ViewShot, { captureRef } from 'react-native-view-shot';
+
+// Lazy-load react-native-view-shot to avoid crash when native module is unavailable
+let captureRefFn: any = null;
+try {
+  const viewShot = require('react-native-view-shot');
+  captureRefFn = viewShot.captureRef;
+} catch (e) {
+  // react-native-view-shot not available in this environment
+}
 import { router } from 'expo-router';
 import { useLanguage } from '@/hooks/useLanguage';
 import AdBanner from '@/components/ui/AdBanner';
@@ -1312,8 +1320,8 @@ export default function StatsScreen() {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setExporting(true);
                 try {
-                  if (statsExportRef.current) {
-                    const uri = await captureRef(statsExportRef.current, { format: 'png', quality: 1, result: 'tmpfile' });
+                  if (statsExportRef.current && captureRefFn) {
+                    const uri = await captureRefFn(statsExportRef.current, { format: 'png', quality: 1, result: 'tmpfile' });
                     const canShare = await Sharing.isAvailableAsync();
                     if (canShare) {
                       await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: t('stats', 'exportStatsTitle') });
