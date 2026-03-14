@@ -6,6 +6,10 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
+  Modal,
+  Alert,
+  Platform,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -13,10 +17,16 @@ import { router } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as Linking from 'expo-linking';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import { decode } from 'base64-arraybuffer';
+import { Image } from 'expo-image';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth, useAlert } from '@/template';
+import { getSupabaseClient } from '@/template';
 import ShareModal from '@/components/ui/ShareModal';
 import { toggleItemPublic } from '@/services/publicItemsService';
 
@@ -26,9 +36,43 @@ export default function MyPlayerCardScreen() {
   const { t } = useLanguage();
   const { selfPlayer, userStats, challengeStats, matches, challenges, setItemPublic } = useApp();
   const { showAlert } = useAlert();
+  const supabase = getSupabaseClient();
   const [showShareModal, setShowShareModal] = React.useState(false);
   const [isPublic, setIsPublic] = React.useState(selfPlayer?.isPublic ?? false);
   const [togglingPublic, setTogglingPublic] = React.useState(false);
+
+  // Federation card state
+  const [federationCardUrl, setFederationCardUrl] = React.useState<string | null>(null);
+  const [federationCardType, setFederationCardType] = React.useState<'image' | 'pdf'>('image');
+  const [uploadingCard, setUploadingCard] = React.useState(false);
+  const [showFullscreen, setShowFullscreen] = React.useState(false);
+  const [loadingCard, setLoadingCard] = React.useState(true);
+
+  const screenWidth = Dimensions.get('window').width;
+  const screenHeight = Dimensions.get('window').height;
+
+  // Load federation card URL
+  React.useEffect(() => {
+    if (!user?.id) return;
+    const loadCard = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .select('federation_card_url')
+          .eq('id', user.id)
+          .single();
+        if (!error && data?.federation_card_url) {
+          setFederationCardUrl(data.federation_card_url);
+          setFederationCardType(data.federation_card_url.toLowerCase().endsWith('.pdf') ? 'pdf' : 'image');
+        }
+      } catch (e) {
+        console.log('Error loading federation card:', e);
+      } finally {
+        setLoadingCard(false);
+      }
+    };
+    loadCard();
+  }, [user?.id]);
 
   React.useEffect(() => {
     if (selfPlayer) setIsPublic(selfPlayer.isPublic ?? false);
@@ -49,6 +93,169 @@ export default function MyPlayerCardScreen() {
     setTogglingPublic(false);
   }, [selfPlayer, isPublic, togglingPublic, showAlert, t]);
 
+  // Federation card upload
+  const uploadFederationFile = async (fileUri: string, fileName: string, mimeType: string) => {
+    if (!user?.id) return;
+    setUploadingCard(true);
+    try {
+      const fileExt = fileName.split('.').pop()?.toLowerCase() || 'jpg';
+      const storagePath = `${user.id}/federation_card_${Date.now()}.${fileExt}`;
+
+      let base64Data: string;
+      if (Platform.OS === 'web') {
+        const response = await fetch(fileUri);
+        const blob = await response.blob();
+        base64Data = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+          };
+          reader.readAsDataURL(blob);
+        });
+      } else {
+        base64Data = await FileSystem.readAsStringAsync(fileUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+      }
+
+      const { error: uploadError } = await supabase.storage
+        .from('federation-cards')
+        .upload(storagePath, decode(base64Data), {
+          contentType: mimeType,
+          upsert: true,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from('federation-cards')
+        .getPublicUrl(storagePath);
+
+      const publicUrl = urlData.publicUrl;
+
+      // Save URL to user_profiles
+      const { error: updateError } = await supabase
+        .from('user_profiles')
+        .update({ federation_card_url: publicUrl })
+        .eq('id', user.id);
+
+      if (updateError) throw updateError;
+
+      setFederationCardUrl(publicUrl);
+      setFederationCardType(fileExt === 'pdf' ? 'pdf' : 'image');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showAlert(t('common', 'success'), t('player', 'federationCardUpdated'));
+    } catch (error: any) {
+      console.log('Error uploading federation card:', error);
+      showAlert(t('common', 'error'), error.message || t('player', 'errorUploadFederationCard'));
+    } finally {
+      setUploadingCard(false);
+    }
+  };
+
+  const handlePickFromGallery = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      showAlert(t('profile', 'permissionRequired'), t('profile', 'galleryPermission'));
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.9,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      const ext = asset.uri.split('.').pop()?.toLowerCase() || 'jpg';
+      await uploadFederationFile(asset.uri, `federation.${ext}`, `image/${ext === 'jpg' ? 'jpeg' : ext}`);
+    }
+  };
+
+  const handlePickFromCamera = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      showAlert(t('profile', 'permissionRequired'), t('profile', 'cameraPermission'));
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      quality: 0.9,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      const ext = asset.uri.split('.').pop()?.toLowerCase() || 'jpg';
+      await uploadFederationFile(asset.uri, `federation.${ext}`, `image/${ext === 'jpg' ? 'jpeg' : ext}`);
+    }
+  };
+
+  const handlePickDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*'],
+        copyToCacheDirectory: true,
+      });
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const file = result.assets[0];
+        await uploadFederationFile(
+          file.uri,
+          file.name || 'federation.pdf',
+          file.mimeType || 'application/pdf'
+        );
+      }
+    } catch (error: any) {
+      console.log('Error picking document:', error);
+    }
+  };
+
+  const showUploadOptions = () => {
+    Alert.alert(
+      t('player', 'chooseSource'),
+      t('player', 'federationCardDesc'),
+      [
+        { text: t('player', 'fromCamera'), onPress: handlePickFromCamera },
+        { text: t('player', 'fromGallery'), onPress: handlePickFromGallery },
+        { text: t('player', 'fromFiles'), onPress: handlePickDocument },
+        { text: t('common', 'cancel'), style: 'cancel' },
+      ]
+    );
+  };
+
+  const handleRemoveFederationCard = () => {
+    Alert.alert(
+      t('player', 'removeFederationCard'),
+      '',
+      [
+        { text: t('common', 'cancel'), style: 'cancel' },
+        {
+          text: t('common', 'delete'),
+          style: 'destructive',
+          onPress: async () => {
+            if (!user?.id) return;
+            try {
+              await supabase
+                .from('user_profiles')
+                .update({ federation_card_url: null })
+                .eq('id', user.id);
+              setFederationCardUrl(null);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              showAlert(t('common', 'success'), t('player', 'federationCardRemoved'));
+            } catch (error: any) {
+              showAlert(t('common', 'error'), error.message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCardPress = () => {
+    if (!federationCardUrl) return;
+    if (federationCardType === 'pdf') {
+      Linking.openURL(federationCardUrl);
+    } else {
+      setShowFullscreen(true);
+    }
+  };
+
   // Calculate preferred role from match history
   const roleAnalysis = React.useMemo(() => {
     if (!selfPlayer) return { roleCounts: {}, totalWithRoles: 0, preferredRole: 'Milieu' };
@@ -56,7 +263,6 @@ export default function MyPlayerCardScreen() {
     const roleCounts: Record<string, number> = { 'Pointeur': 0, 'Milieu': 0, 'Tireur': 0 };
     
     matches.forEach(match => {
-      // Check team A roles (our team)
       if (match.teamA.playerRoles) {
         match.teamA.playerRoles.forEach(pr => {
           if (pr.playerId === selfPlayer.id && roleCounts[pr.role] !== undefined) {
@@ -85,7 +291,6 @@ export default function MyPlayerCardScreen() {
   const tournamentMatches = matches.filter(m => m.mode === 'Tournoi');
   const trainingMatches = matches.filter(m => m.mode === 'Entraînement');
   
-  // Calculate shot stats from player actions
   let totalTirs = 0;
   let totalTirsSuccess = 0;
   let totalPoints = 0;
@@ -260,6 +465,85 @@ export default function MyPlayerCardScreen() {
           )}
         </Animated.View>
 
+        {/* Federation Card Section */}
+        <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('player', 'federationCard').toUpperCase()}</Text>
+          {uploadingCard ? (
+            <View style={styles.federationUploadingCard}>
+              <ActivityIndicator size="large" color={theme.primary} />
+              <Text style={styles.federationUploadingText}>{t('player', 'uploadingCard')}</Text>
+            </View>
+          ) : federationCardUrl ? (
+            <View style={styles.federationCardContainer}>
+              <Pressable
+                style={styles.federationCardPreview}
+                onPress={handleCardPress}
+              >
+                {federationCardType === 'image' ? (
+                  <Image
+                    source={{ uri: federationCardUrl }}
+                    style={styles.federationCardImage}
+                    contentFit="cover"
+                    transition={200}
+                  />
+                ) : (
+                  <View style={styles.federationPdfPreview}>
+                    <MaterialIcons name="picture-as-pdf" size={48} color={theme.error} />
+                    <Text style={styles.federationPdfText}>{t('player', 'pdfDocument')}</Text>
+                    <Text style={styles.federationPdfSubtext}>{t('player', 'tapToView')}</Text>
+                  </View>
+                )}
+                <View style={styles.federationCardOverlay}>
+                  <View style={styles.federationCardOverlayBadge}>
+                    <MaterialIcons 
+                      name={federationCardType === 'pdf' ? 'open-in-new' : 'fullscreen'} 
+                      size={16} 
+                      color="#FFF" 
+                    />
+                    <Text style={styles.federationCardOverlayText}>{t('player', 'viewFullscreen')}</Text>
+                  </View>
+                </View>
+              </Pressable>
+              <View style={styles.federationCardActions}>
+                <Pressable
+                  style={styles.federationReplaceBtn}
+                  onPress={showUploadOptions}
+                >
+                  <MaterialIcons name="refresh" size={18} color={theme.primary} />
+                  <Text style={styles.federationReplaceBtnText}>{t('player', 'replaceFederationCard')}</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.federationRemoveBtn}
+                  onPress={handleRemoveFederationCard}
+                >
+                  <MaterialIcons name="delete-outline" size={18} color={theme.error} />
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <Pressable
+              style={styles.federationAddCard}
+              onPress={showUploadOptions}
+            >
+              <View style={styles.federationAddIcon}>
+                <MaterialIcons name="badge" size={32} color={theme.primary} />
+              </View>
+              <Text style={styles.federationAddTitle}>{t('player', 'addFederationCard')}</Text>
+              <Text style={styles.federationAddDesc}>{t('player', 'federationCardDesc')}</Text>
+              <View style={styles.federationAddFormats}>
+                <View style={styles.federationFormatChip}>
+                  <MaterialIcons name="image" size={14} color={theme.textSecondary} />
+                  <Text style={styles.federationFormatText}>JPG / PNG</Text>
+                </View>
+                <View style={styles.federationFormatChip}>
+                  <MaterialIcons name="picture-as-pdf" size={14} color={theme.textSecondary} />
+                  <Text style={styles.federationFormatText}>PDF</Text>
+                </View>
+              </View>
+            </Pressable>
+          )}
+        </Animated.View>
+
         {/* Quick Stats Grid */}
         <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
           <Text style={styles.sectionTitle}>{t('player', 'summaryLabel')}</Text>
@@ -339,7 +623,6 @@ export default function MyPlayerCardScreen() {
         <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
           <Text style={styles.sectionTitle}>{t('player', 'performancesLabel')}</Text>
           <View style={styles.performanceCard}>
-            {/* Tir */}
             <View style={styles.performanceRow}>
               <View style={[styles.performanceIcon, { backgroundColor: theme.accent + '15' }]}>
                 <MaterialIcons name="gps-fixed" size={20} color={theme.accent} />
@@ -355,7 +638,6 @@ export default function MyPlayerCardScreen() {
               </View>
             </View>
 
-            {/* Point */}
             <View style={styles.performanceRow}>
               <View style={[styles.performanceIcon, { backgroundColor: theme.primary + '15' }]}>
                 <MaterialIcons name="adjust" size={20} color={theme.primary} />
@@ -371,7 +653,6 @@ export default function MyPlayerCardScreen() {
               </View>
             </View>
 
-            {/* Carreau */}
             <View style={[styles.performanceRow, { borderBottomWidth: 0 }]}>
               <View style={[styles.performanceIcon, { backgroundColor: theme.carreauColor + '15' }]}>
                 <MaterialIcons name="stars" size={20} color={theme.carreauColor} />
@@ -479,6 +760,30 @@ export default function MyPlayerCardScreen() {
           </Pressable>
         </Animated.View>
       </ScrollView>
+
+      {/* Fullscreen Image Modal */}
+      <Modal
+        visible={showFullscreen}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowFullscreen(false)}
+      >
+        <View style={styles.fullscreenContainer}>
+          <Pressable style={styles.fullscreenClose} onPress={() => setShowFullscreen(false)}>
+            <View style={styles.fullscreenCloseBtn}>
+              <MaterialIcons name="close" size={28} color="#FFF" />
+            </View>
+          </Pressable>
+          {federationCardUrl ? (
+            <Image
+              source={{ uri: federationCardUrl }}
+              style={{ width: screenWidth, height: screenHeight * 0.8 }}
+              contentFit="contain"
+              transition={200}
+            />
+          ) : null}
+        </View>
+      </Modal>
 
       {selfPlayer && (
         <ShareModal
@@ -776,6 +1081,159 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 12,
   },
+  // Federation Card
+  federationUploadingCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    ...theme.shadows.card,
+  },
+  federationUploadingText: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    fontWeight: '500',
+  },
+  federationCardContainer: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    overflow: 'hidden',
+    ...theme.shadows.card,
+  },
+  federationCardPreview: {
+    position: 'relative',
+    width: '100%',
+    minHeight: 200,
+  },
+  federationCardImage: {
+    width: '100%',
+    height: 220,
+    borderTopLeftRadius: theme.borderRadius.lg,
+    borderTopRightRadius: theme.borderRadius.lg,
+  },
+  federationPdfPreview: {
+    width: '100%',
+    height: 180,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.backgroundSecondary,
+    gap: 8,
+  },
+  federationPdfText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  federationPdfSubtext: {
+    fontSize: 13,
+    color: theme.textSecondary,
+  },
+  federationCardOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  federationCardOverlayBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.full,
+  },
+  federationCardOverlayText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  federationCardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  federationReplaceBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    backgroundColor: theme.primary + '10',
+    borderRadius: theme.borderRadius.md,
+    marginRight: 8,
+  },
+  federationReplaceBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.primary,
+  },
+  federationRemoveBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.error + '10',
+    borderRadius: theme.borderRadius.md,
+  },
+  federationAddCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 32,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: theme.primary + '25',
+    borderStyle: 'dashed',
+    ...theme.shadows.card,
+  },
+  federationAddIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: theme.primary + '12',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  federationAddTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.primary,
+    marginBottom: 6,
+  },
+  federationAddDesc: {
+    fontSize: 13,
+    color: theme.textSecondary,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  federationAddFormats: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  federationFormatChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: theme.backgroundSecondary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.full,
+  },
+  federationFormatText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: theme.textSecondary,
+  },
   // Quick Stats Grid
   quickStatsGrid: {
     flexDirection: 'row',
@@ -983,5 +1441,26 @@ const styles = StyleSheet.create({
   visibilityBadgeText: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  // Fullscreen Modal
+  fullscreenContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fullscreenClose: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+  },
+  fullscreenCloseBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
