@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Modal,
   Dimensions,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -23,11 +24,19 @@ import { preloadInterstitial } from '@/services/adService';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { userStats, tournaments, matches, challenges, selfPlayer } = useApp();
+  const { userStats, tournaments, matches, challenges, selfPlayer, refreshData } = useApp();
   const { user } = useAuth();
   const { t, language } = useLanguage();
+  const { refreshData } = useApp();
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'À venir' | 'En cours' | 'Terminé'>('all');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await refreshData();
+    setRefreshing(false);
+  };
 
   // Status priority: En cours > À venir > Terminé
   const statusOrder: Record<string, number> = { 'En cours': 0, 'À venir': 1, 'Terminé': 2 };
@@ -66,6 +75,14 @@ export default function HomeScreen() {
           { paddingBottom: insets.bottom + 100 }
         ]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.primary}
+            colors={[theme.primary]}
+          />
+        }
       >
         {/* Banner */}
         <Animated.View entering={FadeInDown.duration(400)} style={styles.bannerContainer}>

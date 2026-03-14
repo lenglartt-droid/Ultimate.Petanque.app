@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Modal,
   FlatList,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -457,7 +458,7 @@ const ChallengeStatsSummary = React.memo(({ challenges, t }: { challenges: Chall
 
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
-  const { matches, challenges, deleteChallenge } = useApp();
+  const { matches, challenges, deleteChallenge, refreshData } = useApp();
   const { t, language } = useLanguage();
   
   const [contentFilter, setContentFilter] = useState<ContentFilter>('all');
@@ -466,6 +467,13 @@ export default function HistoryScreen() {
   const [showPeriodModal, setShowPeriodModal] = useState(false);
   const [editingChallenge, setEditingChallenge] = useState<Challenge | null>(null);
   const [showChallengeShare, setShowChallengeShare] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refreshData();
+    setRefreshing(false);
+  }, [refreshData]);
 
   // Group matches by series
   const groupMatchesBySeries = useCallback((matchList: Match[]): (Match | SeriesGroup)[] => {
@@ -804,6 +812,14 @@ export default function HistoryScreen() {
         maxToRenderPerBatch={10}
         windowSize={5}
         removeClippedSubviews={true}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.primary}
+            colors={[theme.primary]}
+          />
+        }
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
