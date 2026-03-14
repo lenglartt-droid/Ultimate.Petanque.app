@@ -134,6 +134,8 @@ export const translations = {
     selectClub: { fr: 'Sélectionner un club', en: 'Select a club' },
     terrain: { fr: 'Terrain', en: 'Court' },
     selectTerrain: { fr: 'Sélectionner un terrain', en: 'Select a court' },
+    locationLabel: { fr: 'Localisation', en: 'Location' },
+    locationPlaceholder: { fr: 'Rechercher une ville...', en: 'Search a city...' },
     chooseTerrain: { fr: 'Choisir un terrain', en: 'Choose a court' },
     searchTerrain: { fr: 'Rechercher un terrain...', en: 'Search a court...' },
     noTerrainRegistered: { fr: 'Aucun terrain enregistré', en: 'No courts registered' },
@@ -1691,6 +1693,9 @@ export const translations = {
     leftHanded: { fr: 'Gaucher', en: 'Left-handed' },
     ambidextrous: { fr: 'Ambidextre', en: 'Ambidextrous' },
     selectHandedness: { fr: 'Sélectionner votre latéralité', en: 'Select your handedness' },
+    locationFrom: { fr: 'via', en: 'via' },
+    locationFallbackTerrain: { fr: 'Position du terrain associé', en: 'Associated court location' },
+    locationFallbackClub: { fr: 'Position du club associé', en: 'Associated club location' },
     // Stats section (edit page)
     statistics: { fr: 'STATISTIQUES', en: 'STATISTICS' },
     matchesPlayed: { fr: 'Matchs joués', en: 'Matches played' },

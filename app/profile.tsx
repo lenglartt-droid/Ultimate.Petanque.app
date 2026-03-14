@@ -27,6 +27,7 @@ import { useApp } from '@/contexts/AppContext';
 import { Club, Terrain } from '@/services/mockData';
 import { getUnreadShareNotificationCount } from '@/services/shareService';
 import { useLanguage } from '@/hooks/useLanguage';
+import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -53,6 +54,15 @@ export default function ProfileScreen() {
   
   // Handedness
   const [handedness, setHandedness] = useState<'right' | 'left' | 'ambidextrous' | ''>('');
+
+  // Location
+  const [location, setLocation] = useState<LocationData>({
+    address: '',
+    city: '',
+    country: 'France',
+    latitude: 0,
+    longitude: 0,
+  });
 
   // Terrain field
   const [terrainId, setTerrainId] = useState<string | null>(null);
@@ -175,6 +185,16 @@ export default function ProfileScreen() {
           setPhone(selfPlayer.phone || '');
           setEmail(selfPlayer.email || '');
           setHandedness(selfPlayer.handedness || '');
+          // Location
+          if (selfPlayer.location) {
+            setLocation({
+              address: selfPlayer.location.address || '',
+              city: selfPlayer.location.city || '',
+              country: selfPlayer.country || 'France',
+              latitude: selfPlayer.location.latitude || 0,
+              longitude: selfPlayer.location.longitude || 0,
+            });
+          }
         }
 
       } catch (error) {
@@ -353,6 +373,12 @@ export default function ProfileScreen() {
           phone: phone.trim() || null,
           email: email.trim() || null,
           handedness: handedness || null,
+          location: location.city ? {
+            city: location.city,
+            latitude: location.latitude,
+            longitude: location.longitude,
+          } : undefined,
+          country: location.country || 'France',
         });
       }
 
@@ -784,6 +810,21 @@ export default function ProfileScreen() {
                   </Pressable>
                 ))}
               </View>
+            </View>
+
+            {/* Location */}
+            <View style={styles.fieldCard}>
+              <View style={styles.fieldHeader}>
+                <MaterialIcons name="place" size={18} color={theme.success} />
+                <Text style={styles.fieldLabel}>{t('profile', 'locationLabel')}</Text>
+              </View>
+              <LocationPicker
+                label=""
+                value={location}
+                onChange={setLocation}
+                placeholder={t('profile', 'locationPlaceholder')}
+                showCityOnly
+              />
             </View>
 
             {/* Club Selection */}

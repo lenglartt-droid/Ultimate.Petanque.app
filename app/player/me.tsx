@@ -527,6 +527,16 @@ export default function MyPlayerCardScreen() {
             </View>
           ) : null}
 
+          {/* Location */}
+          {(selfPlayer.location?.city || selfPlayer.country) ? (
+            <View style={styles.locationBadge}>
+              <MaterialIcons name="place" size={16} color={theme.textSecondary} />
+              <Text style={styles.locationText}>
+                {[selfPlayer.location?.city, selfPlayer.country].filter(Boolean).join(', ')}
+              </Text>
+            </View>
+          ) : null}
+
           {/* Handedness */}
           {selfPlayer.handedness ? (
             <View style={styles.handednessContainer}>
@@ -1184,6 +1194,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: theme.primary,
+  },
+  locationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: theme.backgroundSecondary,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: theme.borderRadius.full,
+    marginBottom: 8,
+  },
+  locationText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: theme.textSecondary,
   },
   handednessContainer: {
     flexDirection: 'row',

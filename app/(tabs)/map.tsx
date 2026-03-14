@@ -297,13 +297,35 @@ export default function MapScreen() {
     return (lat !== undefined && lat !== null && lat !== 0) || (lng !== undefined && lng !== null && lng !== 0);
   }, []);
 
+  // Enrich players with fallback location from associated terrain or club
+  const enrichedPlayers = useMemo(() => {
+    return players.map(player => {
+      if (hasValidLocation(player)) return player;
+      // Try terrain first
+      if (player.terrainId) {
+        const terrain = terrains.find(t => t.id === player.terrainId);
+        if (terrain && hasValidLocation(terrain)) {
+          return { ...player, location: { ...terrain.location, city: terrain.city }, _locationFallback: 'terrain' };
+        }
+      }
+      // Try club
+      if (player.clubId) {
+        const club = clubs.find(c => c.id === player.clubId);
+        if (club && hasValidLocation(club)) {
+          return { ...player, location: { ...club.location, city: club.city }, _locationFallback: 'club' };
+        }
+      }
+      return player;
+    });
+  }, [players, terrains, clubs, hasValidLocation]);
+
   // Own data with locations
   const ownData = useMemo(() => ({
     terrains: terrains.filter(hasValidLocation),
     clubs: clubs.filter(hasValidLocation),
-    players: players.filter(hasValidLocation),
+    players: enrichedPlayers.filter(hasValidLocation),
     tournaments: tournaments.filter(hasValidLocation),
-  }), [terrains, clubs, players, tournaments, hasValidLocation]);
+  }), [terrains, clubs, enrichedPlayers, tournaments, hasValidLocation]);
 
   // Public data with locations
   const pubData = useMemo(() => ({
@@ -378,10 +400,10 @@ export default function MapScreen() {
   const noGeoCount = useMemo(() => {
     const noGeoTerrains = terrains.filter(i => !hasValidLocation(i)).length;
     const noGeoClubs = clubs.filter(i => !hasValidLocation(i)).length;
-    const noGeoPlayers = players.filter(i => !hasValidLocation(i)).length;
+    const noGeoPlayers = enrichedPlayers.filter(i => !hasValidLocation(i)).length;
     const noGeoTournaments = tournaments.filter(i => !hasValidLocation(i)).length;
     return noGeoTerrains + noGeoClubs + noGeoPlayers + noGeoTournaments;
-  }, [terrains, clubs, players, tournaments, hasValidLocation]);
+  }, [terrains, clubs, enrichedPlayers, tournaments, hasValidLocation]);
 
   const [showNoGeoBanner, setShowNoGeoBanner] = useState(true);
   const [showNoGeoModal, setShowNoGeoModal] = useState(false);
@@ -393,10 +415,10 @@ export default function MapScreen() {
     const items: { id: string; name: string; type: string; icon: string; color: string; route: string }[] = [];
     terrains.filter(i => !hasValidLocation(i)).forEach(i => items.push({ id: i.id, name: i.name, type: t('map', 'terrainSingular'), icon: 'sports-soccer', color: theme.success, route: `/terrain/edit/${i.id}` }));
     clubs.filter(i => !hasValidLocation(i)).forEach(i => items.push({ id: i.id, name: i.name, type: t('map', 'clubSingular'), icon: 'home', color: theme.accent, route: `/club/edit/${i.id}` }));
-    players.filter(i => !hasValidLocation(i)).forEach(i => items.push({ id: i.id, name: i.name, type: t('map', 'playerSingular'), icon: 'person', color: theme.primary, route: `/player/edit/${i.id}` }));
+    enrichedPlayers.filter(i => !hasValidLocation(i)).forEach(i => items.push({ id: i.id, name: i.name, type: t('map', 'playerSingular'), icon: 'person', color: theme.primary, route: `/player/edit/${i.id}` }));
     tournaments.filter(i => !hasValidLocation(i)).forEach(i => items.push({ id: i.id, name: i.name, type: t('map', 'tournamentSingular'), icon: 'emoji-events', color: theme.carreauColor, route: `/tournament/edit/${i.id}` }));
     return items;
-  }, [terrains, clubs, players, tournaments, hasValidLocation, t]);
+  }, [terrains, clubs, enrichedPlayers, tournaments, hasValidLocation, t]);
 
   const counts = useMemo(() => {
     const countType = (type: string) => results.filter(r => r.itemType === type).length;
