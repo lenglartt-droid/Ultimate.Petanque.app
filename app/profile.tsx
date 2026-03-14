@@ -133,8 +133,10 @@ export default function ProfileScreen() {
     { id: 'Milieu', icon: 'swap-horiz' },
   ];
 
-  // Load profile data
+  // Load profile data - only when NOT editing to avoid resetting form during edit
   useEffect(() => {
+    if (isEditing) return; // Don't reset form values while user is editing
+
     const loadProfile = async () => {
       if (!user?.id) return;
 
@@ -151,23 +153,29 @@ export default function ProfileScreen() {
           setUsername(data.username || '');
           setRole(data.role || 'Milieu');
           setLevel(data.level || 'Intermédiaire');
-          setClub(data.club || '');
           setAvatarUrl(data.avatar || null);
           setConsentDate(data.consent_date || null);
+          // Set club from user_profiles as initial fallback only
+          if (!selfPlayer) {
+            setClub(data.club || '');
+          }
         }
         
-        // Load from player record - always set values to keep in sync
-        setClubId(selfPlayer?.clubId || null);
-        setTerrainId(selfPlayer?.terrainId || null);
-        setTerrainName(
-          selfPlayer?.terrainName ||
-          (selfPlayer?.terrainId ? terrains.find(t => t.id === selfPlayer.terrainId)?.name || '' : '')
-        );
-        if (selfPlayer?.avatar) setAvatarUrl(selfPlayer.avatar);
-        setPhone(selfPlayer?.phone || '');
-        setEmail(selfPlayer?.email || '');
-        setHandedness(selfPlayer?.handedness || '');
-        
+        // Sync from selfPlayer when available - selfPlayer is the source of truth
+        // for club, terrain, handedness, phone, email (stored in players table)
+        if (selfPlayer) {
+          setClub(selfPlayer.club || '');
+          setClubId(selfPlayer.clubId || null);
+          setTerrainId(selfPlayer.terrainId || null);
+          setTerrainName(
+            selfPlayer.terrainName ||
+            (selfPlayer.terrainId ? terrains.find(t => t.id === selfPlayer.terrainId)?.name || '' : '')
+          );
+          if (selfPlayer.avatar) setAvatarUrl(selfPlayer.avatar);
+          setPhone(selfPlayer.phone || '');
+          setEmail(selfPlayer.email || '');
+          setHandedness(selfPlayer.handedness || '');
+        }
 
       } catch (error) {
         console.log('Error loading profile:', error);
@@ -177,7 +185,7 @@ export default function ProfileScreen() {
     };
 
     loadProfile();
-  }, [user?.id, selfPlayer]);
+  }, [user?.id, selfPlayer, isEditing]);
 
 
 
