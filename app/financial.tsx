@@ -1,10 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
   ScrollView,
   Pressable,
   StyleSheet,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -21,6 +22,13 @@ export default function FinancialScreen() {
   const insets = useSafeAreaInsets();
   const { tournaments, clubs, selfPlayer } = useApp();
   const { t, language } = useLanguage();
+
+  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
+  useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
+    return () => sub?.remove();
+  }, []);
+  const isTablet = screenWidth >= 600;
 
   const financialData = useMemo(() => {
     const myClub = selfPlayer?.clubId ? clubs.find((c: Club) => c.id === selfPlayer.clubId) : null;
@@ -69,7 +77,7 @@ export default function FinancialScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }, isTablet && styles.scrollContentTablet]}
         showsVerticalScrollIndicator={false}
       >
         {/* Balance Hero */}
@@ -321,6 +329,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
+  scrollContentTablet: { maxWidth: 960, alignSelf: 'center' as const, width: '100%', paddingHorizontal: 24 },
 
   // Hero
   heroCard: {

@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -37,6 +38,13 @@ export default function ProfileScreen() {
   const supabase = getSupabaseClient();
   const { t, language, setLanguage } = useLanguage();
   const params = useLocalSearchParams<{ edit?: string }>();
+
+  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
+  useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
+    return () => sub?.remove();
+  }, []);
+  const isTablet = screenWidth >= 600;
 
   const [isEditing, setIsEditing] = useState(false);
 
@@ -595,7 +603,7 @@ export default function ProfileScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }, isTablet && styles.scrollContentTablet]}
         showsVerticalScrollIndicator={false}
       >
         {/* Profile Hero Section */}
@@ -1825,6 +1833,12 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 20,
+  },
+  scrollContentTablet: {
+    maxWidth: 960,
+    alignSelf: 'center' as const,
+    width: '100%',
+    paddingHorizontal: 24,
   },
   // Hero Section
   heroSection: {

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   Modal,
   FlatList,
   RefreshControl,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -469,6 +470,13 @@ export default function HistoryScreen() {
   const [showChallengeShare, setShowChallengeShare] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
+  useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
+    return () => sub?.remove();
+  }, []);
+  const isTablet = screenWidth >= 600;
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await refreshData();
@@ -806,7 +814,7 @@ export default function HistoryScreen() {
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         ListHeaderComponent={ListHeader}
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }]}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }, isTablet && styles.listContentTablet]}
         showsVerticalScrollIndicator={false}
         initialNumToRender={15}
         maxToRenderPerBatch={10}
@@ -1094,6 +1102,7 @@ const styles = StyleSheet.create({
   
   // List
   listContent: { paddingHorizontal: 16, paddingTop: 12 },
+  listContentTablet: { maxWidth: 960, alignSelf: 'center' as const, width: '100%', paddingHorizontal: 24 },
   
   // Section Header
   sectionHeader: {

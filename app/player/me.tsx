@@ -433,7 +433,7 @@ export default function MyPlayerCardScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }, screenWidth >= 600 && styles.scrollContentTablet]}
         showsVerticalScrollIndicator={false}
       >
         {/* Player Card Header */}
@@ -1102,6 +1102,12 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 24,
+  },
+  scrollContentTablet: {
+    maxWidth: 960,
+    alignSelf: 'center' as const,
+    width: '100%',
+    paddingHorizontal: 24,
   },
   // Player Card
   playerCard: {

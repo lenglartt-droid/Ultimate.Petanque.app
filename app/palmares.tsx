@@ -545,7 +545,7 @@ export default function PalmaresScreen() {
         data={flatListData}
         keyExtractor={item => item.tournament.id}
         renderItem={({ item, index }) => <TournamentCard item={item} index={index} t={t} language={language} />}
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 32 }, screenWidth >= 600 && styles.listContentTablet]}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={() => (
           <>
@@ -1054,6 +1054,7 @@ const styles = StyleSheet.create({
   backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
   listContent: { paddingHorizontal: 16, paddingTop: 16 },
+  listContentTablet: { maxWidth: 960, alignSelf: 'center' as const, width: '100%', paddingHorizontal: 24 },
 
   // Hero
   heroCard: {

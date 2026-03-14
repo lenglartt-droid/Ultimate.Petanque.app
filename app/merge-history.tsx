@@ -8,6 +8,7 @@ import {
   TextInput,
   ActivityIndicator,
   RefreshControl,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -32,6 +33,13 @@ export default function MergeHistoryScreen() {
   const insets = useSafeAreaInsets();
   const { t, language } = useLanguage();
   const { refreshData } = useApp();
+
+  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
+  useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
+    return () => sub?.remove();
+  }, []);
+  const isTablet = screenWidth >= 600;
 
   const [logs, setLogs] = useState<MergeLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -144,7 +152,7 @@ export default function MergeHistoryScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }, isTablet && styles.scrollContentTablet]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} colors={[theme.primary]} />
@@ -353,7 +361,9 @@ const styles = StyleSheet.create({
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scrollView: { flex: 1, paddingHorizontal: 16, paddingTop: 16 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
+  scrollContentTablet: { maxWidth: 960, alignSelf: 'center' as const, width: '100%', paddingHorizontal: 24 },
+  scrollView: { flex: 1 },
   // Stats
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   statCard: {
