@@ -41,6 +41,7 @@ import {
   ChallengeStats,
   Terrain,
   TournamentNotification,
+  BoulesSet,
 } from '@/services/mockData';
 
 interface AppContextType {
@@ -53,6 +54,7 @@ interface AppContextType {
   terrains: Terrain[];
   userStats: typeof currentUserStats;
   challengeStats: ChallengeStats;
+  boulesSets: BoulesSet[];
   loading: boolean;
   
   // Current user's player info
@@ -227,6 +229,7 @@ function mapMatchFromDb(m: any): Match {
     tournamentId: m.tournament_id, tournamentName: m.tournament_name,
     tournamentPhase: m.tournament_phase, tournamentBracket: m.tournament_bracket,
     bracketMatchId: m.bracket_match_id, terrainId: m.terrain_id, terrainType: m.terrain_type,
+    boulesSetId: m.boules_set_id,
     teamA: m.team_a, teamB: m.team_b, winner: m.winner,
     duration: m.duration || 0, menes: m.menes || [],
     playerActions: m.player_actions, seriesInfo: m.series_info,
@@ -236,6 +239,7 @@ function mapMatchFromDb(m: any): Match {
 function mapChallengeFromDb(c: any): Challenge {
   return {
     id: c.id, type: c.type, mode: c.mode || 'solo', date: c.date,
+    boulesSetId: c.boules_set_id,
     playerId: c.player_id, playerName: c.player_name,
     opponentId: c.opponent_id, opponentName: c.opponent_name,
     opponentResult: c.opponent_result, winner: c.winner,
@@ -296,6 +300,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [matches, setMatches] = useState<Match[]>([]);
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [terrains, setTerrains] = useState<Terrain[]>([]);
+  const [boulesSets, setBoulesSets] = useState<BoulesSet[]>([]);
   const [favoriteTerrainIds, setFavoriteTerrainIds] = useState<string[]>([]);
   const [favoriteClubIds, setFavoriteClubIds] = useState<string[]>([]);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
@@ -549,7 +554,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
       // Fetch all user data + shared items in parallel
-      const [playersRes, clubsRes, tournamentsRes, matchesRes, challengesRes, terrainsRes, profileRes, sharedWithMeRes] = await Promise.all([
+      const [playersRes, clubsRes, tournamentsRes, matchesRes, challengesRes, terrainsRes, profileRes, sharedWithMeRes, boulesSetsRes] = await Promise.all([
         supabase.from('players').select('*').order('created_at', { ascending: false }),
         supabase.from('clubs').select('*').order('created_at', { ascending: false }),
         supabase.from('tournaments').select('*').order('date', { ascending: false }),
@@ -558,6 +563,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         supabase.from('terrains').select('*').order('created_at', { ascending: false }),
         supabase.from('user_profiles').select('*').eq('id', user.id).single(),
         supabase.from('shared_items').select('item_type, item_id, permission').eq('shared_with_id', user.id),
+        supabase.from('boules_sets').select('*').order('created_at', { ascending: false }),
       ]);
 
       // Group shared item IDs by type for batch fetching + build permissions map
@@ -671,6 +677,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (challengesRes.data) {
         const dbChallenges: Challenge[] = challengesRes.data.map(mapChallengeFromDb);
         setChallenges(dbChallenges.length > 0 ? dbChallenges : mockChallenges);
+      }
+
+      // Boules sets
+      if (boulesSetsRes.data) {
+        const dbSets: BoulesSet[] = boulesSetsRes.data.map((s: any) => ({
+          id: s.id, name: s.name, brand: s.brand,
+          diameter: s.diameter ? parseFloat(s.diameter) : undefined,
+          weight: s.weight || undefined, serialNumber: s.serial_number,
+          hardness: s.hardness, isPrimary: s.is_primary, notes: s.notes,
+        }));
+        setBoulesSets(dbSets);
       }
 
       // Mark network load as complete and save sync timestamp
@@ -965,6 +982,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         bracket_match_id: match.bracketMatchId,
         terrain_id: match.terrainId,
         terrain_type: match.terrainType,
+        boules_set_id: match.boulesSetId || null,
         team_a: match.teamA,
         team_b: match.teamB,
         winner: match.winner,
@@ -989,6 +1007,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           bracketMatchId: data.bracket_match_id,
           terrainId: data.terrain_id,
           terrainType: data.terrain_type,
+          boulesSetId: data.boules_set_id,
           teamA: data.team_a,
           teamB: data.team_b,
           winner: data.winner,
@@ -1321,6 +1340,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         duration: challenge.duration,
         notes: challenge.notes,
         detailed_shots: challenge.detailedShots,
+        boules_set_id: challenge.boulesSetId || null,
       }).select().single();
 
       if (error) throw error;
@@ -1349,6 +1369,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           duration: data.duration,
           notes: data.notes,
           detailedShots: data.detailed_shots,
+          boulesSetId: data.boules_set_id,
         };
         setChallenges(prev => [newChallenge, ...prev]);
         return data.id;
@@ -1984,6 +2005,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         terrains,
         userStats,
         challengeStats,
+        boulesSets,
         loading,
         addMatch,
         addPlayer,

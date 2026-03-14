@@ -158,6 +158,7 @@ export default function NewChallengeScreen() {
   const insets = useSafeAreaInsets();
   const { addChallenge, userStats, selfPlayer, players } = useApp();
   const { t } = useLanguage();
+  const { boulesSets } = useApp();
 
   // ============================================
   // CONFIGURATION (translated)
@@ -208,6 +209,7 @@ export default function NewChallengeScreen() {
   const [challengeMode, setChallengeMode] = useState<ChallengeMode | null>(null);
   const [selectedOpponent, setSelectedOpponent] = useState<Player | null>(null);
   const [playerSearch, setPlayerSearch] = useState('');
+  const [selectedBoulesSetId, setSelectedBoulesSetId] = useState<string | null>(null);
   
   // Challenge state
   const [isStarted, setIsStarted] = useState(false);
@@ -546,6 +548,7 @@ export default function NewChallengeScreen() {
         maxPoints: 100,
         atelierScores,
         duration: elapsedTime,
+        boulesSetId: selectedBoulesSetId || undefined,
       };
     } else {
       return {
@@ -565,6 +568,7 @@ export default function NewChallengeScreen() {
         successRate: playerStats.successRate,
         duration: elapsedTime,
         detailedShots: detailedShots.length > 0 ? detailedShots : undefined,
+        boulesSetId: selectedBoulesSetId || undefined,
       };
     }
   }, [selectedType, challengeMode, selectedOpponent, opponentShots, opponentPrecisionShots,
@@ -937,6 +941,42 @@ export default function NewChallengeScreen() {
               </View>
             </Animated.View>
           )}
+
+          {/* Boules Set Selector */}
+          {boulesSets.length > 0 ? (
+            <Animated.View entering={FadeInDown.duration(400).delay(250)} style={{ width: '100%', marginTop: 16 }}>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textMuted, letterSpacing: 0.5, marginBottom: 8, textAlign: 'center' }}>{t('challenge', 'boulesSet').toUpperCase()}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, justifyContent: 'center', paddingHorizontal: 8 }}>
+                <Pressable
+                  style={[styles.atelierCard, { borderWidth: 2, borderColor: !selectedBoulesSetId ? theme.primary : 'transparent', minWidth: 80 }]}
+                  onPress={() => { Haptics.selectionAsync(); setSelectedBoulesSetId(null); }}
+                >
+                  <View style={[styles.atelierIcon, { backgroundColor: theme.textMuted + '15' }]}>
+                    <MaterialIcons name="block" size={18} color={theme.textMuted} />
+                  </View>
+                  <View style={styles.atelierInfo}>
+                    <Text style={styles.atelierName}>-</Text>
+                  </View>
+                </Pressable>
+                {boulesSets.map(bs => (
+                  <Pressable
+                    key={bs.id}
+                    style={[styles.atelierCard, { borderWidth: 2, borderColor: selectedBoulesSetId === bs.id ? theme.accent : 'transparent' }]}
+                    onPress={() => { Haptics.selectionAsync(); setSelectedBoulesSetId(bs.id); }}
+                  >
+                    <View style={[styles.atelierIcon, { backgroundColor: theme.accent + '15' }]}>
+                      <MaterialIcons name="sports-baseball" size={18} color={theme.accent} />
+                    </View>
+                    <View style={styles.atelierInfo}>
+                      <Text style={styles.atelierName} numberOfLines={1}>{bs.name}</Text>
+                      <Text style={styles.atelierDesc}>{[bs.diameter ? `${bs.diameter}mm` : '', bs.weight ? `${bs.weight}g` : ''].filter(Boolean).join(' \u2022 ')}</Text>
+                    </View>
+                    {selectedBoulesSetId === bs.id ? <MaterialIcons name="check-circle" size={18} color={theme.accent} /> : null}
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </Animated.View>
+          ) : null}
         </ScrollView>
 
         <View style={[styles.bottomAction, { paddingBottom: insets.bottom + 16 }]}>

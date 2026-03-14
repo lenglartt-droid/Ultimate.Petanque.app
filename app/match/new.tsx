@@ -138,6 +138,7 @@ export default function NewMatchScreen() {
   }>();
   const { addMatch, players, tournaments, matches, selfPlayer, terrains } = useApp();
   const { t } = useLanguage();
+  const { boulesSets } = useApp();
   
   const isRevanche = revanche === 'true';
   const seriesWinsA = parseInt(initialWinsA || '0');
@@ -217,6 +218,8 @@ export default function NewMatchScreen() {
   const [advancedShotRecords, setAdvancedShotRecords] = useState<SimpleShotRecord[]>([]);
   const [selectedTerrainId, setSelectedTerrainId] = useState<string | null>(null);
   const [showTerrainPicker, setShowTerrainPicker] = useState(false);
+  const [selectedBoulesSetId, setSelectedBoulesSetId] = useState<string | null>(null);
+  const [showBoulesSetPicker, setShowBoulesSetPicker] = useState(false);
   const [savedMatchIdForShare, setSavedMatchIdForShare] = useState<string | null>(null);
   const [showPostMatchShare, setShowPostMatchShare] = useState(false);
   const [isSavingForShare, setIsSavingForShare] = useState(false);
@@ -237,6 +240,11 @@ export default function NewMatchScreen() {
     if (!selectedTerrainId) return null;
     return terrains.find(t => t.id === selectedTerrainId) || null;
   }, [selectedTerrainId, terrains]);
+
+  const selectedBoulesSet = useMemo(() => {
+    if (!selectedBoulesSetId) return null;
+    return boulesSets.find(bs => bs.id === selectedBoulesSetId) || null;
+  }, [selectedBoulesSetId, boulesSets]);
 
   const maxPlayersPerTeam = useMemo(() => {
     switch (format) {
@@ -695,6 +703,7 @@ export default function NewMatchScreen() {
       tournamentBracket: isTournamentMode && selectedPhase !== 'Poules' ? selectedBracket || undefined : undefined,
       terrainId: selectedTerrainId || linkedTournament?.terrainId || undefined,
       terrainType: selectedTerrain?.type || linkedTournament?.terrainType || undefined,
+      boulesSetId: selectedBoulesSetId || undefined,
       teamA: {
         players: teamAPlayerIds.length > 0 ? teamAPlayerIds : ['1'],
         playerNames: teamAPlayerNames,
@@ -765,6 +774,7 @@ export default function NewMatchScreen() {
       tournamentBracket: isTournamentMode && selectedPhase !== 'Poules' ? selectedBracket || undefined : undefined,
       terrainId: selectedTerrainId || linkedTournament?.terrainId || undefined,
       terrainType: selectedTerrain?.type || linkedTournament?.terrainType || undefined,
+      boulesSetId: selectedBoulesSetId || undefined,
       teamA: { players: teamAPlayerIds.length > 0 ? teamAPlayerIds : ['1'], playerNames: teamAPlayerNames, playerRoles: teamAPlayerRoles.length > 0 ? teamAPlayerRoles : undefined, score: teamAScore },
       teamB: { players: teamBPlayerIds.length > 0 ? teamBPlayerIds : ['2'], playerNames: teamBPlayerNames, playerRoles: teamBPlayerRoles.length > 0 ? teamBPlayerRoles : undefined, score: teamBScore },
       winner, duration,
@@ -835,6 +845,7 @@ export default function NewMatchScreen() {
       tournamentBracket: isTournamentMode && selectedPhase !== 'Poules' ? selectedBracket || undefined : undefined,
       terrainId: selectedTerrainId || linkedTournament?.terrainId || undefined,
       terrainType: selectedTerrain?.type || linkedTournament?.terrainType || undefined,
+      boulesSetId: selectedBoulesSetId || undefined,
       teamA: { players: tAIds.length > 0 ? tAIds : ['1'], playerNames: tANames, playerRoles: tARoles.length > 0 ? tARoles : undefined, score: teamAScore },
       teamB: { players: tBIds.length > 0 ? tBIds : ['2'], playerNames: tBNames, playerRoles: tBRoles.length > 0 ? tBRoles : undefined, score: teamBScore },
       winner, duration: dur,
@@ -982,6 +993,11 @@ export default function NewMatchScreen() {
                 {selectedTerrain && (
                   <Text style={styles.fsTerrainName} numberOfLines={1}>
                     <MaterialIcons name="place" size={12} color="rgba(255,255,255,0.5)" /> {selectedTerrain.name}
+                  </Text>
+                )}
+                {selectedBoulesSet && (
+                  <Text style={styles.fsTerrainName} numberOfLines={1}>
+                    <MaterialIcons name="sports-baseball" size={12} color="rgba(255,255,255,0.5)" /> {selectedBoulesSet.name}
                   </Text>
                 )}
               </View>
@@ -1554,6 +1570,19 @@ export default function NewMatchScreen() {
                 </View>
                 <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
               </Pressable>
+
+              <Pressable style={styles.terrainSelector} onPress={() => setShowBoulesSetPicker(true)}>
+                <View style={styles.terrainSelectorIcon}>
+                  <MaterialIcons name="sports-baseball" size={20} color={selectedBoulesSet ? theme.accent : theme.textMuted} />
+                </View>
+                <View style={styles.terrainSelectorContent}>
+                  <Text style={styles.terrainSelectorLabel}>{t('match', 'boulesSet')}</Text>
+                  <Text style={[styles.terrainSelectorValue, !selectedBoulesSet && styles.terrainSelectorPlaceholder]} numberOfLines={1}>
+                    {selectedBoulesSet ? `${selectedBoulesSet.name}${selectedBoulesSet.diameter ? ` \u2022 ${selectedBoulesSet.diameter}mm` : ''}${selectedBoulesSet.weight ? ` \u2022 ${selectedBoulesSet.weight}g` : ''}` : t('match', 'chooseBoulesSet')}
+                  </Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              </Pressable>
             </Animated.View>
           )}
 
@@ -1952,6 +1981,66 @@ export default function NewMatchScreen() {
           forceReadOnly
         />
       ) : null}
+
+      {/* Boules Set Picker Modal */}
+      <Modal
+        visible={showBoulesSetPicker}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowBoulesSetPicker(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Pressable style={styles.modalCloseBtn} onPress={() => setShowBoulesSetPicker(false)}>
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+            <Text style={styles.modalTitle}>{t('match', 'boulesSet')}</Text>
+            <Pressable style={styles.modalDoneBtn} onPress={() => { setSelectedBoulesSetId(null); setShowBoulesSetPicker(false); }}>
+              <Text style={[styles.modalDoneText, { color: theme.textMuted }]}>-</Text>
+            </Pressable>
+          </View>
+
+          <FlatList
+            data={boulesSets}
+            keyExtractor={item => item.id}
+            style={styles.playersList}
+            contentContainerStyle={styles.playersListContent}
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item: bs }) => (
+              <Pressable
+                style={[styles.playerItem, selectedBoulesSetId === bs.id && styles.playerItemSelected]}
+                onPress={() => { Haptics.selectionAsync(); setSelectedBoulesSetId(bs.id); setShowBoulesSetPicker(false); }}
+              >
+                <View style={[styles.playerAvatar, selectedBoulesSetId === bs.id && { backgroundColor: theme.accent }]}>
+                  <MaterialIcons name="sports-baseball" size={22} color="#FFF" />
+                </View>
+                <View style={styles.playerInfo}>
+                  <View style={styles.playerNameRow}>
+                    <Text style={styles.playerName}>{bs.name}</Text>
+                    {bs.isPrimary ? (
+                      <View style={styles.moiBadge}><Text style={styles.moiBadgeText}>{t('match', 'primary')}</Text></View>
+                    ) : null}
+                  </View>
+                  <Text style={styles.playerMeta}>
+                    {[bs.brand, bs.diameter ? `${bs.diameter}mm` : '', bs.weight ? `${bs.weight}g` : '', bs.hardness].filter(Boolean).join(' \u2022 ')}
+                  </Text>
+                </View>
+                <MaterialIcons
+                  name={selectedBoulesSetId === bs.id ? 'check-circle' : 'radio-button-unchecked'}
+                  size={24}
+                  color={selectedBoulesSetId === bs.id ? theme.accent : theme.border}
+                />
+              </Pressable>
+            )}
+            ListEmptyComponent={
+              <View style={styles.emptySearch}>
+                <MaterialIcons name="sports-baseball" size={40} color={theme.textMuted} />
+                <Text style={styles.emptySearchText}>{t('match', 'noBoulesSet')}</Text>
+              </View>
+            }
+          />
+        </SafeAreaView>
+      </Modal>
 
       {/* Terrain Picker Modal */}
       <Modal

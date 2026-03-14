@@ -2,6 +2,19 @@
 
 import { GameFormat, PlayerRole, TournamentType, TerrainType, TournamentLevel, TournamentCategory, RegistrationType, TournamentScope } from '@/constants/config';
 
+// Boules set (equipment)
+export interface BoulesSet {
+  id: string;
+  name: string;
+  brand?: string;
+  diameter?: number;
+  weight?: number;
+  serialNumber?: string;
+  hardness?: string;
+  isPrimary?: boolean;
+  notes?: string;
+}
+
 // Boules info for player
 export interface BoulesInfo {
   name?: string;
@@ -211,6 +224,7 @@ export interface Match {
   bracketMatchId?: string;
   terrainId?: string;
   terrainType?: string;
+  boulesSetId?: string;
   teamA: {
     players: string[];
     playerNames: string[];
@@ -435,6 +449,7 @@ export interface Challenge {
   type: ChallengeType;
   mode: ChallengeMode;
   date: string;
+  boulesSetId?: string;
   playerId?: string;
   playerName?: string;
   opponentId?: string;
