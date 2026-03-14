@@ -32,7 +32,7 @@ const levels = ['Débutant', 'Intermédiaire', 'Confirmé', 'Expert'] as const;
 export default function EditPlayerScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getPlayerById, updatePlayer, deletePlayer, clubs, matches } = useApp();
+  const { getPlayerById, updatePlayer, deletePlayer, clubs, terrains, matches } = useApp();
   const { t } = useLanguage();
   const supabase = getSupabaseClient();
 
@@ -57,6 +57,10 @@ export default function EditPlayerScreen() {
   const [email, setEmail] = useState('');
   // Handedness
   const [handedness, setHandedness] = useState<'right' | 'left' | 'ambidextrous' | ''>('');
+  // Terrain
+  const [terrainId, setTerrainId] = useState<string | undefined>();
+  const [terrainName, setTerrainName] = useState('');
+
   // Boules info
   const [boulesName, setBoulesName] = useState('');
   const [boulesDiameter, setBoulesDiameter] = useState('');
@@ -80,6 +84,9 @@ export default function EditPlayerScreen() {
       setPhone(player.phone || '');
       setEmail(player.email || '');
       setHandedness(player.handedness || '');
+      // Terrain
+      setTerrainId(player.terrainId);
+      setTerrainName(player.terrainName || '');
       // Boules
       setBoulesName(player.boules?.name || '');
       setBoulesDiameter(player.boules?.diameter?.toString() || '');
@@ -325,6 +332,8 @@ export default function EditPlayerScreen() {
       weight: boulesWeight ? parseInt(boulesWeight) : undefined,
     } : undefined;
 
+    const selectedTerrain = terrains.find(t => t.id === terrainId);
+
     updatePlayer(id!, {
       name: name.trim(),
       nickname: nickname.trim() || undefined,
@@ -333,6 +342,8 @@ export default function EditPlayerScreen() {
       level,
       clubId,
       club: selectedClub?.name,
+      terrainId: terrainId || undefined,
+      terrainName: selectedTerrain?.name || terrainName || undefined,
       phone: phone.trim() || undefined,
       email: email.trim() || undefined,
       handedness: handedness || undefined,
@@ -545,6 +556,61 @@ export default function EditPlayerScreen() {
                     clubId === club.id && styles.clubChipTextActive
                   ]}>
                     {club.name}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </Animated.View>
+
+          {/* Terrain */}
+          <Animated.View entering={FadeInDown.duration(400).delay(260)} style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('player', 'terrainLabel')}</Text>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.clubsScroll}
+            >
+              <Pressable
+                style={[
+                  styles.terrainChip,
+                  !terrainId && styles.terrainChipActive
+                ]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setTerrainId(undefined);
+                  setTerrainName('');
+                }}
+              >
+                <Text style={[
+                  styles.clubChipText,
+                  !terrainId && styles.terrainChipTextActive
+                ]}>
+                  {t('player', 'noTerrain')}
+                </Text>
+              </Pressable>
+              {terrains.map(terr => (
+                <Pressable
+                  key={terr.id}
+                  style={[
+                    styles.terrainChip,
+                    terrainId === terr.id && styles.terrainChipActive
+                  ]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setTerrainId(terr.id);
+                    setTerrainName(terr.name);
+                  }}
+                >
+                  <MaterialIcons 
+                    name="sports-soccer" 
+                    size={14} 
+                    color={terrainId === terr.id ? theme.success : theme.textMuted} 
+                  />
+                  <Text style={[
+                    styles.clubChipText,
+                    terrainId === terr.id && styles.terrainChipTextActive
+                  ]} numberOfLines={1}>
+                    {terr.name}
                   </Text>
                 </Pressable>
               ))}
@@ -1019,6 +1085,26 @@ const styles = StyleSheet.create({
   },
   clubChipTextActive: {
     color: theme.accent,
+  },
+  terrainChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    maxWidth: 200,
+    ...theme.shadows.card,
+  },
+  terrainChipActive: {
+    borderColor: theme.success,
+    backgroundColor: theme.success + '10',
+  },
+  terrainChipTextActive: {
+    color: theme.success,
   },
   contactInputs: {
     gap: 12,

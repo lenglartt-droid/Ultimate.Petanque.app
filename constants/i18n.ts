@@ -1546,6 +1546,8 @@ export const translations = {
     levelLabel: { fr: 'NIVEAU', en: 'LEVEL' },
     clubLabel: { fr: 'CLUB', en: 'CLUB' },
     noClub: { fr: 'Sans club', en: 'No club' },
+    noTerrain: { fr: 'Sans terrain', en: 'No court' },
+    terrainLabel: { fr: 'TERRAIN', en: 'COURT' },
     practiceTerrain: { fr: 'TERRAIN DE PRATIQUE', en: 'PRACTICE COURT' },
     undefined: { fr: 'Non défini', en: 'Undefined' },
     locationLabel: { fr: 'LOCALISATION', en: 'LOCATION' },
