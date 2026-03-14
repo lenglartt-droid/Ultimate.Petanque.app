@@ -578,6 +578,11 @@ export const translations = {
     // Challenge progression chart
     challengeProgressionTitle: { fr: 'Progression des defis', en: 'Challenge Progression' },
     challengeProgressionSubtitle: { fr: 'Taux de reussite par type', en: 'Success rate by type' },
+    exportStats: { fr: 'Exporter', en: 'Export' },
+    exportStatsTitle: { fr: 'Mes Statistiques', en: 'My Statistics' },
+    exportGenerating: { fr: 'Generation en cours...', en: 'Generating...' },
+    exportSuccess: { fr: 'Image exportee', en: 'Image exported' },
+    exportError: { fr: 'Erreur lors de l\'export', en: 'Export error' },
   },
 
   // ============================================
@@ -1020,6 +1025,12 @@ export const translations = {
     noActivity: { fr: 'Aucune activité ne correspond à vos filtres', en: 'No activity matches your filters' },
     resetFilters: { fr: 'Réinitialiser', en: 'Reset' },
     challengeDetails: { fr: 'Détails du défi', en: 'Challenge details' },
+    radarComparison: { fr: 'Comparaison 1v1', en: '1v1 Comparison' },
+    radarSuccessRate: { fr: 'Reussite', en: 'Success' },
+    radarCarreaux: { fr: 'Carreaux', en: 'Carreaux' },
+    radarPrecision: { fr: 'Precision', en: 'Precision' },
+    radarConsistency: { fr: 'Regularite', en: 'Consistency' },
+    radarSpeed: { fr: 'Vitesse', en: 'Speed' },
     editPrecisionShots: { fr: 'Modifier les tirs de précision', en: 'Edit precision shots' },
     workshop: { fr: 'Atelier', en: 'Workshop' },
     distance: { fr: 'Distance', en: 'Distance' },

@@ -509,56 +509,25 @@ export default function PlayerDetailScreen() {
             </View>
           )}
 
-          {/* Preferred Partner from Match History */}
+          {/* Preferred Partner from Match History - Compact Row */}
           {partnerAnalysis.totalWithPartners > 0 && (
             <View style={styles.preferredRoleCard}>
               <Text style={styles.preferredRoleTitle}>{t('player', 'preferredPartner')}</Text>
-              <View style={styles.preferredRoleContent}>
-                <View style={[styles.preferredRoleIcon, { backgroundColor: partnerColors[0] }]}>
-                  <MaterialIcons name="people" size={20} color="#FFF" />
-                </View>
-                <View style={styles.preferredRoleInfo}>
-                  <Text style={styles.preferredRoleName}>{partnerAnalysis.preferredPartner.name}</Text>
-                  <Text style={styles.preferredRoleStats}>
-                    {partnerAnalysis.preferredPartner.count} {t('player', 'outOf')} {partnerAnalysis.totalWithPartners} {t('player', 'matchesLabel')}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.partnerBreakdown}>
+              <View style={styles.roleBreakdown}>
                 {Object.entries(partnerAnalysis.partnerCounts)
                   .sort((a, b) => b[1].count - a[1].count)
-                  .slice(0, 5)
+                  .slice(0, 3)
                   .map(([pid, info], idx) => {
                     const pct = partnerAnalysis.totalWithPartners > 0 ? Math.round((info.count / partnerAnalysis.totalWithPartners) * 100) : 0;
                     const color = partnerColors[idx % partnerColors.length];
                     return (
-                      <View key={pid} style={styles.partnerBreakdownItem}>
-                        {(() => {
-                          const partnerPlayer = getPlayerById(pid);
-                          return partnerPlayer?.avatar ? (
-                            <Image
-                              source={{ uri: partnerPlayer.avatar }}
-                              style={styles.partnerAvatarImg}
-                              contentFit="cover"
-                              transition={200}
-                            />
-                          ) : (
-                            <View style={[styles.partnerAvatar, { backgroundColor: color + '20' }]}>
-                              <Text style={[styles.partnerAvatarText, { color }]}>
-                                {info.name.charAt(0).toUpperCase()}
-                              </Text>
-                            </View>
-                          );
-                        })()}
-                        <View style={styles.partnerInfoCol}>
-                          <Text style={styles.partnerName} numberOfLines={1}>{info.name}</Text>
-                          <View style={styles.partnerBarRow}>
-                            <View style={styles.roleBreakdownBarBg}>
-                              <View style={[styles.roleBreakdownBar, { width: `${pct}%`, backgroundColor: color }]} />
-                            </View>
-                            <Text style={styles.partnerPct}>{info.count} ({pct}%)</Text>
-                          </View>
+                      <View key={pid} style={styles.roleBreakdownItem}>
+                        <MaterialIcons name="person" size={14} color={color} />
+                        <Text style={styles.roleBreakdownLabel} numberOfLines={1}>{info.name.split(' ')[0].substring(0, 4)}</Text>
+                        <View style={styles.roleBreakdownBarBg}>
+                          <View style={[styles.roleBreakdownBar, { width: `${pct}%`, backgroundColor: color }]} />
                         </View>
+                        <Text style={styles.roleBreakdownPct}>{pct}%</Text>
                       </View>
                     );
                   })}

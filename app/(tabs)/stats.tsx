@@ -16,7 +16,9 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
-import Svg, { Circle, Line, G, Text as SvgText, Rect } from 'react-native-svg';
+import Svg, { Circle, Line, G, Text as SvgText, Rect, Polygon } from 'react-native-svg';
+import * as Sharing from 'expo-sharing';
+import ViewShot, { captureRef } from 'react-native-view-shot';
 import { router } from 'expo-router';
 import { useLanguage } from '@/hooks/useLanguage';
 import AdBanner from '@/components/ui/AdBanner';
@@ -313,6 +315,8 @@ export default function StatsScreen() {
   const [showItemPickerModal, setShowItemPickerModal] = useState(false);
   const [itemPickerType, setItemPickerType] = useState<'match' | 'challenge' | 'tournament' | 'opponent' | 'partner' | 'terrain'>('match');
   const [itemPickerSearch, setItemPickerSearch] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const statsExportRef = React.useRef<any>(null);
 
   // Time-filtered base data
   const timeFilteredMatches = filterByTime(matches, timeFilter);
@@ -1301,6 +1305,31 @@ export default function StatsScreen() {
             </Text>
           </View>
           <View style={styles.headerButtons}>
+            <Pressable
+              style={styles.exportButton}
+              onPress={async () => {
+                if (exporting) return;
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setExporting(true);
+                try {
+                  if (statsExportRef.current) {
+                    const uri = await captureRef(statsExportRef.current, { format: 'png', quality: 1, result: 'tmpfile' });
+                    const canShare = await Sharing.isAvailableAsync();
+                    if (canShare) {
+                      await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: t('stats', 'exportStatsTitle') });
+                    }
+                  }
+                } catch (e) {
+                  console.log('Export error:', e);
+                } finally {
+                  setExporting(false);
+                }
+              }}
+              disabled={exporting}
+            >
+              <MaterialIcons name={exporting ? 'hourglass-empty' : 'ios-share'} size={16} color={theme.accent} />
+              <Text style={styles.exportButtonText}>{exporting ? '...' : t('stats', 'exportStats')}</Text>
+            </Pressable>
             <Pressable 
               style={styles.progressionButton}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowProgressionModal(true); }}
@@ -1427,6 +1456,49 @@ export default function StatsScreen() {
               </Text>
             </Pressable>
           ))}
+        </View>
+      </View>
+
+      {/* Hidden export view */}
+      <View style={{ position: 'absolute', left: -9999, top: -9999 }} pointerEvents="none">
+        <View ref={statsExportRef} collapsable={false} style={{ width: 390, backgroundColor: theme.backgroundSecondary, padding: 20 }}>
+          <View style={{ backgroundColor: theme.surface, borderRadius: 16, padding: 20, marginBottom: 16 }}>
+            <Text style={{ fontSize: 22, fontWeight: '700', color: theme.textPrimary, textAlign: 'center', marginBottom: 4 }}>{t('stats', 'exportStatsTitle')}</Text>
+            <Text style={{ fontSize: 12, color: theme.textSecondary, textAlign: 'center', marginBottom: 16 }}>Ultimate Petanque</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16 }}>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 32, fontWeight: '800', color: theme.primary }}>{performanceStats.winRate}%</Text>
+                <Text style={{ fontSize: 11, color: theme.textMuted }}>{t('stats', 'victoriesLabel')}</Text>
+              </View>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 32, fontWeight: '800', color: theme.tirColor }}>{tirStats.successRate}%</Text>
+                <Text style={{ fontSize: 11, color: theme.textMuted }}>{t('stats', 'shotShort')}</Text>
+              </View>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 32, fontWeight: '800', color: theme.pointColor }}>{pointStats.successRate}%</Text>
+                <Text style={{ fontSize: 11, color: theme.textMuted }}>{t('stats', 'pointShort')}</Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 20, fontWeight: '700', color: theme.carreauColor }}>{tirStats.carreauRate}%</Text>
+                <Text style={{ fontSize: 10, color: theme.textMuted }}>{t('stats', 'carreauxLabel')}</Text>
+              </View>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 20, fontWeight: '700', color: theme.success }}>{performanceStats.wins}</Text>
+                <Text style={{ fontSize: 10, color: theme.textMuted }}>{t('stats', 'wonLabel')}</Text>
+              </View>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 20, fontWeight: '700', color: theme.error }}>{performanceStats.losses}</Text>
+                <Text style={{ fontSize: 10, color: theme.textMuted }}>{t('stats', 'lostLabel')}</Text>
+              </View>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 20, fontWeight: '700', color: theme.textPrimary }}>{performanceStats.total}</Text>
+                <Text style={{ fontSize: 10, color: theme.textMuted }}>{t('stats', 'totalLabel')}</Text>
+              </View>
+            </View>
+          </View>
+          <Text style={{ fontSize: 9, color: theme.textMuted, textAlign: 'center' }}>ultimate-petanque.app</Text>
         </View>
       </View>
 
@@ -3346,6 +3418,8 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 26, fontWeight: '700', color: theme.textPrimary },
   headerSubtitle: { fontSize: 13, color: theme.textSecondary, marginTop: 2 },
   headerButtons: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  exportButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: theme.accent + '15', borderRadius: theme.borderRadius.md },
+  exportButtonText: { fontSize: 12, fontWeight: '600', color: theme.accent },
   progressionButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: theme.primary + '15', borderRadius: theme.borderRadius.md },
   progressionButtonText: { fontSize: 12, fontWeight: '600', color: theme.primary },
   historyButton: { padding: 8, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md },

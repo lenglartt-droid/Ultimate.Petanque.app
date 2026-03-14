@@ -25,6 +25,7 @@ import { Match, Challenge, SeriesInfo } from '@/services/mockData';
 import { useLanguage } from '@/hooks/useLanguage';
 import ShareModal from '@/components/ui/ShareModal';
 import AdBanner from '@/components/ui/AdBanner';
+import Svg, { Circle, Line, G, Polygon, Text as SvgText } from 'react-native-svg';
 
 // Constants
 const CHALLENGE_CONFIG = {
@@ -1144,7 +1145,7 @@ export default function HistoryScreen() {
                 </View>
               </View>
 
-              {/* 1v1 Result */}
+              {/* 1v1 Result + Radar Chart */}
               {editingChallenge.mode === '1v1' && editingChallenge.opponentResult ? (
                 <View style={styles.detailOpponent}>
                   <View style={styles.detailOpponentRow}>
@@ -1166,6 +1167,89 @@ export default function HistoryScreen() {
                       </Text>
                     </View>
                   ) : null}
+
+                  {/* Radar Chart Comparison */}
+                  {(() => {
+                    const radarSize = 200;
+                    const cx = radarSize / 2;
+                    const cy = radarSize / 2;
+                    const maxR = radarSize / 2 - 30;
+                    const isPrecision = editingChallenge.type === 'precision';
+                    const playerSuccessRate = isPrecision
+                      ? ((editingChallenge.totalPoints || 0) / Math.max(1, editingChallenge.maxPoints || 100)) * 100
+                      : editingChallenge.successRate || 0;
+                    const playerCarreauRate = editingChallenge.type !== 'precision' && (editingChallenge.totalShots || 0) > 0
+                      ? ((editingChallenge.carreauCount || 0) / (editingChallenge.totalShots || 10)) * 100
+                      : isPrecision ? ((editingChallenge.precisionShots?.filter(s => s.points === 5).length || 0) / Math.max(1, editingChallenge.precisionShots?.length || 1)) * 100 : 0;
+                    const playerConsistency = editingChallenge.shots
+                      ? (editingChallenge.shots.filter(s => s.success).length / Math.max(1, editingChallenge.shots.length)) * 100
+                      : playerSuccessRate;
+                    const oppResult = editingChallenge.opponentResult!;
+                    const oppSuccessRate = isPrecision
+                      ? ((oppResult.totalPoints || 0) / Math.max(1, editingChallenge.maxPoints || 100)) * 100
+                      : oppResult.successRate || 0;
+                    const oppCarreauRate = editingChallenge.type !== 'precision' && (oppResult.totalShots || 0) > 0
+                      ? ((oppResult.carreauCount || 0) / Math.max(1, oppResult.totalShots || 10)) * 100
+                      : isPrecision ? ((oppResult.precisionShots?.filter(s => s.points === 5).length || 0) / Math.max(1, oppResult.precisionShots?.length || 1)) * 100 : 0;
+                    const oppConsistency = oppResult.shots
+                      ? (oppResult.shots.filter(s => s.success).length / Math.max(1, oppResult.shots.length)) * 100
+                      : oppSuccessRate;
+                    const labels = [t('history', 'radarSuccessRate'), t('history', 'radarCarreaux'), t('history', 'radarConsistency')];
+                    const playerValues = [playerSuccessRate, playerCarreauRate, playerConsistency];
+                    const oppValues = [oppSuccessRate, oppCarreauRate, oppConsistency];
+                    const numAxes = labels.length;
+                    const angleStep = (2 * Math.PI) / numAxes;
+                    const getPoint = (value: number, index: number) => {
+                      const angle = index * angleStep - Math.PI / 2;
+                      const r = (Math.min(value, 100) / 100) * maxR;
+                      return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+                    };
+                    const playerPoints = playerValues.map((v, i) => getPoint(v, i));
+                    const oppPoints = oppValues.map((v, i) => getPoint(v, i));
+                    const playerPolygon = playerPoints.map(p => `${p.x},${p.y}`).join(' ');
+                    const oppPolygon = oppPoints.map(p => `${p.x},${p.y}`).join(' ');
+                    return (
+                      <View style={styles.radarContainer}>
+                        <Text style={styles.radarTitle}>{t('history', 'radarComparison')}</Text>
+                        <Svg width={radarSize} height={radarSize}>
+                          {[0.25, 0.5, 0.75, 1].map((level, i) => (
+                            <Circle key={i} cx={cx} cy={cy} r={maxR * level} fill="none" stroke={theme.border} strokeWidth="0.8" strokeDasharray={i < 3 ? '3,3' : undefined} />
+                          ))}
+                          {labels.map((label, i) => {
+                            const angle = i * angleStep - Math.PI / 2;
+                            const endX = cx + maxR * Math.cos(angle);
+                            const endY = cy + maxR * Math.sin(angle);
+                            const labelX = cx + (maxR + 18) * Math.cos(angle);
+                            const labelY = cy + (maxR + 18) * Math.sin(angle);
+                            return (
+                              <G key={i}>
+                                <Line x1={cx} y1={cy} x2={endX} y2={endY} stroke={theme.border} strokeWidth="0.8" />
+                                <SvgText x={labelX} y={labelY + 4} fontSize="9" fill={theme.textSecondary} textAnchor="middle" fontWeight="600">{label}</SvgText>
+                              </G>
+                            );
+                          })}
+                          <Polygon points={oppPolygon} fill={theme.error + '20'} stroke={theme.error} strokeWidth="2" />
+                          <Polygon points={playerPolygon} fill={theme.success + '20'} stroke={theme.success} strokeWidth="2" />
+                          {playerPoints.map((p, i) => <Circle key={`p${i}`} cx={p.x} cy={p.y} r={4} fill={theme.success} />)}
+                          {oppPoints.map((p, i) => <Circle key={`o${i}`} cx={p.x} cy={p.y} r={4} fill={theme.error} />)}
+                        </Svg>
+                        <View style={styles.radarLegend}>
+                          <View style={styles.radarLegendItem}><View style={[styles.radarLegendDot, { backgroundColor: theme.success }]} /><Text style={styles.radarLegendText}>{editingChallenge.playerName || 'Moi'}</Text></View>
+                          <View style={styles.radarLegendItem}><View style={[styles.radarLegendDot, { backgroundColor: theme.error }]} /><Text style={styles.radarLegendText}>{editingChallenge.opponentName}</Text></View>
+                        </View>
+                        <View style={styles.radarValuesTable}>
+                          {labels.map((label, i) => (
+                            <View key={i} style={styles.radarValueRow}>
+                              <Text style={styles.radarValueLabel}>{label}</Text>
+                              <Text style={[styles.radarValueNum, { color: playerValues[i] >= oppValues[i] ? theme.success : theme.textSecondary }]}>{Math.round(playerValues[i])}%</Text>
+                              <Text style={styles.radarValueVs}>vs</Text>
+                              <Text style={[styles.radarValueNum, { color: oppValues[i] >= playerValues[i] ? theme.error : theme.textSecondary }]}>{Math.round(oppValues[i])}%</Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    );
+                  })()}
                 </View>
               ) : null}
 
@@ -1999,7 +2083,19 @@ const styles = StyleSheet.create({
   detailStatItem: { alignItems: 'center' },
   detailStatValue: { fontSize: 18, fontWeight: '700', color: theme.textPrimary, marginTop: 6 },
   detailStatLabel: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
-  detailOpponent: { backgroundColor: theme.accent + '10', borderRadius: theme.borderRadius.md, padding: 14, marginBottom: 20 },
+  detailOpponent: { backgroundColor: theme.accent + '10', borderRadius: theme.borderRadius.md, padding: 14, marginBottom: 20, overflow: 'hidden' as const },
+  // Radar chart styles
+  radarContainer: { alignItems: 'center' as const, marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: theme.border + '40' },
+  radarTitle: { fontSize: 13, fontWeight: '600' as const, color: theme.textSecondary, marginBottom: 12, textAlign: 'center' as const },
+  radarLegend: { flexDirection: 'row' as const, justifyContent: 'center' as const, gap: 20, marginTop: 10 },
+  radarLegendItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
+  radarLegendDot: { width: 10, height: 10, borderRadius: 5 },
+  radarLegendText: { fontSize: 12, fontWeight: '600' as const, color: theme.textPrimary },
+  radarValuesTable: { width: '100%' as const, marginTop: 12, gap: 6 },
+  radarValueRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8 },
+  radarValueLabel: { fontSize: 11, color: theme.textMuted, width: 70, textAlign: 'right' as const },
+  radarValueNum: { fontSize: 13, fontWeight: '700' as const, minWidth: 36, textAlign: 'center' as const },
+  radarValueVs: { fontSize: 10, color: theme.textMuted },
   detailOpponentRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   detailOpponentName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
   detailOpponentScore: { fontSize: 16, fontWeight: '700', color: theme.accent },
