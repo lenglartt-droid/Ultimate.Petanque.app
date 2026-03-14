@@ -475,8 +475,14 @@ export default function MyPlayerCardScreen() {
             </View>
           </View>
 
-          {/* Contact Info */}
+          {/* Contact Section */}
           {(selfPlayer.phone || selfPlayer.email) && (
+            <>
+            <View style={styles.profileSectionDivider}>
+              <MaterialIcons name="contact-phone" size={15} color={theme.primary} />
+              <Text style={styles.profileSectionLabel}>Contact</Text>
+              <View style={styles.profileSectionLine} />
+            </View>
             <View style={styles.contactSection}>
               {selfPlayer.phone && (
                 <Pressable
@@ -497,8 +503,15 @@ export default function MyPlayerCardScreen() {
                 </Pressable>
               )}
             </View>
+            </>
           )}
 
+          {/* Informations Section */}
+          <View style={styles.profileSectionDivider}>
+            <MaterialIcons name="info-outline" size={15} color={theme.textSecondary} />
+            <Text style={styles.profileSectionLabel}>Informations</Text>
+            <View style={styles.profileSectionLine} />
+          </View>
           {/* Club Info */}
           {selfPlayer.club ? (
             <View style={styles.clubBadge}>
@@ -559,7 +572,14 @@ export default function MyPlayerCardScreen() {
             </View>
           ) : null}
 
-          {/* Preferred Role from Match History */}
+          {/* Game Preferences Section */}
+          {(roleAnalysis.totalWithRoles > 0 || terrainAnalysis.totalWithTerrain > 0 || partnerAnalysis.totalWithPartners > 0) ? (
+            <View style={styles.profileSectionDivider}>
+              <MaterialIcons name="psychology" size={15} color={theme.accent} />
+              <Text style={styles.profileSectionLabel}>{language === 'fr' ? 'Préférences de jeu' : 'Game Preferences'}</Text>
+              <View style={styles.profileSectionLine} />
+            </View>
+          ) : null}
           {roleAnalysis.totalWithRoles > 0 && (
             <View style={styles.preferredRoleCard}>
               <Text style={styles.preferredRoleTitle}>{t('player', 'preferredRole')}</Text>
@@ -1160,7 +1180,30 @@ const styles = StyleSheet.create({
   playerMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 4,
+  },
+  profileSectionDivider: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 20,
+    marginBottom: 12,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  profileSectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  profileSectionLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: theme.border,
   },
   metaItem: {
     flexDirection: 'row',
@@ -1274,10 +1317,10 @@ const styles = StyleSheet.create({
   },
   preferredRoleCard: {
     width: '100%',
-    marginTop: 16,
-    paddingTop: 16,
+    marginTop: 12,
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: theme.border,
+    borderTopColor: theme.border + '60',
   },
   preferredRoleTitle: {
     fontSize: 11,
