@@ -354,6 +354,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         country: p.country,
         boules: p.boules,
         handedness: p.handedness,
+        terrainId: p.terrain_id,
+        terrainName: p.terrain_name,
         isPublic: p.is_public ?? false,
         stats: p.stats || {
           matchesPlayed: 0, wins: 0, losses: 0, winRate: 0,
@@ -1016,6 +1018,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.country !== undefined) dbUpdates.country = updates.country;
       if (updates.boules !== undefined) dbUpdates.boules = updates.boules;
       if (updates.handedness !== undefined) dbUpdates.handedness = updates.handedness;
+      if (updates.terrainId !== undefined) dbUpdates.terrain_id = updates.terrainId;
+      if (updates.terrainName !== undefined) dbUpdates.terrain_name = updates.terrainName;
       if (updates.stats !== undefined) dbUpdates.stats = updates.stats;
       dbUpdates.updated_at = new Date().toISOString();
 

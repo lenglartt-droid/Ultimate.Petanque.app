@@ -162,7 +162,8 @@ export default function ProfileScreen() {
         }
         if (selfPlayer?.terrainId) {
           setTerrainId(selfPlayer.terrainId);
-          setTerrainName(selfPlayer.terrainName || '');
+          const resolvedName = selfPlayer.terrainName || terrains.find(t => t.id === selfPlayer.terrainId)?.name || '';
+          setTerrainName(resolvedName);
         }
         if (selfPlayer?.avatar) {
           setAvatarUrl(selfPlayer.avatar);
