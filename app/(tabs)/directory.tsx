@@ -1091,7 +1091,7 @@ export default function DirectoryScreen() {
         />
       ) : null}
 
-      {/* Filter Modal */
+      {/* Filter Modal */}
       <Modal
         visible={showFilters}
         animationType="slide"
