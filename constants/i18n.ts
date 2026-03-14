@@ -2300,6 +2300,16 @@ export const translations = {
     challengeLabel: { fr: 'd\u00e9fi', en: 'challenge' },
     matchLabelUpper: { fr: 'Match', en: 'Match' },
     challengeLabelUpper: { fr: 'D\u00e9fi', en: 'Challenge' },
+    alsoShareAssociated: { fr: 'Partager aussi les fiches associées ?', en: 'Also share associated cards?' },
+    alsoShareAssociatedDesc: { fr: 'Ce joueur est associé aux fiches suivantes. Souhaitez-vous les partager automatiquement pour que le destinataire reçoive toutes les informations ?', en: 'This player is associated with the following cards. Would you like to share them automatically so the recipient receives all information?' },
+    associatedClub: { fr: 'Club associé', en: 'Associated club' },
+    associatedTerrain: { fr: 'Terrain associé', en: 'Associated court' },
+    shareWithAssociated: { fr: 'Partager avec les fiches', en: 'Share with cards' },
+    sharePlayerOnly: { fr: 'Joueur seul', en: 'Player only' },
+    alsoSharedItems: { fr: 'Fiches associées partagées', en: 'Associated cards shared' },
+    clubShared: { fr: 'Club partagé', en: 'Club shared' },
+    terrainShared: { fr: 'Terrain partagé', en: 'Terrain shared' },
+    associatedCodesTitle: { fr: 'CODES FICHES ASSOCIÉES', en: 'ASSOCIATED CARD CODES' },
   },
   // ============================================
   // ONBOARDING
