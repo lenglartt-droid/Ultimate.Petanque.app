@@ -18,7 +18,12 @@ import { useLocalSearchParams, router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import * as Linking from 'expo-linking';
+import { decode } from 'base64-arraybuffer';
 import { FunctionsHttpError } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
 import { useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { uploadPlayerAvatar } from '@/services/storageService';
@@ -68,8 +73,23 @@ export default function ProfileScreen() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   
+  // Nickname
+  const [nickname, setNickname] = useState('');
+
+  // Boules
+  const [boulesName, setBoulesName] = useState('');
+  const [boulesDiameter, setBoulesDiameter] = useState('');
+  const [boulesWeight, setBoulesWeight] = useState('');
+
   // Handedness
   const [handedness, setHandedness] = useState<'right' | 'left' | 'ambidextrous' | ''>('');
+
+  // Federation card state
+  const [federationCardUrl, setFederationCardUrl] = useState<string | null>(null);
+  const [federationCardType, setFederationCardType] = useState<'image' | 'pdf'>('image');
+  const [uploadingCard, setUploadingCard] = useState(false);
+  const [showFullscreen, setShowFullscreen] = useState(false);
+  const [loadingCard, setLoadingCard] = useState(true);
 
   // Location
   const [location, setLocation] = useState<LocationData>({
@@ -123,7 +143,29 @@ export default function ProfileScreen() {
     const interval = setInterval(loadCount, 30000);
     return () => clearInterval(interval);
   }, [user?.id]);
-  
+
+  // Load federation card URL
+  useEffect(() => {
+    if (!user?.id) return;
+    const loadCard = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .select('federation_card_url')
+          .eq('id', user.id)
+          .single();
+        if (!error && data?.federation_card_url) {
+          setFederationCardUrl(data.federation_card_url);
+          setFederationCardType(data.federation_card_url.toLowerCase().endsWith('.pdf') ? 'pdf' : 'image');
+        }
+      } catch (e) {
+        console.log('Error loading federation card:', e);
+      } finally {
+        setLoadingCard(false);
+      }
+    };
+    loadCard();
+  }, [user?.id]);
 
 
   // Filtered clubs based on search
@@ -201,6 +243,10 @@ export default function ProfileScreen() {
           setPhone(selfPlayer.phone || '');
           setEmail(selfPlayer.email || '');
           setHandedness(selfPlayer.handedness || '');
+          setNickname(selfPlayer.nickname || '');
+          setBoulesName(selfPlayer.boules?.name || '');
+          setBoulesDiameter(selfPlayer.boules?.diameter || '');
+          setBoulesWeight(selfPlayer.boules?.weight || '');
           // Location
           if (selfPlayer.location) {
             setLocation({
@@ -378,8 +424,12 @@ export default function ProfileScreen() {
 
       // Also update the player record
       if (user?.id) {
+        const boulesData = (boulesName.trim() || boulesDiameter.trim() || boulesWeight.trim())
+          ? { name: boulesName.trim(), diameter: boulesDiameter.trim(), weight: boulesWeight.trim() }
+          : undefined;
         await updatePlayer(user.id, {
           name: username.trim(),
+          nickname: nickname.trim() || null,
           role,
           level,
           club: club || null,
@@ -389,6 +439,7 @@ export default function ProfileScreen() {
           phone: phone.trim() || null,
           email: email.trim() || null,
           handedness: handedness || null,
+          boules: boulesData,
           location: location.city ? {
             city: location.city,
             latitude: location.latitude,
@@ -446,6 +497,162 @@ export default function ProfileScreen() {
     Haptics.selectionAsync();
     setClub('');
     setClubId(null);
+  };
+
+  // Federation card upload
+  const uploadFederationFile = async (fileUri: string, fileName: string, mimeType: string) => {
+    if (!user?.id) return;
+    setUploadingCard(true);
+    try {
+      const fileExt = fileName.split('.').pop()?.toLowerCase() || 'jpg';
+      const storagePath = `${user.id}/federation_card_${Date.now()}.${fileExt}`;
+
+      let base64Data: string;
+      if (Platform.OS === 'web') {
+        const response = await fetch(fileUri);
+        const blob = await response.blob();
+        base64Data = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+          };
+          reader.readAsDataURL(blob);
+        });
+      } else {
+        base64Data = await FileSystem.readAsStringAsync(fileUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+      }
+
+      const { error: uploadError } = await supabase.storage
+        .from('federation-cards')
+        .upload(storagePath, decode(base64Data), {
+          contentType: mimeType,
+          upsert: true,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from('federation-cards')
+        .getPublicUrl(storagePath);
+
+      const publicUrl = urlData.publicUrl;
+
+      const { error: updateError } = await supabase
+        .from('user_profiles')
+        .update({ federation_card_url: publicUrl })
+        .eq('id', user.id);
+
+      if (updateError) throw updateError;
+
+      setFederationCardUrl(publicUrl);
+      setFederationCardType(fileExt === 'pdf' ? 'pdf' : 'image');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showAlert(t('common', 'success'), t('player', 'federationCardUpdated'));
+    } catch (error: any) {
+      console.log('Error uploading federation card:', error);
+      showAlert(t('common', 'error'), error.message || t('player', 'errorUploadFederationCard'));
+    } finally {
+      setUploadingCard(false);
+    }
+  };
+
+  const handlePickFedFromGallery = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      showAlert(t('profile', 'permissionRequired'), t('profile', 'galleryPermission'));
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.9,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      const ext = asset.uri.split('.').pop()?.toLowerCase() || 'jpg';
+      await uploadFederationFile(asset.uri, `federation.${ext}`, `image/${ext === 'jpg' ? 'jpeg' : ext}`);
+    }
+  };
+
+  const handlePickFedFromCamera = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      showAlert(t('profile', 'permissionRequired'), t('profile', 'cameraPermission'));
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.9 });
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      const ext = asset.uri.split('.').pop()?.toLowerCase() || 'jpg';
+      await uploadFederationFile(asset.uri, `federation.${ext}`, `image/${ext === 'jpg' ? 'jpeg' : ext}`);
+    }
+  };
+
+  const handlePickFedDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*'],
+        copyToCacheDirectory: true,
+      });
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const file = result.assets[0];
+        await uploadFederationFile(file.uri, file.name || 'federation.pdf', file.mimeType || 'application/pdf');
+      }
+    } catch (error: any) {
+      console.log('Error picking document:', error);
+    }
+  };
+
+  const showFederationUploadOptions = () => {
+    Alert.alert(
+      t('player', 'chooseSource'),
+      t('player', 'federationCardDesc'),
+      [
+        { text: t('player', 'fromCamera'), onPress: handlePickFedFromCamera },
+        { text: t('player', 'fromGallery'), onPress: handlePickFedFromGallery },
+        { text: t('player', 'fromFiles'), onPress: handlePickFedDocument },
+        { text: t('common', 'cancel'), style: 'cancel' },
+      ]
+    );
+  };
+
+  const handleRemoveFederationCard = () => {
+    Alert.alert(
+      t('player', 'removeFederationCard'),
+      '',
+      [
+        { text: t('common', 'cancel'), style: 'cancel' },
+        {
+          text: t('common', 'delete'),
+          style: 'destructive',
+          onPress: async () => {
+            if (!user?.id) return;
+            try {
+              await supabase
+                .from('user_profiles')
+                .update({ federation_card_url: null })
+                .eq('id', user.id);
+              setFederationCardUrl(null);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              showAlert(t('common', 'success'), t('player', 'federationCardRemoved'));
+            } catch (error: any) {
+              showAlert(t('common', 'error'), error.message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleFedCardPress = () => {
+    if (!federationCardUrl) return;
+    if (federationCardType === 'pdf') {
+      Linking.openURL(federationCardUrl);
+    } else {
+      setShowFullscreen(true);
+    }
   };
 
   const handleSelectTerrain = (selectedTerrain: Terrain) => {
@@ -640,6 +847,9 @@ export default function ProfileScreen() {
           {/* Name and Role */}
           <View style={styles.heroInfo}>
             <Text style={styles.heroName}>{username || t('share', 'userFallback')}</Text>
+            {selfPlayer?.nickname ? (
+              <Text style={styles.heroNickname}>"{selfPlayer.nickname}"</Text>
+            ) : null}
             <View style={styles.heroMeta}>
               <View style={styles.heroBadge}>
                 <MaterialIcons 
@@ -665,6 +875,16 @@ export default function ProfileScreen() {
               </View>
             )}
           </View>
+
+          {/* Boules summary in view mode */}
+          {!isEditing && selfPlayer?.boules && (selfPlayer.boules.name || selfPlayer.boules.diameter || selfPlayer.boules.weight) ? (
+            <View style={styles.heroBoulesRow}>
+              <MaterialIcons name="sports-baseball" size={16} color={theme.accent} />
+              <Text style={styles.heroBoulesText}>
+                {[selfPlayer.boules.name, selfPlayer.boules.diameter ? `${selfPlayer.boules.diameter} mm` : '', selfPlayer.boules.weight ? `${selfPlayer.boules.weight} g` : ''].filter(Boolean).join(' \u2022 ')}
+              </Text>
+            </View>
+          ) : null}
 
           {/* Quick Stats */}
           <View style={styles.quickStats}>
@@ -703,6 +923,21 @@ export default function ProfileScreen() {
                 value={username}
                 onChangeText={setUsername}
                 placeholder={t('profile', 'usernamePlaceholder')}
+                placeholderTextColor={theme.textMuted}
+              />
+            </View>
+
+            {/* Nickname */}
+            <View style={styles.fieldCard}>
+              <View style={styles.fieldHeader}>
+                <MaterialIcons name="format-quote" size={18} color={theme.carreauColor} />
+                <Text style={styles.fieldLabel}>{t('player', 'nicknameLabel')}</Text>
+              </View>
+              <TextInput
+                style={styles.fieldInput}
+                value={nickname}
+                onChangeText={setNickname}
+                placeholder={t('player', 'nicknamePlaceholder')}
                 placeholderTextColor={theme.textMuted}
               />
             </View>
@@ -926,6 +1161,45 @@ export default function ProfileScreen() {
                 </Pressable>
               )}
             </View>
+            {/* Boules / Equipment */}
+            <View style={styles.fieldCard}>
+              <View style={styles.fieldHeader}>
+                <MaterialIcons name="sports-baseball" size={18} color={theme.accent} />
+                <Text style={styles.fieldLabel}>{t('player', 'boulesLabel')}</Text>
+              </View>
+              <TextInput
+                style={[styles.fieldInput, { marginBottom: 10 }]}
+                value={boulesName}
+                onChangeText={setBoulesName}
+                placeholder={t('player', 'boulesPlaceholder')}
+                placeholderTextColor={theme.textMuted}
+              />
+              <View style={styles.boulesEditRow}>
+                <View style={styles.boulesEditField}>
+                  <Text style={styles.boulesEditLabel}>{t('player', 'diameterLabel')}</Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    value={boulesDiameter}
+                    onChangeText={setBoulesDiameter}
+                    placeholder="70.5"
+                    placeholderTextColor={theme.textMuted}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+                <View style={styles.boulesEditField}>
+                  <Text style={styles.boulesEditLabel}>{t('player', 'weightLabel')}</Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    value={boulesWeight}
+                    onChangeText={setBoulesWeight}
+                    placeholder="690"
+                    placeholderTextColor={theme.textMuted}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+              </View>
+            </View>
+
             {/* Terrain Selection */}
             <View style={styles.fieldCard}>
               <View style={styles.fieldHeader}>
@@ -965,6 +1239,71 @@ export default function ProfileScreen() {
                 </Pressable>
               )}
             </View>
+          </Animated.View>
+        )}
+
+        {/* Federation Card Section */}
+        {!isEditing && (
+          <Animated.View entering={FadeInDown.duration(400).delay(75)} style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('player', 'federationCard').toUpperCase()}</Text>
+            {uploadingCard ? (
+              <View style={styles.fedUploadingCard}>
+                <ActivityIndicator size="large" color={theme.primary} />
+                <Text style={styles.fedUploadingText}>{t('player', 'uploadingCard')}</Text>
+              </View>
+            ) : federationCardUrl ? (
+              <View style={styles.fedCardContainer}>
+                <Pressable style={styles.fedCardPreview} onPress={handleFedCardPress}>
+                  {federationCardType === 'image' ? (
+                    <Image
+                      source={{ uri: federationCardUrl }}
+                      style={styles.fedCardImage}
+                      contentFit="cover"
+                      transition={200}
+                    />
+                  ) : (
+                    <View style={styles.fedPdfPreview}>
+                      <MaterialIcons name="picture-as-pdf" size={48} color={theme.error} />
+                      <Text style={styles.fedPdfText}>{t('player', 'pdfDocument')}</Text>
+                      <Text style={styles.fedPdfSubtext}>{t('player', 'tapToView')}</Text>
+                    </View>
+                  )}
+                  <View style={styles.fedCardOverlay}>
+                    <View style={styles.fedCardOverlayBadge}>
+                      <MaterialIcons name={federationCardType === 'pdf' ? 'open-in-new' : 'fullscreen'} size={16} color="#FFF" />
+                      <Text style={styles.fedCardOverlayText}>{t('player', 'viewFullscreen')}</Text>
+                    </View>
+                  </View>
+                </Pressable>
+                <View style={styles.fedCardActions}>
+                  <Pressable style={styles.fedReplaceBtn} onPress={showFederationUploadOptions}>
+                    <MaterialIcons name="refresh" size={18} color={theme.primary} />
+                    <Text style={styles.fedReplaceBtnText}>{t('player', 'replaceFederationCard')}</Text>
+                  </Pressable>
+                  <Pressable style={styles.fedRemoveBtn} onPress={handleRemoveFederationCard}>
+                    <MaterialIcons name="delete-outline" size={18} color={theme.error} />
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <Pressable style={styles.fedAddCard} onPress={showFederationUploadOptions}>
+                <View style={styles.fedAddIcon}>
+                  <MaterialIcons name="badge" size={32} color={theme.primary} />
+                </View>
+                <Text style={styles.fedAddTitle}>{t('player', 'addFederationCard')}</Text>
+                <Text style={styles.fedAddDesc}>{t('player', 'federationCardDesc')}</Text>
+                <View style={styles.fedAddFormats}>
+                  <View style={styles.fedFormatChip}>
+                    <MaterialIcons name="image" size={14} color={theme.textSecondary} />
+                    <Text style={styles.fedFormatText}>JPG / PNG</Text>
+                  </View>
+                  <View style={styles.fedFormatChip}>
+                    <MaterialIcons name="picture-as-pdf" size={14} color={theme.textSecondary} />
+                    <Text style={styles.fedFormatText}>PDF</Text>
+                  </View>
+                </View>
+              </Pressable>
+            )}
           </Animated.View>
         )}
 
@@ -1625,6 +1964,30 @@ export default function ProfileScreen() {
         </SafeAreaView>
       </Modal>
 
+      {/* Fullscreen Image Modal */}
+      <Modal
+        visible={showFullscreen}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowFullscreen(false)}
+      >
+        <View style={styles.fullscreenContainer}>
+          <Pressable style={styles.fullscreenClose} onPress={() => setShowFullscreen(false)}>
+            <View style={styles.fullscreenCloseBtn}>
+              <MaterialIcons name="close" size={28} color="#FFF" />
+            </View>
+          </Pressable>
+          {federationCardUrl ? (
+            <Image
+              source={{ uri: federationCardUrl }}
+              style={{ width: screenWidth, height: screenWidth * 1.4 }}
+              contentFit="contain"
+              transition={200}
+            />
+          ) : null}
+        </View>
+      </Modal>
+
       {/* Club Picker Modal */}
       <Modal
         visible={showClubPicker}
@@ -1950,6 +2313,27 @@ const styles = StyleSheet.create({
   heroClubText: {
     fontSize: 14,
     color: theme.textSecondary,
+  },
+  heroNickname: {
+    fontSize: 15,
+    fontStyle: 'italic',
+    color: theme.textSecondary,
+    marginBottom: 8,
+  },
+  heroBoulesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: theme.accent + '10',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: theme.borderRadius.full,
+    marginTop: 8,
+  },
+  heroBoulesText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.accent,
   },
   quickStats: {
     flexDirection: 'row',
@@ -2650,6 +3034,194 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#6366F1',
+  },
+  // Boules edit fields
+  boulesEditRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  boulesEditField: {
+    flex: 1,
+  },
+  boulesEditLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.textMuted,
+    marginBottom: 6,
+  },
+  // Federation card styles
+  fedUploadingCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    ...theme.shadows.card,
+  },
+  fedUploadingText: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    fontWeight: '500',
+  },
+  fedCardContainer: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    overflow: 'hidden',
+    ...theme.shadows.card,
+  },
+  fedCardPreview: {
+    position: 'relative',
+    width: '100%',
+    minHeight: 200,
+  },
+  fedCardImage: {
+    width: '100%',
+    height: 220,
+    borderTopLeftRadius: theme.borderRadius.lg,
+    borderTopRightRadius: theme.borderRadius.lg,
+  },
+  fedPdfPreview: {
+    width: '100%',
+    height: 180,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.backgroundSecondary,
+    gap: 8,
+  },
+  fedPdfText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  fedPdfSubtext: {
+    fontSize: 13,
+    color: theme.textSecondary,
+  },
+  fedCardOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  fedCardOverlayBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.full,
+  },
+  fedCardOverlayText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  fedCardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  fedReplaceBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    backgroundColor: theme.primary + '10',
+    borderRadius: theme.borderRadius.md,
+    marginRight: 8,
+  },
+  fedReplaceBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.primary,
+  },
+  fedRemoveBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.error + '10',
+    borderRadius: theme.borderRadius.md,
+  },
+  fedAddCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 32,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: theme.primary + '25',
+    borderStyle: 'dashed',
+    ...theme.shadows.card,
+  },
+  fedAddIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: theme.primary + '12',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  fedAddTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.primary,
+    marginBottom: 6,
+  },
+  fedAddDesc: {
+    fontSize: 13,
+    color: theme.textSecondary,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  fedAddFormats: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  fedFormatChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: theme.backgroundSecondary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.full,
+  },
+  fedFormatText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: theme.textSecondary,
+  },
+  // Fullscreen modal
+  fullscreenContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fullscreenClose: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+  },
+  fullscreenCloseBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   autoFillLocationBtn: {
     flexDirection: 'row',
