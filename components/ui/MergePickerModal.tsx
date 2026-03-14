@@ -18,6 +18,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useAlert } from '@/template';
 import MergeComparisonModal, { MergeField } from './MergeComparisonModal';
 import { Player, Club, Terrain, Tournament } from '@/services/mockData';
+import { saveMergeLog, ReassignedRelation } from '@/services/mergeHistoryService';
 
 type MergeItemType = 'player' | 'club' | 'terrain' | 'tournament';
 
@@ -91,7 +92,7 @@ function buildTournamentFields(current: Tournament, other: Tournament, t: (s: st
 export default function MergePickerModal({ visible, onClose, itemType, currentItemId, deleteSourceAfterMerge = true }: MergePickerModalProps) {
   const { t } = useLanguage();
   const { showAlert } = useAlert();
-  const { players, clubs, terrains, tournaments, matches, updatePlayer, updateClub, updateTerrain, updateTournament, deletePlayer, deleteClub, deleteTerrain } = useApp();
+  const { players, clubs, terrains, tournaments, matches, updatePlayer, updateClub, updateTerrain, updateTournament, deletePlayer, deleteClub, deleteTerrain, deleteTournament } = useApp();
 
   const [search, setSearch] = useState('');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -163,53 +164,60 @@ export default function MergePickerModal({ visible, onClose, itemType, currentIt
   // Reassign relations from sourceId to targetId, then delete source
   const reassignAndDelete = useCallback(async (type: MergeItemType, targetId: string, sourceId: string, targetItem: any) => {
     if (!deleteSourceAfterMerge) return;
+    const sourceItem = type === 'player' ? players.find(p => p.id === sourceId)
+      : type === 'club' ? clubs.find(c => c.id === sourceId)
+      : type === 'terrain' ? terrains.find(t => t.id === sourceId)
+      : tournaments.find(t => t.id === sourceId);
+    const reassigned: ReassignedRelation[] = [];
     try {
       if (type === 'club') {
-        // Reassign players referencing the source club to the target club
         const linkedPlayers = players.filter(p => p.clubId === sourceId);
         for (const p of linkedPlayers) {
+          reassigned.push({ type: 'player', id: p.id, field: 'club_id', oldValue: sourceId, newValue: targetId });
+          reassigned.push({ type: 'player', id: p.id, field: 'club', oldValue: (sourceItem as any)?.name, newValue: targetItem.name });
           await updatePlayer(p.id, { club: targetItem.name, clubId: targetId });
         }
-        // Reassign tournaments referencing the source club
         const linkedTournaments = tournaments.filter(t => t.clubId === sourceId);
-        for (const t of linkedTournaments) {
-          await updateTournament(t.id, { clubId: targetId, clubName: targetItem.name });
+        for (const lt of linkedTournaments) {
+          reassigned.push({ type: 'tournament', id: lt.id, field: 'club_id', oldValue: sourceId, newValue: targetId });
+          await updateTournament(lt.id, { clubId: targetId, clubName: targetItem.name });
         }
-        // Reassign terrains referencing the source club
         const linkedTerrains = terrains.filter(t => t.clubId === sourceId);
-        for (const t of linkedTerrains) {
-          await updateTerrain(t.id, { clubId: targetId, clubName: targetItem.name });
+        for (const lt of linkedTerrains) {
+          reassigned.push({ type: 'terrain', id: lt.id, field: 'club_id', oldValue: sourceId, newValue: targetId });
+          await updateTerrain(lt.id, { clubId: targetId, clubName: targetItem.name });
         }
+        await saveMergeLog({ mergeType: 'club', targetId, targetName: targetItem.name, sourceId, sourceName: (sourceItem as any)?.name || '', sourceSnapshot: sourceItem as any || {}, reassignedRelations: reassigned });
         await deleteClub(sourceId);
       } else if (type === 'terrain') {
-        // Reassign clubs referencing the source terrain
         const linkedClubs = clubs.filter(c => c.terrainId === sourceId);
         for (const c of linkedClubs) {
+          reassigned.push({ type: 'club', id: c.id, field: 'terrain_id', oldValue: sourceId, newValue: targetId });
           await updateClub(c.id, { terrainId: targetId, terrainName: targetItem.name } as any);
         }
-        // Reassign players referencing the source terrain
         const linkedPlayers = players.filter(p => p.terrainId === sourceId);
         for (const p of linkedPlayers) {
+          reassigned.push({ type: 'player', id: p.id, field: 'terrain_id', oldValue: sourceId, newValue: targetId });
           await updatePlayer(p.id, { terrainId: targetId, terrainName: targetItem.name });
         }
-        // Reassign tournaments referencing the source terrain
         const linkedTournaments = tournaments.filter(t => t.terrainId === sourceId);
-        for (const t of linkedTournaments) {
-          await updateTournament(t.id, { terrainId: targetId, terrainName: targetItem.name } as any);
+        for (const lt of linkedTournaments) {
+          reassigned.push({ type: 'tournament', id: lt.id, field: 'terrain_id', oldValue: sourceId, newValue: targetId });
+          await updateTournament(lt.id, { terrainId: targetId, terrainName: targetItem.name } as any);
         }
+        await saveMergeLog({ mergeType: 'terrain', targetId, targetName: targetItem.name, sourceId, sourceName: (sourceItem as any)?.name || '', sourceSnapshot: sourceItem as any || {}, reassignedRelations: reassigned });
         await deleteTerrain(sourceId);
       } else if (type === 'player') {
-        // Note: players are referenced in match teamA/teamB arrays - we don't reassign match participants
-        // because that would change match history. Just delete the duplicate.
+        await saveMergeLog({ mergeType: 'player', targetId, targetName: targetItem.name, sourceId, sourceName: (sourceItem as any)?.name || '', sourceSnapshot: sourceItem as any || {}, reassignedRelations: [] });
         await deletePlayer(sourceId);
       } else if (type === 'tournament') {
-        // Tournaments are referenced in matches - keep match history on the original
-        // No delete function for tournaments currently, so just leave it
+        await saveMergeLog({ mergeType: 'tournament', targetId, targetName: targetItem.name, sourceId, sourceName: (sourceItem as any)?.name || '', sourceSnapshot: sourceItem as any || {}, reassignedRelations: [] });
+        await deleteTournament(sourceId);
       }
     } catch (e) {
       console.log('Error reassigning relations:', e);
     }
-  }, [deleteSourceAfterMerge, players, clubs, terrains, tournaments, updatePlayer, updateClub, updateTerrain, updateTournament, deleteClub, deleteTerrain, deletePlayer]);
+  }, [deleteSourceAfterMerge, players, clubs, terrains, tournaments, updatePlayer, updateClub, updateTerrain, updateTournament, deleteClub, deleteTerrain, deletePlayer, deleteTournament]);
 
   const handleApplyMerge = useCallback(async (selections: Record<string, 'mine' | 'public'>) => {
     if (!currentItem || !selectedItem || !selectedItemId) return;

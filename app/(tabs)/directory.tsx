@@ -26,6 +26,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { SharedOverlayBadge } from '@/components/ui/SharedBadge';
 import AdBanner from '@/components/ui/AdBanner';
 import MergePickerModal from '@/components/ui/MergePickerModal';
+import { saveMergeLog, getMergeLogs, undoMerge, isUndoable, getUndoTimeRemaining, deleteMergeLog, MergeLog, ReassignedRelation } from '@/services/mergeHistoryService';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -34,7 +35,7 @@ type TournamentStatus = 'all' | 'À venir' | 'En cours' | 'Terminé';
 
 export default function DirectoryScreen() {
   const insets = useSafeAreaInsets();
-  const { players, clubs, tournaments, terrains, selfPlayer, favoriteTerrainIds, favoriteClubIds, getSharedPermission, refreshData, updatePlayer, updateClub, updateTerrain, updateTournament, deletePlayer, deleteClub, deleteTerrain } = useApp();
+  const { players, clubs, tournaments, terrains, selfPlayer, favoriteTerrainIds, favoriteClubIds, getSharedPermission, refreshData, updatePlayer, updateClub, updateTerrain, updateTournament, deletePlayer, deleteClub, deleteTerrain, deleteTournament } = useApp();
   const { t, language } = useLanguage();
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
   const [activeTab, setActiveTab] = useState<DirectoryTab>('players');
@@ -46,6 +47,30 @@ export default function DirectoryScreen() {
   const [mergeTarget, setMergeTarget] = useState<{ type: 'player' | 'club' | 'terrain' | 'tournament'; id: string } | null>(null);
   const [dismissedPairs, setDismissedPairs] = useState<Set<string>>(new Set());
   const [quickMerging, setQuickMerging] = useState<string | null>(null);
+  const [showMergeHistory, setShowMergeHistory] = useState(false);
+  const [mergeLogs, setMergeLogs] = useState<MergeLog[]>([]);
+  const [loadingMergeLogs, setLoadingMergeLogs] = useState(false);
+  const [undoingMerge, setUndoingMerge] = useState<string | null>(null);
+
+  const loadMergeLogs = useCallback(async () => {
+    setLoadingMergeLogs(true);
+    const { logs } = await getMergeLogs();
+    setMergeLogs(logs);
+    setLoadingMergeLogs(false);
+  }, []);
+
+  const handleUndoMerge = useCallback(async (log: MergeLog) => {
+    setUndoingMerge(log.id);
+    const { error } = await undoMerge(log);
+    if (error) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      refreshData();
+    }
+    setMergeLogs(prev => prev.filter(l => l.id !== log.id));
+    setUndoingMerge(null);
+  }, [refreshData]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -1014,9 +1039,17 @@ export default function DirectoryScreen() {
               </View>
               <Text style={styles.modalTitle}>{t('directory', 'duplicateModalTitle')}</Text>
             </View>
-            <Pressable style={styles.modalCloseButton} onPress={() => setShowDuplicateModal(false)}>
-              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
-            </Pressable>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Pressable
+                style={[styles.modalCloseButton, { backgroundColor: theme.primary + '15' }]}
+                onPress={() => { setShowDuplicateModal(false); loadMergeLogs(); setShowMergeHistory(true); }}
+              >
+                <MaterialIcons name="history" size={20} color={theme.primary} />
+              </Pressable>
+              <Pressable style={styles.modalCloseButton} onPress={() => setShowDuplicateModal(false)}>
+                <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+              </Pressable>
+            </View>
           </View>
           <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
             {duplicates.map((dup, idx) => {
@@ -1124,26 +1157,53 @@ export default function DirectoryScreen() {
                           }
                           const mergedTarget = { ...target, ...updates };
                           // Reassign relations from source to target, then delete source
+                          // Build reassigned relations log for undo
+                          const reassigned: ReassignedRelation[] = [];
                           if (dup.type === 'club') {
                             const linkedPlayers = players.filter(p => p.clubId === source.id);
-                            for (const p of linkedPlayers) await updatePlayer(p.id, { club: mergedTarget.name, clubId: target.id });
+                            for (const p of linkedPlayers) {
+                              reassigned.push({ type: 'player', id: p.id, field: 'club_id', oldValue: source.id, newValue: target.id });
+                              reassigned.push({ type: 'player', id: p.id, field: 'club', oldValue: source.name, newValue: mergedTarget.name });
+                              await updatePlayer(p.id, { club: mergedTarget.name, clubId: target.id });
+                            }
                             const linkedTournaments = tournaments.filter(t => t.clubId === source.id);
-                            for (const t of linkedTournaments) await updateTournament(t.id, { clubId: target.id, clubName: mergedTarget.name });
+                            for (const lt of linkedTournaments) {
+                              reassigned.push({ type: 'tournament', id: lt.id, field: 'club_id', oldValue: source.id, newValue: target.id });
+                              await updateTournament(lt.id, { clubId: target.id, clubName: mergedTarget.name });
+                            }
                             const linkedTerrains = terrains.filter(t => t.clubId === source.id);
-                            for (const t of linkedTerrains) await updateTerrain(t.id, { clubId: target.id, clubName: mergedTarget.name } as any);
+                            for (const lt of linkedTerrains) {
+                              reassigned.push({ type: 'terrain', id: lt.id, field: 'club_id', oldValue: source.id, newValue: target.id });
+                              await updateTerrain(lt.id, { clubId: target.id, clubName: mergedTarget.name } as any);
+                            }
+                            // Save merge log before delete
+                            await saveMergeLog({ mergeType: 'club', targetId: target.id, targetName: mergedTarget.name, sourceId: source.id, sourceName: source.name, sourceSnapshot: source, reassignedRelations: reassigned });
                             await deleteClub(source.id);
                           } else if (dup.type === 'terrain') {
                             const linkedClubs = clubs.filter(c => c.terrainId === source.id);
-                            for (const c of linkedClubs) await updateClub(c.id, { terrainId: target.id, terrainName: mergedTarget.name } as any);
+                            for (const c of linkedClubs) {
+                              reassigned.push({ type: 'club', id: c.id, field: 'terrain_id', oldValue: source.id, newValue: target.id });
+                              await updateClub(c.id, { terrainId: target.id, terrainName: mergedTarget.name } as any);
+                            }
                             const linkedPlayers = players.filter(p => p.terrainId === source.id);
-                            for (const p of linkedPlayers) await updatePlayer(p.id, { terrainId: target.id, terrainName: mergedTarget.name });
+                            for (const p of linkedPlayers) {
+                              reassigned.push({ type: 'player', id: p.id, field: 'terrain_id', oldValue: source.id, newValue: target.id });
+                              await updatePlayer(p.id, { terrainId: target.id, terrainName: mergedTarget.name });
+                            }
                             const linkedTournaments = tournaments.filter(t => t.terrainId === source.id);
-                            for (const t of linkedTournaments) await updateTournament(t.id, { terrainId: target.id, terrainName: mergedTarget.name } as any);
+                            for (const lt of linkedTournaments) {
+                              reassigned.push({ type: 'tournament', id: lt.id, field: 'terrain_id', oldValue: source.id, newValue: target.id });
+                              await updateTournament(lt.id, { terrainId: target.id, terrainName: mergedTarget.name } as any);
+                            }
+                            await saveMergeLog({ mergeType: 'terrain', targetId: target.id, targetName: mergedTarget.name, sourceId: source.id, sourceName: source.name, sourceSnapshot: source, reassignedRelations: reassigned });
                             await deleteTerrain(source.id);
                           } else if (dup.type === 'player') {
+                            await saveMergeLog({ mergeType: 'player', targetId: target.id, targetName: mergedTarget.name, sourceId: source.id, sourceName: source.name, sourceSnapshot: source, reassignedRelations: [] });
                             await deletePlayer(source.id);
+                          } else if (dup.type === 'tournament') {
+                            await saveMergeLog({ mergeType: 'tournament', targetId: target.id, targetName: mergedTarget.name, sourceId: source.id, sourceName: source.name, sourceSnapshot: source, reassignedRelations: [] });
+                            await deleteTournament(source.id);
                           }
-                          // For tournaments, no delete function exists, so we just dismiss
                           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                           setDismissedPairs(prev => new Set([...prev, dup.pairKey]));
                         } catch (e) { /* silent */ }
@@ -1189,6 +1249,100 @@ export default function DirectoryScreen() {
                 <Text style={[styles.emptyTitle, { color: theme.success }]}>{t('common', 'noResults')}</Text>
               </View>
             ) : null}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Merge History Modal */}
+      <Modal
+        visible={showMergeHistory}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowMergeHistory(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <View style={styles.modalHeaderLeft}>
+              <View style={[styles.modalIcon, { backgroundColor: theme.primary + '15' }]}>
+                <MaterialIcons name="history" size={20} color={theme.primary} />
+              </View>
+              <Text style={styles.modalTitle}>{t('directory', 'mergeHistoryTitle')}</Text>
+            </View>
+            <Pressable style={styles.modalCloseButton} onPress={() => setShowMergeHistory(false)}>
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+          </View>
+          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+            {loadingMergeLogs ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyTitle}>{t('common', 'loading')}</Text>
+              </View>
+            ) : mergeLogs.length === 0 ? (
+              <View style={styles.emptyState}>
+                <MaterialIcons name="check-circle" size={48} color={theme.success} />
+                <Text style={styles.emptyTitle}>{t('directory', 'mergeHistoryEmpty')}</Text>
+                <Text style={styles.emptyText}>{t('directory', 'mergeHistoryEmptyDesc')}</Text>
+              </View>
+            ) : (
+              mergeLogs.map(log => {
+                const typeIcons: Record<string, { icon: string; color: string }> = {
+                  player: { icon: 'person', color: theme.primary },
+                  club: { icon: 'home', color: theme.accent },
+                  terrain: { icon: 'sports-soccer', color: theme.success },
+                  tournament: { icon: 'emoji-events', color: theme.carreauColor },
+                };
+                const cfg = typeIcons[log.mergeType] || typeIcons.player;
+                const canUndo = isUndoable(log);
+                const timeLeft = getUndoTimeRemaining(log, language as 'fr' | 'en');
+                return (
+                  <View key={log.id} style={styles.mergeHistoryCard}>
+                    <View style={styles.duplicateCardHeader}>
+                      <View style={[styles.duplicateTypeIcon, { backgroundColor: cfg.color + '15' }]}>
+                        <MaterialIcons name={cfg.icon as any} size={16} color={cfg.color} />
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 10 }}>
+                        <Text style={styles.mergeHistorySource} numberOfLines={1}>
+                          {log.sourceName} <Text style={{ color: theme.textMuted, fontWeight: '400' }}>{t('directory', 'mergedInto')}</Text> {log.targetName}
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                          <Text style={{ fontSize: 11, color: theme.textMuted }}>
+                            {new Date(log.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                          </Text>
+                          {log.reassignedRelations.length > 0 ? (
+                            <Text style={{ fontSize: 11, color: theme.textSecondary }}>
+                              {log.reassignedRelations.length} {t('directory', 'mergeRelationsCount')}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </View>
+                    </View>
+                    {canUndo ? (
+                      <View style={styles.mergeHistoryActions}>
+                        <View style={styles.mergeHistoryTimer}>
+                          <MaterialIcons name="timer" size={12} color={theme.warning} />
+                          <Text style={styles.mergeHistoryTimerText}>{timeLeft}</Text>
+                        </View>
+                        <Pressable
+                          style={styles.mergeUndoBtn}
+                          disabled={undoingMerge === log.id}
+                          onPress={() => handleUndoMerge(log)}
+                        >
+                          <MaterialIcons name="undo" size={14} color="#FFF" />
+                          <Text style={styles.mergeUndoBtnText}>
+                            {undoingMerge === log.id ? '...' : t('directory', 'mergeUndoBtn')}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <View style={styles.mergeHistoryExpired}>
+                        <MaterialIcons name="lock-clock" size={14} color={theme.textMuted} />
+                        <Text style={styles.mergeHistoryExpiredText}>{t('directory', 'mergeUndoExpired')}</Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })
+            )}
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -1906,4 +2060,67 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   quickMergeBtnText: { fontSize: 14, fontWeight: '600', color: '#FFF' },
+  // Merge History
+  mergeHistoryCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    marginBottom: 12,
+    ...theme.shadows.card,
+  },
+  mergeHistorySource: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  mergeHistoryActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  mergeHistoryTimer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: theme.warning + '10',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: theme.borderRadius.full,
+  },
+  mergeHistoryTimerText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.warning,
+  },
+  mergeUndoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: theme.error,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: theme.borderRadius.md,
+  },
+  mergeUndoBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  mergeHistoryExpired: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  mergeHistoryExpiredText: {
+    fontSize: 12,
+    color: theme.textMuted,
+  },
 });

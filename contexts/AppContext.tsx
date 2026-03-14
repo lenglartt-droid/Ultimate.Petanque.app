@@ -60,6 +60,7 @@ interface AppContextType {
   deleteChallenge: (id: string) => Promise<void>;
   deleteTerrain: (id: string) => Promise<void>;
   deleteClub: (id: string) => Promise<void>;
+  deleteTournament: (id: string) => Promise<void>;
   
   // Favorites
   favoriteTerrainIds: string[];
@@ -1381,6 +1382,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const deleteTournament = async (id: string) => {
+    const tournamentToDelete = tournaments.find(t => t.id === id);
+    setTournaments(prev => prev.filter(tournament => tournament.id !== id));
+    // Also clean up matches linked to this tournament
+    setMatches(prev => prev.map(m =>
+      m.tournamentId === id ? { ...m, tournamentId: undefined, tournamentName: undefined } : m
+    ));
+
+    if (!user?.id) return;
+
+    try {
+      // Unlink matches from this tournament in DB
+      await supabase.from('matches').update({
+        tournament_id: null,
+        tournament_name: null,
+        updated_at: new Date().toISOString(),
+      }).eq('tournament_id', id);
+      // Delete the tournament
+      await supabase.from('tournaments').delete().eq('id', id);
+    } catch (error) {
+      console.log('Error deleting tournament:', error);
+    }
+  };
+
   const deleteTerrain = async (id: string) => {
     setTerrains(prev => prev.filter(terrain => terrain.id !== id));
     // Also remove from favorites
@@ -1595,6 +1620,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deleteChallenge,
         deleteTerrain,
         deleteClub,
+        deleteTournament,
+        deleteTournament,
         favoriteTerrainIds,
         toggleFavoriteTerrain,
         isFavoriteTerrain,
