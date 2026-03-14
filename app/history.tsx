@@ -8,6 +8,11 @@ import {
   FlatList,
   RefreshControl,
   Dimensions,
+  TextInput,
+  ScrollView,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -459,7 +464,7 @@ const ChallengeStatsSummary = React.memo(({ challenges, t }: { challenges: Chall
 
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
-  const { matches, challenges, deleteChallenge, refreshData } = useApp();
+  const { matches, challenges, deleteChallenge, updateChallenge, refreshData } = useApp();
   const { t, language } = useLanguage();
   
   const [contentFilter, setContentFilter] = useState<ContentFilter>('all');
@@ -468,6 +473,13 @@ export default function HistoryScreen() {
   const [showPeriodModal, setShowPeriodModal] = useState(false);
   const [editingChallenge, setEditingChallenge] = useState<Challenge | null>(null);
   const [showChallengeShare, setShowChallengeShare] = useState(false);
+  const [isEditingChallengeFields, setIsEditingChallengeFields] = useState(false);
+  const [editNotes, setEditNotes] = useState('');
+  const [editDuration, setEditDuration] = useState('');
+  const [editSuccessCount, setEditSuccessCount] = useState('');
+  const [editCarreauCount, setEditCarreauCount] = useState('');
+  const [editTotalPoints, setEditTotalPoints] = useState('');
+  const [savingChallenge, setSavingChallenge] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
@@ -652,14 +664,109 @@ export default function HistoryScreen() {
   const handleChallengePress = useCallback((challenge: Challenge) => {
     Haptics.selectionAsync();
     setEditingChallenge(challenge);
+    setIsEditingChallengeFields(false);
+    setEditNotes(challenge.notes || '');
+    setEditDuration(challenge.duration ? String(challenge.duration) : '');
+    setEditSuccessCount(challenge.successCount !== undefined ? String(challenge.successCount) : '');
+    setEditCarreauCount(challenge.carreauCount !== undefined ? String(challenge.carreauCount) : '');
+    setEditTotalPoints(challenge.totalPoints !== undefined ? String(challenge.totalPoints) : '');
   }, []);
 
   const handleDeleteChallenge = useCallback(() => {
     if (!editingChallenge) return;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    deleteChallenge(editingChallenge.id);
-    setEditingChallenge(null);
-  }, [editingChallenge, deleteChallenge]);
+    Alert.alert(
+      t('common', 'delete'),
+      language === 'fr' ? 'Supprimer ce defi ?' : 'Delete this challenge?',
+      [
+        { text: t('common', 'cancel'), style: 'cancel' },
+        {
+          text: t('common', 'delete'),
+          style: 'destructive',
+          onPress: () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            deleteChallenge(editingChallenge.id);
+            setEditingChallenge(null);
+          },
+        },
+      ]
+    );
+  }, [editingChallenge, deleteChallenge, t, language]);
+
+  const handleSaveChallenge = useCallback(async () => {
+    if (!editingChallenge) return;
+    setSavingChallenge(true);
+    try {
+      const updates: Partial<Challenge> = {
+        notes: editNotes.trim() || undefined,
+      };
+
+      const parsedDuration = parseInt(editDuration, 10);
+      if (!isNaN(parsedDuration) && parsedDuration >= 0) {
+        updates.duration = parsedDuration;
+      }
+
+      if (editingChallenge.type !== 'precision') {
+        const sc = parseInt(editSuccessCount, 10);
+        const cc = parseInt(editCarreauCount, 10);
+        const totalShots = editingChallenge.totalShots || 10;
+        if (!isNaN(sc) && sc >= 0 && sc <= totalShots) {
+          updates.successCount = sc;
+          updates.successRate = Math.round((sc / totalShots) * 1000) / 10;
+        }
+        if (!isNaN(cc) && cc >= 0) {
+          updates.carreauCount = cc;
+        }
+      } else {
+        const tp = parseInt(editTotalPoints, 10);
+        if (!isNaN(tp) && tp >= 0) {
+          updates.totalPoints = tp;
+        }
+      }
+
+      await updateChallenge(editingChallenge.id, updates);
+      setEditingChallenge(prev => prev ? { ...prev, ...updates } : null);
+      setIsEditingChallengeFields(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      console.log('Error saving challenge:', e);
+    } finally {
+      setSavingChallenge(false);
+    }
+  }, [editingChallenge, editNotes, editDuration, editSuccessCount, editCarreauCount, editTotalPoints, updateChallenge]);
+
+  const handleToggleChallengeShot = useCallback(async (shotIndex: number) => {
+    if (!editingChallenge || !editingChallenge.shots) return;
+    const updatedShots = editingChallenge.shots.map((s, i) => {
+      if (i !== shotIndex) return s;
+      return { ...s, success: !s.success, carreau: !s.success ? s.carreau : false };
+    });
+    const successCount = updatedShots.filter(s => s.success).length;
+    const carreauCount = updatedShots.filter(s => s.carreau).length;
+    const totalShots = updatedShots.length;
+    const successRate = Math.round((successCount / totalShots) * 1000) / 10;
+    const updates: Partial<Challenge> = { shots: updatedShots, successCount, carreauCount, successRate };
+    await updateChallenge(editingChallenge.id, updates);
+    setEditingChallenge(prev => prev ? { ...prev, ...updates } : null);
+    setEditSuccessCount(String(successCount));
+    setEditCarreauCount(String(carreauCount));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [editingChallenge, updateChallenge]);
+
+  const handleToggleChallengeCarreau = useCallback(async (shotIndex: number) => {
+    if (!editingChallenge || !editingChallenge.shots) return;
+    const shot = editingChallenge.shots[shotIndex];
+    if (!shot.success) return; // Only successful shots can be carreaux
+    const updatedShots = editingChallenge.shots.map((s, i) => {
+      if (i !== shotIndex) return s;
+      return { ...s, carreau: !s.carreau };
+    });
+    const carreauCount = updatedShots.filter(s => s.carreau).length;
+    const updates: Partial<Challenge> = { shots: updatedShots, carreauCount };
+    await updateChallenge(editingChallenge.id, updates);
+    setEditingChallenge(prev => prev ? { ...prev, ...updates } : null);
+    setEditCarreauCount(String(carreauCount));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [editingChallenge, updateChallenge]);
 
   const handleFilterPress = useCallback((filter: ContentFilter) => {
     Haptics.selectionAsync();
@@ -888,18 +995,36 @@ export default function HistoryScreen() {
         visible={!!editingChallenge}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setEditingChallenge(null)}
+        onRequestClose={() => { setEditingChallenge(null); setIsEditingChallengeFields(false); }}
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
+            {isEditingChallengeFields ? (
+              <Pressable style={styles.modalClose} onPress={() => setIsEditingChallengeFields(false)}>
+                <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
+              </Pressable>
+            ) : (
+              <View style={{ width: 36 }} />
+            )}
             <Text style={styles.modalTitle}>{t('history', 'challengeDetails')}</Text>
-            <Pressable style={styles.modalClose} onPress={() => setEditingChallenge(null)}>
-              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
-            </Pressable>
+            {isEditingChallengeFields ? (
+              <Pressable
+                style={styles.cdSaveHeaderBtn}
+                onPress={handleSaveChallenge}
+                disabled={savingChallenge}
+              >
+                <Text style={styles.cdSaveHeaderBtnText}>{savingChallenge ? '...' : t('common', 'save')}</Text>
+              </Pressable>
+            ) : (
+              <Pressable style={styles.modalClose} onPress={() => { setEditingChallenge(null); setIsEditingChallengeFields(false); }}>
+                <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+              </Pressable>
+            )}
           </View>
           
           {editingChallenge && (
-            <View style={styles.modalContent}>
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
               {/* Challenge Header */}
               <View style={styles.detailHeader}>
                 <View style={[styles.detailIcon, { backgroundColor: CHALLENGE_CONFIG[editingChallenge.type].color + '20' }]}>
@@ -916,47 +1041,111 @@ export default function HistoryScreen() {
                       weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'
                     })}
                   </Text>
+                  {editingChallenge.mode === '1v1' ? (
+                    <View style={[styles.modeBadge, { backgroundColor: theme.accent + '15', marginTop: 4 }]}>
+                      <MaterialIcons name="people" size={10} color={theme.accent} />
+                      <Text style={[styles.modeBadgeText, { color: theme.accent }]}>1v1</Text>
+                    </View>
+                  ) : null}
                 </View>
+                {!isEditingChallengeFields ? (
+                  <Pressable
+                    style={styles.cdEditBtn}
+                    onPress={() => setIsEditingChallengeFields(true)}
+                  >
+                    <MaterialIcons name="edit" size={18} color={theme.primary} />
+                  </Pressable>
+                ) : null}
               </View>
 
               {/* Score */}
               <View style={styles.detailScoreCard}>
                 <Text style={styles.detailScoreLabel}>SCORE</Text>
-                <Text style={[styles.detailScoreValue, { color: CHALLENGE_CONFIG[editingChallenge.type].color }]}>
-                  {editingChallenge.type === 'precision' 
-                    ? `${editingChallenge.totalPoints || 0}/100`
-                    : `${editingChallenge.successRate || 0}%`
-                  }
-                </Text>
-                {editingChallenge.type !== 'precision' && (
-                  <Text style={styles.detailScoreSub}>
-                    {editingChallenge.successCount || 0}/{editingChallenge.totalShots || 0} {t('history', 'successfulShots')}
-                  </Text>
+                {isEditingChallengeFields ? (
+                  editingChallenge.type === 'precision' ? (
+                    <View style={styles.cdEditFieldRow}>
+                      <TextInput
+                        style={[styles.cdEditFieldInput, styles.cdEditFieldLarge]}
+                        value={editTotalPoints}
+                        onChangeText={setEditTotalPoints}
+                        keyboardType="number-pad"
+                        placeholder="0"
+                        placeholderTextColor={theme.textMuted}
+                      />
+                      <Text style={styles.cdEditFieldUnit}> / {editingChallenge.maxPoints || 100} pts</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.cdEditFieldRow}>
+                      <TextInput
+                        style={[styles.cdEditFieldInput, styles.cdEditFieldLarge]}
+                        value={editSuccessCount}
+                        onChangeText={setEditSuccessCount}
+                        keyboardType="number-pad"
+                        placeholder="0"
+                        placeholderTextColor={theme.textMuted}
+                      />
+                      <Text style={styles.cdEditFieldUnit}> / {editingChallenge.totalShots || 10} {t('history', 'successfulShots')}</Text>
+                    </View>
+                  )
+                ) : (
+                  <>
+                    <Text style={[styles.detailScoreValue, { color: CHALLENGE_CONFIG[editingChallenge.type].color }]}>
+                      {editingChallenge.type === 'precision' 
+                        ? `${editingChallenge.totalPoints || 0}/${editingChallenge.maxPoints || 100}`
+                        : `${editingChallenge.successRate || 0}%`
+                      }
+                    </Text>
+                    {editingChallenge.type !== 'precision' ? (
+                      <Text style={styles.detailScoreSub}>
+                        {editingChallenge.successCount || 0}/{editingChallenge.totalShots || 0} {t('history', 'successfulShots')}
+                      </Text>
+                    ) : null}
+                  </>
                 )}
               </View>
 
-              {/* Stats Grid */}
+              {/* Stats Grid (editable) */}
               <View style={styles.detailStatsRow}>
-                {editingChallenge.carreauCount !== undefined && editingChallenge.carreauCount > 0 && (
+                {editingChallenge.type !== 'precision' ? (
                   <View style={styles.detailStatItem}>
                     <MaterialIcons name="stars" size={20} color={theme.carreauColor} />
-                    <Text style={styles.detailStatValue}>{editingChallenge.carreauCount}</Text>
+                    {isEditingChallengeFields ? (
+                      <TextInput
+                        style={[styles.cdEditFieldInput, { marginTop: 4, textAlign: 'center' }]}
+                        value={editCarreauCount}
+                        onChangeText={setEditCarreauCount}
+                        keyboardType="number-pad"
+                        placeholder="0"
+                        placeholderTextColor={theme.textMuted}
+                      />
+                    ) : (
+                      <Text style={styles.detailStatValue}>{editingChallenge.carreauCount || 0}</Text>
+                    )}
                     <Text style={styles.detailStatLabel}>{t('history', 'carreaux')}</Text>
                   </View>
-                )}
-                {editingChallenge.duration && (
-                  <View style={styles.detailStatItem}>
-                    <MaterialIcons name="timer" size={20} color={theme.primary} />
+                ) : null}
+                <View style={styles.detailStatItem}>
+                  <MaterialIcons name="timer" size={20} color={theme.primary} />
+                  {isEditingChallengeFields ? (
+                    <TextInput
+                      style={[styles.cdEditFieldInput, { marginTop: 4, textAlign: 'center' }]}
+                      value={editDuration}
+                      onChangeText={setEditDuration}
+                      keyboardType="number-pad"
+                      placeholder="sec"
+                      placeholderTextColor={theme.textMuted}
+                    />
+                  ) : (
                     <Text style={styles.detailStatValue}>
-                      {Math.floor(editingChallenge.duration / 60)}:{(editingChallenge.duration % 60).toString().padStart(2, '0')}
+                      {editingChallenge.duration ? `${Math.floor(editingChallenge.duration / 60)}:${(editingChallenge.duration % 60).toString().padStart(2, '0')}` : '--'}
                     </Text>
-                    <Text style={styles.detailStatLabel}>{t('history', 'duration')}</Text>
-                  </View>
-                )}
+                  )}
+                  <Text style={styles.detailStatLabel}>{t('history', 'duration')}{isEditingChallengeFields ? ' (sec)' : ''}</Text>
+                </View>
               </View>
 
               {/* 1v1 Result */}
-              {editingChallenge.mode === '1v1' && editingChallenge.opponentResult && (
+              {editingChallenge.mode === '1v1' && editingChallenge.opponentResult ? (
                 <View style={styles.detailOpponent}>
                   <View style={styles.detailOpponentRow}>
                     <Text style={styles.detailOpponentName}>{editingChallenge.opponentName}</Text>
@@ -967,7 +1156,7 @@ export default function HistoryScreen() {
                       }
                     </Text>
                   </View>
-                  {editingChallenge.winner && (
+                  {editingChallenge.winner ? (
                     <View style={[
                       styles.detailWinner,
                       { backgroundColor: editingChallenge.winner === 'player' ? theme.success : editingChallenge.winner === 'opponent' ? theme.error : theme.warning }
@@ -976,53 +1165,121 @@ export default function HistoryScreen() {
                         {editingChallenge.winner === 'draw' ? t('history', 'draw') : editingChallenge.winner === 'player' ? `${t('history', 'victory')} !` : t('history', 'defeat')}
                       </Text>
                     </View>
-                  )}
+                  ) : null}
                 </View>
-              )}
+              ) : null}
 
-              {/* Shots Grid */}
-              {editingChallenge.shots && editingChallenge.shots.length > 0 && (
+              {/* Shots Grid - Interactive in edit mode */}
+              {editingChallenge.shots && editingChallenge.shots.length > 0 ? (
                 <View style={styles.detailShots}>
-                  <Text style={styles.detailShotsTitle}>{t('history', 'shotDetail')}</Text>
+                  <View style={styles.cdShotsTitleRow}>
+                    <Text style={styles.detailShotsTitle}>{t('history', 'shotDetail')}</Text>
+                    {isEditingChallengeFields ? (
+                      <Text style={styles.cdShotsEditHint}>
+                        {language === 'fr' ? 'Appuyer = basculer, Maintenir = carreau' : 'Tap = toggle, Long press = carreau'}
+                      </Text>
+                    ) : null}
+                  </View>
                   <View style={styles.detailShotsGrid}>
                     {editingChallenge.shots.map((shot, idx) => (
-                      <View 
-                        key={idx} 
+                      <Pressable
+                        key={idx}
                         style={[
                           styles.shotDot,
-                          { backgroundColor: shot.carreau ? theme.carreauColor : shot.success ? theme.success : theme.error }
+                          { backgroundColor: shot.carreau ? theme.carreauColor : shot.success ? theme.success : theme.error },
+                          isEditingChallengeFields && styles.cdShotDotEditable,
                         ]}
+                        onPress={isEditingChallengeFields ? () => handleToggleChallengeShot(idx) : undefined}
+                        onLongPress={isEditingChallengeFields ? () => handleToggleChallengeCarreau(idx) : undefined}
+                        disabled={!isEditingChallengeFields}
                       >
                         <Text style={styles.shotDotText}>{idx + 1}</Text>
-                      </View>
+                      </Pressable>
                     ))}
                   </View>
+                  {isEditingChallengeFields ? (
+                    <View style={styles.cdShotLegend}>
+                      <View style={styles.cdShotLegendItem}>
+                        <View style={[styles.cdShotLegendDot, { backgroundColor: theme.success }]} />
+                        <Text style={styles.cdShotLegendText}>{language === 'fr' ? 'Reussi' : 'Success'}</Text>
+                      </View>
+                      <View style={styles.cdShotLegendItem}>
+                        <View style={[styles.cdShotLegendDot, { backgroundColor: theme.error }]} />
+                        <Text style={styles.cdShotLegendText}>{language === 'fr' ? 'Rate' : 'Miss'}</Text>
+                      </View>
+                      <View style={styles.cdShotLegendItem}>
+                        <View style={[styles.cdShotLegendDot, { backgroundColor: theme.carreauColor }]} />
+                        <Text style={styles.cdShotLegendText}>Carreau</Text>
+                      </View>
+                    </View>
+                  ) : null}
                 </View>
-              )}
+              ) : null}
+
+              {/* Notes */}
+              <View style={styles.cdNotesSection}>
+                <View style={styles.cdNotesTitleRow}>
+                  <MaterialIcons name="notes" size={16} color={theme.textSecondary} />
+                  <Text style={styles.cdNotesTitle}>Notes</Text>
+                </View>
+                {isEditingChallengeFields ? (
+                  <TextInput
+                    style={styles.cdNotesInput}
+                    value={editNotes}
+                    onChangeText={setEditNotes}
+                    placeholder={language === 'fr' ? 'Ajouter des notes...' : 'Add notes...'}
+                    placeholderTextColor={theme.textMuted}
+                    multiline
+                    numberOfLines={3}
+                    textAlignVertical="top"
+                  />
+                ) : (
+                  <Text style={styles.cdNotesText}>
+                    {editingChallenge.notes || (language === 'fr' ? 'Aucune note' : 'No notes')}
+                  </Text>
+                )}
+              </View>
 
               {/* Share button */}
-              <Pressable
-                style={styles.shareParticipantsBtn}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setShowChallengeShare(true);
-                }}
-              >
-                <MaterialIcons name="share" size={18} color={theme.primary} />
-                <Text style={styles.shareParticipantsBtnText}>{t('matchEdit', 'shareWithParticipants')}</Text>
-              </Pressable>
+              {!isEditingChallengeFields ? (
+                <Pressable
+                  style={styles.shareParticipantsBtn}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setShowChallengeShare(true);
+                  }}
+                >
+                  <MaterialIcons name="share" size={18} color={theme.primary} />
+                  <Text style={styles.shareParticipantsBtnText}>{t('matchEdit', 'shareWithParticipants')}</Text>
+                </Pressable>
+              ) : null}
 
               {/* Actions */}
-              <View style={styles.detailActions}>
-                <Pressable style={styles.deleteBtn} onPress={handleDeleteChallenge}>
-                  <MaterialIcons name="delete" size={18} color={theme.error} />
-                  <Text style={styles.deleteBtnText}>{t('common', 'delete')}</Text>
-                </Pressable>
-                <Pressable style={styles.closeBtn} onPress={() => setEditingChallenge(null)}>
-                  <Text style={styles.closeBtnText}>{t('common', 'close')}</Text>
-                </Pressable>
-              </View>
-            </View>
+              {isEditingChallengeFields ? (
+                <View style={styles.detailActions}>
+                  <Pressable
+                    style={[styles.closeBtn, { flex: 1 }]}
+                    onPress={handleSaveChallenge}
+                    disabled={savingChallenge}
+                  >
+                    <Text style={styles.closeBtnText}>
+                      {savingChallenge ? '...' : t('common', 'save')}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={styles.detailActions}>
+                  <Pressable style={styles.deleteBtn} onPress={handleDeleteChallenge}>
+                    <MaterialIcons name="delete" size={18} color={theme.error} />
+                    <Text style={styles.deleteBtnText}>{t('common', 'delete')}</Text>
+                  </Pressable>
+                  <Pressable style={styles.closeBtn} onPress={() => { setEditingChallenge(null); setIsEditingChallengeFields(false); }}>
+                    <Text style={styles.closeBtnText}>{t('common', 'close')}</Text>
+                  </Pressable>
+                </View>
+              )}
+            </ScrollView>
+            </KeyboardAvoidingView>
           )}
         </SafeAreaView>
       </Modal>
@@ -1334,6 +1591,125 @@ const styles = StyleSheet.create({
   periodOptionText: { fontSize: 15, fontWeight: '500', color: theme.textPrimary },
   periodOptionTextActive: { fontWeight: '600', color: theme.primary },
   
+  // Challenge detail edit styles
+  cdEditBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: theme.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cdSaveHeaderBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: theme.primary,
+    borderRadius: theme.borderRadius.md,
+  },
+  cdSaveHeaderBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  cdEditFieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+  },
+  cdEditFieldInput: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.textPrimary,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.sm,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    minWidth: 56,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  cdEditFieldLarge: {
+    fontSize: 28,
+    fontWeight: '800',
+    textAlign: 'center',
+    minWidth: 80,
+  },
+  cdEditFieldUnit: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    fontWeight: '500',
+  },
+  cdShotDotEditable: {
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.5)',
+  },
+  cdShotsTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  cdShotsEditHint: {
+    fontSize: 10,
+    color: theme.textMuted,
+    fontStyle: 'italic',
+  },
+  cdShotLegend: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 16,
+    marginTop: 10,
+  },
+  cdShotLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  cdShotLegendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  cdShotLegendText: {
+    fontSize: 10,
+    color: theme.textMuted,
+  },
+  cdNotesSection: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  cdNotesTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  cdNotesTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  cdNotesInput: {
+    fontSize: 14,
+    color: theme.textPrimary,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.sm,
+    padding: 12,
+    minHeight: 80,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  cdNotesText: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    lineHeight: 20,
+  },
+
   // Detail Modal
   detailHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 20 },
   detailIcon: { width: 56, height: 56, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },

@@ -72,6 +72,7 @@ interface AppContextType {
   updateClub: (id: string, updates: Partial<Club>) => Promise<void>;
   updateTournament: (id: string, updates: Partial<Tournament>) => Promise<void>;
   updateTerrain: (id: string, updates: Partial<Terrain>) => Promise<void>;
+  updateChallenge: (id: string, updates: Partial<Challenge>) => Promise<void>;
   updateBracketMatch: (tournamentId: string, bracketMatchId: string, updates: Partial<BracketMatch>) => void;
   
   // Delete Actions
@@ -1620,6 +1621,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateChallenge = async (id: string, updates: Partial<Challenge>) => {
+    setChallenges(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+
+    if (!user?.id) return;
+
+    if (!isConnectedRef.current) {
+      enqueueOperation({ type: 'update', table: 'challenges', itemId: id, dbPayload: buildUpdateDbPayload('challenges', updates) });
+      return;
+    }
+
+    try {
+      const dbUpdates: any = {};
+      if (updates.type !== undefined) dbUpdates.type = updates.type;
+      if (updates.mode !== undefined) dbUpdates.mode = updates.mode;
+      if (updates.date !== undefined) dbUpdates.date = updates.date;
+      if (updates.playerId !== undefined) dbUpdates.player_id = updates.playerId;
+      if (updates.playerName !== undefined) dbUpdates.player_name = updates.playerName;
+      if (updates.opponentId !== undefined) dbUpdates.opponent_id = updates.opponentId;
+      if (updates.opponentName !== undefined) dbUpdates.opponent_name = updates.opponentName;
+      if (updates.opponentResult !== undefined) dbUpdates.opponent_result = updates.opponentResult;
+      if (updates.winner !== undefined) dbUpdates.winner = updates.winner;
+      if (updates.shots !== undefined) dbUpdates.shots = updates.shots;
+      if (updates.successCount !== undefined) dbUpdates.success_count = updates.successCount;
+      if (updates.totalShots !== undefined) dbUpdates.total_shots = updates.totalShots;
+      if (updates.carreauCount !== undefined) dbUpdates.carreau_count = updates.carreauCount;
+      if (updates.successRate !== undefined) dbUpdates.success_rate = updates.successRate;
+      if (updates.precisionShots !== undefined) dbUpdates.precision_shots = updates.precisionShots;
+      if (updates.totalPoints !== undefined) dbUpdates.total_points = updates.totalPoints;
+      if (updates.maxPoints !== undefined) dbUpdates.max_points = updates.maxPoints;
+      if (updates.atelierScores !== undefined) dbUpdates.atelier_scores = updates.atelierScores;
+      if (updates.duration !== undefined) dbUpdates.duration = updates.duration;
+      if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+      if (updates.detailedShots !== undefined) dbUpdates.detailed_shots = updates.detailedShots;
+      dbUpdates.updated_at = new Date().toISOString();
+
+      await supabase.from('challenges').update(dbUpdates).eq('id', id);
+    } catch (error) {
+      console.log('Error updating challenge:', error);
+    }
+  };
+
   const updateBracketMatch = (tournamentId: string, bracketMatchId: string, updates: Partial<BracketMatch>) => {
     setTournaments(prev => prev.map(tournament => {
       if (tournament.id !== tournamentId || !tournament.phases) return tournament;
@@ -1954,6 +1996,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updateClub,
         updateTournament,
         updateTerrain,
+        updateChallenge,
         updateBracketMatch,
         deleteMatch,
         deletePlayer,

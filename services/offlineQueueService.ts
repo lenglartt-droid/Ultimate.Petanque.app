@@ -650,6 +650,18 @@ export function buildUpdateDbPayload(table: string, updates: Record<string, any>
       courtsCount: 'courts_count', lighting: 'lighting',
       covered: 'covered', environment: 'environment',
     },
+    challenges: {
+      type: 'type', mode: 'mode', date: 'date',
+      playerId: 'player_id', playerName: 'player_name',
+      opponentId: 'opponent_id', opponentName: 'opponent_name',
+      opponentResult: 'opponent_result', winner: 'winner',
+      shots: 'shots', successCount: 'success_count',
+      totalShots: 'total_shots', carreauCount: 'carreau_count',
+      successRate: 'success_rate', precisionShots: 'precision_shots',
+      totalPoints: 'total_points', maxPoints: 'max_points',
+      atelierScores: 'atelier_scores', duration: 'duration',
+      notes: 'notes', detailedShots: 'detailed_shots',
+    },
   };
 
   const map = FIELD_MAP[table] || {};
