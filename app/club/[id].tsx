@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Linking,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,7 +28,7 @@ import { useAuth } from '@/template';
 export default function ClubDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getClubById, players, tournaments, deleteClub, getSharedPermission, setItemPublic } = useApp();
+  const { getClubById, players, tournaments, deleteClub, getSharedPermission, setItemPublic, loading: appLoading } = useApp();
   const { user } = useAuth();
   const { t, language } = useLanguage();
 
@@ -94,7 +95,22 @@ export default function ClubDetailScreen() {
   if (!club) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text>{t('club', 'clubNotFound')}</Text>
+        <View style={styles.header}>
+          <Pressable style={styles.backButton} onPress={() => router.back()}>
+            <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
+          </Pressable>
+          <Text style={styles.headerTitle}>{t('club', 'clubLabel')}</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        {appLoading ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator size="large" color={theme.primary} />
+          </View>
+        ) : (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ color: theme.textSecondary }}>{t('club', 'clubNotFound')}</Text>
+          </View>
+        )}
       </SafeAreaView>
     );
   }

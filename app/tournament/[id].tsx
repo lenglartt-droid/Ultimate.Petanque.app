@@ -98,7 +98,7 @@ const PHASE_IDS = {
 export default function TournamentDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getTournamentById, getClubById, getTerrainById, getMatchesByTournament, updateTournament, tournamentNotifications, toggleTournamentNotification, isTournamentNotificationEnabled, getSharedPermission, setItemPublic } = useApp();
+  const { getTournamentById, getClubById, getTerrainById, getMatchesByTournament, updateTournament, tournamentNotifications, toggleTournamentNotification, isTournamentNotificationEnabled, getSharedPermission, setItemPublic, loading: appLoading } = useApp();
   const { user } = useAuth();
   const { t, language } = useLanguage();
 
@@ -424,10 +424,16 @@ export default function TournamentDetailScreen() {
           <Text style={styles.headerTitle}>{t('tournament', 'myJourney')}</Text>
           <View style={{ width: 40 }} />
         </View>
-        <View style={styles.emptyContainer}>
-          <MaterialIcons name="error-outline" size={64} color={theme.textMuted} />
-          <Text style={styles.emptyText}>{t('tournament', 'tournamentNotFound')}</Text>
-        </View>
+        {appLoading ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator size="large" color={theme.primary} />
+          </View>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <MaterialIcons name="error-outline" size={64} color={theme.textMuted} />
+            <Text style={styles.emptyText}>{t('tournament', 'tournamentNotFound')}</Text>
+          </View>
+        )}
       </SafeAreaView>
     );
   }

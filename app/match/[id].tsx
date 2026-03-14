@@ -11,6 +11,7 @@ import {
   TextInput,
   Modal,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -35,7 +36,7 @@ interface MeneEdit {
 export default function EditMatchScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getMatchById, updateMatch, deleteMatch, players, matches, terrains, tournaments } = useApp();
+  const { getMatchById, updateMatch, deleteMatch, players, matches, terrains, tournaments, loading: appLoading } = useApp();
   const { t, language } = useLanguage();
 
   const match = getMatchById(id!);
@@ -368,9 +369,18 @@ export default function EditMatchScreen() {
           <Pressable style={styles.backButton} onPress={() => router.back()}>
             <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>{t('match', 'matchNotFound')}</Text>
+          <Text style={styles.headerTitle}>{t('match', 'editMatch')}</Text>
           <View style={{ width: 40 }} />
         </View>
+        {appLoading ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator size="large" color={theme.primary} />
+          </View>
+        ) : (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ color: theme.textSecondary }}>{t('match', 'matchNotFound')}</Text>
+          </View>
+        )}
       </SafeAreaView>
     );
   }

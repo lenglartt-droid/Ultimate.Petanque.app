@@ -8,6 +8,7 @@ import {
   Linking,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -30,7 +31,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 export default function TerrainDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { getTerrainById, tournaments, deleteTerrain, isFavoriteTerrain, toggleFavoriteTerrain, getSharedPermission, setItemPublic } = useApp();
+  const { getTerrainById, tournaments, deleteTerrain, isFavoriteTerrain, toggleFavoriteTerrain, getSharedPermission, setItemPublic, loading: appLoading } = useApp();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -110,11 +111,19 @@ export default function TerrainDetailScreen() {
           <Pressable style={styles.backButton} onPress={() => router.back()}>
             <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
+          <Text style={styles.headerTitle}>{t('terrain', 'terrainDetails')}</Text>
+          <View style={{ width: 40 }} />
         </View>
-        <View style={styles.emptyContainer}>
-          <MaterialIcons name="error-outline" size={64} color={theme.textMuted} />
-          <Text style={styles.emptyText}>{t('terrain', 'terrainNotFound')}</Text>
-        </View>
+        {appLoading ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator size="large" color={theme.primary} />
+          </View>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <MaterialIcons name="error-outline" size={64} color={theme.textMuted} />
+            <Text style={styles.emptyText}>{t('terrain', 'terrainNotFound')}</Text>
+          </View>
+        )}
       </SafeAreaView>
     );
   }
