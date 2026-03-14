@@ -26,7 +26,7 @@ export default function MyPlayerCardScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { t, language } = useLanguage();
-  const { selfPlayer, userStats, challengeStats, matches, challenges, setItemPublic, getTerrainById, players } = useApp();
+  const { selfPlayer, userStats, challengeStats, matches, challenges, setItemPublic, getTerrainById, players, boulesSets } = useApp();
   const { showAlert } = useAlert();
   const [showShareModal, setShowShareModal] = React.useState(false);
   const [isPublic, setIsPublic] = React.useState(selfPlayer?.isPublic ?? false);
@@ -153,6 +153,42 @@ export default function MyPlayerCardScreen() {
 
     return { partnerCounts, totalWithPartners, preferredPartner };
   }, [matches, selfPlayer]);
+
+  // Preferred boules analysis based on match performance
+  const preferredBoulesAnalysis = React.useMemo(() => {
+    if (!selfPlayer || boulesSets.length === 0) return null;
+    const pid = selfPlayer.id;
+    const role = selfPlayer.role || 'Milieu';
+    const setPerf: Record<string, { matches: number; wins: number; tirsSuccess: number; totalTirs: number; pointsSuccess: number; totalPoints: number; carreaux: number }> = {};
+    matches.forEach(m => {
+      if (!m.boulesSetId) return;
+      const inA = m.teamA.players.includes(pid);
+      const inB = m.teamB.players.includes(pid);
+      if (!inA && !inB) return;
+      if (!setPerf[m.boulesSetId]) setPerf[m.boulesSetId] = { matches: 0, wins: 0, tirsSuccess: 0, totalTirs: 0, pointsSuccess: 0, totalPoints: 0, carreaux: 0 };
+      const s = setPerf[m.boulesSetId];
+      s.matches++;
+      if ((inA && m.winner === 'A') || (inB && m.winner === 'B')) s.wins++;
+      if (m.playerActions) {
+        const pa = m.playerActions.find(a => a.playerId === pid);
+        if (pa) { s.tirsSuccess += pa.actions.tirsSuccess; s.totalTirs += pa.actions.tirs; s.pointsSuccess += pa.actions.pointsSuccess; s.totalPoints += pa.actions.points; s.carreaux += pa.actions.carreaux; }
+      }
+    });
+    const entries = Object.entries(setPerf).filter(([_, s]) => s.matches > 0);
+    if (entries.length === 0) return null;
+    const scored = entries.map(([setId, s]) => {
+      let score = 0;
+      if (role === 'Tireur') score = s.wins * 3 + s.tirsSuccess + s.carreaux * 2;
+      else if (role === 'Pointeur') score = s.wins * 3 + s.pointsSuccess * 2;
+      else score = s.wins * 3 + s.tirsSuccess + s.pointsSuccess + s.carreaux;
+      return { setId, ...s, score };
+    });
+    scored.sort((a, b) => b.score - a.score);
+    const best = scored[0];
+    const set = boulesSets.find(bs => bs.id === best.setId);
+    if (!set) return null;
+    return { set, stats: best, role };
+  }, [selfPlayer?.id, selfPlayer?.role, matches, boulesSets]);
 
   const partnerColors = ['#3B82F6', '#8B5CF6', '#F97316', '#10B981', '#EC4899', '#6366F1', '#14B8A6'];
 
@@ -377,7 +413,7 @@ export default function MyPlayerCardScreen() {
 
         <View style={isTablet ? styles.tabletRightCol : undefined}>
         {/* Game Preferences Section */}
-        {(roleAnalysis.totalWithRoles > 0 || terrainAnalysis.totalWithTerrain > 0 || partnerAnalysis.totalWithPartners > 0 || (selfPlayer.boules && (selfPlayer.boules.name || selfPlayer.boules.diameter || selfPlayer.boules.weight))) ? (
+        {(roleAnalysis.totalWithRoles > 0 || terrainAnalysis.totalWithTerrain > 0 || partnerAnalysis.totalWithPartners > 0 || preferredBoulesAnalysis || (selfPlayer.boules && (selfPlayer.boules.name || selfPlayer.boules.diameter || selfPlayer.boules.weight))) ? (
           <Animated.View entering={FadeInDown.duration(400).delay(25)} style={[styles.preferencesCard, isTablet && styles.preferencesCardTablet]}>
             <View style={styles.profileSectionDivider}>
               <MaterialIcons name="psychology" size={15} color={theme.accent} />
@@ -510,8 +546,63 @@ export default function MyPlayerCardScreen() {
               </View>
             );
           })()}
-          {/* Boules préféré */}
-          {selfPlayer.boules && (selfPlayer.boules.name || selfPlayer.boules.diameter || selfPlayer.boules.weight) ? (
+          {/* Boules préférées - Performance based */}
+          {preferredBoulesAnalysis ? (
+            <View style={styles.preferredRoleCard}>
+              <Text style={styles.preferredRoleTitle}>{language === 'fr' ? 'Boules preferees' : 'Preferred Boules'}</Text>
+              <View style={styles.preferredRoleContent}>
+                <View style={[styles.preferredRoleIcon, { backgroundColor: theme.accent }]}>
+                  <MaterialIcons name="sports-baseball" size={20} color="#FFF" />
+                </View>
+                <View style={styles.preferredRoleInfo}>
+                  <Text style={styles.preferredRoleName}>{preferredBoulesAnalysis.set.name}</Text>
+                  <Text style={styles.preferredRoleStats}>
+                    {[preferredBoulesAnalysis.set.diameter ? `${preferredBoulesAnalysis.set.diameter} mm` : '', preferredBoulesAnalysis.set.weight ? `${preferredBoulesAnalysis.set.weight} g` : ''].filter(Boolean).join(' \u2022 ')}{preferredBoulesAnalysis.stats.matches > 0 ? ` \u2022 ${preferredBoulesAnalysis.stats.matches} ${language === 'fr' ? 'matchs' : 'matches'}` : ''}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.roleBreakdown}>
+                <View style={styles.roleBreakdownItem}>
+                  <MaterialIcons name="emoji-events" size={14} color={theme.success} />
+                  <Text style={styles.roleBreakdownLabel}>{language === 'fr' ? 'V' : 'W'}</Text>
+                  <View style={styles.roleBreakdownBarBg}>
+                    <View style={[styles.roleBreakdownBar, { width: `${preferredBoulesAnalysis.stats.matches > 0 ? Math.round((preferredBoulesAnalysis.stats.wins / preferredBoulesAnalysis.stats.matches) * 100) : 0}%`, backgroundColor: theme.success }]} />
+                  </View>
+                  <Text style={styles.roleBreakdownPct}>{preferredBoulesAnalysis.stats.wins}</Text>
+                </View>
+                {preferredBoulesAnalysis.role === 'Tireur' || preferredBoulesAnalysis.role === 'Milieu' ? (
+                  <View style={styles.roleBreakdownItem}>
+                    <MaterialIcons name="gps-fixed" size={14} color={theme.accent} />
+                    <Text style={styles.roleBreakdownLabel}>T</Text>
+                    <View style={styles.roleBreakdownBarBg}>
+                      <View style={[styles.roleBreakdownBar, { width: `${preferredBoulesAnalysis.stats.totalTirs > 0 ? Math.round((preferredBoulesAnalysis.stats.tirsSuccess / preferredBoulesAnalysis.stats.totalTirs) * 100) : 0}%`, backgroundColor: theme.accent }]} />
+                    </View>
+                    <Text style={styles.roleBreakdownPct}>{preferredBoulesAnalysis.stats.tirsSuccess}</Text>
+                  </View>
+                ) : null}
+                {preferredBoulesAnalysis.role === 'Tireur' ? (
+                  <View style={styles.roleBreakdownItem}>
+                    <MaterialIcons name="stars" size={14} color={theme.carreauColor} />
+                    <Text style={styles.roleBreakdownLabel}>C</Text>
+                    <View style={styles.roleBreakdownBarBg}>
+                      <View style={[styles.roleBreakdownBar, { width: `${preferredBoulesAnalysis.stats.tirsSuccess > 0 ? Math.round((preferredBoulesAnalysis.stats.carreaux / preferredBoulesAnalysis.stats.tirsSuccess) * 100) : 0}%`, backgroundColor: theme.carreauColor }]} />
+                    </View>
+                    <Text style={styles.roleBreakdownPct}>{preferredBoulesAnalysis.stats.carreaux}</Text>
+                  </View>
+                ) : null}
+                {preferredBoulesAnalysis.role === 'Pointeur' || preferredBoulesAnalysis.role === 'Milieu' ? (
+                  <View style={styles.roleBreakdownItem}>
+                    <MaterialIcons name="adjust" size={14} color={theme.primary} />
+                    <Text style={styles.roleBreakdownLabel}>P</Text>
+                    <View style={styles.roleBreakdownBarBg}>
+                      <View style={[styles.roleBreakdownBar, { width: `${preferredBoulesAnalysis.stats.totalPoints > 0 ? Math.round((preferredBoulesAnalysis.stats.pointsSuccess / preferredBoulesAnalysis.stats.totalPoints) * 100) : 0}%`, backgroundColor: theme.primary }]} />
+                    </View>
+                    <Text style={styles.roleBreakdownPct}>{preferredBoulesAnalysis.stats.pointsSuccess}</Text>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+          ) : selfPlayer.boules && (selfPlayer.boules.name || selfPlayer.boules.diameter || selfPlayer.boules.weight) ? (
             <View style={styles.preferredRoleCard}>
               <Text style={styles.preferredRoleTitle}>{language === 'fr' ? 'Boules preferees' : 'Preferred Boules'}</Text>
               <View style={styles.preferredRoleContent}>
