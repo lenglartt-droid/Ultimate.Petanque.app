@@ -277,21 +277,28 @@ export default function MapScreen() {
     players: { label: t('map', 'players'), singular: t('map', 'playerSingular'), icon: 'person', color: theme.primary },
   }), [language]);
 
-  // Load public items
+  const [publicLoaded, setPublicLoaded] = useState(false);
+
+  // Lazy-load public items only when needed (first filter interaction or on demand)
+  const loadPublicItems = useCallback(async () => {
+    if (publicLoaded || !user?.id) return;
+    setLoadingPublic(true);
+    const [pRes, cRes, tRes, toRes] = await Promise.all([
+      fetchPublicPlayers(), fetchPublicClubs(), fetchPublicTerrains(), fetchPublicTournaments(),
+    ]);
+    if (!pRes.error) setPublicPlayers(pRes.items);
+    if (!cRes.error) setPublicClubs(cRes.items);
+    if (!tRes.error) setPublicTerrains(tRes.items);
+    if (!toRes.error) setPublicTournaments(toRes.items);
+    setLoadingPublic(false);
+    setPublicLoaded(true);
+  }, [publicLoaded, user?.id]);
+
+  // Load public items on mount (deferred to avoid blocking initial render)
   useEffect(() => {
     if (!user?.id) return;
-    const load = async () => {
-      setLoadingPublic(true);
-      const [pRes, cRes, tRes, toRes] = await Promise.all([
-        fetchPublicPlayers(), fetchPublicClubs(), fetchPublicTerrains(), fetchPublicTournaments(),
-      ]);
-      if (!pRes.error) setPublicPlayers(pRes.items);
-      if (!cRes.error) setPublicClubs(cRes.items);
-      if (!tRes.error) setPublicTerrains(tRes.items);
-      if (!toRes.error) setPublicTournaments(toRes.items);
-      setLoadingPublic(false);
-    };
-    load();
+    const timer = setTimeout(loadPublicItems, 800);
+    return () => clearTimeout(timer);
   }, [user?.id]);
 
   // Helper: check if a location has valid coordinates (not 0,0)
@@ -525,7 +532,7 @@ export default function MapScreen() {
     if (regionDebounceRef.current) clearTimeout(regionDebounceRef.current);
     regionDebounceRef.current = setTimeout(() => {
       setCurrentRegion(region);
-    }, 300);
+    }, 500);
   }, []);
 
   // Cleanup debounce on unmount
