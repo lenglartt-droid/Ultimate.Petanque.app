@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   StyleSheet,
   ActivityIndicator,
   Share,
-  Platform,
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,7 +15,7 @@ import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import theme from '@/constants/theme';
-import { createShareLink, ShareItemType, SharePermission } from '@/services/shareService';
+import { createShareLink, ShareItemType, AssociatedItem } from '@/services/shareService';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useApp } from '@/contexts/AppContext';
 
@@ -47,19 +46,11 @@ interface ShareModalProps {
   forceReadOnly?: boolean;
 }
 
-interface AssociatedShareResult {
-  type: 'club' | 'terrain';
-  name: string;
-  shareCode: string;
-}
-
 export default function ShareModal({ visible, onClose, itemType, itemId, itemName, forceReadOnly = false }: ShareModalProps) {
   const { t } = useLanguage();
   const { getPlayerById, getClubById, getTerrainById } = useApp();
-  const [permission, setPermission] = useState<SharePermission>('read');
   const [isGenerating, setIsGenerating] = useState(false);
   const [shareCode, setShareCode] = useState<string | null>(null);
-  const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -69,29 +60,26 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
   const [associatedTerrain, setAssociatedTerrain] = useState<{ id: string; name: string } | null>(null);
   const [includeClub, setIncludeClub] = useState(true);
   const [includeTerrain, setIncludeTerrain] = useState(true);
-  const [associatedResults, setAssociatedResults] = useState<AssociatedShareResult[]>([]);
-  const [copiedAssociated, setCopiedAssociated] = useState<Record<string, boolean>>({});
+  // Track what was included in the final share
+  const [sharedAssociatedItems, setSharedAssociatedItems] = useState<AssociatedItem[]>([]);
 
   const config = TYPE_CONFIG[itemType];
   const typeLabel = t('shareModal', config.labelKey);
   const typeLabelLower = t('shareModal', TYPE_LOWER_KEY[itemType]);
 
-  // Reset state when modal opens with new item
+  // Reset state when modal opens
   React.useEffect(() => {
     if (visible) {
       setShareCode(null);
-      setShareUrl(null);
       setError(null);
       setCopied(false);
-      setPermission('read');
       setIsGenerating(false);
       setShowAssociatedPrompt(false);
       setAssociatedClub(null);
       setAssociatedTerrain(null);
       setIncludeClub(true);
       setIncludeTerrain(true);
-      setAssociatedResults([]);
-      setCopiedAssociated({});
+      setSharedAssociatedItems([]);
     }
   }, [visible, itemId, itemType]);
 
@@ -126,7 +114,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
       return;
     }
 
-    // For player type, check associated items first
+    // For player type, check associated items first (before generating code)
     if (itemType === 'player' && !showAssociatedPrompt && !shareCode) {
       const { club, terrain } = detectAssociatedItems();
       if (club || terrain) {
@@ -139,17 +127,17 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
       }
     }
 
-    await generateShareCodes();
-  }, [itemType, itemId, permission, showAssociatedPrompt, shareCode, detectAssociatedItems]);
+    // Generate single code (no associated items for non-player types)
+    await generateShareCode([]);
+  }, [itemType, itemId, showAssociatedPrompt, shareCode, detectAssociatedItems]);
 
-  const generateShareCodes = useCallback(async () => {
+  const generateShareCode = useCallback(async (associatedItems: AssociatedItem[]) => {
     setIsGenerating(true);
     setError(null);
     setShowAssociatedPrompt(false);
 
     try {
-      // Generate main player share code
-      const result = await createShareLink(itemType, itemId, permission);
+      const result = await createShareLink(itemType, itemId, 'read', associatedItems.length > 0 ? associatedItems : undefined);
       if (result.error) {
         setError(result.error);
         setIsGenerating(false);
@@ -157,36 +145,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
       }
 
       setShareCode(result.shareCode);
-      setShareUrl(result.shareUrl);
-
-      // Generate associated share codes if applicable
-      const associatedCodes: AssociatedShareResult[] = [];
-
-      if (itemType === 'player') {
-        if (includeClub && associatedClub) {
-          const clubResult = await createShareLink('club', associatedClub.id, 'read');
-          if (!clubResult.error) {
-            associatedCodes.push({
-              type: 'club',
-              name: associatedClub.name,
-              shareCode: clubResult.shareCode,
-            });
-          }
-        }
-
-        if (includeTerrain && associatedTerrain) {
-          const terrainResult = await createShareLink('terrain', associatedTerrain.id, 'read');
-          if (!terrainResult.error) {
-            associatedCodes.push({
-              type: 'terrain',
-              name: associatedTerrain.name,
-              shareCode: terrainResult.shareCode,
-            });
-          }
-        }
-      }
-
-      setAssociatedResults(associatedCodes);
+      setSharedAssociatedItems(associatedItems);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
       console.log('Share link creation error:', e);
@@ -194,32 +153,24 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
     } finally {
       setIsGenerating(false);
     }
-  }, [itemType, itemId, permission, includeClub, includeTerrain, associatedClub, associatedTerrain, t]);
+  }, [itemType, itemId, t]);
+
+  const handleConfirmWithAssociated = useCallback(async () => {
+    const items: AssociatedItem[] = [];
+    if (includeClub && associatedClub) {
+      items.push({ type: 'club', id: associatedClub.id });
+    }
+    if (includeTerrain && associatedTerrain) {
+      items.push({ type: 'terrain', id: associatedTerrain.id });
+    }
+    await generateShareCode(items);
+  }, [includeClub, includeTerrain, associatedClub, associatedTerrain, generateShareCode]);
 
   const handleSkipAssociated = useCallback(async () => {
     setIncludeClub(false);
     setIncludeTerrain(false);
-    // After clearing, proceed with generation
-    setIsGenerating(true);
-    setError(null);
-    setShowAssociatedPrompt(false);
-
-    try {
-      const result = await createShareLink(itemType, itemId, permission);
-      if (result.error) {
-        setError(result.error);
-      } else {
-        setShareCode(result.shareCode);
-        setShareUrl(result.shareUrl);
-        setAssociatedResults([]);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
-    } catch (e: any) {
-      setError(e?.message || t('shareModal', 'errorCreating'));
-    } finally {
-      setIsGenerating(false);
-    }
-  }, [itemType, itemId, permission, t]);
+    await generateShareCode([]);
+  }, [generateShareCode]);
 
   const handleCopy = useCallback(async () => {
     if (!shareCode) return;
@@ -229,23 +180,17 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
     setTimeout(() => setCopied(false), 2000);
   }, [shareCode]);
 
-  const handleCopyAssociated = useCallback(async (code: string, type: string) => {
-    await Clipboard.setStringAsync(code);
-    setCopiedAssociated(prev => ({ ...prev, [type]: true }));
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setTimeout(() => setCopiedAssociated(prev => ({ ...prev, [type]: false })), 2000);
-  }, []);
-
   const handleShare = useCallback(async () => {
     if (!shareCode) return;
     let message = `${t('shareModal', 'shareMessage')} ${typeLabelLower} "${itemName}" ${t('shareModal', 'shareMessageSuffix')}\n\n${t('shareModal', 'shareMessageCode')} ${shareCode}`;
 
-    // Include associated codes in the share message
-    if (associatedResults.length > 0) {
+    // Mention included associated items
+    if (sharedAssociatedItems.length > 0) {
       message += '\n';
-      associatedResults.forEach(ar => {
-        const typeLabel = ar.type === 'club' ? t('shareModal', 'clubLabel') : t('shareModal', 'terrainLabel');
-        message += `\n${typeLabel} "${ar.name}" : ${ar.shareCode}`;
+      sharedAssociatedItems.forEach(ai => {
+        const label = ai.type === 'club' ? t('shareModal', 'clubLabel') : t('shareModal', 'terrainLabel');
+        const name = ai.type === 'club' ? associatedClub?.name : associatedTerrain?.name;
+        if (name) message += `\n+ ${label} "${name}" ${t('shareModal', 'includedInShare')}`;
       });
     }
 
@@ -257,17 +202,14 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
     } catch (e) {
       // User cancelled
     }
-  }, [shareCode, typeLabelLower, itemName, associatedResults, t]);
+  }, [shareCode, typeLabelLower, itemName, sharedAssociatedItems, associatedClub, associatedTerrain, t]);
 
   const handleClose = useCallback(() => {
     setShareCode(null);
-    setShareUrl(null);
     setError(null);
     setCopied(false);
-    setPermission('read');
     setShowAssociatedPrompt(false);
-    setAssociatedResults([]);
-    setCopiedAssociated({});
+    setSharedAssociatedItems([]);
     onClose();
   }, [onClose]);
 
@@ -299,7 +241,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
             </View>
           </Animated.View>
 
-          {/* Associated items prompt */}
+          {/* Associated items prompt — shown BEFORE code generation */}
           {showAssociatedPrompt ? (
             <Animated.View entering={FadeInDown.duration(300)}>
               <View style={styles.associatedSection}>
@@ -309,7 +251,6 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                 </View>
                 <Text style={styles.associatedDesc}>{t('shareModal', 'alsoShareAssociatedDesc')}</Text>
 
-                {/* Club toggle */}
                 {associatedClub ? (
                   <Pressable
                     style={[styles.associatedItem, includeClub && styles.associatedItemActive]}
@@ -328,7 +269,6 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                   </Pressable>
                 ) : null}
 
-                {/* Terrain toggle */}
                 {associatedTerrain ? (
                   <Pressable
                     style={[styles.associatedItem, includeTerrain && styles.associatedItemActive]}
@@ -347,17 +287,13 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                   </Pressable>
                 ) : null}
 
-                {/* Action buttons */}
                 <View style={styles.associatedActions}>
-                  <Pressable
-                    style={styles.associatedSkipBtn}
-                    onPress={handleSkipAssociated}
-                  >
+                  <Pressable style={styles.associatedSkipBtn} onPress={handleSkipAssociated}>
                     <Text style={styles.associatedSkipBtnText}>{t('shareModal', 'sharePlayerOnly')}</Text>
                   </Pressable>
                   <Pressable
                     style={[styles.associatedShareBtn, isGenerating && { opacity: 0.7 }]}
-                    onPress={generateShareCodes}
+                    onPress={handleConfirmWithAssociated}
                     disabled={isGenerating}
                   >
                     {isGenerating ? (
@@ -365,7 +301,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                     ) : (
                       <>
                         <MaterialIcons name="link" size={18} color="#FFF" />
-                        <Text style={styles.associatedShareBtnText}>{t('shareModal', 'shareWithAssociated')}</Text>
+                        <Text style={styles.associatedShareBtnText}>{t('shareModal', 'generateCode')}</Text>
                       </>
                     )}
                   </Pressable>
@@ -374,44 +310,13 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
             </Animated.View>
           ) : !shareCode ? (
             <>
-              {/* Permission selection */}
-              <Animated.View entering={FadeInDown.duration(300).delay(50)} style={styles.permissionSection}>
-                <Text style={styles.sectionLabel}>{t('shareModal', 'permissionLabel')}</Text>
-                <View style={styles.permissionOptions}>
-                  <Pressable
-                    style={[styles.permissionOption, permission === 'read' && styles.permissionOptionActive]}
-                    onPress={() => { Haptics.selectionAsync(); setPermission('read'); }}
-                  >
-                    <View style={[styles.permissionIconBox, { backgroundColor: theme.primary + '15' }]}>
-                      <MaterialIcons name="visibility" size={22} color={theme.primary} />
-                    </View>
-                    <View style={styles.permissionInfo}>
-                      <Text style={[styles.permissionTitle, permission === 'read' && { color: theme.primary }]}>{t('shareModal', 'readOnly')}</Text>
-                      <Text style={styles.permissionDesc}>{t('shareModal', 'canViewCard')}</Text>
-                    </View>
-                    <View style={[styles.radio, permission === 'read' && styles.radioActive]}>
-                      {permission === 'read' ? <View style={styles.radioDot} /> : null}
-                    </View>
-                  </Pressable>
-
-                  {!forceReadOnly ? (
-                  <Pressable
-                    style={[styles.permissionOption, permission === 'write' && styles.permissionOptionActive]}
-                    onPress={() => { Haptics.selectionAsync(); setPermission('write'); }}
-                  >
-                    <View style={[styles.permissionIconBox, { backgroundColor: theme.accent + '15' }]}>
-                      <MaterialIcons name="edit" size={22} color={theme.accent} />
-                    </View>
-                    <View style={styles.permissionInfo}>
-                      <Text style={[styles.permissionTitle, permission === 'write' && { color: theme.accent }]}>{t('shareModal', 'readWrite')}</Text>
-                      <Text style={styles.permissionDesc}>{t('shareModal', 'canViewAndEdit')}</Text>
-                    </View>
-                    <View style={[styles.radio, permission === 'write' && styles.radioActiveWrite]}>
-                      {permission === 'write' ? <View style={[styles.radioDot, { backgroundColor: theme.accent }]} /> : null}
-                    </View>
-                  </Pressable>
-                  ) : null}
+              {/* Read-only info */}
+              <Animated.View entering={FadeInDown.duration(300).delay(50)} style={styles.readOnlyInfo}>
+                <View style={[styles.readOnlyBadge, { backgroundColor: theme.primary + '15' }]}>
+                  <MaterialIcons name="visibility" size={16} color={theme.primary} />
+                  <Text style={[styles.readOnlyBadgeText, { color: theme.primary }]}>{t('shareModal', 'readOnly')}</Text>
                 </View>
+                <Text style={styles.readOnlyDesc}>{t('shareModal', 'autoSaveDesc')}</Text>
               </Animated.View>
 
               {error ? (
@@ -441,15 +346,13 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
             </>
           ) : (
             <>
-              {/* Share code result */}
+              {/* Share code result — single code */}
               <Animated.View entering={FadeInDown.duration(300).delay(50)} style={styles.resultSection}>
                 <View style={styles.resultIcon}>
                   <MaterialIcons name="check-circle" size={48} color={theme.success} />
                 </View>
                 <Text style={styles.resultTitle}>{t('shareModal', 'codeCreated')}</Text>
-                <Text style={styles.resultDesc}>
-                  {t('shareModal', 'shareCodeDesc')}
-                </Text>
+                <Text style={styles.resultDesc}>{t('shareModal', 'shareCodeAutoSaveDesc')}</Text>
 
                 {/* Share code display */}
                 <View style={styles.codeBox}>
@@ -462,60 +365,38 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                   </Pressable>
                 </View>
 
-                {/* Permission badge */}
-                <View style={[styles.permissionBadge, { backgroundColor: permission === 'read' ? theme.primary + '15' : theme.accent + '15' }]}>
-                  <MaterialIcons
-                    name={permission === 'read' ? 'visibility' : 'edit'}
-                    size={14}
-                    color={permission === 'read' ? theme.primary : theme.accent}
-                  />
-                  <Text style={[styles.permissionBadgeText, { color: permission === 'read' ? theme.primary : theme.accent }]}>
-                    {permission === 'read' ? t('shareModal', 'readOnly') : t('shareModal', 'readWrite')}
-                  </Text>
-                </View>
-              </Animated.View>
-
-              {/* Associated share codes */}
-              {associatedResults.length > 0 ? (
-                <Animated.View entering={FadeInDown.duration(300).delay(100)} style={styles.associatedResultSection}>
-                  <Text style={styles.associatedResultTitle}>{t('shareModal', 'associatedCodesTitle')}</Text>
-                  {associatedResults.map((ar) => {
-                    const arConfig = ar.type === 'club'
-                      ? { icon: 'home' as const, color: theme.accent, label: t('shareModal', 'clubShared') }
-                      : { icon: 'sports-soccer' as const, color: theme.success, label: t('shareModal', 'terrainShared') };
-                    const isCopied = copiedAssociated[ar.type] || false;
+                {/* What's included */}
+                <View style={styles.includedSection}>
+                  <View style={styles.includedItem}>
+                    <MaterialIcons name={config.icon as any} size={16} color={config.color} />
+                    <Text style={styles.includedItemText}>{itemName}</Text>
+                  </View>
+                  {sharedAssociatedItems.map((ai) => {
+                    const aiConfig = ai.type === 'club'
+                      ? { icon: 'home' as const, color: theme.accent, name: associatedClub?.name }
+                      : { icon: 'sports-soccer' as const, color: theme.success, name: associatedTerrain?.name };
                     return (
-                      <View key={ar.type} style={styles.associatedResultCard}>
-                        <View style={styles.associatedResultCardHeader}>
-                          <View style={[styles.associatedResultIcon, { backgroundColor: arConfig.color + '15' }]}>
-                            <MaterialIcons name={arConfig.icon} size={18} color={arConfig.color} />
-                          </View>
-                          <View style={styles.associatedResultInfo}>
-                            <Text style={styles.associatedResultLabel}>{arConfig.label}</Text>
-                            <Text style={styles.associatedResultName} numberOfLines={1}>{ar.name}</Text>
-                          </View>
-                        </View>
-                        <View style={styles.associatedCodeRow}>
-                          <Text style={styles.associatedCodeText}>{ar.shareCode}</Text>
-                          <Pressable
-                            style={styles.associatedCopyBtn}
-                            onPress={() => handleCopyAssociated(ar.shareCode, ar.type)}
-                          >
-                            <MaterialIcons
-                              name={isCopied ? 'check' : 'content-copy'}
-                              size={16}
-                              color={isCopied ? theme.success : arConfig.color}
-                            />
-                            <Text style={[styles.associatedCopyBtnText, { color: isCopied ? theme.success : arConfig.color }]}>
-                              {isCopied ? t('shareModal', 'copied') : t('shareModal', 'copy')}
-                            </Text>
-                          </Pressable>
+                      <View key={ai.type} style={styles.includedItem}>
+                        <MaterialIcons name={aiConfig.icon} size={16} color={aiConfig.color} />
+                        <Text style={styles.includedItemText}>{aiConfig.name}</Text>
+                        <View style={[styles.includedBadge, { backgroundColor: aiConfig.color + '15' }]}>
+                          <Text style={[styles.includedBadgeText, { color: aiConfig.color }]}>
+                            {ai.type === 'club' ? t('shareModal', 'clubLabel') : t('shareModal', 'terrainLabel')}
+                          </Text>
                         </View>
                       </View>
                     );
                   })}
-                </Animated.View>
-              ) : null}
+                </View>
+
+                {/* Permission badge */}
+                <View style={[styles.permissionBadge, { backgroundColor: theme.primary + '15' }]}>
+                  <MaterialIcons name="visibility" size={14} color={theme.primary} />
+                  <Text style={[styles.permissionBadgeText, { color: theme.primary }]}>
+                    {t('shareModal', 'readOnly')} + {t('shareModal', 'autoSaveShort')}
+                  </Text>
+                </View>
+              </Animated.View>
 
               {/* Share actions */}
               <Animated.View entering={FadeInDown.duration(300).delay(150)} style={styles.shareActions}>
@@ -529,12 +410,9 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                 </Pressable>
               </Animated.View>
 
-              {/* Info — separated from content above */}
               <View style={styles.infoBox}>
                 <MaterialIcons name="info-outline" size={16} color={theme.textMuted} />
-                <Text style={styles.infoText}>
-                  {t('shareModal', 'infoText')}
-                </Text>
+                <Text style={styles.infoText}>{t('shareModal', 'infoTextAutoSave')}</Text>
               </View>
             </>
           )}
@@ -564,26 +442,14 @@ const styles = StyleSheet.create({
   itemInfo: { flex: 1 },
   itemName: { fontSize: 17, fontWeight: '700', color: theme.textPrimary },
   itemType: { fontSize: 13, color: theme.textSecondary, marginTop: 2 },
-  permissionSection: { marginBottom: 24 },
-  sectionLabel: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, letterSpacing: 1, marginBottom: 10 },
-  permissionOptions: { gap: 10 },
-  permissionOption: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg, padding: 14, gap: 12,
-    borderWidth: 2, borderColor: 'transparent', ...theme.shadows.card,
+  // Read-only info
+  readOnlyInfo: { alignItems: 'center', marginBottom: 20 },
+  readOnlyBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14,
+    paddingVertical: 8, borderRadius: theme.borderRadius.full, marginBottom: 10,
   },
-  permissionOptionActive: { borderColor: theme.primary + '40' },
-  permissionIconBox: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  permissionInfo: { flex: 1 },
-  permissionTitle: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
-  permissionDesc: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
-  radio: {
-    width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: theme.border,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  radioActive: { borderColor: theme.primary },
-  radioActiveWrite: { borderColor: theme.accent },
-  radioDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: theme.primary },
+  readOnlyBadgeText: { fontSize: 14, fontWeight: '600' },
+  readOnlyDesc: { fontSize: 13, color: theme.textSecondary, textAlign: 'center', lineHeight: 20 },
   errorBox: {
     flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.error + '15',
     padding: 12, borderRadius: theme.borderRadius.md, marginBottom: 16,
@@ -609,6 +475,18 @@ const styles = StyleSheet.create({
     backgroundColor: theme.primary + '15', borderRadius: theme.borderRadius.md,
   },
   copyBtnText: { fontSize: 13, fontWeight: '600', color: theme.primary },
+  // Included items
+  includedSection: {
+    width: '100%', marginTop: 14, gap: 8,
+  },
+  includedItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.surface,
+    paddingVertical: 10, paddingHorizontal: 14, borderRadius: theme.borderRadius.md,
+    borderWidth: 1, borderColor: theme.border,
+  },
+  includedItemText: { flex: 1, fontSize: 14, fontWeight: '600', color: theme.textPrimary },
+  includedBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: theme.borderRadius.sm },
+  includedBadgeText: { fontSize: 11, fontWeight: '600' },
   permissionBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6,
     borderRadius: theme.borderRadius.full, marginTop: 12,
@@ -626,191 +504,41 @@ const styles = StyleSheet.create({
     padding: 14, borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.border,
   },
   infoText: { flex: 1, fontSize: 12, color: theme.textMuted, lineHeight: 18 },
-  // Associated items prompt styles
+  // Associated items prompt
   associatedSection: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 20,
-    marginBottom: 20,
-    ...theme.shadows.card,
+    backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg,
+    padding: 20, marginBottom: 20, ...theme.shadows.card,
   },
-  associatedHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 10,
-  },
-  associatedTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: theme.textPrimary,
-    flex: 1,
-  },
-  associatedDesc: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    lineHeight: 20,
-    marginBottom: 16,
-  },
+  associatedHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  associatedTitle: { fontSize: 16, fontWeight: '700', color: theme.textPrimary, flex: 1 },
+  associatedDesc: { fontSize: 13, color: theme.textSecondary, lineHeight: 20, marginBottom: 16 },
   associatedItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.md,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    gap: 12,
+    flexDirection: 'row', alignItems: 'center', backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.md, padding: 14, marginBottom: 10,
+    borderWidth: 2, borderColor: 'transparent', gap: 12,
   },
-  associatedItemActive: {
-    borderColor: theme.primary + '40',
-    backgroundColor: theme.primary + '05',
-  },
-  associatedItemIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  associatedItemInfo: {
-    flex: 1,
-  },
+  associatedItemActive: { borderColor: theme.primary + '40', backgroundColor: theme.primary + '05' },
+  associatedItemIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  associatedItemInfo: { flex: 1 },
   associatedItemLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: theme.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    fontSize: 11, fontWeight: '600', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5,
   },
-  associatedItemName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.textPrimary,
-    marginTop: 2,
-  },
+  associatedItemName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary, marginTop: 2 },
   checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: theme.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: theme.border,
+    alignItems: 'center', justifyContent: 'center',
   },
-  checkboxActive: {
-    backgroundColor: theme.primary,
-    borderColor: theme.primary,
-  },
-  associatedActions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 6,
-  },
+  checkboxActive: { backgroundColor: theme.primary, borderColor: theme.primary },
+  associatedActions: { flexDirection: 'row', gap: 10, marginTop: 6 },
   associatedSkipBtn: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: theme.border,
+    flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14,
+    backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md,
+    borderWidth: 1, borderColor: theme.border,
   },
-  associatedSkipBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
+  associatedSkipBtnText: { fontSize: 14, fontWeight: '600', color: theme.textSecondary },
   associatedShareBtn: {
-    flex: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    backgroundColor: theme.primary,
-    borderRadius: theme.borderRadius.md,
+    flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, paddingVertical: 14, backgroundColor: theme.primary, borderRadius: theme.borderRadius.md,
   },
-  associatedShareBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  // Associated results display
-  associatedResultSection: {
-    marginBottom: 20,
-  },
-  associatedResultTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textSecondary,
-    letterSpacing: 1,
-    marginBottom: 10,
-  },
-  associatedResultCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: 14,
-    marginBottom: 10,
-    ...theme.shadows.card,
-  },
-  associatedResultCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 10,
-  },
-  associatedResultIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  associatedResultInfo: {
-    flex: 1,
-  },
-  associatedResultLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: theme.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  associatedResultName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.textPrimary,
-    marginTop: 1,
-  },
-  associatedCodeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.md,
-    padding: 10,
-    gap: 8,
-  },
-  associatedCodeText: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '700',
-    color: theme.textPrimary,
-    letterSpacing: 1,
-    textAlign: 'center',
-  },
-  associatedCopyBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: theme.borderRadius.sm,
-  },
-  associatedCopyBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
+  associatedShareBtnText: { fontSize: 14, fontWeight: '600', color: '#FFF' },
 });

@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -15,9 +16,10 @@ import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import theme from '@/constants/theme';
-import { redeemShareCode, saveSharedItemToMyAccount, ShareItemType } from '@/services/shareService';
+import { redeemShareCode, ShareItemType } from '@/services/shareService';
 import { useAlert } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useApp } from '@/contexts/AppContext';
 
 const ROUTE_MAP: Record<ShareItemType, string> = {
   player: '/player/',
@@ -55,13 +57,24 @@ const TYPE_COLOR: Record<ShareItemType, string> = {
   challenge: theme.warning,
 };
 
+interface AutoSavedItem {
+  type: ShareItemType;
+  id: string;
+  newItemId: string | null;
+}
+
 export default function RedeemShareScreen() {
   const { showAlert } = useAlert();
   const { t } = useLanguage();
+  const { refreshData } = useApp();
   const [code, setCode] = useState('');
   const [isRedeeming, setIsRedeeming] = useState(false);
-  const [redeemResult, setRedeemResult] = useState<{ itemType: ShareItemType; itemId: string; permission: string } | null>(null);
-  const [isSavingCopy, setIsSavingCopy] = useState(false);
+  const [redeemResult, setRedeemResult] = useState<{
+    itemType: ShareItemType;
+    itemId: string;
+    permission: string;
+    autoSavedItems: AutoSavedItem[];
+  } | null>(null);
 
   const handleRedeem = async () => {
     if (!code.trim()) {
@@ -75,8 +88,15 @@ export default function RedeemShareScreen() {
       if (result.error) {
         showAlert(t('common', 'error'), result.error);
       } else {
-        setRedeemResult({ itemType: result.itemType, itemId: result.itemId, permission: result.permission });
+        setRedeemResult({
+          itemType: result.itemType,
+          itemId: result.itemId,
+          permission: result.permission,
+          autoSavedItems: result.autoSavedItems,
+        });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        // Refresh data to show new items in directory
+        refreshData();
       }
     } catch (e) {
       showAlert(t('common', 'error'), t('share', 'cannotValidate'));
@@ -85,15 +105,13 @@ export default function RedeemShareScreen() {
     }
   };
 
-  const handleNavigate = () => {
-    if (!redeemResult) return;
-    const route = `${ROUTE_MAP[redeemResult.itemType]}${redeemResult.itemId}`;
-    router.replace(route as any);
+  const handleNavigateToItem = (itemType: ShareItemType, itemId: string) => {
+    const route = `${ROUTE_MAP[itemType]}${itemId}`;
+    if (route) router.push(route as any);
   };
 
   const typeColor = redeemResult ? TYPE_COLOR[redeemResult.itemType] : null;
   const typeIcon = redeemResult ? TYPE_ICON[redeemResult.itemType] : null;
-  const typeLabel = redeemResult ? t('share', TYPE_LABEL_KEY[redeemResult.itemType]).toLowerCase() : '';
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
@@ -115,9 +133,7 @@ export default function RedeemShareScreen() {
               <MaterialIcons name="qr-code-2" size={48} color={theme.primary} />
             </View>
             <Text style={styles.title}>{t('share', 'enterShareCode')}</Text>
-            <Text style={styles.desc}>
-              {t('share', 'enterShareCodeDesc')}
-            </Text>
+            <Text style={styles.desc}>{t('share', 'enterShareCodeDesc')}</Text>
 
             <View style={styles.inputRow}>
               <TextInput
@@ -148,55 +164,71 @@ export default function RedeemShareScreen() {
             </Pressable>
           </Animated.View>
         ) : (
-          <Animated.View entering={FadeInDown.duration(400)} style={styles.successSection}>
-            <View style={[styles.successIcon, { backgroundColor: typeColor + '20' }]}>
-              <MaterialIcons name={typeIcon as any} size={48} color={typeColor} />
-            </View>
-            <Text style={styles.successTitle}>{t('share', 'cardUnlocked')}</Text>
-            <Text style={styles.successDesc}>
-              {t('share', 'accessGranted')} {typeLabel} {t('share', 'inMode')}{' '}
-              <Text style={{ fontWeight: '700' }}>
-                {redeemResult.permission === 'read' ? t('share', 'readOnly') : t('share', 'readWrite')}
-              </Text>.
-            </Text>
+          <ScrollView contentContainerStyle={styles.successSection} showsVerticalScrollIndicator={false}>
+            <Animated.View entering={FadeInDown.duration(400)} style={styles.successContent}>
+              <View style={[styles.successIcon, { backgroundColor: theme.success + '20' }]}>
+                <MaterialIcons name="check-circle" size={48} color={theme.success} />
+              </View>
+              <Text style={styles.successTitle}>{t('share', 'cardUnlocked')}</Text>
+              <Text style={styles.successDesc}>{t('share', 'autoSavedToDirectory')}</Text>
 
-            {redeemResult.itemType !== 'challenge' && (
-            <Pressable style={[styles.navigateBtn, { backgroundColor: typeColor }]} onPress={handleNavigate}>
-              <MaterialIcons name="open-in-new" size={20} color="#FFF" />
-              <Text style={styles.navigateBtnText}>{t('share', 'viewCard')}</Text>
-            </Pressable>
-            )}
+              {/* List all imported items */}
+              <View style={styles.importedList}>
+                {redeemResult.autoSavedItems.map((item, idx) => {
+                  const itemColor = TYPE_COLOR[item.type];
+                  const itemIcon = TYPE_ICON[item.type];
+                  const labelKey = TYPE_LABEL_KEY[item.type];
+                  const canNavigate = ROUTE_MAP[item.type] && item.newItemId;
+                  return (
+                    <Animated.View key={`${item.type}-${item.id}-${idx}`} entering={FadeInDown.duration(300).delay(100 * idx)}>
+                      <Pressable
+                        style={styles.importedItem}
+                        onPress={() => canNavigate ? handleNavigateToItem(item.type, item.newItemId!) : null}
+                        disabled={!canNavigate}
+                      >
+                        <View style={[styles.importedItemIcon, { backgroundColor: itemColor + '15' }]}>
+                          <MaterialIcons name={itemIcon as any} size={22} color={itemColor} />
+                        </View>
+                        <View style={styles.importedItemInfo}>
+                          <Text style={styles.importedItemType}>{t('share', labelKey)}</Text>
+                          <View style={styles.importedItemStatus}>
+                            <MaterialIcons name="check" size={14} color={theme.success} />
+                            <Text style={styles.importedItemStatusText}>{t('share', 'savedToDirectory')}</Text>
+                          </View>
+                        </View>
+                        {canNavigate ? (
+                          <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
+                        ) : null}
+                      </Pressable>
+                    </Animated.View>
+                  );
+                })}
+              </View>
 
-            <Pressable
-              style={[styles.saveBtn, isSavingCopy && { opacity: 0.6 }]}
-              onPress={async () => {
-                if (!redeemResult) return;
-                setIsSavingCopy(true);
-                const { newItemId, error } = await saveSharedItemToMyAccount(redeemResult.itemType, redeemResult.itemId);
-                setIsSavingCopy(false);
-                if (error) {
-                  showAlert(t('common', 'error'), error);
-                } else {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  const isMatchOrChallenge = redeemResult.itemType === 'match' || redeemResult.itemType === 'challenge';
-                  showAlert(t('share', 'saved'), isMatchOrChallenge ? t('share', 'importedToAccount') : t('share', 'copiedToDirectory'));
-                  if (newItemId && ROUTE_MAP[redeemResult.itemType]) {
-                    router.replace(`${ROUTE_MAP[redeemResult.itemType]}${newItemId}` as any);
-                  } else {
-                    router.replace('/(tabs)' as any);
-                  }
-                }
-              }}
-              disabled={isSavingCopy}
-            >
-              <MaterialIcons name="save-alt" size={20} color={theme.accent} />
-              <Text style={styles.saveBtnText}>
-                {(redeemResult.itemType === 'match' || redeemResult.itemType === 'challenge') 
-                  ? t('share', 'importToMyAccount') 
-                  : t('share', 'saveToDirectory')}
-              </Text>
-            </Pressable>
-          </Animated.View>
+              {/* Navigate to main item */}
+              {redeemResult.itemType !== 'challenge' && (
+                <Pressable
+                  style={[styles.navigateBtn, { backgroundColor: typeColor }]}
+                  onPress={() => {
+                    // Navigate to the new copy if available, otherwise the original
+                    const mainItem = redeemResult.autoSavedItems.find(i => i.type === redeemResult.itemType);
+                    const navId = mainItem?.newItemId || redeemResult.itemId;
+                    handleNavigateToItem(redeemResult.itemType, navId);
+                  }}
+                >
+                  <MaterialIcons name="open-in-new" size={20} color="#FFF" />
+                  <Text style={styles.navigateBtnText}>{t('share', 'viewCard')}</Text>
+                </Pressable>
+              )}
+
+              <Pressable
+                style={styles.backToHomeBtn}
+                onPress={() => router.replace('/(tabs)' as any)}
+              >
+                <Text style={styles.backToHomeBtnText}>{t('common', 'back')}</Text>
+              </Pressable>
+            </Animated.View>
+          </ScrollView>
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -234,23 +266,34 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.lg,
   },
   redeemBtnText: { fontSize: 16, fontWeight: '600', color: '#FFF' },
-  successSection: { alignItems: 'center' },
+  successSection: { paddingVertical: 24, alignItems: 'center' },
+  successContent: { alignItems: 'center', width: '100%' },
   successIcon: {
     width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center',
     marginBottom: 20,
   },
   successTitle: { fontSize: 24, fontWeight: '700', color: theme.textPrimary, marginBottom: 8 },
-  successDesc: { fontSize: 15, color: theme.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: 28 },
+  successDesc: { fontSize: 15, color: theme.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: 24 },
+  // Imported items list
+  importedList: { width: '100%', gap: 10, marginBottom: 24 },
+  importedItem: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg, padding: 16, gap: 14, ...theme.shadows.card,
+  },
+  importedItemIcon: {
+    width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
+  },
+  importedItemInfo: { flex: 1 },
+  importedItemType: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  importedItemStatus: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  importedItemStatusText: { fontSize: 12, color: theme.success, fontWeight: '500' },
   navigateBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
     width: '100%', paddingVertical: 16, borderRadius: theme.borderRadius.lg,
   },
   navigateBtnText: { fontSize: 16, fontWeight: '600', color: '#FFF' },
-  saveBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    width: '100%', paddingVertical: 16, borderRadius: theme.borderRadius.lg,
-    marginTop: 12, backgroundColor: theme.accent + '15', borderWidth: 1.5,
-    borderColor: theme.accent + '40',
+  backToHomeBtn: {
+    paddingVertical: 14, marginTop: 12,
   },
-  saveBtnText: { fontSize: 16, fontWeight: '600', color: theme.accent },
+  backToHomeBtnText: { fontSize: 15, fontWeight: '600', color: theme.textSecondary },
 });

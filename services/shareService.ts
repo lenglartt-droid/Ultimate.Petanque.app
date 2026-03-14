@@ -14,6 +14,7 @@ export interface SharedItem {
   isPublicLink: boolean;
   expiresAt?: string;
   createdAt: string;
+  associatedItems?: { type: ShareItemType; id: string }[];
 }
 
 function generateShareCode(): string {
@@ -25,8 +26,16 @@ function generateShareCode(): string {
   return result;
 }
 
+export interface AssociatedItem {
+  type: ShareItemType;
+  id: string;
+}
+
 export async function createShareLink(
-  itemType: ShareItemType, itemId: string, permission: SharePermission = 'read',
+  itemType: ShareItemType,
+  itemId: string,
+  permission: SharePermission = 'read',
+  associatedItems?: AssociatedItem[],
 ): Promise<{ shareCode: string; shareUrl: string; error: string | null }> {
   const supabase = getSupabaseClient();
   const { data: userData, error: authError } = await supabase.auth.getUser();
@@ -37,10 +46,19 @@ export async function createShareLink(
   for (let attempt = 0; attempt < 3; attempt++) {
     const shareCode = generateShareCode();
     const shareUrl = `ultimatepetanque://share/${shareCode}`;
-    const { error } = await supabase.from('shared_items').insert({
-      owner_id: userData.user.id, share_code: shareCode, item_type: itemType,
-      item_id: itemId, permission, is_public_link: true,
-    });
+    const insertData: any = {
+      owner_id: userData.user.id,
+      share_code: shareCode,
+      item_type: itemType,
+      item_id: itemId,
+      permission,
+      is_public_link: true,
+    };
+    // Store associated items if provided
+    if (associatedItems && associatedItems.length > 0) {
+      insertData.associated_items = associatedItems;
+    }
+    const { error } = await supabase.from('shared_items').insert(insertData);
     if (!error) return { shareCode, shareUrl, error: null };
     // If it's a unique constraint violation on share_code, retry with new code
     if (error.code === '23505' && error.message?.includes('share_code')) continue;
@@ -49,31 +67,55 @@ export async function createShareLink(
   return { shareCode: '', shareUrl: '', error: 'Failed to generate unique share code' };
 }
 
-export async function redeemShareCode(
-  shareCode: string,
-): Promise<{ itemType: ShareItemType; itemId: string; permission: SharePermission; error: string | null }> {
+export interface RedeemResult {
+  itemType: ShareItemType;
+  itemId: string;
+  permission: SharePermission;
+  error: string | null;
+  autoSavedItems: { type: ShareItemType; id: string; newItemId: string | null }[];
+}
+
+export async function redeemShareCode(shareCode: string): Promise<RedeemResult> {
   const supabase = getSupabaseClient();
   const { data: userData } = await supabase.auth.getUser();
-  if (!userData?.user) return { itemType: 'player', itemId: '', permission: 'read', error: 'Not connected' };
+  if (!userData?.user) return { itemType: 'player', itemId: '', permission: 'read', error: 'Not connected', autoSavedItems: [] };
 
   const { data, error } = await supabase.from('shared_items').select('*')
     .eq('share_code', shareCode).eq('is_public_link', true).single();
-  if (error || !data) return { itemType: 'player', itemId: '', permission: 'read', error: 'Invalid share code' };
+  if (error || !data) return { itemType: 'player', itemId: '', permission: 'read', error: 'Invalid share code', autoSavedItems: [] };
   if (data.expires_at && new Date(data.expires_at) < new Date())
-    return { itemType: 'player', itemId: '', permission: 'read', error: 'This share link has expired' };
-  if (data.owner_id === userData.user.id)
-    return { itemType: data.item_type, itemId: data.item_id, permission: data.permission, error: null };
+    return { itemType: 'player', itemId: '', permission: 'read', error: 'This share link has expired', autoSavedItems: [] };
 
+  // If owner is redeeming their own code, just return info
+  if (data.owner_id === userData.user.id)
+    return { itemType: data.item_type, itemId: data.item_id, permission: data.permission, error: null, autoSavedItems: [] };
+
+  // Create share entry for the main item (always read-only)
   const { data: existing } = await supabase.from('shared_items').select('id')
     .eq('item_type', data.item_type).eq('item_id', data.item_id)
     .eq('shared_with_id', userData.user.id).maybeSingle();
   if (!existing) {
     await supabase.from('shared_items').insert({
       owner_id: data.owner_id, shared_with_id: userData.user.id, share_code: generateShareCode(),
-      item_type: data.item_type, item_id: data.item_id, permission: data.permission, is_public_link: false,
+      item_type: data.item_type, item_id: data.item_id, permission: 'read', is_public_link: false,
     });
   }
 
+  // Process associated items
+  const associatedItems: { type: ShareItemType; id: string }[] = data.associated_items || [];
+  for (const assoc of associatedItems) {
+    const { data: assocExisting } = await supabase.from('shared_items').select('id')
+      .eq('item_type', assoc.type).eq('item_id', assoc.id)
+      .eq('shared_with_id', userData.user.id).maybeSingle();
+    if (!assocExisting) {
+      await supabase.from('shared_items').insert({
+        owner_id: data.owner_id, shared_with_id: userData.user.id, share_code: generateShareCode(),
+        item_type: assoc.type, item_id: assoc.id, permission: 'read', is_public_link: false,
+      });
+    }
+  }
+
+  // Send notification to owner
   const { data: accessorProfile } = await supabase.from('user_profiles')
     .select('username, email').eq('id', userData.user.id).single();
 
@@ -111,9 +153,23 @@ export async function redeemShareCode(
     accessor_name: accessorProfile?.username || userData.user.email?.split('@')[0] || 'User',
     accessor_email: accessorProfile?.email || userData.user.email,
     item_type: data.item_type, item_id: data.item_id, item_name: itemName,
-    permission: data.permission, share_code: shareCode, is_read: false,
+    permission: 'read', share_code: shareCode, is_read: false,
   });
-  return { itemType: data.item_type, itemId: data.item_id, permission: data.permission, error: null };
+
+  // Auto-save all items to recipient's directory
+  const autoSavedItems: { type: ShareItemType; id: string; newItemId: string | null }[] = [];
+
+  // Save main item
+  const mainSave = await saveSharedItemToMyAccount(data.item_type, data.item_id);
+  autoSavedItems.push({ type: data.item_type, id: data.item_id, newItemId: mainSave.newItemId });
+
+  // Save associated items
+  for (const assoc of associatedItems) {
+    const assocSave = await saveSharedItemToMyAccount(assoc.type, assoc.id);
+    autoSavedItems.push({ type: assoc.type, id: assoc.id, newItemId: assocSave.newItemId });
+  }
+
+  return { itemType: data.item_type, itemId: data.item_id, permission: 'read', error: null, autoSavedItems };
 }
 
 export async function getMySharedItems(): Promise<{ items: SharedItem[]; error: string | null }> {
@@ -126,7 +182,7 @@ export async function getMySharedItems(): Promise<{ items: SharedItem[]; error: 
   return { items: (data || []).map((s: any) => ({
     id: s.id, ownerId: s.owner_id, sharedWithId: s.shared_with_id, shareCode: s.share_code,
     itemType: s.item_type, itemId: s.item_id, permission: s.permission, isPublicLink: s.is_public_link,
-    expiresAt: s.expires_at, createdAt: s.created_at,
+    expiresAt: s.expires_at, createdAt: s.created_at, associatedItems: s.associated_items,
   })), error: null };
 }
 
@@ -140,7 +196,7 @@ export async function getSharedWithMe(): Promise<{ items: SharedItem[]; error: s
   return { items: (data || []).map((s: any) => ({
     id: s.id, ownerId: s.owner_id, sharedWithId: s.shared_with_id, shareCode: s.share_code,
     itemType: s.item_type, itemId: s.item_id, permission: s.permission, isPublicLink: s.is_public_link,
-    expiresAt: s.expires_at, createdAt: s.created_at,
+    expiresAt: s.expires_at, createdAt: s.created_at, associatedItems: s.associated_items,
   })), error: null };
 }
 
@@ -346,16 +402,23 @@ export async function saveSharedItemToMyAccount(itemType: ShareItemType, itemId:
     if (itemType === 'player') {
       const { data: source, error: fetchErr } = await supabase.from('players').select('*').eq('id', itemId).single();
       if (fetchErr || !source) return { newItemId: null, error: 'Player not found' };
+      // Check if already exists (by name) to avoid duplicates
+      const { data: existing } = await supabase.from('players').select('id').eq('user_id', userData.user.id).eq('name', source.name).maybeSingle();
+      if (existing) return { newItemId: existing.id, error: null }; // Already saved
       const { data: newItem, error: insertErr } = await supabase.from('players').insert({
         user_id: userData.user.id, name: source.name, nickname: source.nickname, avatar: source.avatar,
         club: source.club, club_id: null, role: source.role, level: source.level, location: source.location,
-        phone: source.phone, email: source.email, country: source.country, boules: source.boules, stats: source.stats,
+        phone: source.phone, email: source.email, country: source.country, boules: source.boules,
+        handedness: source.handedness, terrain_id: null, terrain_name: source.terrain_name,
+        is_public: false, stats: source.stats,
       }).select('id').single();
       if (insertErr) return { newItemId: null, error: insertErr.message };
       return { newItemId: newItem?.id || null, error: null };
     } else if (itemType === 'club') {
       const { data: source, error: fetchErr } = await supabase.from('clubs').select('*').eq('id', itemId).single();
       if (fetchErr || !source) return { newItemId: null, error: 'Club not found' };
+      const { data: existing } = await supabase.from('clubs').select('id').eq('user_id', userData.user.id).eq('name', source.name).maybeSingle();
+      if (existing) return { newItemId: existing.id, error: null };
       const { data: newItem, error: insertErr } = await supabase.from('clubs').insert({
         user_id: userData.user.id, name: source.name, logo: source.logo, address: source.address,
         city: source.city, country: source.country, location: source.location, members_count: source.members_count,
@@ -368,10 +431,12 @@ export async function saveSharedItemToMyAccount(itemType: ShareItemType, itemId:
     } else if (itemType === 'terrain') {
       const { data: source, error: fetchErr } = await supabase.from('terrains').select('*').eq('id', itemId).single();
       if (fetchErr || !source) return { newItemId: null, error: 'Terrain not found' };
+      const { data: existing } = await supabase.from('terrains').select('id').eq('user_id', userData.user.id).eq('name', source.name).maybeSingle();
+      if (existing) return { newItemId: existing.id, error: null };
       const { data: newItem, error: insertErr } = await supabase.from('terrains').insert({
         user_id: userData.user.id, name: source.name, address: source.address, city: source.city,
         location: source.location, type: source.type, description: source.description, facilities: source.facilities,
-        photos: source.photos, club_id: null, club_name: source.club_name, is_public: source.is_public,
+        photos: source.photos, club_id: null, club_name: source.club_name, is_public: false,
         courts_count: source.courts_count, lighting: source.lighting, covered: source.covered,
       }).select('id').single();
       if (insertErr) return { newItemId: null, error: insertErr.message };
@@ -379,6 +444,8 @@ export async function saveSharedItemToMyAccount(itemType: ShareItemType, itemId:
     } else if (itemType === 'tournament') {
       const { data: source, error: fetchErr } = await supabase.from('tournaments').select('*').eq('id', itemId).single();
       if (fetchErr || !source) return { newItemId: null, error: 'Tournament not found' };
+      const { data: existing } = await supabase.from('tournaments').select('id').eq('user_id', userData.user.id).eq('name', source.name).maybeSingle();
+      if (existing) return { newItemId: existing.id, error: null };
       const { data: newItem, error: insertErr } = await supabase.from('tournaments').insert({
         user_id: userData.user.id, name: source.name, date: source.date, end_date: source.end_date,
         type: source.type, format: source.format, location: source.location, terrain_id: null,

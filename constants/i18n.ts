@@ -2091,6 +2091,10 @@ export const translations = {
     challengeLabel: { fr: 'D\u00e9fi', en: 'Challenge' },
     importToMyAccount: { fr: 'Importer dans mon compte', en: 'Import to my account' },
     importedToAccount: { fr: 'Match/d\u00e9fi import\u00e9 dans votre compte avec les \u00e9quipes adapt\u00e9es', en: 'Match/challenge imported to your account with adapted teams' },
+    autoSavedToDirectory: { fr: 'Toutes les fiches ont \u00e9t\u00e9 automatiquement enregistr\u00e9es dans votre annuaire.', en: 'All cards have been automatically saved to your directory.' },
+    savedToDirectory: { fr: 'Enregistr\u00e9 dans l\'annuaire', en: 'Saved to directory' },
+    mergeWithExisting: { fr: 'Fusionner avec une fiche existante', en: 'Merge with existing card' },
+    mergeDesc: { fr: 'Une fiche similaire existe dans votre annuaire. Souhaitez-vous fusionner les informations ?', en: 'A similar card exists in your directory. Would you like to merge the information?' },
   },
   // ============================================
   // NOTATION (Shot & Point notation components)
@@ -2310,6 +2314,11 @@ export const translations = {
     clubShared: { fr: 'Club partagé', en: 'Club shared' },
     terrainShared: { fr: 'Terrain partagé', en: 'Terrain shared' },
     associatedCodesTitle: { fr: 'CODES FICHES ASSOCIÉES', en: 'ASSOCIATED CARD CODES' },
+    autoSaveDesc: { fr: 'La fiche sera en lecture seule et automatiquement enregistrée dans l\'annuaire du destinataire.', en: 'The card will be read-only and automatically saved to the recipient\'s directory.' },
+    shareCodeAutoSaveDesc: { fr: 'Le destinataire recevra automatiquement la fiche dans son annuaire en saisissant ce code.', en: 'The recipient will automatically receive the card in their directory when entering this code.' },
+    autoSaveShort: { fr: 'Enregistrement auto', en: 'Auto-save' },
+    infoTextAutoSave: { fr: 'Le destinataire saisit ce code dans "Code de partage" de son profil. La fiche et ses fiches associées seront automatiquement enregistrées dans son annuaire en lecture seule.', en: 'The recipient enters this code in "Share code" in their profile. The card and its associated cards will be automatically saved to their directory as read-only.' },
+    includedInShare: { fr: 'inclus dans le partage', en: 'included in share' },
   },
   // ============================================
   // ONBOARDING
