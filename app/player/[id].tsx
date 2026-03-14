@@ -297,6 +297,8 @@ export default function PlayerDetailScreen() {
           />
         }
       >
+        <View style={isTablet ? styles.tabletProfileRow : undefined}>
+        <View style={isTablet ? styles.tabletLeftCol : undefined}>
         {/* Profile Card */}
         <Animated.View entering={FadeInDown.duration(400)} style={[styles.profileCard, isTablet && styles.profileCardTablet]}>
           <View style={styles.avatar}>
@@ -473,15 +475,19 @@ export default function PlayerDetailScreen() {
             </View>
           ) : null}
 
-          {/* Game Preferences Section */}
-          {(roleAnalysis.totalWithRoles > 0 || terrainAnalysis.totalWithTerrain > 0 || partnerAnalysis.totalWithPartners > 0) ? (
+        </Animated.View>
+        </View>
+
+        <View style={isTablet ? styles.tabletRightCol : undefined}>
+        {/* Game Preferences Section */}
+        {(roleAnalysis.totalWithRoles > 0 || terrainAnalysis.totalWithTerrain > 0 || partnerAnalysis.totalWithPartners > 0) ? (
+          <Animated.View entering={FadeInDown.duration(400).delay(50)} style={[styles.preferencesCard, isTablet && styles.preferencesCardTablet]}>
             <View style={styles.profileSectionDivider}>
               <MaterialIcons name="psychology" size={15} color={theme.accent} />
               <Text style={styles.profileSectionLabel}>{language === 'fr' ? 'Préférences de jeu' : 'Game Preferences'}</Text>
               <View style={styles.profileSectionLine} />
             </View>
-          ) : null}
-          {roleAnalysis.totalWithRoles > 0 && (
+          {roleAnalysis.totalWithRoles > 0 ? (
             <View style={styles.preferredRoleCard}>
               <Text style={styles.preferredRoleTitle}>{t('player', 'preferredRole')}</Text>
               <View style={styles.preferredRoleContent}>
@@ -516,10 +522,10 @@ export default function PlayerDetailScreen() {
                 })}
               </View>
             </View>
-          )}
+          ) : null}
           
           {/* Preferred Terrain from Match History */}
-          {terrainAnalysis.totalWithTerrain > 0 && (
+          {terrainAnalysis.totalWithTerrain > 0 ? (
             <View style={styles.preferredRoleCard}>
               <Text style={styles.preferredRoleTitle}>{t('player', 'preferredTerrain')}</Text>
               <View style={styles.preferredRoleContent}>
@@ -554,7 +560,7 @@ export default function PlayerDetailScreen() {
                 })}
               </View>
             </View>
-          )}
+          ) : null}
 
           {/* Preferred Partner from Match History */}
           {partnerAnalysis.totalWithPartners > 0 && (() => {
@@ -607,9 +613,8 @@ export default function PlayerDetailScreen() {
               </View>
             );
           })()}
-
-
-        </Animated.View>
+          </Animated.View>
+        ) : null}
 
         {/* Quick Stats */}
         <Animated.View entering={FadeInDown.duration(400).delay(100)} style={[styles.quickStats, isTablet && styles.quickStatsTablet]}>
@@ -657,6 +662,9 @@ export default function PlayerDetailScreen() {
             </View>
           </Animated.View>
         )}
+
+        </View>
+        </View>
 
         <View style={isTablet ? styles.tabletRow : undefined}>
         {/* Performance Rings */}
@@ -872,10 +880,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   profileCardTablet: {
-    padding: 32,
+    padding: 28,
   },
   quickStatsTablet: {
-    marginTop: 20,
+    marginTop: 0,
+  },
+  tabletProfileRow: {
+    flexDirection: 'row' as const,
+    gap: 16,
+    marginBottom: 16,
+  },
+  tabletLeftCol: {
+    flex: 1,
+  },
+  tabletRightCol: {
+    flex: 1,
+  },
+  preferencesCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 24,
+    alignItems: 'center' as const,
+    marginBottom: 16,
+    ...theme.shadows.card,
+  },
+  preferencesCardTablet: {
+    padding: 20,
+    marginBottom: 12,
   },
   tabletRow: {
     flexDirection: 'row' as const,

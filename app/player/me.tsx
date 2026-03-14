@@ -55,6 +55,7 @@ export default function MyPlayerCardScreen() {
   }, []);
   const screenWidth = Math.max(1, screenDims.width);
   const screenHeight = Math.max(1, screenDims.height);
+  const isTablet = screenWidth >= 600;
 
   // Load federation card URL
   React.useEffect(() => {
@@ -433,11 +434,13 @@ export default function MyPlayerCardScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }, screenWidth >= 600 && styles.scrollContentTablet]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }, isTablet && styles.scrollContentTablet]}
         showsVerticalScrollIndicator={false}
       >
+        <View style={isTablet ? styles.tabletProfileRow : undefined}>
+        <View style={isTablet ? styles.tabletLeftCol : undefined}>
         {/* Player Card Header */}
-        <Animated.View entering={FadeInDown.duration(400)} style={styles.playerCard}>
+        <Animated.View entering={FadeInDown.duration(400)} style={[styles.playerCard, isTablet && styles.playerCardTablet]}>
           <View style={styles.avatarContainer}>
             <View style={styles.avatar}>
               {selfPlayer.avatar ? (
@@ -572,15 +575,19 @@ export default function MyPlayerCardScreen() {
             </View>
           ) : null}
 
-          {/* Game Preferences Section */}
-          {(roleAnalysis.totalWithRoles > 0 || terrainAnalysis.totalWithTerrain > 0 || partnerAnalysis.totalWithPartners > 0) ? (
+        </Animated.View>
+        </View>
+
+        <View style={isTablet ? styles.tabletRightCol : undefined}>
+        {/* Game Preferences Section */}
+        {(roleAnalysis.totalWithRoles > 0 || terrainAnalysis.totalWithTerrain > 0 || partnerAnalysis.totalWithPartners > 0) ? (
+          <Animated.View entering={FadeInDown.duration(400).delay(25)} style={[styles.preferencesCard, isTablet && styles.preferencesCardTablet]}>
             <View style={styles.profileSectionDivider}>
               <MaterialIcons name="psychology" size={15} color={theme.accent} />
               <Text style={styles.profileSectionLabel}>{language === 'fr' ? 'Préférences de jeu' : 'Game Preferences'}</Text>
               <View style={styles.profileSectionLine} />
             </View>
-          ) : null}
-          {roleAnalysis.totalWithRoles > 0 && (
+          {roleAnalysis.totalWithRoles > 0 ? (
             <View style={styles.preferredRoleCard}>
               <Text style={styles.preferredRoleTitle}>{t('player', 'preferredRole')}</Text>
               <View style={styles.preferredRoleContent}>
@@ -615,10 +622,10 @@ export default function MyPlayerCardScreen() {
                 })}
               </View>
             </View>
-          )}
+          ) : null}
 
           {/* Preferred Terrain from Match History */}
-          {terrainAnalysis.totalWithTerrain > 0 && (
+          {terrainAnalysis.totalWithTerrain > 0 ? (
             <View style={styles.preferredRoleCard}>
               <Text style={styles.preferredRoleTitle}>{t('player', 'preferredTerrain')}</Text>
               <View style={styles.preferredRoleContent}>
@@ -653,7 +660,7 @@ export default function MyPlayerCardScreen() {
                 })}
               </View>
             </View>
-          )}
+          ) : null}
 
           {/* Preferred Partner from Match History */}
           {partnerAnalysis.totalWithPartners > 0 && (() => {
@@ -706,7 +713,8 @@ export default function MyPlayerCardScreen() {
               </View>
             );
           })()}
-        </Animated.View>
+          </Animated.View>
+        ) : null}
 
         {/* Federation Card Section */}
         <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
@@ -821,6 +829,9 @@ export default function MyPlayerCardScreen() {
             </View>
           </View>
         </Animated.View>
+
+        </View>
+        </View>
 
         {/* Match Statistics */}
         <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
@@ -1126,6 +1137,33 @@ const styles = StyleSheet.create({
     alignSelf: 'center' as const,
     width: '100%',
     paddingHorizontal: 24,
+  },
+  // Tablet layout
+  tabletProfileRow: {
+    flexDirection: 'row' as const,
+    gap: 16,
+    marginBottom: 16,
+  },
+  tabletLeftCol: {
+    flex: 1,
+  },
+  tabletRightCol: {
+    flex: 1,
+  },
+  preferencesCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 24,
+    alignItems: 'center' as const,
+    marginBottom: 16,
+    ...theme.shadows.card,
+  },
+  preferencesCardTablet: {
+    padding: 20,
+    marginBottom: 12,
+  },
+  playerCardTablet: {
+    padding: 28,
   },
   // Player Card
   playerCard: {
