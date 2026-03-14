@@ -620,7 +620,7 @@ export const translations = {
     publicAccessLabel: { fr: 'Accès public', en: 'Public access' },
     privateAccessLabel: { fr: 'Réservé membres', en: 'Members only' },
     publicAccessShort: { fr: 'Accès public', en: 'Public' },
-    privateAccessShort: { fr: 'Membres', en: 'Members' },
+    privateAccessShort: { fr: 'Privé', en: 'Private' },
     indoorShort: { fr: 'Intérieur', en: 'Indoor' },
     outdoorShort: { fr: 'Extérieur', en: 'Outdoor' },
     litLabel: { fr: 'Éclairé', en: 'Lit' },

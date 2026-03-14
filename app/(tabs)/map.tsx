@@ -32,7 +32,6 @@ import {
 import AdBanner from '@/components/ui/AdBanner';
 
 type MarkerType = 'all' | 'terrains' | 'clubs' | 'tournaments' | 'players';
-type TerrainAccessFilter = 'all' | 'public' | 'private';
 type MapMode = 'all' | 'public';
 
 let MapViewComponent: React.ComponentType<any> | null = null;
@@ -228,7 +227,8 @@ export default function MapScreen() {
   const [mapMode, setMapMode] = useState<MapMode>('all');
   const [showManageModal, setShowManageModal] = useState(false);
   const [currentRegion, setCurrentRegion] = useState(config.map.defaultRegion);
-  const [terrainAccessFilter, setTerrainAccessFilter] = useState<TerrainAccessFilter>('all');
+  const [showPublicAccess, setShowPublicAccess] = useState(true);
+  const [showPrivateAccess, setShowPrivateAccess] = useState(true);
   const mapRef = useRef<any>(null);
 
   // Public items state
@@ -303,8 +303,14 @@ export default function MapScreen() {
 
     if (filter === 'all' || filter === 'terrains') {
       const filterAccess = (items: any[]) => {
-        if (terrainAccessFilter === 'all') return items;
-        return items.filter((it: any) => terrainAccessFilter === 'public' ? (it.publicAccess !== false && it.public_access !== false) : (it.publicAccess === false || it.public_access === false));
+        if (showPublicAccess && showPrivateAccess) return items;
+        if (!showPublicAccess && !showPrivateAccess) return items;
+        return items.filter((it: any) => {
+          const isPub = it.publicAccess !== false && it.public_access !== false;
+          if (showPublicAccess && isPub) return true;
+          if (showPrivateAccess && !isPub) return true;
+          return false;
+        });
       };
       if (showOwn) addItems(filterAccess(ownData.terrains), 'terrains', false);
       if (showPublic) addItems(filterAccess(pubData.terrains), 'terrains', true);
@@ -330,7 +336,7 @@ export default function MapScreen() {
       seen.add(key);
       return true;
     });
-  }, [ownData, pubData, filter, search, mapMode, terrainAccessFilter]);
+  }, [ownData, pubData, filter, search, mapMode, showPublicAccess, showPrivateAccess]);
 
   // Compute clusters
   const clusters = useMemo(() => {
@@ -585,11 +591,67 @@ export default function MapScreen() {
     <View style={styles.container}>
       {Platform.OS === 'web' ? renderList() : renderMap()}
 
-      {/* Header */}
-      <SafeAreaView edges={['top']} style={styles.header}>
-        {/* Title bar */}
-        <Animated.View entering={FadeInDown.duration(300)} style={styles.titleBar}>
+      {/* Bottom Panel */}
+      <View style={styles.bottomPanel}>
+        {/* Search bar (expandable) */}
+        {showSearch ? (
+          <Animated.View entering={FadeIn.duration(200)} style={styles.searchRowOuter}>
+            <View style={styles.searchBar}>
+              <MaterialIcons name="search" size={18} color={theme.textMuted} />
+              <TextInput style={styles.searchInput} placeholder={t('map', 'search')} placeholderTextColor={theme.textMuted} value={search} onChangeText={setSearch} autoFocus />
+              {search.length > 0 ? (
+                <Pressable onPress={() => setSearch('')} hitSlop={8}><MaterialIcons name="close" size={16} color={theme.textMuted} /></Pressable>
+              ) : null}
+            </View>
+            {search.trim() ? <Text style={styles.searchCount}>{counts.total} {counts.total !== 1 ? t('map', 'results') : t('map', 'result')}</Text> : null}
+          </Animated.View>
+        ) : null}
+
+        {/* Category filters + access checkboxes */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+          <Pressable style={[styles.chip, filter === 'all' && styles.chipActive]} onPress={() => handleFilterPress('all')}>
+            <MaterialIcons name="layers" size={14} color={filter === 'all' ? '#FFF' : theme.textSecondary} />
+            <Text style={[styles.chipText, filter === 'all' && styles.chipTextActive]}>{t('map', 'all')}</Text>
+          </Pressable>
+          {(Object.keys(MARKER_CONFIG) as (keyof typeof MARKER_CONFIG)[]).map(k => (
+            <Pressable key={k} style={[styles.chip, filter === k && { backgroundColor: MARKER_CONFIG[k].color }]} onPress={() => handleFilterPress(k)}>
+              <MaterialIcons name={MARKER_CONFIG[k].icon as any} size={14} color={filter === k ? '#FFF' : theme.textSecondary} />
+              <Text style={[styles.chipText, filter === k && styles.chipTextActive]}>{MARKER_CONFIG[k].label}</Text>
+            </Pressable>
+          ))}
+          {/* Terrain access checkboxes */}
+          {(filter === 'all' || filter === 'terrains') ? (
+            <>
+              <View style={styles.chipSeparator} />
+              <Pressable style={styles.checkboxItem} onPress={() => { Haptics.selectionAsync(); setShowPublicAccess(v => !v); }}>
+                <MaterialIcons name={showPublicAccess ? 'check-box' : 'check-box-outline-blank'} size={18} color={showPublicAccess ? theme.success : theme.textMuted} />
+                <Text style={[styles.checkboxLabel, showPublicAccess && { color: theme.success }]}>{t('directory', 'publicAccessShort')}</Text>
+              </Pressable>
+              <Pressable style={styles.checkboxItem} onPress={() => { Haptics.selectionAsync(); setShowPrivateAccess(v => !v); }}>
+                <MaterialIcons name={showPrivateAccess ? 'check-box' : 'check-box-outline-blank'} size={18} color={showPrivateAccess ? theme.error : theme.textMuted} />
+                <Text style={[styles.checkboxLabel, showPrivateAccess && { color: theme.error }]}>{t('directory', 'privateAccessShort')}</Text>
+              </Pressable>
+            </>
+          ) : null}
+        </ScrollView>
+
+        {/* Action bar with inline stats */}
+        <View style={styles.actionBar}>
           <Text style={styles.cardTitle}>{t('map', 'map')}</Text>
+          <View style={styles.inlineStats}>
+            {(Object.keys(MARKER_CONFIG) as (keyof typeof MARKER_CONFIG)[]).map(k => (
+              <Pressable key={k} style={styles.miniStat} onPress={() => handleFilterPress(k)}>
+                <MaterialIcons name={MARKER_CONFIG[k].icon as any} size={12} color={MARKER_CONFIG[k].color} />
+                <Text style={[styles.miniStatValue, { color: MARKER_CONFIG[k].color }]}>{counts[k]}</Text>
+              </Pressable>
+            ))}
+            {counts.publicTotal > 0 ? (
+              <View style={styles.miniStat}>
+                <MaterialIcons name="public" size={12} color={theme.success} />
+                <Text style={[styles.miniStatValue, { color: theme.success }]}>{counts.publicTotal}</Text>
+              </View>
+            ) : null}
+          </View>
           <View style={styles.cardActions}>
             <Pressable
               style={styles.manageBtn}
@@ -612,86 +674,12 @@ export default function MapScreen() {
               <MaterialIcons name={showSearch ? 'close' : 'search'} size={20} color={showSearch ? '#FFF' : theme.textSecondary} />
             </Pressable>
           </View>
-        </Animated.View>
-
-        {/* Search bar (collapsible) */}
-        {showSearch ? (
-          <Animated.View entering={FadeIn.duration(200)} style={styles.searchRowOuter}>
-            <View style={styles.searchBar}>
-              <MaterialIcons name="search" size={18} color={theme.textMuted} />
-              <TextInput style={styles.searchInput} placeholder={t('map', 'search')} placeholderTextColor={theme.textMuted} value={search} onChangeText={setSearch} autoFocus />
-              {search.length > 0 ? (
-                <Pressable onPress={() => setSearch('')} hitSlop={8}><MaterialIcons name="close" size={16} color={theme.textMuted} /></Pressable>
-              ) : null}
-            </View>
-            {search.trim() ? <Text style={styles.searchCount}>{counts.total} {counts.total !== 1 ? t('map', 'results') : t('map', 'result')}</Text> : null}
-          </Animated.View>
-        ) : null}
-
-        {/* Stats counters card */}
-        <Animated.View entering={FadeInDown.duration(300).delay(30)} style={styles.statsCard}>
-          <View style={styles.statsRow}>
-            {(Object.keys(MARKER_CONFIG) as (keyof typeof MARKER_CONFIG)[]).map(k => {
-              const isActive = filter === 'all' || filter === k;
-              return (
-                <Pressable key={k} style={[styles.statItem, !isActive && styles.statItemDim]} onPress={() => handleFilterPress(k)}>
-                  <View style={[styles.statIconWrap, { backgroundColor: MARKER_CONFIG[k].color + (isActive ? '20' : '08') }]}>
-                    <MaterialIcons name={MARKER_CONFIG[k].icon as any} size={16} color={MARKER_CONFIG[k].color} />
-                  </View>
-                  <Text style={[styles.statValue, { color: isActive ? theme.textPrimary : theme.textMuted }]}>{counts[k]}</Text>
-                  <Text style={styles.statLabel}>{MARKER_CONFIG[k].label.toLowerCase()}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          {counts.publicTotal > 0 ? (
-            <View style={styles.publicCountRow}>
-              <MaterialIcons name="public" size={11} color={theme.success} />
-              <Text style={styles.publicCountText}>{counts.publicTotal} {t('map', 'publicCount')}</Text>
-            </View>
-          ) : null}
-        </Animated.View>
-
-        {/* Category filters */}
-        <Animated.View entering={FadeInDown.duration(300).delay(60)}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
-            <Pressable style={[styles.chip, filter === 'all' && styles.chipActive]} onPress={() => handleFilterPress('all')}>
-              <MaterialIcons name="layers" size={14} color={filter === 'all' ? '#FFF' : theme.textSecondary} />
-              <Text style={[styles.chipText, filter === 'all' && styles.chipTextActive]}>{t('map', 'all')}</Text>
-            </Pressable>
-            {(Object.keys(MARKER_CONFIG) as (keyof typeof MARKER_CONFIG)[]).map(k => (
-              <Pressable key={k} style={[styles.chip, filter === k && { backgroundColor: MARKER_CONFIG[k].color }]} onPress={() => handleFilterPress(k)}>
-                <MaterialIcons name={MARKER_CONFIG[k].icon as any} size={14} color={filter === k ? '#FFF' : theme.textSecondary} />
-                <Text style={[styles.chipText, filter === k && styles.chipTextActive]}>{MARKER_CONFIG[k].label}</Text>
-              </Pressable>
-            ))}
-            {/* Terrain access sub-filter */}
-            {(filter === 'all' || filter === 'terrains') ? (
-              <>
-                <View style={styles.chipSeparator} />
-                <Pressable
-                  style={[styles.chip, terrainAccessFilter === 'public' && { backgroundColor: theme.success }]}
-                  onPress={() => { Haptics.selectionAsync(); setTerrainAccessFilter(terrainAccessFilter === 'public' ? 'all' : 'public'); }}
-                >
-                  <MaterialIcons name="public" size={14} color={terrainAccessFilter === 'public' ? '#FFF' : theme.textSecondary} />
-                  <Text style={[styles.chipText, terrainAccessFilter === 'public' && styles.chipTextActive]}>{t('directory', 'publicAccessShort')}</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.chip, terrainAccessFilter === 'private' && { backgroundColor: theme.error }]}
-                  onPress={() => { Haptics.selectionAsync(); setTerrainAccessFilter(terrainAccessFilter === 'private' ? 'all' : 'private'); }}
-                >
-                  <MaterialIcons name="lock" size={14} color={terrainAccessFilter === 'private' ? '#FFF' : theme.textSecondary} />
-                  <Text style={[styles.chipText, terrainAccessFilter === 'private' && styles.chipTextActive]}>{t('directory', 'privateAccessShort')}</Text>
-                </Pressable>
-              </>
-            ) : null}
-          </ScrollView>
-        </Animated.View>
-      </SafeAreaView>
+        </View>
+      </View>
 
       {/* Selected Card */}
       {selected ? (
-        <Animated.View entering={FadeInUp.duration(250)} style={[styles.selectedCard, { bottom: insets.bottom + 100 }]}>
+        <Animated.View entering={FadeInUp.duration(250)} style={[styles.selectedCard, { bottom: 190 }]}>
           <Pressable style={styles.selectedInner} onPress={selected._isPublic ? undefined : handleNavigate}>
             <View style={[styles.selectedIcon, { backgroundColor: MARKER_CONFIG[selected.itemType as keyof typeof MARKER_CONFIG]?.color }]}>
               <MaterialIcons
@@ -795,57 +783,51 @@ export default function MapScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.backgroundSecondary },
-  header: { position: 'absolute', top: 0, left: 0, right: 0 },
-  titleBar: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginHorizontal: 16, marginTop: 4, paddingVertical: 6,
+  bottomPanel: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingBottom: 8, ...theme.shadows.cardElevated,
   },
-  cardTitle: { fontSize: 22, fontWeight: '800', color: theme.textPrimary },
+  actionBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 10,
+  },
+  cardTitle: { fontSize: 20, fontWeight: '800', color: theme.textPrimary },
+  inlineStats: { flexDirection: 'row', gap: 6, flex: 1, justifyContent: 'center', marginHorizontal: 8 },
+  miniStat: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: theme.backgroundSecondary, paddingHorizontal: 6, paddingVertical: 3,
+    borderRadius: theme.borderRadius.full,
+  },
+  miniStatValue: { fontSize: 12, fontWeight: '700' },
   cardActions: { flexDirection: 'row', gap: 6 },
   manageBtn: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.95)',
-    alignItems: 'center', justifyContent: 'center', ...theme.shadows.card,
+    width: 36, height: 36, borderRadius: 18, backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center', justifyContent: 'center',
   },
   searchBtn: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.95)',
-    alignItems: 'center', justifyContent: 'center', ...theme.shadows.card,
+    width: 36, height: 36, borderRadius: 18, backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center', justifyContent: 'center',
   },
   searchBtnActive: { backgroundColor: theme.primary },
   searchRowOuter: {
-    marginHorizontal: 16, marginBottom: 6,
+    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4,
   },
   searchBar: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.97)',
+    flexDirection: 'row', alignItems: 'center', backgroundColor: theme.backgroundSecondary,
     borderRadius: theme.borderRadius.md, paddingHorizontal: 12, height: 42, gap: 8,
-    ...theme.shadows.card,
   },
   searchInput: { flex: 1, fontSize: 14, color: theme.textPrimary },
   searchCount: { fontSize: 11, color: theme.textSecondary, marginTop: 6, textAlign: 'center' },
-  statsCard: {
-    backgroundColor: 'rgba(255,255,255,0.97)', marginHorizontal: 16, marginTop: 4,
-    borderRadius: theme.borderRadius.lg, paddingVertical: 12, paddingHorizontal: 8,
-    ...theme.shadows.card,
-  },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-around' },
-  statItem: { alignItems: 'center', flex: 1, gap: 2 },
-  statItemDim: { opacity: 0.3 },
-  statIconWrap: {
-    width: 32, height: 32, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 2,
-  },
-  statValue: { fontSize: 17, fontWeight: '800', color: theme.textPrimary, includeFontPadding: false },
-  statLabel: { fontSize: 10, color: theme.textSecondary, fontWeight: '500' },
-  publicCountRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 4, marginTop: 8, paddingTop: 7, borderTopWidth: 1, borderTopColor: theme.border + '60',
-  },
-  publicCountText: { fontSize: 11, color: theme.success, fontWeight: '600' },
-  filters: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, gap: 6 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: theme.borderRadius.full, backgroundColor: 'rgba(255,255,255,0.95)', ...theme.shadows.card },
+  filters: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 6, gap: 6 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: theme.borderRadius.full, backgroundColor: theme.backgroundSecondary },
   chipActive: { backgroundColor: theme.primary },
   chipText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
   chipTextActive: { color: '#FFF' },
   chipSeparator: { width: 1, height: 20, backgroundColor: theme.border, marginHorizontal: 2 },
+  checkboxItem: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 6 },
+  checkboxLabel: { fontSize: 12, fontWeight: '600', color: theme.textMuted },
   // Single markers
   marker: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF', ...theme.shadows.card },
   markerPublic: { borderColor: theme.success, borderWidth: 3 },
@@ -889,7 +871,7 @@ const styles = StyleSheet.create({
   },
   publicBadgeSelectedText: { fontSize: 9, fontWeight: '600', color: theme.success },
   // List fallback
-  listContainer: { flex: 1, paddingTop: 200 },
+  listContainer: { flex: 1, paddingBottom: 200 },
   listHeader: { alignItems: 'center', paddingHorizontal: 24, marginBottom: 16 },
   listTitle: { fontSize: 18, fontWeight: '700', color: theme.textPrimary, marginTop: 8 },
   listSubtitle: { fontSize: 13, color: theme.textSecondary },
