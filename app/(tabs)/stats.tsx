@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -21,7 +21,7 @@ import { router } from 'expo-router';
 import { useLanguage } from '@/hooks/useLanguage';
 import AdBanner from '@/components/ui/AdBanner';
 
-const { width: screenWidth } = Dimensions.get('window');
+const defaultScreenWidth = Dimensions.get('window').width;
 
 // ============================================
 // TYPES & CONSTANTS
@@ -286,6 +286,14 @@ export default function StatsScreen() {
   const PROGRESSION_FILTERS = useMemo(() => PROGRESSION_FILTER_KEYS.map(f => ({ ...f, label: t('stats', f.key) })), [language]);
   const CATEGORY_TABS = useMemo(() => CATEGORY_TAB_KEYS.map(f => ({ ...f, label: t('stats', f.key) })), [language]);
   
+  // Responsive dimensions for tablet
+  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
+  useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }) => setScreenWidth(window.width));
+    return () => sub?.remove();
+  }, []);
+  const isTablet = screenWidth >= 600;
+
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
   const [category, setCategory] = useState<StatsCategory>('performance');
   const [showProgressionModal, setShowProgressionModal] = useState(false);
@@ -1272,7 +1280,7 @@ export default function StatsScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }, isTablet && styles.scrollContentTablet]}
         showsVerticalScrollIndicator={false}
       >
         {!hasData ? (
@@ -1360,9 +1368,9 @@ export default function StatsScreen() {
                   </>
                 ) : (
                 <>
-                <Animated.View entering={FadeInDown.duration(400)} style={styles.heroCard}>
+                <Animated.View entering={FadeInDown.duration(400)} style={[styles.heroCard, isTablet && styles.heroCardTablet]}>
                   <View style={styles.heroContent}>
-                    <ProgressRing value={performanceStats.winRate} size={110} strokeWidth={9} color={theme.primary} label={t('stats', 'victoriesLabel')} />
+                    <ProgressRing value={performanceStats.winRate} size={isTablet ? 130 : 110} strokeWidth={isTablet ? 10 : 9} color={theme.primary} label={t('stats', 'victoriesLabel')} />
                     <View style={styles.heroStats}>
                       <View style={styles.heroStatItem}>
                         <Text style={[styles.heroStatValue, { color: theme.success }]}>{performanceStats.wins}</Text>
@@ -1380,6 +1388,37 @@ export default function StatsScreen() {
                   </View>
                 </Animated.View>
 
+                {/* Tablet 2-column row for games played + win rate by mode */}
+                {isTablet ? (
+                  <View style={styles.tabletRow}>
+                    <Animated.View entering={FadeInDown.duration(400).delay(50)} style={[styles.section, styles.tabletHalf]}>
+                      <SectionHeader title={t('stats', 'gamesPlayedSection')} icon="sports" color={theme.primary} />
+                      <View style={styles.card}>
+                        <View style={styles.statsGrid3}>
+                          <View style={styles.gridItem}><Text style={styles.gridValue}>{performanceStats.total}</Text><Text style={styles.gridLabel}>{t('stats', 'totalLabel')}</Text></View>
+                          <View style={styles.gridItem}><Text style={styles.gridValue}>{performanceStats.trainingCount}</Text><Text style={styles.gridLabel}>{t('stats', 'training')}</Text></View>
+                          <View style={styles.gridItem}><Text style={styles.gridValue}>{performanceStats.tournamentCount}</Text><Text style={styles.gridLabel}>{t('stats', 'tournamentLabel')}</Text></View>
+                        </View>
+                      </View>
+                    </Animated.View>
+                    <Animated.View entering={FadeInDown.duration(400).delay(100)} style={[styles.section, styles.tabletHalf]}>
+                      <SectionHeader title={t('stats', 'winRateByModeSection')} icon="emoji-events" color={theme.carreauColor} />
+                      <View style={styles.card}>
+                        <View style={styles.modeWinRates}>
+                          <View style={styles.modeWinRateItem}>
+                            <Text style={styles.modeLabel}>{t('stats', 'training')}</Text>
+                            <ProgressBar value={performanceStats.trainingWinRate} color={theme.primary} />
+                          </View>
+                          <View style={styles.modeWinRateItem}>
+                            <Text style={styles.modeLabel}>{t('stats', 'tournamentLabel')}</Text>
+                            <ProgressBar value={performanceStats.tournamentWinRate} color={theme.carreauColor} />
+                          </View>
+                        </View>
+                      </View>
+                    </Animated.View>
+                  </View>
+                ) : (
+                <>
                 <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
                   <SectionHeader title={t('stats', 'gamesPlayedSection')} icon="sports" color={theme.primary} />
                   <View style={styles.card}>
@@ -1406,10 +1445,62 @@ export default function StatsScreen() {
                     </View>
                   </View>
                 </Animated.View>
+                </>
+                )}
 
                 {/* Ad Banner */}
                 <AdBanner position="inline" />
 
+                {/* Tablet 2-column row for format + score */}
+                {isTablet ? (
+                  <View style={styles.tabletRow}>
+                    <Animated.View entering={FadeInDown.duration(400).delay(150)} style={[styles.section, styles.tabletHalf]}>
+                      <SectionHeader title={t('stats', 'winRateByFormatSection')} icon="group" color={theme.accent} />
+                      <View style={styles.card}>
+                        {Object.entries(performanceStats.byFormat).map(([format, data]) => {
+                          const rate = data.total > 0 ? Math.round((data.wins / data.total) * 100) : 0;
+                          return (
+                            <View key={format} style={styles.formatRow}>
+                              <View style={styles.formatInfo}>
+                                <Text style={styles.formatName}>{t('formats', format)}</Text>
+                                <Text style={styles.formatRecord}>{data.wins}V - {data.total - data.wins}D ({data.total})</Text>
+                              </View>
+                              <View style={styles.formatBarContainer}>
+                                <ProgressBar value={rate} color={format === 'Tête-à-tête' ? theme.tirColor : format === 'Doublette' ? theme.primary : theme.accent} />
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </Animated.View>
+                    <Animated.View entering={FadeInDown.duration(400).delay(200)} style={[styles.section, styles.tabletHalf]}>
+                      <SectionHeader title={t('stats', 'avgScoreSection')} icon="scoreboard" color={theme.success} />
+                      <View style={styles.card}>
+                        <View style={styles.scoreComparison}>
+                          <View style={styles.scoreItem}>
+                            <MaterialIcons name="add-circle" size={28} color={theme.success} />
+                            <Text style={[styles.scoreValue, { color: theme.success }]}>{performanceStats.avgScoreFor}</Text>
+                            <Text style={styles.scoreLabel}>{t('stats', 'scoredLabel')}</Text>
+                          </View>
+                          <View style={styles.scoreDiff}>
+                            <View style={[styles.scoreDiffBadge, { backgroundColor: performanceStats.pointDiff >= 0 ? theme.success + '15' : theme.error + '15' }]}>
+                              <Text style={[styles.scoreDiffText, { color: performanceStats.pointDiff >= 0 ? theme.success : theme.error }]}>
+                                {performanceStats.avgPointDiff > '0' ? '+' : ''}{performanceStats.avgPointDiff}
+                              </Text>
+                              <Text style={styles.scoreDiffLabel}>{t('stats', 'avgPerGameLabel')}</Text>
+                            </View>
+                          </View>
+                          <View style={styles.scoreItem}>
+                            <MaterialIcons name="remove-circle" size={28} color={theme.error} />
+                            <Text style={[styles.scoreValue, { color: theme.error }]}>{performanceStats.avgScoreAgainst}</Text>
+                            <Text style={styles.scoreLabel}>{t('stats', 'concededLabel')}</Text>
+                          </View>
+                        </View>
+                      </View>
+                    </Animated.View>
+                  </View>
+                ) : (
+                <>
                 <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
                   <SectionHeader title={t('stats', 'winRateByFormatSection')} icon="group" color={theme.accent} />
                   <View style={styles.card}>
@@ -1455,6 +1546,8 @@ export default function StatsScreen() {
                     </View>
                   </View>
                 </Animated.View>
+                </>
+                )}
 
                 {performanceStats.matchesWithDuration > 0 && (
                   <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
@@ -1525,9 +1618,9 @@ export default function StatsScreen() {
             {/* TIR */}
             {category === 'tir' && (
               <>
-                <Animated.View entering={FadeInDown.duration(400)} style={styles.heroCard}>
+                <Animated.View entering={FadeInDown.duration(400)} style={[styles.heroCard, isTablet && styles.heroCardTablet]}>
                   <View style={styles.heroContent}>
-                    <ProgressRing value={tirStats.successRate} size={110} strokeWidth={9} color={theme.tirColor} label={t('stats', 'successLabel')} />
+                    <ProgressRing value={tirStats.successRate} size={isTablet ? 130 : 110} strokeWidth={isTablet ? 10 : 9} color={theme.tirColor} label={t('stats', 'successLabel')} />
                     <View style={styles.heroStats}>
                       <View style={styles.heroStatItem}>
                         <Text style={[styles.heroStatValue, { color: theme.success }]}>{tirStats.tirsSuccess}</Text>
@@ -1570,7 +1663,7 @@ export default function StatsScreen() {
                 <AdBanner position="inline" />
 
                 {tirStats.hasDetailedData && (
-                  <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
+                  <Animated.View entering={FadeInDown.duration(400).delay(150)} style={[styles.section, isTablet && styles.sectionTabletWide]}>
                     <SectionHeader title={t('stats', 'shotTypesSection')} subtitle={`${tirStats.totalDetailedTirs} ${t('stats', 'analyzedLabel')}`} icon="category" color={theme.tirColor} />
                     <View style={styles.card}>
                       <StatRow label={t('stats', 'tirTenduLabel')} value={`${tirStats.tirAuFer.success}/${tirStats.tirAuFer.total}`} subValue={tirStats.tirAuFer.total > 0 ? `${Math.round((tirStats.tirAuFer.success / tirStats.tirAuFer.total) * 100)}%` : ''} icon="gps-fixed" color={theme.tirColor} />
@@ -1735,9 +1828,9 @@ export default function StatsScreen() {
                   </Animated.View>
                 ) : (
                 <>
-                <Animated.View entering={FadeInDown.duration(400)} style={styles.heroCard}>
+                <Animated.View entering={FadeInDown.duration(400)} style={[styles.heroCard, isTablet && styles.heroCardTablet]}>
                   <View style={styles.heroContent}>
-                    <ProgressRing value={pointStats.successRate} size={110} strokeWidth={9} color={theme.pointColor} label={t('stats', 'successLabel')} />
+                    <ProgressRing value={pointStats.successRate} size={isTablet ? 130 : 110} strokeWidth={isTablet ? 10 : 9} color={theme.pointColor} label={t('stats', 'successLabel')} />
                     <View style={styles.heroStats}>
                       <View style={styles.heroStatItem}>
                         <Text style={[styles.heroStatValue, { color: theme.success }]}>{pointStats.pointsSuccess}</Text>
@@ -1916,7 +2009,7 @@ export default function StatsScreen() {
             {category === 'errors' && (
               <>
                 {/* Hero Errors */}
-                <Animated.View entering={FadeInDown.duration(400)} style={[styles.heroCard, { borderLeftWidth: 4, borderLeftColor: theme.error }]}>
+                <Animated.View entering={FadeInDown.duration(400)} style={[styles.heroCard, { borderLeftWidth: 4, borderLeftColor: theme.error }, isTablet && styles.heroCardTablet]}>
                   <View style={styles.errorHeroContent}>
                     <View style={styles.errorHeroMain}>
                       <MaterialIcons name="error-outline" size={48} color={theme.error} />
@@ -1950,7 +2043,7 @@ export default function StatsScreen() {
                 <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
                   <SectionHeader title={t('stats', 'overallErrorRateSection')} icon="analytics" color={theme.error} />
                   <View style={styles.card}>
-                    <View style={styles.errorRatesGrid}>
+                    <View style={[styles.errorRatesGrid, isTablet && styles.errorRatesGridTablet]}>
                       <View style={[styles.errorRateCard, { borderColor: theme.tirColor }]}>
                         <MaterialIcons name="gps-fixed" size={24} color={theme.tirColor} />
                         <Text style={[styles.errorRateValue, { color: theme.tirColor }]}>{errorStats.tirErrorRate}%</Text>
@@ -2929,6 +3022,12 @@ const styles = StyleSheet.create({
   categoryTabTextActive: { fontWeight: '700' },
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 20 },
+  scrollContentTablet: { maxWidth: 960, alignSelf: 'center' as const, width: '100%', paddingHorizontal: 24 },
+  tabletRow: { flexDirection: 'row' as const, gap: 16, marginBottom: 0 },
+  tabletHalf: { flex: 1 },
+  heroCardTablet: { padding: 28 },
+  sectionTabletWide: { },
+  errorRatesGridTablet: { gap: 20 },
   section: { marginBottom: 16 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 10 },
   sectionIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
