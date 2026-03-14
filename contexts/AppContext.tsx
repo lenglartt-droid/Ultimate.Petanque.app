@@ -68,6 +68,12 @@ interface AppContextType {
   addChallenge: (challenge: Omit<Challenge, 'id'>) => Promise<string | null>;
   addTerrain: (terrain: Omit<Terrain, 'id'>) => Promise<void>;
   
+  // Boules Sets CRUD
+  addBoulesSet: (set: Omit<BoulesSet, 'id'>) => Promise<void>;
+  updateBoulesSet: (id: string, updates: Partial<BoulesSet>) => Promise<void>;
+  deleteBoulesSet: (id: string) => Promise<void>;
+  setPrimaryBoulesSet: (id: string) => Promise<void>;
+  
   // Update Actions
   updateMatch: (id: string, updates: Partial<Match>) => Promise<void>;
   updatePlayer: (id: string, updates: Partial<Player>) => Promise<void>;
@@ -84,6 +90,7 @@ interface AppContextType {
   deleteTerrain: (id: string) => Promise<void>;
   deleteClub: (id: string) => Promise<void>;
   deleteTournament: (id: string) => Promise<void>;
+  deleteBoulesSet: (id: string) => Promise<void>;
   
   // Favorites
   favoriteTerrainIds: string[];
@@ -128,6 +135,11 @@ interface AppContextType {
 
   // Retry failed operations
   retryFailedOps: (opIds?: string[]) => Promise<void>;
+  
+  // Boules Sets CRUD
+  addBoulesSet: (set: Omit<BoulesSet, 'id'>) => Promise<void>;
+  updateBoulesSet: (id: string, updates: Partial<BoulesSet>) => Promise<void>;
+  setPrimaryBoulesSet: (id: string) => Promise<void>;
 
   // Refresh
   refreshData: () => Promise<void>;
@@ -1823,6 +1835,107 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Boules Sets CRUD
+  const addBoulesSet = async (set: Omit<BoulesSet, 'id'>) => {
+    if (!user?.id) return;
+    try {
+      const { data, error } = await supabase.from('boules_sets').insert({
+        user_id: user.id,
+        name: set.name,
+        brand: set.brand || null,
+        diameter: set.diameter || null,
+        weight: set.weight || null,
+        serial_number: set.serialNumber || null,
+        hardness: set.hardness || null,
+        is_primary: set.isPrimary || false,
+        notes: set.notes || null,
+      }).select().single();
+      if (error) throw error;
+      if (data) {
+        const newSet: BoulesSet = {
+          id: data.id, name: data.name, brand: data.brand,
+          diameter: data.diameter ? parseFloat(data.diameter) : undefined,
+          weight: data.weight || undefined, serialNumber: data.serial_number,
+          hardness: data.hardness, isPrimary: data.is_primary, notes: data.notes,
+        };
+        // If this is primary, unset others
+        if (newSet.isPrimary) {
+          setBoulesSets(prev => [...prev.map(s => ({ ...s, isPrimary: false })), newSet]);
+          // Sync primary boules to selfPlayer
+          syncPrimaryBoulesToPlayer(newSet);
+        } else {
+          setBoulesSets(prev => [...prev, newSet]);
+        }
+      }
+    } catch (error) {
+      console.log('Error adding boules set:', error);
+    }
+  };
+
+  const updateBoulesSet = async (id: string, updates: Partial<BoulesSet>) => {
+    if (!user?.id) return;
+    setBoulesSets(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+    try {
+      const dbUpdates: any = {};
+      if (updates.name !== undefined) dbUpdates.name = updates.name;
+      if (updates.brand !== undefined) dbUpdates.brand = updates.brand || null;
+      if (updates.diameter !== undefined) dbUpdates.diameter = updates.diameter || null;
+      if (updates.weight !== undefined) dbUpdates.weight = updates.weight || null;
+      if (updates.serialNumber !== undefined) dbUpdates.serial_number = updates.serialNumber || null;
+      if (updates.hardness !== undefined) dbUpdates.hardness = updates.hardness || null;
+      if (updates.isPrimary !== undefined) dbUpdates.is_primary = updates.isPrimary;
+      if (updates.notes !== undefined) dbUpdates.notes = updates.notes || null;
+      dbUpdates.updated_at = new Date().toISOString();
+      await supabase.from('boules_sets').update(dbUpdates).eq('id', id);
+      // If updated set is primary, sync to player
+      const updatedSet = boulesSets.find(s => s.id === id);
+      if (updatedSet && (updatedSet.isPrimary || updates.isPrimary)) {
+        syncPrimaryBoulesToPlayer({ ...updatedSet, ...updates });
+      }
+    } catch (error) {
+      console.log('Error updating boules set:', error);
+    }
+  };
+
+  const deleteBoulesSet = async (id: string) => {
+    setBoulesSets(prev => prev.filter(s => s.id !== id));
+    if (!user?.id) return;
+    try {
+      await supabase.from('boules_sets').delete().eq('id', id);
+    } catch (error) {
+      console.log('Error deleting boules set:', error);
+    }
+  };
+
+  const setPrimaryBoulesSet = async (id: string) => {
+    if (!user?.id) return;
+    // Unset all, set the chosen one
+    setBoulesSets(prev => prev.map(s => ({ ...s, isPrimary: s.id === id })));
+    try {
+      // Unset all primary
+      await supabase.from('boules_sets').update({ is_primary: false, updated_at: new Date().toISOString() }).eq('user_id', user.id);
+      // Set new primary
+      await supabase.from('boules_sets').update({ is_primary: true, updated_at: new Date().toISOString() }).eq('id', id);
+      // Sync to player profile
+      const primarySet = boulesSets.find(s => s.id === id);
+      if (primarySet) syncPrimaryBoulesToPlayer(primarySet);
+    } catch (error) {
+      console.log('Error setting primary boules set:', error);
+    }
+  };
+
+  // Sync primary boules set data to selfPlayer.boules
+  const syncPrimaryBoulesToPlayer = useCallback((set: Partial<BoulesSet>) => {
+    if (!user?.id) return;
+    const boulesData = {
+      name: set.name || undefined,
+      diameter: set.diameter || undefined,
+      weight: set.weight || undefined,
+      serialNumber: set.serialNumber || undefined,
+    };
+    updatePlayer(user.id, { boules: boulesData });
+  }, [user?.id, updatePlayer]);
+
   // Favorites functions
   const toggleFavoriteTerrain = (terrainId: string) => {
     setFavoriteTerrainIds(prev => {
@@ -2007,6 +2120,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         challengeStats,
         boulesSets,
         loading,
+        addBoulesSet,
+        updateBoulesSet,
+        deleteBoulesSet,
+        setPrimaryBoulesSet,
         addMatch,
         addPlayer,
         addClub,
@@ -2048,6 +2165,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         retryFailedOps,
         refreshData,
         selfPlayer,
+        addBoulesSet,
+        updateBoulesSet,
+        deleteBoulesSet,
+        setPrimaryBoulesSet,
         setItemPublic,
         isReplayingQueue,
         replayProgress,

@@ -1376,6 +1376,20 @@ export default function ProfileScreen() {
 
             <Pressable 
               style={[styles.playerCardLink, { marginTop: 10 }]}
+              onPress={() => router.push('/equipment')}
+            >
+              <View style={[styles.playerCardLinkIcon, { backgroundColor: theme.accent + '15' }]}>
+                <MaterialIcons name="sports-baseball" size={24} color={theme.accent} />
+              </View>
+              <View style={styles.playerCardLinkInfo}>
+                <Text style={styles.playerCardLinkTitle}>{language === 'fr' ? 'Équipement' : 'Equipment'}</Text>
+                <Text style={styles.playerCardLinkSubtitle}>{language === 'fr' ? 'Gérer vos sets de boules' : 'Manage your boules sets'}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
+            </Pressable>
+
+            <Pressable 
+              style={[styles.playerCardLink, { marginTop: 10 }]}
               onPress={() => router.push('/palmares')}
             >
               <View style={[styles.playerCardLinkIcon, { backgroundColor: theme.carreauColor + '15' }]}>

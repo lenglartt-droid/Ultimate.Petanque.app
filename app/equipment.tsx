@@ -1,0 +1,608 @@
+import React, { useState, useMemo, useCallback } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  Alert,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import theme from '@/constants/theme';
+import { useApp } from '@/contexts/AppContext';
+import { useLanguage } from '@/hooks/useLanguage';
+import { BoulesSet } from '@/services/mockData';
+
+const HARDNESS_OPTIONS = ['Tendre', 'Demi-tendre', 'Dure'] as const;
+
+export default function EquipmentScreen() {
+  const insets = useSafeAreaInsets();
+  const { boulesSets, addBoulesSet, updateBoulesSet, deleteBoulesSet, setPrimaryBoulesSet, matches, challenges } = useApp();
+  const { t, language } = useLanguage();
+
+  const [showForm, setShowForm] = useState(false);
+  const [editingSet, setEditingSet] = useState<BoulesSet | null>(null);
+
+  // Form state
+  const [formName, setFormName] = useState('');
+  const [formBrand, setFormBrand] = useState('');
+  const [formDiameter, setFormDiameter] = useState('');
+  const [formWeight, setFormWeight] = useState('');
+  const [formSerialNumber, setFormSerialNumber] = useState('');
+  const [formHardness, setFormHardness] = useState('');
+  const [formNotes, setFormNotes] = useState('');
+  const [formIsPrimary, setFormIsPrimary] = useState(false);
+
+  // Stats per set
+  const setStats = useMemo(() => {
+    const stats: Record<string, { matches: number; wins: number; challenges: number }> = {};
+    boulesSets.forEach(bs => {
+      const bsMatches = matches.filter(m => m.boulesSetId === bs.id);
+      const bsChallenges = challenges.filter(c => c.boulesSetId === bs.id);
+      stats[bs.id] = {
+        matches: bsMatches.length,
+        wins: bsMatches.filter(m => m.winner === 'A').length,
+        challenges: bsChallenges.length,
+      };
+    });
+    return stats;
+  }, [boulesSets, matches, challenges]);
+
+  const resetForm = useCallback(() => {
+    setFormName('');
+    setFormBrand('');
+    setFormDiameter('');
+    setFormWeight('');
+    setFormSerialNumber('');
+    setFormHardness('');
+    setFormNotes('');
+    setFormIsPrimary(false);
+    setEditingSet(null);
+  }, []);
+
+  const openNewForm = useCallback(() => {
+    resetForm();
+    setFormIsPrimary(boulesSets.length === 0);
+    setShowForm(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [boulesSets.length, resetForm]);
+
+  const openEditForm = useCallback((set: BoulesSet) => {
+    setEditingSet(set);
+    setFormName(set.name);
+    setFormBrand(set.brand || '');
+    setFormDiameter(set.diameter ? String(set.diameter) : '');
+    setFormWeight(set.weight ? String(set.weight) : '');
+    setFormSerialNumber(set.serialNumber || '');
+    setFormHardness(set.hardness || '');
+    setFormNotes(set.notes || '');
+    setFormIsPrimary(set.isPrimary || false);
+    setShowForm(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, []);
+
+  const handleSave = useCallback(async () => {
+    if (!formName.trim()) {
+      Alert.alert(t('common', 'error'), language === 'fr' ? 'Le nom est obligatoire' : 'Name is required');
+      return;
+    }
+
+    const setData: Omit<BoulesSet, 'id'> = {
+      name: formName.trim(),
+      brand: formBrand.trim() || undefined,
+      diameter: formDiameter ? parseFloat(formDiameter) : undefined,
+      weight: formWeight ? parseInt(formWeight, 10) : undefined,
+      serialNumber: formSerialNumber.trim() || undefined,
+      hardness: formHardness || undefined,
+      isPrimary: formIsPrimary,
+      notes: formNotes.trim() || undefined,
+    };
+
+    if (editingSet) {
+      await updateBoulesSet(editingSet.id, setData);
+      if (formIsPrimary && !editingSet.isPrimary) {
+        await setPrimaryBoulesSet(editingSet.id);
+      }
+    } else {
+      await addBoulesSet(setData);
+    }
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setShowForm(false);
+    resetForm();
+  }, [formName, formBrand, formDiameter, formWeight, formSerialNumber, formHardness, formNotes, formIsPrimary, editingSet, addBoulesSet, updateBoulesSet, setPrimaryBoulesSet, resetForm, t, language]);
+
+  const handleDelete = useCallback((set: BoulesSet) => {
+    Alert.alert(
+      t('common', 'delete'),
+      language === 'fr' ? `Supprimer "${set.name}" ?` : `Delete "${set.name}"?`,
+      [
+        { text: t('common', 'cancel'), style: 'cancel' },
+        {
+          text: t('common', 'delete'),
+          style: 'destructive',
+          onPress: async () => {
+            await deleteBoulesSet(set.id);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          },
+        },
+      ]
+    );
+  }, [deleteBoulesSet, t, language]);
+
+  const handleSetPrimary = useCallback(async (set: BoulesSet) => {
+    await setPrimaryBoulesSet(set.id);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [setPrimaryBoulesSet]);
+
+  const primarySet = boulesSets.find(s => s.isPrimary);
+
+  return (
+    <SafeAreaView edges={['top']} style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+          <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
+        </Pressable>
+        <Text style={styles.headerTitle}>{language === 'fr' ? 'Équipement' : 'Equipment'}</Text>
+        <Pressable style={styles.addBtn} onPress={openNewForm}>
+          <MaterialIcons name="add" size={24} color={theme.primary} />
+        </Pressable>
+      </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Hero */}
+        <Animated.View entering={FadeInDown.duration(400)} style={styles.heroCard}>
+          <View style={styles.heroIconBg}>
+            <MaterialIcons name="sports-baseball" size={36} color={theme.accent} />
+          </View>
+          <Text style={styles.heroTitle}>{language === 'fr' ? 'Mes Sets de Boules' : 'My Boules Sets'}</Text>
+          <Text style={styles.heroSubtitle}>
+            {boulesSets.length} {language === 'fr' ? 'set(s) enregistré(s)' : 'set(s) registered'}
+          </Text>
+          {primarySet ? (
+            <View style={styles.heroPrimaryBadge}>
+              <MaterialIcons name="star" size={14} color={theme.carreauColor} />
+              <Text style={styles.heroPrimaryText}>
+                {language === 'fr' ? 'Principal' : 'Primary'}: {primarySet.name}
+              </Text>
+            </View>
+          ) : null}
+        </Animated.View>
+
+        {/* Sets List */}
+        {boulesSets.length === 0 ? (
+          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.emptyState}>
+            <View style={styles.emptyIconBg}>
+              <MaterialIcons name="sports-baseball" size={48} color={theme.textMuted} />
+            </View>
+            <Text style={styles.emptyTitle}>{language === 'fr' ? 'Aucun set enregistré' : 'No sets registered'}</Text>
+            <Text style={styles.emptyDesc}>
+              {language === 'fr'
+                ? 'Ajoutez vos sets de boules pour suivre vos performances par équipement'
+                : 'Add your boules sets to track performance by equipment'}
+            </Text>
+            <Pressable style={styles.emptyBtn} onPress={openNewForm}>
+              <MaterialIcons name="add" size={20} color="#FFF" />
+              <Text style={styles.emptyBtnText}>{language === 'fr' ? 'Ajouter un set' : 'Add a set'}</Text>
+            </Pressable>
+          </Animated.View>
+        ) : (
+          boulesSets.map((set, idx) => {
+            const stats = setStats[set.id] || { matches: 0, wins: 0, challenges: 0 };
+            const winRate = stats.matches > 0 ? Math.round((stats.wins / stats.matches) * 100) : 0;
+
+            return (
+              <Animated.View key={set.id} entering={FadeInDown.duration(400).delay(100 + idx * 60)}>
+                <Pressable
+                  style={[styles.setCard, set.isPrimary && styles.setCardPrimary]}
+                  onPress={() => openEditForm(set)}
+                >
+                  {/* Primary badge */}
+                  {set.isPrimary ? (
+                    <View style={styles.primaryBadge}>
+                      <MaterialIcons name="star" size={12} color="#FFF" />
+                      <Text style={styles.primaryBadgeText}>{language === 'fr' ? 'Principal' : 'Primary'}</Text>
+                    </View>
+                  ) : null}
+
+                  {/* Header row */}
+                  <View style={styles.setHeader}>
+                    <View style={[styles.setIconBg, set.isPrimary && { backgroundColor: theme.accent + '20' }]}>
+                      <MaterialIcons name="sports-baseball" size={24} color={set.isPrimary ? theme.accent : theme.textSecondary} />
+                    </View>
+                    <View style={styles.setInfo}>
+                      <Text style={styles.setName}>{set.name}</Text>
+                      <Text style={styles.setMeta}>
+                        {[
+                          set.brand,
+                          set.diameter ? `${set.diameter} mm` : '',
+                          set.weight ? `${set.weight} g` : '',
+                          set.hardness,
+                        ].filter(Boolean).join(' \u2022 ')}
+                      </Text>
+                    </View>
+                    <View style={styles.setActions}>
+                      {!set.isPrimary ? (
+                        <Pressable
+                          style={styles.setActionBtn}
+                          onPress={(e) => { e.stopPropagation(); handleSetPrimary(set); }}
+                          hitSlop={8}
+                        >
+                          <MaterialIcons name="star-outline" size={20} color={theme.textMuted} />
+                        </Pressable>
+                      ) : null}
+                      <Pressable
+                        style={[styles.setActionBtn, { backgroundColor: theme.error + '10' }]}
+                        onPress={(e) => { e.stopPropagation(); handleDelete(set); }}
+                        hitSlop={8}
+                      >
+                        <MaterialIcons name="delete-outline" size={20} color={theme.error} />
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  {/* Serial number */}
+                  {set.serialNumber ? (
+                    <View style={styles.serialRow}>
+                      <MaterialIcons name="tag" size={14} color={theme.textMuted} />
+                      <Text style={styles.serialText}>N\u00B0{set.serialNumber}</Text>
+                    </View>
+                  ) : null}
+
+                  {/* Specs bars */}
+                  {(set.diameter || set.weight) ? (
+                    <View style={styles.specsBars}>
+                      {set.diameter ? (
+                        <View style={styles.specBar}>
+                          <Text style={styles.specLabel}>{language === 'fr' ? 'Diamètre' : 'Diameter'}</Text>
+                          <View style={styles.specTrack}>
+                            <View
+                              style={[
+                                styles.specFill,
+                                {
+                                  width: `${Math.max(0, Math.min(100, ((Number(set.diameter) - 70.5) / (80 - 70.5)) * 100))}%`,
+                                  backgroundColor: theme.primary,
+                                },
+                              ]}
+                            />
+                          </View>
+                          <Text style={styles.specValue}>{set.diameter} mm</Text>
+                        </View>
+                      ) : null}
+                      {set.weight ? (
+                        <View style={styles.specBar}>
+                          <Text style={styles.specLabel}>{language === 'fr' ? 'Poids' : 'Weight'}</Text>
+                          <View style={styles.specTrack}>
+                            <View
+                              style={[
+                                styles.specFill,
+                                {
+                                  width: `${Math.max(0, Math.min(100, ((set.weight - 650) / (800 - 650)) * 100))}%`,
+                                  backgroundColor: theme.accent,
+                                },
+                              ]}
+                            />
+                          </View>
+                          <Text style={styles.specValue}>{set.weight} g</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  ) : null}
+
+                  {/* Stats row */}
+                  {(stats.matches > 0 || stats.challenges > 0) ? (
+                    <View style={styles.statsRow}>
+                      <View style={styles.statItem}>
+                        <MaterialIcons name="sports" size={14} color={theme.primary} />
+                        <Text style={styles.statValue}>{stats.matches}</Text>
+                        <Text style={styles.statLabel}>{language === 'fr' ? 'matchs' : 'matches'}</Text>
+                      </View>
+                      {stats.matches > 0 ? (
+                        <View style={styles.statItem}>
+                          <MaterialIcons name="emoji-events" size={14} color={winRate >= 50 ? theme.success : theme.error} />
+                          <Text style={[styles.statValue, { color: winRate >= 50 ? theme.success : theme.error }]}>{winRate}%</Text>
+                          <Text style={styles.statLabel}>{language === 'fr' ? 'victoires' : 'wins'}</Text>
+                        </View>
+                      ) : null}
+                      {stats.challenges > 0 ? (
+                        <View style={styles.statItem}>
+                          <MaterialIcons name="flag" size={14} color={theme.accent} />
+                          <Text style={styles.statValue}>{stats.challenges}</Text>
+                          <Text style={styles.statLabel}>{language === 'fr' ? 'défis' : 'challenges'}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  ) : null}
+
+                  {/* Notes */}
+                  {set.notes ? (
+                    <View style={styles.notesRow}>
+                      <MaterialIcons name="notes" size={14} color={theme.textMuted} />
+                      <Text style={styles.notesText} numberOfLines={2}>{set.notes}</Text>
+                    </View>
+                  ) : null}
+                </Pressable>
+              </Animated.View>
+            );
+          })
+        )}
+
+        {/* Add button at bottom */}
+        {boulesSets.length > 0 ? (
+          <Pressable style={styles.addSetBtn} onPress={openNewForm}>
+            <MaterialIcons name="add-circle-outline" size={22} color={theme.primary} />
+            <Text style={styles.addSetBtnText}>{language === 'fr' ? 'Ajouter un set de boules' : 'Add a boules set'}</Text>
+          </Pressable>
+        ) : null}
+      </ScrollView>
+
+      {/* Form Modal */}
+      <Modal
+        visible={showForm}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => { setShowForm(false); resetForm(); }}
+      >
+        <SafeAreaView edges={['top']} style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Pressable style={styles.modalCloseBtn} onPress={() => { setShowForm(false); resetForm(); }}>
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+            <Text style={styles.modalTitle}>
+              {editingSet
+                ? (language === 'fr' ? 'Modifier le set' : 'Edit set')
+                : (language === 'fr' ? 'Nouveau set' : 'New set')}
+            </Text>
+            <Pressable style={styles.modalSaveBtn} onPress={handleSave}>
+              <Text style={styles.modalSaveBtnText}>{t('common', 'save')}</Text>
+            </Pressable>
+          </View>
+
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <ScrollView
+              style={styles.formScroll}
+              contentContainerStyle={styles.formContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* Name */}
+              <View style={styles.formField}>
+                <Text style={styles.formLabel}>{language === 'fr' ? 'NOM DU SET *' : 'SET NAME *'}</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={formName}
+                  onChangeText={setFormName}
+                  placeholder={language === 'fr' ? 'Ex: Obut ATX Compétition' : 'Ex: Obut ATX Competition'}
+                  placeholderTextColor={theme.textMuted}
+                  autoFocus
+                />
+              </View>
+
+              {/* Brand */}
+              <View style={styles.formField}>
+                <Text style={styles.formLabel}>{language === 'fr' ? 'MARQUE' : 'BRAND'}</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={formBrand}
+                  onChangeText={setFormBrand}
+                  placeholder={language === 'fr' ? 'Ex: Obut, MS Pétanque, La Boule Noire...' : 'Ex: Obut, MS Pétanque, La Boule Noire...'}
+                  placeholderTextColor={theme.textMuted}
+                />
+              </View>
+
+              {/* Diameter & Weight */}
+              <View style={styles.formRow}>
+                <View style={styles.formRowField}>
+                  <Text style={styles.formLabel}>{language === 'fr' ? 'DIAMÈTRE (mm)' : 'DIAMETER (mm)'}</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={formDiameter}
+                    onChangeText={setFormDiameter}
+                    placeholder="70.5 - 80.0"
+                    placeholderTextColor={theme.textMuted}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+                <View style={styles.formRowField}>
+                  <Text style={styles.formLabel}>{language === 'fr' ? 'POIDS (g)' : 'WEIGHT (g)'}</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={formWeight}
+                    onChangeText={setFormWeight}
+                    placeholder="650 - 800"
+                    placeholderTextColor={theme.textMuted}
+                    keyboardType="number-pad"
+                  />
+                </View>
+              </View>
+
+              {/* Serial Number */}
+              <View style={styles.formField}>
+                <Text style={styles.formLabel}>{language === 'fr' ? 'NUMÉRO DE SÉRIE' : 'SERIAL NUMBER'}</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={formSerialNumber}
+                  onChangeText={setFormSerialNumber}
+                  placeholder={language === 'fr' ? 'Optionnel' : 'Optional'}
+                  placeholderTextColor={theme.textMuted}
+                />
+              </View>
+
+              {/* Hardness */}
+              <View style={styles.formField}>
+                <Text style={styles.formLabel}>{language === 'fr' ? 'DURETÉ' : 'HARDNESS'}</Text>
+                <View style={styles.hardnessRow}>
+                  {HARDNESS_OPTIONS.map(h => (
+                    <Pressable
+                      key={h}
+                      style={[styles.hardnessChip, formHardness === h && styles.hardnessChipActive]}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setFormHardness(formHardness === h ? '' : h);
+                      }}
+                    >
+                      <Text style={[styles.hardnessChipText, formHardness === h && styles.hardnessChipTextActive]}>
+                        {h}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+
+              {/* Primary toggle */}
+              <Pressable
+                style={[styles.primaryToggle, formIsPrimary && styles.primaryToggleActive]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setFormIsPrimary(!formIsPrimary);
+                }}
+              >
+                <MaterialIcons
+                  name={formIsPrimary ? 'star' : 'star-outline'}
+                  size={22}
+                  color={formIsPrimary ? theme.carreauColor : theme.textMuted}
+                />
+                <View style={styles.primaryToggleContent}>
+                  <Text style={[styles.primaryToggleTitle, formIsPrimary && { color: theme.carreauColor }]}>
+                    {language === 'fr' ? 'Set principal' : 'Primary set'}
+                  </Text>
+                  <Text style={styles.primaryToggleDesc}>
+                    {language === 'fr'
+                      ? 'Synchronisé avec votre profil joueur'
+                      : 'Synced with your player profile'}
+                  </Text>
+                </View>
+                <View style={[styles.toggleIndicator, formIsPrimary && styles.toggleIndicatorActive]}>
+                  <View style={[styles.toggleDot, formIsPrimary && styles.toggleDotActive]} />
+                </View>
+              </Pressable>
+
+              {/* Notes */}
+              <View style={styles.formField}>
+                <Text style={styles.formLabel}>{language === 'fr' ? 'NOTES' : 'NOTES'}</Text>
+                <TextInput
+                  style={[styles.formInput, styles.formTextArea]}
+                  value={formNotes}
+                  onChangeText={setFormNotes}
+                  placeholder={language === 'fr' ? 'Remarques, sensations, préférences...' : 'Remarks, feelings, preferences...'}
+                  placeholderTextColor={theme.textMuted}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.backgroundSecondary },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 17, fontWeight: '700', color: theme.textPrimary },
+  addBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.primary + '15', borderRadius: 20 },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 20 },
+
+  // Hero
+  heroCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.xl, padding: 24, alignItems: 'center', marginBottom: 20, ...theme.shadows.card },
+  heroIconBg: { width: 72, height: 72, borderRadius: 20, backgroundColor: theme.accent + '15', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  heroTitle: { fontSize: 22, fontWeight: '700', color: theme.textPrimary, marginBottom: 4 },
+  heroSubtitle: { fontSize: 14, color: theme.textSecondary },
+  heroPrimaryBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, backgroundColor: theme.carreauColor + '12', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
+  heroPrimaryText: { fontSize: 13, fontWeight: '600', color: theme.carreauColor },
+
+  // Empty
+  emptyState: { alignItems: 'center', paddingVertical: 48 },
+  emptyIconBg: { width: 88, height: 88, borderRadius: 44, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  emptyTitle: { fontSize: 18, fontWeight: '600', color: theme.textPrimary, marginBottom: 8 },
+  emptyDesc: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', maxWidth: 280, marginBottom: 24, lineHeight: 22 },
+  emptyBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.primary, paddingHorizontal: 24, paddingVertical: 14, borderRadius: theme.borderRadius.lg },
+  emptyBtnText: { fontSize: 15, fontWeight: '600', color: '#FFF' },
+
+  // Set card
+  setCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 12, ...theme.shadows.card },
+  setCardPrimary: { borderWidth: 2, borderColor: theme.accent + '40' },
+  primaryBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.carreauColor, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10, alignSelf: 'flex-start', marginBottom: 10 },
+  primaryBadgeText: { fontSize: 10, fontWeight: '700', color: '#FFF' },
+  setHeader: { flexDirection: 'row', alignItems: 'center' },
+  setIconBg: { width: 48, height: 48, borderRadius: 14, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  setInfo: { flex: 1 },
+  setName: { fontSize: 16, fontWeight: '600', color: theme.textPrimary, marginBottom: 2 },
+  setMeta: { fontSize: 13, color: theme.textSecondary },
+  setActions: { flexDirection: 'row', gap: 8 },
+  setActionBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
+  serialRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border },
+  serialText: { fontSize: 12, color: theme.textMuted, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+
+  // Specs bars
+  specsBars: { marginTop: 12, gap: 8 },
+  specBar: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  specLabel: { fontSize: 11, fontWeight: '600', color: theme.textMuted, width: 60 },
+  specTrack: { flex: 1, height: 6, backgroundColor: theme.backgroundSecondary, borderRadius: 3, overflow: 'hidden' },
+  specFill: { height: '100%', borderRadius: 3 },
+  specValue: { fontSize: 12, fontWeight: '600', color: theme.textPrimary, width: 52, textAlign: 'right' },
+
+  // Stats
+  statsRow: { flexDirection: 'row', gap: 16, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border },
+  statItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  statValue: { fontSize: 13, fontWeight: '700', color: theme.textPrimary },
+  statLabel: { fontSize: 11, color: theme.textMuted },
+
+  // Notes
+  notesRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border },
+  notesText: { flex: 1, fontSize: 12, color: theme.textSecondary, fontStyle: 'italic', lineHeight: 18 },
+
+  // Add button
+  addSetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.primary + '10', paddingVertical: 16, borderRadius: theme.borderRadius.lg, borderWidth: 2, borderColor: theme.primary + '25', borderStyle: 'dashed', marginTop: 8 },
+  addSetBtnText: { fontSize: 15, fontWeight: '600', color: theme.primary },
+
+  // Modal
+  modalContainer: { flex: 1, backgroundColor: theme.backgroundSecondary },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  modalCloseBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  modalTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
+  modalSaveBtn: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: theme.primary, borderRadius: theme.borderRadius.md },
+  modalSaveBtnText: { fontSize: 15, fontWeight: '600', color: '#FFF' },
+  formScroll: { flex: 1 },
+  formContent: { padding: 16, gap: 16 },
+  formField: {},
+  formLabel: { fontSize: 11, fontWeight: '700', color: theme.textMuted, letterSpacing: 0.5, marginBottom: 8 },
+  formInput: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, paddingVertical: 14, paddingHorizontal: 16, fontSize: 16, color: theme.textPrimary, ...theme.shadows.card },
+  formTextArea: { minHeight: 80, paddingTop: 14 },
+  formRow: { flexDirection: 'row', gap: 12 },
+  formRowField: { flex: 1 },
+  hardnessRow: { flexDirection: 'row', gap: 8 },
+  hardnessChip: { flex: 1, paddingVertical: 12, alignItems: 'center', backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, borderWidth: 2, borderColor: 'transparent', ...theme.shadows.card },
+  hardnessChipActive: { borderColor: theme.primary, backgroundColor: theme.primary + '10' },
+  hardnessChipText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
+  hardnessChipTextActive: { color: theme.primary },
+
+  // Primary toggle
+  primaryToggle: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, borderWidth: 2, borderColor: 'transparent', ...theme.shadows.card },
+  primaryToggleActive: { borderColor: theme.carreauColor + '40', backgroundColor: theme.carreauColor + '08' },
+  primaryToggleContent: { flex: 1 },
+  primaryToggleTitle: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  primaryToggleDesc: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  toggleIndicator: { width: 44, height: 26, borderRadius: 13, backgroundColor: theme.border, justifyContent: 'center', paddingHorizontal: 3 },
+  toggleIndicatorActive: { backgroundColor: theme.carreauColor },
+  toggleDot: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#FFF' },
+  toggleDotActive: { alignSelf: 'flex-end' },
+});

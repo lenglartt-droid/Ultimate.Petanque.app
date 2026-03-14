@@ -213,6 +213,13 @@ function LayoutInner() {
                 }} 
               />
               <Stack.Screen 
+                name="equipment" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="password" 
                 options={{ 
                   presentation: 'card',
