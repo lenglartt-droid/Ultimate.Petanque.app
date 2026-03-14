@@ -465,7 +465,7 @@ const ChallengeStatsSummary = React.memo(({ challenges, t }: { challenges: Chall
 
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
-  const { matches, challenges, deleteChallenge, updateChallenge, refreshData, boulesSets } = useApp();
+  const { matches, challenges, deleteChallenge, updateChallenge, refreshData, boulesSets, terrains } = useApp();
   const { t, language } = useLanguage();
   
   const [contentFilter, setContentFilter] = useState<ContentFilter>('all');
@@ -1024,8 +1024,8 @@ export default function HistoryScreen() {
           </View>
           
           {editingChallenge && (
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} enabled={isEditingChallengeFields}>
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 60 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" bounces>
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} enabled={Platform.OS === 'ios' ? isEditingChallengeFields : true}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 80 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" bounces nestedScrollEnabled>
               {/* Challenge Header Card */}
               <View style={styles.detailHeaderCard}>
                 <View style={styles.detailHeaderTop}>
@@ -1085,6 +1085,19 @@ export default function HistoryScreen() {
                         <MaterialIcons name="sports-baseball" size={13} color={'#D97706'} />
                         <Text style={[styles.detailModeBadgeText, { color: '#D97706' }]} numberOfLines={1}>
                           {bs.name}{bs.diameter ? ` \u2022 ${bs.diameter}mm` : ''}{bs.weight ? ` \u2022 ${bs.weight}g` : ''}
+                        </Text>
+                      </View>
+                    );
+                  })()}
+                  {(() => {
+                    if (!editingChallenge.terrainId) return null;
+                    const terrain = terrains.find(tr => tr.id === editingChallenge.terrainId);
+                    if (!terrain) return null;
+                    return (
+                      <View style={[styles.detailModeBadge, { backgroundColor: theme.success + '15' }]}>
+                        <MaterialIcons name="place" size={13} color={theme.success} />
+                        <Text style={[styles.detailModeBadgeText, { color: theme.success }]} numberOfLines={1}>
+                          {terrain.name}
                         </Text>
                       </View>
                     );

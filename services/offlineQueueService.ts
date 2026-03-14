@@ -595,6 +595,8 @@ export function buildChallengeDbPayload(challenge: Record<string, any>): Record<
     duration: challenge.duration,
     notes: challenge.notes,
     detailed_shots: challenge.detailedShots,
+    boules_set_id: challenge.boulesSetId || null,
+    terrain_id: challenge.terrainId || null,
   };
 }
 
@@ -661,6 +663,7 @@ export function buildUpdateDbPayload(table: string, updates: Record<string, any>
       totalPoints: 'total_points', maxPoints: 'max_points',
       atelierScores: 'atelier_scores', duration: 'duration',
       notes: 'notes', detailedShots: 'detailed_shots',
+      boulesSetId: 'boules_set_id', terrainId: 'terrain_id',
     },
   };
 

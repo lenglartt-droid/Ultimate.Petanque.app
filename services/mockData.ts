@@ -452,6 +452,7 @@ export interface Challenge {
   mode: ChallengeMode;
   date: string;
   boulesSetId?: string;
+  terrainId?: string;
   playerId?: string;
   playerName?: string;
   opponentId?: string;

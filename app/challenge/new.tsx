@@ -30,7 +30,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { SimplifiedShotNotation, SimpleShotRecord } from '@/components';
 import ShareModal from '@/components/ui/ShareModal';
 import { showInterstitial } from '@/services/adService';
-import { 
+import {
   ChallengeType, 
   ChallengeShot,
   ChallengeMode,
@@ -156,9 +156,8 @@ function CountdownTimer({ seconds, isRunning, onStart, onTimeUp, startLabel }: C
 
 export default function NewChallengeScreen() {
   const insets = useSafeAreaInsets();
-  const { addChallenge, userStats, selfPlayer, players, matches, challenges: pastChallenges } = useApp();
+  const { addChallenge, userStats, selfPlayer, players, matches, challenges: pastChallenges, boulesSets, terrains } = useApp();
   const { t } = useLanguage();
-  const { boulesSets } = useApp();
 
   // ============================================
   // CONFIGURATION (translated)
@@ -213,6 +212,7 @@ export default function NewChallengeScreen() {
     const primary = boulesSets.find(bs => bs.isPrimary);
     return primary ? primary.id : null;
   });
+  const [selectedTerrainId, setSelectedTerrainId] = useState<string | null>(() => selfPlayer?.terrainId || null);
   
   // Challenge state
   const [isStarted, setIsStarted] = useState(false);
@@ -579,6 +579,7 @@ export default function NewChallengeScreen() {
         atelierScores,
         duration: elapsedTime,
         boulesSetId: selectedBoulesSetId || undefined,
+        terrainId: selectedTerrainId || undefined,
       };
     } else {
       return {
@@ -599,6 +600,7 @@ export default function NewChallengeScreen() {
         duration: elapsedTime,
         detailedShots: detailedShots.length > 0 ? detailedShots : undefined,
         boulesSetId: selectedBoulesSetId || undefined,
+        terrainId: selectedTerrainId || undefined,
       };
     }
   }, [selectedType, challengeMode, selectedOpponent, opponentShots, opponentPrecisionShots,
@@ -980,9 +982,44 @@ export default function NewChallengeScreen() {
             </Animated.View>
           )}
 
-          {/* Boules Set Selector */}
+          {/* Terrain & Boules Set Selectors */}
+          {terrains.length > 0 ? (
+            <Animated.View entering={FadeInDown.duration(400).delay(240)} style={{ width: '100%', marginTop: 16 }}>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textMuted, letterSpacing: 0.5, marginBottom: 8, textAlign: 'center' }}>{t('challenge', 'terrain').toUpperCase()}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, justifyContent: 'center', paddingHorizontal: 8 }}>
+                <Pressable
+                  style={[styles.atelierCard, { borderWidth: 2, borderColor: !selectedTerrainId ? theme.primary : 'transparent', minWidth: 80 }]}
+                  onPress={() => { Haptics.selectionAsync(); setSelectedTerrainId(null); }}
+                >
+                  <View style={[styles.atelierIcon, { backgroundColor: theme.textMuted + '15' }]}>
+                    <MaterialIcons name="block" size={18} color={theme.textMuted} />
+                  </View>
+                  <View style={styles.atelierInfo}>
+                    <Text style={styles.atelierName}>-</Text>
+                  </View>
+                </Pressable>
+                {terrains.map(tr => (
+                  <Pressable
+                    key={tr.id}
+                    style={[styles.atelierCard, { borderWidth: 2, borderColor: selectedTerrainId === tr.id ? theme.primary : 'transparent' }]}
+                    onPress={() => { Haptics.selectionAsync(); setSelectedTerrainId(tr.id); }}
+                  >
+                    <View style={[styles.atelierIcon, { backgroundColor: theme.primary + '15' }]}>
+                      <MaterialIcons name="place" size={18} color={theme.primary} />
+                    </View>
+                    <View style={styles.atelierInfo}>
+                      <Text style={styles.atelierName} numberOfLines={1}>{tr.name}</Text>
+                      <Text style={styles.atelierDesc}>{tr.city}</Text>
+                    </View>
+                    {selectedTerrainId === tr.id ? <MaterialIcons name="check-circle" size={18} color={theme.primary} /> : null}
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </Animated.View>
+          ) : null}
+
           {boulesSets.length > 0 ? (
-            <Animated.View entering={FadeInDown.duration(400).delay(250)} style={{ width: '100%', marginTop: 16 }}>
+            <Animated.View entering={FadeInDown.duration(400).delay(260)} style={{ width: '100%', marginTop: 16 }}>
               <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textMuted, letterSpacing: 0.5, marginBottom: 8, textAlign: 'center' }}>{t('challenge', 'boulesSet').toUpperCase()}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, justifyContent: 'center', paddingHorizontal: 8 }}>
                 <Pressable

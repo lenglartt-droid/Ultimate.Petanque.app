@@ -1592,6 +1592,8 @@ export const translations = {
     boulesSet: { fr: 'Set de boules', en: 'Boules set' },
     chooseBoulesSet: { fr: 'Choisir un set (optionnel)', en: 'Choose a set (optional)' },
     noBoulesSet: { fr: 'Aucun set enregistr\u00e9', en: 'No sets registered' },
+    terrain: { fr: 'Terrain', en: 'Court' },
+    chooseTerrain: { fr: 'Choisir un terrain (optionnel)', en: 'Choose a court (optional)' },
     timedAuto: { fr: 'Chronométré automatiquement', en: 'Automatically timed' },
     carreauxCounted: { fr: 'Carreaux comptabilisés', en: 'Carreaux counted' },
     resultsSaved: { fr: 'Résultats enregistrés', en: 'Results saved' },

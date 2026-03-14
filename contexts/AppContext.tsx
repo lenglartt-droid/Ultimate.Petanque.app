@@ -251,7 +251,7 @@ function mapMatchFromDb(m: any): Match {
 function mapChallengeFromDb(c: any): Challenge {
   return {
     id: c.id, type: c.type, mode: c.mode || 'solo', date: c.date,
-    boulesSetId: c.boules_set_id,
+    boulesSetId: c.boules_set_id, terrainId: c.terrain_id,
     playerId: c.player_id, playerName: c.player_name,
     opponentId: c.opponent_id, opponentName: c.opponent_name,
     opponentResult: c.opponent_result, winner: c.winner,
@@ -1354,6 +1354,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         notes: challenge.notes,
         detailed_shots: challenge.detailedShots,
         boules_set_id: challenge.boulesSetId || null,
+        terrain_id: challenge.terrainId || null,
       }).select().single();
 
       if (error) throw error;
@@ -1383,6 +1384,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           notes: data.notes,
           detailedShots: data.detailed_shots,
           boulesSetId: data.boules_set_id,
+          terrainId: data.terrain_id,
         };
         setChallenges(prev => [newChallenge, ...prev]);
         return data.id;
@@ -1688,6 +1690,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.duration !== undefined) dbUpdates.duration = updates.duration;
       if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
       if (updates.detailedShots !== undefined) dbUpdates.detailed_shots = updates.detailedShots;
+      if (updates.terrainId !== undefined) dbUpdates.terrain_id = updates.terrainId || null;
       dbUpdates.updated_at = new Date().toISOString();
 
       await supabase.from('challenges').update(dbUpdates).eq('id', id);
