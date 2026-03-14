@@ -26,6 +26,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { SharedOverlayBadge } from '@/components/ui/SharedBadge';
 import AdBanner from '@/components/ui/AdBanner';
 import MergePickerModal from '@/components/ui/MergePickerModal';
+import { Player, Club, Terrain, Tournament } from '@/services/mockData';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -34,7 +35,7 @@ type TournamentStatus = 'all' | 'À venir' | 'En cours' | 'Terminé';
 
 export default function DirectoryScreen() {
   const insets = useSafeAreaInsets();
-  const { players, clubs, tournaments, terrains, selfPlayer, favoriteTerrainIds, favoriteClubIds, getSharedPermission, refreshData } = useApp();
+  const { players, clubs, tournaments, terrains, selfPlayer, favoriteTerrainIds, favoriteClubIds, getSharedPermission, refreshData, updatePlayer, updateClub, updateTerrain, updateTournament } = useApp();
   const { t, language } = useLanguage();
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
   const [activeTab, setActiveTab] = useState<DirectoryTab>('players');
@@ -45,6 +46,7 @@ export default function DirectoryScreen() {
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [mergeTarget, setMergeTarget] = useState<{ type: 'player' | 'club' | 'terrain' | 'tournament'; id: string } | null>(null);
   const [dismissedPairs, setDismissedPairs] = useState<Set<string>>(new Set());
+  const [quickMerging, setQuickMerging] = useState<string | null>(null);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -1045,6 +1047,77 @@ export default function DirectoryScreen() {
                       <Text style={styles.duplicateNameText} numberOfLines={1}>{dup.itemB.name}</Text>
                     </View>
                   </View>
+                  {/* Quick merge for >90% */}
+                  {dup.score >= 90 ? (
+                    <Pressable
+                      style={styles.quickMergeBtn}
+                      onPress={async () => {
+                        Haptics.selectionAsync();
+                        setQuickMerging(dup.pairKey);
+                        try {
+                          const a = dup.itemA as any;
+                          const b = dup.itemB as any;
+                          const pick = (va: any, vb: any) => {
+                            const sa = typeof va === 'string' ? va.trim() : '';
+                            const sb = typeof vb === 'string' ? vb.trim() : '';
+                            if (!sa && !sb) return undefined;
+                            if (!sa) return vb;
+                            if (!sb) return va;
+                            return sa.length >= sb.length ? va : vb;
+                          };
+                          const pickNum = (va: any, vb: any) => {
+                            if (va && !vb) return va;
+                            if (!va && vb) return vb;
+                            if (va && vb) return Math.max(Number(va), Number(vb));
+                            return undefined;
+                          };
+                          const pickObj = (va: any, vb: any) => {
+                            if (va && !vb) return va;
+                            if (!va && vb) return vb;
+                            if (va && vb) return JSON.stringify(va).length >= JSON.stringify(vb).length ? va : vb;
+                            return undefined;
+                          };
+                          const pickArr = (va: any, vb: any) => {
+                            const aa = Array.isArray(va) ? va : [];
+                            const ab = Array.isArray(vb) ? vb : [];
+                            return aa.length >= ab.length ? (aa.length > 0 ? va : undefined) : (ab.length > 0 ? vb : undefined);
+                          };
+                          let updates: Record<string, any> = {};
+                          let count = 0;
+                          const fields = Object.keys(b).filter(k => !['id', 'userId', 'user_id', 'createdAt', 'created_at', 'updatedAt', 'updated_at', 'stats'].includes(k));
+                          for (const k of fields) {
+                            const va = a[k];
+                            const vb = b[k];
+                            let best;
+                            if (typeof va === 'object' && !Array.isArray(va) && va !== null) best = pickObj(va, vb);
+                            else if (Array.isArray(va) || Array.isArray(vb)) best = pickArr(va, vb);
+                            else if (typeof va === 'number' || typeof vb === 'number') best = pickNum(va, vb);
+                            else best = pick(va, vb);
+                            if (best !== undefined && JSON.stringify(best) !== JSON.stringify(va)) {
+                              updates[k] = best;
+                              count++;
+                            }
+                          }
+                          if (count > 0) {
+                            const updaters: Record<string, (id: string, u: any) => Promise<void>> = {
+                              player: updatePlayer, club: updateClub, terrain: updateTerrain, tournament: updateTournament,
+                            };
+                            const updater = updaters[dup.type];
+                            if (updater) await updater(a.id, updates);
+                          }
+                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                          setDismissedPairs(prev => new Set([...prev, dup.pairKey]));
+                        } catch (e) { /* silent */ }
+                        setQuickMerging(null);
+                      }}
+                      disabled={quickMerging === dup.pairKey}
+                    >
+                      <MaterialIcons name="auto-fix-high" size={14} color="#FFF" />
+                      <Text style={styles.quickMergeBtnText}>
+                        {quickMerging === dup.pairKey ? '...' : t('directory', 'duplicateQuickMerge')}
+                      </Text>
+                    </Pressable>
+                  ) : null}
                   <View style={styles.duplicateActions}>
                     <Pressable
                       style={styles.duplicateMergeBtn}
@@ -1783,4 +1856,15 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.md,
   },
   duplicateDismissBtnText: { fontSize: 14, fontWeight: '600', color: theme.textSecondary },
+  quickMergeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: theme.success,
+    paddingVertical: 10,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: 8,
+  },
+  quickMergeBtnText: { fontSize: 14, fontWeight: '600', color: '#FFF' },
 });

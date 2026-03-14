@@ -31,6 +31,7 @@ import {
 } from '@/services/publicItemsService';
 import AdBanner from '@/components/ui/AdBanner';
 import { useToast } from '@/components/ui/Toast';
+import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 
 type MarkerType = 'all' | 'terrains' | 'clubs' | 'tournaments' | 'players';
 type MapMode = 'all' | 'public';
@@ -239,7 +240,7 @@ const ListItem = React.memo(({ item, onPress, singularLabel, terrainTypeLabel, i
 // ============================================
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
-  const { clubs, tournaments, terrains, players, refreshData } = useApp();
+  const { clubs, tournaments, terrains, players, refreshData, updatePlayer, updateClub, updateTerrain, updateTournament } = useApp();
   const { user } = useAuth();
   const { showAlert } = useAlert();
   const { showToast } = useToast();
@@ -384,6 +385,9 @@ export default function MapScreen() {
 
   const [showNoGeoBanner, setShowNoGeoBanner] = useState(true);
   const [showNoGeoModal, setShowNoGeoModal] = useState(false);
+  const [batchGeoMode, setBatchGeoMode] = useState(false);
+  const [geoSaving, setGeoSaving] = useState<string | null>(null);
+  const [geolocatedIds, setGeolocatedIds] = useState<Set<string>>(new Set());
 
   const noGeoItems = useMemo(() => {
     const items: { id: string; name: string; type: string; icon: string; color: string; route: string }[] = [];
@@ -860,11 +864,11 @@ export default function MapScreen() {
       ) : null}
 
       {/* No-Geo Items Modal */}
-      <Modal visible={showNoGeoModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowNoGeoModal(false)}>
+      <Modal visible={showNoGeoModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { setShowNoGeoModal(false); setBatchGeoMode(false); }}>
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>{t('map', 'noGeoModalTitle')}</Text>
-            <Pressable style={styles.modalClose} onPress={() => setShowNoGeoModal(false)}>
+            <Pressable style={styles.modalClose} onPress={() => { setShowNoGeoModal(false); setBatchGeoMode(false); }}>
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>
           </View>
@@ -872,29 +876,86 @@ export default function MapScreen() {
             <MaterialIcons name="location-off" size={18} color={theme.warning} />
             <Text style={styles.manageInfoText}>{noGeoCount} {t('map', 'noGeoBannerDesc')}</Text>
           </View>
+          {/* Batch mode toggle */}
+          <View style={styles.batchToggleRow}>
+            <Pressable
+              style={[styles.batchToggleBtn, !batchGeoMode && styles.batchToggleBtnActive]}
+              onPress={() => setBatchGeoMode(false)}
+            >
+              <MaterialIcons name="edit" size={16} color={!batchGeoMode ? '#FFF' : theme.textSecondary} />
+              <Text style={[styles.batchToggleText, !batchGeoMode && styles.batchToggleTextActive]}>{t('map', 'noGeoEditBtn')}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.batchToggleBtn, batchGeoMode && styles.batchToggleBtnActive]}
+              onPress={() => setBatchGeoMode(true)}
+            >
+              <MaterialIcons name="my-location" size={16} color={batchGeoMode ? '#FFF' : theme.textSecondary} />
+              <Text style={[styles.batchToggleText, batchGeoMode && styles.batchToggleTextActive]}>{t('map', 'noGeoBatchMode')}</Text>
+            </Pressable>
+          </View>
           <ScrollView style={styles.modalContent} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }} showsVerticalScrollIndicator={false}>
-            {noGeoItems.map(item => (
-              <Pressable
-                key={`${item.type}-${item.id}`}
-                style={styles.noGeoItem}
-                onPress={() => {
-                  setShowNoGeoModal(false);
-                  router.push(item.route as any);
-                }}
-              >
-                <View style={[styles.noGeoItemIcon, { backgroundColor: item.color + '15' }]}>
-                  <MaterialIcons name={item.icon as any} size={20} color={item.color} />
-                </View>
-                <View style={styles.noGeoItemInfo}>
-                  <Text style={styles.noGeoItemName} numberOfLines={1}>{item.name}</Text>
-                  <Text style={styles.noGeoItemType}>{item.type}</Text>
-                </View>
-                <View style={styles.noGeoItemBtn}>
-                  <MaterialIcons name="edit-location-alt" size={18} color={theme.primary} />
-                  <Text style={styles.noGeoItemBtnText}>{t('map', 'noGeoEditBtn')}</Text>
-                </View>
-              </Pressable>
+            {noGeoItems.filter(item => !geolocatedIds.has(item.id)).map(item => (
+              <View key={`${item.type}-${item.id}`} style={styles.noGeoItemBatch}>
+                <Pressable
+                  style={styles.noGeoItem}
+                  onPress={() => {
+                    if (!batchGeoMode) {
+                      setShowNoGeoModal(false);
+                      setBatchGeoMode(false);
+                      router.push(item.route as any);
+                    }
+                  }}
+                >
+                  <View style={[styles.noGeoItemIcon, { backgroundColor: item.color + '15' }]}>
+                    <MaterialIcons name={item.icon as any} size={20} color={item.color} />
+                  </View>
+                  <View style={styles.noGeoItemInfo}>
+                    <Text style={styles.noGeoItemName} numberOfLines={1}>{item.name}</Text>
+                    <Text style={styles.noGeoItemType}>{item.type}</Text>
+                  </View>
+                  {!batchGeoMode ? (
+                    <View style={styles.noGeoItemBtn}>
+                      <MaterialIcons name="edit-location-alt" size={18} color={theme.primary} />
+                      <Text style={styles.noGeoItemBtnText}>{t('map', 'noGeoEditBtn')}</Text>
+                    </View>
+                  ) : geoSaving === item.id ? (
+                    <ActivityIndicator size="small" color={theme.primary} />
+                  ) : null}
+                </Pressable>
+                {batchGeoMode ? (
+                  <View style={styles.batchLocationPicker}>
+                    <LocationPicker
+                      label=""
+                      showCityOnly
+                      placeholder={t('map', 'noGeoSetLocation')}
+                      onChange={async (loc: LocationData) => {
+                        if (!loc.latitude && !loc.longitude) return;
+                        setGeoSaving(item.id);
+                        try {
+                          const locationUpdate = { location: { address: loc.address, city: loc.city, country: loc.country, latitude: loc.latitude, longitude: loc.longitude } };
+                          const typeTable = item.icon === 'sports-soccer' ? 'terrain' : item.icon === 'home' ? 'club' : item.icon === 'person' ? 'player' : 'tournament';
+                          if (typeTable === 'terrain') await updateTerrain(item.id, { ...locationUpdate, city: loc.city, address: loc.address } as any);
+                          else if (typeTable === 'club') await updateClub(item.id, { ...locationUpdate, city: loc.city, address: loc.address } as any);
+                          else if (typeTable === 'player') await updatePlayer(item.id, locationUpdate as any);
+                          else await updateTournament(item.id, locationUpdate as any);
+                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                          setGeolocatedIds(prev => new Set([...prev, item.id]));
+                          showToast({ message: `${item.name} — ${t('map', 'noGeoLocationSaved')}`, icon: 'check-circle', iconColor: theme.success });
+                        } catch (e) { /* silent */ }
+                        setGeoSaving(null);
+                      }}
+                    />
+                  </View>
+                ) : null}
+              </View>
             ))}
+            {noGeoItems.filter(item => !geolocatedIds.has(item.id)).length === 0 ? (
+              <View style={styles.manageEmpty}>
+                <MaterialIcons name="check-circle" size={48} color={theme.success} />
+                <Text style={styles.manageEmptyText}>{t('common', 'success')}</Text>
+                <Text style={styles.manageEmptyDesc}>{t('map', 'noGeoLocationSaved')}</Text>
+              </View>
+            ) : null}
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -1151,4 +1212,20 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.sm,
   },
   noGeoItemBtnText: { fontSize: 12, fontWeight: '600', color: theme.primary },
+  noGeoItemBatch: { marginBottom: 4 },
+  batchLocationPicker: {
+    paddingHorizontal: 12, paddingBottom: 12,
+    backgroundColor: theme.surface, borderBottomLeftRadius: theme.borderRadius.md, borderBottomRightRadius: theme.borderRadius.md,
+    marginTop: -8, marginBottom: 4,
+  },
+  batchToggleRow: {
+    flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 10,
+  },
+  batchToggleBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 10, borderRadius: theme.borderRadius.md, backgroundColor: theme.backgroundSecondary,
+  },
+  batchToggleBtnActive: { backgroundColor: theme.primary },
+  batchToggleText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
+  batchToggleTextActive: { color: '#FFF' },
 });

@@ -608,6 +608,10 @@ export const translations = {
     duplicateSimilarity: { fr: 'Similitude', en: 'Similarity' },
     duplicateMerge: { fr: 'Fusionner', en: 'Merge' },
     duplicateDismiss: { fr: 'Ignorer', en: 'Dismiss' },
+    duplicateQuickMerge: { fr: 'Fusion rapide', en: 'Quick merge' },
+    duplicateQuickMergeDesc: { fr: 'Garde automatiquement les champs les plus complets', en: 'Automatically keeps the most complete fields' },
+    duplicateQuickMergeSuccess: { fr: 'Fusion rapide effectuée', en: 'Quick merge completed' },
+    duplicateQuickMergeSuccessDesc: { fr: 'champs mis à jour avec les valeurs les plus complètes', en: 'fields updated with the most complete values' },
     duplicatePair: { fr: 'Paire', en: 'Pair' },
     me: { fr: 'MOI', en: 'ME' },
     since: { fr: 'Depuis', en: 'Since' },
@@ -724,6 +728,12 @@ export const translations = {
     noGeoBannerAction: { fr: 'Géolocaliser', en: 'Geolocate' },
     noGeoModalTitle: { fr: 'Fiches à géolocaliser', en: 'Items to geolocate' },
     noGeoEditBtn: { fr: 'Modifier', en: 'Edit' },
+    noGeoBatchMode: { fr: 'Géolocaliser en lot', en: 'Batch geolocate' },
+    noGeoBatchDesc: { fr: 'Assignez une position GPS directement depuis ce modal', en: 'Assign a GPS position directly from this modal' },
+    noGeoLocating: { fr: 'Localisation...', en: 'Locating...' },
+    noGeoLocationSaved: { fr: 'Position enregistrée', en: 'Position saved' },
+    noGeoSetLocation: { fr: 'Localiser', en: 'Locate' },
+    noGeoLocationSet: { fr: 'Géolocalisé', en: 'Geolocated' },
   },
 
   // ============================================
