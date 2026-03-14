@@ -1219,6 +1219,67 @@ export default function StatsScreen() {
     };
   }, [progressionData]);
 
+  // ============================================
+  // CHALLENGE PROGRESSION DATA
+  // ============================================
+  const challengeProgressionData = useMemo(() => {
+    const selectedFilter = PROGRESSION_FILTERS.find(f => f.id === progressionFilter) || PROGRESSION_FILTERS[1];
+    const weeksToShow = selectedFilter.weeks;
+
+    const sortedChallenges = [...challenges].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    if (sortedChallenges.length === 0) return { weeklyData: [], hasData: false };
+
+    const now = new Date();
+    const startDate = new Date(now);
+    startDate.setDate(startDate.getDate() - (weeksToShow * 7));
+    startDate.setDate(startDate.getDate() - startDate.getDay());
+
+    const TYPES = ['10_tirs', '10_tirs_sautee', 'precision'] as const;
+    const currentDate = new Date(startDate);
+    const weeklyData: {
+      week: string;
+      byType: Record<string, { count: number; avgRate: number }>;
+    }[] = [];
+
+    while (currentDate <= now) {
+      const weekStart = new Date(currentDate);
+      const weekEnd = new Date(currentDate);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+
+      const weekChallenges = sortedChallenges.filter(c => {
+        const d = new Date(c.date);
+        return d >= weekStart && d <= weekEnd;
+      });
+
+      const byType: Record<string, { count: number; avgRate: number }> = {};
+      TYPES.forEach(type => {
+        const tc = weekChallenges.filter(c => c.type === type);
+        let totalRate = 0;
+        tc.forEach(c => {
+          if (type === 'precision') {
+            totalRate += (c.maxPoints && c.maxPoints > 0) ? ((c.totalPoints || 0) / c.maxPoints) * 100 : 0;
+          } else {
+            totalRate += c.successRate || 0;
+          }
+        });
+        byType[type] = {
+          count: tc.length,
+          avgRate: tc.length > 0 ? Math.round(totalRate / tc.length) : 0,
+        };
+      });
+
+      weeklyData.push({
+        week: `${weekStart.getDate()}/${weekStart.getMonth() + 1}`,
+        byType,
+      });
+
+      currentDate.setDate(currentDate.getDate() + 7);
+    }
+
+    const hasData = weeklyData.some(w => Object.values(w.byType).some(t => t.count > 0));
+    return { weeklyData, hasData };
+  }, [challenges, progressionFilter]);
+
   const hasData = performanceStats.total > 0 || filteredChallenges.length > 0;
 
   const formatDuration = (minutes: number) => {
@@ -2811,6 +2872,75 @@ export default function StatsScreen() {
                 </View>
                 </View>
 
+                {/* Challenge Progression */}
+                {challengeProgressionData.hasData && (
+                  <View style={styles.progressionSection}>
+                    <View style={styles.progressionSectionHeader}>
+                      <View style={[styles.progressionSectionIcon, { backgroundColor: theme.accent + '15' }]}>
+                        <MaterialIcons name="flag" size={20} color={theme.accent} />
+                      </View>
+                      <View>
+                        <Text style={[styles.progressionSectionTitle, isTablet && styles.progressionSectionTitleTablet]}>{t('stats', 'challengeProgressionTitle')}</Text>
+                        <Text style={[styles.progressionSectionSubtitle, isTablet && styles.progressionSectionSubtitleTablet]}>{t('stats', 'challengeProgressionSubtitle')}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.chartContainer}>
+                      <Svg width={modalChartWidth} height={modalChartHeight + 20}>
+                        {[0, 50, 100].map((v, i) => (
+                          <G key={i}>
+                            <Line x1="35" y1={(modalChartHeight - 20) - (v / 100) * (modalChartHeight - 40)} x2={modalChartWidth} y2={(modalChartHeight - 20) - (v / 100) * (modalChartHeight - 40)} stroke={theme.border} strokeWidth="1" strokeDasharray="4,4" />
+                            <SvgText x="30" y={(modalChartHeight - 15) - (v / 100) * (modalChartHeight - 40)} fontSize={isTablet ? '12' : '10'} fill={theme.textMuted} textAnchor="end">{v}%</SvgText>
+                          </G>
+                        ))}
+                        {[
+                          { type: '10_tirs', color: '#F97316' },
+                          { type: '10_tirs_sautee', color: '#3B82F6' },
+                          { type: 'precision', color: '#F59E0B' },
+                        ].map(({ type, color }) => {
+                          const dataPoints = challengeProgressionData.weeklyData.map((w, i) => ({
+                            x: 45 + (i * ((modalChartWidth - 45) / Math.max(challengeProgressionData.weeklyData.length - 1, 1))),
+                            y: (modalChartHeight - 20) - (w.byType[type].avgRate / 100) * (modalChartHeight - 40),
+                            hasData: w.byType[type].count > 0,
+                            rate: w.byType[type].avgRate,
+                          }));
+                          return (
+                            <G key={type}>
+                              {dataPoints.map((pt, i) => {
+                                if (i === 0 || !pt.hasData) return null;
+                                const prev = dataPoints[i - 1];
+                                if (!prev.hasData) return null;
+                                return <Line key={`l-${i}`} x1={prev.x} y1={prev.y} x2={pt.x} y2={pt.y} stroke={color} strokeWidth="2.5" />;
+                              })}
+                              {dataPoints.map((pt, i) => {
+                                if (!pt.hasData) return null;
+                                return (
+                                  <G key={`d-${i}`}>
+                                    <Circle cx={pt.x} cy={pt.y} r={isTablet ? 5 : 4} fill={color} />
+                                    <SvgText x={pt.x} y={pt.y - 10} fontSize={isTablet ? '11' : '9'} fill={color} textAnchor="middle" fontWeight="600">{pt.rate}%</SvgText>
+                                  </G>
+                                );
+                              })}
+                            </G>
+                          );
+                        })}
+                      </Svg>
+                    </View>
+                    {/* Legend */}
+                    <View style={styles.challengeProgLegend}>
+                      {[
+                        { nameKey: 'tenShots', color: '#F97316' },
+                        { nameKey: 'tenShotsLob', color: '#3B82F6' },
+                        { nameKey: 'precision', color: '#F59E0B' },
+                      ].map(({ nameKey, color }) => (
+                        <View key={nameKey} style={styles.challengeProgLegendItem}>
+                          <View style={[styles.challengeProgLegendDot, { backgroundColor: color }]} />
+                          <Text style={styles.challengeProgLegendText}>{t('challenge', nameKey)}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
                 {/* Summary Table */}
                 <View style={styles.progressionSection}>
                   <View style={styles.progressionSectionHeader}>
@@ -3437,6 +3567,11 @@ const styles = StyleSheet.create({
   noProgressionData: { alignItems: 'center', paddingVertical: 48 },
   noProgressionTitle: { fontSize: 18, fontWeight: '600', color: theme.textPrimary, marginTop: 16 },
   noProgressionText: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginTop: 8, maxWidth: 260 },
+  // Challenge progression legend
+  challengeProgLegend: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 16, marginTop: 4 },
+  challengeProgLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  challengeProgLegendDot: { width: 10, height: 10, borderRadius: 5 },
+  challengeProgLegendText: { fontSize: 12, color: theme.textSecondary, fontWeight: '500' },
   // Cross-reference table styles
   crossTableHeader: { flexDirection: 'row', alignItems: 'center', paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: theme.border, marginBottom: 4 },
   crossTableHeaderLabel: { flex: 1.5, paddingLeft: 4 },

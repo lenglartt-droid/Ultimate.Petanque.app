@@ -575,6 +575,9 @@ export const translations = {
     precisionEvolutionLabel: { fr: 'Evol.', en: 'Trend' },
     precisionInsightBest: { fr: 'a le meilleur taux de reussite', en: 'has the best success rate' },
     precisionInsightWorst: { fr: 'est le plus difficile', en: 'is the hardest' },
+    // Challenge progression chart
+    challengeProgressionTitle: { fr: 'Progression des defis', en: 'Challenge Progression' },
+    challengeProgressionSubtitle: { fr: 'Taux de reussite par type', en: 'Success rate by type' },
   },
 
   // ============================================
