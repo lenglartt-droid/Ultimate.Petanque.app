@@ -64,7 +64,11 @@ interface Cluster {
 }
 
 function clusterMarkers(items: ClusterItem[], region: { latitudeDelta: number; longitudeDelta: number } | null): Cluster[] {
-  if (!region || items.length === 0) return items.map(item => ({
+  if (!region || items.length === 0) return items.filter(item => {
+    const lat = item.location?.latitude;
+    const lng = item.location?.longitude;
+    return (lat !== undefined && lat !== null && lat !== 0) || (lng !== undefined && lng !== null && lng !== 0);
+  }).map(item => ({
     id: `single-${item.itemType}-${item.id}`,
     latitude: item.location?.latitude || 0,
     longitude: item.location?.longitude || 0,
@@ -78,7 +82,11 @@ function clusterMarkers(items: ClusterItem[], region: { latitudeDelta: number; l
 
   // If zoomed in enough, don't cluster
   if (region.latitudeDelta < 0.05) {
-    return items.map(item => ({
+    return items.filter(item => {
+      const lat = item.location?.latitude;
+      const lng = item.location?.longitude;
+      return (lat !== undefined && lat !== null && lat !== 0) || (lng !== undefined && lng !== null && lng !== 0);
+    }).map(item => ({
       id: `single-${item.itemType}-${item.id}`,
       latitude: item.location?.latitude || 0,
       longitude: item.location?.longitude || 0,
@@ -92,7 +100,8 @@ function clusterMarkers(items: ClusterItem[], region: { latitudeDelta: number; l
   items.forEach(item => {
     const lat = item.location?.latitude;
     const lng = item.location?.longitude;
-    if (!lat && !lng) return;
+    if (lat === undefined || lat === null || lng === undefined || lng === null) return;
+    if (lat === 0 && lng === 0) return;
     const cellKey = `${Math.floor(lat / cellLat)}_${Math.floor(lng / cellLng)}`;
     if (!grid[cellKey]) grid[cellKey] = [];
     grid[cellKey].push(item);
@@ -278,21 +287,28 @@ export default function MapScreen() {
     load();
   }, [user?.id]);
 
+  // Helper: check if a location has valid coordinates (not 0,0)
+  const hasValidLocation = useCallback((item: any) => {
+    const lat = item.location?.latitude;
+    const lng = item.location?.longitude;
+    return (lat !== undefined && lat !== null && lat !== 0) || (lng !== undefined && lng !== null && lng !== 0);
+  }, []);
+
   // Own data with locations
   const ownData = useMemo(() => ({
-    terrains: terrains.filter(t => t.location?.latitude || t.location?.longitude),
-    clubs: clubs.filter(c => c.location?.latitude || c.location?.longitude),
-    players: players.filter(p => p.location?.latitude || p.location?.longitude),
-    tournaments: tournaments.filter(t => t.location?.latitude || t.location?.longitude),
-  }), [terrains, clubs, players, tournaments]);
+    terrains: terrains.filter(hasValidLocation),
+    clubs: clubs.filter(hasValidLocation),
+    players: players.filter(hasValidLocation),
+    tournaments: tournaments.filter(hasValidLocation),
+  }), [terrains, clubs, players, tournaments, hasValidLocation]);
 
   // Public data with locations
   const pubData = useMemo(() => ({
-    terrains: publicTerrains.filter(t => t.location?.latitude || t.location?.longitude),
-    clubs: publicClubs.filter(c => c.location?.latitude || c.location?.longitude),
-    players: publicPlayers.filter(p => p.location?.latitude || p.location?.longitude),
-    tournaments: publicTournaments.filter(t => t.location?.latitude || t.location?.longitude),
-  }), [publicTerrains, publicClubs, publicPlayers, publicTournaments]);
+    terrains: publicTerrains.filter(hasValidLocation),
+    clubs: publicClubs.filter(hasValidLocation),
+    players: publicPlayers.filter(hasValidLocation),
+    tournaments: publicTournaments.filter(hasValidLocation),
+  }), [publicTerrains, publicClubs, publicPlayers, publicTournaments, hasValidLocation]);
 
   // Combined results
   const results = useMemo(() => {

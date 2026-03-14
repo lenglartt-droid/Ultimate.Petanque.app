@@ -756,6 +756,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           terrainId: data.terrain_id,
           terrainName: data.terrain_name,
           membershipCost: data.membership_cost ? parseFloat(data.membership_cost) : undefined,
+          isPublic: data.is_public ?? false,
+          showContactPublic: data.show_contact_public ?? false,
         };
         setClubs(prev => [...prev, newClub]);
       }

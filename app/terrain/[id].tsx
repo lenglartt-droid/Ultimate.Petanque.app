@@ -49,6 +49,8 @@ export default function TerrainDetailScreen() {
   const isReadOnly = sharedPermission === 'read';
   const canEdit = !isReadOnly;
 
+  const terrain = getTerrainById(id || '');
+
   useEffect(() => {
     if (id) {
       isSharedWithMe('terrain', id).then(setIsShared);
@@ -57,7 +59,7 @@ export default function TerrainDetailScreen() {
 
   useEffect(() => {
     if (terrain) setIsPublicState(terrain.isPublic ?? false);
-  }, [terrain?.isPublic]);
+  }, [terrain?.id, terrain?.isPublic]);
 
   const handleTogglePublic = async () => {
     if (!terrain || togglingPublic || isSharedItem) return;
@@ -82,8 +84,6 @@ export default function TerrainDetailScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   };
-
-  const terrain = getTerrainById(id || '');
 
   const handleDelete = () => {
     Alert.alert(
