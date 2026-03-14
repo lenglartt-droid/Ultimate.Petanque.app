@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { getSupabaseClient } from '@/template';
 import { useAuth } from '@/template';
 import { logModification } from '@/services/modificationLogService';
-import { saveToCache, saveSingleToCache, loadFromCache, clearCache } from '@/services/cacheService';
+import { saveToCache, saveSingleToCache, loadFromCache, clearCache, getLastSyncTimestamp, setLastSyncTimestamp } from '@/services/cacheService';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import {
   mockPlayers,
@@ -147,6 +147,105 @@ function calculatePlayerStatsFromMatches(allMatches: Match[], playerId: string, 
   };
 }
 
+// Module-level DB row mappers (pure functions, reusable in full & delta sync)
+function mapClubFromDb(c: any): Club {
+  return {
+    id: c.id, name: c.name, logo: c.logo, address: c.address, city: c.city,
+    country: c.country || 'France', location: c.location || { latitude: 0, longitude: 0 },
+    membersCount: c.members_count || 0, foundedYear: c.founded_year,
+    description: c.description, facilities: c.facilities || [],
+    contactEmail: c.contact_email, contactPhone: c.contact_phone,
+    terrainId: c.terrain_id, terrainName: c.terrain_name,
+    membershipCost: c.membership_cost ? parseFloat(c.membership_cost) : undefined,
+    isPublic: c.is_public ?? false, showContactPublic: c.show_contact_public ?? false,
+  };
+}
+
+function mapTerrainFromDb(t: any): Terrain {
+  return {
+    id: t.id, name: t.name, address: t.address, city: t.city,
+    location: t.location || { latitude: 0, longitude: 0 }, type: t.type,
+    description: t.description, facilities: t.facilities || [], photos: t.photos || [],
+    clubId: t.club_id, clubName: t.club_name, isPublic: t.is_public ?? true,
+    publicAccess: t.public_access ?? true, courtsCount: t.courts_count || 1,
+    lighting: t.lighting ?? false, covered: t.covered ?? false,
+    environment: t.environment || 'outdoor', createdAt: t.created_at,
+  };
+}
+
+function mapTournamentFromDb(t: any): Tournament {
+  return {
+    id: t.id, name: t.name, date: t.date, endDate: t.end_date,
+    type: t.type, format: t.format, location: t.location,
+    terrainId: t.terrain_id, terrainName: t.terrain_name, terrainType: t.terrain_type,
+    clubId: t.club_id, clubName: t.club_name, status: t.status,
+    participants: t.participants || 0, maxParticipants: t.max_participants || 32,
+    prize: t.prize, description: t.description, teams: t.teams, phases: t.phases,
+    currentPhaseId: t.current_phase_id, tournamentLevel: t.tournament_level,
+    tournamentCategory: t.tournament_category, registrationType: t.registration_type,
+    tournamentScope: t.tournament_scope,
+    registrationCost: t.registration_cost ? parseFloat(t.registration_cost) : undefined,
+    prizeWon: t.prize_won ? parseFloat(t.prize_won) : undefined,
+    finalResult: t.final_result, isPublic: t.is_public ?? false,
+  };
+}
+
+function mapMatchFromDb(m: any): Match {
+  return {
+    id: m.id, date: m.date, mode: m.mode, format: m.format,
+    tournamentId: m.tournament_id, tournamentName: m.tournament_name,
+    tournamentPhase: m.tournament_phase, tournamentBracket: m.tournament_bracket,
+    bracketMatchId: m.bracket_match_id, terrainId: m.terrain_id, terrainType: m.terrain_type,
+    teamA: m.team_a, teamB: m.team_b, winner: m.winner,
+    duration: m.duration || 0, menes: m.menes || [],
+    playerActions: m.player_actions, seriesInfo: m.series_info,
+  };
+}
+
+function mapChallengeFromDb(c: any): Challenge {
+  return {
+    id: c.id, type: c.type, mode: c.mode || 'solo', date: c.date,
+    playerId: c.player_id, playerName: c.player_name,
+    opponentId: c.opponent_id, opponentName: c.opponent_name,
+    opponentResult: c.opponent_result, winner: c.winner,
+    shots: c.shots, successCount: c.success_count, totalShots: c.total_shots,
+    carreauCount: c.carreau_count,
+    successRate: c.success_rate ? parseFloat(c.success_rate) : undefined,
+    precisionShots: c.precision_shots, totalPoints: c.total_points,
+    maxPoints: c.max_points, atelierScores: c.atelier_scores,
+    duration: c.duration, notes: c.notes, detailedShots: c.detailed_shots,
+  };
+}
+
+function mapPlayerFromDb(p: any): Player {
+  return {
+    id: p.id, name: p.name, nickname: p.nickname, avatar: p.avatar,
+    club: p.club, clubId: p.club_id, role: p.role, level: p.level,
+    location: p.location, phone: p.phone, email: p.email, country: p.country,
+    boules: p.boules, handedness: p.handedness, terrainId: p.terrain_id,
+    terrainName: p.terrain_name, isPublic: p.is_public ?? false,
+    showContactPublic: p.show_contact_public ?? false,
+    stats: p.stats || {
+      matchesPlayed: 0, wins: 0, losses: 0, winRate: 0,
+      tirRate: 0, pointRate: 0, carreauRate: 0,
+      avgPointsScored: 0, avgPointsConceded: 0,
+    },
+    createdAt: p.created_at,
+  };
+}
+
+// Merge delta records into existing array (upsert by id)
+function mergeRecords<T extends { id: string }>(existing: T[], delta: T[]): T[] {
+  if (delta.length === 0) return existing;
+  const deltaMap = new Map(delta.map(item => [item.id, item]));
+  const merged = existing.map(item => deltaMap.has(item.id) ? deltaMap.get(item.id)! : item);
+  const existingIds = new Set(existing.map(item => item.id));
+  delta.forEach(item => {
+    if (!existingIds.has(item.id)) merged.push(item);
+  });
+  return merged;
+}
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -157,6 +256,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [cacheLoaded, setCacheLoaded] = useState(false);
   const initialLoadDone = useRef(false);
+  const syncCountRef = useRef(0);
+  const FULL_SYNC_INTERVAL = 5; // Full sync every 5th cycle, delta sync otherwise
   
   const [players, setPlayers] = useState<Player[]>([]);
   const [clubs, setClubs] = useState<Club[]>([]);
@@ -293,32 +394,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [challenges]);
 
   // Helper to transform a raw player DB row (reusable across loadData and addPlayer)
-  const mapPlayer = useCallback((p: any): Player => ({
-    id: p.id,
-    name: p.name,
-    nickname: p.nickname,
-    avatar: p.avatar,
-    club: p.club,
-    clubId: p.club_id,
-    role: p.role,
-    level: p.level,
-    location: p.location,
-    phone: p.phone,
-    email: p.email,
-    country: p.country,
-    boules: p.boules,
-    handedness: p.handedness,
-    terrainId: p.terrain_id,
-    terrainName: p.terrain_name,
-    isPublic: p.is_public ?? false,
-    showContactPublic: p.show_contact_public ?? false,
-    stats: p.stats || {
-      matchesPlayed: 0, wins: 0, losses: 0, winRate: 0,
-      tirRate: 0, pointRate: 0, carreauRate: 0,
-      avgPointsScored: 0, avgPointsConceded: 0
-    },
-    createdAt: p.created_at,
-  }), []);
+  const mapPlayer = useCallback((p: any): Player => mapPlayerFromDb(p), []);
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -355,14 +431,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadCache();
   }, [user?.id, cacheLoaded]);
 
-  // Auto-sync when network returns after being offline
+  // Auto-sync when network returns after being offline (delta first, then full)
   useEffect(() => {
     if (justReconnected && user?.id) {
-      console.log('Network restored - syncing data...');
+      console.log('Network restored - delta syncing data...');
       setIsOfflineMode(false);
-      loadData();
+      loadDeltaData();
     }
-  }, [justReconnected, user?.id]);
+  }, [justReconnected, user?.id, loadDeltaData]);
 
   // Load data from Supabase
   const loadData = useCallback(async () => {
@@ -469,174 +545,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       setPlayers(dbPlayers.length > 0 ? dbPlayers : mockPlayers);
 
-      // Helper to transform a raw club DB row
-      const mapClub = (c: any): Club => ({
-        id: c.id,
-        name: c.name,
-        logo: c.logo,
-        address: c.address,
-        city: c.city,
-        country: c.country || 'France',
-        location: c.location || { latitude: 0, longitude: 0 },
-        membersCount: c.members_count || 0,
-        foundedYear: c.founded_year,
-        description: c.description,
-        facilities: c.facilities || [],
-        contactEmail: c.contact_email,
-        contactPhone: c.contact_phone,
-        terrainId: c.terrain_id,
-        terrainName: c.terrain_name,
-        membershipCost: c.membership_cost ? parseFloat(c.membership_cost) : undefined,
-        isPublic: c.is_public ?? false,
-        showContactPublic: c.show_contact_public ?? false,
-      });
-
       if (clubsRes.data) {
-        const dbClubs: Club[] = clubsRes.data.map(mapClub);
-        // Merge shared clubs
+        const dbClubs: Club[] = clubsRes.data.map(mapClubFromDb);
         const ownClubIds = new Set(dbClubs.map(c => c.id));
         if (sharedClubsRes.data) {
           sharedClubsRes.data.forEach((c: any) => {
-            if (!ownClubIds.has(c.id)) dbClubs.push(mapClub(c));
+            if (!ownClubIds.has(c.id)) dbClubs.push(mapClubFromDb(c));
           });
         }
         setClubs(dbClubs.length > 0 ? dbClubs : mockClubs);
       }
 
-      // Helper to transform a raw terrain DB row
-      const mapTerrain = (t: any): Terrain => ({
-        id: t.id,
-        name: t.name,
-        address: t.address,
-        city: t.city,
-        location: t.location || { latitude: 0, longitude: 0 },
-        type: t.type,
-        description: t.description,
-        facilities: t.facilities || [],
-        photos: t.photos || [],
-        clubId: t.club_id,
-        clubName: t.club_name,
-        isPublic: t.is_public ?? true,
-        publicAccess: t.public_access ?? true,
-        courtsCount: t.courts_count || 1,
-        lighting: t.lighting ?? false,
-        covered: t.covered ?? false,
-        environment: t.environment || 'outdoor',
-        createdAt: t.created_at,
-      });
-
       if (terrainsRes.data) {
-        const dbTerrains: Terrain[] = terrainsRes.data.map(mapTerrain);
-        // Merge shared terrains
+        const dbTerrains: Terrain[] = terrainsRes.data.map(mapTerrainFromDb);
         const ownTerrainIds = new Set(dbTerrains.map(t => t.id));
         if (sharedTerrainsRes.data) {
           sharedTerrainsRes.data.forEach((t: any) => {
-            if (!ownTerrainIds.has(t.id)) dbTerrains.push(mapTerrain(t));
+            if (!ownTerrainIds.has(t.id)) dbTerrains.push(mapTerrainFromDb(t));
           });
         }
         setTerrains(dbTerrains.length > 0 ? dbTerrains : mockTerrains);
       }
 
-      // Helper to transform a raw tournament DB row
-      const mapTournament = (t: any): Tournament => ({
-        id: t.id,
-        name: t.name,
-        date: t.date,
-        endDate: t.end_date,
-        type: t.type,
-        format: t.format,
-        location: t.location,
-        terrainId: t.terrain_id,
-        terrainName: t.terrain_name,
-        terrainType: t.terrain_type,
-        clubId: t.club_id,
-        clubName: t.club_name,
-        status: t.status,
-        participants: t.participants || 0,
-        maxParticipants: t.max_participants || 32,
-        prize: t.prize,
-        description: t.description,
-        teams: t.teams,
-        phases: t.phases,
-        currentPhaseId: t.current_phase_id,
-        tournamentLevel: t.tournament_level,
-        tournamentCategory: t.tournament_category,
-        registrationType: t.registration_type,
-        tournamentScope: t.tournament_scope,
-        registrationCost: t.registration_cost ? parseFloat(t.registration_cost) : undefined,
-        prizeWon: t.prize_won ? parseFloat(t.prize_won) : undefined,
-        finalResult: t.final_result,
-        isPublic: t.is_public ?? false,
-      });
-
       if (tournamentsRes.data) {
-        const dbTournaments: Tournament[] = tournamentsRes.data.map(mapTournament);
-        // Merge shared tournaments
+        const dbTournaments: Tournament[] = tournamentsRes.data.map(mapTournamentFromDb);
         const ownTournamentIds = new Set(dbTournaments.map(t => t.id));
         if (sharedTournamentsRes.data) {
           sharedTournamentsRes.data.forEach((t: any) => {
-            if (!ownTournamentIds.has(t.id)) dbTournaments.push(mapTournament(t));
+            if (!ownTournamentIds.has(t.id)) dbTournaments.push(mapTournamentFromDb(t));
           });
         }
         setTournaments(dbTournaments.length > 0 ? dbTournaments : mockTournaments);
       }
 
       if (matchesRes.data) {
-        const dbMatches: Match[] = matchesRes.data.map(m => ({
-          id: m.id,
-          date: m.date,
-          mode: m.mode,
-          format: m.format,
-          tournamentId: m.tournament_id,
-          tournamentName: m.tournament_name,
-          tournamentPhase: m.tournament_phase,
-          tournamentBracket: m.tournament_bracket,
-          bracketMatchId: m.bracket_match_id,
-          terrainId: m.terrain_id,
-          terrainType: m.terrain_type,
-          teamA: m.team_a,
-          teamB: m.team_b,
-          winner: m.winner,
-          duration: m.duration || 0,
-          menes: m.menes || [],
-          playerActions: m.player_actions,
-          seriesInfo: m.series_info,
-        }));
+        const dbMatches: Match[] = matchesRes.data.map(mapMatchFromDb);
         setMatches(dbMatches.length > 0 ? dbMatches : mockMatches);
       }
 
       if (challengesRes.data) {
-        const dbChallenges: Challenge[] = challengesRes.data.map(c => ({
-          id: c.id,
-          type: c.type,
-          mode: c.mode || 'solo',
-          date: c.date,
-          playerId: c.player_id,
-          playerName: c.player_name,
-          opponentId: c.opponent_id,
-          opponentName: c.opponent_name,
-          opponentResult: c.opponent_result,
-          winner: c.winner,
-
-          shots: c.shots,
-          successCount: c.success_count,
-          totalShots: c.total_shots,
-          carreauCount: c.carreau_count,
-          successRate: c.success_rate ? parseFloat(c.success_rate) : undefined,
-          precisionShots: c.precision_shots,
-          totalPoints: c.total_points,
-          maxPoints: c.max_points,
-          atelierScores: c.atelier_scores,
-          duration: c.duration,
-          notes: c.notes,
-          detailedShots: c.detailed_shots,
-        }));
+        const dbChallenges: Challenge[] = challengesRes.data.map(mapChallengeFromDb);
         setChallenges(dbChallenges.length > 0 ? dbChallenges : mockChallenges);
       }
 
-      // Mark network load as complete
+      // Mark network load as complete and save sync timestamp
       initialLoadDone.current = true;
       setIsOfflineMode(false);
+      await setLastSyncTimestamp(new Date().toISOString());
 
     } catch (error) {
       console.log('Error loading data from cloud:', error);
@@ -664,6 +619,78 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   }, [user?.id, supabase, mapPlayer]);
+
+  // Delta sync: only fetch records changed since last sync timestamp
+  const loadDeltaData = useCallback(async () => {
+    if (!user?.id || !isConnectedRef.current || !initialLoadDone.current) return;
+
+    const lastSync = await getLastSyncTimestamp();
+    if (!lastSync) {
+      // No previous sync timestamp, fall back to full sync
+      return loadData();
+    }
+
+    const syncTimestamp = new Date().toISOString();
+
+    try {
+      // Fetch only records updated since last sync (6 lightweight queries)
+      const [playersRes, clubsRes, tournamentsRes, matchesRes, challengesRes, terrainsRes] = await Promise.all([
+        supabase.from('players').select('*').gt('updated_at', lastSync),
+        supabase.from('clubs').select('*').gt('updated_at', lastSync),
+        supabase.from('tournaments').select('*').gt('updated_at', lastSync),
+        supabase.from('matches').select('*').gt('updated_at', lastSync),
+        supabase.from('challenges').select('*').gt('updated_at', lastSync),
+        supabase.from('terrains').select('*').gt('updated_at', lastSync),
+      ]);
+
+      const totalChanges =
+        (playersRes.data?.length || 0) +
+        (clubsRes.data?.length || 0) +
+        (tournamentsRes.data?.length || 0) +
+        (matchesRes.data?.length || 0) +
+        (challengesRes.data?.length || 0) +
+        (terrainsRes.data?.length || 0);
+
+      if (totalChanges === 0) {
+        // No changes since last sync
+        await setLastSyncTimestamp(syncTimestamp);
+        return;
+      }
+
+      console.log(`Delta sync: ${totalChanges} records changed since last sync`);
+
+      // Merge delta records into existing state
+      if (playersRes.data && playersRes.data.length > 0) {
+        const deltaPlayers = playersRes.data.map(mapPlayerFromDb);
+        setPlayers(prev => mergeRecords(prev, deltaPlayers));
+      }
+      if (clubsRes.data && clubsRes.data.length > 0) {
+        const deltaClubs = clubsRes.data.map(mapClubFromDb);
+        setClubs(prev => mergeRecords(prev, deltaClubs));
+      }
+      if (terrainsRes.data && terrainsRes.data.length > 0) {
+        const deltaTerrains = terrainsRes.data.map(mapTerrainFromDb);
+        setTerrains(prev => mergeRecords(prev, deltaTerrains));
+      }
+      if (tournamentsRes.data && tournamentsRes.data.length > 0) {
+        const deltaTournaments = tournamentsRes.data.map(mapTournamentFromDb);
+        setTournaments(prev => mergeRecords(prev, deltaTournaments));
+      }
+      if (matchesRes.data && matchesRes.data.length > 0) {
+        const deltaMatches = matchesRes.data.map(mapMatchFromDb);
+        setMatches(prev => mergeRecords(prev, deltaMatches));
+      }
+      if (challengesRes.data && challengesRes.data.length > 0) {
+        const deltaChallenges = challengesRes.data.map(mapChallengeFromDb);
+        setChallenges(prev => mergeRecords(prev, deltaChallenges));
+      }
+
+      await setLastSyncTimestamp(syncTimestamp);
+    } catch (error) {
+      console.log('Delta sync error, falling back to full sync:', error);
+      return loadData();
+    }
+  }, [user?.id, supabase, loadData]);
 
   // Persist data to cache whenever critical state changes (debounced)
   useEffect(() => {
@@ -743,17 +770,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.id]);
 
-  // Auto-refresh every 30 seconds when user is logged in
+  // Auto-refresh every 30 seconds: delta sync normally, full sync every Nth cycle
   useEffect(() => {
     if (!user?.id) return;
     const interval = setInterval(() => {
-      loadData();
+      syncCountRef.current += 1;
+      if (syncCountRef.current % FULL_SYNC_INTERVAL === 0) {
+        console.log('Periodic full sync (cycle', syncCountRef.current, ')');
+        loadData();
+      } else {
+        loadDeltaData();
+      }
     }, 30000);
     return () => clearInterval(interval);
-  }, [user?.id, loadData]);
+  }, [user?.id, loadData, loadDeltaData]);
 
-  // Refresh data function
+  // Refresh data function (manual pull-to-refresh always does full sync)
   const refreshData = useCallback(async () => {
+    syncCountRef.current = 0;
     await loadData();
   }, [loadData]);
 

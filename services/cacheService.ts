@@ -5,6 +5,7 @@ const CACHE_PREFIX = 'petanque_cache_';
 const CACHE_VERSION_KEY = `${CACHE_PREFIX}version`;
 const CACHE_VERSION = '1';
 const CACHE_TIMESTAMP_KEY = `${CACHE_PREFIX}timestamp`;
+const LAST_SYNC_KEY = `${CACHE_PREFIX}last_sync`;
 
 type CacheKey = 'players' | 'clubs' | 'tournaments' | 'matches' | 'challenges' | 'terrains';
 
@@ -131,10 +132,32 @@ export async function getCacheTimestamp(): Promise<string | null> {
  */
 export async function clearCache(): Promise<void> {
   try {
-    const allKeys = [...Object.values(CACHE_KEYS), CACHE_TIMESTAMP_KEY, CACHE_VERSION_KEY];
+    const allKeys = [...Object.values(CACHE_KEYS), CACHE_TIMESTAMP_KEY, CACHE_VERSION_KEY, LAST_SYNC_KEY];
     await AsyncStorage.multiRemove(allKeys);
   } catch (error) {
     console.log('Error clearing cache:', error);
+  }
+}
+
+/**
+ * Get the last successful sync timestamp (for delta sync)
+ */
+export async function getLastSyncTimestamp(): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(LAST_SYNC_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Save the last successful sync timestamp
+ */
+export async function setLastSyncTimestamp(timestamp: string): Promise<void> {
+  try {
+    await AsyncStorage.setItem(LAST_SYNC_KEY, timestamp);
+  } catch (error) {
+    console.log('Error saving sync timestamp:', error);
   }
 }
 
