@@ -1029,6 +1029,40 @@ export default function MyPlayerCardScreen() {
               </Text>
             </View>
           </Pressable>
+
+          {/* Contact privacy warning */}
+          {isPublic ? (
+            <View style={styles.contactWarningCard}>
+              <View style={styles.contactWarningHeader}>
+                <View style={styles.contactWarningIconWrap}>
+                  <MaterialIcons name="shield" size={18} color={theme.warning} />
+                </View>
+                <Text style={styles.contactWarningTitle}>
+                  {language === 'fr' ? 'Protection des contacts' : 'Contact Protection'}
+                </Text>
+              </View>
+              <Text style={styles.contactWarningText}>
+                {language === 'fr'
+                  ? 'Vos informations de contact (telephone, email) ne sont jamais transmises via la carte publique. Seul votre nom, role, niveau et localisation sont visibles.'
+                  : 'Your contact information (phone, email) is never transmitted via the public map. Only your name, role, level and location are visible.'}
+              </Text>
+              <Pressable
+                style={styles.contactWarningLink}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setShowShareModal(true);
+                }}
+              >
+                <MaterialIcons name="vpn-key" size={16} color={theme.primary} />
+                <Text style={styles.contactWarningLinkText}>
+                  {language === 'fr'
+                    ? 'Utiliser le partage par code pour transmettre vos coordonnees'
+                    : 'Use code sharing to transmit your contact details'}
+                </Text>
+                <MaterialIcons name="chevron-right" size={16} color={theme.primary} />
+              </Pressable>
+            </View>
+          ) : null}
         </Animated.View>
 
         {/* Edit Profile Button */}
@@ -1843,6 +1877,54 @@ const styles = StyleSheet.create({
   visibilityBadgeText: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  contactWarningCard: {
+    backgroundColor: theme.warning + '08',
+    borderRadius: theme.borderRadius.md,
+    padding: 14,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: theme.warning + '20',
+  },
+  contactWarningHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  contactWarningIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme.warning + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  contactWarningTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.warning,
+  },
+  contactWarningText: {
+    fontSize: 13,
+    color: theme.textSecondary,
+    lineHeight: 19,
+    marginBottom: 10,
+  },
+  contactWarningLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: theme.primary + '10',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: theme.borderRadius.md,
+  },
+  contactWarningLinkText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.primary,
   },
   // Boules styles
   boulesCard: {
