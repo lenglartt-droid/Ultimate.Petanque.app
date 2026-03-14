@@ -7,6 +7,7 @@ export interface BoulesInfo {
   name?: string;
   diameter?: number; // mm
   weight?: number; // g
+  serialNumber?: string;
 }
 
 export interface Player {

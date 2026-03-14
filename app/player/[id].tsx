@@ -480,7 +480,7 @@ export default function PlayerDetailScreen() {
 
         <View style={isTablet ? styles.tabletRightCol : undefined}>
         {/* Game Preferences Section */}
-        {(roleAnalysis.totalWithRoles > 0 || terrainAnalysis.totalWithTerrain > 0 || partnerAnalysis.totalWithPartners > 0) ? (
+        {(roleAnalysis.totalWithRoles > 0 || terrainAnalysis.totalWithTerrain > 0 || partnerAnalysis.totalWithPartners > 0 || (player.boules && (player.boules.name || player.boules.diameter || player.boules.weight))) ? (
           <Animated.View entering={FadeInDown.duration(400).delay(50)} style={[styles.preferencesCard, isTablet && styles.preferencesCardTablet]}>
             <View style={styles.profileSectionDivider}>
               <MaterialIcons name="psychology" size={15} color={theme.accent} />
@@ -613,6 +613,51 @@ export default function PlayerDetailScreen() {
               </View>
             );
           })()}
+          {/* Boules / Equipment in preferences */}
+          {player.boules && (player.boules.name || player.boules.diameter || player.boules.weight) ? (
+            <View style={styles.preferredRoleCard}>
+              <Text style={styles.preferredRoleTitle}>{t('player', 'boulesLabel')}</Text>
+              <View style={styles.preferredRoleContent}>
+                <View style={[styles.preferredRoleIcon, { backgroundColor: theme.accent }]}>
+                  <MaterialIcons name="sports-baseball" size={20} color="#FFF" />
+                </View>
+                <View style={styles.preferredRoleInfo}>
+                  <Text style={styles.preferredRoleName}>{player.boules.name || t('player', 'boulesLabel')}</Text>
+                  <Text style={styles.preferredRoleStats}>
+                    {[player.boules.diameter ? `${player.boules.diameter} mm` : '', player.boules.weight ? `${player.boules.weight} g` : ''].filter(Boolean).join(' \u2022 ')}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.roleBreakdown}>
+                {player.boules.diameter ? (
+                  <View style={styles.roleBreakdownItem}>
+                    <MaterialIcons name="straighten" size={14} color={theme.accent} />
+                    <Text style={styles.roleBreakdownLabel}>\u00D8</Text>
+                    <View style={styles.roleBreakdownBarBg}>
+                      <View style={[styles.roleBreakdownBar, { width: `${Math.min(((player.boules.diameter - 70.5) / (80 - 70.5)) * 100, 100)}%`, backgroundColor: theme.accent }]} />
+                    </View>
+                    <Text style={styles.roleBreakdownPct}>{player.boules.diameter}mm</Text>
+                  </View>
+                ) : null}
+                {player.boules.weight ? (
+                  <View style={styles.roleBreakdownItem}>
+                    <MaterialIcons name="fitness-center" size={14} color={theme.accent} />
+                    <Text style={styles.roleBreakdownLabel}>g</Text>
+                    <View style={styles.roleBreakdownBarBg}>
+                      <View style={[styles.roleBreakdownBar, { width: `${Math.min(((player.boules.weight - 650) / (800 - 650)) * 100, 100)}%`, backgroundColor: theme.accent }]} />
+                    </View>
+                    <Text style={styles.roleBreakdownPct}>{player.boules.weight}g</Text>
+                  </View>
+                ) : null}
+                {player.boules.serialNumber ? (
+                  <View style={styles.roleBreakdownItem}>
+                    <MaterialIcons name="tag" size={14} color={theme.textMuted} />
+                    <Text style={[styles.roleBreakdownPct, { flex: 1, textAlign: 'left', marginLeft: 4 }]}>{player.boules.serialNumber}</Text>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
           </Animated.View>
         ) : null}
 
@@ -631,37 +676,6 @@ export default function PlayerDetailScreen() {
             <Text style={styles.quickStatLabel}>{t('player', 'defeats')}</Text>
           </View>
         </Animated.View>
-
-        {/* Boules Section */}
-        {player.boules && (player.boules.name || player.boules.diameter || player.boules.weight) && (
-          <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('player', 'boulesLabel')}</Text>
-            <View style={styles.boulesCard}>
-              <View style={styles.boulesIconContainer}>
-                <MaterialIcons name="sports-baseball" size={32} color={theme.accent} />
-              </View>
-              <View style={styles.boulesInfo}>
-                {player.boules.name && (
-                  <Text style={styles.boulesName}>{player.boules.name}</Text>
-                )}
-                <View style={styles.boulesSpecs}>
-                  {player.boules.diameter && (
-                    <View style={styles.boulesSpecItem}>
-                      <Text style={styles.boulesSpecLabel}>{t('player', 'diameter')}</Text>
-                      <Text style={styles.boulesSpecValue}>{player.boules.diameter} mm</Text>
-                    </View>
-                  )}
-                  {player.boules.weight && (
-                    <View style={styles.boulesSpecItem}>
-                      <Text style={styles.boulesSpecLabel}>{t('player', 'weight')}</Text>
-                      <Text style={styles.boulesSpecValue}>{player.boules.weight} g</Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-            </View>
-          </Animated.View>
-        )}
 
         </View>
         </View>

@@ -80,6 +80,7 @@ export default function ProfileScreen() {
   const [boulesName, setBoulesName] = useState('');
   const [boulesDiameter, setBoulesDiameter] = useState('');
   const [boulesWeight, setBoulesWeight] = useState('');
+  const [boulesSerialNumber, setBoulesSerialNumber] = useState('');
 
   // Handedness
   const [handedness, setHandedness] = useState<'right' | 'left' | 'ambidextrous' | ''>('');
@@ -247,6 +248,7 @@ export default function ProfileScreen() {
           setBoulesName(selfPlayer.boules?.name || '');
           setBoulesDiameter(selfPlayer.boules?.diameter || '');
           setBoulesWeight(selfPlayer.boules?.weight || '');
+          setBoulesSerialNumber(selfPlayer.boules?.serialNumber || '');
           // Location
           if (selfPlayer.location) {
             setLocation({
@@ -424,8 +426,8 @@ export default function ProfileScreen() {
 
       // Also update the player record
       if (user?.id) {
-        const boulesData = (boulesName.trim() || boulesDiameter.trim() || boulesWeight.trim())
-          ? { name: boulesName.trim(), diameter: boulesDiameter.trim(), weight: boulesWeight.trim() }
+        const boulesData = (boulesName.trim() || boulesDiameter.trim() || boulesWeight.trim() || boulesSerialNumber.trim())
+          ? { name: boulesName.trim(), diameter: boulesDiameter.trim(), weight: boulesWeight.trim(), serialNumber: boulesSerialNumber.trim() || undefined }
           : undefined;
         await updatePlayer(user.id, {
           name: username.trim(),
@@ -881,7 +883,7 @@ export default function ProfileScreen() {
             <View style={styles.heroBoulesRow}>
               <MaterialIcons name="sports-baseball" size={16} color={theme.accent} />
               <Text style={styles.heroBoulesText}>
-                {[selfPlayer.boules.name, selfPlayer.boules.diameter ? `${selfPlayer.boules.diameter} mm` : '', selfPlayer.boules.weight ? `${selfPlayer.boules.weight} g` : ''].filter(Boolean).join(' \u2022 ')}
+                {[selfPlayer.boules.name, selfPlayer.boules.diameter ? `${selfPlayer.boules.diameter} mm` : '', selfPlayer.boules.weight ? `${selfPlayer.boules.weight} g` : '', selfPlayer.boules.serialNumber ? `N\u00B0${selfPlayer.boules.serialNumber}` : ''].filter(Boolean).join(' \u2022 ')}
               </Text>
             </View>
           ) : null}
@@ -1198,6 +1200,13 @@ export default function ProfileScreen() {
                   />
                 </View>
               </View>
+              <TextInput
+                style={[styles.fieldInput, { marginTop: 10 }]}
+                value={boulesSerialNumber}
+                onChangeText={setBoulesSerialNumber}
+                placeholder={language === 'fr' ? 'Numero de serie (optionnel)' : 'Serial number (optional)'}
+                placeholderTextColor={theme.textMuted}
+              />
             </View>
 
             {/* Terrain Selection */}
