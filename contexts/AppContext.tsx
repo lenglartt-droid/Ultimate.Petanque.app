@@ -8,6 +8,8 @@ import {
   replayOfflineQueue,
   getQueueSize,
   clearOfflineQueue,
+  retryFailedOperations,
+  getFailedOperations,
   buildMatchDbPayload,
   buildPlayerDbPayload,
   buildClubDbPayload,
@@ -120,6 +122,9 @@ interface AppContextType {
   currentConflict: ConflictInfo | null;
   conflictRemaining: number;
   resolveConflict: (choice: 'local' | 'server' | 'skip') => void;
+
+  // Retry failed operations
+  retryFailedOps: (opIds?: string[]) => Promise<void>;
 
   // Refresh
   refreshData: () => Promise<void>;
@@ -863,6 +868,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, 30000);
     return () => clearInterval(interval);
   }, [user?.id, loadData, loadDeltaData]);
+
+  // Retry failed operations
+  const retryFailedOps = useCallback(async (opIds?: string[]) => {
+    if (!user?.id || !isConnectedRef.current) return;
+    const failedOps = await getFailedOperations();
+    const toRetry = opIds ? failedOps.filter(op => opIds.includes(op.id)) : failedOps;
+    if (toRetry.length === 0) return;
+
+    setIsReplayingQueue(true);
+    setReplayProgress({ current: 0, total: toRetry.length });
+    const startTime = Date.now();
+
+    const result = await retryFailedOperations(supabase, user.id, opIds, (current, total) => {
+      setReplayProgress({ current, total });
+    });
+
+    const duration = Date.now() - startTime;
+    setIsReplayingQueue(false);
+    setReplayProgress({ current: 0, total: 0 });
+
+    await addSyncHistoryEntry({
+      date: new Date().toISOString(),
+      total: result.total,
+      succeeded: result.succeeded,
+      failed: result.failed,
+      conflictsDetected: 0,
+      conflictsResolved: 0,
+      errors: result.errors,
+      duration,
+    });
+
+    if (result.succeeded > 0) {
+      await loadData();
+    }
+  }, [user?.id, supabase, loadData]);
 
   // Refresh data function (manual pull-to-refresh always does full sync)
   const refreshData = useCallback(async () => {
@@ -1940,6 +1980,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         getMatchesByTournament,
         getHeadToHead,
         getCommonOpponents,
+        retryFailedOps,
         refreshData,
         selfPlayer,
         setItemPublic,

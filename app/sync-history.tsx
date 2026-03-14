@@ -18,17 +18,56 @@ import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useApp } from '@/contexts/AppContext';
 import { getSyncHistory, clearSyncHistory, SyncHistoryEntry } from '@/services/syncHistoryService';
-import { getQueueSize } from '@/services/offlineQueueService';
+import { getQueueSize, getFailedOperations, clearFailedOperations, removeFailedOperation, FailedOperation } from '@/services/offlineQueueService';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+
+const TABLE_ICONS: Record<string, string> = {
+  players: 'person',
+  clubs: 'location-city',
+  terrains: 'sports-soccer',
+  tournaments: 'emoji-events',
+  matches: 'sports',
+  challenges: 'flag',
+};
+
+const TABLE_LABELS_FR: Record<string, string> = {
+  players: 'Joueur',
+  clubs: 'Club',
+  terrains: 'Terrain',
+  tournaments: 'Tournoi',
+  matches: 'Match',
+  challenges: 'Challenge',
+};
+
+const OP_LABELS_FR: Record<string, string> = {
+  insert: 'Ajout',
+  update: 'Modification',
+  delete: 'Suppression',
+};
+
+const OP_LABELS_EN: Record<string, string> = {
+  insert: 'Insert',
+  update: 'Update',
+  delete: 'Delete',
+};
+
+const OP_COLORS: Record<string, string> = {
+  insert: theme.success,
+  update: theme.primary,
+  delete: theme.error,
+};
 
 export default function SyncHistoryScreen() {
   const { language } = useLanguage();
-  const { refreshData, isReplayingQueue } = useApp();
+  const { refreshData, isReplayingQueue, retryFailedOps } = useApp();
   const { isConnected } = useNetworkStatus();
   const [history, setHistory] = useState<SyncHistoryEntry[]>([]);
+  const [failedOps, setFailedOps] = useState<FailedOperation[]>([]);
   const [loading, setLoading] = useState(true);
   const [queueSize, setQueueSize] = useState(0);
   const [manualSyncing, setManualSyncing] = useState(false);
+  const [retryingAll, setRetryingAll] = useState(false);
+  const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
 
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
   useEffect(() => {
@@ -40,9 +79,10 @@ export default function SyncHistoryScreen() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [h, qs] = await Promise.all([getSyncHistory(), getQueueSize()]);
+      const [h, qs, fo] = await Promise.all([getSyncHistory(), getQueueSize(), getFailedOperations()]);
       setHistory(h);
       setQueueSize(qs);
+      setFailedOps(fo);
     } catch {
       // ignore
     } finally {
@@ -70,6 +110,59 @@ export default function SyncHistoryScreen() {
     } finally {
       setManualSyncing(false);
     }
+  };
+
+  const handleRetryAll = async () => {
+    if (!isConnected) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setRetryingAll(true);
+    try {
+      await retryFailedOps();
+      await loadData();
+    } finally {
+      setRetryingAll(false);
+    }
+  };
+
+  const handleRetrySingle = async (opId: string) => {
+    if (!isConnected) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setRetryingIds(prev => new Set(prev).add(opId));
+    try {
+      await retryFailedOps([opId]);
+      await loadData();
+    } finally {
+      setRetryingIds(prev => {
+        const next = new Set(prev);
+        next.delete(opId);
+        return next;
+      });
+    }
+  };
+
+  const handleRemoveFailedOp = async (opId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await removeFailedOperation(opId);
+    setFailedOps(prev => prev.filter(op => op.id !== opId));
+  };
+
+  const handleClearAllFailed = () => {
+    Alert.alert(
+      language === 'fr' ? 'Supprimer les echecs' : 'Clear failed ops',
+      language === 'fr' ? 'Supprimer toutes les operations echouees ?' : 'Remove all failed operations?',
+      [
+        { text: language === 'fr' ? 'Annuler' : 'Cancel', style: 'cancel' },
+        {
+          text: language === 'fr' ? 'Supprimer' : 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            await clearFailedOperations();
+            setFailedOps([]);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          },
+        },
+      ]
+    );
   };
 
   const handleClearHistory = () => {
@@ -135,6 +228,142 @@ export default function SyncHistoryScreen() {
     if (entry.failed > 0) return 'warning';
     if (entry.conflictsDetected > 0) return 'sync-problem';
     return 'check-circle';
+  };
+
+  const renderFailedOpsSection = () => {
+    if (failedOps.length === 0) return null;
+
+    return (
+      <Animated.View entering={FadeInDown.duration(300)} style={styles.failedSection}>
+        {/* Section header */}
+        <View style={styles.failedHeader}>
+          <View style={styles.failedHeaderLeft}>
+            <View style={styles.failedIcon}>
+              <MaterialIcons name="error" size={16} color={theme.error} />
+            </View>
+            <Text style={styles.failedTitle}>
+              {failedOps.length} {language === 'fr' ? 'operation(s) echouee(s)' : 'failed operation(s)'}
+            </Text>
+          </View>
+          <Pressable onPress={handleClearAllFailed} hitSlop={8}>
+            <Text style={styles.failedClearBtn}>
+              {language === 'fr' ? 'Tout supprimer' : 'Clear all'}
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Failed operation cards */}
+        {failedOps.map((op, index) => {
+          const opLabel = language === 'fr' ? (OP_LABELS_FR[op.type] || op.type) : (OP_LABELS_EN[op.type] || op.type);
+          const tableLabel = language === 'fr' ? (TABLE_LABELS_FR[op.table] || op.table) : op.table;
+          const tableIcon = TABLE_ICONS[op.table] || 'storage';
+          const opColor = OP_COLORS[op.type] || theme.textSecondary;
+          const isRetrying = retryingIds.has(op.id);
+          const itemName = op.dbPayload?.name || op.dbPayload?.player_name || op.dbPayload?.tournament_name || '';
+
+          return (
+            <Animated.View
+              key={op.id}
+              entering={FadeInDown.duration(250).delay(index * 30)}
+              style={styles.failedCard}
+            >
+              <View style={[styles.failedCardStrip, { backgroundColor: opColor }]} />
+              <View style={styles.failedCardContent}>
+                {/* Top row: icon + info */}
+                <View style={styles.failedCardTop}>
+                  <View style={[styles.failedCardIcon, { backgroundColor: opColor + '15' }]}>
+                    <MaterialIcons name={tableIcon as any} size={18} color={opColor} />
+                  </View>
+                  <View style={styles.failedCardInfo}>
+                    <View style={styles.failedCardInfoRow}>
+                      <Text style={styles.failedCardOpLabel}>
+                        {opLabel}
+                      </Text>
+                      <View style={[styles.failedCardTypeBadge, { backgroundColor: opColor + '15' }]}>
+                        <Text style={[styles.failedCardTypeBadgeText, { color: opColor }]}>
+                          {tableLabel}
+                        </Text>
+                      </View>
+                      {op.retryCount > 0 ? (
+                        <View style={styles.retryCountBadge}>
+                          <MaterialIcons name="refresh" size={10} color={theme.textMuted} />
+                          <Text style={styles.retryCountText}>{op.retryCount}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    {itemName ? (
+                      <Text style={styles.failedCardItemName} numberOfLines={1}>{itemName}</Text>
+                    ) : null}
+                    <Text style={styles.failedCardDate}>
+                      {formatDate(op.failedAt)}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Error message */}
+                <View style={styles.failedCardError}>
+                  <MaterialIcons name="error-outline" size={12} color={theme.error} />
+                  <Text style={styles.failedCardErrorText} numberOfLines={2}>{op.error}</Text>
+                </View>
+
+                {/* Actions */}
+                <View style={styles.failedCardActions}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.failedCardRetryBtn,
+                      (!isConnected || isRetrying) && styles.failedCardRetryBtnDisabled,
+                      pressed && { opacity: 0.8 },
+                    ]}
+                    onPress={() => handleRetrySingle(op.id)}
+                    disabled={!isConnected || isRetrying}
+                  >
+                    {isRetrying ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <>
+                        <MaterialIcons name="replay" size={14} color="#FFF" />
+                        <Text style={styles.failedCardRetryBtnText}>
+                          {language === 'fr' ? 'Reessayer' : 'Retry'}
+                        </Text>
+                      </>
+                    )}
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [styles.failedCardRemoveBtn, pressed && { opacity: 0.6 }]}
+                    onPress={() => handleRemoveFailedOp(op.id)}
+                    disabled={isRetrying}
+                  >
+                    <MaterialIcons name="close" size={16} color={theme.textMuted} />
+                  </Pressable>
+                </View>
+              </View>
+            </Animated.View>
+          );
+        })}
+
+        {/* Retry all button */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.retryAllBtn,
+            (!isConnected || retryingAll) && styles.retryAllBtnDisabled,
+            pressed && { opacity: 0.85 },
+          ]}
+          onPress={handleRetryAll}
+          disabled={!isConnected || retryingAll}
+        >
+          {retryingAll ? (
+            <ActivityIndicator size="small" color="#FFF" />
+          ) : (
+            <MaterialIcons name="replay" size={18} color="#FFF" />
+          )}
+          <Text style={styles.retryAllBtnText}>
+            {retryingAll
+              ? (language === 'fr' ? 'Reessai en cours...' : 'Retrying...')
+              : (language === 'fr' ? `Reessayer tout (${failedOps.length})` : `Retry all (${failedOps.length})`)}
+          </Text>
+        </Pressable>
+      </Animated.View>
+    );
   };
 
   const renderItem = ({ item, index }: { item: SyncHistoryEntry; index: number }) => {
@@ -275,6 +504,9 @@ export default function SyncHistoryScreen() {
             : (language === 'fr' ? 'Forcer synchronisation complete' : 'Force full sync')}
         </Text>
       </Pressable>
+
+      {/* Failed Operations Section */}
+      {renderFailedOpsSection()}
 
       {/* Section header */}
       <View style={styles.sectionHeader}>
@@ -442,6 +674,181 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFF',
   },
+  // Failed Operations Section
+  failedSection: {
+    marginBottom: 20,
+  },
+  failedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  failedHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  failedIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme.error + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  failedTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.error,
+  },
+  failedClearBtn: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textMuted,
+  },
+  failedCard: {
+    flexDirection: 'row',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    marginBottom: 8,
+    overflow: 'hidden',
+    ...theme.shadows.card,
+  },
+  failedCardStrip: {
+    width: 4,
+  },
+  failedCardContent: {
+    flex: 1,
+    padding: 12,
+  },
+  failedCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
+  failedCardIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  failedCardInfo: {
+    flex: 1,
+  },
+  failedCardInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  failedCardOpLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  failedCardTypeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  failedCardTypeBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  retryCountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: theme.backgroundSecondary,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  retryCountText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: theme.textMuted,
+  },
+  failedCardItemName: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 1,
+  },
+  failedCardDate: {
+    fontSize: 11,
+    color: theme.textMuted,
+    marginTop: 1,
+  },
+  failedCardError: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    backgroundColor: theme.error + '08',
+    borderRadius: theme.borderRadius.sm,
+    padding: 8,
+    marginBottom: 8,
+  },
+  failedCardErrorText: {
+    flex: 1,
+    fontSize: 11,
+    color: theme.error,
+    lineHeight: 16,
+  },
+  failedCardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  failedCardRetryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: theme.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: theme.borderRadius.md,
+  },
+  failedCardRetryBtnDisabled: {
+    backgroundColor: theme.textMuted,
+    opacity: 0.5,
+  },
+  failedCardRetryBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  failedCardRemoveBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: theme.error,
+    paddingVertical: 14,
+    borderRadius: theme.borderRadius.lg,
+    marginTop: 4,
+  },
+  retryAllBtnDisabled: {
+    backgroundColor: theme.textMuted,
+    opacity: 0.6,
+  },
+  retryAllBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  // Section header
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',

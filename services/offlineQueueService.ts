@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const QUEUE_KEY = 'petanque_offline_queue';
+const FAILED_OPS_KEY = 'petanque_failed_operations';
 
 export type OperationType = 'insert' | 'update' | 'delete';
 
@@ -24,6 +25,12 @@ export interface ConflictInfo {
   localFields: Record<string, any>;
   serverFields: Record<string, any>;
   itemName?: string;
+}
+
+export interface FailedOperation extends QueuedOperation {
+  error: string;
+  failedAt: string;
+  retryCount: number;
 }
 
 export interface ReplayResult {
@@ -90,6 +97,160 @@ export async function clearOfflineQueue(): Promise<void> {
   } catch (error) {
     console.log('[OfflineQueue] Error clearing:', error);
   }
+}
+
+// ============================================
+// FAILED OPERATIONS MANAGEMENT
+// ============================================
+
+/**
+ * Save a failed operation for manual retry later.
+ */
+export async function saveFailedOperation(op: QueuedOperation, error: string): Promise<void> {
+  try {
+    const failed = await getFailedOperations();
+    const existingIdx = failed.findIndex(f => f.id === op.id);
+    const entry: FailedOperation = {
+      ...op,
+      error,
+      failedAt: new Date().toISOString(),
+      retryCount: existingIdx >= 0 ? failed[existingIdx].retryCount + 1 : 0,
+    };
+    if (existingIdx >= 0) {
+      failed[existingIdx] = entry;
+    } else {
+      failed.push(entry);
+    }
+    await AsyncStorage.setItem(FAILED_OPS_KEY, JSON.stringify(failed));
+  } catch (e) {
+    console.log('[OfflineQueue] Error saving failed op:', e);
+  }
+}
+
+/**
+ * Get all stored failed operations.
+ */
+export async function getFailedOperations(): Promise<FailedOperation[]> {
+  try {
+    const raw = await AsyncStorage.getItem(FAILED_OPS_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as FailedOperation[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Clear all stored failed operations.
+ */
+export async function clearFailedOperations(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(FAILED_OPS_KEY);
+  } catch (e) {
+    console.log('[OfflineQueue] Error clearing failed ops:', e);
+  }
+}
+
+/**
+ * Remove a single failed operation by its id.
+ */
+export async function removeFailedOperation(opId: string): Promise<void> {
+  try {
+    const failed = await getFailedOperations();
+    const filtered = failed.filter(op => op.id !== opId);
+    await AsyncStorage.setItem(FAILED_OPS_KEY, JSON.stringify(filtered));
+  } catch (e) {
+    console.log('[OfflineQueue] Error removing failed op:', e);
+  }
+}
+
+/**
+ * Retry specific (or all) failed operations against Supabase.
+ * @param opIds If provided, only retry these operation IDs; otherwise retry all.
+ */
+export async function retryFailedOperations(
+  supabase: any,
+  userId: string,
+  opIds?: string[],
+  onProgress?: (current: number, total: number) => void,
+): Promise<ReplayResult> {
+  const allFailed = await getFailedOperations();
+  const toRetry = opIds
+    ? allFailed.filter(op => opIds.includes(op.id))
+    : [...allFailed];
+
+  if (toRetry.length === 0) {
+    return { total: 0, succeeded: 0, failed: 0, conflictsDetected: 0, conflictsResolved: 0, idMap: {}, errors: [] };
+  }
+
+  console.log(`[OfflineQueue] Retrying ${toRetry.length} failed operations...`);
+
+  const result: ReplayResult = {
+    total: toRetry.length,
+    succeeded: 0,
+    failed: 0,
+    conflictsDetected: 0,
+    conflictsResolved: 0,
+    idMap: {},
+    errors: [],
+  };
+
+  for (const op of toRetry) {
+    try {
+      const resolvedItemId = op.itemId && result.idMap[op.itemId]
+        ? result.idMap[op.itemId]
+        : op.itemId;
+
+      switch (op.type) {
+        case 'insert': {
+          if (!op.dbPayload) break;
+          const payload = { ...op.dbPayload, user_id: userId };
+          const { data, error } = await supabase
+            .from(op.table)
+            .insert(payload)
+            .select('id')
+            .single();
+          if (error) throw error;
+          if (op.tempId && data?.id) {
+            result.idMap[op.tempId] = data.id;
+          }
+          break;
+        }
+        case 'update': {
+          if (!resolvedItemId || !op.dbPayload) break;
+          const { error } = await supabase
+            .from(op.table)
+            .update(op.dbPayload)
+            .eq('id', resolvedItemId);
+          if (error) throw error;
+          break;
+        }
+        case 'delete': {
+          if (!resolvedItemId) break;
+          const { error } = await supabase
+            .from(op.table)
+            .delete()
+            .eq('id', resolvedItemId);
+          if (error) throw error;
+          break;
+        }
+      }
+
+      result.succeeded++;
+      await removeFailedOperation(op.id);
+    } catch (error: any) {
+      result.failed++;
+      const errMsg = error?.message || 'Unknown error';
+      result.errors.push(`${op.type} ${op.table}: ${errMsg}`);
+      // Update the failed op with latest error and incremented retry count
+      await saveFailedOperation(op, errMsg);
+    }
+    const processed = result.succeeded + result.failed;
+    onProgress?.(processed, result.total);
+  }
+
+  console.log(`[OfflineQueue] Retry complete: ${result.succeeded}/${result.total} succeeded`);
+  return result;
 }
 
 /**
@@ -274,9 +435,12 @@ export async function replayOfflineQueue(
       await removeOperation(op.id);
     } catch (error: any) {
       result.failed++;
-      result.errors.push(`${op.type} ${op.table}: ${error?.message || 'Unknown error'}`);
+      const errMsg = error?.message || 'Unknown error';
+      result.errors.push(`${op.type} ${op.table}: ${errMsg}`);
       console.log(`[OfflineQueue] Failed to replay ${op.type} on ${op.table}:`, error);
-      // Remove failed op to avoid infinite retry loops on permanent errors
+      // Save to failed operations store for manual retry
+      await saveFailedOperation(op, errMsg);
+      // Remove from main queue
       await removeOperation(op.id);
     }
     // Report progress
