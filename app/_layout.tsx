@@ -1,3 +1,4 @@
+import { View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -5,6 +6,7 @@ import { AlertProvider, AuthProvider } from '@/template';
 import { AppProvider } from '@/contexts/AppContext';
 import { LanguageProvider } from '@/contexts/LanguageContext';
 import { ToastProvider } from '@/components/ui/Toast';
+import OfflineBanner from '@/components/ui/OfflineBanner';
 
 export default function RootLayout() {
   return (
@@ -14,7 +16,9 @@ export default function RootLayout() {
           <LanguageProvider>
           <ToastProvider>
           <AppProvider>
+            <View style={{ flex: 1 }}>
             <StatusBar style="dark" />
+            <OfflineBanner />
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" options={{ headerShown: false }} />
               <Stack.Screen name="(tabs)" />
@@ -252,6 +256,7 @@ export default function RootLayout() {
                 }} 
               />
             </Stack>
+            </View>
           </AppProvider>
           </ToastProvider>
           </LanguageProvider>
