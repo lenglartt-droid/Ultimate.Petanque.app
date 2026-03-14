@@ -39,7 +39,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, logout, operationLoading, sendOTP } = useAuth();
   const { showAlert } = useAlert();
-  const { clubs, terrains, addClub, updatePlayer, selfPlayer, userStats, matches, challenges, tournaments, refreshData } = useApp();
+  const { clubs, terrains, addClub, updatePlayer, selfPlayer, userStats, matches, challenges, tournaments, refreshData, boulesSets, addBoulesSet, updateBoulesSet, setPrimaryBoulesSet } = useApp();
   const supabase = getSupabaseClient();
   const { t, language, setLanguage } = useLanguage();
   const params = useLocalSearchParams<{ edit?: string }>();
@@ -449,6 +449,29 @@ export default function ProfileScreen() {
           } : undefined,
           country: location.country || 'France',
         });
+      }
+
+      // Auto-sync boules to boules_sets as primary set
+      if (boulesData && user?.id) {
+        const primarySet = boulesSets.find(s => s.isPrimary);
+        if (primarySet) {
+          // Update existing primary set
+          await updateBoulesSet(primarySet.id, {
+            name: boulesData.name || primarySet.name || (language === 'fr' ? 'Mon set principal' : 'My primary set'),
+            diameter: boulesData.diameter ? parseFloat(String(boulesData.diameter)) : undefined,
+            weight: boulesData.weight ? parseInt(String(boulesData.weight), 10) : undefined,
+            serialNumber: boulesData.serialNumber || undefined,
+          });
+        } else {
+          // Create new primary set
+          await addBoulesSet({
+            name: boulesData.name || (language === 'fr' ? 'Mon set principal' : 'My primary set'),
+            diameter: boulesData.diameter ? parseFloat(String(boulesData.diameter)) : undefined,
+            weight: boulesData.weight ? parseInt(String(boulesData.weight), 10) : undefined,
+            serialNumber: boulesData.serialNumber || undefined,
+            isPrimary: true,
+          });
+        }
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

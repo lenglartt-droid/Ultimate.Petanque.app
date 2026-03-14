@@ -510,10 +510,10 @@ export default function MyPlayerCardScreen() {
               </View>
             );
           })()}
-          {/* Boules / Equipment in preferences */}
+          {/* Boules préféré */}
           {selfPlayer.boules && (selfPlayer.boules.name || selfPlayer.boules.diameter || selfPlayer.boules.weight) ? (
             <View style={styles.preferredRoleCard}>
-              <Text style={styles.preferredRoleTitle}>{t('player', 'boulesLabel')}</Text>
+              <Text style={styles.preferredRoleTitle}>{language === 'fr' ? 'Boules preferees' : 'Preferred Boules'}</Text>
               <View style={styles.preferredRoleContent}>
                 <View style={[styles.preferredRoleIcon, { backgroundColor: theme.accent }]}>
                   <MaterialIcons name="sports-baseball" size={20} color="#FFF" />
@@ -521,37 +521,9 @@ export default function MyPlayerCardScreen() {
                 <View style={styles.preferredRoleInfo}>
                   <Text style={styles.preferredRoleName}>{selfPlayer.boules.name || t('player', 'boulesLabel')}</Text>
                   <Text style={styles.preferredRoleStats}>
-                    {[selfPlayer.boules.diameter ? `${selfPlayer.boules.diameter} mm` : '', selfPlayer.boules.weight ? `${selfPlayer.boules.weight} g` : ''].filter(Boolean).join(' \u2022 ')}
+                    {[selfPlayer.boules.diameter ? `${selfPlayer.boules.diameter} mm` : '', selfPlayer.boules.weight ? `${selfPlayer.boules.weight} g` : '', selfPlayer.boules.serialNumber ? `N\u00B0${selfPlayer.boules.serialNumber}` : ''].filter(Boolean).join(' \u2022 ')}
                   </Text>
                 </View>
-              </View>
-              <View style={styles.roleBreakdown}>
-                {selfPlayer.boules.diameter ? (
-                  <View style={styles.roleBreakdownItem}>
-                    <MaterialIcons name="straighten" size={14} color={theme.accent} />
-                    <Text style={styles.roleBreakdownLabel}>\u00D8</Text>
-                    <View style={styles.roleBreakdownBarBg}>
-                      <View style={[styles.roleBreakdownBar, { width: `${Math.min(((Number(selfPlayer.boules.diameter) - 70.5) / (80 - 70.5)) * 100, 100)}%`, backgroundColor: theme.accent }]} />
-                    </View>
-                    <Text style={styles.roleBreakdownPct}>{selfPlayer.boules.diameter}mm</Text>
-                  </View>
-                ) : null}
-                {selfPlayer.boules.weight ? (
-                  <View style={styles.roleBreakdownItem}>
-                    <MaterialIcons name="fitness-center" size={14} color={theme.accent} />
-                    <Text style={styles.roleBreakdownLabel}>g</Text>
-                    <View style={styles.roleBreakdownBarBg}>
-                      <View style={[styles.roleBreakdownBar, { width: `${Math.min(((Number(selfPlayer.boules.weight) - 650) / (800 - 650)) * 100, 100)}%`, backgroundColor: theme.accent }]} />
-                    </View>
-                    <Text style={styles.roleBreakdownPct}>{selfPlayer.boules.weight}g</Text>
-                  </View>
-                ) : null}
-                {selfPlayer.boules.serialNumber ? (
-                  <View style={styles.roleBreakdownItem}>
-                    <MaterialIcons name="tag" size={14} color={theme.textMuted} />
-                    <Text style={[styles.roleBreakdownPct, { flex: 1, textAlign: 'left', marginLeft: 4 }]}>{selfPlayer.boules.serialNumber}</Text>
-                  </View>
-                ) : null}
               </View>
             </View>
           ) : null}
