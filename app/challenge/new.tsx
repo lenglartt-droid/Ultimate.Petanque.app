@@ -156,7 +156,7 @@ function CountdownTimer({ seconds, isRunning, onStart, onTimeUp, startLabel }: C
 
 export default function NewChallengeScreen() {
   const insets = useSafeAreaInsets();
-  const { addChallenge, userStats, selfPlayer, players } = useApp();
+  const { addChallenge, userStats, selfPlayer, players, matches, challenges: pastChallenges } = useApp();
   const { t } = useLanguage();
   const { boulesSets } = useApp();
 
@@ -299,6 +299,33 @@ export default function NewChallengeScreen() {
     }
     return result;
   }, [players, selfPlayer, playerSearch]);
+
+  // Sort opponents by confrontation frequency (most faced first)
+  const sortedOpponents = useMemo(() => {
+    const selfId = selfPlayer?.id || userStats.playerId;
+    const confrontationCount: Record<string, number> = {};
+    matches.forEach(m => {
+      const selfInA = m.teamA.players.includes(selfId);
+      const selfInB = m.teamB.players.includes(selfId);
+      if (selfInA) {
+        m.teamB.players.forEach(pid => {
+          confrontationCount[pid] = (confrontationCount[pid] || 0) + 1;
+        });
+      } else if (selfInB) {
+        m.teamA.players.forEach(pid => {
+          confrontationCount[pid] = (confrontationCount[pid] || 0) + 1;
+        });
+      }
+    });
+    pastChallenges.forEach(c => {
+      if (c.mode === '1v1' && c.opponentId) {
+        confrontationCount[c.opponentId] = (confrontationCount[c.opponentId] || 0) + 1;
+      }
+    });
+    return [...filteredPlayers]
+      .map(p => ({ ...p, _confrontations: confrontationCount[p.id] || 0 }))
+      .sort((a, b) => b._confrontations - a._confrontations);
+  }, [filteredPlayers, matches, pastChallenges, selfPlayer, userStats.playerId]);
 
   // ============================================
   // EFFECTS
@@ -819,7 +846,7 @@ export default function NewChallengeScreen() {
         </View>
 
         <FlatList
-          data={filteredPlayers}
+          data={sortedOpponents}
           keyExtractor={item => item.id}
           style={styles.scrollView}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32, paddingTop: 16 }]}
@@ -841,8 +868,16 @@ export default function NewChallengeScreen() {
                 </Text>
               </View>
               <View style={styles.opponentInfo}>
-                <Text style={styles.opponentName}>{player.name}</Text>
-                <Text style={styles.opponentMeta}>{player.club || '-'} • {player.role}</Text>
+                <View style={styles.opponentNameRow}>
+                  <Text style={styles.opponentName}>{player.name}</Text>
+                  {(player as any)._confrontations > 0 ? (
+                    <View style={styles.confrontationBadge}>
+                      <MaterialIcons name="sports" size={10} color={theme.accent} />
+                      <Text style={styles.confrontationBadgeText}>{(player as any)._confrontations}</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text style={styles.opponentMeta}>{player.club || '-'} \u2022 {player.role}</Text>
               </View>
               <View style={styles.opponentBtn}>
                 <Text style={styles.opponentBtnText}>{t('challenge', 'challengeBtn')}</Text>
@@ -1450,8 +1485,11 @@ const styles = StyleSheet.create({
   opponentAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   opponentAvatarText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
   opponentInfo: { flex: 1 },
-  opponentName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary, marginBottom: 2 },
+  opponentNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
+  opponentName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
   opponentMeta: { fontSize: 12, color: theme.textMuted },
+  confrontationBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.accent + '15', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
+  confrontationBadgeText: { fontSize: 11, fontWeight: '700', color: theme.accent },
   opponentBtn: { backgroundColor: theme.accent, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
   opponentBtnText: { fontSize: 13, fontWeight: '600', color: '#FFF' },
   emptyState: { alignItems: 'center', paddingVertical: 48 },
