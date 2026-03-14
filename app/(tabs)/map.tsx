@@ -252,6 +252,7 @@ export default function MapScreen() {
   const [myItems, setMyItems] = useState<any>({ players: [], clubs: [], terrains: [], tournaments: [] });
   const [loadingPublic, setLoadingPublic] = useState(false);
   const [loadingManage, setLoadingManage] = useState(false);
+  const [showLegend, setShowLegend] = useState(false);
 
   const MARKER_CONFIG = useMemo(() => ({
     terrains: { label: t('map', 'terrains'), singular: t('map', 'terrainSingular'), icon: 'sports-soccer', color: theme.success },
@@ -602,6 +603,40 @@ export default function MapScreen() {
     <View style={styles.container}>
       {Platform.OS === 'web' ? renderList() : renderMap()}
 
+      {/* Legend */}
+      {Platform.OS !== 'web' ? (
+        <View style={[styles.legendContainer, { top: insets.top + 12 }]}>
+          <Pressable
+            style={styles.legendToggle}
+            onPress={() => { Haptics.selectionAsync(); setShowLegend(!showLegend); }}
+            hitSlop={8}
+          >
+            <MaterialIcons name={showLegend ? 'close' : 'info-outline'} size={18} color={theme.textSecondary} />
+          </Pressable>
+          {showLegend ? (
+            <Animated.View entering={FadeIn.duration(200)} style={styles.legendPanel}>
+              <Text style={styles.legendTitle}>{t('map', 'legendTitle')}</Text>
+              <View style={styles.legendRow}>
+                <View style={[styles.legendDot, { backgroundColor: theme.success }]}>
+                  <MaterialIcons name="lock-open" size={7} color="#FFF" />
+                </View>
+                <Text style={styles.legendLabel}>{t('map', 'legendPublicAccess')}</Text>
+              </View>
+              <View style={styles.legendRow}>
+                <View style={[styles.legendDot, { backgroundColor: '#F59E0B' }]}>
+                  <MaterialIcons name="lock" size={7} color="#FFF" />
+                </View>
+                <Text style={styles.legendLabel}>{t('map', 'legendMembersOnly')}</Text>
+              </View>
+              <View style={styles.legendRow}>
+                <View style={styles.legendBorderSample} />
+                <Text style={styles.legendLabel}>{t('map', 'legendPublicItem')}</Text>
+              </View>
+            </Animated.View>
+          ) : null}
+        </View>
+      ) : null}
+
       {/* Bottom Panel */}
       <View style={styles.bottomPanel}>
         {/* Search bar (expandable) */}
@@ -930,4 +965,22 @@ const styles = StyleSheet.create({
   manageEmpty: { alignItems: 'center', paddingVertical: 40 },
   manageEmptyText: { fontSize: 16, fontWeight: '600', color: theme.textPrimary, marginTop: 12 },
   manageEmptyDesc: { fontSize: 13, color: theme.textSecondary, textAlign: 'center', marginTop: 6, maxWidth: 280 },
+  // Legend
+  legendContainer: { position: 'absolute', left: 12, zIndex: 10 },
+  legendToggle: {
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    alignItems: 'center', justifyContent: 'center',
+    ...theme.shadows.card,
+  },
+  legendPanel: {
+    marginTop: 6, backgroundColor: 'rgba(255,255,255,0.97)',
+    borderRadius: theme.borderRadius.md, padding: 10,
+    ...theme.shadows.card, minWidth: 160,
+  },
+  legendTitle: { fontSize: 11, fontWeight: '700', color: theme.textPrimary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  legendDot: { width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF' },
+  legendLabel: { fontSize: 12, color: theme.textSecondary, fontWeight: '500' },
+  legendBorderSample: { width: 14, height: 14, borderRadius: 7, backgroundColor: theme.textMuted + '30', borderWidth: 2.5, borderColor: theme.success },
 });

@@ -697,6 +697,10 @@ export const translations = {
     visibility: { fr: 'Visibilité', en: 'Visibility' },
     visibilityToggle: { fr: 'Visibilité sur la carte', en: 'Map visibility' },
     publicOwner: { fr: 'Partagé par', en: 'Shared by' },
+    legendTitle: { fr: 'Légende', en: 'Legend' },
+    legendPublicAccess: { fr: 'Accès public', en: 'Public access' },
+    legendMembersOnly: { fr: 'Réservé membres', en: 'Members only' },
+    legendPublicItem: { fr: 'Fiche publique', en: 'Public item' },
   },
 
   // ============================================
