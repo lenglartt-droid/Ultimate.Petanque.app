@@ -65,6 +65,9 @@ interface AppContextType {
   favoriteTerrainIds: string[];
   toggleFavoriteTerrain: (terrainId: string) => void;
   isFavoriteTerrain: (terrainId: string) => boolean;
+  favoriteClubIds: string[];
+  toggleFavoriteClub: (clubId: string) => void;
+  isFavoriteClub: (clubId: string) => boolean;
   
   // Tournament Notifications
   tournamentNotifications: string[];
@@ -107,6 +110,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [terrains, setTerrains] = useState<Terrain[]>([]);
   const [favoriteTerrainIds, setFavoriteTerrainIds] = useState<string[]>([]);
+  const [favoriteClubIds, setFavoriteClubIds] = useState<string[]>([]);
   const [sharedItemPermissions, setSharedItemPermissions] = useState<Record<string, 'read' | 'write'>>({});
   const [tournamentNotifications, setTournamentNotifications] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1266,6 +1270,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return favoriteTerrainIds.includes(terrainId);
   };
 
+  // Club favorites
+  const toggleFavoriteClub = (clubId: string) => {
+    setFavoriteClubIds(prev => {
+      if (prev.includes(clubId)) {
+        return prev.filter(id => id !== clubId);
+      } else {
+        return [...prev, clubId];
+      }
+    });
+  };
+
+  const isFavoriteClub = (clubId: string) => {
+    return favoriteClubIds.includes(clubId);
+  };
+
   // Tournament notification functions
   const toggleTournamentNotification = (tournamentId: string) => {
     setTournamentNotifications(prev => {
@@ -1437,6 +1456,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         favoriteTerrainIds,
         toggleFavoriteTerrain,
         isFavoriteTerrain,
+        favoriteClubIds,
+        toggleFavoriteClub,
+        isFavoriteClub,
         tournamentNotifications,
         toggleTournamentNotification,
         isTournamentNotificationEnabled,

@@ -28,7 +28,7 @@ import { useAuth } from '@/template';
 export default function ClubDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getClubById, players, tournaments, deleteClub, getSharedPermission, setItemPublic, loading: appLoading } = useApp();
+  const { getClubById, players, tournaments, deleteClub, getSharedPermission, setItemPublic, isFavoriteClub, toggleFavoriteClub, loading: appLoading } = useApp();
   const { user } = useAuth();
   const { t, language } = useLanguage();
 
@@ -45,6 +45,15 @@ export default function ClubDetailScreen() {
   const isSharedItem = sharedPermission !== null;
   const isReadOnly = sharedPermission === 'read';
   const canEdit = !isReadOnly;
+
+  const isFavorite = id ? isFavoriteClub(id) : false;
+
+  const handleToggleFavorite = () => {
+    if (id) {
+      toggleFavoriteClub(id);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  };
 
   React.useEffect(() => {
     if (id) {
@@ -146,6 +155,16 @@ export default function ClubDetailScreen() {
           )}
           <Pressable style={styles.shareButton} onPress={() => setShowShareModal(true)}>
             <MaterialIcons name="share" size={22} color={theme.success} />
+          </Pressable>
+          <Pressable 
+            style={[styles.favoriteButton, isFavorite && styles.favoriteButtonActive]} 
+            onPress={handleToggleFavorite}
+          >
+            <MaterialIcons 
+              name={isFavorite ? 'favorite' : 'favorite-border'} 
+              size={22} 
+              color={isFavorite ? theme.error : theme.textSecondary} 
+            />
           </Pressable>
           {canEdit && (
             <Pressable 
@@ -419,6 +438,16 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  favoriteButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  favoriteButtonActive: {
+    backgroundColor: theme.error + '15',
+    borderRadius: 20,
   },
   editButton: {
     width: 40,

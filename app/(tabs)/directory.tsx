@@ -32,7 +32,7 @@ type TournamentStatus = 'all' | 'À venir' | 'En cours' | 'Terminé';
 
 export default function DirectoryScreen() {
   const insets = useSafeAreaInsets();
-  const { players, clubs, tournaments, terrains, selfPlayer, favoriteTerrainIds, getSharedPermission } = useApp();
+  const { players, clubs, tournaments, terrains, selfPlayer, favoriteTerrainIds, favoriteClubIds, getSharedPermission } = useApp();
   const { t, language } = useLanguage();
   const [activeTab, setActiveTab] = useState<DirectoryTab>('players');
   const [searchQuery, setSearchQuery] = useState('');
@@ -317,14 +317,19 @@ export default function DirectoryScreen() {
   const renderClub = ({ item }: { item: Club }) => {
     const sharedPerm = getSharedPermission(item.id);
     const isPublicItem = (item as any).isPublic;
+    const isFavorite = favoriteClubIds.includes(item.id);
     return (
       <Pressable
-        style={styles.itemCard}
+        style={[styles.itemCard, isFavorite && styles.favoriteCard]}
         onPress={() => router.push(`/club/${item.id}`)}
       >
         <View style={[styles.itemAvatar, { backgroundColor: theme.accent }]}>
           <MaterialIcons name="home" size={24} color="#FFF" />
-          {isPublicItem ? (
+          {isFavorite ? (
+            <View style={styles.favoriteBadge}>
+              <MaterialIcons name="favorite" size={10} color={theme.error} />
+            </View>
+          ) : isPublicItem ? (
             <View style={styles.publicOverlay}>
               <MaterialIcons name="public" size={10} color={theme.success} />
             </View>
