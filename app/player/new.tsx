@@ -16,8 +16,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { getSupabaseClient } from '@/template';
-import { decode } from 'base64-arraybuffer';
+import { uploadPlayerAvatar } from '@/services/storageService';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
@@ -32,8 +31,6 @@ export default function NewPlayerScreen() {
   const insets = useSafeAreaInsets();
   const { addPlayer, clubs, terrains } = useApp();
   const { t } = useLanguage();
-  const supabase = getSupabaseClient();
-
   const [name, setName] = useState('');
   const [nickname, setNickname] = useState('');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
@@ -69,7 +66,6 @@ export default function NewPlayerScreen() {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
-        base64: true,
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -93,7 +89,6 @@ export default function NewPlayerScreen() {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
-        base64: true,
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -120,41 +115,13 @@ export default function NewPlayerScreen() {
 
   const uploadAvatar = async (): Promise<string | undefined> => {
     if (!avatarUri) return undefined;
+    // Already a remote URL — keep as-is
+    if (avatarUri.startsWith('http://') || avatarUri.startsWith('https://')) return avatarUri;
 
     try {
       setUploadingAvatar(true);
-      
-      // Read file as base64
-      const response = await fetch(avatarUri);
-      const blob = await response.blob();
-      
-      // Convert to base64
-      const reader = new FileReader();
-      const base64Promise = new Promise<string>((resolve, reject) => {
-        reader.onloadend = () => {
-          const base64 = reader.result as string;
-          const base64Data = base64.split(',')[1];
-          resolve(base64Data);
-        };
-        reader.onerror = reject;
-      });
-      reader.readAsDataURL(blob);
-      const base64Data = await base64Promise;
-
-      const fileName = `player_${Date.now()}.jpg`;
-      const filePath = `avatars/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, decode(base64Data), {
-          contentType: 'image/jpeg',
-          upsert: true,
-        });
-
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
-      return urlData?.publicUrl;
+      const url = await uploadPlayerAvatar('new_player', avatarUri);
+      return url || undefined;
     } catch (error) {
       console.log('Error uploading avatar:', error);
       return undefined;

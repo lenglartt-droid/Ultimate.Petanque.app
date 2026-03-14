@@ -18,9 +18,9 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { FunctionsHttpError } from '@supabase/supabase-js';
-import { decode } from 'base64-arraybuffer';
 import { useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
+import { uploadPlayerAvatar } from '@/services/storageService';
 import theme from '@/constants/theme';
 import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
@@ -204,7 +204,6 @@ export default function ProfileScreen() {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
-        base64: true,
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -230,7 +229,6 @@ export default function ProfileScreen() {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
-        base64: true,
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -243,38 +241,17 @@ export default function ProfileScreen() {
   };
 
   const uploadAvatar = async (asset: ImagePicker.ImagePickerAsset) => {
-    if (!user?.id || !asset.base64) return;
+    if (!user?.id) return;
 
     setUploadingPhoto(true);
     try {
-      // Generate unique filename
-      const fileExt = asset.uri.split('.').pop()?.toLowerCase() || 'jpg';
-      const fileName = `${user.id}_${Date.now()}.${fileExt}`;
-      const filePath = `avatars/${fileName}`;
+      // Upload via centralized storage service
+      const publicUrl = await uploadPlayerAvatar(user.id, asset.uri);
 
-      // Upload to storage
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, decode(asset.base64), {
-          contentType: `image/${fileExt}`,
-          upsert: true,
-        });
-
-      if (uploadError) {
-        // Try creating bucket if it doesn't exist
-        if (uploadError.message?.includes('not found')) {
-          showAlert(t('profile', 'configurationLabel'), t('profile', 'storageNotConfigured'));
-          return;
-        }
-        throw uploadError;
+      if (!publicUrl) {
+        showAlert(t('common', 'error'), t('profile', 'errorUploadPhoto'));
+        return;
       }
-
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(filePath);
-
-      const publicUrl = urlData.publicUrl;
 
       // Update profile with new avatar URL
       const { error: updateError } = await supabase

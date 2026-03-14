@@ -68,6 +68,18 @@ export async function uploadImageToStorage(
 }
 
 /**
+ * Upload a player avatar to Supabase Storage.
+ * Local URIs are uploaded; remote URLs are kept as-is.
+ * Returns the public URL on success, or null on failure.
+ */
+export async function uploadPlayerAvatar(
+  userId: string,
+  fileUri: string,
+): Promise<string | null> {
+  return uploadImageToStorage('avatars', `avatars`, fileUri);
+}
+
+/**
  * Upload multiple terrain photos to Supabase Storage.
  * Local URIs are uploaded; remote URLs are kept as-is.
  * Returns array of public URLs (failed uploads are filtered out).
