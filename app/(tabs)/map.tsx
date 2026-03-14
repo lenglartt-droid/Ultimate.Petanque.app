@@ -133,6 +133,12 @@ function clusterMarkers(items: ClusterItem[], region: { latitudeDelta: number; l
 // ============================================
 // CLUSTER MARKER COMPONENT
 // ============================================
+const SingleMarkerView = React.memo(({ color, icon, isPublic }: { color: string; icon: string; isPublic: boolean }) => (
+  <View style={[styles.marker, { backgroundColor: color }, isPublic && styles.markerPublic]}>
+    <MaterialIcons name={icon as any} size={14} color="#FFF" />
+  </View>
+));
+
 const ClusterMarkerView = React.memo(({ count, typeCounts }: { count: number; typeCounts: Record<string, number> }) => {
   // Determine dominant type color
   const colorMap: Record<string, string> = {
@@ -229,6 +235,7 @@ export default function MapScreen() {
   const [currentRegion, setCurrentRegion] = useState(config.map.defaultRegion);
 
   const mapRef = useRef<any>(null);
+  const regionDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Public items state
   const [publicPlayers, setPublicPlayers] = useState<any[]>([]);
@@ -410,7 +417,17 @@ export default function MapScreen() {
   }, []);
 
   const handleRegionChange = useCallback((region: any) => {
-    setCurrentRegion(region);
+    if (regionDebounceRef.current) clearTimeout(regionDebounceRef.current);
+    regionDebounceRef.current = setTimeout(() => {
+      setCurrentRegion(region);
+    }, 300);
+  }, []);
+
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => {
+      if (regionDebounceRef.current) clearTimeout(regionDebounceRef.current);
+    };
   }, []);
 
   const loadManageData = useCallback(async () => {
@@ -504,9 +521,7 @@ export default function MapScreen() {
                 onPress={() => handleSelect(item, item.itemType)}
                 tracksViewChanges={false}
               >
-                <View style={[styles.marker, { backgroundColor: cfg.color }, item._isPublic && styles.markerPublic]}>
-                  <MaterialIcons name={(tc?.icon || cfg.icon) as any} size={14} color="#FFF" />
-                </View>
+                <SingleMarkerView color={cfg.color} icon={tc?.icon || cfg.icon} isPublic={item._isPublic} />
               </MarkerComponent>
             );
           }
