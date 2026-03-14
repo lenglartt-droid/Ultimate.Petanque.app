@@ -156,27 +156,17 @@ export default function ProfileScreen() {
           setConsentDate(data.consent_date || null);
         }
         
-        // Load club ID from player record if available
-        if (selfPlayer?.clubId) {
-          setClubId(selfPlayer.clubId);
-        }
-        if (selfPlayer?.terrainId) {
-          setTerrainId(selfPlayer.terrainId);
-          const resolvedName = selfPlayer.terrainName || terrains.find(t => t.id === selfPlayer.terrainId)?.name || '';
-          setTerrainName(resolvedName);
-        }
-        if (selfPlayer?.avatar) {
-          setAvatarUrl(selfPlayer.avatar);
-        }
-        if (selfPlayer?.phone) {
-          setPhone(selfPlayer.phone);
-        }
-        if (selfPlayer?.email) {
-          setEmail(selfPlayer.email);
-        }
-        if (selfPlayer?.handedness) {
-          setHandedness(selfPlayer.handedness);
-        }
+        // Load from player record - always set values to keep in sync
+        setClubId(selfPlayer?.clubId || null);
+        setTerrainId(selfPlayer?.terrainId || null);
+        setTerrainName(
+          selfPlayer?.terrainName ||
+          (selfPlayer?.terrainId ? terrains.find(t => t.id === selfPlayer.terrainId)?.name || '' : '')
+        );
+        if (selfPlayer?.avatar) setAvatarUrl(selfPlayer.avatar);
+        setPhone(selfPlayer?.phone || '');
+        setEmail(selfPlayer?.email || '');
+        setHandedness(selfPlayer?.handedness || '');
         
 
       } catch (error) {
@@ -371,13 +361,13 @@ export default function ProfileScreen() {
           name: username.trim(),
           role,
           level,
-          club: club || undefined,
-          clubId: clubId || undefined,
-          terrainId: terrainId || undefined,
-          terrainName: terrainName || undefined,
-          phone: phone.trim() || undefined,
-          email: email.trim() || undefined,
-          handedness: handedness || undefined,
+          club: club || null,
+          clubId: clubId || null,
+          terrainId: terrainId || null,
+          terrainName: terrainName || null,
+          phone: phone.trim() || null,
+          email: email.trim() || null,
+          handedness: handedness || null,
         });
       }
 

@@ -219,6 +219,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [challenges]);
 
+  // Helper to transform a raw player DB row (reusable across loadData and addPlayer)
+  const mapPlayer = useCallback((p: any): Player => ({
+    id: p.id,
+    name: p.name,
+    nickname: p.nickname,
+    avatar: p.avatar,
+    club: p.club,
+    clubId: p.club_id,
+    role: p.role,
+    level: p.level,
+    location: p.location,
+    phone: p.phone,
+    email: p.email,
+    country: p.country,
+    boules: p.boules,
+    handedness: p.handedness,
+    terrainId: p.terrain_id,
+    terrainName: p.terrain_name,
+    isPublic: p.is_public ?? false,
+    stats: p.stats || {
+      matchesPlayed: 0, wins: 0, losses: 0, winRate: 0,
+      tirRate: 0, pointRate: 0, carreauRate: 0,
+      avgPointsScored: 0, avgPointsConceded: 0
+    },
+    createdAt: p.created_at,
+  }), []);
+
   // Load data from Supabase
   const loadData = useCallback(async () => {
     if (!user?.id) {
@@ -275,34 +302,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ? supabase.from('tournaments').select('*').in('id', sharedIds.tournament)
           : Promise.resolve({ data: [] as any[] }),
       ]);
-
-      // Transform database records to app format
-      // Helper to transform a raw player DB row (defined early so it can be reused)
-      const mapPlayer = (p: any): Player => ({
-        id: p.id,
-        name: p.name,
-        nickname: p.nickname,
-        avatar: p.avatar,
-        club: p.club,
-        clubId: p.club_id,
-        role: p.role,
-        level: p.level,
-        location: p.location,
-        phone: p.phone,
-        email: p.email,
-        country: p.country,
-        boules: p.boules,
-        handedness: p.handedness,
-        terrainId: p.terrain_id,
-        terrainName: p.terrain_name,
-        isPublic: p.is_public ?? false,
-        stats: p.stats || {
-          matchesPlayed: 0, wins: 0, losses: 0, winRate: 0,
-          tirRate: 0, pointRate: 0, carreauRate: 0,
-          avgPointsScored: 0, avgPointsConceded: 0
-        },
-        createdAt: p.created_at,
-      });
 
       let dbPlayers: Player[] = [];
       if (playersRes.data) {
@@ -520,7 +519,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, supabase]);
+  }, [user?.id, supabase, mapPlayer]);
 
   // Load user preferences (favorites) from database
   const loadPreferences = useCallback(async () => {
@@ -1030,8 +1029,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.country !== undefined) dbUpdates.country = updates.country;
       if (updates.boules !== undefined) dbUpdates.boules = updates.boules;
       if (updates.handedness !== undefined) dbUpdates.handedness = updates.handedness;
-      if (updates.terrainId !== undefined) dbUpdates.terrain_id = updates.terrainId;
-      if (updates.terrainName !== undefined) dbUpdates.terrain_name = updates.terrainName;
+      if (updates.terrainId !== undefined) dbUpdates.terrain_id = updates.terrainId || null;
+      if (updates.terrainName !== undefined) dbUpdates.terrain_name = updates.terrainName || null;
+      if (updates.isPublic !== undefined) dbUpdates.is_public = updates.isPublic;
       if (updates.stats !== undefined) dbUpdates.stats = updates.stats;
       dbUpdates.updated_at = new Date().toISOString();
 
