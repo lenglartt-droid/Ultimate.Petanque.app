@@ -109,6 +109,10 @@ interface AppContextType {
   // Toggle public/private
   setItemPublic: (type: 'players' | 'clubs' | 'terrains' | 'tournaments', itemId: string, isPublic: boolean) => void;
 
+  // Offline queue replay
+  isReplayingQueue: boolean;
+  replayProgress: { current: number; total: number };
+
   // Refresh
   refreshData: () => Promise<void>;
 }
@@ -284,6 +288,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [sharedItemPermissions, setSharedItemPermissions] = useState<Record<string, 'read' | 'write'>>({});
   const [tournamentNotifications, setTournamentNotifications] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isReplayingQueue, setIsReplayingQueue] = useState(false);
+  const [replayProgress, setReplayProgress] = useState({ current: 0, total: 0 });
   
   // Recalculate player stats from actual match data
   const playersWithStats = React.useMemo(() => {
@@ -453,7 +459,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const queueSize = await getQueueSize();
         if (queueSize > 0) {
           console.log(`Replaying ${queueSize} queued operations...`);
-          await replayOfflineQueue(supabase, user.id);
+          setIsReplayingQueue(true);
+          setReplayProgress({ current: 0, total: queueSize });
+          const result = await replayOfflineQueue(supabase, user.id, (current, total) => {
+            setReplayProgress({ current, total });
+          });
+          setIsReplayingQueue(false);
+          setReplayProgress({ current: 0, total: 0 });
           // After replay, do a full sync to reconcile temp IDs with real ones
           await loadData();
         } else {
@@ -1865,7 +1877,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deleteTerrain,
         deleteClub,
         deleteTournament,
-        deleteTournament,
         favoriteTerrainIds,
         toggleFavoriteTerrain,
         isFavoriteTerrain,
@@ -1888,6 +1899,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         refreshData,
         selfPlayer,
         setItemPublic,
+        isReplayingQueue,
+        replayProgress,
       }}
     >
       {children}

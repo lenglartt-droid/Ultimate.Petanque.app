@@ -2,7 +2,16 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
+import Animated, {
+  FadeInDown,
+  FadeOutUp,
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withRepeat,
+  withSequence,
+  Easing,
+} from 'react-native-reanimated';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { getLastSyncTimestamp } from '@/services/cacheService';
 import { getQueueSize } from '@/services/offlineQueueService';
@@ -13,12 +22,16 @@ import theme from '@/constants/theme';
 export default function OfflineBanner() {
   const insets = useSafeAreaInsets();
   const { isConnected } = useNetworkStatus();
-  const { refreshData } = useApp();
+  const { refreshData, isReplayingQueue, replayProgress } = useApp();
   const { language } = useLanguage();
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [queueCount, setQueueCount] = useState(0);
   const [, setTick] = useState(0);
+
+  // Animated progress bar for replay
+  const progressWidth = useSharedValue(0);
+  const pulseOpacity = useSharedValue(1);
 
   // Load last sync timestamp + queue size and refresh display every 30s
   useEffect(() => {
@@ -36,13 +49,47 @@ export default function OfflineBanner() {
     return () => clearInterval(interval);
   }, []);
 
+  // Animate progress bar during replay
+  useEffect(() => {
+    if (isReplayingQueue && replayProgress.total > 0) {
+      const pct = (replayProgress.current / replayProgress.total) * 100;
+      progressWidth.value = withTiming(pct, { duration: 300, easing: Easing.out(Easing.cubic) });
+    } else {
+      progressWidth.value = 0;
+    }
+  }, [isReplayingQueue, replayProgress, progressWidth]);
+
+  // Pulse animation during replay
+  useEffect(() => {
+    if (isReplayingQueue) {
+      pulseOpacity.value = withRepeat(
+        withSequence(
+          withTiming(0.5, { duration: 600 }),
+          withTiming(1, { duration: 600 })
+        ),
+        -1,
+        false
+      );
+    } else {
+      pulseOpacity.value = withTiming(1, { duration: 200 });
+    }
+  }, [isReplayingQueue, pulseOpacity]);
+
+  const progressBarStyle = useAnimatedStyle(() => ({
+    width: `${progressWidth.value}%`,
+  }));
+
+  const pulseStyle = useAnimatedStyle(() => ({
+    opacity: pulseOpacity.value,
+  }));
+
   const getTimeSinceSync = useCallback((): string => {
     if (!lastSync) {
       return language === 'fr' ? 'jamais synchronise' : 'never synced';
     }
     const diff = Date.now() - new Date(lastSync).getTime();
     const minutes = Math.floor(diff / 60000);
-    if (minutes < 1) return language === 'fr' ? 'il y a moins d\'1 min' : 'less than 1 min ago';
+    if (minutes < 1) return language === 'fr' ? "il y a moins d'1 min" : 'less than 1 min ago';
     if (minutes < 60) return language === 'fr' ? `il y a ${minutes} min` : `${minutes} min ago`;
     const hours = Math.floor(minutes / 60);
     if (hours < 24) return language === 'fr' ? `il y a ${hours}h` : `${hours}h ago`;
@@ -63,8 +110,42 @@ export default function OfflineBanner() {
     }
   }, [refreshData]);
 
-  if (isConnected) return null;
+  // Show banner when offline OR when replaying queue (even if connected)
+  const shouldShow = !isConnected || isReplayingQueue;
+  if (!shouldShow) return null;
 
+  // Replaying state (green/syncing banner)
+  if (isReplayingQueue) {
+    return (
+      <Animated.View
+        entering={FadeInDown.duration(300)}
+        exiting={FadeOutUp.duration(200)}
+        style={[styles.banner, styles.bannerSyncing, { paddingTop: insets.top + 6 }]}
+      >
+        <Animated.View style={[styles.iconContainer, styles.iconContainerSyncing, pulseStyle]}>
+          <MaterialIcons name="cloud-sync" size={16} color="#FFF" />
+        </Animated.View>
+        <View style={styles.textContainer}>
+          <Text style={styles.title}>
+            {language === 'fr' ? 'Synchronisation...' : 'Syncing...'}
+          </Text>
+          <Text style={styles.subtitle}>
+            {replayProgress.current}/{replayProgress.total}{' '}
+            {language === 'fr' ? 'operations' : 'operations'}
+          </Text>
+          {/* Progress bar */}
+          <View style={styles.progressBarTrack}>
+            <Animated.View style={[styles.progressBarFill, progressBarStyle]} />
+          </View>
+        </View>
+        <View style={styles.replayBadge}>
+          <ActivityIndicator size="small" color="#FFF" />
+        </View>
+      </Animated.View>
+    );
+  }
+
+  // Offline state (red banner)
   return (
     <Animated.View
       entering={FadeInDown.duration(300)}
@@ -75,13 +156,23 @@ export default function OfflineBanner() {
         <MaterialIcons name="cloud-off" size={16} color="#FFF" />
       </View>
       <View style={styles.textContainer}>
-        <Text style={styles.title}>
-          {language === 'fr' ? 'Mode hors-ligne' : 'Offline mode'}
-        </Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>
+            {language === 'fr' ? 'Mode hors-ligne' : 'Offline mode'}
+          </Text>
+          {queueCount > 0 ? (
+            <View style={styles.queueBadge}>
+              <MaterialIcons name="schedule" size={10} color="#FFF" />
+              <Text style={styles.queueBadgeText}>{queueCount}</Text>
+            </View>
+          ) : null}
+        </View>
         <Text style={styles.subtitle}>
           {language === 'fr' ? 'Derniere sync ' : 'Last sync '}
           {getTimeSinceSync()}
-          {queueCount > 0 ? ` · ${queueCount} ${language === 'fr' ? 'en attente' : 'pending'}` : ''}
+          {queueCount > 0
+            ? ` · ${queueCount} ${language === 'fr' ? 'en attente' : 'pending'}`
+            : ''}
         </Text>
       </View>
       <Pressable
@@ -109,6 +200,9 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     gap: 10,
   },
+  bannerSyncing: {
+    backgroundColor: '#1D6F42',
+  },
   iconContainer: {
     width: 30,
     height: 30,
@@ -117,8 +211,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  iconContainerSyncing: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
   textContainer: {
     flex: 1,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   title: {
     fontSize: 13,
@@ -131,6 +233,20 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.75)',
     marginTop: 1,
   },
+  queueBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  queueBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFF',
+  },
   refreshBtn: {
     width: 36,
     height: 36,
@@ -141,5 +257,25 @@ const styles = StyleSheet.create({
   },
   refreshBtnPressed: {
     backgroundColor: 'rgba(255,255,255,0.35)',
+  },
+  replayBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressBarTrack: {
+    height: 3,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 2,
+    marginTop: 6,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#4ADE80',
+    borderRadius: 2,
   },
 });

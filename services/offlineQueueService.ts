@@ -108,7 +108,8 @@ async function removeOperation(opId: string): Promise<void> {
  */
 export async function replayOfflineQueue(
   supabase: any,
-  userId: string
+  userId: string,
+  onProgress?: (current: number, total: number) => void
 ): Promise<ReplayResult> {
   const queue = await getQueue();
   if (queue.length === 0) {
@@ -193,6 +194,9 @@ export async function replayOfflineQueue(
       // Remove failed op to avoid infinite retry loops on permanent errors
       await removeOperation(op.id);
     }
+    // Report progress
+    const processed = result.succeeded + result.failed;
+    onProgress?.(processed, result.total);
   }
 
   console.log(`[OfflineQueue] Replay complete: ${result.succeeded}/${result.total} succeeded, ${result.failed} failed`);
