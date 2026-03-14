@@ -795,6 +795,37 @@ export default function MyPlayerCardScreen() {
           )}
         </Animated.View>
 
+        {/* Boules Section */}
+        {selfPlayer.boules && (selfPlayer.boules.name || selfPlayer.boules.diameter || selfPlayer.boules.weight) && (
+          <Animated.View entering={FadeInDown.duration(400).delay(75)} style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('player', 'boulesLabel')}</Text>
+            <View style={styles.boulesCard}>
+              <View style={styles.boulesIconContainer}>
+                <MaterialIcons name="sports-baseball" size={32} color={theme.accent} />
+              </View>
+              <View style={styles.boulesInfo}>
+                {selfPlayer.boules.name ? (
+                  <Text style={styles.boulesName}>{selfPlayer.boules.name}</Text>
+                ) : null}
+                <View style={styles.boulesSpecs}>
+                  {selfPlayer.boules.diameter ? (
+                    <View style={styles.boulesSpecItem}>
+                      <Text style={styles.boulesSpecLabel}>{t('player', 'diameter')}</Text>
+                      <Text style={styles.boulesSpecValue}>{selfPlayer.boules.diameter} mm</Text>
+                    </View>
+                  ) : null}
+                  {selfPlayer.boules.weight ? (
+                    <View style={styles.boulesSpecItem}>
+                      <Text style={styles.boulesSpecLabel}>{t('player', 'weight')}</Text>
+                      <Text style={styles.boulesSpecValue}>{selfPlayer.boules.weight} g</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            </View>
+          </Animated.View>
+        )}
+
         {/* Quick Stats Grid */}
         <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
           <Text style={styles.sectionTitle}>{t('player', 'summaryLabel')}</Text>
@@ -1812,6 +1843,52 @@ const styles = StyleSheet.create({
   visibilityBadgeText: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  // Boules styles
+  boulesCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    ...theme.shadows.card,
+  },
+  boulesIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 14,
+    backgroundColor: theme.accent + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  boulesInfo: {
+    flex: 1,
+  },
+  boulesName: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: theme.textPrimary,
+    marginBottom: 8,
+  },
+  boulesSpecs: {
+    flexDirection: 'row',
+    gap: 20,
+  },
+  boulesSpecItem: {
+    alignItems: 'flex-start',
+  },
+  boulesSpecLabel: {
+    fontSize: 11,
+    color: theme.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  boulesSpecValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.accent,
+    marginTop: 2,
   },
   // Fullscreen Modal
   fullscreenContainer: {

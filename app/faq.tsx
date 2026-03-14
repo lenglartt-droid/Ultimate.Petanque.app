@@ -134,6 +134,7 @@ function getFaqData(tFn: (s: string, k: string) => string) {
         { id: 'd4', question: tFn('faq', 'd4Q'), answer: tFn('faq', 'd4A') },
         { id: 'd5', question: tFn('faq', 'd5Q'), answer: tFn('faq', 'd5A') },
         { id: 'd6', question: tFn('faq', 'd6Q'), answer: tFn('faq', 'd6A') },
+        { id: 'd7', question: tFn('faq', 'd7Q'), answer: tFn('faq', 'd7A') },
       ],
     },
     {
@@ -146,6 +147,7 @@ function getFaqData(tFn: (s: string, k: string) => string) {
         { id: 'mp2', question: tFn('faq', 'mp2Q'), answer: tFn('faq', 'mp2A') },
         { id: 'mp3', question: tFn('faq', 'mp3Q'), answer: tFn('faq', 'mp3A') },
         { id: 'mp4', question: tFn('faq', 'mp4Q'), answer: tFn('faq', 'mp4A') },
+        { id: 'mp5', question: tFn('faq', 'mp5Q'), answer: tFn('faq', 'mp5A') },
       ],
     },
     {
@@ -173,6 +175,7 @@ function getTips(tFn: (s: string, k: string) => string) {
     { icon: 'share', text: tFn('faq', 'tip4'), color: theme.accent },
     { icon: 'public', text: tFn('faq', 'tip5'), color: theme.success },
     { icon: 'content-copy', text: tFn('faq', 'tip6'), color: theme.warning },
+    { icon: 'phone-disabled', text: tFn('faq', 'tip7'), color: theme.error },
   ];
 }
 
