@@ -1169,6 +1169,135 @@ export default function HistoryScreen() {
                 </View>
               ) : null}
 
+              {/* Precision Shots Editing */}
+              {editingChallenge.type === 'precision' && editingChallenge.precisionShots && editingChallenge.precisionShots.length > 0 ? (
+                <View style={styles.detailShots}>
+                  <View style={styles.cdShotsTitleRow}>
+                    <Text style={styles.detailShotsTitle}>{t('history', 'editPrecisionShots')}</Text>
+                    {isEditingChallengeFields ? (
+                      <Text style={styles.cdShotsEditHint}>
+                        {language === 'fr' ? 'Modifier atelier, distance, score' : 'Edit workshop, distance, score'}
+                      </Text>
+                    ) : null}
+                  </View>
+                  {editingChallenge.precisionShots.map((ps, idx) => {
+                    const atelierLabels: Record<string, string> = {
+                      boule_seule: t('precisionWorkshops', 'boule_seule'),
+                      derriere_but: t('precisionWorkshops', 'derriere_but'),
+                      entre_2_boules: t('precisionWorkshops', 'entre_2_boules'),
+                      sautee: t('precisionWorkshops', 'sautee'),
+                      tir_but: t('precisionWorkshops', 'tir_but'),
+                    };
+                    const pointColors: Record<number, string> = { 0: theme.error, 1: theme.warning, 3: theme.success, 5: theme.carreauColor };
+                    const pointLabels: Record<number, string> = {
+                      0: t('precisionWorkshops', 'rate'),
+                      1: t('precisionWorkshops', 'touche'),
+                      3: t('precisionWorkshops', 'sorti'),
+                      5: t('precisionWorkshops', 'carreau'),
+                    };
+                    return (
+                      <View key={idx} style={styles.cdPrecisionShotRow}>
+                        <View style={styles.cdPrecisionShotNum}>
+                          <Text style={styles.cdPrecisionShotNumText}>{idx + 1}</Text>
+                        </View>
+                        {isEditingChallengeFields ? (
+                          <View style={styles.cdPrecisionShotEditable}>
+                            {/* Atelier picker */}
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cdPrecisionPickerScroll}>
+                              {(['boule_seule', 'derriere_but', 'entre_2_boules', 'sautee', 'tir_but'] as const).map(at => (
+                                <Pressable
+                                  key={at}
+                                  style={[styles.cdPrecisionChip, ps.atelier === at && styles.cdPrecisionChipActive]}
+                                  onPress={() => {
+                                    if (!editingChallenge.precisionShots) return;
+                                    const updated = [...editingChallenge.precisionShots];
+                                    updated[idx] = { ...updated[idx], atelier: at };
+                                    const newAtelierScores: Record<string, number> = {};
+                                    updated.forEach(s => {
+                                      if (!newAtelierScores[s.atelier]) newAtelierScores[s.atelier] = 0;
+                                      newAtelierScores[s.atelier] += s.points;
+                                    });
+                                    const tp = updated.reduce((sum, s) => sum + s.points, 0);
+                                    const updates = { precisionShots: updated, totalPoints: tp, atelierScores: newAtelierScores };
+                                    updateChallenge(editingChallenge.id, updates);
+                                    setEditingChallenge(prev => prev ? { ...prev, ...updates } : null);
+                                    Haptics.selectionAsync();
+                                  }}
+                                >
+                                  <Text style={[styles.cdPrecisionChipText, ps.atelier === at && styles.cdPrecisionChipTextActive]} numberOfLines={1}>
+                                    {(atelierLabels[at] || at).split(' ').slice(0, 2).join(' ')}
+                                  </Text>
+                                </Pressable>
+                              ))}
+                            </ScrollView>
+                            {/* Distance */}
+                            <View style={styles.cdPrecisionDistanceRow}>
+                              <Text style={styles.cdPrecisionLabel}>{t('history', 'distance')}:</Text>
+                              {([6, 7, 8, 9] as const).map(d => (
+                                <Pressable
+                                  key={d}
+                                  style={[styles.cdPrecisionDistChip, ps.distance === d && styles.cdPrecisionDistChipActive]}
+                                  onPress={() => {
+                                    if (!editingChallenge.precisionShots) return;
+                                    const updated = [...editingChallenge.precisionShots];
+                                    updated[idx] = { ...updated[idx], distance: d };
+                                    const updates = { precisionShots: updated };
+                                    updateChallenge(editingChallenge.id, updates);
+                                    setEditingChallenge(prev => prev ? { ...prev, ...updates } : null);
+                                    Haptics.selectionAsync();
+                                  }}
+                                >
+                                  <Text style={[styles.cdPrecisionDistChipText, ps.distance === d && styles.cdPrecisionDistChipTextActive]}>{d}m</Text>
+                                </Pressable>
+                              ))}
+                            </View>
+                            {/* Points */}
+                            <View style={styles.cdPrecisionPointsRow}>
+                              <Text style={styles.cdPrecisionLabel}>{t('history', 'points')}:</Text>
+                              {([0, 1, 3, 5] as const).map(p => (
+                                <Pressable
+                                  key={p}
+                                  style={[styles.cdPrecisionPointChip, { borderColor: pointColors[p] + '40' }, ps.points === p && { backgroundColor: pointColors[p], borderColor: pointColors[p] }]}
+                                  onPress={() => {
+                                    if (!editingChallenge.precisionShots) return;
+                                    const updated = [...editingChallenge.precisionShots];
+                                    updated[idx] = { ...updated[idx], points: p };
+                                    const tp = updated.reduce((sum, s) => sum + s.points, 0);
+                                    const newAtelierScores: Record<string, number> = {};
+                                    updated.forEach(s => {
+                                      if (!newAtelierScores[s.atelier]) newAtelierScores[s.atelier] = 0;
+                                      newAtelierScores[s.atelier] += s.points;
+                                    });
+                                    const updates = { precisionShots: updated, totalPoints: tp, atelierScores: newAtelierScores };
+                                    updateChallenge(editingChallenge.id, updates);
+                                    setEditingChallenge(prev => prev ? { ...prev, ...updates } : null);
+                                    setEditTotalPoints(String(tp));
+                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                  }}
+                                >
+                                  <Text style={[styles.cdPrecisionPointChipText, ps.points === p && { color: '#FFF' }]}>{p}</Text>
+                                  <Text style={[styles.cdPrecisionPointChipLabel, ps.points === p && { color: '#FFF' }]}>{pointLabels[p]}</Text>
+                                </Pressable>
+                              ))}
+                            </View>
+                          </View>
+                        ) : (
+                          <View style={styles.cdPrecisionShotDisplay}>
+                            <View style={styles.cdPrecisionShotInfoRow}>
+                              <Text style={styles.cdPrecisionShotAtelier} numberOfLines={1}>{atelierLabels[ps.atelier] || ps.atelier}</Text>
+                              <Text style={styles.cdPrecisionShotDist}>{ps.distance}m</Text>
+                            </View>
+                            <View style={[styles.cdPrecisionShotPointBadge, { backgroundColor: (pointColors[ps.points] || theme.textMuted) + '20' }]}>
+                              <Text style={[styles.cdPrecisionShotPointValue, { color: pointColors[ps.points] || theme.textMuted }]}>{ps.points} pts</Text>
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : null}
+
               {/* Shots Grid - Interactive in edit mode */}
               {editingChallenge.shots && editingChallenge.shots.length > 0 ? (
                 <View style={styles.detailShots}>
@@ -1674,6 +1803,144 @@ const styles = StyleSheet.create({
   cdShotLegendText: {
     fontSize: 10,
     color: theme.textMuted,
+  },
+  // Precision shot editing styles
+  cdPrecisionShotRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+    gap: 10,
+  },
+  cdPrecisionShotNum: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  cdPrecisionShotNumText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.textSecondary,
+  },
+  cdPrecisionShotEditable: {
+    flex: 1,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.md,
+    padding: 10,
+    gap: 8,
+  },
+  cdPrecisionPickerScroll: {
+    flexGrow: 0,
+  },
+  cdPrecisionChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.surface,
+    borderWidth: 1,
+    borderColor: theme.border,
+    marginRight: 6,
+  },
+  cdPrecisionChipActive: {
+    backgroundColor: theme.primary,
+    borderColor: theme.primary,
+  },
+  cdPrecisionChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  cdPrecisionChipTextActive: {
+    color: '#FFF',
+  },
+  cdPrecisionDistanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  cdPrecisionLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textMuted,
+    width: 56,
+  },
+  cdPrecisionDistChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: theme.borderRadius.sm,
+    backgroundColor: theme.surface,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  cdPrecisionDistChipActive: {
+    backgroundColor: theme.accent,
+    borderColor: theme.accent,
+  },
+  cdPrecisionDistChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  cdPrecisionDistChipTextActive: {
+    color: '#FFF',
+  },
+  cdPrecisionPointsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  cdPrecisionPointChip: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.sm,
+    backgroundColor: theme.surface,
+    borderWidth: 1.5,
+  },
+  cdPrecisionPointChipText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  cdPrecisionPointChipLabel: {
+    fontSize: 8,
+    fontWeight: '600',
+    color: theme.textMuted,
+    marginTop: 1,
+  },
+  cdPrecisionShotDisplay: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  cdPrecisionShotInfoRow: {
+    flex: 1,
+    gap: 2,
+  },
+  cdPrecisionShotAtelier: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  cdPrecisionShotDist: {
+    fontSize: 11,
+    color: theme.textMuted,
+  },
+  cdPrecisionShotPointBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: theme.borderRadius.full,
+  },
+  cdPrecisionShotPointValue: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   cdNotesSection: {
     backgroundColor: theme.surface,

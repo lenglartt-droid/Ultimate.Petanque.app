@@ -274,11 +274,11 @@ function NAPlaceholder({ message }: { message: string }) {
 // ============================================
 // MAIN COMPONENT
 // ============================================
-type ItemFilterType = 'all' | 'match' | 'challenge' | 'tournament' | 'opponent' | 'partner';
+type ItemFilterType = 'all' | 'match' | 'challenge' | 'tournament' | 'opponent' | 'partner' | 'terrain';
 
 export default function StatsScreen() {
   const insets = useSafeAreaInsets();
-  const { matches, challenges, tournaments, players, getMatchesByTournament, selfPlayer } = useApp();
+  const { matches, challenges, tournaments, players, terrains, getMatchesByTournament, selfPlayer } = useApp();
   const { t, language } = useLanguage();
 
   // Translated filter/tab arrays
@@ -309,6 +309,7 @@ export default function StatsScreen() {
   const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null);
   const [selectedOpponentId, setSelectedOpponentId] = useState<string | null>(null);
   const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
+  const [selectedTerrainId, setSelectedTerrainId] = useState<string | null>(null);
   const [showItemPickerModal, setShowItemPickerModal] = useState(false);
   const [itemPickerType, setItemPickerType] = useState<'match' | 'challenge' | 'tournament' | 'opponent' | 'partner'>('match');
   const [itemPickerSearch, setItemPickerSearch] = useState('');
@@ -334,8 +335,11 @@ export default function StatsScreen() {
     if (itemFilterType === 'partner' && selectedPartnerId) {
       return timeFilteredMatches.filter(m => m.teamA.players.includes(selectedPartnerId));
     }
+    if (itemFilterType === 'terrain' && selectedTerrainId) {
+      return timeFilteredMatches.filter(m => m.terrainId === selectedTerrainId);
+    }
     return timeFilteredMatches;
-  }, [timeFilteredMatches, itemFilterType, selectedMatchId, selectedTournamentId, selectedOpponentId, selectedPartnerId]);
+  }, [timeFilteredMatches, itemFilterType, selectedMatchId, selectedTournamentId, selectedOpponentId, selectedPartnerId, selectedTerrainId]);
 
   const filteredChallenges = useMemo(() => {
     if (itemFilterType === 'challenge' && selectedChallengeId) {
@@ -345,11 +349,11 @@ export default function StatsScreen() {
       return timeFilteredChallenges.filter(c => c.mode === '1v1' && c.opponentId === selectedOpponentId);
     }
     // When filtering by match, tournament, or partner, don't include challenges in stats
-    if (itemFilterType === 'match' || itemFilterType === 'tournament' || itemFilterType === 'partner') {
+    if (itemFilterType === 'match' || itemFilterType === 'tournament' || itemFilterType === 'partner' || itemFilterType === 'terrain') {
       return [];
     }
     return timeFilteredChallenges;
-  }, [timeFilteredChallenges, itemFilterType, selectedChallengeId, selectedMatchId, selectedTournamentId, selectedOpponentId, selectedPartnerId]);
+  }, [timeFilteredChallenges, itemFilterType, selectedChallengeId, selectedMatchId, selectedTournamentId, selectedOpponentId, selectedPartnerId, selectedTerrainId]);
 
   // Active filter label
   const activeFilterLabel = useMemo(() => {
@@ -379,8 +383,12 @@ export default function StatsScreen() {
       const partner = players.find(p => p.id === selectedPartnerId);
       if (partner) return `${language === 'fr' ? 'avec' : 'with'} ${partner.name}`;
     }
+    if (itemFilterType === 'terrain' && selectedTerrainId) {
+      const terr = terrains.find(te => te.id === selectedTerrainId);
+      if (terr) return terr.name;
+    }
     return null;
-  }, [itemFilterType, selectedMatchId, selectedChallengeId, selectedTournamentId, selectedOpponentId, selectedPartnerId, matches, challenges, tournaments, players, language]);
+  }, [itemFilterType, selectedMatchId, selectedChallengeId, selectedTournamentId, selectedOpponentId, selectedPartnerId, selectedTerrainId, matches, challenges, tournaments, players, terrains, language]);
 
   const clearItemFilter = () => {
     setItemFilterType('all');
@@ -389,9 +397,10 @@ export default function StatsScreen() {
     setSelectedTournamentId(null);
     setSelectedOpponentId(null);
     setSelectedPartnerId(null);
+    setSelectedTerrainId(null);
   };
 
-  const openItemPicker = (type: 'match' | 'challenge' | 'tournament' | 'opponent' | 'partner') => {
+  const openItemPicker = (type: 'match' | 'challenge' | 'tournament' | 'opponent' | 'partner' | 'terrain') => {
     setItemPickerType(type);
     setItemPickerSearch('');
     setShowItemPickerModal(true);
@@ -448,6 +457,19 @@ export default function StatsScreen() {
     setSelectedChallengeId(null);
     setSelectedTournamentId(null);
     setSelectedOpponentId(null);
+    setSelectedTerrainId(null);
+    setShowItemPickerModal(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const selectTerrain = (id: string) => {
+    setItemFilterType('terrain');
+    setSelectedTerrainId(id);
+    setSelectedMatchId(null);
+    setSelectedChallengeId(null);
+    setSelectedTournamentId(null);
+    setSelectedOpponentId(null);
+    setSelectedPartnerId(null);
     setShowItemPickerModal(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
@@ -1246,6 +1268,15 @@ export default function StatsScreen() {
                 {t('profile', 'statsFilterPartner')}
               </Text>
             </Pressable>
+            <Pressable
+              style={[styles.itemFilterChip, itemFilterType === 'terrain' ? styles.itemFilterChipTerrain : styles.itemFilterChipInactive]}
+              onPress={() => { Haptics.selectionAsync(); openItemPicker('terrain' as any); }}
+            >
+              <MaterialIcons name="sports-soccer" size={14} color={itemFilterType === 'terrain' ? '#FFF' : theme.textSecondary} />
+              <Text style={[styles.itemFilterChipText, itemFilterType !== 'terrain' && styles.itemFilterChipTextInactive]}>
+                {t('profile', 'statsFilterTerrain')}
+              </Text>
+            </Pressable>
           </ScrollView>
         </View>
 
@@ -1253,9 +1284,9 @@ export default function StatsScreen() {
         {activeFilterLabel && (
           <View style={styles.activeFilterBanner}>
             <MaterialIcons 
-              name={itemFilterType === 'match' ? 'sports' : itemFilterType === 'challenge' ? 'flag' : itemFilterType === 'opponent' ? 'people' : itemFilterType === 'partner' ? 'group' : 'emoji-events'} 
+              name={itemFilterType === 'match' ? 'sports' : itemFilterType === 'challenge' ? 'flag' : itemFilterType === 'opponent' ? 'people' : itemFilterType === 'partner' ? 'group' : itemFilterType === 'terrain' ? 'sports-soccer' : 'emoji-events'} 
               size={14} 
-              color={itemFilterType === 'match' ? theme.tirColor : itemFilterType === 'challenge' ? theme.accent : itemFilterType === 'opponent' ? theme.pointColor : itemFilterType === 'partner' ? theme.success : theme.carreauColor} 
+              color={itemFilterType === 'match' ? theme.tirColor : itemFilterType === 'challenge' ? theme.accent : itemFilterType === 'opponent' ? theme.pointColor : itemFilterType === 'partner' ? theme.success : itemFilterType === 'terrain' ? '#8B5CF6' : theme.carreauColor} 
             />
             <Text style={styles.activeFilterText} numberOfLines={1}>{activeFilterLabel}</Text>
             <Pressable style={styles.activeFilterClear} onPress={clearItemFilter}>
@@ -2678,7 +2709,7 @@ export default function StatsScreen() {
           <View style={styles.modalHeader}>
             <View>
               <Text style={styles.modalTitle}>
-                {itemPickerType === 'match' ? t('profile', 'selectMatch') : itemPickerType === 'challenge' ? t('profile', 'selectChallenge') : itemPickerType === 'opponent' ? t('profile', 'selectOpponent') : itemPickerType === 'partner' ? t('profile', 'selectPartner') : t('profile', 'selectTournament')}
+                {itemPickerType === 'match' ? t('profile', 'selectMatch') : itemPickerType === 'challenge' ? t('profile', 'selectChallenge') : itemPickerType === 'opponent' ? t('profile', 'selectOpponent') : itemPickerType === 'partner' ? t('profile', 'selectPartner') : itemPickerType === 'terrain' ? t('profile', 'selectTerrain') : t('profile', 'selectTournament')}
               </Text>
             </View>
             <Pressable style={styles.modalCloseButton} onPress={() => setShowItemPickerModal(false)}>
@@ -2918,6 +2949,59 @@ export default function StatsScreen() {
             );
           })()}
 
+          {/* Terrain Picker */}
+          {itemPickerType === 'terrain' && (() => {
+            const search = itemPickerSearch.toLowerCase();
+            // Only show terrains that have matches
+            const terrainsWithMatches = terrains.filter(terr => {
+              const terrMatches = timeFilteredMatches.filter(m => m.terrainId === terr.id);
+              return terrMatches.length > 0;
+            });
+            const items = terrainsWithMatches.filter(terr => {
+              if (!search) return true;
+              return terr.name.toLowerCase().includes(search) || terr.city.toLowerCase().includes(search) || (terr.type || '').toLowerCase().includes(search);
+            });
+            return items.length > 0 ? (
+              <FlatList
+                data={items}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+                renderItem={({ item: terr }) => {
+                  const matchCount = timeFilteredMatches.filter(m => m.terrainId === terr.id).length;
+                  const wins = timeFilteredMatches.filter(m => m.terrainId === terr.id && m.winner === 'A').length;
+                  const isSelected = selectedTerrainId === terr.id;
+                  return (
+                    <Pressable
+                      style={[styles.pickerItem, isSelected && styles.pickerItemSelected]}
+                      onPress={() => selectTerrain(terr.id)}
+                    >
+                      <View style={[styles.pickerItemIndicator, { backgroundColor: '#8B5CF6' }]} />
+                      <View style={styles.pickerItemContent}>
+                        <View style={styles.pickerItemRow}>
+                          <Text style={styles.pickerItemTitle} numberOfLines={1}>{terr.name}</Text>
+                          <Text style={[styles.pickerItemScore, { color: wins >= matchCount - wins ? theme.success : theme.error }]}>{wins}W-{matchCount - wins}L</Text>
+                        </View>
+                        <View style={styles.pickerItemMeta}>
+                          <Text style={styles.pickerItemMetaText}>{terr.city}</Text>
+                          <View style={styles.pickerItemDot} />
+                          <Text style={styles.pickerItemMetaText}>{t('terrainTypes', terr.type)}</Text>
+                          <View style={styles.pickerItemDot} />
+                          <Text style={styles.pickerItemMetaText}>{matchCount} {t('profile', 'matchesOnTerrain')}</Text>
+                        </View>
+                      </View>
+                      {isSelected && <MaterialIcons name="check-circle" size={22} color={'#8B5CF6'} />}
+                    </Pressable>
+                  );
+                }}
+              />
+            ) : (
+              <View style={styles.pickerEmpty}>
+                <MaterialIcons name="sports-soccer" size={48} color={theme.textMuted} />
+                <Text style={styles.pickerEmptyText}>{t('profile', 'noTerrainsAvailable')}</Text>
+              </View>
+            );
+          })()}
+
           {/* Opponent Picker */}
           {itemPickerType === 'opponent' && (() => {
             const search = itemPickerSearch.toLowerCase();
@@ -3000,6 +3084,7 @@ const styles = StyleSheet.create({
   itemFilterChipTournament: { backgroundColor: theme.carreauColor },
   itemFilterChipOpponent: { backgroundColor: theme.pointColor },
   itemFilterChipPartner: { backgroundColor: theme.success },
+  itemFilterChipTerrain: { backgroundColor: '#8B5CF6' },
   itemFilterChipText: { fontSize: 12, fontWeight: '600', color: '#FFF' },
   itemFilterChipTextInactive: { color: theme.textSecondary },
   activeFilterBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.border },
