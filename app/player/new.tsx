@@ -435,6 +435,49 @@ export default function NewPlayerScreen() {
               placeholder={t('player', 'searchCity')}
               showCityOnly
             />
+            {/* Auto-fill location from terrain/club */}
+            {(() => {
+              const locationEmpty = !location.city && !location.latitude && !location.longitude;
+              if (!locationEmpty) return null;
+              const suggestions: { label: string; icon: string; color: string; city: string; lat: number; lng: number; address?: string; country?: string }[] = [];
+              if (terrainId) {
+                const tr = terrains.find(te => te.id === terrainId);
+                if (tr && tr.location && (tr.location.latitude || tr.location.longitude)) {
+                  suggestions.push({ label: t('profile', 'useTerrainLocation'), icon: 'sports-soccer', color: theme.success, city: tr.city, lat: tr.location.latitude, lng: tr.location.longitude, address: tr.address, country: tr.country });
+                }
+              }
+              if (clubId) {
+                const cl = clubs.find(c => c.id === clubId);
+                if (cl && cl.location && (cl.location.latitude || cl.location.longitude)) {
+                  suggestions.push({ label: t('profile', 'useClubLocation'), icon: 'home', color: theme.accent, city: cl.city, lat: cl.location.latitude, lng: cl.location.longitude, address: cl.address, country: cl.country });
+                }
+              }
+              if (suggestions.length === 0) return null;
+              return suggestions.map((sug, idx) => (
+                <Pressable
+                  key={idx}
+                  style={styles.autoFillLocationBtn}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setLocation({
+                      address: sug.address || '',
+                      city: sug.city || '',
+                      country: sug.country || 'France',
+                      latitude: sug.lat,
+                      longitude: sug.lng,
+                    });
+                  }}
+                >
+                  <View style={[styles.autoFillLocationIcon, { backgroundColor: sug.color + '15' }]}>
+                    <MaterialIcons name={sug.icon as any} size={16} color={sug.color} />
+                  </View>
+                  <Text style={styles.autoFillLocationText} numberOfLines={1}>{sug.label}</Text>
+                  <View style={styles.autoFillLocationArrow}>
+                    <MaterialIcons name="my-location" size={16} color={theme.primary} />
+                  </View>
+                </Pressable>
+              ));
+            })()}
           </Animated.View>
 
           {/* Boules Section */}
@@ -798,5 +841,38 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  autoFillLocationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.primary + '08',
+    borderRadius: theme.borderRadius.md,
+    padding: 12,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: theme.primary + '20',
+    borderStyle: 'dashed',
+    gap: 10,
+  },
+  autoFillLocationIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  autoFillLocationText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.primary,
+  },
+  autoFillLocationArrow: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
