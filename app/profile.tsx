@@ -24,7 +24,7 @@ import { getSupabaseClient } from '@/template';
 import theme from '@/constants/theme';
 import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
-import { Club } from '@/services/mockData';
+import { Club, Terrain } from '@/services/mockData';
 import { getUnreadShareNotificationCount } from '@/services/shareService';
 import { useLanguage } from '@/hooks/useLanguage';
 
@@ -32,7 +32,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, logout, operationLoading, sendOTP } = useAuth();
   const { showAlert } = useAlert();
-  const { clubs, addClub, updatePlayer, selfPlayer, userStats, matches, challenges, tournaments, refreshData } = useApp();
+  const { clubs, terrains, addClub, updatePlayer, selfPlayer, userStats, matches, challenges, tournaments, refreshData } = useApp();
   const supabase = getSupabaseClient();
   const { t, language, setLanguage } = useLanguage();
 
@@ -51,6 +51,12 @@ export default function ProfileScreen() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   
+  // Terrain field
+  const [terrainId, setTerrainId] = useState<string | null>(null);
+  const [terrainName, setTerrainName] = useState('');
+  const [showTerrainPicker, setShowTerrainPicker] = useState(false);
+  const [terrainSearch, setTerrainSearch] = useState('');
+
   // Club picker state
   const [showClubPicker, setShowClubPicker] = useState(false);
   const [clubSearch, setClubSearch] = useState('');
@@ -101,6 +107,16 @@ export default function ProfileScreen() {
     );
   }, [clubs, clubSearch]);
 
+  // Filtered terrains based on search
+  const filteredTerrains = useMemo(() => {
+    if (!terrainSearch.trim()) return terrains;
+    const search = terrainSearch.toLowerCase();
+    return terrains.filter(t => 
+      t.name.toLowerCase().includes(search) ||
+      t.city.toLowerCase().includes(search)
+    );
+  }, [terrains, terrainSearch]);
+
   const levels = [
     { id: 'Débutant', icon: 'school' },
     { id: 'Intermédiaire', icon: 'trending-up' },
@@ -140,6 +156,10 @@ export default function ProfileScreen() {
         // Load club ID from player record if available
         if (selfPlayer?.clubId) {
           setClubId(selfPlayer.clubId);
+        }
+        if (selfPlayer?.terrainId) {
+          setTerrainId(selfPlayer.terrainId);
+          setTerrainName(selfPlayer.terrainName || '');
         }
         if (selfPlayer?.avatar) {
           setAvatarUrl(selfPlayer.avatar);
@@ -346,6 +366,8 @@ export default function ProfileScreen() {
           level,
           club: club || undefined,
           clubId: clubId || undefined,
+          terrainId: terrainId || undefined,
+          terrainName: terrainName || undefined,
           phone: phone.trim() || undefined,
           email: email.trim() || undefined,
         });
@@ -399,6 +421,20 @@ export default function ProfileScreen() {
     Haptics.selectionAsync();
     setClub('');
     setClubId(null);
+  };
+
+  const handleSelectTerrain = (selectedTerrain: Terrain) => {
+    Haptics.selectionAsync();
+    setTerrainId(selectedTerrain.id);
+    setTerrainName(selectedTerrain.name);
+    setShowTerrainPicker(false);
+    setTerrainSearch('');
+  };
+
+  const handleRemoveTerrain = () => {
+    Haptics.selectionAsync();
+    setTerrainId(null);
+    setTerrainName('');
   };
 
   const handleSendDeleteOtp = async () => {
@@ -774,6 +810,45 @@ export default function ProfileScreen() {
                 >
                   <MaterialIcons name="add-circle-outline" size={22} color={theme.primary} />
                   <Text style={styles.selectClubButtonText}>{t('profile', 'selectClub')}</Text>
+                </Pressable>
+              )}
+            </View>
+            {/* Terrain Selection */}
+            <View style={styles.fieldCard}>
+              <View style={styles.fieldHeader}>
+                <MaterialIcons name="sports-soccer" size={18} color={theme.carreauColor} />
+                <Text style={styles.fieldLabel}>{t('profile', 'terrain')}</Text>
+              </View>
+              {terrainName ? (
+                <View style={styles.selectedClubContainer}>
+                  <View style={styles.selectedClubInfo}>
+                    <View style={[styles.selectedClubIcon, { backgroundColor: theme.carreauColor + '20' }]}>
+                      <MaterialIcons name="sports-soccer" size={20} color={theme.carreauColor} />
+                    </View>
+                    <Text style={styles.selectedClubName}>{terrainName}</Text>
+                  </View>
+                  <View style={styles.selectedClubActions}>
+                    <Pressable 
+                      style={styles.changeClubBtn}
+                      onPress={() => setShowTerrainPicker(true)}
+                    >
+                      <MaterialIcons name="swap-horiz" size={18} color={theme.primary} />
+                    </Pressable>
+                    <Pressable 
+                      style={styles.removeClubBtn}
+                      onPress={handleRemoveTerrain}
+                    >
+                      <MaterialIcons name="close" size={18} color={theme.error} />
+                    </Pressable>
+                  </View>
+                </View>
+              ) : (
+                <Pressable
+                  style={[styles.selectClubButton, { borderColor: theme.carreauColor + '30' }]}
+                  onPress={() => setShowTerrainPicker(true)}
+                >
+                  <MaterialIcons name="add-circle-outline" size={22} color={theme.carreauColor} />
+                  <Text style={[styles.selectClubButtonText, { color: theme.carreauColor }]}>{t('profile', 'selectTerrain')}</Text>
                 </Pressable>
               )}
             </View>
@@ -1307,6 +1382,95 @@ export default function ProfileScreen() {
               </>
             )}
           </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Terrain Picker Modal */}
+      <Modal
+        visible={showTerrainPicker}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => {
+          setShowTerrainPicker(false);
+          setTerrainSearch('');
+        }}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Pressable
+              style={styles.modalCloseBtn}
+              onPress={() => {
+                setShowTerrainPicker(false);
+                setTerrainSearch('');
+              }}
+            >
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+            <Text style={styles.modalTitle}>{t('profile', 'chooseTerrain')}</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          {/* Search */}
+          <View style={styles.clubSearchContainer}>
+            <MaterialIcons name="search" size={20} color={theme.textMuted} />
+            <TextInput
+              style={styles.clubSearchInput}
+              value={terrainSearch}
+              onChangeText={setTerrainSearch}
+              placeholder={t('profile', 'searchTerrain')}
+              placeholderTextColor={theme.textMuted}
+            />
+            {terrainSearch.length > 0 ? (
+              <Pressable onPress={() => setTerrainSearch('')}>
+                <MaterialIcons name="close" size={20} color={theme.textMuted} />
+              </Pressable>
+            ) : null}
+          </View>
+
+          {/* Terrains list */}
+          <ScrollView
+            style={styles.clubsList}
+            contentContainerStyle={styles.clubsListContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {filteredTerrains.length > 0 ? (
+              filteredTerrains.map((terr) => (
+                <Pressable
+                  key={terr.id}
+                  style={[
+                    styles.clubPickerItem,
+                    terrainId === terr.id && styles.clubPickerItemActive,
+                  ]}
+                  onPress={() => handleSelectTerrain(terr)}
+                >
+                  <View style={[
+                    styles.clubPickerIcon,
+                    { backgroundColor: terrainId === terr.id ? theme.carreauColor : theme.backgroundSecondary },
+                  ]}>
+                    <MaterialIcons
+                      name="sports-soccer"
+                      size={24}
+                      color={terrainId === terr.id ? '#FFF' : theme.textSecondary}
+                    />
+                  </View>
+                  <View style={styles.clubPickerInfo}>
+                    <Text style={styles.clubPickerName}>{terr.name}</Text>
+                    <Text style={styles.clubPickerCity}>{terr.city} \u2022 {t('terrainTypes', terr.type)}</Text>
+                  </View>
+                  {terrainId === terr.id ? (
+                    <MaterialIcons name="check-circle" size={24} color={theme.carreauColor} />
+                  ) : null}
+                </Pressable>
+              ))
+            ) : (
+              <View style={styles.emptyClubsContainer}>
+                <MaterialIcons name="search-off" size={48} color={theme.textMuted} />
+                <Text style={styles.emptyClubsText}>
+                  {terrainSearch ? t('common', 'noResults') : t('profile', 'noTerrainRegistered')}
+                </Text>
+              </View>
+            )}
+          </ScrollView>
         </SafeAreaView>
       </Modal>
 
