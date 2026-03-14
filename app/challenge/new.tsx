@@ -3,6 +3,7 @@ import {
   View,
   Text,
   ScrollView,
+  FlatList,
   Pressable,
   StyleSheet,
   Alert,
@@ -783,37 +784,38 @@ export default function NewChallengeScreen() {
           <Text style={styles.opponentBannerTitle}>{t('challenge', 'whoToChallenge')}</Text>
         </View>
 
-        <ScrollView
+        <FlatList
+          data={filteredPlayers}
+          keyExtractor={item => item.id}
           style={styles.scrollView}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32, paddingTop: 16 }]}
           showsVerticalScrollIndicator={false}
-        >
-          {filteredPlayers.length > 0 ? (
-            filteredPlayers.map((player, index) => (
-              <Animated.View key={player.id} entering={FadeInDown.duration(300).delay(index * 40)}>
-                <Pressable
-                  style={styles.opponentCard}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                    setSelectedOpponent(player);
-                  }}
-                >
-                  <View style={styles.opponentAvatar}>
-                    <Text style={styles.opponentAvatarText}>
-                      {player.name.split(' ').map(n => n[0]).join('')}
-                    </Text>
-                  </View>
-                  <View style={styles.opponentInfo}>
-                    <Text style={styles.opponentName}>{player.name}</Text>
-                    <Text style={styles.opponentMeta}>{player.club || '-'} • {player.role}</Text>
-                  </View>
-                  <View style={styles.opponentBtn}>
-                    <Text style={styles.opponentBtnText}>{t('challenge', 'challengeBtn')}</Text>
-                  </View>
-                </Pressable>
-              </Animated.View>
-            ))
-          ) : (
+          initialNumToRender={15}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          renderItem={({ item: player }) => (
+            <Pressable
+              style={styles.opponentCard}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setSelectedOpponent(player);
+              }}
+            >
+              <View style={styles.opponentAvatar}>
+                <Text style={styles.opponentAvatarText}>
+                  {player.name.split(' ').map(n => n[0]).join('')}
+                </Text>
+              </View>
+              <View style={styles.opponentInfo}>
+                <Text style={styles.opponentName}>{player.name}</Text>
+                <Text style={styles.opponentMeta}>{player.club || '-'} • {player.role}</Text>
+              </View>
+              <View style={styles.opponentBtn}>
+                <Text style={styles.opponentBtnText}>{t('challenge', 'challengeBtn')}</Text>
+              </View>
+            </Pressable>
+          )}
+          ListEmptyComponent={
             <View style={styles.emptyState}>
               <MaterialIcons name="person-search" size={48} color={theme.textMuted} />
               <Text style={styles.emptyStateText}>{t('challenge', 'noPlayers')}</Text>
@@ -822,8 +824,8 @@ export default function NewChallengeScreen() {
                 <Text style={styles.emptyStateBtnText}>{t('challenge', 'createPlayer')}</Text>
               </Pressable>
             </View>
-          )}
-        </ScrollView>
+          }
+        />
       </SafeAreaView>
     );
   }

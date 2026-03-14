@@ -3,6 +3,7 @@ import {
   View,
   Text,
   ScrollView,
+  FlatList,
   Pressable,
   StyleSheet,
   KeyboardAvoidingView,
@@ -1970,46 +1971,53 @@ export default function NewMatchScreen() {
             </Pressable>
           </View>
 
-          <ScrollView style={styles.playersList} contentContainerStyle={styles.playersListContent}>
-            <Pressable style={styles.createPlayerBtn} onPress={() => { setShowTerrainPicker(false); router.push('/terrain/new'); }}>
-              <View style={[styles.createPlayerIcon, { backgroundColor: theme.primary + '20' }]}>
-                <MaterialIcons name="add-location" size={22} color={theme.primary} />
-              </View>
-              <View style={styles.createPlayerInfo}>
-                <Text style={[styles.createPlayerTitle, { color: theme.primary }]}>{t('match', 'addTerrain')}</Text>
-                <Text style={styles.createPlayerSubtitle}>{t('match', 'createNewField')}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-            </Pressable>
-
-            {terrains.length === 0 ? (
+          <FlatList
+            data={terrains}
+            keyExtractor={item => item.id}
+            style={styles.playersList}
+            contentContainerStyle={styles.playersListContent}
+            keyboardShouldPersistTaps="handled"
+            initialNumToRender={15}
+            maxToRenderPerBatch={10}
+            windowSize={5}
+            ListHeaderComponent={
+              <Pressable style={styles.createPlayerBtn} onPress={() => { setShowTerrainPicker(false); router.push('/terrain/new'); }}>
+                <View style={[styles.createPlayerIcon, { backgroundColor: theme.primary + '20' }]}>
+                  <MaterialIcons name="add-location" size={22} color={theme.primary} />
+                </View>
+                <View style={styles.createPlayerInfo}>
+                  <Text style={[styles.createPlayerTitle, { color: theme.primary }]}>{t('match', 'addTerrain')}</Text>
+                  <Text style={styles.createPlayerSubtitle}>{t('match', 'createNewField')}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              </Pressable>
+            }
+            renderItem={({ item: terrain }) => (
+              <Pressable
+                style={[styles.playerItem, selectedTerrainId === terrain.id && styles.playerItemSelected]}
+                onPress={() => { Haptics.selectionAsync(); setSelectedTerrainId(terrain.id); setShowTerrainPicker(false); }}
+              >
+                <View style={[styles.playerAvatar, selectedTerrainId === terrain.id && styles.playerAvatarSelected]}>
+                  <MaterialIcons name="place" size={22} color="#FFF" />
+                </View>
+                <View style={styles.playerInfo}>
+                  <Text style={styles.playerName}>{terrain.name}</Text>
+                  <Text style={styles.playerMeta}>{t('terrainTypes', terrain.type)} • {terrain.city}</Text>
+                </View>
+                <MaterialIcons 
+                  name={selectedTerrainId === terrain.id ? 'check-circle' : 'radio-button-unchecked'} 
+                  size={24} 
+                  color={selectedTerrainId === terrain.id ? theme.primary : theme.border} 
+                />
+              </Pressable>
+            )}
+            ListEmptyComponent={
               <View style={styles.emptySearch}>
                 <MaterialIcons name="location-off" size={40} color={theme.textMuted} />
                 <Text style={styles.emptySearchText}>{t('match', 'noTerrains')}</Text>
               </View>
-            ) : (
-              terrains.map(terrain => (
-                <Pressable
-                  key={terrain.id}
-                  style={[styles.playerItem, selectedTerrainId === terrain.id && styles.playerItemSelected]}
-                  onPress={() => { Haptics.selectionAsync(); setSelectedTerrainId(terrain.id); setShowTerrainPicker(false); }}
-                >
-                  <View style={[styles.playerAvatar, selectedTerrainId === terrain.id && styles.playerAvatarSelected]}>
-                    <MaterialIcons name="place" size={22} color="#FFF" />
-                  </View>
-                  <View style={styles.playerInfo}>
-                    <Text style={styles.playerName}>{terrain.name}</Text>
-                    <Text style={styles.playerMeta}>{t('terrainTypes', terrain.type)} • {terrain.city}</Text>
-                  </View>
-                  <MaterialIcons 
-                    name={selectedTerrainId === terrain.id ? 'check-circle' : 'radio-button-unchecked'} 
-                    size={24} 
-                    color={selectedTerrainId === terrain.id ? theme.primary : theme.border} 
-                  />
-                </Pressable>
-              ))
-            )}
-          </ScrollView>
+            }
+          />
         </SafeAreaView>
       </Modal>
 
@@ -2051,107 +2059,114 @@ export default function NewMatchScreen() {
             {showPlayerPicker === 'A' ? teamAPlayers.length : teamBPlayers.length} / {maxPlayersPerTeam} {t('match', 'selected')}
           </Text>
 
-          <ScrollView style={styles.playersList} contentContainerStyle={styles.playersListContent}>
-            {showPlayerPicker === 'A' && selfPlayer && (
-              <Pressable
-                style={[styles.playerItem, teamAPlayers.some(p => p.playerId === selfPlayer.id) && styles.playerItemSelected]}
-                onPress={() => togglePlayer(selfPlayer.id, 'A')}
-              >
-                <View style={[styles.playerAvatar, teamAPlayers.some(p => p.playerId === selfPlayer.id) && styles.playerAvatarSelected]}>
-                  <Text style={styles.playerAvatarText}>{selfPlayer.name?.charAt(0) || 'M'}</Text>
-                </View>
-                <View style={styles.playerInfo}>
-                  <View style={styles.playerNameRow}>
-                    <Text style={styles.playerName}>{selfPlayer.name || t('history', 'me')}</Text>
-                    <View style={styles.moiBadge}><Text style={styles.moiBadgeText}>MOI</Text></View>
-                  </View>
-                  <Text style={styles.playerMeta}>{t('roles', selfPlayer.role)} • {t('levels', selfPlayer.level)}</Text>
-                </View>
-                <MaterialIcons 
-                  name={teamAPlayers.some(p => p.playerId === selfPlayer.id) ? 'check-circle' : 'radio-button-unchecked'} 
-                  size={24} 
-                  color={teamAPlayers.some(p => p.playerId === selfPlayer.id) ? theme.primary : theme.border} 
-                />
-              </Pressable>
-            )}
-
-            {showPlayerPicker && availableRoles.length > 0 && (showPlayerPicker === 'A' ? teamAPlayers : teamBPlayers).length > 0 && (
-              <View style={styles.roleSelectionSection}>
-                <Text style={styles.roleSelectionTitle}>{t('match', 'playerRoles')}</Text>
-                {(showPlayerPicker === 'A' ? teamAPlayers : teamBPlayers).map(p => (
-                  <View key={p.playerId} style={styles.roleSelectionRow}>
-                    <Text style={styles.roleSelectionName}>{getPlayerName(p.playerId)}</Text>
-                    <View style={styles.roleButtonsRow}>
-                      {availableRoles.map(role => (
-                        <Pressable
-                          key={role}
-                          style={[styles.roleButton, p.role === role && (showPlayerPicker === 'A' ? styles.roleButtonActiveA : styles.roleButtonActiveB)]}
-                          onPress={() => updatePlayerRole(p.playerId, showPlayerPicker!, role)}
-                        >
-                          <Text style={[styles.roleButtonText, p.role === role && styles.roleButtonTextActive]}>{t('roles', role).charAt(0)}</Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {showPlayerPicker === 'B' && (
-              <Pressable style={styles.createPlayerBtn} onPress={() => { setShowPlayerPicker(null); setPlayerSearch(''); router.push('/player/new'); }}>
-                <View style={styles.createPlayerIcon}>
-                  <MaterialIcons name="person-add" size={22} color={theme.accent} />
-                </View>
-                <View style={styles.createPlayerInfo}>
-                  <Text style={styles.createPlayerTitle}>{t('match', 'createOpponent')}</Text>
-                  <Text style={styles.createPlayerSubtitle}>{t('match', 'addNewPlayer')}</Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-              </Pressable>
-            )}
-
-            {filteredPlayers
-              .filter(player => !(showPlayerPicker === 'A' && selfPlayer && player.id === selfPlayer.id))
-              .map(player => {
-                const isSelectedA = teamAPlayers.some(p => p.playerId === player.id);
-                const isSelectedB = teamBPlayers.some(p => p.playerId === player.id);
-                const isInOtherTeam = showPlayerPicker === 'A' ? isSelectedB : isSelectedA;
-                const isSelected = showPlayerPicker === 'A' ? isSelectedA : isSelectedB;
-
-                return (
+          <FlatList
+            data={filteredPlayers.filter(player => !(showPlayerPicker === 'A' && selfPlayer && player.id === selfPlayer.id))}
+            keyExtractor={item => item.id}
+            style={styles.playersList}
+            contentContainerStyle={styles.playersListContent}
+            keyboardShouldPersistTaps="handled"
+            initialNumToRender={15}
+            maxToRenderPerBatch={10}
+            windowSize={5}
+            ListHeaderComponent={
+              <>
+                {showPlayerPicker === 'A' && selfPlayer ? (
                   <Pressable
-                    key={player.id}
-                    style={[styles.playerItem, isSelected && styles.playerItemSelected, isInOtherTeam && styles.playerItemDisabled]}
-                    onPress={() => !isInOtherTeam && togglePlayer(player.id, showPlayerPicker!)}
-                    disabled={isInOtherTeam}
+                    style={[styles.playerItem, teamAPlayers.some(p => p.playerId === selfPlayer.id) && styles.playerItemSelected]}
+                    onPress={() => togglePlayer(selfPlayer.id, 'A')}
                   >
-                    <View style={[styles.playerAvatar, isSelected && (showPlayerPicker === 'A' ? styles.playerAvatarSelectedA : styles.playerAvatarSelectedB), isInOtherTeam && styles.playerAvatarDisabled]}>
-                      <Text style={styles.playerAvatarText}>{player.name.split(' ').map(n => n[0]).join('')}</Text>
+                    <View style={[styles.playerAvatar, teamAPlayers.some(p => p.playerId === selfPlayer.id) && styles.playerAvatarSelected]}>
+                      <Text style={styles.playerAvatarText}>{selfPlayer.name?.charAt(0) || 'M'}</Text>
                     </View>
                     <View style={styles.playerInfo}>
-                      <Text style={[styles.playerName, isInOtherTeam && { color: theme.textMuted }]}>{player.name}</Text>
-                      <Text style={styles.playerMeta}>{t('roles', player.role)} • {t('levels', player.level)}{player.club ? ` • ${player.club}` : ''}</Text>
+                      <View style={styles.playerNameRow}>
+                        <Text style={styles.playerName}>{selfPlayer.name || t('history', 'me')}</Text>
+                        <View style={styles.moiBadge}><Text style={styles.moiBadgeText}>MOI</Text></View>
+                      </View>
+                      <Text style={styles.playerMeta}>{t('roles', selfPlayer.role)} • {t('levels', selfPlayer.level)}</Text>
                     </View>
-                    {isInOtherTeam ? (
-                      <Text style={styles.otherTeamLabel}>{t('match', 'otherTeam')}</Text>
-                    ) : (
-                      <MaterialIcons 
-                        name={isSelected ? 'check-circle' : 'radio-button-unchecked'} 
-                        size={24} 
-                        color={isSelected ? (showPlayerPicker === 'A' ? theme.primary : theme.accent) : theme.border} 
-                      />
-                    )}
+                    <MaterialIcons 
+                      name={teamAPlayers.some(p => p.playerId === selfPlayer.id) ? 'check-circle' : 'radio-button-unchecked'} 
+                      size={24} 
+                      color={teamAPlayers.some(p => p.playerId === selfPlayer.id) ? theme.primary : theme.border} 
+                    />
                   </Pressable>
-                );
-              })}
+                ) : null}
 
-            {filteredPlayers.length === 0 && (
+                {showPlayerPicker && availableRoles.length > 0 && (showPlayerPicker === 'A' ? teamAPlayers : teamBPlayers).length > 0 ? (
+                  <View style={styles.roleSelectionSection}>
+                    <Text style={styles.roleSelectionTitle}>{t('match', 'playerRoles')}</Text>
+                    {(showPlayerPicker === 'A' ? teamAPlayers : teamBPlayers).map(p => (
+                      <View key={p.playerId} style={styles.roleSelectionRow}>
+                        <Text style={styles.roleSelectionName}>{getPlayerName(p.playerId)}</Text>
+                        <View style={styles.roleButtonsRow}>
+                          {availableRoles.map(role => (
+                            <Pressable
+                              key={role}
+                              style={[styles.roleButton, p.role === role && (showPlayerPicker === 'A' ? styles.roleButtonActiveA : styles.roleButtonActiveB)]}
+                              onPress={() => updatePlayerRole(p.playerId, showPlayerPicker!, role)}
+                            >
+                              <Text style={[styles.roleButtonText, p.role === role && styles.roleButtonTextActive]}>{t('roles', role).charAt(0)}</Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+
+                {showPlayerPicker === 'B' ? (
+                  <Pressable style={styles.createPlayerBtn} onPress={() => { setShowPlayerPicker(null); setPlayerSearch(''); router.push('/player/new'); }}>
+                    <View style={styles.createPlayerIcon}>
+                      <MaterialIcons name="person-add" size={22} color={theme.accent} />
+                    </View>
+                    <View style={styles.createPlayerInfo}>
+                      <Text style={styles.createPlayerTitle}>{t('match', 'createOpponent')}</Text>
+                      <Text style={styles.createPlayerSubtitle}>{t('match', 'addNewPlayer')}</Text>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                  </Pressable>
+                ) : null}
+              </>
+            }
+            renderItem={({ item: player }) => {
+              const isSelectedA = teamAPlayers.some(p => p.playerId === player.id);
+              const isSelectedB = teamBPlayers.some(p => p.playerId === player.id);
+              const isInOtherTeam = showPlayerPicker === 'A' ? isSelectedB : isSelectedA;
+              const isSelected = showPlayerPicker === 'A' ? isSelectedA : isSelectedB;
+
+              return (
+                <Pressable
+                  style={[styles.playerItem, isSelected && styles.playerItemSelected, isInOtherTeam && styles.playerItemDisabled]}
+                  onPress={() => !isInOtherTeam && togglePlayer(player.id, showPlayerPicker!)}
+                  disabled={isInOtherTeam}
+                >
+                  <View style={[styles.playerAvatar, isSelected && (showPlayerPicker === 'A' ? styles.playerAvatarSelectedA : styles.playerAvatarSelectedB), isInOtherTeam && styles.playerAvatarDisabled]}>
+                    <Text style={styles.playerAvatarText}>{player.name.split(' ').map(n => n[0]).join('')}</Text>
+                  </View>
+                  <View style={styles.playerInfo}>
+                    <Text style={[styles.playerName, isInOtherTeam && { color: theme.textMuted }]}>{player.name}</Text>
+                    <Text style={styles.playerMeta}>{t('roles', player.role)} • {t('levels', player.level)}{player.club ? ` • ${player.club}` : ''}</Text>
+                  </View>
+                  {isInOtherTeam ? (
+                    <Text style={styles.otherTeamLabel}>{t('match', 'otherTeam')}</Text>
+                  ) : (
+                    <MaterialIcons 
+                      name={isSelected ? 'check-circle' : 'radio-button-unchecked'} 
+                      size={24} 
+                      color={isSelected ? (showPlayerPicker === 'A' ? theme.primary : theme.accent) : theme.border} 
+                    />
+                  )}
+                </Pressable>
+              );
+            }}
+            ListEmptyComponent={
               <View style={styles.emptySearch}>
                 <MaterialIcons name="search-off" size={40} color={theme.textMuted} />
                 <Text style={styles.emptySearchText}>{t('match', 'noPlayersFound')}</Text>
               </View>
-            )}
-          </ScrollView>
+            }
+          />
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
