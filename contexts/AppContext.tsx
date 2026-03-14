@@ -116,11 +116,72 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [tournamentNotifications, setTournamentNotifications] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Self player (current user's player card)
+  // Recalculate player stats from actual match data
+  const playersWithStats = React.useMemo(() => {
+    if (matches.length === 0) return players;
+    return players.map(player => {
+      const playerMatches = matches.filter(m =>
+        m.teamA.players.includes(player.id) || m.teamB.players.includes(player.id)
+      );
+      if (playerMatches.length === 0) return player;
+
+      const totalMatches = playerMatches.length;
+      const wins = playerMatches.filter(m => {
+        const inA = m.teamA.players.includes(player.id);
+        return (inA && m.winner === 'A') || (!inA && m.winner === 'B');
+      }).length;
+      const losses = totalMatches - wins;
+
+      let totalTirs = 0, totalTirsSuccess = 0, totalPoints = 0, totalPointsSuccess = 0, totalCarreaux = 0;
+      let totalScoreFor = 0, totalScoreAgainst = 0;
+
+      playerMatches.forEach(m => {
+        const inA = m.teamA.players.includes(player.id);
+        totalScoreFor += inA ? m.teamA.score : m.teamB.score;
+        totalScoreAgainst += inA ? m.teamB.score : m.teamA.score;
+
+        if (m.playerActions) {
+          const pa = m.playerActions.find(a => a.playerId === player.id);
+          if (pa) {
+            totalTirs += pa.actions.tirs;
+            totalTirsSuccess += pa.actions.tirsSuccess;
+            totalPoints += pa.actions.points;
+            totalPointsSuccess += pa.actions.pointsSuccess;
+            totalCarreaux += pa.actions.carreaux;
+          }
+        }
+      });
+
+      const newStats = {
+        ...player.stats,
+        matchesPlayed: totalMatches,
+        wins,
+        losses,
+        winRate: totalMatches > 0 ? Math.round((wins / totalMatches) * 1000) / 10 : 0,
+        tirRate: totalTirs > 0 ? Math.round((totalTirsSuccess / totalTirs) * 1000) / 10 : player.stats.tirRate,
+        pointRate: totalPoints > 0 ? Math.round((totalPointsSuccess / totalPoints) * 1000) / 10 : player.stats.pointRate,
+        carreauRate: totalTirsSuccess > 0 ? Math.round((totalCarreaux / totalTirsSuccess) * 1000) / 10 : player.stats.carreauRate,
+        avgPointsScored: totalMatches > 0 ? Math.round((totalScoreFor / totalMatches) * 10) / 10 : 0,
+        avgPointsConceded: totalMatches > 0 ? Math.round((totalScoreAgainst / totalMatches) * 10) / 10 : 0,
+      };
+
+      return { ...player, stats: newStats };
+    });
+  }, [players, matches]);
+
+  // Self player (current user's player card) - use recalculated stats
   const selfPlayer = React.useMemo(() => {
     if (!user?.id) return null;
-    return players.find(p => p.id === user.id) || null;
-  }, [players, user?.id]);
+    return playersWithStats.find(p => p.id === user.id) || null;
+  }, [playersWithStats, user?.id]);
+
+  // Recalculate club membersCount from players referencing each club
+  const clubsWithMemberCount = React.useMemo(() => {
+    return clubs.map(club => {
+      const memberCount = playersWithStats.filter(p => p.clubId === club.id).length;
+      return { ...club, membersCount: Math.max(memberCount, club.membersCount || 0) };
+    });
+  }, [clubs, playersWithStats]);
 
   // Calculate user stats from actual data
   const userStats = React.useMemo(() => {
@@ -1353,8 +1414,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Getters
-  const getPlayerById = (id: string) => players.find(p => p.id === id);
-  const getClubById = (id: string) => clubs.find(c => c.id === id);
+  const getPlayerById = (id: string) => playersWithStats.find(p => p.id === id);
+  const getClubById = (id: string) => clubsWithMemberCount.find(c => c.id === id);
   const getTournamentById = (id: string) => tournaments.find(t => t.id === id);
   const getMatchById = (id: string) => matches.find(m => m.id === id);
   const getTerrainById = (id: string) => terrains.find(t => t.id === id);
@@ -1455,8 +1516,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider
       value={{
-        players,
-        clubs,
+        players: playersWithStats,
+        clubs: clubsWithMemberCount,
         tournaments,
         matches,
         challenges,
