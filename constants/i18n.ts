@@ -2719,6 +2719,17 @@ export const translations = {
     challengeSavedShareReady: { fr: 'D\u00e9fi enregistr\u00e9, partagez-le !', en: 'Challenge saved, share it!' },
   },
 
+  mergeHistory: {
+    title: { fr: 'Historique des fusions', en: 'Merge History' },
+    totalMerges: { fr: 'Fusions', en: 'Merges' },
+    undoableCount: { fr: 'Annulables', en: 'Undoable' },
+    relationsReassigned: { fr: 'Relations', en: 'Relations' },
+    searchPlaceholder: { fr: 'Rechercher une fusion...', en: 'Search a merge...' },
+    mergesPlural: { fr: 'fusions', en: 'merges' },
+    mergeSingular: { fr: 'fusion', en: 'merge' },
+    tryOtherFilters: { fr: 'Essayez un autre filtre ou terme de recherche', en: 'Try a different filter or search term' },
+  },
+
   locationPicker: {
     searchPlace: { fr: 'Rechercher un lieu', en: 'Search a place' },
     searchAddress: { fr: 'Rechercher une adresse...', en: 'Search an address...' },

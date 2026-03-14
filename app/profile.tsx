@@ -927,6 +927,20 @@ export default function ProfileScreen() {
 
             <Pressable 
               style={[styles.playerCardLink, { marginTop: 10 }]}
+              onPress={() => router.push('/merge-history')}
+            >
+              <View style={[styles.playerCardLinkIcon, { backgroundColor: theme.warning + '15' }]}>
+                <MaterialIcons name="merge-type" size={24} color={theme.warning} />
+              </View>
+              <View style={styles.playerCardLinkInfo}>
+                <Text style={styles.playerCardLinkTitle}>{t('mergeHistory', 'title')}</Text>
+                <Text style={styles.playerCardLinkSubtitle}>{t('directory', 'mergeHistoryEmptyDesc')}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
+            </Pressable>
+
+            <Pressable 
+              style={[styles.playerCardLink, { marginTop: 10 }]}
               onPress={() => router.push('/palmares')}
             >
               <View style={[styles.playerCardLinkIcon, { backgroundColor: theme.carreauColor + '15' }]}>

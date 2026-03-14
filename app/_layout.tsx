@@ -202,6 +202,13 @@ export default function RootLayout() {
                 }} 
               />
               <Stack.Screen 
+                name="merge-history" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="privacy-policy" 
                 options={{ 
                   presentation: 'card',
