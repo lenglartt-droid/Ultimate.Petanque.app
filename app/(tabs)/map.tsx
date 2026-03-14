@@ -1045,20 +1045,20 @@ const styles = StyleSheet.create({
     position: 'absolute', bottom: 0, left: 0, right: 0,
     backgroundColor: 'rgba(255,255,255,0.97)',
     borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    paddingBottom: 8, ...theme.shadows.cardElevated,
+    paddingBottom: Platform.select({ ios: 8, default: 8 }), ...theme.shadows.cardElevated,
   },
   actionBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 10,
   },
   cardTitle: { fontSize: 20, fontWeight: '800', color: theme.textPrimary },
-  inlineStats: { flexDirection: 'row', gap: 6, flex: 1, justifyContent: 'center', marginHorizontal: 8 },
+  inlineStats: { flexDirection: 'row', gap: 4, flex: 1, justifyContent: 'center', marginHorizontal: 6, flexWrap: 'wrap' },
   miniStat: {
     flexDirection: 'row', alignItems: 'center', gap: 3,
     backgroundColor: theme.backgroundSecondary, paddingHorizontal: 6, paddingVertical: 3,
     borderRadius: theme.borderRadius.full,
   },
-  miniStatValue: { fontSize: 12, fontWeight: '700' },
+  miniStatValue: { fontSize: 11, fontWeight: '700' },
   cardActions: { flexDirection: 'row', gap: 6 },
   manageBtn: {
     width: 36, height: 36, borderRadius: 18, backgroundColor: theme.backgroundSecondary,
@@ -1093,7 +1093,7 @@ const styles = StyleSheet.create({
   accessBadgePrivate: { backgroundColor: '#F59E0B' },
   // Fallback badge for players with terrain/club location
   fallbackBadge: { position: 'absolute', bottom: -3, right: -3, width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF', ...theme.shadows.card },
-  markerFallback: { opacity: 0.8, borderWidth: 2, borderColor: '#FFF', borderStyle: 'dashed' as any },
+  markerFallback: { opacity: 0.85, borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.6)' },
   // Cluster markers
   clusterOuter: {
     alignItems: 'center', justifyContent: 'center',

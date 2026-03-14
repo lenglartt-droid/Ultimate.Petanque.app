@@ -342,7 +342,7 @@ export default function PlayerDetailScreen() {
           
           {/* Location with fallback indicator */}
           {(() => {
-            const hasOwnLocation = player.location?.city || (player.location?.latitude && player.location.latitude !== 0) || (player.location?.longitude && player.location.longitude !== 0);
+            const hasOwnLocation = (player.location?.latitude && player.location.latitude !== 0) || (player.location?.longitude && player.location.longitude !== 0);
             if (hasOwnLocation) return null;
             // Check if location can be derived from terrain or club
             let fallbackSource: 'terrain' | 'club' | null = null;
@@ -1254,6 +1254,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.warning + '08',
     borderRadius: theme.borderRadius.md,
     padding: 12,
+    marginTop: 8,
     marginBottom: 8,
     borderWidth: 1,
     borderColor: theme.warning + '25',

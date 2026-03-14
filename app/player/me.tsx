@@ -48,8 +48,13 @@ export default function MyPlayerCardScreen() {
   const [showFullscreen, setShowFullscreen] = React.useState(false);
   const [loadingCard, setLoadingCard] = React.useState(true);
 
-  const screenWidth = Dimensions.get('window').width;
-  const screenHeight = Dimensions.get('window').height;
+  const [screenDims, setScreenDims] = React.useState(() => Dimensions.get('window'));
+  React.useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }) => setScreenDims(window));
+    return () => sub?.remove();
+  }, []);
+  const screenWidth = Math.max(1, screenDims.width);
+  const screenHeight = Math.max(1, screenDims.height);
 
   // Load federation card URL
   React.useEffect(() => {
@@ -1178,6 +1183,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: theme.borderRadius.full,
+    marginBottom: 8,
   },
   clubText: {
     fontSize: 14,
@@ -1189,6 +1195,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingVertical: 10,
+    marginBottom: 8,
   },
   addClubText: {
     fontSize: 14,
@@ -1233,7 +1240,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: theme.borderRadius.full,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   terrainBadgeText: {
     fontSize: 14,
@@ -1508,31 +1515,33 @@ const styles = StyleSheet.create({
   // Quick Stats Grid
   quickStatsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
   },
   quickStatCard: {
+    minWidth: 70,
     flex: 1,
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.md,
-    padding: 14,
+    padding: 12,
     alignItems: 'center',
     ...theme.shadows.card,
   },
   quickStatIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   quickStatValue: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
     color: theme.textPrimary,
   },
   quickStatLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: theme.textSecondary,
     marginTop: 4,
     textAlign: 'center',
