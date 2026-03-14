@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -32,7 +32,7 @@ const levels = ['Débutant', 'Intermédiaire', 'Confirmé', 'Expert'] as const;
 export default function EditPlayerScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getPlayerById, updatePlayer, deletePlayer, clubs } = useApp();
+  const { getPlayerById, updatePlayer, deletePlayer, clubs, matches } = useApp();
   const { t } = useLanguage();
   const supabase = getSupabaseClient();
 
@@ -198,6 +198,100 @@ export default function EditPlayerScreen() {
       setUploadingAvatar(false);
     }
   };
+
+  // Preferred role analysis (read-only)
+  const roleIcons: Record<string, { icon: string; color: string }> = {
+    'Pointeur': { icon: 'radio-button-on', color: '#3B82F6' },
+    'Milieu': { icon: 'swap-horiz', color: '#8B5CF6' },
+    'Tireur': { icon: 'gps-fixed', color: '#F97316' },
+  };
+
+  const roleAnalysis = useMemo(() => {
+    if (!id) return { roleCounts: {} as Record<string, number>, totalWithRoles: 0, preferredRole: '' };
+    const roleCounts: Record<string, number> = { 'Pointeur': 0, 'Milieu': 0, 'Tireur': 0 };
+    const allMatches = matches.filter(m =>
+      m.teamA.players.includes(id) || m.teamB.players.includes(id)
+    );
+    allMatches.forEach(match => {
+      if (match.teamA.players.includes(id) && match.teamA.playerRoles) {
+        const pr = match.teamA.playerRoles.find(r => r.playerId === id);
+        if (pr && roleCounts[pr.role] !== undefined) roleCounts[pr.role]++;
+      }
+      if (match.teamB.players.includes(id) && match.teamB.playerRoles) {
+        const pr = match.teamB.playerRoles.find(r => r.playerId === id);
+        if (pr && roleCounts[pr.role] !== undefined) roleCounts[pr.role]++;
+      }
+    });
+    const totalWithRoles = Object.values(roleCounts).reduce((a, b) => a + b, 0);
+    const preferredRole = totalWithRoles > 0
+      ? Object.entries(roleCounts).reduce((a, b) => b[1] > a[1] ? b : a)[0]
+      : '';
+    return { roleCounts, totalWithRoles, preferredRole };
+  }, [matches, id]);
+
+  // Preferred terrain analysis (read-only)
+  const terrainTypeIcons: Record<string, { icon: string; color: string }> = {
+    'Stabilisé': { icon: 'landscape', color: '#6B7280' },
+    'Graviers': { icon: 'grain', color: '#92400E' },
+    'Sable': { icon: 'beach-access', color: '#D97706' },
+    'Cailloux': { icon: 'terrain', color: '#6D28D9' },
+    'Terre battue': { icon: 'grass', color: '#15803D' },
+  };
+
+  const terrainAnalysis = useMemo(() => {
+    if (!id) return { terrainCounts: {} as Record<string, number>, totalWithTerrain: 0, preferredTerrain: '' };
+    const terrainCounts: Record<string, number> = {};
+    const allMatches = matches.filter(m =>
+      m.teamA.players.includes(id) || m.teamB.players.includes(id)
+    );
+    allMatches.forEach(match => {
+      if (match.terrainType) {
+        terrainCounts[match.terrainType] = (terrainCounts[match.terrainType] || 0) + 1;
+      }
+    });
+    const totalWithTerrain = Object.values(terrainCounts).reduce((a, b) => a + b, 0);
+    const preferredTerrain = totalWithTerrain > 0
+      ? Object.entries(terrainCounts).reduce((a, b) => b[1] > a[1] ? b : a)[0]
+      : '';
+    return { terrainCounts, totalWithTerrain, preferredTerrain };
+  }, [matches, id]);
+
+  // Preferred partner analysis (read-only)
+  const partnerColors = ['#3B82F6', '#8B5CF6', '#F97316', '#10B981', '#EC4899'];
+
+  const partnerAnalysis = useMemo(() => {
+    if (!id) return { partnerCounts: {} as Record<string, { count: number; name: string }>, totalWithPartners: 0, preferredPartner: { id: '', name: '', count: 0 } };
+    const partnerCounts: Record<string, { count: number; name: string }> = {};
+    const allMatches = matches.filter(m =>
+      m.teamA.players.includes(id) || m.teamB.players.includes(id)
+    );
+    allMatches.forEach(match => {
+      const inTeamA = match.teamA.players.includes(id);
+      const inTeamB = match.teamB.players.includes(id);
+      if (inTeamA && match.teamA.players.length > 1) {
+        match.teamA.players.forEach((pid, idx) => {
+          if (pid !== id) {
+            if (!partnerCounts[pid]) partnerCounts[pid] = { count: 0, name: match.teamA.playerNames[idx] || pid };
+            partnerCounts[pid].count++;
+          }
+        });
+      } else if (inTeamB && match.teamB.players.length > 1) {
+        match.teamB.players.forEach((pid, idx) => {
+          if (pid !== id) {
+            if (!partnerCounts[pid]) partnerCounts[pid] = { count: 0, name: match.teamB.playerNames[idx] || pid };
+            partnerCounts[pid].count++;
+          }
+        });
+      }
+    });
+    const totalWithPartners = Object.values(partnerCounts).reduce((a, b) => a + b.count, 0);
+    let preferredPartner = { id: '', name: '', count: 0 };
+    if (totalWithPartners > 0) {
+      const best = Object.entries(partnerCounts).reduce((a, b) => b[1].count > a[1].count ? b : a);
+      preferredPartner = { id: best[0], name: best[1].name, count: best[1].count };
+    }
+    return { partnerCounts, totalWithPartners, preferredPartner };
+  }, [matches, id]);
 
   if (!player) {
     return (
@@ -568,6 +662,135 @@ export default function EditPlayerScreen() {
             </View>
           </Animated.View>
 
+          {/* Preferred Role (read-only) */}
+          {roleAnalysis.totalWithRoles > 0 && (
+            <Animated.View entering={FadeInDown.duration(400).delay(380)} style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('player', 'preferredRole')}</Text>
+              <View style={styles.readOnlyCard}>
+                <View style={styles.readOnlyHeader}>
+                  <View style={[styles.readOnlyIcon, { backgroundColor: roleIcons[roleAnalysis.preferredRole]?.color || theme.primary }]}>
+                    <MaterialIcons name={(roleIcons[roleAnalysis.preferredRole]?.icon || 'person') as any} size={18} color="#FFF" />
+                  </View>
+                  <View style={styles.readOnlyInfo}>
+                    <Text style={styles.readOnlyName}>{t('roles', roleAnalysis.preferredRole)}</Text>
+                    <Text style={styles.readOnlyStats}>
+                      {roleAnalysis.roleCounts[roleAnalysis.preferredRole]} {t('player', 'outOf')} {roleAnalysis.totalWithRoles} {t('player', 'matchesLabel')}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.readOnlyBreakdown}>
+                  {Object.entries(roleAnalysis.roleCounts).map(([r, count]) => {
+                    const cfg = roleIcons[r];
+                    const pct = roleAnalysis.totalWithRoles > 0 ? Math.round((count / roleAnalysis.totalWithRoles) * 100) : 0;
+                    return (
+                      <View key={r} style={styles.readOnlyBreakdownItem}>
+                        <MaterialIcons name={(cfg?.icon || 'person') as any} size={12} color={cfg?.color || theme.textMuted} />
+                        <Text style={styles.readOnlyBreakdownLabel}>{r.charAt(0)}</Text>
+                        <View style={styles.readOnlyBarBg}>
+                          <View style={[styles.readOnlyBar, { width: `${pct}%`, backgroundColor: cfg?.color || theme.primary }]} />
+                        </View>
+                        <Text style={styles.readOnlyBreakdownPct}>{pct}%</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+                <View style={styles.readOnlyNotice}>
+                  <MaterialIcons name="info-outline" size={12} color={theme.textMuted} />
+                  <Text style={styles.readOnlyNoticeText}>{t('player', 'statsAutoCalculated')}</Text>
+                </View>
+              </View>
+            </Animated.View>
+          )}
+
+          {/* Preferred Terrain (read-only) */}
+          {terrainAnalysis.totalWithTerrain > 0 && (
+            <Animated.View entering={FadeInDown.duration(400).delay(390)} style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('player', 'preferredTerrain')}</Text>
+              <View style={styles.readOnlyCard}>
+                <View style={styles.readOnlyHeader}>
+                  <View style={[styles.readOnlyIcon, { backgroundColor: terrainTypeIcons[terrainAnalysis.preferredTerrain]?.color || theme.primary }]}>
+                    <MaterialIcons name={(terrainTypeIcons[terrainAnalysis.preferredTerrain]?.icon || 'sports-soccer') as any} size={18} color="#FFF" />
+                  </View>
+                  <View style={styles.readOnlyInfo}>
+                    <Text style={styles.readOnlyName}>{t('terrainTypes', terrainAnalysis.preferredTerrain)}</Text>
+                    <Text style={styles.readOnlyStats}>
+                      {terrainAnalysis.terrainCounts[terrainAnalysis.preferredTerrain]} {t('player', 'outOf')} {terrainAnalysis.totalWithTerrain} {t('player', 'matchesLabel')}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.readOnlyBreakdown}>
+                  {Object.entries(terrainAnalysis.terrainCounts).map(([terrainType, count]) => {
+                    const cfg = terrainTypeIcons[terrainType];
+                    const pct = terrainAnalysis.totalWithTerrain > 0 ? Math.round((count / terrainAnalysis.totalWithTerrain) * 100) : 0;
+                    return (
+                      <View key={terrainType} style={styles.readOnlyBreakdownItem}>
+                        <MaterialIcons name={(cfg?.icon || 'sports-soccer') as any} size={12} color={cfg?.color || theme.textMuted} />
+                        <Text style={[styles.readOnlyBreakdownLabel, { width: 18 }]}>{terrainType.substring(0, 2)}</Text>
+                        <View style={styles.readOnlyBarBg}>
+                          <View style={[styles.readOnlyBar, { width: `${pct}%`, backgroundColor: cfg?.color || theme.primary }]} />
+                        </View>
+                        <Text style={styles.readOnlyBreakdownPct}>{pct}%</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+                <View style={styles.readOnlyNotice}>
+                  <MaterialIcons name="info-outline" size={12} color={theme.textMuted} />
+                  <Text style={styles.readOnlyNoticeText}>{t('player', 'statsAutoCalculated')}</Text>
+                </View>
+              </View>
+            </Animated.View>
+          )}
+
+          {/* Preferred Partner (read-only) */}
+          {partnerAnalysis.totalWithPartners > 0 && (
+            <Animated.View entering={FadeInDown.duration(400).delay(395)} style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('player', 'preferredPartner')}</Text>
+              <View style={styles.readOnlyCard}>
+                <View style={styles.readOnlyHeader}>
+                  <View style={[styles.readOnlyIcon, { backgroundColor: partnerColors[0] }]}>
+                    <MaterialIcons name="people" size={18} color="#FFF" />
+                  </View>
+                  <View style={styles.readOnlyInfo}>
+                    <Text style={styles.readOnlyName}>{partnerAnalysis.preferredPartner.name}</Text>
+                    <Text style={styles.readOnlyStats}>
+                      {partnerAnalysis.preferredPartner.count} {t('player', 'outOf')} {partnerAnalysis.totalWithPartners} {t('player', 'matchesLabel')}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.readOnlyPartnerList}>
+                  {Object.entries(partnerAnalysis.partnerCounts)
+                    .sort((a, b) => b[1].count - a[1].count)
+                    .slice(0, 5)
+                    .map(([pid, info], idx) => {
+                      const pct = partnerAnalysis.totalWithPartners > 0 ? Math.round((info.count / partnerAnalysis.totalWithPartners) * 100) : 0;
+                      const color = partnerColors[idx % partnerColors.length];
+                      return (
+                        <View key={pid} style={styles.readOnlyPartnerItem}>
+                          <View style={[styles.readOnlyPartnerAvatar, { backgroundColor: color + '20' }]}>
+                            <Text style={[styles.readOnlyPartnerAvatarText, { color }]}>{info.name.charAt(0).toUpperCase()}</Text>
+                          </View>
+                          <View style={styles.readOnlyPartnerInfo}>
+                            <Text style={styles.readOnlyPartnerName} numberOfLines={1}>{info.name}</Text>
+                            <View style={styles.readOnlyPartnerBarRow}>
+                              <View style={styles.readOnlyBarBg}>
+                                <View style={[styles.readOnlyBar, { width: `${pct}%`, backgroundColor: color }]} />
+                              </View>
+                              <Text style={styles.readOnlyPartnerPct}>{info.count} ({pct}%)</Text>
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+                </View>
+                <View style={styles.readOnlyNotice}>
+                  <MaterialIcons name="info-outline" size={12} color={theme.textMuted} />
+                  <Text style={styles.readOnlyNoticeText}>{t('player', 'statsAutoCalculated')}</Text>
+                </View>
+              </View>
+            </Animated.View>
+          )}
+
           {/* Stats Preview */}
           <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
             <Text style={styles.sectionTitle}>{t('player', 'statistics')}</Text>
@@ -886,5 +1109,137 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     color: '#FFF',
+  },
+  // Read-only analysis cards
+  readOnlyCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: theme.border,
+    ...theme.shadows.card,
+  },
+  readOnlyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  readOnlyIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  readOnlyInfo: {
+    flex: 1,
+  },
+  readOnlyName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  readOnlyStats: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 2,
+  },
+  readOnlyBreakdown: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+  },
+  readOnlyBreakdownItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: theme.backgroundSecondary,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: theme.borderRadius.md,
+  },
+  readOnlyBreakdownLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textSecondary,
+    width: 12,
+  },
+  readOnlyBarBg: {
+    flex: 1,
+    height: 4,
+    backgroundColor: theme.border,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  readOnlyBar: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  readOnlyBreakdownPct: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textPrimary,
+    minWidth: 28,
+    textAlign: 'right',
+  },
+  readOnlyNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  readOnlyNoticeText: {
+    fontSize: 11,
+    color: theme.textMuted,
+    fontStyle: 'italic',
+  },
+  readOnlyPartnerList: {
+    gap: 8,
+    marginBottom: 10,
+  },
+  readOnlyPartnerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: theme.backgroundSecondary,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: theme.borderRadius.md,
+  },
+  readOnlyPartnerAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  readOnlyPartnerAvatarText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  readOnlyPartnerInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  readOnlyPartnerName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  readOnlyPartnerBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  readOnlyPartnerPct: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textSecondary,
+    minWidth: 50,
+    textAlign: 'right',
   },
 });
