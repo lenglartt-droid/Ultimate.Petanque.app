@@ -32,6 +32,8 @@ import {
   PublicTerrain,
 } from '@/services/publicItemsService';
 import MergeComparisonModal, { MergeField } from '@/components/ui/MergeComparisonModal';
+import { useAuth } from '@/template';
+import { uploadTerrainPhotos } from '@/services/storageService';
 
 export default function EditTerrainScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -39,6 +41,7 @@ export default function EditTerrainScreen() {
   const { getTerrainById, updateTerrain, clubs, loading: appLoading } = useApp();
   const { t } = useLanguage();
   const { showAlert } = useAlert();
+  const { user } = useAuth();
 
   const terrain = getTerrainById(id || '');
 
@@ -291,6 +294,8 @@ export default function EditTerrainScreen() {
 
     setIsSaving(true);
     try {
+      // Upload any new local photos to Supabase Storage
+      const uploadedPhotos = user?.id ? await uploadTerrainPhotos(user.id, photos) : photos;
       const selectedClub = clubs.find(c => c.id === clubId);
 
       await updateTerrain(terrain.id, {
@@ -307,7 +312,7 @@ export default function EditTerrainScreen() {
         lighting,
         covered,
         environment,
-        photos,
+        photos: uploadedPhotos,
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

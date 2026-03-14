@@ -25,6 +25,8 @@ import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAlert } from '@/template';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
+import { useAuth } from '@/template';
+import { uploadTerrainPhotos } from '@/services/storageService';
 import {
   checkDuplicatePublicTerrains,
   importPublicItemToDirectory,
@@ -36,6 +38,8 @@ export default function NewTerrainScreen() {
   const { addTerrain, clubs } = useApp();
   const { t } = useLanguage();
   const { showAlert } = useAlert();
+  const { user } = useAuth();
+  const [isSaving, setIsSaving] = useState(false);
 
   const [name, setName] = useState('');
   const [type, setType] = useState<TerrainType>('Stabilisé');
@@ -104,27 +108,36 @@ export default function NewTerrainScreen() {
       Alert.alert(t('common', 'error'), t('terrain', 'errorCityRequired'));
       return;
     }
-    const selectedClub = clubs.find(c => c.id === clubId);
-    await addTerrain({
-      name: name.trim(),
-      address: location.address.trim(),
-      city: location.city.trim(),
-      location: { latitude: location.latitude, longitude: location.longitude },
-      type,
-      description: description.trim() || undefined,
-      facilities: [],
-      clubId,
-      clubName: selectedClub?.name,
-      isPublic: false,
-      publicAccess,
-      courtsCount: parseInt(courtsCount) || 1,
-      lighting,
-      covered,
-      environment,
-      photos,
-    });
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.back();
+    setIsSaving(true);
+    try {
+      // Upload photos to Supabase Storage
+      const uploadedPhotos = user?.id ? await uploadTerrainPhotos(user.id, photos) : [];
+      const selectedClub = clubs.find(c => c.id === clubId);
+      await addTerrain({
+        name: name.trim(),
+        address: location.address.trim(),
+        city: location.city.trim(),
+        location: { latitude: location.latitude, longitude: location.longitude },
+        type,
+        description: description.trim() || undefined,
+        facilities: [],
+        clubId,
+        clubName: selectedClub?.name,
+        isPublic: false,
+        publicAccess,
+        courtsCount: parseInt(courtsCount) || 1,
+        lighting,
+        covered,
+        environment,
+        photos: uploadedPhotos,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.back();
+    } catch (error) {
+      Alert.alert(t('common', 'error'), t('terrain', 'errorSave'));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const showDuplicates = duplicates.length > 0 && !duplicatesDismissed;
@@ -392,9 +405,15 @@ export default function NewTerrainScreen() {
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-          <Pressable style={[styles.saveButton, (!name.trim() || !location.address.trim() || !location.city.trim()) && styles.saveButtonDisabled]} onPress={handleSave}>
-            <MaterialIcons name="check" size={24} color="#FFF" />
-            <Text style={styles.saveButtonText}>{t('terrain', 'createTerrain')}</Text>
+          <Pressable style={[styles.saveButton, (!name.trim() || !location.address.trim() || !location.city.trim() || isSaving) && styles.saveButtonDisabled]} onPress={handleSave} disabled={isSaving}>
+            {isSaving ? (
+              <ActivityIndicator size="small" color="#FFF" />
+            ) : (
+              <>
+                <MaterialIcons name="check" size={24} color="#FFF" />
+                <Text style={styles.saveButtonText}>{t('terrain', 'createTerrain')}</Text>
+              </>
+            )}
           </Pressable>
         </View>
       </KeyboardAvoidingView>
