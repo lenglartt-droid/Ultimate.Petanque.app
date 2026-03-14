@@ -263,8 +263,8 @@ export default function ClubDetailScreen() {
           </View>
         </Animated.View>
 
-        {/* Contact */}
-        {(club.contactEmail || club.contactPhone) && (
+        {/* Contact - hidden for shared items */}
+        {(club.contactEmail || club.contactPhone) && !isSharedItem && (
           <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
             <Text style={styles.sectionTitle}>{t('club', 'contactLabel')}</Text>
             <View style={styles.contactCard}>

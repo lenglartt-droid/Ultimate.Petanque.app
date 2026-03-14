@@ -469,8 +469,8 @@ export default function PlayerDetailScreen() {
             <Text style={styles.playerNickname}>"{player.nickname}"</Text>
           )}
           
-          {/* Contact Info */}
-          {(player.phone || player.email) && (
+          {/* Contact Info - hidden for shared items */}
+          {(player.phone || player.email) && !isSharedItem && (
             <View style={styles.contactInfo}>
               {player.phone && (
                 <Pressable 

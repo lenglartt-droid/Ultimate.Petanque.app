@@ -408,7 +408,7 @@ export async function saveSharedItemToMyAccount(itemType: ShareItemType, itemId:
       const { data: newItem, error: insertErr } = await supabase.from('players').insert({
         user_id: userData.user.id, name: source.name, nickname: source.nickname, avatar: source.avatar,
         club: source.club, club_id: null, role: source.role, level: source.level, location: source.location,
-        phone: source.phone, email: source.email, country: source.country, boules: source.boules,
+        phone: null, email: null, country: source.country, boules: source.boules,
         handedness: source.handedness, terrain_id: null, terrain_name: source.terrain_name,
         is_public: false, stats: source.stats,
       }).select('id').single();
@@ -423,7 +423,7 @@ export async function saveSharedItemToMyAccount(itemType: ShareItemType, itemId:
         user_id: userData.user.id, name: source.name, logo: source.logo, address: source.address,
         city: source.city, country: source.country, location: source.location, members_count: source.members_count,
         founded_year: source.founded_year, description: source.description, facilities: source.facilities,
-        contact_email: source.contact_email, contact_phone: source.contact_phone, terrain_id: null,
+        contact_email: null, contact_phone: null, terrain_id: null,
         terrain_name: source.terrain_name, membership_cost: source.membership_cost,
       }).select('id').single();
       if (insertErr) return { newItemId: null, error: insertErr.message };
