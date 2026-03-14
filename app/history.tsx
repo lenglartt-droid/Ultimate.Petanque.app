@@ -1026,42 +1026,66 @@ export default function HistoryScreen() {
           {editingChallenge && (
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
             <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
-              {/* Challenge Header */}
-              <View style={styles.detailHeader}>
-                <View style={[styles.detailIcon, { backgroundColor: CHALLENGE_CONFIG[editingChallenge.type].color + '20' }]}>
-                  <MaterialIcons 
-                    name={CHALLENGE_CONFIG[editingChallenge.type].icon} 
-                    size={28} 
-                    color={CHALLENGE_CONFIG[editingChallenge.type].color} 
-                  />
+              {/* Challenge Header Card */}
+              <View style={styles.detailHeaderCard}>
+                <View style={styles.detailHeaderTop}>
+                  <View style={[styles.detailIcon, { backgroundColor: CHALLENGE_CONFIG[editingChallenge.type].color + '18' }]}>
+                    <MaterialIcons 
+                      name={CHALLENGE_CONFIG[editingChallenge.type].icon} 
+                      size={30} 
+                      color={CHALLENGE_CONFIG[editingChallenge.type].color} 
+                    />
+                  </View>
+                  <View style={styles.detailInfo}>
+                    <Text style={styles.detailName}>{t('challenge', CHALLENGE_CONFIG[editingChallenge.type].nameKey)}</Text>
+                    <Text style={styles.detailDate}>
+                      {new Date(editingChallenge.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', {
+                        weekday: 'long', day: 'numeric', month: 'long'
+                      })}
+                    </Text>
+                    <Text style={styles.detailTime}>
+                      {new Date(editingChallenge.date).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', {
+                        hour: '2-digit', minute: '2-digit'
+                      })}
+                    </Text>
+                  </View>
+                  {!isEditingChallengeFields ? (
+                    <Pressable
+                      style={styles.cdEditBtn}
+                      onPress={() => setIsEditingChallengeFields(true)}
+                    >
+                      <MaterialIcons name="edit" size={18} color={theme.primary} />
+                    </Pressable>
+                  ) : null}
                 </View>
-                <View style={styles.detailInfo}>
-                  <Text style={styles.detailName}>{t('challenge', CHALLENGE_CONFIG[editingChallenge.type].nameKey)}</Text>
-                  <Text style={styles.detailDate}>
-                    {new Date(editingChallenge.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', {
-                      weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'
-                    })}
-                  </Text>
+                {/* Mode badges */}
+                <View style={styles.detailHeaderBadges}>
                   {editingChallenge.mode === '1v1' ? (
-                    <View style={[styles.modeBadge, { backgroundColor: theme.accent + '15', marginTop: 4 }]}>
-                      <MaterialIcons name="people" size={10} color={theme.accent} />
-                      <Text style={[styles.modeBadgeText, { color: theme.accent }]}>1v1</Text>
+                    <View style={[styles.detailModeBadge, { backgroundColor: theme.accent + '15' }]}>
+                      <MaterialIcons name="people" size={13} color={theme.accent} />
+                      <Text style={[styles.detailModeBadgeText, { color: theme.accent }]}>1 vs 1</Text>
+                    </View>
+                  ) : (
+                    <View style={[styles.detailModeBadge, { backgroundColor: theme.primary + '15' }]}>
+                      <MaterialIcons name="person" size={13} color={theme.primary} />
+                      <Text style={[styles.detailModeBadgeText, { color: theme.primary }]}>Solo</Text>
+                    </View>
+                  )}
+                  {editingChallenge.playerName ? (
+                    <View style={[styles.detailModeBadge, { backgroundColor: theme.backgroundSecondary }]}>
+                      <MaterialIcons name="sports" size={13} color={theme.textSecondary} />
+                      <Text style={[styles.detailModeBadgeText, { color: theme.textSecondary }]} numberOfLines={1}>{editingChallenge.playerName}</Text>
                     </View>
                   ) : null}
                 </View>
-                {!isEditingChallengeFields ? (
-                  <Pressable
-                    style={styles.cdEditBtn}
-                    onPress={() => setIsEditingChallengeFields(true)}
-                  >
-                    <MaterialIcons name="edit" size={18} color={theme.primary} />
-                  </Pressable>
-                ) : null}
               </View>
 
-              {/* Score */}
-              <View style={styles.detailScoreCard}>
-                <Text style={styles.detailScoreLabel}>SCORE</Text>
+              {/* Score Card */}
+              <View style={[styles.detailScoreCard, { borderLeftWidth: 4, borderLeftColor: CHALLENGE_CONFIG[editingChallenge.type].color }]}>
+                <View style={styles.detailScoreHeader}>
+                  <MaterialIcons name="emoji-events" size={16} color={CHALLENGE_CONFIG[editingChallenge.type].color} />
+                  <Text style={[styles.detailScoreLabel, { color: CHALLENGE_CONFIG[editingChallenge.type].color }]}>SCORE</Text>
+                </View>
                 {isEditingChallengeFields ? (
                   editingChallenge.type === 'precision' ? (
                     <View style={styles.cdEditFieldRow}>
@@ -1101,18 +1125,33 @@ export default function HistoryScreen() {
                         {editingChallenge.successCount || 0}/{editingChallenge.totalShots || 0} {t('history', 'successfulShots')}
                       </Text>
                     ) : null}
+                    {/* Progress ring visual */}
+                    {(() => {
+                      const pct = editingChallenge.type === 'precision'
+                        ? ((editingChallenge.totalPoints || 0) / Math.max(1, editingChallenge.maxPoints || 100)) * 100
+                        : editingChallenge.successRate || 0;
+                      return (
+                        <View style={styles.detailScoreBar}>
+                          <View style={styles.detailScoreBarTrack}>
+                            <View style={[styles.detailScoreBarFill, { width: `${Math.min(pct, 100)}%`, backgroundColor: CHALLENGE_CONFIG[editingChallenge.type].color }]} />
+                          </View>
+                        </View>
+                      );
+                    })()}
                   </>
                 )}
               </View>
 
-              {/* Stats Grid (editable) */}
+              {/* Stats Cards */}
               <View style={styles.detailStatsRow}>
                 {editingChallenge.type !== 'precision' ? (
-                  <View style={styles.detailStatItem}>
-                    <MaterialIcons name="stars" size={20} color={theme.carreauColor} />
+                  <View style={styles.detailStatCard}>
+                    <View style={[styles.detailStatIconBg, { backgroundColor: theme.carreauColor + '15' }]}>
+                      <MaterialIcons name="stars" size={20} color={theme.carreauColor} />
+                    </View>
                     {isEditingChallengeFields ? (
                       <TextInput
-                        style={[styles.cdEditFieldInput, { marginTop: 4, textAlign: 'center' }]}
+                        style={[styles.cdEditFieldInput, { marginTop: 6, textAlign: 'center', minWidth: 48 }]}
                         value={editCarreauCount}
                         onChangeText={setEditCarreauCount}
                         keyboardType="number-pad"
@@ -1120,16 +1159,18 @@ export default function HistoryScreen() {
                         placeholderTextColor={theme.textMuted}
                       />
                     ) : (
-                      <Text style={styles.detailStatValue}>{editingChallenge.carreauCount || 0}</Text>
+                      <Text style={[styles.detailStatValue, { color: theme.carreauColor }]}>{editingChallenge.carreauCount || 0}</Text>
                     )}
                     <Text style={styles.detailStatLabel}>{t('history', 'carreaux')}</Text>
                   </View>
                 ) : null}
-                <View style={styles.detailStatItem}>
-                  <MaterialIcons name="timer" size={20} color={theme.primary} />
+                <View style={styles.detailStatCard}>
+                  <View style={[styles.detailStatIconBg, { backgroundColor: theme.primary + '15' }]}>
+                    <MaterialIcons name="timer" size={20} color={theme.primary} />
+                  </View>
                   {isEditingChallengeFields ? (
                     <TextInput
-                      style={[styles.cdEditFieldInput, { marginTop: 4, textAlign: 'center' }]}
+                      style={[styles.cdEditFieldInput, { marginTop: 6, textAlign: 'center', minWidth: 48 }]}
                       value={editDuration}
                       onChangeText={setEditDuration}
                       keyboardType="number-pad"
@@ -1137,35 +1178,71 @@ export default function HistoryScreen() {
                       placeholderTextColor={theme.textMuted}
                     />
                   ) : (
-                    <Text style={styles.detailStatValue}>
+                    <Text style={[styles.detailStatValue, { color: theme.primary }]}>
                       {editingChallenge.duration ? `${Math.floor(editingChallenge.duration / 60)}:${(editingChallenge.duration % 60).toString().padStart(2, '0')}` : '--'}
                     </Text>
                   )}
                   <Text style={styles.detailStatLabel}>{t('history', 'duration')}{isEditingChallengeFields ? ' (sec)' : ''}</Text>
                 </View>
+                {editingChallenge.type !== 'precision' && !isEditingChallengeFields ? (
+                  <View style={styles.detailStatCard}>
+                    <View style={[styles.detailStatIconBg, { backgroundColor: theme.success + '15' }]}>
+                      <MaterialIcons name="check-circle" size={20} color={theme.success} />
+                    </View>
+                    <Text style={[styles.detailStatValue, { color: theme.success }]}>{editingChallenge.successCount || 0}/{editingChallenge.totalShots || 0}</Text>
+                    <Text style={styles.detailStatLabel}>{t('history', 'success')}</Text>
+                  </View>
+                ) : null}
               </View>
 
               {/* 1v1 Result + Radar Chart */}
               {editingChallenge.mode === '1v1' && editingChallenge.opponentResult ? (
                 <View style={styles.detailOpponent}>
-                  <View style={styles.detailOpponentRow}>
-                    <Text style={styles.detailOpponentName}>{editingChallenge.opponentName}</Text>
-                    <Text style={styles.detailOpponentScore}>
-                      {editingChallenge.type === 'precision'
-                        ? `${editingChallenge.opponentResult.totalPoints || 0} pts`
-                        : `${editingChallenge.opponentResult.successRate || 0}%`
-                      }
-                    </Text>
+                  {/* 1v1 Score Comparison */}
+                  <View style={styles.detail1v1Header}>
+                    <MaterialIcons name="people" size={16} color={theme.accent} />
+                    <Text style={styles.detail1v1Title}>{language === 'fr' ? 'Confrontation' : 'Matchup'}</Text>
                   </View>
-                  {editingChallenge.winner ? (
-                    <View style={[
-                      styles.detailWinner,
-                      { backgroundColor: editingChallenge.winner === 'player' ? theme.success : editingChallenge.winner === 'opponent' ? theme.error : theme.warning }
-                    ]}>
-                      <Text style={styles.detailWinnerText}>
-                        {editingChallenge.winner === 'draw' ? t('history', 'draw') : editingChallenge.winner === 'player' ? `${t('history', 'victory')} !` : t('history', 'defeat')}
+                  <View style={styles.detail1v1ScoreRow}>
+                    <View style={styles.detail1v1Player}>
+                      <Text style={styles.detail1v1PlayerName} numberOfLines={1}>{editingChallenge.playerName || 'Moi'}</Text>
+                      <Text style={[styles.detail1v1PlayerScore, { color: editingChallenge.winner === 'player' ? theme.success : theme.textPrimary }]}>
+                        {editingChallenge.type === 'precision'
+                          ? `${editingChallenge.totalPoints || 0} pts`
+                          : `${editingChallenge.successRate || 0}%`
+                        }
                       </Text>
                     </View>
+                    <View style={styles.detail1v1Vs}>
+                      {editingChallenge.winner ? (
+                        <View style={[
+                          styles.detail1v1WinnerBadge,
+                          { backgroundColor: editingChallenge.winner === 'player' ? theme.success : editingChallenge.winner === 'opponent' ? theme.error : theme.warning }
+                        ]}>
+                          <MaterialIcons 
+                            name={editingChallenge.winner === 'draw' ? 'handshake' : editingChallenge.winner === 'player' ? 'emoji-events' : 'sentiment-dissatisfied'} 
+                            size={16} 
+                            color="#FFF" 
+                          />
+                        </View>
+                      ) : (
+                        <Text style={styles.detail1v1VsText}>VS</Text>
+                      )}
+                    </View>
+                    <View style={[styles.detail1v1Player, { alignItems: 'flex-end' }]}>
+                      <Text style={styles.detail1v1PlayerName} numberOfLines={1}>{editingChallenge.opponentName}</Text>
+                      <Text style={[styles.detail1v1PlayerScore, { color: editingChallenge.winner === 'opponent' ? theme.error : theme.textPrimary }]}>
+                        {editingChallenge.type === 'precision'
+                          ? `${editingChallenge.opponentResult.totalPoints || 0} pts`
+                          : `${editingChallenge.opponentResult.successRate || 0}%`
+                        }
+                      </Text>
+                    </View>
+                  </View>
+                  {editingChallenge.winner ? (
+                    <Text style={[styles.detail1v1ResultLabel, { color: editingChallenge.winner === 'player' ? theme.success : editingChallenge.winner === 'opponent' ? theme.error : theme.warning }]}>
+                      {editingChallenge.winner === 'draw' ? t('history', 'draw') : editingChallenge.winner === 'player' ? `${t('history', 'victory')} !` : t('history', 'defeat')}
+                    </Text>
                   ) : null}
 
                   {/* Radar Chart Comparison */}
@@ -1255,15 +1332,29 @@ export default function HistoryScreen() {
 
               {/* Precision Shots Editing */}
               {editingChallenge.type === 'precision' && editingChallenge.precisionShots && editingChallenge.precisionShots.length > 0 ? (
-                <View style={styles.detailShots}>
+                <View style={styles.detailShotsSection}>
                   <View style={styles.cdShotsTitleRow}>
-                    <Text style={styles.detailShotsTitle}>{t('history', 'editPrecisionShots')}</Text>
+                    <View style={styles.detailShotsTitleRow}>
+                      <MaterialIcons name="gps-fixed" size={16} color={CHALLENGE_CONFIG.precision.color} />
+                      <Text style={styles.detailShotsTitle}>{t('history', 'editPrecisionShots')}</Text>
+                    </View>
                     {isEditingChallengeFields ? (
                       <Text style={styles.cdShotsEditHint}>
                         {language === 'fr' ? 'Modifier atelier, distance, score' : 'Edit workshop, distance, score'}
                       </Text>
                     ) : null}
                   </View>
+                  {/* Atelier scores summary */}
+                  {!isEditingChallengeFields && editingChallenge.atelierScores ? (
+                    <View style={styles.detailAtelierSummary}>
+                      {Object.entries(editingChallenge.atelierScores).map(([atelier, score]) => (
+                        <View key={atelier} style={styles.detailAtelierSummaryItem}>
+                          <Text style={styles.detailAtelierSummaryLabel} numberOfLines={1}>{t('precisionWorkshops', atelier).split(' ').slice(0, 2).join(' ')}</Text>
+                          <Text style={[styles.detailAtelierSummaryValue, { color: CHALLENGE_CONFIG.precision.color }]}>{score as number}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
                   {editingChallenge.precisionShots.map((ps, idx) => {
                     const atelierLabels: Record<string, string> = {
                       boule_seule: t('precisionWorkshops', 'boule_seule'),
@@ -1384,9 +1475,12 @@ export default function HistoryScreen() {
 
               {/* Shots Grid - Interactive in edit mode */}
               {editingChallenge.shots && editingChallenge.shots.length > 0 ? (
-                <View style={styles.detailShots}>
+                <View style={styles.detailShotsSection}>
                   <View style={styles.cdShotsTitleRow}>
-                    <Text style={styles.detailShotsTitle}>{t('history', 'shotDetail')}</Text>
+                    <View style={styles.detailShotsTitleRow}>
+                      <MaterialIcons name="gps-fixed" size={16} color={CHALLENGE_CONFIG[editingChallenge.type].color} />
+                      <Text style={styles.detailShotsTitle}>{t('history', 'shotDetail')}</Text>
+                    </View>
                     {isEditingChallengeFields ? (
                       <Text style={styles.cdShotsEditHint}>
                         {language === 'fr' ? 'Appuyer = basculer, Maintenir = carreau' : 'Tap = toggle, Long press = carreau'}
@@ -1407,23 +1501,31 @@ export default function HistoryScreen() {
                         disabled={!isEditingChallengeFields}
                       >
                         <Text style={styles.shotDotText}>{idx + 1}</Text>
+                        {shot.carreau ? <View style={styles.shotDotCarreauIndicator} /> : null}
                       </Pressable>
                     ))}
                   </View>
+                  {/* Always show legend */}
+                  <View style={styles.cdShotLegend}>
+                    <View style={styles.cdShotLegendItem}>
+                      <View style={[styles.cdShotLegendDot, { backgroundColor: theme.success }]} />
+                      <Text style={styles.cdShotLegendText}>{language === 'fr' ? 'Reussi' : 'Success'}</Text>
+                    </View>
+                    <View style={styles.cdShotLegendItem}>
+                      <View style={[styles.cdShotLegendDot, { backgroundColor: theme.error }]} />
+                      <Text style={styles.cdShotLegendText}>{language === 'fr' ? 'Rate' : 'Miss'}</Text>
+                    </View>
+                    <View style={styles.cdShotLegendItem}>
+                      <View style={[styles.cdShotLegendDot, { backgroundColor: theme.carreauColor }]} />
+                      <Text style={styles.cdShotLegendText}>Carreau</Text>
+                    </View>
+                  </View>
                   {isEditingChallengeFields ? (
-                    <View style={styles.cdShotLegend}>
-                      <View style={styles.cdShotLegendItem}>
-                        <View style={[styles.cdShotLegendDot, { backgroundColor: theme.success }]} />
-                        <Text style={styles.cdShotLegendText}>{language === 'fr' ? 'Reussi' : 'Success'}</Text>
-                      </View>
-                      <View style={styles.cdShotLegendItem}>
-                        <View style={[styles.cdShotLegendDot, { backgroundColor: theme.error }]} />
-                        <Text style={styles.cdShotLegendText}>{language === 'fr' ? 'Rate' : 'Miss'}</Text>
-                      </View>
-                      <View style={styles.cdShotLegendItem}>
-                        <View style={[styles.cdShotLegendDot, { backgroundColor: theme.carreauColor }]} />
-                        <Text style={styles.cdShotLegendText}>Carreau</Text>
-                      </View>
+                    <View style={styles.cdShotEditHintRow}>
+                      <MaterialIcons name="info-outline" size={14} color={theme.textMuted} />
+                      <Text style={styles.cdShotsEditHint}>
+                        {language === 'fr' ? 'Appuyer = basculer, Maintenir = carreau' : 'Tap = toggle, Long press = carreau'}
+                      </Text>
                     </View>
                   ) : null}
                 </View>
@@ -2061,29 +2163,51 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // Detail Modal
-  detailHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 20 },
-  detailIcon: { width: 56, height: 56, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  // Detail Modal - Header
+  detailHeaderCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 16, ...theme.shadows.card },
+  detailHeaderTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  detailIcon: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   detailInfo: { flex: 1 },
-  detailName: { fontSize: 18, fontWeight: '700', color: theme.textPrimary },
-  detailDate: { fontSize: 13, color: theme.textSecondary, marginTop: 4 },
+  detailName: { fontSize: 20, fontWeight: '700', color: theme.textPrimary },
+  detailDate: { fontSize: 13, color: theme.textSecondary, marginTop: 3 },
+  detailTime: { fontSize: 12, color: theme.textMuted, marginTop: 1 },
+  detailHeaderBadges: { flexDirection: 'row', gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border },
+  detailModeBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: theme.borderRadius.full },
+  detailModeBadgeText: { fontSize: 12, fontWeight: '600' },
+  // Detail Modal - Score
   detailScoreCard: {
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg,
     padding: 20,
     alignItems: 'center',
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: theme.border,
+    marginBottom: 16,
+    ...theme.shadows.card,
   },
-  detailScoreLabel: { fontSize: 11, fontWeight: '600', color: theme.textMuted, letterSpacing: 1, marginBottom: 6 },
-  detailScoreValue: { fontSize: 40, fontWeight: '800' },
-  detailScoreSub: { fontSize: 13, color: theme.textSecondary, marginTop: 4 },
-  detailStatsRow: { flexDirection: 'row', justifyContent: 'center', gap: 40, marginBottom: 20 },
-  detailStatItem: { alignItems: 'center' },
-  detailStatValue: { fontSize: 18, fontWeight: '700', color: theme.textPrimary, marginTop: 6 },
-  detailStatLabel: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
-  detailOpponent: { backgroundColor: theme.accent + '10', borderRadius: theme.borderRadius.md, padding: 14, marginBottom: 20, overflow: 'hidden' as const },
+  detailScoreHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  detailScoreLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.5 },
+  detailScoreValue: { fontSize: 44, fontWeight: '800' },
+  detailScoreSub: { fontSize: 14, color: theme.textSecondary, marginTop: 4, fontWeight: '500' },
+  detailScoreBar: { width: '80%', marginTop: 12 },
+  detailScoreBarTrack: { height: 6, backgroundColor: theme.backgroundSecondary, borderRadius: 3, overflow: 'hidden' },
+  detailScoreBarFill: { height: '100%', borderRadius: 3 },
+  // Detail Modal - Stats
+  detailStatsRow: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 16 },
+  detailStatCard: { flex: 1, alignItems: 'center', backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 14, ...theme.shadows.card },
+  detailStatIconBg: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  detailStatValue: { fontSize: 20, fontWeight: '700', color: theme.textPrimary, marginTop: 2 },
+  detailStatLabel: { fontSize: 11, color: theme.textMuted, marginTop: 3, textAlign: 'center' },
+  // Detail Modal - 1v1
+  detailOpponent: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 16, ...theme.shadows.card, borderWidth: 1, borderColor: theme.accent + '30' },
+  detail1v1Header: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
+  detail1v1Title: { fontSize: 14, fontWeight: '700', color: theme.accent, textTransform: 'uppercase', letterSpacing: 0.5 },
+  detail1v1ScoreRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  detail1v1Player: { flex: 1 },
+  detail1v1PlayerName: { fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginBottom: 4 },
+  detail1v1PlayerScore: { fontSize: 26, fontWeight: '800' },
+  detail1v1Vs: { paddingHorizontal: 16, alignItems: 'center' },
+  detail1v1VsText: { fontSize: 12, fontWeight: '700', color: theme.textMuted },
+  detail1v1WinnerBadge: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  detail1v1ResultLabel: { fontSize: 13, fontWeight: '700', textAlign: 'center', marginTop: 4, marginBottom: 4 },
   // Radar chart styles
   radarContainer: { alignItems: 'center' as const, marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: theme.border + '40' },
   radarTitle: { fontSize: 13, fontWeight: '600' as const, color: theme.textSecondary, marginBottom: 12, textAlign: 'center' as const },
@@ -2096,16 +2220,19 @@ const styles = StyleSheet.create({
   radarValueLabel: { fontSize: 11, color: theme.textMuted, width: 70, textAlign: 'right' as const },
   radarValueNum: { fontSize: 13, fontWeight: '700' as const, minWidth: 36, textAlign: 'center' as const },
   radarValueVs: { fontSize: 10, color: theme.textMuted },
-  detailOpponentRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  detailOpponentName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
-  detailOpponentScore: { fontSize: 16, fontWeight: '700', color: theme.accent },
-  detailWinner: { alignItems: 'center', paddingVertical: 8, borderRadius: theme.borderRadius.sm },
-  detailWinnerText: { fontSize: 13, fontWeight: '600', color: '#FFF' },
-  detailShots: { marginBottom: 20 },
-  detailShotsTitle: { fontSize: 13, fontWeight: '600', color: theme.textSecondary, marginBottom: 10 },
-  detailShotsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  shotDot: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  shotDotText: { fontSize: 11, fontWeight: '700', color: '#FFF' },
+  // Detail Modal - Shots
+  detailShotsSection: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 16, ...theme.shadows.card },
+  detailShotsTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  detailShotsTitle: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
+  detailShotsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  shotDot: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  shotDotText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
+  shotDotCarreauIndicator: { position: 'absolute', top: -1, right: -1, width: 10, height: 10, borderRadius: 5, backgroundColor: '#FFF', borderWidth: 1.5, borderColor: theme.carreauColor },
+  detailAtelierSummary: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: theme.border },
+  detailAtelierSummaryItem: { flex: 1, minWidth: 60, alignItems: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.sm, paddingVertical: 8, paddingHorizontal: 6 },
+  detailAtelierSummaryLabel: { fontSize: 10, color: theme.textMuted, fontWeight: '600', marginBottom: 2, textAlign: 'center' },
+  detailAtelierSummaryValue: { fontSize: 16, fontWeight: '700' },
+  cdShotEditHintRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border },
   detailActions: { flexDirection: 'row', gap: 12, marginTop: 'auto' },
   shareParticipantsBtn: {
     flexDirection: 'row',
