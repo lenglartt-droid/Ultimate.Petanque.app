@@ -26,6 +26,8 @@ interface MergePickerModalProps {
   onClose: () => void;
   itemType: MergeItemType;
   currentItemId: string;
+  /** When true, after merge the source item (selectedItem) will be deleted and relations reassigned */
+  deleteSourceAfterMerge?: boolean;
 }
 
 // Build merge fields for each type
@@ -86,10 +88,10 @@ function buildTournamentFields(current: Tournament, other: Tournament, t: (s: st
   ];
 }
 
-export default function MergePickerModal({ visible, onClose, itemType, currentItemId }: MergePickerModalProps) {
+export default function MergePickerModal({ visible, onClose, itemType, currentItemId, deleteSourceAfterMerge = true }: MergePickerModalProps) {
   const { t } = useLanguage();
   const { showAlert } = useAlert();
-  const { players, clubs, terrains, tournaments, updatePlayer, updateClub, updateTerrain, updateTournament } = useApp();
+  const { players, clubs, terrains, tournaments, matches, updatePlayer, updateClub, updateTerrain, updateTournament, deletePlayer, deleteClub, deleteTerrain } = useApp();
 
   const [search, setSearch] = useState('');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -158,8 +160,59 @@ export default function MergePickerModal({ visible, onClose, itemType, currentIt
     setShowComparison(true);
   }, []);
 
+  // Reassign relations from sourceId to targetId, then delete source
+  const reassignAndDelete = useCallback(async (type: MergeItemType, targetId: string, sourceId: string, targetItem: any) => {
+    if (!deleteSourceAfterMerge) return;
+    try {
+      if (type === 'club') {
+        // Reassign players referencing the source club to the target club
+        const linkedPlayers = players.filter(p => p.clubId === sourceId);
+        for (const p of linkedPlayers) {
+          await updatePlayer(p.id, { club: targetItem.name, clubId: targetId });
+        }
+        // Reassign tournaments referencing the source club
+        const linkedTournaments = tournaments.filter(t => t.clubId === sourceId);
+        for (const t of linkedTournaments) {
+          await updateTournament(t.id, { clubId: targetId, clubName: targetItem.name });
+        }
+        // Reassign terrains referencing the source club
+        const linkedTerrains = terrains.filter(t => t.clubId === sourceId);
+        for (const t of linkedTerrains) {
+          await updateTerrain(t.id, { clubId: targetId, clubName: targetItem.name });
+        }
+        await deleteClub(sourceId);
+      } else if (type === 'terrain') {
+        // Reassign clubs referencing the source terrain
+        const linkedClubs = clubs.filter(c => c.terrainId === sourceId);
+        for (const c of linkedClubs) {
+          await updateClub(c.id, { terrainId: targetId, terrainName: targetItem.name } as any);
+        }
+        // Reassign players referencing the source terrain
+        const linkedPlayers = players.filter(p => p.terrainId === sourceId);
+        for (const p of linkedPlayers) {
+          await updatePlayer(p.id, { terrainId: targetId, terrainName: targetItem.name });
+        }
+        // Reassign tournaments referencing the source terrain
+        const linkedTournaments = tournaments.filter(t => t.terrainId === sourceId);
+        for (const t of linkedTournaments) {
+          await updateTournament(t.id, { terrainId: targetId, terrainName: targetItem.name } as any);
+        }
+        await deleteTerrain(sourceId);
+      } else if (type === 'player') {
+        // Note: players are referenced in match teamA/teamB arrays - we don't reassign match participants
+        // because that would change match history. Just delete the duplicate.
+        await deletePlayer(sourceId);
+      } else if (type === 'tournament') {
+        // Tournaments are referenced in matches - keep match history on the original
+        // No delete function for tournaments currently, so just leave it
+      }
+    } catch (e) {
+      console.log('Error reassigning relations:', e);
+    }
+  }, [deleteSourceAfterMerge, players, clubs, terrains, tournaments, updatePlayer, updateClub, updateTerrain, updateTournament, deleteClub, deleteTerrain, deletePlayer]);
+
   const handleApplyMerge = useCallback(async (selections: Record<string, 'mine' | 'public'>) => {
-    if (!currentItem || !selectedItem) return;
+    if (!currentItem || !selectedItem || !selectedItemId) return;
 
     const updates: Record<string, any> = {};
     Object.entries(selections).forEach(([key, choice]) => {
@@ -182,19 +235,21 @@ export default function MergePickerModal({ visible, onClose, itemType, currentIt
       }
     });
 
-    if (Object.keys(updates).length === 0) {
-      setShowComparison(false);
-      onClose();
-      return;
-    }
-
     try {
-      switch (itemType) {
-        case 'player': await updatePlayer(currentItemId, updates); break;
-        case 'club': await updateClub(currentItemId, updates); break;
-        case 'terrain': await updateTerrain(currentItemId, updates); break;
-        case 'tournament': await updateTournament(currentItemId, updates); break;
+      // Apply field updates to the target item
+      if (Object.keys(updates).length > 0) {
+        switch (itemType) {
+          case 'player': await updatePlayer(currentItemId, updates); break;
+          case 'club': await updateClub(currentItemId, updates); break;
+          case 'terrain': await updateTerrain(currentItemId, updates); break;
+          case 'tournament': await updateTournament(currentItemId, updates); break;
+        }
       }
+
+      // Reassign relations and delete the source duplicate
+      const mergedTarget = { ...(currentItem as any), ...updates };
+      await reassignAndDelete(itemType, currentItemId, selectedItemId, mergedTarget);
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showAlert(t('common', 'success'), t('map', 'mergeSuccess'));
     } catch (e: any) {
@@ -203,7 +258,7 @@ export default function MergePickerModal({ visible, onClose, itemType, currentIt
 
     setShowComparison(false);
     onClose();
-  }, [currentItem, selectedItem, mergeFields, itemType, currentItemId, updatePlayer, updateClub, updateTerrain, updateTournament, showAlert, t, onClose]);
+  }, [currentItem, selectedItem, selectedItemId, mergeFields, itemType, currentItemId, updatePlayer, updateClub, updateTerrain, updateTournament, reassignAndDelete, showAlert, t, onClose]);
 
   const getItemIcon = (type: MergeItemType): string => {
     switch (type) {

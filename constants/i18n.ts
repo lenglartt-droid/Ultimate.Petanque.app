@@ -612,6 +612,7 @@ export const translations = {
     duplicateQuickMergeDesc: { fr: 'Garde automatiquement les champs les plus complets', en: 'Automatically keeps the most complete fields' },
     duplicateQuickMergeSuccess: { fr: 'Fusion rapide effectuée', en: 'Quick merge completed' },
     duplicateQuickMergeSuccessDesc: { fr: 'champs mis à jour avec les valeurs les plus complètes', en: 'fields updated with the most complete values' },
+    duplicateMergeDeletedSource: { fr: 'La fiche doublon a été supprimée et ses relations réassignées', en: 'The duplicate card has been deleted and its relations reassigned' },
     duplicatePair: { fr: 'Paire', en: 'Pair' },
     me: { fr: 'MOI', en: 'ME' },
     since: { fr: 'Depuis', en: 'Since' },

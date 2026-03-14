@@ -34,7 +34,7 @@ type TournamentStatus = 'all' | 'À venir' | 'En cours' | 'Terminé';
 
 export default function DirectoryScreen() {
   const insets = useSafeAreaInsets();
-  const { players, clubs, tournaments, terrains, selfPlayer, favoriteTerrainIds, favoriteClubIds, getSharedPermission, refreshData, updatePlayer, updateClub, updateTerrain, updateTournament } = useApp();
+  const { players, clubs, tournaments, terrains, selfPlayer, favoriteTerrainIds, favoriteClubIds, getSharedPermission, refreshData, updatePlayer, updateClub, updateTerrain, updateTournament, deletePlayer, deleteClub, deleteTerrain } = useApp();
   const { t, language } = useLanguage();
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
   const [activeTab, setActiveTab] = useState<DirectoryTab>('players');
@@ -1056,6 +1056,25 @@ export default function DirectoryScreen() {
                         try {
                           const a = dup.itemA as any;
                           const b = dup.itemB as any;
+                          // Determine which item is "more complete" (target) and which is the duplicate (source)
+                          const scoreCompleteness = (item: any) => {
+                            let score = 0;
+                            const fields = Object.keys(item).filter(k => !['id', 'userId', 'user_id', 'createdAt', 'created_at', 'updatedAt', 'updated_at', 'stats', 'isPublic', 'showContactPublic'].includes(k));
+                            for (const k of fields) {
+                              const v = item[k];
+                              if (v === null || v === undefined || v === '' || v === 0 || v === false) continue;
+                              if (typeof v === 'string') score += v.trim().length;
+                              else if (Array.isArray(v)) score += v.length * 5;
+                              else if (typeof v === 'object') score += JSON.stringify(v).length;
+                              else score += 3;
+                            }
+                            return score;
+                          };
+                          const scoreA = scoreCompleteness(a);
+                          const scoreB = scoreCompleteness(b);
+                          // Target = the more complete one, Source = the less complete one to delete
+                          const target = scoreA >= scoreB ? a : b;
+                          const source = scoreA >= scoreB ? b : a;
                           const pick = (va: any, vb: any) => {
                             const sa = typeof va === 'string' ? va.trim() : '';
                             const sb = typeof vb === 'string' ? vb.trim() : '';
@@ -1082,28 +1101,49 @@ export default function DirectoryScreen() {
                             return aa.length >= ab.length ? (aa.length > 0 ? va : undefined) : (ab.length > 0 ? vb : undefined);
                           };
                           let updates: Record<string, any> = {};
-                          let count = 0;
-                          const fields = Object.keys(b).filter(k => !['id', 'userId', 'user_id', 'createdAt', 'created_at', 'updatedAt', 'updated_at', 'stats'].includes(k));
+                          const fields = Object.keys(source).filter(k => !['id', 'userId', 'user_id', 'createdAt', 'created_at', 'updatedAt', 'updated_at', 'stats'].includes(k));
                           for (const k of fields) {
-                            const va = a[k];
-                            const vb = b[k];
+                            const vTarget = target[k];
+                            const vSource = source[k];
                             let best;
-                            if (typeof va === 'object' && !Array.isArray(va) && va !== null) best = pickObj(va, vb);
-                            else if (Array.isArray(va) || Array.isArray(vb)) best = pickArr(va, vb);
-                            else if (typeof va === 'number' || typeof vb === 'number') best = pickNum(va, vb);
-                            else best = pick(va, vb);
-                            if (best !== undefined && JSON.stringify(best) !== JSON.stringify(va)) {
+                            if (typeof vTarget === 'object' && !Array.isArray(vTarget) && vTarget !== null) best = pickObj(vTarget, vSource);
+                            else if (Array.isArray(vTarget) || Array.isArray(vSource)) best = pickArr(vTarget, vSource);
+                            else if (typeof vTarget === 'number' || typeof vSource === 'number') best = pickNum(vTarget, vSource);
+                            else best = pick(vTarget, vSource);
+                            if (best !== undefined && JSON.stringify(best) !== JSON.stringify(vTarget)) {
                               updates[k] = best;
-                              count++;
                             }
                           }
-                          if (count > 0) {
-                            const updaters: Record<string, (id: string, u: any) => Promise<void>> = {
-                              player: updatePlayer, club: updateClub, terrain: updateTerrain, tournament: updateTournament,
-                            };
-                            const updater = updaters[dup.type];
-                            if (updater) await updater(a.id, updates);
+                          // Update the target with best fields from both
+                          const updaters: Record<string, (id: string, u: any) => Promise<void>> = {
+                            player: updatePlayer, club: updateClub, terrain: updateTerrain, tournament: updateTournament,
+                          };
+                          const updater = updaters[dup.type];
+                          if (updater && Object.keys(updates).length > 0) {
+                            await updater(target.id, updates);
                           }
+                          const mergedTarget = { ...target, ...updates };
+                          // Reassign relations from source to target, then delete source
+                          if (dup.type === 'club') {
+                            const linkedPlayers = players.filter(p => p.clubId === source.id);
+                            for (const p of linkedPlayers) await updatePlayer(p.id, { club: mergedTarget.name, clubId: target.id });
+                            const linkedTournaments = tournaments.filter(t => t.clubId === source.id);
+                            for (const t of linkedTournaments) await updateTournament(t.id, { clubId: target.id, clubName: mergedTarget.name });
+                            const linkedTerrains = terrains.filter(t => t.clubId === source.id);
+                            for (const t of linkedTerrains) await updateTerrain(t.id, { clubId: target.id, clubName: mergedTarget.name } as any);
+                            await deleteClub(source.id);
+                          } else if (dup.type === 'terrain') {
+                            const linkedClubs = clubs.filter(c => c.terrainId === source.id);
+                            for (const c of linkedClubs) await updateClub(c.id, { terrainId: target.id, terrainName: mergedTarget.name } as any);
+                            const linkedPlayers = players.filter(p => p.terrainId === source.id);
+                            for (const p of linkedPlayers) await updatePlayer(p.id, { terrainId: target.id, terrainName: mergedTarget.name });
+                            const linkedTournaments = tournaments.filter(t => t.terrainId === source.id);
+                            for (const t of linkedTournaments) await updateTournament(t.id, { terrainId: target.id, terrainName: mergedTarget.name } as any);
+                            await deleteTerrain(source.id);
+                          } else if (dup.type === 'player') {
+                            await deletePlayer(source.id);
+                          }
+                          // For tournaments, no delete function exists, so we just dismiss
                           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                           setDismissedPairs(prev => new Set([...prev, dup.pairKey]));
                         } catch (e) { /* silent */ }
