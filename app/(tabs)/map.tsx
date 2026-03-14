@@ -587,80 +587,85 @@ export default function MapScreen() {
 
       {/* Header */}
       <SafeAreaView edges={['top']} style={styles.header}>
-        <Animated.View entering={FadeInDown.duration(300)} style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>{t('map', 'map')}</Text>
-            <View style={styles.cardActions}>
-              {/* Manage public button */}
-              <Pressable
-                style={styles.manageBtn}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  loadManageData();
-                  setShowManageModal(true);
-                }}
-              >
-                <MaterialIcons name="public" size={18} color={theme.success} />
-              </Pressable>
-              <Pressable
-                style={[styles.searchBtn, showSearch && styles.searchBtnActive]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setShowSearch(!showSearch);
-                  if (showSearch) setSearch('');
-                }}
-              >
-                <MaterialIcons name={showSearch ? 'close' : 'search'} size={20} color={showSearch ? '#FFF' : theme.textSecondary} />
-              </Pressable>
+        {/* Title bar */}
+        <Animated.View entering={FadeInDown.duration(300)} style={styles.titleBar}>
+          <Text style={styles.cardTitle}>{t('map', 'map')}</Text>
+          <View style={styles.cardActions}>
+            <Pressable
+              style={styles.manageBtn}
+              onPress={() => {
+                Haptics.selectionAsync();
+                loadManageData();
+                setShowManageModal(true);
+              }}
+            >
+              <MaterialIcons name="public" size={18} color={theme.success} />
+            </Pressable>
+            <Pressable
+              style={[styles.searchBtn, showSearch && styles.searchBtnActive]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setShowSearch(!showSearch);
+                if (showSearch) setSearch('');
+              }}
+            >
+              <MaterialIcons name={showSearch ? 'close' : 'search'} size={20} color={showSearch ? '#FFF' : theme.textSecondary} />
+            </Pressable>
+          </View>
+        </Animated.View>
+
+        {/* Search bar (collapsible) */}
+        {showSearch ? (
+          <Animated.View entering={FadeIn.duration(200)} style={styles.searchRowOuter}>
+            <View style={styles.searchBar}>
+              <MaterialIcons name="search" size={18} color={theme.textMuted} />
+              <TextInput style={styles.searchInput} placeholder={t('map', 'search')} placeholderTextColor={theme.textMuted} value={search} onChangeText={setSearch} autoFocus />
+              {search.length > 0 ? (
+                <Pressable onPress={() => setSearch('')} hitSlop={8}><MaterialIcons name="close" size={16} color={theme.textMuted} /></Pressable>
+              ) : null}
             </View>
-          </View>
+            {search.trim() ? <Text style={styles.searchCount}>{counts.total} {counts.total !== 1 ? t('map', 'results') : t('map', 'result')}</Text> : null}
+          </Animated.View>
+        ) : null}
 
-          {showSearch ? (
-            <Animated.View entering={FadeIn.duration(200)} style={styles.searchRow}>
-              <View style={styles.searchBar}>
-                <MaterialIcons name="search" size={18} color={theme.textMuted} />
-                <TextInput style={styles.searchInput} placeholder={t('map', 'search')} placeholderTextColor={theme.textMuted} value={search} onChangeText={setSearch} autoFocus />
-                {search.length > 0 ? (
-                  <Pressable onPress={() => setSearch('')} hitSlop={8}><MaterialIcons name="close" size={16} color={theme.textMuted} /></Pressable>
-                ) : null}
-              </View>
-              {search.trim() ? <Text style={styles.searchCount}>{counts.total} {counts.total !== 1 ? t('map', 'results') : t('map', 'result')}</Text> : null}
-            </Animated.View>
-          ) : null}
-
+        {/* Stats counters card */}
+        <Animated.View entering={FadeInDown.duration(300).delay(30)} style={styles.statsCard}>
           <View style={styles.statsRow}>
-            {(Object.keys(MARKER_CONFIG) as (keyof typeof MARKER_CONFIG)[]).map(k => (
-              <View key={k} style={[styles.statItem, filter !== 'all' && filter !== k && styles.statItemDim]}>
-                <View style={[styles.statDot, { backgroundColor: MARKER_CONFIG[k].color }]} />
-                <Text style={styles.statValue}>{counts[k]}</Text>
-                <Text style={styles.statLabel}>{MARKER_CONFIG[k].label.toLowerCase()}</Text>
-              </View>
-            ))}
+            {(Object.keys(MARKER_CONFIG) as (keyof typeof MARKER_CONFIG)[]).map(k => {
+              const isActive = filter === 'all' || filter === k;
+              return (
+                <Pressable key={k} style={[styles.statItem, !isActive && styles.statItemDim]} onPress={() => handleFilterPress(k)}>
+                  <View style={[styles.statIconWrap, { backgroundColor: MARKER_CONFIG[k].color + (isActive ? '20' : '08') }]}>
+                    <MaterialIcons name={MARKER_CONFIG[k].icon as any} size={16} color={MARKER_CONFIG[k].color} />
+                  </View>
+                  <Text style={[styles.statValue, { color: isActive ? theme.textPrimary : theme.textMuted }]}>{counts[k]}</Text>
+                  <Text style={styles.statLabel}>{MARKER_CONFIG[k].label.toLowerCase()}</Text>
+                </Pressable>
+              );
+            })}
           </View>
-
-          {/* Public items count */}
           {counts.publicTotal > 0 ? (
             <View style={styles.publicCountRow}>
-              <MaterialIcons name="public" size={12} color={theme.success} />
+              <MaterialIcons name="public" size={11} color={theme.success} />
               <Text style={styles.publicCountText}>{counts.publicTotal} {t('map', 'publicCount')}</Text>
             </View>
           ) : null}
         </Animated.View>
 
-        {/* Filters */}
-        <Animated.View entering={FadeInDown.duration(300).delay(50)}>
+        {/* Category filters */}
+        <Animated.View entering={FadeInDown.duration(300).delay(60)}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
             <Pressable style={[styles.chip, filter === 'all' && styles.chipActive]} onPress={() => handleFilterPress('all')}>
               <MaterialIcons name="layers" size={14} color={filter === 'all' ? '#FFF' : theme.textSecondary} />
-              <Text style={[styles.chipText, filter === 'all' && styles.chipTextActive]}>{t('map', 'all')} ({counts.total})</Text>
+              <Text style={[styles.chipText, filter === 'all' && styles.chipTextActive]}>{t('map', 'all')}</Text>
             </Pressable>
             {(Object.keys(MARKER_CONFIG) as (keyof typeof MARKER_CONFIG)[]).map(k => (
               <Pressable key={k} style={[styles.chip, filter === k && { backgroundColor: MARKER_CONFIG[k].color }]} onPress={() => handleFilterPress(k)}>
                 <MaterialIcons name={MARKER_CONFIG[k].icon as any} size={14} color={filter === k ? '#FFF' : theme.textSecondary} />
-                <Text style={[styles.chipText, filter === k && styles.chipTextActive]}>{MARKER_CONFIG[k].label} ({counts[k]})</Text>
+                <Text style={[styles.chipText, filter === k && styles.chipTextActive]}>{MARKER_CONFIG[k].label}</Text>
               </Pressable>
             ))}
-            {/* Terrain access filter */}
+            {/* Terrain access sub-filter */}
             {(filter === 'all' || filter === 'terrains') ? (
               <>
                 <View style={styles.chipSeparator} />
@@ -791,35 +796,51 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.backgroundSecondary },
   header: { position: 'absolute', top: 0, left: 0, right: 0 },
-  card: {
-    backgroundColor: 'rgba(255,255,255,0.97)', marginHorizontal: 16, marginTop: 8,
-    borderRadius: theme.borderRadius.lg, padding: 14, ...theme.shadows.card,
+  titleBar: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginHorizontal: 16, marginTop: 4, paddingVertical: 6,
   },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  cardTitle: { fontSize: 20, fontWeight: '700', color: theme.textPrimary },
+  cardTitle: { fontSize: 22, fontWeight: '800', color: theme.textPrimary },
   cardActions: { flexDirection: 'row', gap: 6 },
   manageBtn: {
-    width: 34, height: 34, borderRadius: 17, backgroundColor: theme.success + '15',
-    alignItems: 'center', justifyContent: 'center',
+    width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.95)',
+    alignItems: 'center', justifyContent: 'center', ...theme.shadows.card,
   },
-  searchBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
+  searchBtn: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.95)',
+    alignItems: 'center', justifyContent: 'center', ...theme.shadows.card,
+  },
   searchBtnActive: { backgroundColor: theme.primary },
-  searchRow: { marginBottom: 10 },
-  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, paddingHorizontal: 10, height: 40, gap: 6 },
+  searchRowOuter: {
+    marginHorizontal: 16, marginBottom: 6,
+  },
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.97)',
+    borderRadius: theme.borderRadius.md, paddingHorizontal: 12, height: 42, gap: 8,
+    ...theme.shadows.card,
+  },
   searchInput: { flex: 1, fontSize: 14, color: theme.textPrimary },
   searchCount: { fontSize: 11, color: theme.textSecondary, marginTop: 6, textAlign: 'center' },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  statItem: { alignItems: 'center', flex: 1 },
-  statItemDim: { opacity: 0.35 },
-  statDot: { width: 6, height: 6, borderRadius: 3, marginBottom: 3 },
-  statValue: { fontSize: 16, fontWeight: '700', color: theme.textPrimary },
-  statLabel: { fontSize: 10, color: theme.textSecondary },
+  statsCard: {
+    backgroundColor: 'rgba(255,255,255,0.97)', marginHorizontal: 16, marginTop: 4,
+    borderRadius: theme.borderRadius.lg, paddingVertical: 12, paddingHorizontal: 8,
+    ...theme.shadows.card,
+  },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-around' },
+  statItem: { alignItems: 'center', flex: 1, gap: 2 },
+  statItemDim: { opacity: 0.3 },
+  statIconWrap: {
+    width: 32, height: 32, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 2,
+  },
+  statValue: { fontSize: 17, fontWeight: '800', color: theme.textPrimary, includeFontPadding: false },
+  statLabel: { fontSize: 10, color: theme.textSecondary, fontWeight: '500' },
   publicCountRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 4, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: theme.border,
+    gap: 4, marginTop: 8, paddingTop: 7, borderTopWidth: 1, borderTopColor: theme.border + '60',
   },
-  publicCountText: { fontSize: 11, color: theme.success, fontWeight: '500' },
-  filters: { paddingHorizontal: 16, paddingTop: 10, gap: 6 },
+  publicCountText: { fontSize: 11, color: theme.success, fontWeight: '600' },
+  filters: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, gap: 6 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: theme.borderRadius.full, backgroundColor: 'rgba(255,255,255,0.95)', ...theme.shadows.card },
   chipActive: { backgroundColor: theme.primary },
   chipText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
