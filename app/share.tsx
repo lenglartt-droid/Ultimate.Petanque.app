@@ -95,8 +95,8 @@ export default function RedeemShareScreen() {
           autoSavedItems: result.autoSavedItems,
         });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        // Refresh data to show new items in directory
-        refreshData();
+        // Refresh data to show new items in directory - await to ensure context is updated
+        await refreshData();
       }
     } catch (e) {
       showAlert(t('common', 'error'), t('share', 'cannotValidate'));
