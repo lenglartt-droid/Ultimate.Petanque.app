@@ -30,7 +30,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 export default function TerrainDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { getTerrainById, tournaments, deleteTerrain, isFavoriteTerrain, toggleFavoriteTerrain, getSharedPermission, setItemPublic, selfPlayer } = useApp();
+  const { getTerrainById, tournaments, deleteTerrain, isFavoriteTerrain, toggleFavoriteTerrain, getSharedPermission, setItemPublic } = useApp();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -267,12 +267,6 @@ export default function TerrainDetailScreen() {
               <MaterialIcons name={typeConfig.icon as any} size={56} color="#FFF" />
             </View>
             <Text style={styles.terrainName}>{terrain.name}</Text>
-            {selfPlayer?.terrainId === terrain.id ? (
-              <View style={styles.preferredBadge}>
-                <MaterialIcons name="favorite" size={14} color={theme.error} />
-                <Text style={styles.preferredBadgeText}>{t('profile', 'preferredLabel')}</Text>
-              </View>
-            ) : null}
             {sharedPermission ? (
               <View style={{ marginBottom: 8 }}>
                 <SharedBadge permission={sharedPermission} />
@@ -290,12 +284,6 @@ export default function TerrainDetailScreen() {
         {hasPhotos && (
           <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.nameSection}>
             <Text style={styles.terrainNameLarge}>{terrain.name}</Text>
-            {selfPlayer?.terrainId === terrain.id ? (
-              <View style={styles.preferredBadge}>
-                <MaterialIcons name="favorite" size={14} color={theme.error} />
-                <Text style={styles.preferredBadgeText}>{t('profile', 'preferredLabel')}</Text>
-              </View>
-            ) : null}
             {sharedPermission ? (
               <View style={{ marginBottom: 8 }}>
                 <SharedBadge permission={sharedPermission} />
@@ -704,21 +692,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: theme.textSecondary,
     textAlign: 'center',
-  },
-  preferredBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: theme.error + '12',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: theme.borderRadius.full,
-    marginBottom: 8,
-  },
-  preferredBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.error,
   },
   quickInfoGrid: {
     flexDirection: 'row',

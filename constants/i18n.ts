@@ -137,7 +137,6 @@ export const translations = {
     chooseTerrain: { fr: 'Choisir un terrain', en: 'Choose a court' },
     searchTerrain: { fr: 'Rechercher un terrain...', en: 'Search a court...' },
     noTerrainRegistered: { fr: 'Aucun terrain enregistré', en: 'No courts registered' },
-    preferredLabel: { fr: 'Préféré', en: 'Preferred' },
     chooseClub: { fr: 'Choisir un club', en: 'Choose a club' },
     newClub: { fr: 'Nouveau club', en: 'New club' },
     createNewClub: { fr: 'Créer un nouveau club', en: 'Create a new club' },

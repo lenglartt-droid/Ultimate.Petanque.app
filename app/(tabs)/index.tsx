@@ -23,7 +23,7 @@ import { preloadInterstitial } from '@/services/adService';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { userStats, tournaments, matches, challenges, selfPlayer, getTerrainById } = useApp();
+  const { userStats, tournaments, matches, challenges, selfPlayer } = useApp();
   const { user } = useAuth();
   const { t, language } = useLanguage();
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
@@ -200,49 +200,6 @@ export default function HomeScreen() {
             </Pressable>
           </Animated.View>
         )}
-
-        {/* My Journey - Preferred Terrain */}
-        {selfPlayer?.terrainId && selfPlayer?.terrainName ? (
-          <Animated.View entering={FadeInDown.duration(400).delay(220)} style={styles.journeySection}>
-            <Text style={styles.journeySectionTitle}>{t('home', 'myJourney')}</Text>
-            <Pressable
-              style={({ pressed }) => [styles.terrainCard, pressed && styles.terrainCardPressed]}
-              onPress={() => router.push(`/terrain/${selfPlayer.terrainId}` as any)}
-            >
-              <View style={styles.terrainCardIcon}>
-                <MaterialIcons name="sports-soccer" size={24} color={theme.success} />
-              </View>
-              <View style={styles.terrainCardInfo}>
-                <View style={styles.terrainCardNameRow}>
-                  <Text style={styles.terrainCardName} numberOfLines={1}>{selfPlayer.terrainName}</Text>
-                  <MaterialIcons name="favorite" size={12} color={theme.error} />
-                </View>
-                {(() => {
-                  const terr = getTerrainById(selfPlayer.terrainId!);
-                  return terr ? (
-                    <View style={styles.terrainCardMeta}>
-                      <MaterialIcons name="place" size={12} color={theme.textMuted} />
-                      <Text style={styles.terrainCardMetaText}>{terr.city}</Text>
-                      <View style={styles.terrainCardDot} />
-                      <Text style={styles.terrainCardMetaText}>{t('terrainTypes', terr.type)}</Text>
-                      {terr.courtsCount > 0 ? (
-                        <>
-                          <View style={styles.terrainCardDot} />
-                          <Text style={styles.terrainCardMetaText}>{terr.courtsCount} {terr.courtsCount > 1 ? t('map', 'courts') : t('map', 'court')}</Text>
-                        </>
-                      ) : null}
-                    </View>
-                  ) : (
-                    <Text style={styles.terrainCardMetaText}>{t('profile', 'preferredLabel')}</Text>
-                  );
-                })()}
-              </View>
-              <View style={styles.terrainCardArrow}>
-                <MaterialIcons name="chevron-right" size={20} color={theme.success} />
-              </View>
-            </Pressable>
-          </Animated.View>
-        ) : null}
 
         {/* Ad Banner */}
         <AdBanner position="inline" />
@@ -646,77 +603,6 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
     opacity: 0.9,
     backgroundColor: theme.primary + '08',
-  },
-  // Journey / Preferred Terrain
-  journeySection: {
-    marginBottom: 20,
-  },
-  journeySectionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: theme.textPrimary,
-    marginBottom: 12,
-  },
-  terrainCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 14,
-    borderWidth: 1.5,
-    borderColor: theme.success + '25',
-    ...theme.shadows.card,
-  },
-  terrainCardPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.9,
-  },
-  terrainCardIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: theme.success + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  terrainCardInfo: {
-    flex: 1,
-  },
-  terrainCardNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
-  terrainCardName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.textPrimary,
-    flex: 1,
-  },
-  terrainCardMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  terrainCardMetaText: {
-    fontSize: 12,
-    color: theme.textSecondary,
-  },
-  terrainCardDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: theme.textMuted,
-  },
-  terrainCardArrow: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: theme.success + '12',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   historyButtonText: {
     flex: 1,

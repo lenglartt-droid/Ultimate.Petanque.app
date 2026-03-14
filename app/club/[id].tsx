@@ -27,7 +27,7 @@ import { useAuth } from '@/template';
 export default function ClubDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getClubById, players, tournaments, deleteClub, getSharedPermission, setItemPublic, selfPlayer } = useApp();
+  const { getClubById, players, tournaments, deleteClub, getSharedPermission, setItemPublic } = useApp();
   const { user } = useAuth();
   const { t, language } = useLanguage();
 
@@ -158,12 +158,6 @@ export default function ClubDetailScreen() {
             <MaterialIcons name="home" size={48} color="#FFF" />
           </View>
           <Text style={styles.clubName}>{club.name}</Text>
-          {selfPlayer?.clubId === club.id ? (
-            <View style={styles.preferredBadge}>
-              <MaterialIcons name="favorite" size={14} color={theme.error} />
-              <Text style={styles.preferredBadgeText}>{t('profile', 'preferredLabel')}</Text>
-            </View>
-          ) : null}
           {sharedPermission ? (
             <View style={{ marginBottom: 8 }}>
               <SharedBadge permission={sharedPermission} />
@@ -472,21 +466,6 @@ const styles = StyleSheet.create({
     color: theme.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
-  },
-  preferredBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: theme.error + '12',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: theme.borderRadius.full,
-    marginBottom: 8,
-  },
-  preferredBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.error,
   },
   quickStats: {
     flexDirection: 'row',
