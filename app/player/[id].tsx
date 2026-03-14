@@ -57,8 +57,11 @@ export default function PlayerDetailScreen() {
   const { getPlayerById, getMatchesByPlayer, getClubById, getTerrainById, deletePlayer, selfPlayer, matches, getSharedPermission, loading: appLoading } = useApp();
   const player = getPlayerById(id!);
   const playerMatches = getMatchesByPlayer(id!).slice(0, 5);
-  const club = player?.clubId ? getClubById(player.clubId) : null;
-  const terrain = player?.terrainId ? getTerrainById(player.terrainId) : null;
+  const clubEntity = player?.clubId ? getClubById(player.clubId) : null;
+  const terrainEntity = player?.terrainId ? getTerrainById(player.terrainId) : null;
+  // For shared players, the club/terrain may not exist in recipient's local context
+  const clubDisplayName = clubEntity?.name || player?.club || null;
+  const terrainDisplayName = terrainEntity?.name || player?.terrainName || null;
   const isSelf = selfPlayer && player?.id === selfPlayer.id;
   const sharedPermission = getSharedPermission(id!);
   const isSharedItem = sharedPermission !== null;
@@ -276,28 +279,42 @@ export default function PlayerDetailScreen() {
               <Text style={[styles.badgeText, { color: theme.primary }]}>{t('roles', player.role)}</Text>
             </View>
           </View>
-          {club && (
-            <Pressable 
-              style={styles.clubLink}
-              onPress={() => router.push(`/club/${club.id}`)}
-            >
-              <MaterialIcons name="home" size={16} color={theme.textSecondary} />
-              <Text style={styles.clubName}>{club.name}</Text>
-              <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
-            </Pressable>
-          )}
+          {clubDisplayName ? (
+            clubEntity ? (
+              <Pressable 
+                style={styles.clubLink}
+                onPress={() => router.push(`/club/${clubEntity.id}`)}
+              >
+                <MaterialIcons name="home" size={16} color={theme.textSecondary} />
+                <Text style={styles.clubName}>{clubEntity.name}</Text>
+                <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
+              </Pressable>
+            ) : (
+              <View style={styles.clubLink}>
+                <MaterialIcons name="home" size={16} color={theme.textSecondary} />
+                <Text style={styles.clubName}>{clubDisplayName}</Text>
+              </View>
+            )
+          ) : null}
 
           {/* Terrain de pratique */}
-          {terrain && (
-            <Pressable 
-              style={styles.terrainLink}
-              onPress={() => router.push(`/terrain/${terrain.id}`)}
-            >
-              <MaterialIcons name="sports-soccer" size={16} color={theme.success} />
-              <Text style={styles.terrainLinkText}>{terrain.name}</Text>
-              <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
-            </Pressable>
-          )}
+          {terrainDisplayName ? (
+            terrainEntity ? (
+              <Pressable 
+                style={styles.terrainLink}
+                onPress={() => router.push(`/terrain/${terrainEntity.id}`)}
+              >
+                <MaterialIcons name="sports-soccer" size={16} color={theme.success} />
+                <Text style={styles.terrainLinkText}>{terrainEntity.name}</Text>
+                <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
+              </Pressable>
+            ) : (
+              <View style={styles.terrainLink}>
+                <MaterialIcons name="sports-soccer" size={16} color={theme.success} />
+                <Text style={styles.terrainLinkText}>{terrainDisplayName}</Text>
+              </View>
+            )
+          ) : null}
           
           {/* Handedness */}
           {player.handedness ? (

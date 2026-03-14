@@ -687,29 +687,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         email: player.email,
         country: player.country,
         boules: player.boules,
+        handedness: player.handedness,
+        terrain_id: player.terrainId,
+        terrain_name: player.terrainName,
+        is_public: player.isPublic ?? false,
         stats: player.stats,
       }).select().single();
 
       if (error) throw error;
 
       if (data) {
-        const newPlayer: Player = {
-          id: data.id,
-          name: data.name,
-          nickname: data.nickname,
-          avatar: data.avatar,
-          club: data.club,
-          clubId: data.club_id,
-          role: data.role,
-          level: data.level,
-          location: data.location,
-          phone: data.phone,
-          email: data.email,
-          country: data.country || 'France',
-          boules: data.boules,
-          stats: data.stats,
-          createdAt: data.created_at,
-        };
+        const newPlayer: Player = mapPlayer(data);
         setPlayers(prev => [...prev, newPlayer]);
       }
     } catch (error) {
