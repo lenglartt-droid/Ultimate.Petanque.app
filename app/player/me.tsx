@@ -34,7 +34,7 @@ export default function MyPlayerCardScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { t } = useLanguage();
-  const { selfPlayer, userStats, challengeStats, matches, challenges, setItemPublic, getTerrainById } = useApp();
+  const { selfPlayer, userStats, challengeStats, matches, challenges, setItemPublic, getTerrainById, players } = useApp();
   const { showAlert } = useAlert();
   const supabase = getSupabaseClient();
   const [showShareModal, setShowShareModal] = React.useState(false);
@@ -435,9 +435,18 @@ export default function MyPlayerCardScreen() {
         <Animated.View entering={FadeInDown.duration(400)} style={styles.playerCard}>
           <View style={styles.avatarContainer}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {selfPlayer.name?.charAt(0).toUpperCase() || '?'}
-              </Text>
+              {selfPlayer.avatar ? (
+                <Image
+                  source={{ uri: selfPlayer.avatar }}
+                  style={styles.avatarImage}
+                  contentFit="cover"
+                  transition={200}
+                />
+              ) : (
+                <Text style={styles.avatarText}>
+                  {selfPlayer.name?.charAt(0).toUpperCase() || '?'}
+                </Text>
+              )}
             </View>
             <View style={[styles.roleBadge, { backgroundColor: getRoleColor(selfPlayer.role) }]}>
               <MaterialIcons name={getRoleIcon(selfPlayer.role)} size={14} color="#FFF" />
@@ -632,11 +641,23 @@ export default function MyPlayerCardScreen() {
                     const color = partnerColors[idx % partnerColors.length];
                     return (
                       <View key={pid} style={styles.partnerBreakdownItem}>
-                        <View style={[styles.partnerAvatar, { backgroundColor: color + '20' }]}>
-                          <Text style={[styles.partnerAvatarText, { color }]}>
-                            {info.name.charAt(0).toUpperCase()}
-                          </Text>
-                        </View>
+                        {(() => {
+                          const partnerPlayer = players.find(p => p.id === pid);
+                          return partnerPlayer?.avatar ? (
+                            <Image
+                              source={{ uri: partnerPlayer.avatar }}
+                              style={styles.partnerAvatarImg}
+                              contentFit="cover"
+                              transition={200}
+                            />
+                          ) : (
+                            <View style={[styles.partnerAvatar, { backgroundColor: color + '20' }]}>
+                              <Text style={[styles.partnerAvatarText, { color }]}>
+                                {info.name.charAt(0).toUpperCase()}
+                              </Text>
+                            </View>
+                          );
+                        })()}
                         <View style={styles.partnerInfoCol}>
                           <Text style={styles.partnerName} numberOfLines={1}>{info.name}</Text>
                           <View style={styles.partnerBarRow}>
@@ -1087,6 +1108,12 @@ const styles = StyleSheet.create({
     backgroundColor: theme.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
   },
   avatarText: {
     fontSize: 40,
@@ -1702,6 +1729,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  partnerAvatarImg: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
   partnerAvatarText: {
     fontSize: 14,

@@ -15,8 +15,10 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { Image } from 'expo-image';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 import theme from '@/constants/theme';
 import config, { TerrainType } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
@@ -44,6 +46,7 @@ export default function NewTerrainScreen() {
   const [lighting, setLighting] = useState(false);
   const [covered, setCovered] = useState(false);
   const [environment, setEnvironment] = useState<'indoor' | 'outdoor'>('outdoor');
+  const [photos, setPhotos] = useState<string[]>([]);
   const [location, setLocation] = useState<LocationData>({
     address: '', city: '', country: 'France', latitude: 0, longitude: 0,
   });
@@ -118,6 +121,7 @@ export default function NewTerrainScreen() {
       lighting,
       covered,
       environment,
+      photos,
     });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.back();
@@ -142,10 +146,40 @@ export default function NewTerrainScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Icon Preview */}
-          <Animated.View entering={FadeInDown.duration(400)} style={styles.iconSection}>
-            <View style={styles.terrainIcon}>
-              <MaterialIcons name={config.terrainTypes.find(tt => tt.id === type)?.icon as any || 'landscape'} size={48} color="#FFF" />
+          {/* Photos Section */}
+          <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('terrain', 'photosLabel')} ({photos.length}/5)</Text>
+            <View style={styles.photosContainer}>
+              {photos.map((photo, index) => (
+                <View key={index} style={styles.photoItem}>
+                  <Image source={{ uri: photo }} style={styles.photoImage} contentFit="cover" />
+                  <Pressable style={styles.removePhotoButton} onPress={() => { setPhotos(prev => prev.filter((_, i) => i !== index)); Haptics.selectionAsync(); }}>
+                    <MaterialIcons name="close" size={16} color="#FFF" />
+                  </Pressable>
+                </View>
+              ))}
+              {photos.length < 5 && (
+                <View style={styles.addPhotoButtons}>
+                  <Pressable style={styles.addPhotoButton} onPress={async () => {
+                    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                    if (status !== 'granted') { Alert.alert(t('common', 'error'), t('terrain', 'galleryPermissionMsg')); return; }
+                    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsMultipleSelection: true, quality: 0.8, selectionLimit: 5 - photos.length });
+                    if (!result.canceled && result.assets) { setPhotos(prev => [...prev, ...result.assets.map(a => a.uri)].slice(0, 5)); Haptics.selectionAsync(); }
+                  }}>
+                    <MaterialIcons name="photo-library" size={24} color={theme.primary} />
+                    <Text style={styles.addPhotoText}>{t('terrain', 'gallery')}</Text>
+                  </Pressable>
+                  <Pressable style={styles.addPhotoButton} onPress={async () => {
+                    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+                    if (status !== 'granted') { Alert.alert(t('common', 'error'), t('terrain', 'cameraPermissionMsg')); return; }
+                    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+                    if (!result.canceled && result.assets && result.assets[0]) { setPhotos(prev => [...prev, result.assets[0].uri].slice(0, 5)); Haptics.selectionAsync(); }
+                  }}>
+                    <MaterialIcons name="camera-alt" size={24} color={theme.primary} />
+                    <Text style={styles.addPhotoText}>{t('terrain', 'photo')}</Text>
+                  </Pressable>
+                </View>
+              )}
             </View>
           </Animated.View>
 
@@ -375,8 +409,13 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 24 },
-  iconSection: { alignItems: 'center', marginBottom: 24 },
-  terrainIcon: { width: 100, height: 100, borderRadius: 20, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' },
+  photosContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  photoItem: { width: 100, height: 100, borderRadius: 12, overflow: 'hidden', position: 'relative' },
+  photoImage: { width: '100%', height: '100%' },
+  removePhotoButton: { position: 'absolute', top: 4, right: 4, width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
+  addPhotoButtons: { flexDirection: 'row', gap: 12 },
+  addPhotoButton: { width: 100, height: 100, borderRadius: 12, backgroundColor: theme.surface, borderWidth: 2, borderColor: theme.border, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  addPhotoText: { fontSize: 12, color: theme.primary, fontWeight: '500' },
   section: { marginBottom: 24 },
   sectionTitle: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, letterSpacing: 1, marginBottom: 12 },
   textInput: { backgroundColor: theme.surface, paddingHorizontal: 16, paddingVertical: 14, borderRadius: theme.borderRadius.md, fontSize: 16, color: theme.textPrimary, ...theme.shadows.card },

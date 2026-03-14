@@ -393,7 +393,16 @@ export default function DirectoryScreen() {
         onPress={() => router.push(`/terrain/${item.id}`)}
       >
         <View style={[styles.itemAvatar, { backgroundColor: theme.success }]}>
-          <MaterialIcons name={typeConfig.icon as any} size={24} color="#FFF" />
+          {item.photos && item.photos.length > 0 ? (
+            <Image
+              source={{ uri: item.photos[0] }}
+              style={styles.avatarImage}
+              contentFit="cover"
+              transition={200}
+            />
+          ) : (
+            <MaterialIcons name={typeConfig.icon as any} size={24} color="#FFF" />
+          )}
           {isFavorite ? (
             <View style={styles.favoriteBadge}>
               <MaterialIcons name="favorite" size={10} color={theme.error} />

@@ -21,6 +21,7 @@ import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
 import SharedBadge from '@/components/ui/SharedBadge';
 import ShareModal from '@/components/ui/ShareModal';
 import MergePickerModal from '@/components/ui/MergePickerModal';
+import { Image } from 'expo-image';
 import Svg, { Circle } from 'react-native-svg';
 import * as Linking from 'expo-linking';
 
@@ -274,9 +275,18 @@ export default function PlayerDetailScreen() {
         {/* Profile Card */}
         <Animated.View entering={FadeInDown.duration(400)} style={styles.profileCard}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {player.name.split(' ').map(n => n[0]).join('')}
-            </Text>
+            {player.avatar ? (
+              <Image
+                source={{ uri: player.avatar }}
+                style={styles.avatarImage}
+                contentFit="cover"
+                transition={200}
+              />
+            ) : (
+              <Text style={styles.avatarText}>
+                {player.name.split(' ').map(n => n[0]).join('')}
+              </Text>
+            )}
           </View>
           <Text style={styles.playerName}>{player.name}</Text>
           {sharedPermission ? (
@@ -443,11 +453,23 @@ export default function PlayerDetailScreen() {
                     const color = partnerColors[idx % partnerColors.length];
                     return (
                       <View key={pid} style={styles.partnerBreakdownItem}>
-                        <View style={[styles.partnerAvatar, { backgroundColor: color + '20' }]}>
-                          <Text style={[styles.partnerAvatarText, { color }]}>
-                            {info.name.charAt(0).toUpperCase()}
-                          </Text>
-                        </View>
+                        {(() => {
+                          const partnerPlayer = getPlayerById(pid);
+                          return partnerPlayer?.avatar ? (
+                            <Image
+                              source={{ uri: partnerPlayer.avatar }}
+                              style={styles.partnerAvatarImg}
+                              contentFit="cover"
+                              transition={200}
+                            />
+                          ) : (
+                            <View style={[styles.partnerAvatar, { backgroundColor: color + '20' }]}>
+                              <Text style={[styles.partnerAvatarText, { color }]}>
+                                {info.name.charAt(0).toUpperCase()}
+                              </Text>
+                            </View>
+                          );
+                        })()}
                         <View style={styles.partnerInfoCol}>
                           <Text style={styles.partnerName} numberOfLines={1}>{info.name}</Text>
                           <View style={styles.partnerBarRow}>
@@ -760,6 +782,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
   },
   avatarText: {
     fontSize: 36,
@@ -1132,6 +1160,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  partnerAvatarImg: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
   partnerAvatarText: {
     fontSize: 14,
