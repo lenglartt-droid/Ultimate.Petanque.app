@@ -567,6 +567,14 @@ export const translations = {
     errorPointRate: { fr: 'Point raté', en: 'Point missed' },
     errorPointCrochete: { fr: 'Point crocheté', en: 'Point hooked' },
     errorPointSorti: { fr: 'Point sorti', en: 'Point out' },
+    // Precision workshop stats
+    precisionWorkshopTitle: { fr: 'Ateliers de precision', en: 'Precision Workshops' },
+    precisionSessionsLabel: { fr: 'sessions', en: 'sessions' },
+    precisionAvgPtsLabel: { fr: 'pts moy.', en: 'avg pts' },
+    precisionBestLabel: { fr: 'Meilleur', en: 'Best' },
+    precisionEvolutionLabel: { fr: 'Evol.', en: 'Trend' },
+    precisionInsightBest: { fr: 'a le meilleur taux de reussite', en: 'has the best success rate' },
+    precisionInsightWorst: { fr: 'est le plus difficile', en: 'is the hardest' },
   },
 
   // ============================================

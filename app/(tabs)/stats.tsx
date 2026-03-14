@@ -311,7 +311,7 @@ export default function StatsScreen() {
   const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
   const [selectedTerrainId, setSelectedTerrainId] = useState<string | null>(null);
   const [showItemPickerModal, setShowItemPickerModal] = useState(false);
-  const [itemPickerType, setItemPickerType] = useState<'match' | 'challenge' | 'tournament' | 'opponent' | 'partner'>('match');
+  const [itemPickerType, setItemPickerType] = useState<'match' | 'challenge' | 'tournament' | 'opponent' | 'partner' | 'terrain'>('match');
   const [itemPickerSearch, setItemPickerSearch] = useState('');
 
   // Time-filtered base data
@@ -1061,6 +1061,63 @@ export default function StatsScreen() {
   }, [filteredMatches, tournaments]);
 
   // ============================================
+  // PRECISION WORKSHOP STATS
+  // ============================================
+  const precisionWorkshopStats = useMemo(() => {
+    const precisionChallenges = filteredChallenges.filter(c => c.type === 'precision' && c.precisionShots && c.precisionShots.length > 0);
+    if (precisionChallenges.length === 0) return null;
+
+    const ATELIERS = ['boule_seule', 'derriere_but', 'entre_2_boules', 'sautee', 'tir_but'] as const;
+    const atelierData: Record<string, {
+      totalShots: number; totalPoints: number; maxSingleShot: number;
+      sessions: number; bestSessionScore: number;
+      sessionScores: { date: string; score: number }[];
+      successCount: number; maxSessionPoints: number;
+    }> = {};
+
+    ATELIERS.forEach(a => {
+      atelierData[a] = { totalShots: 0, totalPoints: 0, maxSingleShot: 0, sessions: 0, bestSessionScore: 0, sessionScores: [], successCount: 0, maxSessionPoints: 0 };
+    });
+
+    // Sort challenges by date for evolution tracking
+    const sortedChallenges = [...precisionChallenges].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    sortedChallenges.forEach(c => {
+      const sessionAtelierScores: Record<string, { score: number; shots: number }> = {};
+      c.precisionShots!.forEach(ps => {
+        const data = atelierData[ps.atelier];
+        if (data) {
+          data.totalShots++;
+          data.totalPoints += ps.points;
+          data.maxSingleShot = Math.max(data.maxSingleShot, ps.points);
+          if (ps.points >= 3) data.successCount++;
+          if (!sessionAtelierScores[ps.atelier]) sessionAtelierScores[ps.atelier] = { score: 0, shots: 0 };
+          sessionAtelierScores[ps.atelier].score += ps.points;
+          sessionAtelierScores[ps.atelier].shots++;
+        }
+      });
+
+      Object.entries(sessionAtelierScores).forEach(([atelier, info]) => {
+        if (atelierData[atelier]) {
+          atelierData[atelier].sessions++;
+          atelierData[atelier].sessionScores.push({ date: c.date, score: info.score });
+          atelierData[atelier].bestSessionScore = Math.max(atelierData[atelier].bestSessionScore, info.score);
+          atelierData[atelier].maxSessionPoints = Math.max(atelierData[atelier].maxSessionPoints, info.shots * 5);
+        }
+      });
+    });
+
+    const activeAteliers = ATELIERS.filter(a => atelierData[a].totalShots > 0);
+
+    return {
+      atelierData,
+      totalSessions: precisionChallenges.length,
+      activeAteliers,
+      hasData: activeAteliers.length > 0,
+    };
+  }, [filteredChallenges]);
+
+  // ============================================
   // PROGRESSION DATA
   // ============================================
   const progressionData = useMemo(() => {
@@ -1270,7 +1327,7 @@ export default function StatsScreen() {
             </Pressable>
             <Pressable
               style={[styles.itemFilterChip, itemFilterType === 'terrain' ? styles.itemFilterChipTerrain : styles.itemFilterChipInactive]}
-              onPress={() => { Haptics.selectionAsync(); openItemPicker('terrain' as any); }}
+              onPress={() => { Haptics.selectionAsync(); openItemPicker('terrain'); }}
             >
               <MaterialIcons name="sports-soccer" size={14} color={itemFilterType === 'terrain' ? '#FFF' : theme.textSecondary} />
               <Text style={[styles.itemFilterChipText, itemFilterType !== 'terrain' && styles.itemFilterChipTextInactive]}>
@@ -1813,6 +1870,95 @@ export default function StatsScreen() {
                     </View>
                   </Animated.View>
                 )}
+                {/* Precision Workshop Stats */}
+                {precisionWorkshopStats && precisionWorkshopStats.hasData && (
+                  <Animated.View entering={FadeInDown.duration(400).delay(225)} style={styles.section}>
+                    <SectionHeader title={t('stats', 'precisionWorkshopTitle')} subtitle={`${precisionWorkshopStats.totalSessions} ${t('stats', 'precisionSessionsLabel')}`} icon="stars" color={theme.carreauColor} />
+                    <View style={styles.card}>
+                      {/* Per-workshop rows */}
+                      {precisionWorkshopStats.activeAteliers.map((atelier, idx) => {
+                        const data = precisionWorkshopStats.atelierData[atelier];
+                        const successRate = data.totalShots > 0 ? Math.round((data.successCount / data.totalShots) * 100) : 0;
+                        const avgPoints = data.totalShots > 0 ? (data.totalPoints / data.totalShots).toFixed(1) : '0';
+                        const atelierColors: Record<string, string> = {
+                          boule_seule: theme.tirColor,
+                          derriere_but: theme.primary,
+                          entre_2_boules: theme.accent,
+                          sautee: theme.pointColor,
+                          tir_but: theme.carreauColor,
+                        };
+                        const color = atelierColors[atelier] || theme.primary;
+                        return (
+                          <View key={atelier} style={[styles.precisionWorkshopRow, idx < precisionWorkshopStats.activeAteliers.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                            <View style={styles.precisionWorkshopHeader}>
+                              <View style={[styles.precisionWorkshopIcon, { backgroundColor: color + '15' }]}>
+                                <MaterialIcons name="gps-fixed" size={16} color={color} />
+                              </View>
+                              <View style={styles.precisionWorkshopInfo}>
+                                <Text style={styles.precisionWorkshopName} numberOfLines={1}>{t('precisionWorkshops', atelier)}</Text>
+                                <Text style={styles.precisionWorkshopMeta}>{data.totalShots} {t('stats', 'shotsUnit')} \u2022 {data.sessions} {t('stats', 'precisionSessionsLabel')}</Text>
+                              </View>
+                            </View>
+                            <View style={styles.precisionWorkshopStats}>
+                              <View style={styles.precisionWorkshopStatItem}>
+                                <Text style={[styles.precisionWorkshopStatValue, { color }]}>{successRate}%</Text>
+                                <Text style={styles.precisionWorkshopStatLabel}>{t('stats', 'successLabel')}</Text>
+                              </View>
+                              <View style={styles.precisionWorkshopStatItem}>
+                                <Text style={styles.precisionWorkshopStatValue}>{avgPoints}</Text>
+                                <Text style={styles.precisionWorkshopStatLabel}>{t('stats', 'precisionAvgPtsLabel')}</Text>
+                              </View>
+                              <View style={styles.precisionWorkshopStatItem}>
+                                <Text style={[styles.precisionWorkshopStatValue, { color: theme.carreauColor }]}>{data.bestSessionScore}</Text>
+                                <Text style={styles.precisionWorkshopStatLabel}>{t('stats', 'precisionBestLabel')}</Text>
+                              </View>
+                            </View>
+                            {/* Evolution mini-bars (last 5 sessions) */}
+                            {data.sessionScores.length >= 2 ? (
+                              <View style={styles.precisionEvolutionRow}>
+                                <Text style={styles.precisionEvolutionLabel}>{t('stats', 'precisionEvolutionLabel')}</Text>
+                                <View style={styles.precisionEvolutionBars}>
+                                  {data.sessionScores.slice(-5).map((s, i) => {
+                                    const maxPts = data.maxSessionPoints || 20;
+                                    const pct = maxPts > 0 ? Math.min(100, (s.score / maxPts) * 100) : 0;
+                                    return (
+                                      <View key={i} style={styles.precisionEvolutionBarCol}>
+                                        <View style={styles.precisionEvolutionBarTrack}>
+                                          <View style={[styles.precisionEvolutionBarFill, { height: `${Math.max(pct, 4)}%`, backgroundColor: color }]} />
+                                        </View>
+                                        <Text style={styles.precisionEvolutionBarLabel}>{s.score}</Text>
+                                      </View>
+                                    );
+                                  })}
+                                </View>
+                              </View>
+                            ) : null}
+                          </View>
+                        );
+                      })}
+                      {/* Insight */}
+                      {(() => {
+                        const entries = precisionWorkshopStats.activeAteliers.filter(a => precisionWorkshopStats.atelierData[a].totalShots >= 2);
+                        if (entries.length < 2) return null;
+                        const rates = entries.map(a => ({ a, rate: precisionWorkshopStats.atelierData[a].totalShots > 0 ? (precisionWorkshopStats.atelierData[a].successCount / precisionWorkshopStats.atelierData[a].totalShots) * 100 : 0 }));
+                        rates.sort((a, b) => b.rate - a.rate);
+                        const best = rates[0];
+                        const worst = rates[rates.length - 1];
+                        if (best.rate - worst.rate < 15) return null;
+                        return (
+                          <View style={styles.insightBox}>
+                            <MaterialIcons name="lightbulb" size={16} color={theme.carreauColor} />
+                            <Text style={styles.insightText}>
+                              {t('stats', 'yourLabel')} <Text style={{ fontWeight: '700', color: theme.success }}>{t('precisionWorkshops', best.a)}</Text> {t('stats', 'precisionInsightBest')} ({Math.round(best.rate)}%). 
+                              <Text style={{ fontWeight: '700', color: theme.error }}>{t('precisionWorkshops', worst.a)}</Text> {t('stats', 'precisionInsightWorst')} ({Math.round(worst.rate)}%).
+                            </Text>
+                          </View>
+                        );
+                      })()}
+                    </View>
+                  </Animated.View>
+                )}
+
                 {terrainTypeStats.hasData && (
                   <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
                     <SectionHeader title={t('stats', 'statsByTerrainSection')} subtitle={`${terrainTypeStats.totalTerrainMatches} ${t('stats', 'terrainMatchesSubtitle')}`} icon="terrain" color={theme.tirColor} />
@@ -3230,6 +3376,24 @@ const styles = StyleSheet.create({
   consecutiveErrorItem: { alignItems: 'center' },
   consecutiveErrorValue: { fontSize: 36, fontWeight: '700', color: theme.error },
   consecutiveErrorLabel: { fontSize: 11, color: theme.textMuted, textAlign: 'center', marginTop: 4 },
+  // Precision Workshop Stats
+  precisionWorkshopRow: { paddingVertical: 14 },
+  precisionWorkshopHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  precisionWorkshopIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  precisionWorkshopInfo: { flex: 1 },
+  precisionWorkshopName: { fontSize: 13, fontWeight: '600', color: theme.textPrimary },
+  precisionWorkshopMeta: { fontSize: 11, color: theme.textMuted, marginTop: 1 },
+  precisionWorkshopStats: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 4 },
+  precisionWorkshopStatItem: { alignItems: 'center' },
+  precisionWorkshopStatValue: { fontSize: 18, fontWeight: '700', color: theme.textPrimary },
+  precisionWorkshopStatLabel: { fontSize: 10, color: theme.textMuted, marginTop: 1 },
+  precisionEvolutionRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: theme.border + '50' },
+  precisionEvolutionLabel: { fontSize: 10, color: theme.textMuted, width: 50 },
+  precisionEvolutionBars: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 4, height: 36 },
+  precisionEvolutionBarCol: { flex: 1, alignItems: 'center' },
+  precisionEvolutionBarTrack: { width: '100%', height: 28, backgroundColor: theme.backgroundSecondary, borderRadius: 3, overflow: 'hidden', justifyContent: 'flex-end' },
+  precisionEvolutionBarFill: { width: '100%', borderRadius: 3 },
+  precisionEvolutionBarLabel: { fontSize: 9, color: theme.textMuted, marginTop: 2 },
   // Modal Styles
   modalContainer: { flex: 1, backgroundColor: theme.backgroundSecondary },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
