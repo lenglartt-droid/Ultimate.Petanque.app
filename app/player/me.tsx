@@ -33,7 +33,7 @@ import { toggleItemPublic } from '@/services/publicItemsService';
 export default function MyPlayerCardScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { selfPlayer, userStats, challengeStats, matches, challenges, setItemPublic, getTerrainById, players } = useApp();
   const { showAlert } = useAlert();
   const supabase = getSupabaseClient();
