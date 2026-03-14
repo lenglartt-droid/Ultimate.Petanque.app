@@ -603,7 +603,7 @@ export default function EditPlayerScreen() {
             />
             {/* Auto-fill location from terrain/club */}
             {(() => {
-              const locationEmpty = !location.city && !location.latitude && !location.longitude;
+              const locationEmpty = !location.latitude && !location.longitude;
               if (!locationEmpty) return null;
               const suggestions: { label: string; icon: string; color: string; city: string; lat: number; lng: number; address?: string; country?: string }[] = [];
               if (terrainId) {

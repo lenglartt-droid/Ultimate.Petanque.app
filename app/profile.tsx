@@ -13,7 +13,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { useLocalSearchParams, router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
@@ -36,8 +36,16 @@ export default function ProfileScreen() {
   const { clubs, terrains, addClub, updatePlayer, selfPlayer, userStats, matches, challenges, tournaments, refreshData } = useApp();
   const supabase = getSupabaseClient();
   const { t, language, setLanguage } = useLanguage();
+  const params = useLocalSearchParams<{ edit?: string }>();
 
   const [isEditing, setIsEditing] = useState(false);
+
+  // Auto-open edit mode when navigated with edit=true param
+  useEffect(() => {
+    if (params.edit === 'true') {
+      setIsEditing(true);
+    }
+  }, [params.edit]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -829,7 +837,7 @@ export default function ProfileScreen() {
 
             {/* Auto-fill location suggestion */}
             {(() => {
-              const locationEmpty = !location.city && !location.latitude && !location.longitude;
+              const locationEmpty = !location.latitude && !location.longitude;
               if (!locationEmpty) return null;
               const suggestions: { label: string; icon: string; color: string; city: string; lat: number; lng: number; address?: string; country?: string }[] = [];
               if (terrainId) {
@@ -1012,20 +1020,6 @@ export default function ProfileScreen() {
 
             <Pressable 
               style={[styles.playerCardLink, { marginTop: 10 }]}
-              onPress={() => router.push('/merge-history')}
-            >
-              <View style={[styles.playerCardLinkIcon, { backgroundColor: theme.warning + '15' }]}>
-                <MaterialIcons name="merge-type" size={24} color={theme.warning} />
-              </View>
-              <View style={styles.playerCardLinkInfo}>
-                <Text style={styles.playerCardLinkTitle}>{t('mergeHistory', 'title')}</Text>
-                <Text style={styles.playerCardLinkSubtitle}>{t('directory', 'mergeHistoryEmptyDesc')}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
-            </Pressable>
-
-            <Pressable 
-              style={[styles.playerCardLink, { marginTop: 10 }]}
               onPress={() => router.push('/palmares')}
             >
               <View style={[styles.playerCardLinkIcon, { backgroundColor: theme.carreauColor + '15' }]}>
@@ -1128,6 +1122,23 @@ export default function ProfileScreen() {
                 </Pressable>
               </View>
             )}
+
+            <Pressable 
+              style={styles.menuItem}
+              onPress={() => {
+                Haptics.selectionAsync();
+                router.push('/merge-history');
+              }}
+            >
+              <View style={[styles.menuIcon, { backgroundColor: theme.warning + '15' }]}>
+                <MaterialIcons name="merge-type" size={20} color={theme.warning} />
+              </View>
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuItemText}>{t('mergeHistory', 'title')}</Text>
+                <Text style={styles.menuItemSubtext}>{t('directory', 'mergeHistoryEmptyDesc')}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+            </Pressable>
 
             {/* Partage expandable */}
             <Pressable 

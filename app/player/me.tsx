@@ -418,7 +418,7 @@ export default function MyPlayerCardScreen() {
             style={styles.editButton}
             onPress={() => {
               Haptics.selectionAsync();
-              router.push('/profile');
+              router.push({ pathname: '/profile', params: { edit: 'true' } } as any);
             }}
           >
             <MaterialIcons name="edit" size={20} color={theme.primary} />
@@ -972,7 +972,7 @@ export default function MyPlayerCardScreen() {
             style={styles.editProfileButton}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              router.push('/profile');
+              router.push({ pathname: '/profile', params: { edit: 'true' } } as any);
             }}
           >
             <MaterialIcons name="edit" size={20} color="#FFF" />
