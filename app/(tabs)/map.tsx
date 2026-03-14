@@ -133,9 +133,16 @@ function clusterMarkers(items: ClusterItem[], region: { latitudeDelta: number; l
 // ============================================
 // CLUSTER MARKER COMPONENT
 // ============================================
-const SingleMarkerView = React.memo(({ color, icon, isPublic }: { color: string; icon: string; isPublic: boolean }) => (
-  <View style={[styles.marker, { backgroundColor: color }, isPublic && styles.markerPublic]}>
-    <MaterialIcons name={icon as any} size={14} color="#FFF" />
+const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator }: { color: string; icon: string; isPublic: boolean; accessIndicator?: 'public' | 'private' | null }) => (
+  <View style={styles.markerWrapper}>
+    <View style={[styles.marker, { backgroundColor: color }, isPublic && styles.markerPublic]}>
+      <MaterialIcons name={icon as any} size={14} color="#FFF" />
+    </View>
+    {accessIndicator ? (
+      <View style={[styles.accessBadge, accessIndicator === 'public' ? styles.accessBadgePublic : styles.accessBadgePrivate]}>
+        <MaterialIcons name={accessIndicator === 'public' ? 'lock-open' : 'lock'} size={7} color="#FFF" />
+      </View>
+    ) : null}
   </View>
 ));
 
@@ -521,7 +528,7 @@ export default function MapScreen() {
                 onPress={() => handleSelect(item, item.itemType)}
                 tracksViewChanges={false}
               >
-                <SingleMarkerView color={cfg.color} icon={tc?.icon || cfg.icon} isPublic={item._isPublic} />
+                <SingleMarkerView color={cfg.color} icon={tc?.icon || cfg.icon} isPublic={item._isPublic} accessIndicator={item.itemType === 'terrains' ? (item.publicAccess !== false ? 'public' : 'private') : null} />
               </MarkerComponent>
             );
           }
@@ -820,6 +827,10 @@ const styles = StyleSheet.create({
   // Single markers
   marker: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF', ...theme.shadows.card },
   markerPublic: { borderColor: theme.success, borderWidth: 3 },
+  markerWrapper: { alignItems: 'center', justifyContent: 'center' },
+  accessBadge: { position: 'absolute', bottom: -3, right: -3, width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF', ...theme.shadows.card },
+  accessBadgePublic: { backgroundColor: theme.success },
+  accessBadgePrivate: { backgroundColor: '#F59E0B' },
   // Cluster markers
   clusterOuter: {
     alignItems: 'center', justifyContent: 'center',
