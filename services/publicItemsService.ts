@@ -181,7 +181,7 @@ export async function importPublicItemToDirectory(
         city: source.city, country: source.country, location: source.location,
         members_count: source.members_count, founded_year: source.founded_year,
         description: source.description, facilities: source.facilities,
-        contact_email: source.contact_email, contact_phone: source.contact_phone,
+        contact_email: null, contact_phone: null,
         terrain_name: source.terrain_name, membership_cost: source.membership_cost,
         is_public: false,
       });

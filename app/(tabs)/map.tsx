@@ -239,7 +239,7 @@ const ListItem = React.memo(({ item, onPress, singularLabel, terrainTypeLabel, i
 // ============================================
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
-  const { clubs, tournaments, terrains, players } = useApp();
+  const { clubs, tournaments, terrains, players, refreshData } = useApp();
   const { user } = useAuth();
   const { showAlert } = useAlert();
   const { showToast } = useToast();
@@ -432,6 +432,8 @@ export default function MapScreen() {
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setSelected(null);
+      // Refresh context so the imported item appears in directory immediately
+      refreshData();
       // Show toast with directory tab navigation
       const tabMap: Record<string, { tab: string; labelKey: string; icon: string; color: string }> = {
         players: { tab: 'players', labelKey: 'playersTab', icon: 'person', color: '#4F46E5' },
