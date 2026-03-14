@@ -1931,38 +1931,96 @@ export default function StatsScreen() {
                   <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
                     <SectionHeader title={t('stats', 'statsByBoulesSection')} subtitle={`${boulesSetStats.totalWithBoules} ${t('profile', 'matchesWithBoulesSet')}`} icon="sports-baseball" color={'#D97706'} />
                     <View style={styles.card}>
+                      {/* Detailed table with all rates */}
                       <View style={styles.crossTableHeader}>
                         <View style={styles.crossTableHeaderLabel}><Text style={styles.crossTableHeaderText}>{t('stats', 'boulesSetColumn')}</Text></View>
-                        <View style={styles.crossTableHeaderCell}><Text style={styles.crossTableHeaderCellText}>{t('stats', 'matchesColumn')}</Text></View>
                         <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: theme.primary }]}>{t('stats', 'winRateColumn')}</Text></View>
-                        <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: theme.tirColor }]}>{t('stats', 'shotSuccessColumn')}</Text></View>
+                        <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: theme.tirColor }]}>{language === 'fr' ? 'Tir' : 'Shot'}</Text></View>
+                        <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: theme.pointColor }]}>Pt</Text></View>
+                        <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: theme.carreauColor }]}>C</Text></View>
                       </View>
                       {boulesSetStats.sets.map((setId, idx) => {
                         const data = boulesSetStats.bySet[setId];
                         const winRate = data.matches > 0 ? Math.round((data.wins / data.matches) * 100) : 0;
                         const tirRate = data.tirs > 0 ? Math.round((data.tirsSuccess / data.tirs) * 100) : 0;
+                        const ptRate = data.points > 0 ? Math.round((data.pointsSuccess / data.points) * 100) : 0;
+                        const carRate = data.tirs > 0 ? Math.round((data.carreaux / data.tirs) * 100) : 0;
                         return (
                           <Pressable key={setId} style={[styles.crossTableRow, idx % 2 === 0 && styles.crossTableRowAlt]} onPress={() => selectBoulesSet(setId)}>
                             <View style={styles.crossTableRowLabel}>
                               <MaterialIcons name="sports-baseball" size={14} color={'#D97706'} />
                               <View style={{ flex: 1 }}>
                                 <Text style={styles.crossTableRowLabelText} numberOfLines={1}>{data.name}</Text>
-                                {data.diameter || data.weight ? <Text style={styles.crossTableCellPct}>{[data.diameter ? `${data.diameter}mm` : '', data.weight ? `${data.weight}g` : ''].filter(Boolean).join(' \u2022 ')}</Text> : null}
+                                <Text style={styles.crossTableCellPct}>{data.matches}M{data.challenges > 0 ? ` +${data.challenges}C` : ''}{data.diameter ? ` \u2022 ${data.diameter}mm` : ''}{data.weight ? ` \u2022 ${data.weight}g` : ''}</Text>
                               </View>
-                            </View>
-                            <View style={styles.crossTableCell}>
-                              <Text style={styles.crossTableCellValue}>{data.matches}</Text>
-                              {data.challenges > 0 ? <Text style={styles.crossTableCellPct}>+{data.challenges} {t('stats', 'challengesColumn')}</Text> : null}
                             </View>
                             <View style={styles.crossTableCell}>
                               <Text style={[styles.crossTableCellValue, { color: winRate >= 60 ? theme.success : winRate >= 45 ? theme.warning : theme.error }]}>{winRate}%</Text>
                             </View>
                             <View style={styles.crossTableCell}>
-                              <Text style={[styles.crossTableCellValue, { color: theme.tirColor }]}>{tirRate}%</Text>
+                              <Text style={[styles.crossTableCellValue, { color: theme.tirColor }]}>{tirRate > 0 ? `${tirRate}%` : '-'}</Text>
+                            </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={[styles.crossTableCellValue, { color: theme.pointColor }]}>{ptRate > 0 ? `${ptRate}%` : '-'}</Text>
+                            </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={[styles.crossTableCellValue, { color: theme.carreauColor }]}>{carRate > 0 ? `${carRate}%` : '-'}</Text>
                             </View>
                           </Pressable>
                         );
                       })}
+
+                      {/* Comparison bar chart when 2+ sets */}
+                      {boulesSetStats.sets.length >= 2 && (() => {
+                        const setsWithMatches = boulesSetStats.sets.filter(id => boulesSetStats.bySet[id].matches >= 1);
+                        if (setsWithMatches.length < 2) return null;
+                        const setColors = ['#D97706', '#3B82F6', '#10B981', '#8B5CF6', '#EC4899', '#F97316'];
+                        const metrics = [
+                          { key: 'win', label: language === 'fr' ? 'Victoires' : 'Wins', color: theme.success, getValue: (d: typeof boulesSetStats.bySet[string]) => d.matches > 0 ? Math.round((d.wins / d.matches) * 100) : 0 },
+                          { key: 'tir', label: language === 'fr' ? 'Tir' : 'Shot', color: theme.tirColor, getValue: (d: typeof boulesSetStats.bySet[string]) => d.tirs > 0 ? Math.round((d.tirsSuccess / d.tirs) * 100) : 0 },
+                          { key: 'pt', label: 'Point', color: theme.pointColor, getValue: (d: typeof boulesSetStats.bySet[string]) => d.points > 0 ? Math.round((d.pointsSuccess / d.points) * 100) : 0 },
+                          { key: 'car', label: language === 'fr' ? 'Carreau' : 'Carreau', color: theme.carreauColor, getValue: (d: typeof boulesSetStats.bySet[string]) => d.tirs > 0 ? Math.round((d.carreaux / d.tirs) * 100) : 0 },
+                        ];
+                        return (
+                          <View style={styles.boulesCompChart}>
+                            <View style={styles.boulesCompChartHeader}>
+                              <MaterialIcons name="bar-chart" size={16} color={'#D97706'} />
+                              <Text style={styles.boulesCompChartTitle}>{language === 'fr' ? 'Comparaison des sets' : 'Sets Comparison'}</Text>
+                            </View>
+                            {metrics.map(metric => (
+                              <View key={metric.key} style={styles.boulesCompMetricRow}>
+                                <Text style={styles.boulesCompMetricLabel}>{metric.label}</Text>
+                                <View style={styles.boulesCompBarsCol}>
+                                  {setsWithMatches.slice(0, 4).map((setId, sIdx) => {
+                                    const data = boulesSetStats.bySet[setId];
+                                    const val = metric.getValue(data);
+                                    const barColor = setColors[sIdx % setColors.length];
+                                    return (
+                                      <View key={setId} style={styles.boulesCompBarRow}>
+                                        <View style={styles.boulesCompBarTrack}>
+                                          <View style={[styles.boulesCompBarFill, { width: `${Math.min(val, 100)}%`, backgroundColor: barColor }]} />
+                                        </View>
+                                        <Text style={[styles.boulesCompBarValue, { color: barColor }]}>{val}%</Text>
+                                      </View>
+                                    );
+                                  })}
+                                </View>
+                              </View>
+                            ))}
+                            {/* Legend */}
+                            <View style={styles.boulesCompLegend}>
+                              {setsWithMatches.slice(0, 4).map((setId, sIdx) => (
+                                <View key={setId} style={styles.boulesCompLegendItem}>
+                                  <View style={[styles.boulesCompLegendDot, { backgroundColor: setColors[sIdx % setColors.length] }]} />
+                                  <Text style={styles.boulesCompLegendText} numberOfLines={1}>{boulesSetStats.bySet[setId].name}</Text>
+                                </View>
+                              ))}
+                            </View>
+                          </View>
+                        );
+                      })()}
+
+                      {/* Insight */}
                       {boulesSetStats.sets.length >= 2 && (() => {
                         const entries = boulesSetStats.sets.filter(id => boulesSetStats.bySet[id].matches >= 2);
                         if (entries.length < 2) return null;
@@ -3848,6 +3906,21 @@ const styles = StyleSheet.create({
   noProgressionData: { alignItems: 'center', paddingVertical: 48 },
   noProgressionTitle: { fontSize: 18, fontWeight: '600', color: theme.textPrimary, marginTop: 16 },
   noProgressionText: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginTop: 8, maxWidth: 260 },
+  // Boules comparison chart
+  boulesCompChart: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: theme.border },
+  boulesCompChartHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
+  boulesCompChartTitle: { fontSize: 13, fontWeight: '700', color: '#D97706' },
+  boulesCompMetricRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 14 },
+  boulesCompMetricLabel: { width: 60, fontSize: 11, fontWeight: '600', color: theme.textSecondary, paddingTop: 2 },
+  boulesCompBarsCol: { flex: 1, gap: 4 },
+  boulesCompBarRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  boulesCompBarTrack: { flex: 1, height: 8, backgroundColor: theme.backgroundSecondary, borderRadius: 4, overflow: 'hidden' },
+  boulesCompBarFill: { height: '100%', borderRadius: 4 },
+  boulesCompBarValue: { fontSize: 11, fontWeight: '700', minWidth: 32, textAlign: 'right' as const },
+  boulesCompLegend: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 4, justifyContent: 'center' as const },
+  boulesCompLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: 120 },
+  boulesCompLegendDot: { width: 8, height: 8, borderRadius: 4 },
+  boulesCompLegendText: { fontSize: 11, color: theme.textSecondary, fontWeight: '500' },
   // Challenge progression legend
   challengeProgLegend: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 16, marginTop: 4 },
   challengeProgLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
