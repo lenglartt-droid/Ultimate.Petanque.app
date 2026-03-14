@@ -144,12 +144,16 @@ function clusterMarkers(items: ClusterItem[], region: { latitudeDelta: number; l
 // ============================================
 // CLUSTER MARKER COMPONENT
 // ============================================
-const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator }: { color: string; icon: string; isPublic: boolean; accessIndicator?: 'public' | 'private' | null }) => (
+const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator, fallbackSource }: { color: string; icon: string; isPublic: boolean; accessIndicator?: 'public' | 'private' | null; fallbackSource?: 'terrain' | 'club' | null }) => (
   <View style={styles.markerWrapper}>
-    <View style={[styles.marker, { backgroundColor: color }, isPublic && styles.markerPublic]}>
+    <View style={[styles.marker, { backgroundColor: color }, isPublic && styles.markerPublic, fallbackSource && styles.markerFallback]}>
       <MaterialIcons name={icon as any} size={14} color="#FFF" />
     </View>
-    {accessIndicator ? (
+    {fallbackSource ? (
+      <View style={[styles.fallbackBadge, { backgroundColor: fallbackSource === 'terrain' ? theme.success : theme.accent }]}>
+        <MaterialIcons name={fallbackSource === 'terrain' ? 'sports-soccer' : 'home'} size={7} color="#FFF" />
+      </View>
+    ) : accessIndicator ? (
       <View style={[styles.accessBadge, accessIndicator === 'public' ? styles.accessBadgePublic : styles.accessBadgePrivate]}>
         <MaterialIcons name={accessIndicator === 'public' ? 'lock-open' : 'lock'} size={7} color="#FFF" />
       </View>
@@ -622,7 +626,7 @@ export default function MapScreen() {
                 onPress={() => handleSelect(item, item.itemType)}
                 tracksViewChanges={false}
               >
-                <SingleMarkerView color={cfg.color} icon={tc?.icon || cfg.icon} isPublic={item._isPublic} accessIndicator={item.itemType === 'terrains' ? (item.publicAccess !== false ? 'public' : 'private') : null} />
+                <SingleMarkerView color={cfg.color} icon={tc?.icon || cfg.icon} isPublic={item._isPublic} accessIndicator={item.itemType === 'terrains' ? (item.publicAccess !== false ? 'public' : 'private') : null} fallbackSource={item.itemType === 'players' ? (item._locationFallback || null) : null} />
               </MarkerComponent>
             );
           }
@@ -724,6 +728,18 @@ export default function MapScreen() {
               <View style={styles.legendRow}>
                 <View style={styles.legendBorderSample} />
                 <Text style={styles.legendLabel}>{t('map', 'legendPublicItem')}</Text>
+              </View>
+              <View style={styles.legendRow}>
+                <View style={[styles.legendDot, { backgroundColor: theme.success }]}>
+                  <MaterialIcons name="sports-soccer" size={7} color="#FFF" />
+                </View>
+                <Text style={styles.legendLabel}>{t('map', 'legendFallbackTerrain')}</Text>
+              </View>
+              <View style={styles.legendRow}>
+                <View style={[styles.legendDot, { backgroundColor: theme.accent }]}>
+                  <MaterialIcons name="home" size={7} color="#FFF" />
+                </View>
+                <Text style={styles.legendLabel}>{t('map', 'legendFallbackClub')}</Text>
               </View>
             </Animated.View>
           ) : null}
@@ -1075,6 +1091,9 @@ const styles = StyleSheet.create({
   accessBadge: { position: 'absolute', bottom: -3, right: -3, width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF', ...theme.shadows.card },
   accessBadgePublic: { backgroundColor: theme.success },
   accessBadgePrivate: { backgroundColor: '#F59E0B' },
+  // Fallback badge for players with terrain/club location
+  fallbackBadge: { position: 'absolute', bottom: -3, right: -3, width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF', ...theme.shadows.card },
+  markerFallback: { opacity: 0.8, borderWidth: 2, borderColor: '#FFF', borderStyle: 'dashed' as any },
   // Cluster markers
   clusterOuter: {
     alignItems: 'center', justifyContent: 'center',
