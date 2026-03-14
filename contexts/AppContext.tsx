@@ -97,6 +97,53 @@ interface AppContextType {
   refreshData: () => Promise<void>;
 }
 
+// Module-level helper: calculate stats for a single player from matches
+function calculatePlayerStatsFromMatches(allMatches: Match[], playerId: string, existingStats: any) {
+  const playerMatches = allMatches.filter(m =>
+    m.teamA.players.includes(playerId) || m.teamB.players.includes(playerId)
+  );
+  if (playerMatches.length === 0) return existingStats;
+
+  const totalMatches = playerMatches.length;
+  const wins = playerMatches.filter(m => {
+    const inA = m.teamA.players.includes(playerId);
+    return (inA && m.winner === 'A') || (!inA && m.winner === 'B');
+  }).length;
+  const losses = totalMatches - wins;
+
+  let totalTirs = 0, totalTirsSuccess = 0, totalPoints = 0, totalPointsSuccess = 0, totalCarreaux = 0;
+  let totalScoreFor = 0, totalScoreAgainst = 0;
+
+  playerMatches.forEach(m => {
+    const inA = m.teamA.players.includes(playerId);
+    totalScoreFor += inA ? m.teamA.score : m.teamB.score;
+    totalScoreAgainst += inA ? m.teamB.score : m.teamA.score;
+    if (m.playerActions) {
+      const pa = m.playerActions.find(a => a.playerId === playerId);
+      if (pa) {
+        totalTirs += pa.actions.tirs;
+        totalTirsSuccess += pa.actions.tirsSuccess;
+        totalPoints += pa.actions.points;
+        totalPointsSuccess += pa.actions.pointsSuccess;
+        totalCarreaux += pa.actions.carreaux;
+      }
+    }
+  });
+
+  return {
+    ...existingStats,
+    matchesPlayed: totalMatches,
+    wins,
+    losses,
+    winRate: totalMatches > 0 ? Math.round((wins / totalMatches) * 1000) / 10 : 0,
+    tirRate: totalTirs > 0 ? Math.round((totalTirsSuccess / totalTirs) * 1000) / 10 : existingStats.tirRate || 0,
+    pointRate: totalPoints > 0 ? Math.round((totalPointsSuccess / totalPoints) * 1000) / 10 : existingStats.pointRate || 0,
+    carreauRate: totalTirsSuccess > 0 ? Math.round((totalCarreaux / totalTirsSuccess) * 1000) / 10 : existingStats.carreauRate || 0,
+    avgPointsScored: totalMatches > 0 ? Math.round((totalScoreFor / totalMatches) * 10) / 10 : 0,
+    avgPointsConceded: totalMatches > 0 ? Math.round((totalScoreAgainst / totalMatches) * 10) / 10 : 0,
+  };
+}
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -120,51 +167,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const playersWithStats = React.useMemo(() => {
     if (matches.length === 0) return players;
     return players.map(player => {
-      const playerMatches = matches.filter(m =>
-        m.teamA.players.includes(player.id) || m.teamB.players.includes(player.id)
-      );
-      if (playerMatches.length === 0) return player;
-
-      const totalMatches = playerMatches.length;
-      const wins = playerMatches.filter(m => {
-        const inA = m.teamA.players.includes(player.id);
-        return (inA && m.winner === 'A') || (!inA && m.winner === 'B');
-      }).length;
-      const losses = totalMatches - wins;
-
-      let totalTirs = 0, totalTirsSuccess = 0, totalPoints = 0, totalPointsSuccess = 0, totalCarreaux = 0;
-      let totalScoreFor = 0, totalScoreAgainst = 0;
-
-      playerMatches.forEach(m => {
-        const inA = m.teamA.players.includes(player.id);
-        totalScoreFor += inA ? m.teamA.score : m.teamB.score;
-        totalScoreAgainst += inA ? m.teamB.score : m.teamA.score;
-
-        if (m.playerActions) {
-          const pa = m.playerActions.find(a => a.playerId === player.id);
-          if (pa) {
-            totalTirs += pa.actions.tirs;
-            totalTirsSuccess += pa.actions.tirsSuccess;
-            totalPoints += pa.actions.points;
-            totalPointsSuccess += pa.actions.pointsSuccess;
-            totalCarreaux += pa.actions.carreaux;
-          }
-        }
-      });
-
-      const newStats = {
-        ...player.stats,
-        matchesPlayed: totalMatches,
-        wins,
-        losses,
-        winRate: totalMatches > 0 ? Math.round((wins / totalMatches) * 1000) / 10 : 0,
-        tirRate: totalTirs > 0 ? Math.round((totalTirsSuccess / totalTirs) * 1000) / 10 : player.stats.tirRate,
-        pointRate: totalPoints > 0 ? Math.round((totalPointsSuccess / totalPoints) * 1000) / 10 : player.stats.pointRate,
-        carreauRate: totalTirsSuccess > 0 ? Math.round((totalCarreaux / totalTirsSuccess) * 1000) / 10 : player.stats.carreauRate,
-        avgPointsScored: totalMatches > 0 ? Math.round((totalScoreFor / totalMatches) * 10) / 10 : 0,
-        avgPointsConceded: totalMatches > 0 ? Math.round((totalScoreAgainst / totalMatches) * 10) / 10 : 0,
-      };
-
+      const newStats = calculatePlayerStatsFromMatches(matches, player.id, player.stats);
+      if (newStats === player.stats) return player;
       return { ...player, stats: newStats };
     });
   }, [players, matches]);
@@ -659,6 +663,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await loadData();
   }, [loadData]);
 
+  // Persist recalculated stats for affected players to the database
+  const persistPlayerStats = useCallback(async (allMatches: Match[], playerIds: string[]) => {
+    if (!user?.id) return;
+    const uniqueIds = [...new Set(playerIds)];
+    for (const playerId of uniqueIds) {
+      const player = players.find(p => p.id === playerId);
+      const baseStats = player?.stats || {
+        matchesPlayed: 0, wins: 0, losses: 0, winRate: 0,
+        tirRate: 0, pointRate: 0, carreauRate: 0,
+        avgPointsScored: 0, avgPointsConceded: 0,
+      };
+      const newStats = calculatePlayerStatsFromMatches(allMatches, playerId, baseStats);
+      try {
+        await supabase.from('players').update({
+          stats: newStats,
+          updated_at: new Date().toISOString(),
+        }).eq('id', playerId);
+      } catch (e) {
+        console.log('Error persisting stats for player:', playerId, e);
+      }
+    }
+  }, [user?.id, supabase, players]);
+
   // Add functions with cloud sync
   const addMatch = async (match: Omit<Match, 'id'>): Promise<string | null> => {
     if (!user?.id) {
@@ -715,6 +742,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           seriesInfo: data.series_info,
         };
         setMatches(prev => [newMatch, ...prev]);
+        // Persist recalculated stats for all players in this match
+        const updatedMatches = [newMatch, ...matches];
+        const affectedPlayers = [...new Set([...newMatch.teamA.players, ...newMatch.teamB.players])];
+        persistPlayerStats(updatedMatches, affectedPlayers);
         return data.id;
       }
       return null;
@@ -1043,10 +1074,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Update functions with cloud sync
   const updateMatch = async (id: string, updates: Partial<Match>) => {
+    const existingMatch = matches.find(m => m.id === id);
     // Update local state immediately
     setMatches(prev => prev.map(match => 
       match.id === id ? { ...match, ...updates } : match
     ));
+
+    // Persist recalculated stats if score/winner/actions changed
+    if (user?.id && existingMatch && (updates.winner !== undefined || updates.playerActions !== undefined || updates.teamA !== undefined || updates.teamB !== undefined)) {
+      const updatedMatch = { ...existingMatch, ...updates } as Match;
+      const updatedMatches = matches.map(m => m.id === id ? updatedMatch : m);
+      const affectedPlayers = [...new Set([
+        ...updatedMatch.teamA.players,
+        ...updatedMatch.teamB.players,
+        ...(existingMatch.teamA.players || []),
+        ...(existingMatch.teamB.players || []),
+      ])];
+      persistPlayerStats(updatedMatches, affectedPlayers);
+    }
 
     if (!user?.id) return;
 
@@ -1277,7 +1322,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Delete functions with cloud sync
   const deleteMatch = async (id: string) => {
+    const matchToDelete = matches.find(m => m.id === id);
     setMatches(prev => prev.filter(match => match.id !== id));
+
+    // Persist recalculated stats for players from the deleted match
+    if (matchToDelete && user?.id) {
+      const updatedMatches = matches.filter(m => m.id !== id);
+      const affectedPlayers = [...new Set([...matchToDelete.teamA.players, ...matchToDelete.teamB.players])];
+      persistPlayerStats(updatedMatches, affectedPlayers);
+    }
 
     if (!user?.id) return;
 
