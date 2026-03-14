@@ -13,7 +13,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialIcons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
@@ -34,6 +34,7 @@ export default function DirectoryScreen() {
   const insets = useSafeAreaInsets();
   const { players, clubs, tournaments, terrains, selfPlayer, favoriteTerrainIds, favoriteClubIds, getSharedPermission } = useApp();
   const { t, language } = useLanguage();
+  const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
   const [activeTab, setActiveTab] = useState<DirectoryTab>('players');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -73,6 +74,13 @@ export default function DirectoryScreen() {
     tournamentScope: 'all',
     tournamentCity: 'all',
   });
+
+  // Set active tab from navigation param
+  React.useEffect(() => {
+    if (tabParam && ['players', 'clubs', 'terrains', 'tournaments'].includes(tabParam)) {
+      setActiveTab(tabParam as DirectoryTab);
+    }
+  }, [tabParam]);
 
   // Counts for tabs
   const counts = useMemo(() => ({

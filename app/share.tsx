@@ -20,6 +20,7 @@ import { redeemShareCode, ShareItemType } from '@/services/shareService';
 import { useAlert } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useApp } from '@/contexts/AppContext';
+import { useToast } from '@/components/ui/Toast';
 
 const ROUTE_MAP: Record<ShareItemType, string> = {
   player: '/player/',
@@ -67,6 +68,7 @@ export default function RedeemShareScreen() {
   const { showAlert } = useAlert();
   const { t } = useLanguage();
   const { refreshData } = useApp();
+  const { showToast } = useToast();
   const [code, setCode] = useState('');
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [redeemResult, setRedeemResult] = useState<{
@@ -97,6 +99,27 @@ export default function RedeemShareScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         // Refresh data to show new items in directory - await to ensure context is updated
         await refreshData();
+
+        // Show toast with directory tab navigation
+        const mainType = result.itemType as ShareItemType;
+        const tabMap: Record<string, { tab: string; labelKey: string; icon: string; color: string }> = {
+          player: { tab: 'players', labelKey: 'playersTab', icon: 'person', color: '#4F46E5' },
+          club: { tab: 'clubs', labelKey: 'clubsTab', icon: 'home', color: '#F97316' },
+          terrain: { tab: 'terrains', labelKey: 'terrainsTab', icon: 'sports-soccer', color: '#22C55E' },
+          tournament: { tab: 'tournaments', labelKey: 'tournamentsTab', icon: 'emoji-events', color: '#EAB308' },
+        };
+        const tabInfo = tabMap[mainType];
+        if (tabInfo) {
+          showToast({
+            message: `${t('toast', 'addedToTab')} ${t('toast', tabInfo.labelKey)}`,
+            icon: tabInfo.icon,
+            iconColor: tabInfo.color,
+            action: {
+              label: t('toast', 'viewTab'),
+              onPress: () => router.push({ pathname: '/(tabs)/directory', params: { tab: tabInfo.tab } } as any),
+            },
+          });
+        }
       }
     } catch (e) {
       showAlert(t('common', 'error'), t('share', 'cannotValidate'));

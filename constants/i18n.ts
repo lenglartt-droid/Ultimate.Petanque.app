@@ -2328,6 +2328,18 @@ export const translations = {
     includedInShare: { fr: 'inclus dans le partage', en: 'included in share' },
   },
   // ============================================
+  // TOAST NOTIFICATIONS
+  // ============================================
+  toast: {
+    addedToTab: { fr: 'Fiche ajoutée dans', en: 'Card added to' },
+    viewTab: { fr: 'Voir', en: 'View' },
+    playersTab: { fr: 'Joueurs', en: 'Players' },
+    clubsTab: { fr: 'Clubs', en: 'Clubs' },
+    terrainsTab: { fr: 'Terrains', en: 'Courts' },
+    tournamentsTab: { fr: 'Tournois', en: 'Tournaments' },
+    itemsImported: { fr: 'fiche(s) importée(s)', en: 'card(s) imported' },
+  },
+  // ============================================
   // ONBOARDING
   // ============================================
   onboarding: {

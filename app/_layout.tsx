@@ -4,6 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AlertProvider, AuthProvider } from '@/template';
 import { AppProvider } from '@/contexts/AppContext';
 import { LanguageProvider } from '@/contexts/LanguageContext';
+import { ToastProvider } from '@/components/ui/Toast';
 
 export default function RootLayout() {
   return (
@@ -11,6 +12,7 @@ export default function RootLayout() {
       <AuthProvider>
         <SafeAreaProvider>
           <LanguageProvider>
+          <ToastProvider>
           <AppProvider>
             <StatusBar style="dark" />
             <Stack screenOptions={{ headerShown: false }}>
@@ -244,6 +246,7 @@ export default function RootLayout() {
               />
             </Stack>
           </AppProvider>
+          </ToastProvider>
           </LanguageProvider>
         </SafeAreaProvider>
       </AuthProvider>
