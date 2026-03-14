@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -49,10 +50,11 @@ function StatRing({ value, color, size = 80 }: { value: number; color: string; s
 export default function PlayerDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getPlayerById, getMatchesByPlayer, getClubById, getTerrainById, deletePlayer, selfPlayer, matches, getSharedPermission } = useApp();
+
   const { user } = useAuth();
   const { t, language } = useLanguage();
 
+  const { getPlayerById, getMatchesByPlayer, getClubById, getTerrainById, deletePlayer, selfPlayer, matches, getSharedPermission, loading: appLoading } = useApp();
   const player = getPlayerById(id!);
   const playerMatches = getMatchesByPlayer(id!).slice(0, 5);
   const club = player?.clubId ? getClubById(player.clubId) : null;
@@ -199,7 +201,22 @@ export default function PlayerDetailScreen() {
   if (!player) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text>{t('player', 'playerNotFound')}</Text>
+        <View style={styles.header}>
+          <Pressable style={styles.backButton} onPress={() => router.back()}>
+            <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
+          </Pressable>
+          <Text style={styles.headerTitle}>{t('player', 'playerProfile')}</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        {appLoading ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator size="large" color={theme.primary} />
+          </View>
+        ) : (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ color: theme.textSecondary }}>{t('player', 'playerNotFound')}</Text>
+          </View>
+        )}
       </SafeAreaView>
     );
   }
