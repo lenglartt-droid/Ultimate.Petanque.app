@@ -26,7 +26,6 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { SharedOverlayBadge } from '@/components/ui/SharedBadge';
 import AdBanner from '@/components/ui/AdBanner';
 import MergePickerModal from '@/components/ui/MergePickerModal';
-import { Player, Club, Terrain, Tournament } from '@/services/mockData';
 
 const { width: screenWidth } = Dimensions.get('window');
 
