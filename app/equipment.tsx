@@ -11,8 +11,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Polyline, Line, Circle as SvgCircle, Path } from 'react-native-svg';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
@@ -25,6 +27,32 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
 import { BoulesSet } from '@/services/mockData';
 import { uploadBoulesSetPhoto } from '@/services/storageService';
+
+function MiniWinChart({ data, chartWidth }: { data: { cumWinRate: number }[]; chartWidth: number }) {
+  if (data.length < 2) return null;
+  const W = Math.max(100, chartWidth);
+  const H = 72;
+  const pad = { top: 10, right: 10, bottom: 10, left: 10 };
+  const cW = W - pad.left - pad.right;
+  const cH = H - pad.top - pad.bottom;
+  const pts = data.map((d, i) => ({
+    x: pad.left + (i / (data.length - 1)) * cW,
+    y: pad.top + cH - (d.cumWinRate / 100) * cH,
+  }));
+  const polyline = pts.map(p => `${p.x},${p.y}`).join(' ');
+  const area = `M ${pad.left},${pad.top + cH} L ${pts.map(p => `${p.x},${p.y}`).join(' L ')} L ${pad.left + cW},${pad.top + cH} Z`;
+  const mid = pad.top + cH / 2;
+  return (
+    <Svg width={W} height={H}>
+      <Line x1={pad.left} y1={mid} x2={pad.left + cW} y2={mid} stroke={theme.border} strokeWidth={1} strokeDasharray="4,4" />
+      <Path d={area} fill={theme.success + '12'} />
+      <Polyline points={polyline} fill="none" stroke={theme.success} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      {pts.map((p, i) => (
+        <SvgCircle key={i} cx={p.x} cy={p.y} r={3} fill={data[i].cumWinRate >= 50 ? theme.success : theme.error} stroke="#FFF" strokeWidth={1.5} />
+      ))}
+    </Svg>
+  );
+}
 
 const HARDNESS_OPTIONS = ['Tendre', 'Demi-tendre', 'Dure'] as const;
 
@@ -49,16 +77,38 @@ export default function EquipmentScreen() {
   const [formPhoto, setFormPhoto] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
-  // Stats per set
+  // Detailed stats per set
   const setStats = useMemo(() => {
-    const stats: Record<string, { matches: number; wins: number; challenges: number }> = {};
+    const stats: Record<string, { matches: number; wins: number; challenges: number; totalTirs: number; tirsSuccess: number; totalPoints: number; pointsSuccess: number; carreaux: number; winRate: number; tirRate: number; pointRate: number; carreauRate: number; evolution: { cumWinRate: number }[] }> = {};
     boulesSets.forEach(bs => {
-      const bsMatches = matches.filter(m => m.boulesSetId === bs.id);
+      const bsMatches = matches.filter(m => m.boulesSetId === bs.id).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       const bsChallenges = challenges.filter(c => c.boulesSetId === bs.id);
+      let totalTirs = 0, tirsSuccess = 0, totalPoints = 0, pointsSuccess = 0, carreaux = 0;
+      const wins = bsMatches.filter(m => m.winner === 'A').length;
+      bsMatches.forEach(m => {
+        if (m.playerActions) {
+          m.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
+            totalTirs += pa.actions.tirs;
+            tirsSuccess += pa.actions.tirsSuccess;
+            totalPoints += pa.actions.points;
+            pointsSuccess += pa.actions.pointsSuccess;
+            carreaux += pa.actions.carreaux;
+          });
+        }
+      });
+      let cumWins = 0;
+      const evolution = bsMatches.map((m, i) => {
+        if (m.winner === 'A') cumWins++;
+        return { cumWinRate: Math.round((cumWins / (i + 1)) * 100) };
+      });
       stats[bs.id] = {
-        matches: bsMatches.length,
-        wins: bsMatches.filter(m => m.winner === 'A').length,
-        challenges: bsChallenges.length,
+        matches: bsMatches.length, wins, challenges: bsChallenges.length,
+        totalTirs, tirsSuccess, totalPoints, pointsSuccess, carreaux,
+        winRate: bsMatches.length > 0 ? Math.round((wins / bsMatches.length) * 100) : 0,
+        tirRate: totalTirs > 0 ? Math.round((tirsSuccess / totalTirs) * 100) : 0,
+        pointRate: totalPoints > 0 ? Math.round((pointsSuccess / totalPoints) * 100) : 0,
+        carreauRate: tirsSuccess > 0 ? Math.round((carreaux / tirsSuccess) * 100) : 0,
+        evolution,
       };
     });
     return stats;
@@ -277,8 +327,8 @@ export default function EquipmentScreen() {
           </Animated.View>
         ) : (
           boulesSets.map((set, idx) => {
-            const stats = setStats[set.id] || { matches: 0, wins: 0, challenges: 0 };
-            const winRate = stats.matches > 0 ? Math.round((stats.wins / stats.matches) * 100) : 0;
+            const stats = setStats[set.id] || { matches: 0, wins: 0, challenges: 0, totalTirs: 0, tirsSuccess: 0, totalPoints: 0, pointsSuccess: 0, carreaux: 0, winRate: 0, tirRate: 0, pointRate: 0, carreauRate: 0, evolution: [] };
+            const chartWidth = Dimensions.get('window').width - 96;
 
             return (
               <Animated.View key={set.id} entering={FadeInDown.duration(400).delay(100 + idx * 60)}>
@@ -349,63 +399,132 @@ export default function EquipmentScreen() {
                     <View style={styles.specsBars}>
                       {set.diameter ? (
                         <View style={styles.specBar}>
-                          <Text style={styles.specLabel}>{language === 'fr' ? 'Diamètre' : 'Diameter'}</Text>
-                          <View style={styles.specTrack}>
-                            <View
-                              style={[
-                                styles.specFill,
-                                {
-                                  width: `${Math.max(0, Math.min(100, ((Number(set.diameter) - 70.5) / (80 - 70.5)) * 100))}%`,
-                                  backgroundColor: theme.primary,
-                                },
-                              ]}
-                            />
+                          <View style={styles.specHeader}>
+                            <Text style={styles.specLabel}>{language === 'fr' ? 'Diamètre' : 'Diameter'}</Text>
+                            <Text style={styles.specValue}>{set.diameter} mm</Text>
                           </View>
-                          <Text style={styles.specValue}>{set.diameter} mm</Text>
+                          <View style={styles.specTrack}>
+                            <View style={[styles.specFill, { width: `${Math.max(0, Math.min(100, ((Number(set.diameter) - 70.5) / (80 - 70.5)) * 100))}%`, backgroundColor: theme.primary }]} />
+                          </View>
+                          <View style={styles.specRange}>
+                            <Text style={styles.specRangeText}>70.5 mm</Text>
+                            <Text style={styles.specRangeText}>80.0 mm</Text>
+                          </View>
                         </View>
                       ) : null}
                       {set.weight ? (
                         <View style={styles.specBar}>
-                          <Text style={styles.specLabel}>{language === 'fr' ? 'Poids' : 'Weight'}</Text>
-                          <View style={styles.specTrack}>
-                            <View
-                              style={[
-                                styles.specFill,
-                                {
-                                  width: `${Math.max(0, Math.min(100, ((set.weight - 650) / (800 - 650)) * 100))}%`,
-                                  backgroundColor: theme.accent,
-                                },
-                              ]}
-                            />
+                          <View style={styles.specHeader}>
+                            <Text style={styles.specLabel}>{language === 'fr' ? 'Poids' : 'Weight'}</Text>
+                            <Text style={styles.specValue}>{set.weight} g</Text>
                           </View>
-                          <Text style={styles.specValue}>{set.weight} g</Text>
+                          <View style={styles.specTrack}>
+                            <View style={[styles.specFill, { width: `${Math.max(0, Math.min(100, ((set.weight - 650) / (800 - 650)) * 100))}%`, backgroundColor: theme.accent }]} />
+                          </View>
+                          <View style={styles.specRange}>
+                            <Text style={styles.specRangeText}>650 g</Text>
+                            <Text style={styles.specRangeText}>800 g</Text>
+                          </View>
                         </View>
                       ) : null}
                     </View>
                   ) : null}
 
-                  {/* Stats row */}
-                  {(stats.matches > 0 || stats.challenges > 0) ? (
+                  {/* Performance */}
+                  {stats.matches > 0 ? (
+                    <View style={styles.perfSection}>
+                      <View style={styles.perfHeader}>
+                        <MaterialIcons name="analytics" size={14} color={theme.textSecondary} />
+                        <Text style={styles.perfTitle}>{language === 'fr' ? 'Performances' : 'Performance'}</Text>
+                        <Text style={styles.perfMatchCount}>{stats.matches} {language === 'fr' ? 'matchs' : 'matches'}{stats.challenges > 0 ? ` \u2022 ${stats.challenges} ${language === 'fr' ? 'défis' : 'challenges'}` : ''}</Text>
+                      </View>
+                      <View style={styles.perfBars}>
+                        <View style={styles.perfBarRow}>
+                          <MaterialIcons name="emoji-events" size={13} color={theme.success} />
+                          <Text style={styles.perfBarLabel}>{language === 'fr' ? 'Victoires' : 'Wins'}</Text>
+                          <View style={styles.perfBarTrack}>
+                            <View style={[styles.perfBarFill, { width: `${stats.winRate}%`, backgroundColor: theme.success }]} />
+                          </View>
+                          <Text style={[styles.perfBarValue, { color: stats.winRate >= 50 ? theme.success : theme.error }]}>{stats.winRate}%</Text>
+                        </View>
+                        {stats.totalTirs > 0 ? (
+                          <View style={styles.perfBarRow}>
+                            <MaterialIcons name="gps-fixed" size={13} color={theme.accent} />
+                            <Text style={styles.perfBarLabel}>{language === 'fr' ? 'Tirs' : 'Shots'}</Text>
+                            <View style={styles.perfBarTrack}>
+                              <View style={[styles.perfBarFill, { width: `${stats.tirRate}%`, backgroundColor: theme.accent }]} />
+                            </View>
+                            <Text style={[styles.perfBarValue, { color: theme.accent }]}>{stats.tirRate}%</Text>
+                          </View>
+                        ) : null}
+                        {stats.totalPoints > 0 ? (
+                          <View style={styles.perfBarRow}>
+                            <MaterialIcons name="adjust" size={13} color={theme.primary} />
+                            <Text style={styles.perfBarLabel}>Points</Text>
+                            <View style={styles.perfBarTrack}>
+                              <View style={[styles.perfBarFill, { width: `${stats.pointRate}%`, backgroundColor: theme.primary }]} />
+                            </View>
+                            <Text style={[styles.perfBarValue, { color: theme.primary }]}>{stats.pointRate}%</Text>
+                          </View>
+                        ) : null}
+                        {stats.tirsSuccess > 0 ? (
+                          <View style={styles.perfBarRow}>
+                            <MaterialIcons name="stars" size={13} color={theme.carreauColor} />
+                            <Text style={styles.perfBarLabel}>{language === 'fr' ? 'Carreaux' : 'Carreaux'}</Text>
+                            <View style={styles.perfBarTrack}>
+                              <View style={[styles.perfBarFill, { width: `${stats.carreauRate}%`, backgroundColor: theme.carreauColor }]} />
+                            </View>
+                            <Text style={[styles.perfBarValue, { color: theme.carreauColor }]}>{stats.carreauRate}%</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      {stats.evolution.length >= 2 ? (
+                        <View style={styles.perfChartSection}>
+                          <Text style={styles.perfChartTitle}>{language === 'fr' ? 'Évolution du taux de victoire' : 'Win rate evolution'}</Text>
+                          <View style={styles.perfChartContainer}>
+                            <View style={{ flex: 1 }}>
+                              <MiniWinChart data={stats.evolution} chartWidth={chartWidth} />
+                            </View>
+                            <View style={styles.perfChartLabels}>
+                              <Text style={styles.perfChartLabelText}>100%</Text>
+                              <Text style={styles.perfChartLabelText}>50%</Text>
+                              <Text style={styles.perfChartLabelText}>0%</Text>
+                            </View>
+                          </View>
+                        </View>
+                      ) : null}
+                      <View style={styles.perfCounters}>
+                        <View style={styles.perfCounter}>
+                          <Text style={styles.perfCounterValue}>{stats.wins}/{stats.matches}</Text>
+                          <Text style={styles.perfCounterLabel}>{language === 'fr' ? 'V/M' : 'W/M'}</Text>
+                        </View>
+                        {stats.totalTirs > 0 ? (
+                          <View style={styles.perfCounter}>
+                            <Text style={styles.perfCounterValue}>{stats.tirsSuccess}/{stats.totalTirs}</Text>
+                            <Text style={styles.perfCounterLabel}>{language === 'fr' ? 'Tirs' : 'Shots'}</Text>
+                          </View>
+                        ) : null}
+                        {stats.totalPoints > 0 ? (
+                          <View style={styles.perfCounter}>
+                            <Text style={styles.perfCounterValue}>{stats.pointsSuccess}/{stats.totalPoints}</Text>
+                            <Text style={styles.perfCounterLabel}>Pts</Text>
+                          </View>
+                        ) : null}
+                        {stats.carreaux > 0 ? (
+                          <View style={styles.perfCounter}>
+                            <Text style={[styles.perfCounterValue, { color: theme.carreauColor }]}>{stats.carreaux}</Text>
+                            <Text style={styles.perfCounterLabel}>C</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
+                  ) : stats.challenges > 0 ? (
                     <View style={styles.statsRow}>
                       <View style={styles.statItem}>
-                        <MaterialIcons name="sports" size={14} color={theme.primary} />
-                        <Text style={styles.statValue}>{stats.matches}</Text>
-                        <Text style={styles.statLabel}>{language === 'fr' ? 'matchs' : 'matches'}</Text>
+                        <MaterialIcons name="flag" size={14} color={theme.accent} />
+                        <Text style={styles.statValue}>{stats.challenges}</Text>
+                        <Text style={styles.statLabel}>{language === 'fr' ? 'défis' : 'challenges'}</Text>
                       </View>
-                      {stats.matches > 0 ? (
-                        <View style={styles.statItem}>
-                          <MaterialIcons name="emoji-events" size={14} color={winRate >= 50 ? theme.success : theme.error} />
-                          <Text style={[styles.statValue, { color: winRate >= 50 ? theme.success : theme.error }]}>{winRate}%</Text>
-                          <Text style={styles.statLabel}>{language === 'fr' ? 'victoires' : 'wins'}</Text>
-                        </View>
-                      ) : null}
-                      {stats.challenges > 0 ? (
-                        <View style={styles.statItem}>
-                          <MaterialIcons name="flag" size={14} color={theme.accent} />
-                          <Text style={styles.statValue}>{stats.challenges}</Text>
-                          <Text style={styles.statLabel}>{language === 'fr' ? 'défis' : 'challenges'}</Text>
-                        </View>
-                      ) : null}
                     </View>
                   ) : null}
 
@@ -665,18 +784,42 @@ const styles = StyleSheet.create({
   serialText: { fontSize: 12, color: theme.textMuted, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
 
   // Specs bars
-  specsBars: { marginTop: 12, gap: 8 },
-  specBar: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  specLabel: { fontSize: 11, fontWeight: '600', color: theme.textMuted, width: 60 },
-  specTrack: { flex: 1, height: 6, backgroundColor: theme.backgroundSecondary, borderRadius: 3, overflow: 'hidden' },
+  specsBars: { marginTop: 12, gap: 10 },
+  specBar: { gap: 2 },
+  specHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  specLabel: { fontSize: 11, fontWeight: '600', color: theme.textMuted },
+  specTrack: { height: 6, backgroundColor: theme.backgroundSecondary, borderRadius: 3, overflow: 'hidden' },
   specFill: { height: '100%', borderRadius: 3 },
-  specValue: { fontSize: 12, fontWeight: '600', color: theme.textPrimary, width: 52, textAlign: 'right' },
+  specValue: { fontSize: 12, fontWeight: '700', color: theme.textPrimary },
+  specRange: { flexDirection: 'row', justifyContent: 'space-between' },
+  specRangeText: { fontSize: 9, color: theme.textMuted },
 
   // Stats
   statsRow: { flexDirection: 'row', gap: 16, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border },
   statItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   statValue: { fontSize: 13, fontWeight: '700', color: theme.textPrimary },
   statLabel: { fontSize: 11, color: theme.textMuted },
+
+  // Performance section
+  perfSection: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border },
+  perfHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
+  perfTitle: { fontSize: 12, fontWeight: '700', color: theme.textSecondary, flex: 1 },
+  perfMatchCount: { fontSize: 10, color: theme.textMuted },
+  perfBars: { gap: 6 },
+  perfBarRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  perfBarLabel: { fontSize: 11, fontWeight: '600', color: theme.textSecondary, width: 52 },
+  perfBarTrack: { flex: 1, height: 6, backgroundColor: theme.backgroundSecondary, borderRadius: 3, overflow: 'hidden' },
+  perfBarFill: { height: '100%', borderRadius: 3 },
+  perfBarValue: { fontSize: 12, fontWeight: '700', minWidth: 34, textAlign: 'right' as const },
+  perfChartSection: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border + '60' },
+  perfChartTitle: { fontSize: 10, fontWeight: '600', color: theme.textMuted, marginBottom: 6, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
+  perfChartContainer: { flexDirection: 'row' as const, alignItems: 'center' as const },
+  perfChartLabels: { width: 30, justifyContent: 'space-between' as const, height: 72, paddingVertical: 8, marginLeft: 4 },
+  perfChartLabelText: { fontSize: 8, color: theme.textMuted, textAlign: 'right' as const },
+  perfCounters: { flexDirection: 'row' as const, gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border + '60' },
+  perfCounter: { flex: 1, alignItems: 'center' as const, backgroundColor: theme.backgroundSecondary, paddingVertical: 8, borderRadius: theme.borderRadius.sm },
+  perfCounterValue: { fontSize: 13, fontWeight: '700', color: theme.textPrimary },
+  perfCounterLabel: { fontSize: 9, color: theme.textMuted, marginTop: 2 },
 
   // Notes
   notesRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border },
