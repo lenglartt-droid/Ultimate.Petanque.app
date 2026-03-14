@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Modal,
   Dimensions,
   RefreshControl,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -28,8 +29,6 @@ import AdBanner from '@/components/ui/AdBanner';
 import MergePickerModal from '@/components/ui/MergePickerModal';
 import { saveMergeLog, getMergeLogs, undoMerge, isUndoable, getUndoTimeRemaining, deleteMergeLog, MergeLog, ReassignedRelation } from '@/services/mergeHistoryService';
 
-const { width: screenWidth } = Dimensions.get('window');
-
 type DirectoryTab = 'players' | 'clubs' | 'terrains' | 'tournaments';
 type TournamentStatus = 'all' | 'À venir' | 'En cours' | 'Terminé';
 
@@ -39,6 +38,15 @@ export default function DirectoryScreen() {
   const { t, language } = useLanguage();
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
   const [activeTab, setActiveTab] = useState<DirectoryTab>('players');
+
+  // Responsive dimensions for tablet
+  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
+  useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }) => setScreenWidth(window.width));
+    return () => sub?.remove();
+  }, []);
+  const isTablet = screenWidth >= 600;
+  const numColumns = isTablet ? 2 : 1;
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -990,38 +998,78 @@ export default function DirectoryScreen() {
 
       {/* List */}
       <View style={styles.listContainer}>
-        <FlashList
-          data={currentData}
-          renderItem={getCurrentRenderItem() as any}
-          estimatedItemSize={110}
-          contentContainerStyle={{ 
-            paddingHorizontal: 16,
-            paddingBottom: insets.bottom + 100,
-          }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              tintColor={theme.primary}
-              colors={[theme.primary]}
-            />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <MaterialIcons name={tabConfig?.icon as any || 'search'} size={48} color={theme.textMuted} />
-              <Text style={styles.emptyTitle}>{t('directory', 'noResultsFound')}</Text>
-              <Text style={styles.emptyText}>
-                {searchQuery 
-                  ? `${language === 'fr' ? 'Aucun' : 'No'} ${getTabSingular(activeTab)} ${t('directory', 'noMatchSearch')} "${searchQuery}"`
-                  : currentFilterCount > 0 
-                    ? t('directory', 'tryModifyFilters')
-                    : `${language === 'fr' ? 'Aucun' : 'No'} ${getTabSingular(activeTab)} ${t('directory', 'noRegistered')}`
-                }
-              </Text>
-            </View>
-          }
-        />
+        {isTablet ? (
+          <FlatList
+            key={`tablet-${activeTab}-${numColumns}`}
+            data={currentData as any[]}
+            renderItem={getCurrentRenderItem() as any}
+            numColumns={2}
+            columnWrapperStyle={styles.tabletRow}
+            contentContainerStyle={{
+              paddingHorizontal: 16,
+              paddingBottom: insets.bottom + 100,
+              maxWidth: 960,
+              alignSelf: 'center' as const,
+              width: '100%',
+            }}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor={theme.primary}
+                colors={[theme.primary]}
+              />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <MaterialIcons name={tabConfig?.icon as any || 'search'} size={48} color={theme.textMuted} />
+                <Text style={styles.emptyTitle}>{t('directory', 'noResultsFound')}</Text>
+                <Text style={styles.emptyText}>
+                  {searchQuery 
+                    ? `${language === 'fr' ? 'Aucun' : 'No'} ${getTabSingular(activeTab)} ${t('directory', 'noMatchSearch')} "${searchQuery}"`
+                    : currentFilterCount > 0 
+                      ? t('directory', 'tryModifyFilters')
+                      : `${language === 'fr' ? 'Aucun' : 'No'} ${getTabSingular(activeTab)} ${t('directory', 'noRegistered')}`
+                  }
+                </Text>
+              </View>
+            }
+          />
+        ) : (
+          <FlashList
+            data={currentData}
+            renderItem={getCurrentRenderItem() as any}
+            estimatedItemSize={110}
+            contentContainerStyle={{ 
+              paddingHorizontal: 16,
+              paddingBottom: insets.bottom + 100,
+            }}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor={theme.primary}
+                colors={[theme.primary]}
+              />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <MaterialIcons name={tabConfig?.icon as any || 'search'} size={48} color={theme.textMuted} />
+                <Text style={styles.emptyTitle}>{t('directory', 'noResultsFound')}</Text>
+                <Text style={styles.emptyText}>
+                  {searchQuery 
+                    ? `${language === 'fr' ? 'Aucun' : 'No'} ${getTabSingular(activeTab)} ${t('directory', 'noMatchSearch')} "${searchQuery}"`
+                    : currentFilterCount > 0 
+                      ? t('directory', 'tryModifyFilters')
+                      : `${language === 'fr' ? 'Aucun' : 'No'} ${getTabSingular(activeTab)} ${t('directory', 'noRegistered')}`
+                  }
+                </Text>
+              </View>
+            }
+          />
+        )}
       </View>
 
       {/* Duplicate Detection Modal */}
@@ -1500,6 +1548,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: theme.textPrimary,
   },
+  headerTablet: {
+    maxWidth: 960,
+    alignSelf: 'center' as const,
+    width: '100%',
+  },
   headerStats: {
     backgroundColor: theme.backgroundSecondary,
     paddingHorizontal: 10,
@@ -1661,7 +1714,11 @@ const styles = StyleSheet.create({
   listContainer: {
     flex: 1,
   },
+  tabletRow: {
+    gap: 12,
+  },
   itemCard: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.surface,

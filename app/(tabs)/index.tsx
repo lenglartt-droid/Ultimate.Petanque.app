@@ -9,6 +9,7 @@ import {
   Modal,
   Dimensions,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -30,6 +31,14 @@ export default function HomeScreen() {
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'À venir' | 'En cours' | 'Terminé'>('all');
   const [refreshing, setRefreshing] = useState(false);
+
+  // Responsive dimensions for tablet
+  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
+  useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }) => setScreenWidth(window.width));
+    return () => sub?.remove();
+  }, []);
+  const isTablet = screenWidth >= 600;
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -87,7 +96,7 @@ export default function HomeScreen() {
         <Animated.View entering={FadeInDown.duration(400)} style={styles.bannerContainer}>
           <Image
             source={require('@/assets/images/banner-home.png')}
-            style={styles.bannerImage}
+            style={[styles.bannerImage, isTablet && styles.bannerImageTablet]}
             contentFit="cover"
           />
         </Animated.View>
@@ -121,49 +130,49 @@ export default function HomeScreen() {
         </Animated.View>
 
         {/* Main Actions - Hero Section */}
-        <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.heroSection}>
-          <Text style={styles.heroTitle}>{t('home', 'whatDoYouWant')}</Text>
+        <Animated.View entering={FadeInDown.duration(400).delay(100)} style={[styles.heroSection, isTablet && styles.heroSectionTablet]}>
+          <Text style={[styles.heroTitle, isTablet && styles.heroTitleTablet]}>{t('home', 'whatDoYouWant')}</Text>
           
-          <View style={styles.mainActionsRow}>
+          <View style={[styles.mainActionsRow, isTablet && styles.mainActionsRowTablet]}>
             <Pressable 
-              style={({ pressed }) => [styles.mainActionCard, pressed && styles.mainActionCardPressed]}
+              style={({ pressed }) => [styles.mainActionCard, isTablet && styles.mainActionCardTablet, pressed && styles.mainActionCardPressed]}
               onPress={() => router.push('/match/new')}
             >
-              <View style={[styles.mainActionIcon, { backgroundColor: theme.primary }]}>
-                <MaterialIcons name="sports" size={36} color="#FFF" />
+              <View style={[styles.mainActionIcon, isTablet && styles.mainActionIconTablet, { backgroundColor: theme.primary }]}>
+                <MaterialIcons name="sports" size={isTablet ? 44 : 36} color="#FFF" />
               </View>
-              <Text style={styles.mainActionTitle}>{t('home', 'match')}</Text>
-              <Text style={styles.mainActionSubtitle}>{t('home', 'training')}</Text>
+              <Text style={[styles.mainActionTitle, isTablet && styles.mainActionTitleTablet]}>{t('home', 'match')}</Text>
+              <Text style={[styles.mainActionSubtitle, isTablet && styles.mainActionSubtitleTablet]}>{t('home', 'training')}</Text>
             </Pressable>
 
             <Pressable 
-              style={({ pressed }) => [styles.mainActionCard, pressed && styles.mainActionCardPressed]}
+              style={({ pressed }) => [styles.mainActionCard, isTablet && styles.mainActionCardTablet, pressed && styles.mainActionCardPressed]}
               onPress={() => router.push('/challenge/new')}
             >
-              <View style={[styles.mainActionIcon, { backgroundColor: theme.accent }]}>
-                <MaterialIcons name="track-changes" size={36} color="#FFF" />
+              <View style={[styles.mainActionIcon, isTablet && styles.mainActionIconTablet, { backgroundColor: theme.accent }]}>
+                <MaterialIcons name="track-changes" size={isTablet ? 44 : 36} color="#FFF" />
               </View>
-              <Text style={styles.mainActionTitle}>{t('home', 'challenge')}</Text>
-              <Text style={styles.mainActionSubtitle}>{t('home', 'shotsPoints')}</Text>
+              <Text style={[styles.mainActionTitle, isTablet && styles.mainActionTitleTablet]}>{t('home', 'challenge')}</Text>
+              <Text style={[styles.mainActionSubtitle, isTablet && styles.mainActionSubtitleTablet]}>{t('home', 'shotsPoints')}</Text>
             </Pressable>
 
             <Pressable 
-              style={({ pressed }) => [styles.mainActionCard, pressed && styles.mainActionCardPressed]}
+              style={({ pressed }) => [styles.mainActionCard, isTablet && styles.mainActionCardTablet, pressed && styles.mainActionCardPressed]}
               onPress={() => setShowTournamentPicker(true)}
             >
-              <View style={[styles.mainActionIcon, { backgroundColor: theme.carreauColor }]}>
-                <MaterialIcons name="emoji-events" size={36} color="#FFF" />
+              <View style={[styles.mainActionIcon, isTablet && styles.mainActionIconTablet, { backgroundColor: theme.carreauColor }]}>
+                <MaterialIcons name="emoji-events" size={isTablet ? 44 : 36} color="#FFF" />
               </View>
-              <Text style={styles.mainActionTitle}>{t('home', 'tournament')}</Text>
-              <Text style={styles.mainActionSubtitle}>{t('home', 'myJourney')}</Text>
+              <Text style={[styles.mainActionTitle, isTablet && styles.mainActionTitleTablet]}>{t('home', 'tournament')}</Text>
+              <Text style={[styles.mainActionSubtitle, isTablet && styles.mainActionSubtitleTablet]}>{t('home', 'myJourney')}</Text>
             </Pressable>
           </View>
         </Animated.View>
 
         {/* Quick Access Grid */}
-        <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.quickAccessSection}>
-          <Text style={styles.quickAccessTitle}>{t('home', 'quickAccess')}</Text>
-          <View style={styles.quickAccessGrid}>
+        <Animated.View entering={FadeInDown.duration(400).delay(150)} style={[styles.quickAccessSection, isTablet && styles.quickAccessSectionTablet]}>
+          <Text style={[styles.quickAccessTitle, isTablet && styles.quickAccessTitleTablet]}>{t('home', 'quickAccess')}</Text>
+          <View style={[styles.quickAccessGrid, isTablet && styles.quickAccessGridTablet]}>
             <Pressable 
               style={({ pressed }) => [styles.quickAccessItem, pressed && styles.quickAccessItemPressed]} 
               onPress={() => router.push('/player/new')}
@@ -208,7 +217,7 @@ export default function HomeScreen() {
 
         {/* Empty State - First Time User */}
         {matches.length === 0 && challenges.length === 0 && (
-          <Animated.View entering={FadeIn.duration(500).delay(250)} style={styles.emptyStateCard}>
+          <Animated.View entering={FadeIn.duration(500).delay(250)} style={[styles.emptyStateCard, isTablet && styles.emptyStateCardTablet]}>
             <View style={styles.emptyStateIcon}>
               <MaterialIcons name="sports" size={48} color={theme.primary} />
             </View>
@@ -230,9 +239,9 @@ export default function HomeScreen() {
         <AdBanner position="inline" />
 
         {/* History Button */}
-        <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.historySection}>
+        <Animated.View entering={FadeInDown.duration(400).delay(200)} style={[styles.historySection, isTablet && styles.historySectionTablet]}>
           <Pressable 
-            style={({ pressed }) => [styles.historyButton, pressed && styles.historyButtonPressed]}
+            style={({ pressed }) => [styles.historyButton, isTablet && styles.historyButtonTablet, pressed && styles.historyButtonPressed]}
             onPress={() => router.push('/history')}
           >
             <MaterialIcons name="history" size={22} color={theme.primary} />
@@ -429,6 +438,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 0,
+    maxWidth: 960,
+    alignSelf: 'center' as const,
+    width: '100%',
   },
   // Banner
   bannerContainer: {
@@ -442,6 +454,9 @@ const styles = StyleSheet.create({
   bannerImage: {
     width: '100%',
     height: 140,
+  },
+  bannerImageTablet: {
+    height: 200,
   },
   // Header
   header: {
@@ -508,15 +523,25 @@ const styles = StyleSheet.create({
   heroSection: {
     marginBottom: 20,
   },
+  heroSectionTablet: {
+    marginBottom: 28,
+  },
   heroTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: theme.textPrimary,
     marginBottom: 14,
   },
+  heroTitleTablet: {
+    fontSize: 22,
+    marginBottom: 18,
+  },
   mainActionsRow: {
     flexDirection: 'row',
     gap: 12,
+  },
+  mainActionsRowTablet: {
+    gap: 20,
   },
   mainActionCard: {
     flex: 1,
@@ -527,6 +552,10 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'transparent',
     ...theme.shadows.card,
+  },
+  mainActionCardTablet: {
+    padding: 28,
+    borderRadius: 24,
   },
   mainActionCardPressed: {
     transform: [{ scale: 0.97 }],
@@ -541,19 +570,35 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     ...theme.shadows.card,
   },
+  mainActionIconTablet: {
+    width: 88,
+    height: 88,
+    borderRadius: 24,
+    marginBottom: 18,
+  },
   mainActionTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: theme.textPrimary,
     marginBottom: 3,
   },
+  mainActionTitleTablet: {
+    fontSize: 19,
+    marginBottom: 5,
+  },
   mainActionSubtitle: {
     fontSize: 12,
     color: theme.textSecondary,
   },
+  mainActionSubtitleTablet: {
+    fontSize: 14,
+  },
   // Quick Access
   quickAccessSection: {
     marginBottom: 28,
+  },
+  quickAccessSectionTablet: {
+    marginBottom: 36,
   },
   quickAccessTitle: {
     fontSize: 15,
@@ -561,10 +606,17 @@ const styles = StyleSheet.create({
     color: theme.textPrimary,
     marginBottom: 14,
   },
+  quickAccessTitleTablet: {
+    fontSize: 18,
+    marginBottom: 18,
+  },
   quickAccessGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 10,
+  },
+  quickAccessGridTablet: {
+    gap: 16,
   },
   quickAccessItem: {
     flex: 1,
@@ -619,6 +671,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 24,
   },
+  historySectionTablet: {
+    marginTop: 12,
+    marginBottom: 32,
+  },
   historyButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -635,6 +691,9 @@ const styles = StyleSheet.create({
     opacity: 0.9,
     backgroundColor: theme.primary + '08',
   },
+  historyButtonTablet: {
+    padding: 20,
+  },
   historyButtonText: {
     flex: 1,
     fontSize: 15,
@@ -649,6 +708,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 20,
     ...theme.shadows.card,
+  },
+  emptyStateCardTablet: {
+    padding: 48,
+    maxWidth: 560,
+    alignSelf: 'center' as const,
+    width: '100%',
   },
   emptyStateIcon: {
     width: 80,
