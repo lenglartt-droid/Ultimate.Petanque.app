@@ -30,6 +30,7 @@ import {
   toggleItemPublic, importPublicItemToDirectory, getMyPublicableItems,
 } from '@/services/publicItemsService';
 import AdBanner from '@/components/ui/AdBanner';
+import { useToast } from '@/components/ui/Toast';
 
 type MarkerType = 'all' | 'terrains' | 'clubs' | 'tournaments' | 'players';
 type MapMode = 'all' | 'public';
@@ -241,6 +242,7 @@ export default function MapScreen() {
   const { clubs, tournaments, terrains, players } = useApp();
   const { user } = useAuth();
   const { showAlert } = useAlert();
+  const { showToast } = useToast();
   const { t, language } = useLanguage();
   const [filter, setFilter] = useState<MarkerType>('all');
   const [selected, setSelected] = useState<any>(null);
@@ -429,10 +431,28 @@ export default function MapScreen() {
       showAlert(t('common', 'error'), error);
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showAlert(t('common', 'success'), t('map', 'addedToDirectory'));
       setSelected(null);
+      // Show toast with directory tab navigation
+      const tabMap: Record<string, { tab: string; labelKey: string; icon: string; color: string }> = {
+        players: { tab: 'players', labelKey: 'playersTab', icon: 'person', color: '#4F46E5' },
+        clubs: { tab: 'clubs', labelKey: 'clubsTab', icon: 'home', color: '#F97316' },
+        terrains: { tab: 'terrains', labelKey: 'terrainsTab', icon: 'sports-soccer', color: '#22C55E' },
+        tournaments: { tab: 'tournaments', labelKey: 'tournamentsTab', icon: 'emoji-events', color: '#EAB308' },
+      };
+      const tabInfo = tabMap[item.itemType];
+      if (tabInfo) {
+        showToast({
+          message: `${t('toast', 'addedToTab')} ${t('toast', tabInfo.labelKey)}`,
+          icon: tabInfo.icon,
+          iconColor: tabInfo.color,
+          action: {
+            label: t('toast', 'viewTab'),
+            onPress: () => router.push({ pathname: '/(tabs)/directory', params: { tab: tabInfo.tab } } as any),
+          },
+        });
+      }
     }
-  }, [showAlert, t]);
+  }, [showAlert, showToast, t]);
 
   const handleFilterPress = useCallback((f: MarkerType) => {
     Haptics.selectionAsync();

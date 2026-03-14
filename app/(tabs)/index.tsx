@@ -80,9 +80,18 @@ export default function HomeScreen() {
         <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.header}>
           <Pressable style={styles.profileCardEnhanced} onPress={() => router.push('/profile')}>
             <View style={styles.profileAvatarEnhanced}>
-              <Text style={styles.profileAvatarText}>
-                {displayName.charAt(0).toUpperCase()}
-              </Text>
+              {selfPlayer?.avatar ? (
+                <Image
+                  source={{ uri: selfPlayer.avatar }}
+                  style={styles.profileAvatarImage}
+                  contentFit="cover"
+                  transition={200}
+                />
+              ) : (
+                <Text style={styles.profileAvatarText}>
+                  {displayName.charAt(0).toUpperCase()}
+                </Text>
+              )}
             </View>
             <View style={styles.profileInfoEnhanced}>
               <Text style={styles.profileNameEnhanced} numberOfLines={1}>{displayName}</Text>
@@ -444,6 +453,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
+    overflow: 'hidden',
+  },
+  profileAvatarImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   profileAvatarText: {
     fontSize: 18,
