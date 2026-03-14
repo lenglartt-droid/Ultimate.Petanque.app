@@ -277,69 +277,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ]);
 
       // Transform database records to app format
-      let dbPlayers: Player[] = [];
-      if (playersRes.data) {
-        dbPlayers = playersRes.data.map(p => ({
-          id: p.id,
-          name: p.name,
-          nickname: p.nickname,
-          avatar: p.avatar,
-          club: p.club,
-          clubId: p.club_id,
-          role: p.role,
-          level: p.level,
-          location: p.location,
-          phone: p.phone,
-          email: p.email,
-          country: p.country,
-          boules: p.boules,
-          handedness: p.handedness,
-          stats: p.stats || {
-            matchesPlayed: 0, wins: 0, losses: 0, winRate: 0,
-            tirRate: 0, pointRate: 0, carreauRate: 0,
-            avgPointsScored: 0, avgPointsConceded: 0
-          },
-          createdAt: p.created_at,
-        }));
-      }
-
-      // Check if selfPlayer exists, if not create it from user_profiles
-      const selfPlayerExists = dbPlayers.some(p => p.id === user.id);
-      if (!selfPlayerExists && profileRes.data) {
-        // Create player entry for current user
-        const profile = profileRes.data;
-        const { data: newPlayerData, error: createError } = await supabase.from('players').insert({
-          id: user.id,
-          user_id: user.id,
-          name: profile.username || user.email?.split('@')[0] || 'Joueur',
-          role: profile.role || 'Milieu',
-          level: profile.level || 'Intermédiaire',
-          club: profile.club,
-          avatar: profile.avatar,
-          stats: {
-            matchesPlayed: 0, wins: 0, losses: 0, winRate: 0,
-            tirRate: 0, pointRate: 0, carreauRate: 0,
-            avgPointsScored: 0, avgPointsConceded: 0
-          },
-        }).select().single();
-
-        if (!createError && newPlayerData) {
-          dbPlayers.push({
-            id: newPlayerData.id,
-            name: newPlayerData.name,
-            avatar: newPlayerData.avatar,
-            club: newPlayerData.club,
-            clubId: newPlayerData.club_id,
-            role: newPlayerData.role,
-            level: newPlayerData.level,
-            location: newPlayerData.location,
-            stats: newPlayerData.stats,
-            createdAt: newPlayerData.created_at,
-          });
-        }
-      }
-
-      // Helper to transform a raw player DB row
+      // Helper to transform a raw player DB row (defined early so it can be reused)
       const mapPlayer = (p: any): Player => ({
         id: p.id,
         name: p.name,
@@ -365,6 +303,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
         },
         createdAt: p.created_at,
       });
+
+      let dbPlayers: Player[] = [];
+      if (playersRes.data) {
+        dbPlayers = playersRes.data.map(mapPlayer);
+      }
+
+      // Check if selfPlayer exists, if not create it from user_profiles
+      const selfPlayerExists = dbPlayers.some(p => p.id === user.id);
+      if (!selfPlayerExists && profileRes.data) {
+        // Create player entry for current user
+        const profile = profileRes.data;
+        const { data: newPlayerData, error: createError } = await supabase.from('players').insert({
+          id: user.id,
+          user_id: user.id,
+          name: profile.username || user.email?.split('@')[0] || 'Joueur',
+          role: profile.role || 'Milieu',
+          level: profile.level || 'Intermédiaire',
+          club: profile.club,
+          avatar: profile.avatar,
+          stats: {
+            matchesPlayed: 0, wins: 0, losses: 0, winRate: 0,
+            tirRate: 0, pointRate: 0, carreauRate: 0,
+            avgPointsScored: 0, avgPointsConceded: 0
+          },
+        }).select().single();
+
+        if (!createError && newPlayerData) {
+          dbPlayers.push(mapPlayer(newPlayerData));
+        }
+      }
 
       // Merge shared players (always fetch latest from owner)
       const ownPlayerIds = new Set(dbPlayers.map(p => p.id));
