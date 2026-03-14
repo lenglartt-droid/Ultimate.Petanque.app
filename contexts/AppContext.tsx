@@ -111,6 +111,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [terrains, setTerrains] = useState<Terrain[]>([]);
   const [favoriteTerrainIds, setFavoriteTerrainIds] = useState<string[]>([]);
   const [favoriteClubIds, setFavoriteClubIds] = useState<string[]>([]);
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [sharedItemPermissions, setSharedItemPermissions] = useState<Record<string, 'read' | 'write'>>({});
   const [tournamentNotifications, setTournamentNotifications] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -552,6 +553,61 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   }, [user?.id, supabase]);
+
+  // Load user preferences (favorites) from database
+  const loadPreferences = useCallback(async () => {
+    if (!user?.id) {
+      setFavoriteTerrainIds([]);
+      setFavoriteClubIds([]);
+      setPreferencesLoaded(false);
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('user_preferences')
+        .select('favorite_terrain_ids, favorite_club_ids')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        // PGRST116 = no rows found, which is fine for new users
+        console.log('Error loading preferences:', error);
+      }
+
+      if (data) {
+        setFavoriteTerrainIds(Array.isArray(data.favorite_terrain_ids) ? data.favorite_terrain_ids : []);
+        setFavoriteClubIds(Array.isArray(data.favorite_club_ids) ? data.favorite_club_ids : []);
+      }
+      setPreferencesLoaded(true);
+    } catch (e) {
+      console.log('Error loading preferences:', e);
+      setPreferencesLoaded(true);
+    }
+  }, [user?.id, supabase]);
+
+  // Save preferences to database (debounced via caller)
+  const savePreferences = useCallback(async (terrainIds: string[], clubIds: string[]) => {
+    if (!user?.id) return;
+    try {
+      const { error } = await supabase
+        .from('user_preferences')
+        .upsert({
+          user_id: user.id,
+          favorite_terrain_ids: terrainIds,
+          favorite_club_ids: clubIds,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
+
+      if (error) console.log('Error saving preferences:', error);
+    } catch (e) {
+      console.log('Error saving preferences:', e);
+    }
+  }, [user?.id, supabase]);
+
+  // Load preferences when user changes
+  useEffect(() => {
+    loadPreferences();
+  }, [loadPreferences]);
 
   // Load data when user changes
   useEffect(() => {
@@ -1261,13 +1317,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Favorites functions
   const toggleFavoriteTerrain = (terrainId: string) => {
     setFavoriteTerrainIds(prev => {
-      if (prev.includes(terrainId)) {
-        return prev.filter(id => id !== terrainId);
-      } else {
-        return [...prev, terrainId];
-      }
+      const updated = prev.includes(terrainId)
+        ? prev.filter(id => id !== terrainId)
+        : [...prev, terrainId];
+      // Persist to database
+      savePreferences(updated, favoriteClubIds);
+      return updated;
     });
-    // TODO: Persist to user preferences in database
   };
 
   const isFavoriteTerrain = (terrainId: string) => {
@@ -1277,11 +1333,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Club favorites
   const toggleFavoriteClub = (clubId: string) => {
     setFavoriteClubIds(prev => {
-      if (prev.includes(clubId)) {
-        return prev.filter(id => id !== clubId);
-      } else {
-        return [...prev, clubId];
-      }
+      const updated = prev.includes(clubId)
+        ? prev.filter(id => id !== clubId)
+        : [...prev, clubId];
+      // Persist to database
+      savePreferences(favoriteTerrainIds, updated);
+      return updated;
     });
   };
 
