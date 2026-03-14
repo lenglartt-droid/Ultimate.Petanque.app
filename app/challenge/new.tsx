@@ -209,7 +209,10 @@ export default function NewChallengeScreen() {
   const [challengeMode, setChallengeMode] = useState<ChallengeMode | null>(null);
   const [selectedOpponent, setSelectedOpponent] = useState<Player | null>(null);
   const [playerSearch, setPlayerSearch] = useState('');
-  const [selectedBoulesSetId, setSelectedBoulesSetId] = useState<string | null>(null);
+  const [selectedBoulesSetId, setSelectedBoulesSetId] = useState<string | null>(() => {
+    const primary = boulesSets.find(bs => bs.isPrimary);
+    return primary ? primary.id : null;
+  });
   
   // Challenge state
   const [isStarted, setIsStarted] = useState(false);

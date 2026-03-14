@@ -901,15 +901,23 @@ export default function ProfileScreen() {
             )}
           </View>
 
-          {/* Boules summary in view mode */}
-          {!isEditing && selfPlayer?.boules && (selfPlayer.boules.name || selfPlayer.boules.diameter || selfPlayer.boules.weight) ? (
-            <View style={styles.heroBoulesRow}>
-              <MaterialIcons name="sports-baseball" size={16} color={theme.accent} />
-              <Text style={styles.heroBoulesText}>
-                {[selfPlayer.boules.name, selfPlayer.boules.diameter ? `${selfPlayer.boules.diameter} mm` : '', selfPlayer.boules.weight ? `${selfPlayer.boules.weight} g` : '', selfPlayer.boules.serialNumber ? `N\u00B0${selfPlayer.boules.serialNumber}` : ''].filter(Boolean).join(' \u2022 ')}
-              </Text>
-            </View>
-          ) : null}
+          {/* Boules summary in view mode - linked to primary set */}
+          {!isEditing && (() => {
+            const primarySet = boulesSets.find(bs => bs.isPrimary);
+            const boulesSource = primarySet || (selfPlayer?.boules && (selfPlayer.boules.name || selfPlayer.boules.diameter || selfPlayer.boules.weight) ? selfPlayer.boules : null);
+            if (!boulesSource) return null;
+            const label = primarySet
+              ? [primarySet.name, primarySet.brand, primarySet.diameter ? `${primarySet.diameter} mm` : '', primarySet.weight ? `${primarySet.weight} g` : ''].filter(Boolean).join(' \u2022 ')
+              : [selfPlayer?.boules?.name, selfPlayer?.boules?.diameter ? `${selfPlayer.boules.diameter} mm` : '', selfPlayer?.boules?.weight ? `${selfPlayer.boules.weight} g` : ''].filter(Boolean).join(' \u2022 ');
+            return (
+              <Pressable style={styles.heroBoulesRow} onPress={() => router.push('/equipment')}>
+                <MaterialIcons name="sports-baseball" size={16} color={theme.accent} />
+                <Text style={styles.heroBoulesText} numberOfLines={1}>{label}</Text>
+                {primarySet ? <View style={styles.heroBoulesPrimaryBadge}><MaterialIcons name="star" size={10} color="#FFF" /></View> : null}
+                <MaterialIcons name="chevron-right" size={16} color={theme.accent} />
+              </Pressable>
+            );
+          })()}
 
           {/* Quick Stats */}
           <View style={styles.quickStats}>
@@ -2380,6 +2388,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: theme.accent,
+    flex: 1,
+  },
+  heroBoulesPrimaryBadge: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: theme.carreauColor,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   quickStats: {
     flexDirection: 'row',

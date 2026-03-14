@@ -216,9 +216,12 @@ export default function NewMatchScreen() {
   const [advancedNotationPlayer, setAdvancedNotationPlayer] = useState<{ id: string; name: string; team: 'A' | 'B' } | null>(null);
   const [advancedNotationType, setAdvancedNotationType] = useState<'tir' | 'point'>('tir');
   const [advancedShotRecords, setAdvancedShotRecords] = useState<SimpleShotRecord[]>([]);
-  const [selectedTerrainId, setSelectedTerrainId] = useState<string | null>(null);
+  const [selectedTerrainId, setSelectedTerrainId] = useState<string | null>(() => selfPlayer?.terrainId || null);
   const [showTerrainPicker, setShowTerrainPicker] = useState(false);
-  const [selectedBoulesSetId, setSelectedBoulesSetId] = useState<string | null>(null);
+  const [selectedBoulesSetId, setSelectedBoulesSetId] = useState<string | null>(() => {
+    const primary = boulesSets.find(bs => bs.isPrimary);
+    return primary ? primary.id : null;
+  });
   const [showBoulesSetPicker, setShowBoulesSetPicker] = useState(false);
   const [savedMatchIdForShare, setSavedMatchIdForShare] = useState<string | null>(null);
   const [showPostMatchShare, setShowPostMatchShare] = useState(false);
