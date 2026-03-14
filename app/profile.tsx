@@ -633,12 +633,20 @@ export default function ProfileScreen() {
                 <Text style={[styles.heroBadgeText, { color: theme.accent }]}>{t('levels', level)}</Text>
               </View>
             </View>
-            {club && (
-              <View style={styles.heroClub}>
+            {club ? (
+              <Pressable style={styles.heroClub} onPress={() => selfPlayer?.clubId ? router.push(`/club/${selfPlayer.clubId}` as any) : undefined}>
                 <MaterialIcons name="location-city" size={14} color={theme.textSecondary} />
                 <Text style={styles.heroClubText}>{club}</Text>
-              </View>
-            )}
+                <MaterialIcons name="favorite" size={12} color={theme.error} />
+              </Pressable>
+            ) : null}
+            {selfPlayer?.terrainName ? (
+              <Pressable style={styles.heroTerrain} onPress={() => selfPlayer?.terrainId ? router.push(`/terrain/${selfPlayer.terrainId}` as any) : undefined}>
+                <MaterialIcons name="sports-soccer" size={14} color={theme.success} />
+                <Text style={styles.heroTerrainText}>{selfPlayer.terrainName}</Text>
+                <MaterialIcons name="favorite" size={12} color={theme.error} />
+              </Pressable>
+            ) : null}
           </View>
 
           {/* Quick Stats */}
@@ -1791,6 +1799,16 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   heroClubText: {
+    fontSize: 14,
+    color: theme.textSecondary,
+  },
+  heroTerrain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  heroTerrainText: {
     fontSize: 14,
     color: theme.textSecondary,
   },
