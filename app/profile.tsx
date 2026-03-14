@@ -1148,6 +1148,27 @@ export default function ProfileScreen() {
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </Pressable>
 
+            <Pressable 
+              style={styles.menuItem}
+              onPress={() => {
+                Haptics.selectionAsync();
+                router.push('/sync-history');
+              }}
+            >
+              <View style={[styles.menuIcon, { backgroundColor: '#0EA5E9' + '15' }]}>
+                <MaterialIcons name="cloud-sync" size={20} color="#0EA5E9" />
+              </View>
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuItemText}>
+                  {language === 'fr' ? 'Synchronisation' : 'Sync History'}
+                </Text>
+                <Text style={styles.menuItemSubtext}>
+                  {language === 'fr' ? 'Historique et file hors-ligne' : 'History and offline queue'}
+                </Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+            </Pressable>
+
             {/* Partage expandable */}
             <Pressable 
               style={styles.menuItem}

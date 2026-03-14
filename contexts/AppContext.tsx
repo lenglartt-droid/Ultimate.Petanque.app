@@ -15,7 +15,10 @@ import {
   buildTerrainDbPayload,
   buildChallengeDbPayload,
   buildUpdateDbPayload,
+  ConflictInfo,
+  ConflictResolver,
 } from '@/services/offlineQueueService';
+import { addSyncHistoryEntry } from '@/services/syncHistoryService';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import {
   mockPlayers,
@@ -112,6 +115,11 @@ interface AppContextType {
   // Offline queue replay
   isReplayingQueue: boolean;
   replayProgress: { current: number; total: number };
+
+  // Conflict resolution
+  currentConflict: ConflictInfo | null;
+  conflictRemaining: number;
+  resolveConflict: (choice: 'local' | 'server' | 'skip') => void;
 
   // Refresh
   refreshData: () => Promise<void>;
@@ -290,6 +298,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isReplayingQueue, setIsReplayingQueue] = useState(false);
   const [replayProgress, setReplayProgress] = useState({ current: 0, total: 0 });
+  const [currentConflict, setCurrentConflict] = useState<ConflictInfo | null>(null);
+  const [conflictRemaining, setConflictRemaining] = useState(0);
+  const conflictResolverRef = useRef<((choice: 'local' | 'server' | 'skip') => void) | null>(null);
+
+  // Resolve conflict from UI
+  const resolveConflict = useCallback((choice: 'local' | 'server' | 'skip') => {
+    if (conflictResolverRef.current) {
+      conflictResolverRef.current(choice);
+      conflictResolverRef.current = null;
+      setCurrentConflict(null);
+    }
+  }, []);
+
+  // Conflict handler that pauses replay and waits for user decision
+  const handleConflict: ConflictResolver = useCallback(async (conflict: ConflictInfo) => {
+    return new Promise<'local' | 'server' | 'skip'>((resolve) => {
+      conflictResolverRef.current = resolve;
+      setCurrentConflict(conflict);
+      // remaining is calculated from replayProgress
+    });
+  }, []);
   
   // Recalculate player stats from actual match data
   const playersWithStats = React.useMemo(() => {
@@ -456,16 +485,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.log('Network restored - replaying offline queue then syncing...');
       setIsOfflineMode(false);
       (async () => {
-        const queueSize = await getQueueSize();
-        if (queueSize > 0) {
-          console.log(`Replaying ${queueSize} queued operations...`);
+        const queueSizeVal = await getQueueSize();
+        if (queueSizeVal > 0) {
+          console.log(`Replaying ${queueSizeVal} queued operations...`);
           setIsReplayingQueue(true);
-          setReplayProgress({ current: 0, total: queueSize });
+          setReplayProgress({ current: 0, total: queueSizeVal });
+          const startTime = Date.now();
           const result = await replayOfflineQueue(supabase, user.id, (current, total) => {
             setReplayProgress({ current, total });
-          });
+            setConflictRemaining(Math.max(0, total - current));
+          }, handleConflict);
+          const duration = Date.now() - startTime;
           setIsReplayingQueue(false);
           setReplayProgress({ current: 0, total: 0 });
+          setCurrentConflict(null);
+          // Log sync history
+          await addSyncHistoryEntry({
+            date: new Date().toISOString(),
+            total: result.total,
+            succeeded: result.succeeded,
+            failed: result.failed,
+            conflictsDetected: result.conflictsDetected,
+            conflictsResolved: result.conflictsResolved,
+            errors: result.errors,
+            duration,
+          });
           // After replay, do a full sync to reconcile temp IDs with real ones
           await loadData();
         } else {
@@ -473,7 +517,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       })();
     }
-  }, [justReconnected, user?.id, loadDeltaData, loadData, supabase]);
+  }, [justReconnected, user?.id, loadDeltaData, loadData, supabase, handleConflict]);
 
   // Load data from Supabase
   const loadData = useCallback(async () => {
@@ -1901,6 +1945,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setItemPublic,
         isReplayingQueue,
         replayProgress,
+        currentConflict,
+        conflictRemaining,
+        resolveConflict,
       }}
     >
       {children}

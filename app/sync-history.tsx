@@ -1,0 +1,575 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import theme from '@/constants/theme';
+import { useLanguage } from '@/hooks/useLanguage';
+import { useApp } from '@/contexts/AppContext';
+import { getSyncHistory, clearSyncHistory, SyncHistoryEntry } from '@/services/syncHistoryService';
+import { getQueueSize } from '@/services/offlineQueueService';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+
+export default function SyncHistoryScreen() {
+  const { language } = useLanguage();
+  const { refreshData, isReplayingQueue } = useApp();
+  const { isConnected } = useNetworkStatus();
+  const [history, setHistory] = useState<SyncHistoryEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [queueSize, setQueueSize] = useState(0);
+  const [manualSyncing, setManualSyncing] = useState(false);
+
+  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
+  useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
+    return () => sub?.remove();
+  }, []);
+  const isTablet = screenWidth >= 600;
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [h, qs] = await Promise.all([getSyncHistory(), getQueueSize()]);
+      setHistory(h);
+      setQueueSize(qs);
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Refresh when replay finishes
+  useEffect(() => {
+    if (!isReplayingQueue) {
+      loadData();
+    }
+  }, [isReplayingQueue, loadData]);
+
+  const handleManualSync = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setManualSyncing(true);
+    try {
+      await refreshData();
+      await loadData();
+    } finally {
+      setManualSyncing(false);
+    }
+  };
+
+  const handleClearHistory = () => {
+    Alert.alert(
+      language === 'fr' ? 'Effacer historique' : 'Clear history',
+      language === 'fr' ? 'Supprimer tout historique de synchronisation ?' : 'Delete all sync history?',
+      [
+        { text: language === 'fr' ? 'Annuler' : 'Cancel', style: 'cancel' },
+        {
+          text: language === 'fr' ? 'Effacer' : 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            await clearSyncHistory();
+            setHistory([]);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          },
+        },
+      ]
+    );
+  };
+
+  const formatDate = (dateStr: string): string => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMin / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    const timeStr = date.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    if (diffDays === 0) {
+      if (diffMin < 1) return language === 'fr' ? "A l'instant" : 'Just now';
+      if (diffMin < 60) return `${diffMin} min · ${timeStr}`;
+      return `${diffHours}h · ${timeStr}`;
+    }
+    if (diffDays === 1) return `${language === 'fr' ? 'Hier' : 'Yesterday'} · ${timeStr}`;
+    if (diffDays < 7) return `${diffDays}${language === 'fr' ? 'j' : 'd'} · ${timeStr}`;
+
+    return date.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', {
+      day: 'numeric',
+      month: 'short',
+    }) + ` · ${timeStr}`;
+  };
+
+  const formatDuration = (ms: number): string => {
+    if (ms < 1000) return `${ms}ms`;
+    const secs = Math.round(ms / 100) / 10;
+    return `${secs}s`;
+  };
+
+  const getStatusColor = (entry: SyncHistoryEntry): string => {
+    if (entry.failed > 0 && entry.succeeded === 0) return theme.error;
+    if (entry.failed > 0) return theme.warning;
+    return theme.success;
+  };
+
+  const getStatusIcon = (entry: SyncHistoryEntry): string => {
+    if (entry.failed > 0 && entry.succeeded === 0) return 'error';
+    if (entry.failed > 0) return 'warning';
+    if (entry.conflictsDetected > 0) return 'sync-problem';
+    return 'check-circle';
+  };
+
+  const renderItem = ({ item, index }: { item: SyncHistoryEntry; index: number }) => {
+    const statusColor = getStatusColor(item);
+    const statusIcon = getStatusIcon(item);
+
+    return (
+      <Animated.View
+        entering={FadeInDown.duration(300).delay(index * 40)}
+        style={styles.entryCard}
+      >
+        {/* Status indicator */}
+        <View style={[styles.statusStrip, { backgroundColor: statusColor }]} />
+
+        <View style={styles.entryContent}>
+          {/* Top row: icon + date + duration */}
+          <View style={styles.entryHeader}>
+            <View style={[styles.statusIcon, { backgroundColor: statusColor + '15' }]}>
+              <MaterialIcons name={statusIcon as any} size={18} color={statusColor} />
+            </View>
+            <View style={styles.entryHeaderInfo}>
+              <Text style={styles.entryDate}>{formatDate(item.date)}</Text>
+              <Text style={styles.entryDuration}>{formatDuration(item.duration)}</Text>
+            </View>
+          </View>
+
+          {/* Stats row */}
+          <View style={styles.entryStats}>
+            <View style={styles.entryStat}>
+              <MaterialIcons name="check" size={14} color={theme.success} />
+              <Text style={[styles.entryStatValue, { color: theme.success }]}>{item.succeeded}</Text>
+              <Text style={styles.entryStatLabel}>
+                {language === 'fr' ? 'reussies' : 'succeeded'}
+              </Text>
+            </View>
+
+            {item.failed > 0 ? (
+              <View style={styles.entryStat}>
+                <MaterialIcons name="close" size={14} color={theme.error} />
+                <Text style={[styles.entryStatValue, { color: theme.error }]}>{item.failed}</Text>
+                <Text style={styles.entryStatLabel}>
+                  {language === 'fr' ? 'echouees' : 'failed'}
+                </Text>
+              </View>
+            ) : null}
+
+            {item.conflictsDetected > 0 ? (
+              <View style={styles.entryStat}>
+                <MaterialIcons name="sync-problem" size={14} color={theme.warning} />
+                <Text style={[styles.entryStatValue, { color: theme.warning }]}>{item.conflictsDetected}</Text>
+                <Text style={styles.entryStatLabel}>
+                  {language === 'fr' ? 'conflits' : 'conflicts'}
+                </Text>
+              </View>
+            ) : null}
+
+            <View style={styles.entryStat}>
+              <MaterialIcons name="swap-vert" size={14} color={theme.textMuted} />
+              <Text style={styles.entryStatValue}>{item.total}</Text>
+              <Text style={styles.entryStatLabel}>total</Text>
+            </View>
+          </View>
+
+          {/* Errors (if any) */}
+          {item.errors.length > 0 ? (
+            <View style={styles.errorsContainer}>
+              {item.errors.slice(0, 3).map((err, i) => (
+                <View key={i} style={styles.errorRow}>
+                  <MaterialIcons name="error-outline" size={12} color={theme.error} />
+                  <Text style={styles.errorText} numberOfLines={1}>{err}</Text>
+                </View>
+              ))}
+              {item.errors.length > 3 ? (
+                <Text style={styles.moreErrors}>
+                  +{item.errors.length - 3} {language === 'fr' ? 'autres erreurs' : 'more errors'}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+      </Animated.View>
+    );
+  };
+
+  const renderHeader = () => (
+    <View style={styles.headerContent}>
+      {/* Queue Status Card */}
+      <View style={[styles.queueCard, isReplayingQueue && styles.queueCardActive]}>
+        <View style={styles.queueCardLeft}>
+          <View style={[
+            styles.queueIcon,
+            { backgroundColor: isReplayingQueue ? theme.warning + '15' : (queueSize > 0 ? theme.primary + '15' : theme.success + '15') },
+          ]}>
+            <MaterialIcons
+              name={isReplayingQueue ? 'cloud-sync' : (queueSize > 0 ? 'schedule' : 'cloud-done')}
+              size={24}
+              color={isReplayingQueue ? theme.warning : (queueSize > 0 ? theme.primary : theme.success)}
+            />
+          </View>
+          <View>
+            <Text style={styles.queueTitle}>
+              {isReplayingQueue
+                ? (language === 'fr' ? 'Synchronisation en cours...' : 'Syncing...')
+                : queueSize > 0
+                  ? `${queueSize} ${language === 'fr' ? 'en attente' : 'pending'}`
+                  : (language === 'fr' ? 'File vide' : 'Queue empty')}
+            </Text>
+            <Text style={styles.queueSubtitle}>
+              {isConnected
+                ? (language === 'fr' ? 'Connecte' : 'Connected')
+                : (language === 'fr' ? 'Hors-ligne' : 'Offline')}
+            </Text>
+          </View>
+        </View>
+        {isReplayingQueue ? (
+          <ActivityIndicator size="small" color={theme.warning} />
+        ) : null}
+      </View>
+
+      {/* Manual Sync Button */}
+      <Pressable
+        style={({ pressed }) => [
+          styles.syncButton,
+          (!isConnected || manualSyncing || isReplayingQueue) && styles.syncButtonDisabled,
+          pressed && { opacity: 0.85 },
+        ]}
+        onPress={handleManualSync}
+        disabled={!isConnected || manualSyncing || isReplayingQueue}
+      >
+        {manualSyncing ? (
+          <ActivityIndicator size="small" color="#FFF" />
+        ) : (
+          <MaterialIcons name="sync" size={20} color="#FFF" />
+        )}
+        <Text style={styles.syncButtonText}>
+          {manualSyncing
+            ? (language === 'fr' ? 'Synchronisation...' : 'Syncing...')
+            : (language === 'fr' ? 'Forcer synchronisation complete' : 'Force full sync')}
+        </Text>
+      </Pressable>
+
+      {/* Section header */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>
+          {language === 'fr' ? 'HISTORIQUE' : 'HISTORY'}
+        </Text>
+        {history.length > 0 ? (
+          <Pressable onPress={handleClearHistory} hitSlop={8}>
+            <Text style={styles.clearBtn}>
+              {language === 'fr' ? 'Effacer' : 'Clear'}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+
+  const renderEmpty = () => (
+    <View style={styles.emptyContainer}>
+      <View style={styles.emptyIcon}>
+        <MaterialIcons name="cloud-queue" size={48} color={theme.textMuted} />
+      </View>
+      <Text style={styles.emptyTitle}>
+        {language === 'fr' ? 'Aucun historique' : 'No history'}
+      </Text>
+      <Text style={styles.emptySubtitle}>
+        {language === 'fr'
+          ? "Les synchronisations hors-ligne apparaitront ici"
+          : 'Offline sync replays will appear here'}
+      </Text>
+    </View>
+  );
+
+  return (
+    <SafeAreaView edges={['top']} style={styles.container}>
+      {/* Header Bar */}
+      <View style={styles.headerBar}>
+        <Pressable style={styles.backButton} onPress={() => router.back()}>
+          <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
+        </Pressable>
+        <Text style={styles.headerTitle}>
+          {language === 'fr' ? 'Synchronisation' : 'Sync History'}
+        </Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={history}
+          keyExtractor={item => item.id}
+          renderItem={renderItem}
+          ListHeaderComponent={renderHeader}
+          ListEmptyComponent={renderEmpty}
+          contentContainerStyle={[
+            styles.listContent,
+            isTablet && styles.listContentTablet,
+          ]}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: theme.backgroundSecondary,
+  },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: theme.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  listContent: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+  listContentTablet: {
+    maxWidth: 960,
+    alignSelf: 'center' as const,
+    width: '100%',
+    paddingHorizontal: 24,
+  },
+  headerContent: {
+    marginBottom: 8,
+  },
+  queueCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    marginBottom: 12,
+    ...theme.shadows.card,
+  },
+  queueCardActive: {
+    borderWidth: 1,
+    borderColor: theme.warning + '30',
+  },
+  queueCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  queueIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  queueTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.textPrimary,
+    marginBottom: 2,
+  },
+  queueSubtitle: {
+    fontSize: 12,
+    color: theme.textSecondary,
+  },
+  syncButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: theme.primary,
+    paddingVertical: 14,
+    borderRadius: theme.borderRadius.lg,
+    marginBottom: 20,
+  },
+  syncButtonDisabled: {
+    backgroundColor: theme.textMuted,
+    opacity: 0.6,
+  },
+  syncButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.textSecondary,
+    letterSpacing: 1,
+  },
+  clearBtn: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.error,
+  },
+  // Entry Card
+  entryCard: {
+    flexDirection: 'row',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    marginBottom: 10,
+    overflow: 'hidden',
+    ...theme.shadows.card,
+  },
+  statusStrip: {
+    width: 4,
+  },
+  entryContent: {
+    flex: 1,
+    padding: 14,
+  },
+  entryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  statusIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  entryHeaderInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  entryDate: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  entryDuration: {
+    fontSize: 12,
+    color: theme.textMuted,
+    fontWeight: '500',
+  },
+  entryStats: {
+    flexDirection: 'row',
+    gap: 16,
+    flexWrap: 'wrap',
+  },
+  entryStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  entryStatValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  entryStatLabel: {
+    fontSize: 12,
+    color: theme.textSecondary,
+  },
+  errorsContainer: {
+    marginTop: 10,
+    backgroundColor: theme.error + '08',
+    borderRadius: theme.borderRadius.sm,
+    padding: 10,
+    gap: 4,
+  },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 11,
+    color: theme.error,
+  },
+  moreErrors: {
+    fontSize: 11,
+    color: theme.textMuted,
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  // Empty state
+  emptyContainer: {
+    alignItems: 'center',
+    paddingTop: 48,
+  },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: theme.textPrimary,
+    marginBottom: 6,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    textAlign: 'center',
+  },
+});

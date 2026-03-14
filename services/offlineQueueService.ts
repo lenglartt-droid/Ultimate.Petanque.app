@@ -17,10 +17,21 @@ export interface QueuedOperation {
   tempId?: string;
 }
 
+export interface ConflictInfo {
+  table: string;
+  itemId: string;
+  operationType: 'update' | 'insert';
+  localFields: Record<string, any>;
+  serverFields: Record<string, any>;
+  itemName?: string;
+}
+
 export interface ReplayResult {
   total: number;
   succeeded: number;
   failed: number;
+  conflictsDetected: number;
+  conflictsResolved: number;
   /** Map of tempId -> realId for successfully inserted items */
   idMap: Record<string, string>;
   errors: string[];
@@ -98,22 +109,34 @@ async function removeOperation(opId: string): Promise<void> {
 // REPLAY LOGIC
 // ============================================
 
+/** Callback type for conflict resolution: returns user choice */
+export type ConflictResolver = (conflict: ConflictInfo) => Promise<'local' | 'server' | 'skip'>;
+
+/** Name field extractor for readable conflict items */
+function extractItemName(table: string, fields: Record<string, any>): string | undefined {
+  return fields.name || fields.player_name || fields.tournament_name || undefined;
+}
+
 /**
  * Replay all queued operations against Supabase, in order.
  * Handles temp ID mapping: if an insert created a tempId,
  * subsequent update/delete operations referencing that tempId
  * will use the real ID returned by the server.
  *
+ * For update operations, checks if the server record was modified
+ * after the operation was queued (conflict detection).
+ *
  * @returns ReplayResult with stats and ID mapping
  */
 export async function replayOfflineQueue(
   supabase: any,
   userId: string,
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
+  onConflict?: ConflictResolver
 ): Promise<ReplayResult> {
   const queue = await getQueue();
   if (queue.length === 0) {
-    return { total: 0, succeeded: 0, failed: 0, idMap: {}, errors: [] };
+    return { total: 0, succeeded: 0, failed: 0, conflictsDetected: 0, conflictsResolved: 0, idMap: {}, errors: [] };
   }
 
   console.log(`[OfflineQueue] Replaying ${queue.length} operations...`);
@@ -122,6 +145,8 @@ export async function replayOfflineQueue(
     total: queue.length,
     succeeded: 0,
     failed: 0,
+    conflictsDetected: 0,
+    conflictsResolved: 0,
     idMap: {},
     errors: [],
   };
@@ -159,6 +184,66 @@ export async function replayOfflineQueue(
             console.log(`[OfflineQueue] Skipping update for unresolved temp ID: ${op.itemId}`);
             break;
           }
+
+          // Conflict detection: fetch current server record
+          let hasConflict = false;
+          let serverRecord: Record<string, any> | null = null;
+          try {
+            const { data: currentData } = await supabase
+              .from(op.table)
+              .select('*')
+              .eq('id', resolvedItemId)
+              .single();
+
+            if (currentData) {
+              serverRecord = currentData;
+              // Check if server updated_at > operation timestamp
+              const serverUpdatedAt = currentData.updated_at ? new Date(currentData.updated_at).getTime() : 0;
+              const opTimestamp = new Date(op.timestamp).getTime();
+              if (serverUpdatedAt > opTimestamp) {
+                hasConflict = true;
+              }
+            }
+          } catch {
+            // If fetch fails, proceed without conflict check
+          }
+
+          if (hasConflict && onConflict && serverRecord) {
+            result.conflictsDetected++;
+            const remainingOps = queue.length - (result.succeeded + result.failed + 1);
+            const conflictInfo: ConflictInfo = {
+              table: op.table,
+              itemId: resolvedItemId,
+              operationType: 'update',
+              localFields: op.dbPayload,
+              serverFields: serverRecord,
+              itemName: extractItemName(op.table, serverRecord),
+            };
+
+            const choice = await onConflict(conflictInfo);
+
+            if (choice === 'server') {
+              // Keep server version - skip this update
+              result.conflictsResolved++;
+              console.log(`[OfflineQueue] Conflict resolved: keeping server version for ${op.table}/${resolvedItemId}`);
+              await removeOperation(op.id);
+              result.succeeded++;
+              const processed = result.succeeded + result.failed;
+              onProgress?.(processed, result.total);
+              continue;
+            } else if (choice === 'skip') {
+              // Skip entirely
+              console.log(`[OfflineQueue] Conflict skipped for ${op.table}/${resolvedItemId}`);
+              await removeOperation(op.id);
+              result.succeeded++;
+              const processed = result.succeeded + result.failed;
+              onProgress?.(processed, result.total);
+              continue;
+            }
+            // choice === 'local': proceed with local update
+            result.conflictsResolved++;
+          }
+
           const { error } = await supabase
             .from(op.table)
             .update(op.dbPayload)
@@ -199,7 +284,7 @@ export async function replayOfflineQueue(
     onProgress?.(processed, result.total);
   }
 
-  console.log(`[OfflineQueue] Replay complete: ${result.succeeded}/${result.total} succeeded, ${result.failed} failed`);
+  console.log(`[OfflineQueue] Replay complete: ${result.succeeded}/${result.total} succeeded, ${result.failed} failed, ${result.conflictsDetected} conflicts`);
   return result;
 }
 

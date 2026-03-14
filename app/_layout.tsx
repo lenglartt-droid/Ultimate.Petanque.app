@@ -7,6 +7,8 @@ import { AppProvider } from '@/contexts/AppContext';
 import { LanguageProvider } from '@/contexts/LanguageContext';
 import { ToastProvider } from '@/components/ui/Toast';
 import OfflineBanner from '@/components/ui/OfflineBanner';
+import ConflictResolutionModal from '@/components/ui/ConflictResolutionModal';
+import { useApp } from '@/contexts/AppContext';
 
 export default function RootLayout() {
   return (
@@ -16,9 +18,28 @@ export default function RootLayout() {
           <LanguageProvider>
           <ToastProvider>
           <AppProvider>
+            <LayoutInner />
+          </AppProvider>
+          </ToastProvider>
+          </LanguageProvider>
+        </SafeAreaProvider>
+      </AuthProvider>
+    </AlertProvider>
+  );
+}
+
+function LayoutInner() {
+  const { currentConflict, conflictRemaining, resolveConflict } = useApp();
+  return (
             <View style={{ flex: 1 }}>
             <StatusBar style="dark" />
             <OfflineBanner />
+            <ConflictResolutionModal
+              visible={currentConflict !== null}
+              conflict={currentConflict}
+              onResolve={resolveConflict}
+              remaining={conflictRemaining}
+            />
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" options={{ headerShown: false }} />
               <Stack.Screen name="(tabs)" />
@@ -255,13 +276,14 @@ export default function RootLayout() {
                   animation: 'slide_from_right',
                 }} 
               />
+              <Stack.Screen 
+                name="sync-history" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
             </Stack>
             </View>
-          </AppProvider>
-          </ToastProvider>
-          </LanguageProvider>
-        </SafeAreaProvider>
-      </AuthProvider>
-    </AlertProvider>
   );
 }
