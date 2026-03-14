@@ -1,7 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { getSupabaseClient } from '@/template';
 import { useAuth } from '@/template';
 import { logModification } from '@/services/modificationLogService';
+import { saveToCache, saveSingleToCache, loadFromCache, clearCache } from '@/services/cacheService';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import {
   mockPlayers,
   mockClubs,
@@ -150,6 +152,11 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const supabase = getSupabaseClient();
+  const { isConnected, justReconnected } = useNetworkStatus();
+  const isConnectedRef = useRef(isConnected);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const [cacheLoaded, setCacheLoaded] = useState(false);
+  const initialLoadDone = useRef(false);
   
   const [players, setPlayers] = useState<Player[]>([]);
   const [clubs, setClubs] = useState<Club[]>([]);
@@ -313,6 +320,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
     createdAt: p.created_at,
   }), []);
 
+  // Keep ref in sync with state
+  useEffect(() => {
+    isConnectedRef.current = isConnected;
+    if (!isConnected) {
+      setIsOfflineMode(true);
+    }
+  }, [isConnected]);
+
+  // Load from local cache on first mount (before network fetch)
+  useEffect(() => {
+    if (!user?.id || cacheLoaded) return;
+    const loadCache = async () => {
+      try {
+        const cached = await loadFromCache();
+        if (cached) {
+          // Only apply cache if we have not yet loaded from network
+          if (!initialLoadDone.current) {
+            if (cached.players.length > 0) setPlayers(cached.players);
+            if (cached.clubs.length > 0) setClubs(cached.clubs);
+            if (cached.tournaments.length > 0) setTournaments(cached.tournaments);
+            if (cached.matches.length > 0) setMatches(cached.matches);
+            if (cached.challenges.length > 0) setChallenges(cached.challenges);
+            if (cached.terrains.length > 0) setTerrains(cached.terrains);
+            console.log('Loaded data from local cache');
+          }
+        }
+      } catch (e) {
+        console.log('Error loading cache:', e);
+      } finally {
+        setCacheLoaded(true);
+      }
+    };
+    loadCache();
+  }, [user?.id, cacheLoaded]);
+
+  // Auto-sync when network returns after being offline
+  useEffect(() => {
+    if (justReconnected && user?.id) {
+      console.log('Network restored - syncing data...');
+      setIsOfflineMode(false);
+      loadData();
+    }
+  }, [justReconnected, user?.id]);
+
   // Load data from Supabase
   const loadData = useCallback(async () => {
     if (!user?.id) {
@@ -323,6 +374,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMatches(mockMatches);
       setChallenges(mockChallenges);
       setTerrains(mockTerrains);
+      setLoading(false);
+      return;
+    }
+
+    // If offline, skip network fetch (use cached data)
+    if (!isConnectedRef.current) {
+      setIsOfflineMode(true);
       setLoading(false);
       return;
     }
@@ -576,19 +634,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setChallenges(dbChallenges.length > 0 ? dbChallenges : mockChallenges);
       }
 
+      // Mark network load as complete
+      initialLoadDone.current = true;
+      setIsOfflineMode(false);
+
     } catch (error) {
       console.log('Error loading data from cloud:', error);
-      // Fallback to mock data on error
-      setPlayers(mockPlayers);
-      setClubs(mockClubs);
-      setTournaments(mockTournaments);
-      setMatches(mockMatches);
-      setChallenges(mockChallenges);
-      setTerrains(mockTerrains);
+      // If we have cached data, keep using it instead of mock data
+      if (!initialLoadDone.current) {
+        const cached = await loadFromCache();
+        if (cached && (cached.players.length > 0 || cached.matches.length > 0)) {
+          if (cached.players.length > 0) setPlayers(cached.players);
+          if (cached.clubs.length > 0) setClubs(cached.clubs);
+          if (cached.tournaments.length > 0) setTournaments(cached.tournaments);
+          if (cached.matches.length > 0) setMatches(cached.matches);
+          if (cached.challenges.length > 0) setChallenges(cached.challenges);
+          if (cached.terrains.length > 0) setTerrains(cached.terrains);
+          setIsOfflineMode(true);
+        } else {
+          setPlayers(mockPlayers);
+          setClubs(mockClubs);
+          setTournaments(mockTournaments);
+          setMatches(mockMatches);
+          setChallenges(mockChallenges);
+          setTerrains(mockTerrains);
+        }
+      }
     } finally {
       setLoading(false);
     }
   }, [user?.id, supabase, mapPlayer]);
+
+  // Persist data to cache whenever critical state changes (debounced)
+  useEffect(() => {
+    if (!user?.id || !initialLoadDone.current) return;
+    const timeout = setTimeout(() => {
+      saveToCache({ players, clubs, tournaments, matches, challenges, terrains });
+    }, 2000);
+    return () => clearTimeout(timeout);
+  }, [players, clubs, tournaments, matches, challenges, terrains, user?.id]);
 
   // Load user preferences (favorites) from database
   const loadPreferences = useCallback(async () => {
@@ -649,6 +733,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Clear cache on logout
+  useEffect(() => {
+    if (!user?.id) {
+      initialLoadDone.current = false;
+      setCacheLoaded(false);
+      setIsOfflineMode(false);
+    }
+  }, [user?.id]);
 
   // Auto-refresh every 30 seconds when user is logged in
   useEffect(() => {
