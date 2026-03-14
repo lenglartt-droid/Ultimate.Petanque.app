@@ -286,6 +286,18 @@ export default function PlayerDetailScreen() {
               <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
             </Pressable>
           )}
+
+          {/* Terrain de pratique */}
+          {terrain && (
+            <Pressable 
+              style={styles.terrainLink}
+              onPress={() => router.push(`/terrain/${terrain.id}`)}
+            >
+              <MaterialIcons name="sports-soccer" size={16} color={theme.success} />
+              <Text style={styles.terrainLinkText}>{terrain.name}</Text>
+              <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
+            </Pressable>
+          )}
           
           {/* Handedness */}
           {player.handedness ? (
@@ -422,18 +434,6 @@ export default function PlayerDetailScreen() {
             </View>
           )}
 
-          {/* Terrain de pratique */}
-          {terrain && (
-            <Pressable 
-              style={styles.terrainLink}
-              onPress={() => router.push(`/terrain/${terrain.id}`)}
-            >
-              <MaterialIcons name="sports-soccer" size={16} color={theme.accent} />
-              <Text style={styles.terrainName}>{terrain.name}</Text>
-              <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
-            </Pressable>
-          )}
-          
           {/* Nickname */}
           {player.nickname && (
             <Text style={styles.playerNickname}>"{player.nickname}"</Text>
@@ -827,9 +827,9 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 8,
   },
-  terrainName: {
+  terrainLinkText: {
     fontSize: 15,
-    color: theme.accent,
+    color: theme.success,
   },
   contactInfo: {
     flexDirection: 'row',
