@@ -286,6 +286,34 @@ export default function MyPlayerCardScreen() {
     'Tireur': { icon: 'gps-fixed', color: '#F97316' },
   };
 
+  // Terrain type analysis from match history
+  const terrainAnalysis = React.useMemo(() => {
+    if (!selfPlayer) return { terrainCounts: {} as Record<string, number>, totalWithTerrain: 0, preferredTerrain: '' };
+
+    const terrainCounts: Record<string, number> = {};
+
+    matches.forEach(match => {
+      if (match.terrainType) {
+        terrainCounts[match.terrainType] = (terrainCounts[match.terrainType] || 0) + 1;
+      }
+    });
+
+    const totalWithTerrain = Object.values(terrainCounts).reduce((a, b) => a + b, 0);
+    const preferredTerrain = totalWithTerrain > 0
+      ? Object.entries(terrainCounts).reduce((a, b) => b[1] > a[1] ? b : a)[0]
+      : '';
+
+    return { terrainCounts, totalWithTerrain, preferredTerrain };
+  }, [matches, selfPlayer]);
+
+  const terrainTypeIcons: Record<string, { icon: string; color: string }> = {
+    'Stabilisé': { icon: 'landscape', color: '#6B7280' },
+    'Graviers': { icon: 'grain', color: '#92400E' },
+    'Sable': { icon: 'beach-access', color: '#D97706' },
+    'Cailloux': { icon: 'terrain', color: '#6D28D9' },
+    'Terre battue': { icon: 'grass', color: '#15803D' },
+  };
+
   // Calculate detailed stats
   const totalMatches = matches.length;
   const tournamentMatches = matches.filter(m => m.mode === 'Tournoi');
@@ -453,6 +481,44 @@ export default function MyPlayerCardScreen() {
                     <View key={role} style={styles.roleBreakdownItem}>
                       <MaterialIcons name={config?.icon as any || 'person'} size={14} color={config?.color || theme.textMuted} />
                       <Text style={styles.roleBreakdownLabel}>{role.charAt(0)}</Text>
+                      <View style={styles.roleBreakdownBarBg}>
+                        <View style={[styles.roleBreakdownBar, { width: `${pct}%`, backgroundColor: config?.color || theme.primary }]} />
+                      </View>
+                      <Text style={styles.roleBreakdownPct}>{pct}%</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {/* Preferred Terrain from Match History */}
+          {terrainAnalysis.totalWithTerrain > 0 && (
+            <View style={styles.preferredRoleCard}>
+              <Text style={styles.preferredRoleTitle}>{t('player', 'preferredTerrain')}</Text>
+              <View style={styles.preferredRoleContent}>
+                <View style={[styles.preferredRoleIcon, { backgroundColor: terrainTypeIcons[terrainAnalysis.preferredTerrain]?.color || theme.primary }]}>
+                  <MaterialIcons 
+                    name={(terrainTypeIcons[terrainAnalysis.preferredTerrain]?.icon || 'sports-soccer') as any} 
+                    size={20} 
+                    color="#FFF" 
+                  />
+                </View>
+                <View style={styles.preferredRoleInfo}>
+                  <Text style={styles.preferredRoleName}>{t('terrainTypes', terrainAnalysis.preferredTerrain)}</Text>
+                  <Text style={styles.preferredRoleStats}>
+                    {terrainAnalysis.terrainCounts[terrainAnalysis.preferredTerrain]} {t('player', 'outOf')} {terrainAnalysis.totalWithTerrain} {t('player', 'matchesLabel')}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.roleBreakdown}>
+                {Object.entries(terrainAnalysis.terrainCounts).map(([terrainType, count]) => {
+                  const config = terrainTypeIcons[terrainType];
+                  const pct = terrainAnalysis.totalWithTerrain > 0 ? Math.round((count / terrainAnalysis.totalWithTerrain) * 100) : 0;
+                  return (
+                    <View key={terrainType} style={styles.roleBreakdownItem}>
+                      <MaterialIcons name={(config?.icon || 'sports-soccer') as any} size={14} color={config?.color || theme.textMuted} />
+                      <Text style={[styles.roleBreakdownLabel, { width: 18 }]}>{terrainType.substring(0, 2)}</Text>
                       <View style={styles.roleBreakdownBarBg}>
                         <View style={[styles.roleBreakdownBar, { width: `${pct}%`, backgroundColor: config?.color || theme.primary }]} />
                       </View>
