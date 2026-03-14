@@ -170,8 +170,9 @@ export async function importPublicItemToDirectory(
       Object.assign(payload, {
         name: source.name, nickname: source.nickname, avatar: source.avatar,
         club: source.club, role: source.role, level: source.level,
-        location: source.location, phone: source.phone, email: source.email,
+        location: source.location, phone: null, email: null,
         country: source.country, boules: source.boules, stats: source.stats,
+        handedness: source.handedness, terrain_name: source.terrain_name,
         is_public: false,
       });
     } else if (table === 'clubs') {

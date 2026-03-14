@@ -397,6 +397,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         courtsCount: t.courts_count || 1,
         lighting: t.lighting ?? false,
         covered: t.covered ?? false,
+        environment: t.environment || 'outdoor',
         createdAt: t.created_at,
       });
 
@@ -870,6 +871,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         courts_count: terrain.courtsCount,
         lighting: terrain.lighting,
         covered: terrain.covered,
+        environment: terrain.environment || 'outdoor',
       }).select().single();
 
       if (error) throw error;
@@ -892,6 +894,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           courtsCount: data.courts_count,
           lighting: data.lighting,
           covered: data.covered,
+          environment: data.environment || 'outdoor',
           createdAt: data.created_at,
         };
         setTerrains(prev => [...prev, newTerrain]);
@@ -1178,6 +1181,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.courtsCount !== undefined) dbUpdates.courts_count = updates.courtsCount;
       if (updates.lighting !== undefined) dbUpdates.lighting = updates.lighting;
       if (updates.covered !== undefined) dbUpdates.covered = updates.covered;
+      if (updates.environment !== undefined) dbUpdates.environment = updates.environment;
       dbUpdates.updated_at = new Date().toISOString();
 
       await supabase.from('terrains').update(dbUpdates).eq('id', id);

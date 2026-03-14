@@ -39,7 +39,7 @@ export default function ClubDetailScreen() {
   const [showShareModal, setShowShareModal] = React.useState(false);
   const [isShared, setIsShared] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
-  const [isPublicState, setIsPublicState] = React.useState(club?.isPublic ?? false);
+  const [isPublicState, setIsPublicState] = React.useState(false);
   const [togglingPublic, setTogglingPublic] = React.useState(false);
   const { showAlert } = useAlert();
   const [showMergePicker, setShowMergePicker] = React.useState(false);
@@ -65,7 +65,7 @@ export default function ClubDetailScreen() {
 
   React.useEffect(() => {
     if (club) setIsPublicState(club.isPublic ?? false);
-  }, [club?.isPublic]);
+  }, [club?.id, club?.isPublic]);
 
   const handleTogglePublic = React.useCallback(async () => {
     if (!club || togglingPublic || isSharedItem) return;
