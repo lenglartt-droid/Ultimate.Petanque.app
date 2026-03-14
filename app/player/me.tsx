@@ -459,6 +459,9 @@ export default function MyPlayerCardScreen() {
           </View>
           
           <Text style={styles.playerName}>{selfPlayer.name}</Text>
+          {selfPlayer.nickname ? (
+            <Text style={styles.playerNickname}>"{selfPlayer.nickname}"</Text>
+          ) : null}
           
           <View style={styles.playerMeta}>
             <View style={styles.metaItem}>
@@ -1684,6 +1687,12 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     color: '#FFF',
+  },
+  playerNickname: {
+    fontSize: 15,
+    fontStyle: 'italic',
+    color: theme.textSecondary,
+    marginBottom: 8,
   },
   visibilityCard: {
     flexDirection: 'row',

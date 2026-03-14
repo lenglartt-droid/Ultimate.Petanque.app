@@ -314,6 +314,9 @@ export default function PlayerDetailScreen() {
             )}
           </View>
           <Text style={styles.playerName}>{player.name}</Text>
+          {player.nickname ? (
+            <Text style={styles.playerNickname}>"{player.nickname}"</Text>
+          ) : null}
           {sharedPermission ? (
             <View style={{ marginBottom: 8 }}>
               <SharedBadge permission={sharedPermission} />
@@ -327,6 +330,29 @@ export default function PlayerDetailScreen() {
               <Text style={[styles.badgeText, { color: theme.primary }]}>{t('roles', player.role)}</Text>
             </View>
           </View>
+          {/* Contact Info */}
+          {(player.phone || player.email) && !isSharedItem && (player.showContactPublic !== false || !player.isPublic) ? (
+            <View style={styles.contactInfo}>
+              {player.phone ? (
+                <Pressable 
+                  style={styles.contactItem}
+                  onPress={() => Linking.openURL(`tel:${player.phone}`)}
+                >
+                  <MaterialIcons name="phone" size={16} color={theme.primary} />
+                  <Text style={styles.contactText}>{player.phone}</Text>
+                </Pressable>
+              ) : null}
+              {player.email ? (
+                <Pressable 
+                  style={styles.contactItem}
+                  onPress={() => Linking.openURL(`mailto:${player.email}`)}
+                >
+                  <MaterialIcons name="email" size={16} color={theme.primary} />
+                  <Text style={styles.contactText}>{player.email}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
           {clubDisplayName ? (
             clubEntity ? (
               <Pressable 
@@ -561,34 +587,7 @@ export default function PlayerDetailScreen() {
             );
           })()}
 
-          {/* Nickname */}
-          {player.nickname && (
-            <Text style={styles.playerNickname}>"{player.nickname}"</Text>
-          )}
-          
-          {/* Contact Info - hidden for shared items, and hidden on public if showContactPublic is false */}
-          {(player.phone || player.email) && !isSharedItem && (player.showContactPublic !== false || !player.isPublic) && (
-            <View style={styles.contactInfo}>
-              {player.phone && (
-                <Pressable 
-                  style={styles.contactItem}
-                  onPress={() => Linking.openURL(`tel:${player.phone}`)}
-                >
-                  <MaterialIcons name="phone" size={16} color={theme.primary} />
-                  <Text style={styles.contactText}>{player.phone}</Text>
-                </Pressable>
-              )}
-              {player.email && (
-                <Pressable 
-                  style={styles.contactItem}
-                  onPress={() => Linking.openURL(`mailto:${player.email}`)}
-                >
-                  <MaterialIcons name="email" size={16} color={theme.primary} />
-                  <Text style={styles.contactText}>{player.email}</Text>
-                </Pressable>
-              )}
-            </View>
-          )}
+
         </Animated.View>
 
         {/* Quick Stats */}
