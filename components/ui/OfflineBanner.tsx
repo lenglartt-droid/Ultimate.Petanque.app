@@ -5,6 +5,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { getLastSyncTimestamp } from '@/services/cacheService';
+import { getQueueSize } from '@/services/offlineQueueService';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import theme from '@/constants/theme';
@@ -16,13 +17,16 @@ export default function OfflineBanner() {
   const { language } = useLanguage();
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [queueCount, setQueueCount] = useState(0);
   const [, setTick] = useState(0);
 
-  // Load last sync timestamp and refresh display every 30s
+  // Load last sync timestamp + queue size and refresh display every 30s
   useEffect(() => {
     const load = async () => {
       const ts = await getLastSyncTimestamp();
       setLastSync(ts);
+      const qs = await getQueueSize();
+      setQueueCount(qs);
     };
     load();
     const interval = setInterval(() => {
@@ -77,6 +81,7 @@ export default function OfflineBanner() {
         <Text style={styles.subtitle}>
           {language === 'fr' ? 'Derniere sync ' : 'Last sync '}
           {getTimeSinceSync()}
+          {queueCount > 0 ? ` · ${queueCount} ${language === 'fr' ? 'en attente' : 'pending'}` : ''}
         </Text>
       </View>
       <Pressable

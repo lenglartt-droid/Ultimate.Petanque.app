@@ -3,6 +3,19 @@ import { getSupabaseClient } from '@/template';
 import { useAuth } from '@/template';
 import { logModification } from '@/services/modificationLogService';
 import { saveToCache, saveSingleToCache, loadFromCache, clearCache, getLastSyncTimestamp, setLastSyncTimestamp } from '@/services/cacheService';
+import {
+  enqueueOperation,
+  replayOfflineQueue,
+  getQueueSize,
+  clearOfflineQueue,
+  buildMatchDbPayload,
+  buildPlayerDbPayload,
+  buildClubDbPayload,
+  buildTournamentDbPayload,
+  buildTerrainDbPayload,
+  buildChallengeDbPayload,
+  buildUpdateDbPayload,
+} from '@/services/offlineQueueService';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import {
   mockPlayers,
@@ -431,14 +444,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadCache();
   }, [user?.id, cacheLoaded]);
 
-  // Auto-sync when network returns after being offline (delta first, then full)
+  // Replay offline queue then delta sync when network returns
   useEffect(() => {
     if (justReconnected && user?.id) {
-      console.log('Network restored - delta syncing data...');
+      console.log('Network restored - replaying offline queue then syncing...');
       setIsOfflineMode(false);
-      loadDeltaData();
+      (async () => {
+        const queueSize = await getQueueSize();
+        if (queueSize > 0) {
+          console.log(`Replaying ${queueSize} queued operations...`);
+          await replayOfflineQueue(supabase, user.id);
+          // After replay, do a full sync to reconcile temp IDs with real ones
+          await loadData();
+        } else {
+          await loadDeltaData();
+        }
+      })();
     }
-  }, [justReconnected, user?.id, loadDeltaData]);
+  }, [justReconnected, user?.id, loadDeltaData, loadData, supabase]);
 
   // Load data from Supabase
   const loadData = useCallback(async () => {
@@ -817,8 +840,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Add functions with cloud sync
   const addMatch = async (match: Omit<Match, 'id'>): Promise<string | null> => {
     if (!user?.id) {
-      // Offline mode - just add locally with temp ID
       const tempId = Date.now().toString();
+      const newMatch: Match = { ...match, id: tempId };
+      setMatches(prev => [newMatch, ...prev]);
+      return tempId;
+    }
+
+    // Queue if offline
+    if (!isConnectedRef.current) {
+      const tempId = `temp_${Date.now()}`;
+      enqueueOperation({ type: 'insert', table: 'matches', dbPayload: buildMatchDbPayload(match), tempId });
       const newMatch: Match = { ...match, id: tempId };
       setMatches(prev => [newMatch, ...prev]);
       return tempId;
@@ -894,6 +925,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    if (!isConnectedRef.current) {
+      const tempId = `temp_${Date.now()}`;
+      enqueueOperation({ type: 'insert', table: 'players', dbPayload: buildPlayerDbPayload(player), tempId });
+      setPlayers(prev => [...prev, { ...player, id: tempId } as Player]);
+      return;
+    }
+
     try {
       const { data, error } = await supabase.from('players').insert({
         user_id: user.id,
@@ -934,6 +972,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!user?.id) {
       const newClub: Club = { ...club, id: Date.now().toString() };
       setClubs(prev => [...prev, newClub]);
+      return;
+    }
+
+    if (!isConnectedRef.current) {
+      const tempId = `temp_${Date.now()}`;
+      enqueueOperation({ type: 'insert', table: 'clubs', dbPayload: buildClubDbPayload(club), tempId });
+      setClubs(prev => [...prev, { ...club, id: tempId }]);
       return;
     }
 
@@ -993,6 +1038,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!user?.id) {
       const newTournament: Tournament = { ...tournament, id: Date.now().toString() };
       setTournaments(prev => [...prev, newTournament]);
+      return;
+    }
+
+    if (!isConnectedRef.current) {
+      const tempId = `temp_${Date.now()}`;
+      enqueueOperation({ type: 'insert', table: 'tournaments', dbPayload: buildTournamentDbPayload(tournament), tempId });
+      setTournaments(prev => [...prev, { ...tournament, id: tempId }]);
       return;
     }
 
@@ -1073,6 +1125,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    if (!isConnectedRef.current) {
+      const tempId = `temp_${Date.now()}`;
+      enqueueOperation({ type: 'insert', table: 'terrains', dbPayload: buildTerrainDbPayload(terrain), tempId });
+      setTerrains(prev => [...prev, { ...terrain, id: tempId }]);
+      return;
+    }
+
     try {
       const { data, error } = await supabase.from('terrains').insert({
         user_id: user.id,
@@ -1131,6 +1190,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const tempId = Date.now().toString();
       const newChallenge: Challenge = { ...challenge, id: tempId };
       setChallenges(prev => [newChallenge, ...prev]);
+      return tempId;
+    }
+
+    if (!isConnectedRef.current) {
+      const tempId = `temp_${Date.now()}`;
+      enqueueOperation({ type: 'insert', table: 'challenges', dbPayload: buildChallengeDbPayload(challenge), tempId });
+      setChallenges(prev => [{ ...challenge, id: tempId }, ...prev]);
       return tempId;
     }
 
@@ -1223,6 +1289,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     if (!user?.id) return;
 
+    if (!isConnectedRef.current) {
+      enqueueOperation({ type: 'update', table: 'matches', itemId: id, dbPayload: buildUpdateDbPayload('matches', updates) });
+      return;
+    }
+
     try {
       const dbUpdates: any = {};
       if (updates.date !== undefined) dbUpdates.date = updates.date;
@@ -1255,6 +1326,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ));
 
     if (!user?.id) return;
+
+    if (!isConnectedRef.current) {
+      enqueueOperation({ type: 'update', table: 'players', itemId: id, dbPayload: buildUpdateDbPayload('players', updates) });
+      return;
+    }
 
     try {
       const dbUpdates: any = {};
@@ -1301,6 +1377,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     if (!user?.id) return;
 
+    if (!isConnectedRef.current) {
+      enqueueOperation({ type: 'update', table: 'clubs', itemId: id, dbPayload: buildUpdateDbPayload('clubs', updates) });
+      return;
+    }
+
     try {
       const dbUpdates: any = {};
       if (updates.name !== undefined) dbUpdates.name = updates.name;
@@ -1343,6 +1424,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ));
 
     if (!user?.id) return;
+
+    if (!isConnectedRef.current) {
+      enqueueOperation({ type: 'update', table: 'tournaments', itemId: id, dbPayload: buildUpdateDbPayload('tournaments', updates) });
+      return;
+    }
 
     try {
       const dbUpdates: any = {};
@@ -1397,6 +1483,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ));
 
     if (!user?.id) return;
+
+    if (!isConnectedRef.current) {
+      enqueueOperation({ type: 'update', table: 'terrains', itemId: id, dbPayload: buildUpdateDbPayload('terrains', updates) });
+      return;
+    }
 
     try {
       const dbUpdates: any = {};
@@ -1453,7 +1544,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const matchToDelete = matches.find(m => m.id === id);
     setMatches(prev => prev.filter(match => match.id !== id));
 
-    // Persist recalculated stats for players from the deleted match
     if (matchToDelete && user?.id) {
       const updatedMatches = matches.filter(m => m.id !== id);
       const affectedPlayers = [...new Set([...matchToDelete.teamA.players, ...matchToDelete.teamB.players])];
@@ -1461,6 +1551,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     if (!user?.id) return;
+
+    if (!isConnectedRef.current) {
+      enqueueOperation({ type: 'delete', table: 'matches', itemId: id });
+      return;
+    }
 
     try {
       await supabase.from('matches').delete().eq('id', id);
@@ -1474,6 +1569,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     if (!user?.id) return;
 
+    if (!isConnectedRef.current) {
+      enqueueOperation({ type: 'delete', table: 'players', itemId: id });
+      return;
+    }
+
     try {
       await supabase.from('players').delete().eq('id', id);
     } catch (error) {
@@ -1486,6 +1586,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     if (!user?.id) return;
 
+    if (!isConnectedRef.current) {
+      enqueueOperation({ type: 'delete', table: 'challenges', itemId: id });
+      return;
+    }
+
     try {
       await supabase.from('challenges').delete().eq('id', id);
     } catch (error) {
@@ -1495,12 +1600,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteClub = async (id: string) => {
     setClubs(prev => prev.filter(club => club.id !== id));
-    // Also update terrains that reference this club
     setTerrains(prev => prev.map(t => 
       t.clubId === id ? { ...t, clubId: undefined, clubName: undefined } : t
     ));
 
     if (!user?.id) return;
+
+    if (!isConnectedRef.current) {
+      enqueueOperation({ type: 'delete', table: 'clubs', itemId: id });
+      return;
+    }
 
     try {
       await supabase.from('clubs').delete().eq('id', id);
@@ -1512,12 +1621,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteTournament = async (id: string) => {
     const tournamentToDelete = tournaments.find(t => t.id === id);
     setTournaments(prev => prev.filter(tournament => tournament.id !== id));
-    // Also clean up matches linked to this tournament
     setMatches(prev => prev.map(m =>
       m.tournamentId === id ? { ...m, tournamentId: undefined, tournamentName: undefined } : m
     ));
 
     if (!user?.id) return;
+
+    if (!isConnectedRef.current) {
+      enqueueOperation({ type: 'delete', table: 'tournaments', itemId: id });
+      return;
+    }
 
     try {
       // Unlink matches from this tournament in DB
@@ -1535,10 +1648,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteTerrain = async (id: string) => {
     setTerrains(prev => prev.filter(terrain => terrain.id !== id));
-    // Also remove from favorites
     setFavoriteTerrainIds(prev => prev.filter(fid => fid !== id));
 
     if (!user?.id) return;
+
+    if (!isConnectedRef.current) {
+      enqueueOperation({ type: 'delete', table: 'terrains', itemId: id });
+      return;
+    }
 
     try {
       await supabase.from('terrains').delete().eq('id', id);
