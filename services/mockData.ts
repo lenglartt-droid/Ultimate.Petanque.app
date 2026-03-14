@@ -26,6 +26,7 @@ export interface Player {
   boules?: BoulesInfo;
   handedness?: 'right' | 'left' | 'ambidextrous';
   isPublic?: boolean;
+  showContactPublic?: boolean;
   location?: {
     latitude: number;
     longitude: number;
@@ -70,6 +71,7 @@ export interface Club {
   terrainName?: string;
   membershipCost?: number;
   isPublic?: boolean;
+  showContactPublic?: boolean;
 }
 
 export interface TournamentNotification {

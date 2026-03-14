@@ -56,7 +56,7 @@ export default function PlayerDetailScreen() {
   const { user } = useAuth();
   const { t, language } = useLanguage();
 
-  const { getPlayerById, getMatchesByPlayer, getClubById, getTerrainById, deletePlayer, selfPlayer, matches, getSharedPermission, loading: appLoading } = useApp();
+  const { getPlayerById, getMatchesByPlayer, getClubById, getTerrainById, deletePlayer, updatePlayer, selfPlayer, matches, getSharedPermission, loading: appLoading } = useApp();
   const player = getPlayerById(id!);
   const playerMatches = getMatchesByPlayer(id!).slice(0, 5);
   const clubEntity = player?.clubId ? getClubById(player.clubId) : null;
@@ -469,8 +469,8 @@ export default function PlayerDetailScreen() {
             <Text style={styles.playerNickname}>"{player.nickname}"</Text>
           )}
           
-          {/* Contact Info - hidden for shared items */}
-          {(player.phone || player.email) && !isSharedItem && (
+          {/* Contact Info - hidden for shared items, and hidden on public if showContactPublic is false */}
+          {(player.phone || player.email) && !isSharedItem && (player.showContactPublic !== false || !player.isPublic) && (
             <View style={styles.contactInfo}>
               {player.phone && (
                 <Pressable 
@@ -601,6 +601,36 @@ export default function PlayerDetailScreen() {
             </View>
           </View>
         </Animated.View>
+
+        {/* Contact Visibility Toggle - only when public and has contact */}
+        {canEdit && !isSharedItem && (player?.isPublic ?? false) && (player?.phone || player?.email) && (
+          <Animated.View entering={FadeInDown.duration(400).delay(450)} style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('player', 'contactVisibility')}</Text>
+            <Pressable
+              style={[styles.detailsCard, { flexDirection: 'row', alignItems: 'center', padding: 16 }]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                const newVal = !(player.showContactPublic ?? false);
+                updatePlayer(player.id, { showContactPublic: newVal });
+              }}
+            >
+              <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: (player.showContactPublic ? theme.success : theme.textMuted) + '15', alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
+                <MaterialIcons name={player.showContactPublic ? 'contact-phone' : 'phone-disabled'} size={22} color={player.showContactPublic ? theme.success : theme.textMuted} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, fontWeight: '600', color: theme.textPrimary }}>{t('map', 'showContactPublic')}</Text>
+                <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 2 }}>
+                  {player.showContactPublic ? t('map', 'contactVisibleDesc') : t('map', 'contactHiddenDesc')}
+                </Text>
+              </View>
+              <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: (player.showContactPublic ? theme.success : theme.textMuted) + '15' }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: player.showContactPublic ? theme.success : theme.textMuted }}>
+                  {player.showContactPublic ? t('map', 'visibleLabel') : t('map', 'hiddenLabel')}
+                </Text>
+              </View>
+            </Pressable>
+          </Animated.View>
+        )}
 
         {/* Recent Matches */}
         {playerMatches.length > 0 && (

@@ -29,7 +29,7 @@ import { useAuth } from '@/template';
 export default function ClubDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getClubById, players, tournaments, deleteClub, getSharedPermission, setItemPublic, isFavoriteClub, toggleFavoriteClub, loading: appLoading } = useApp();
+  const { getClubById, players, tournaments, deleteClub, updateClub, getSharedPermission, setItemPublic, isFavoriteClub, toggleFavoriteClub, loading: appLoading } = useApp();
   const { user } = useAuth();
   const { t, language } = useLanguage();
 
@@ -263,8 +263,8 @@ export default function ClubDetailScreen() {
           </View>
         </Animated.View>
 
-        {/* Contact - hidden for shared items */}
-        {(club.contactEmail || club.contactPhone) && !isSharedItem && (
+        {/* Contact - hidden for shared items, and hidden on public if showContactPublic is false */}
+        {(club.contactEmail || club.contactPhone) && !isSharedItem && (club.showContactPublic !== false || !club.isPublic) && (
           <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
             <Text style={styles.sectionTitle}>{t('club', 'contactLabel')}</Text>
             <View style={styles.contactCard}>
@@ -361,6 +361,35 @@ export default function ClubDetailScreen() {
             ))}
           </Animated.View>
         )}
+        {/* Contact Visibility Toggle - only when public */}
+        {canEdit && !isSharedItem && (club.isPublic ?? false) && (club.contactEmail || club.contactPhone) && (
+          <Animated.View entering={FadeInDown.duration(400).delay(640)} style={styles.section}>
+            <Pressable
+              style={styles.visibilityCard}
+              onPress={() => {
+                Haptics.selectionAsync();
+                const newVal = !(club.showContactPublic ?? false);
+                updateClub(club.id, { showContactPublic: newVal });
+              }}
+            >
+              <View style={[styles.visibilityIcon, { backgroundColor: (club.showContactPublic ? theme.success : theme.textMuted) + '15' }]}>
+                <MaterialIcons name={club.showContactPublic ? 'contact-phone' : 'phone-disabled'} size={22} color={club.showContactPublic ? theme.success : theme.textMuted} />
+              </View>
+              <View style={styles.visibilityInfo}>
+                <Text style={styles.visibilityTitle}>{t('map', 'showContactPublic')}</Text>
+                <Text style={styles.visibilityDesc}>
+                  {club.showContactPublic ? t('map', 'contactVisibleDesc') : t('map', 'contactHiddenDesc')}
+                </Text>
+              </View>
+              <View style={[styles.visibilityBadge, { backgroundColor: (club.showContactPublic ? theme.success : theme.textMuted) + '15' }]}>
+                <Text style={[styles.visibilityBadgeText, { color: club.showContactPublic ? theme.success : theme.textMuted }]}>
+                  {club.showContactPublic ? t('map', 'visibleLabel') : t('map', 'hiddenLabel')}
+                </Text>
+              </View>
+            </Pressable>
+          </Animated.View>
+        )}
+
         {/* Visibility Toggle - only for owner */}
         {canEdit && !isSharedItem && (
           <Animated.View entering={FadeInDown.duration(400).delay(650)} style={styles.section}>

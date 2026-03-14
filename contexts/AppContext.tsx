@@ -238,6 +238,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     terrainId: p.terrain_id,
     terrainName: p.terrain_name,
     isPublic: p.is_public ?? false,
+    showContactPublic: p.show_contact_public ?? false,
     stats: p.stats || {
       matchesPlayed: 0, wins: 0, losses: 0, winRate: 0,
       tirRate: 0, pointRate: 0, carreauRate: 0,
@@ -363,6 +364,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         terrainName: c.terrain_name,
         membershipCost: c.membership_cost ? parseFloat(c.membership_cost) : undefined,
         isPublic: c.is_public ?? false,
+        showContactPublic: c.show_contact_public ?? false,
       });
 
       if (clubsRes.data) {
@@ -690,6 +692,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         terrain_id: player.terrainId,
         terrain_name: player.terrainName,
         is_public: player.isPublic ?? false,
+        show_contact_public: player.showContactPublic ?? false,
         stats: player.stats,
       }).select().single();
 
@@ -1032,6 +1035,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.phone !== undefined) dbUpdates.phone = updates.phone || null;
       if (updates.email !== undefined) dbUpdates.email = updates.email || null;
       if (updates.isPublic !== undefined) dbUpdates.is_public = updates.isPublic;
+      if (updates.showContactPublic !== undefined) dbUpdates.show_contact_public = updates.showContactPublic;
       if (updates.stats !== undefined) dbUpdates.stats = updates.stats;
       dbUpdates.updated_at = new Date().toISOString();
 
@@ -1075,6 +1079,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.terrainId !== undefined) dbUpdates.terrain_id = updates.terrainId;
       if (updates.terrainName !== undefined) dbUpdates.terrain_name = updates.terrainName;
       if (updates.membershipCost !== undefined) dbUpdates.membership_cost = updates.membershipCost;
+      if (updates.showContactPublic !== undefined) dbUpdates.show_contact_public = updates.showContactPublic;
       dbUpdates.updated_at = new Date().toISOString();
 
       await supabase.from('clubs').update(dbUpdates).eq('id', id);

@@ -17,12 +17,12 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import * as Location from 'expo-location';
 import theme from '@/constants/theme';
 import config, { TerrainType } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAlert } from '@/template';
+import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 import {
   checkDuplicatePublicTerrains,
   importPublicItemToDirectory,
@@ -36,8 +36,6 @@ export default function NewTerrainScreen() {
   const { showAlert } = useAlert();
 
   const [name, setName] = useState('');
-  const [address, setAddress] = useState('');
-  const [city, setCity] = useState('');
   const [type, setType] = useState<TerrainType>('Stabilisé');
   const [description, setDescription] = useState('');
   const [clubId, setClubId] = useState<string | undefined>();
@@ -46,10 +44,9 @@ export default function NewTerrainScreen() {
   const [lighting, setLighting] = useState(false);
   const [covered, setCovered] = useState(false);
   const [environment, setEnvironment] = useState<'indoor' | 'outdoor'>('outdoor');
-  const [latitude, setLatitude] = useState(0);
-  const [longitude, setLongitude] = useState(0);
-  const [isGeocoding, setIsGeocoding] = useState(false);
-  const [locationPermission, setLocationPermission] = useState(false);
+  const [location, setLocation] = useState<LocationData>({
+    address: '', city: '', country: 'France', latitude: 0, longitude: 0,
+  });
 
   // Duplicate detection state
   const [duplicates, setDuplicates] = useState<(PublicTerrain & { matchType: 'exact' | 'city' })[]>([]);
@@ -57,16 +54,9 @@ export default function NewTerrainScreen() {
   const [duplicatesDismissed, setDuplicatesDismissed] = useState(false);
   const [importingId, setImportingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      setLocationPermission(status === 'granted');
-    })();
-  }, []);
-
   // Check for duplicates when city changes
   useEffect(() => {
-    const trimmedCity = city.trim();
+    const trimmedCity = location.city.trim();
     if (trimmedCity.length < 2) {
       setDuplicates([]);
       setDuplicatesDismissed(false);
@@ -75,14 +65,14 @@ export default function NewTerrainScreen() {
 
     const timer = setTimeout(async () => {
       setCheckingDuplicates(true);
-      const { duplicates: found } = await checkDuplicatePublicTerrains(trimmedCity, address.trim());
+      const { duplicates: found } = await checkDuplicatePublicTerrains(trimmedCity, location.address.trim());
       setDuplicates(found);
       setDuplicatesDismissed(false);
       setCheckingDuplicates(false);
     }, 800);
 
     return () => clearTimeout(timer);
-  }, [city, address]);
+  }, [location.city, location.address]);
 
   const handleImportDuplicate = useCallback(async (item: PublicTerrain) => {
     setImportingId(item.id);
@@ -98,72 +88,25 @@ export default function NewTerrainScreen() {
     }
   }, [showAlert, t]);
 
-  const geocodeAddress = async () => {
-    if (!address.trim() || !city.trim()) return;
-    setIsGeocoding(true);
-    try {
-      const fullAddress = `${address.trim()}, ${city.trim()}, France`;
-      const results = await Location.geocodeAsync(fullAddress);
-      if (results && results.length > 0) {
-        setLatitude(results[0].latitude);
-        setLongitude(results[0].longitude);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else {
-        Alert.alert(t('terrain', 'addressNotFound'), t('terrain', 'addressNotFoundMsg'));
-      }
-    } catch (error) {
-      console.error('Geocoding error:', error);
-    } finally {
-      setIsGeocoding(false);
-    }
-  };
-
-  const getCurrentLocation = async () => {
-    if (!locationPermission) {
-      Alert.alert(t('terrain', 'permissionRequired'), t('terrain', 'locationPermissionMsg'));
-      return;
-    }
-    setIsGeocoding(true);
-    try {
-      const loc = await Location.getCurrentPositionAsync({});
-      setLatitude(loc.coords.latitude);
-      setLongitude(loc.coords.longitude);
-      const reverseResults = await Location.reverseGeocodeAsync({
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-      });
-      if (reverseResults && reverseResults.length > 0) {
-        const result = reverseResults[0];
-        if (result.street) setAddress(`${result.streetNumber || ''} ${result.street}`.trim());
-        if (result.city) setCity(result.city);
-      }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (error) {
-      Alert.alert(t('common', 'error'), t('terrain', 'errorGetPosition'));
-    } finally {
-      setIsGeocoding(false);
-    }
-  };
-
   const handleSave = async () => {
     if (!name.trim()) {
       Alert.alert(t('common', 'error'), t('terrain', 'errorNameRequired'));
       return;
     }
-    if (!address.trim()) {
+    if (!location.address.trim()) {
       Alert.alert(t('common', 'error'), t('terrain', 'errorAddressRequired'));
       return;
     }
-    if (!city.trim()) {
+    if (!location.city.trim()) {
       Alert.alert(t('common', 'error'), t('terrain', 'errorCityRequired'));
       return;
     }
     const selectedClub = clubs.find(c => c.id === clubId);
     await addTerrain({
       name: name.trim(),
-      address: address.trim(),
-      city: city.trim(),
-      location: { latitude, longitude },
+      address: location.address.trim(),
+      city: location.city.trim(),
+      location: { latitude: location.latitude, longitude: location.longitude },
       type,
       description: description.trim() || undefined,
       facilities: [],
@@ -228,40 +171,16 @@ export default function NewTerrainScreen() {
             </View>
           </Animated.View>
 
-          {/* Address */}
+          {/* Address - using LocationPicker */}
           <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{t('terrain', 'addressRequired')}</Text>
-              <Pressable style={styles.locationButton} onPress={getCurrentLocation} disabled={isGeocoding}>
-                {isGeocoding ? <ActivityIndicator size="small" color={theme.primary} /> : (
-                  <>
-                    <MaterialIcons name="my-location" size={16} color={theme.primary} />
-                    <Text style={styles.locationButtonText}>{t('terrain', 'myLocation')}</Text>
-                  </>
-                )}
-              </Pressable>
-            </View>
-            <TextInput style={[styles.textInput, { marginBottom: 12 }]} value={address} onChangeText={setAddress} placeholder={t('terrain', 'streetNumber')} placeholderTextColor={theme.textMuted} />
-            <TextInput style={[styles.textInput, { marginBottom: 12 }]} value={city} onChangeText={setCity} placeholder={t('terrain', 'cityRequired')} placeholderTextColor={theme.textMuted} />
-
-            <Pressable style={[styles.geocodeButton, (!address.trim() || !city.trim()) && styles.geocodeButtonDisabled]} onPress={geocodeAddress} disabled={!address.trim() || !city.trim() || isGeocoding}>
-              {isGeocoding ? <ActivityIndicator size="small" color="#FFF" /> : (
-                <>
-                  <MaterialIcons name="place" size={18} color="#FFF" />
-                  <Text style={styles.geocodeButtonText}>{t('terrain', 'geocodeAddress')}</Text>
-                </>
-              )}
-            </Pressable>
-
-            {(latitude !== 0 || longitude !== 0) ? (
-              <Animated.View entering={FadeInDown.duration(300)} style={styles.locationPreview}>
-                <MaterialIcons name="check-circle" size={20} color={theme.success} />
-                <View style={styles.locationPreviewInfo}>
-                  <Text style={styles.locationPreviewTitle}>{t('terrain', 'positionSaved')}</Text>
-                  <Text style={styles.locationPreviewCoords}>{latitude.toFixed(6)}, {longitude.toFixed(6)}</Text>
-                </View>
-              </Animated.View>
-            ) : null}
+            <LocationPicker
+              label={t('terrain', 'addressRequired')}
+              value={location}
+              onChange={setLocation}
+              placeholder={t('terrain', 'streetNumber')}
+              required
+              showAddressField
+            />
           </Animated.View>
 
           {/* Duplicate Detection Banner */}
@@ -439,7 +358,7 @@ export default function NewTerrainScreen() {
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-          <Pressable style={[styles.saveButton, (!name.trim() || !address.trim() || !city.trim()) && styles.saveButtonDisabled]} onPress={handleSave}>
+          <Pressable style={[styles.saveButton, (!name.trim() || !location.address.trim() || !location.city.trim()) && styles.saveButtonDisabled]} onPress={handleSave}>
             <MaterialIcons name="check" size={24} color="#FFF" />
             <Text style={styles.saveButtonText}>{t('terrain', 'createTerrain')}</Text>
           </Pressable>

@@ -38,7 +38,7 @@ export default function TerrainDetailScreen() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [isShared, setIsShared] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isPublicState, setIsPublicState] = useState(terrain?.isPublic ?? false);
+  const [isPublicState, setIsPublicState] = useState(false);
   const [showMergePicker, setShowMergePicker] = useState(false);
   const [togglingPublic, setTogglingPublic] = useState(false);
   const { showAlert } = useAlert();
