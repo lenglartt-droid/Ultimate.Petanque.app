@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Alert,
   Dimensions,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -206,6 +207,7 @@ export default function NewChallengeScreen() {
   const [selectedType, setSelectedType] = useState<ChallengeType | null>(null);
   const [challengeMode, setChallengeMode] = useState<ChallengeMode | null>(null);
   const [selectedOpponent, setSelectedOpponent] = useState<Player | null>(null);
+  const [playerSearch, setPlayerSearch] = useState('');
   
   // Challenge state
   const [isStarted, setIsStarted] = useState(false);
@@ -280,9 +282,18 @@ export default function NewChallengeScreen() {
     }, {} as Record<PrecisionAtelier, number>
   ), [opponentPrecisionShots]);
 
-  const filteredPlayers = useMemo(() => 
-    players.filter(p => !selfPlayer || p.id !== selfPlayer.id),
-  [players, selfPlayer]);
+  const filteredPlayers = useMemo(() => {
+    let result = players.filter(p => !selfPlayer || p.id !== selfPlayer.id);
+    if (playerSearch.trim()) {
+      const search = playerSearch.toLowerCase();
+      result = result.filter(p =>
+        p.name.toLowerCase().includes(search) ||
+        p.club?.toLowerCase().includes(search) ||
+        p.role.toLowerCase().includes(search)
+      );
+    }
+    return result;
+  }, [players, selfPlayer, playerSearch]);
 
   // ============================================
   // EFFECTS
@@ -762,11 +773,27 @@ export default function NewChallengeScreen() {
     return (
       <SafeAreaView edges={['top']} style={styles.container}>
         <View style={styles.header}>
-          <Pressable style={styles.headerBtn} onPress={() => setChallengeMode(null)}>
+          <Pressable style={styles.headerBtn} onPress={() => { setChallengeMode(null); setPlayerSearch(''); }}>
             <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
           <Text style={styles.headerTitle}>{t('challenge', 'opponentLabel')}</Text>
           <View style={styles.headerBtn} />
+        </View>
+
+        <View style={styles.opponentSearchContainer}>
+          <MaterialIcons name="search" size={20} color={theme.textMuted} />
+          <TextInput
+            style={styles.opponentSearchInput}
+            value={playerSearch}
+            onChangeText={setPlayerSearch}
+            placeholder={`${t('common', 'search')}...`}
+            placeholderTextColor={theme.textMuted}
+          />
+          {playerSearch.length > 0 ? (
+            <Pressable onPress={() => setPlayerSearch('')}>
+              <MaterialIcons name="close" size={20} color={theme.textMuted} />
+            </Pressable>
+          ) : null}
         </View>
 
         <View style={styles.opponentBanner}>
@@ -1363,6 +1390,12 @@ const styles = StyleSheet.create({
   modeCardBtnText: { fontSize: 14, fontWeight: '600', color: '#FFF' },
   
   // Opponent Selection
+  opponentSearchContainer: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface,
+    marginHorizontal: 16, marginTop: 12, paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: theme.borderRadius.md, gap: 10,
+  },
+  opponentSearchInput: { flex: 1, fontSize: 16, color: theme.textPrimary, padding: 0 },
   opponentBanner: { backgroundColor: theme.accent, paddingVertical: 16, alignItems: 'center' },
   opponentBannerPlayers: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
   opponentBannerAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center' },
