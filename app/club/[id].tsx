@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  Dimensions,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -32,6 +33,12 @@ export default function ClubDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getClubById, players, tournaments, deleteClub, updateClub, getSharedPermission, setItemPublic, isFavoriteClub, toggleFavoriteClub, refreshData, loading: appLoading } = useApp();
   const [refreshing, setRefreshing] = React.useState(false);
+  const [screenWidth, setScreenWidth] = React.useState(() => Dimensions.get('window').width);
+  React.useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
+    return () => sub?.remove();
+  }, []);
+  const isTablet = screenWidth >= 600;
 
   const handleRefresh = React.useCallback(async () => {
     setRefreshing(true);
@@ -199,7 +206,7 @@ export default function ClubDetailScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }, isTablet && styles.scrollContentTablet]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -211,7 +218,7 @@ export default function ClubDetailScreen() {
         }
       >
         {/* Club Card */}
-        <Animated.View entering={FadeInDown.duration(400)} style={styles.clubCard}>
+        <Animated.View entering={FadeInDown.duration(400)} style={[styles.clubCard, isTablet && styles.clubCardTablet]}>
           <View style={styles.clubIcon}>
             <MaterialIcons name="home" size={48} color="#FFF" />
           </View>
@@ -248,8 +255,9 @@ export default function ClubDetailScreen() {
           </View>
         </Animated.View>
 
+        <View style={isTablet ? styles.tabletRow : undefined}>
         {/* Location */}
-        <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
+        <Animated.View entering={FadeInDown.duration(400).delay(200)} style={[styles.section, isTablet && styles.tabletHalf]}>
           <Text style={styles.sectionTitle}>{t('club', 'locationLabel')}</Text>
           <View style={styles.locationCard}>
             <View style={styles.locationInfo}>
@@ -267,7 +275,7 @@ export default function ClubDetailScreen() {
         </Animated.View>
 
         {/* Facilities */}
-        <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
+        <Animated.View entering={FadeInDown.duration(400).delay(300)} style={[styles.section, isTablet && styles.tabletHalf]}>
           <Text style={styles.sectionTitle}>{t('club', 'facilitiesLabel')}</Text>
           <View style={styles.facilitiesGrid}>
             {club.facilities.map((facility, index) => (
@@ -278,6 +286,8 @@ export default function ClubDetailScreen() {
             ))}
           </View>
         </Animated.View>
+
+        </View>
 
         {/* Contact - hidden for shared items, and hidden on public if showContactPublic is false */}
         {(club.contactEmail || club.contactPhone) && !isSharedItem && (club.showContactPublic !== false || !club.isPublic) && (
@@ -308,9 +318,10 @@ export default function ClubDetailScreen() {
           </Animated.View>
         )}
 
+        <View style={isTablet ? styles.tabletRow : undefined}>
         {/* Members */}
         {clubPlayers.length > 0 && (
-          <Animated.View entering={FadeInDown.duration(400).delay(500)} style={styles.section}>
+          <Animated.View entering={FadeInDown.duration(400).delay(500)} style={[styles.section, isTablet && styles.tabletHalf]}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>{t('club', 'membersCount')} ({clubPlayers.length})</Text>
             </View>
@@ -340,7 +351,7 @@ export default function ClubDetailScreen() {
 
         {/* Tournaments */}
         {clubTournaments.length > 0 && (
-          <Animated.View entering={FadeInDown.duration(400).delay(600)} style={styles.section}>
+          <Animated.View entering={FadeInDown.duration(400).delay(600)} style={[styles.section, isTablet && styles.tabletHalf]}>
             <Text style={styles.sectionTitle}>{t('club', 'organizedTournaments')}</Text>
             {clubTournaments.map(tournament => (
               <Pressable 
@@ -377,6 +388,8 @@ export default function ClubDetailScreen() {
             ))}
           </Animated.View>
         )}
+        </View>
+
         {/* Contact Visibility Toggle - only when public */}
         {canEdit && !isSharedItem && (club.isPublic ?? false) && (club.contactEmail || club.contactPhone) && (
           <Animated.View entering={FadeInDown.duration(400).delay(640)} style={styles.section}>
@@ -531,6 +544,22 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
+  },
+  scrollContentTablet: {
+    maxWidth: 960,
+    alignSelf: 'center' as const,
+    width: '100%',
+    paddingHorizontal: 24,
+  },
+  clubCardTablet: {
+    padding: 32,
+  },
+  tabletRow: {
+    flexDirection: 'row' as const,
+    gap: 16,
+  },
+  tabletHalf: {
+    flex: 1,
   },
   clubCard: {
     backgroundColor: theme.surface,

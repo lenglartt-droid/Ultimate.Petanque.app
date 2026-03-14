@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -35,6 +36,12 @@ export default function TerrainDetailScreen() {
   const insets = useSafeAreaInsets();
   const { getTerrainById, tournaments, deleteTerrain, isFavoriteTerrain, toggleFavoriteTerrain, getSharedPermission, setItemPublic, refreshData, loading: appLoading } = useApp();
   const [refreshing, setRefreshing] = useState(false);
+  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
+  useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
+    return () => sub?.remove();
+  }, []);
+  const isTablet = screenWidth >= 600;
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -234,7 +241,7 @@ export default function TerrainDetailScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }, isTablet && styles.scrollContentTablet]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -361,8 +368,9 @@ export default function TerrainDetailScreen() {
           </View>
         </Animated.View>
 
+        <View style={isTablet ? styles.tabletRow : undefined}>
         {/* Location */}
-        <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
+        <Animated.View entering={FadeInDown.duration(400).delay(150)} style={[styles.section, isTablet && styles.tabletHalf]}>
           <Text style={styles.sectionTitle}>{t('terrain', 'addressSection')}</Text>
           <Pressable style={styles.locationCard} onPress={openMaps}>
             <View style={styles.locationIcon}>
@@ -378,7 +386,7 @@ export default function TerrainDetailScreen() {
 
         {/* Club */}
         {terrain.clubName && (
-          <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
+          <Animated.View entering={FadeInDown.duration(400).delay(200)} style={[styles.section, isTablet && styles.tabletHalf]}>
             <Text style={styles.sectionTitle}>{t('terrain', 'clubSection')}</Text>
             <Pressable 
               style={styles.clubCard}
@@ -396,6 +404,8 @@ export default function TerrainDetailScreen() {
           </Animated.View>
         )}
 
+        </View>
+
         {/* Description */}
         {terrain.description && (
           <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
@@ -406,9 +416,10 @@ export default function TerrainDetailScreen() {
           </Animated.View>
         )}
 
+        <View style={isTablet ? styles.tabletRow : undefined}>
         {/* Facilities */}
         {terrain.facilities && terrain.facilities.length > 0 && (
-          <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
+          <Animated.View entering={FadeInDown.duration(400).delay(300)} style={[styles.section, isTablet && styles.tabletHalf]}>
             <Text style={styles.sectionTitle}>{t('terrain', 'facilitiesSection')}</Text>
             <View style={styles.facilitiesGrid}>
               {terrain.facilities.map((facility, index) => (
@@ -422,7 +433,7 @@ export default function TerrainDetailScreen() {
         )}
 
         {/* Terrain Type Tips */}
-        <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
+        <Animated.View entering={FadeInDown.duration(400).delay(350)} style={[styles.section, isTablet && styles.tabletHalf]}>
           <Text style={styles.sectionTitle}>{t('terrain', 'playingTips')}</Text>
           <View style={[styles.tipsCard, { backgroundColor: colors.light, borderColor: colors.bg + '30' }]}>
             <View style={styles.tipsHeader}>
@@ -468,6 +479,8 @@ export default function TerrainDetailScreen() {
             </View>
           </View>
         </Animated.View>
+
+        </View>
 
         {/* Upcoming Tournaments */}
         {terrainTournaments.length > 0 && (
@@ -624,6 +637,19 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
+  },
+  scrollContentTablet: {
+    maxWidth: 960,
+    alignSelf: 'center' as const,
+    width: '100%',
+    paddingHorizontal: 24,
+  },
+  tabletRow: {
+    flexDirection: 'row' as const,
+    gap: 16,
+  },
+  tabletHalf: {
+    flex: 1,
   },
   emptyContainer: {
     flex: 1,

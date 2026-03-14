@@ -12,6 +12,7 @@ import {
   Linking,
   Platform,
   RefreshControl,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -102,6 +103,12 @@ export default function TournamentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getTournamentById, getClubById, getTerrainById, getMatchesByTournament, updateTournament, tournamentNotifications, toggleTournamentNotification, isTournamentNotificationEnabled, getSharedPermission, setItemPublic, refreshData, loading: appLoading } = useApp();
   const [refreshing, setRefreshing] = useState(false);
+  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
+  useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
+    return () => sub?.remove();
+  }, []);
+  const isTablet = screenWidth >= 600;
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -508,7 +515,7 @@ export default function TournamentDetailScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }, isTablet && styles.scrollContentTablet]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -520,7 +527,7 @@ export default function TournamentDetailScreen() {
         }
       >
         {/* Tournament Header Card */}
-        <Animated.View entering={FadeInDown.duration(300)} style={styles.tournamentCard}>
+        <Animated.View entering={FadeInDown.duration(300)} style={[styles.tournamentCard, isTablet && styles.tournamentCardTablet]}>
           <View style={styles.tournamentRow}>
             <View style={styles.tournamentIcon}>
               <MaterialIcons name="emoji-events" size={28} color={theme.carreauColor} />
@@ -620,8 +627,9 @@ export default function TournamentDetailScreen() {
           )}
         </Animated.View>
 
+        <View style={isTablet ? styles.tabletRow : undefined}>
         {/* Status Card */}
-        <Animated.View entering={FadeInDown.duration(300).delay(50)} style={styles.statusCard}>
+        <Animated.View entering={FadeInDown.duration(300).delay(50)} style={[styles.statusCard, isTablet && styles.tabletHalf]}>
           <View style={[styles.statusIconBox, { backgroundColor: journeyStatus.color + '20' }]}>
             <MaterialIcons name={journeyStatus.icon as any} size={32} color={journeyStatus.color} />
           </View>
@@ -640,7 +648,7 @@ export default function TournamentDetailScreen() {
         </Animated.View>
 
         {/* Phase Progress */}
-        <Animated.View entering={FadeInDown.duration(300).delay(100)} style={styles.section}>
+        <Animated.View entering={FadeInDown.duration(300).delay(100)} style={[styles.section, isTablet && styles.tabletHalf]}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>{t('tournament', 'progression')}</Text>
             <View style={styles.cadrageBadge}>
@@ -716,6 +724,8 @@ export default function TournamentDetailScreen() {
             </View>
           </View>
         </Animated.View>
+
+        </View>
 
         {/* Match Timeline */}
         <Animated.View entering={FadeInDown.duration(300).delay(150)} style={styles.section}>
@@ -1454,6 +1464,23 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingTop: 16,
     paddingHorizontal: 16,
+  },
+  scrollContentTablet: {
+    maxWidth: 960,
+    alignSelf: 'center' as const,
+    width: '100%',
+    paddingHorizontal: 24,
+  },
+  tournamentCardTablet: {
+    padding: 24,
+  },
+  tabletRow: {
+    flexDirection: 'row' as const,
+    gap: 16,
+    marginBottom: 0,
+  },
+  tabletHalf: {
+    flex: 1,
   },
   emptyContainer: {
     flex: 1,

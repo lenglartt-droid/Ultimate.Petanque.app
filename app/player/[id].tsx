@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  Dimensions,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -76,6 +77,12 @@ export default function PlayerDetailScreen() {
   const [showShareModal, setShowShareModal] = React.useState(false);
   const [showMergePicker, setShowMergePicker] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
+  const [screenWidth, setScreenWidth] = React.useState(() => Dimensions.get('window').width);
+  React.useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
+    return () => sub?.remove();
+  }, []);
+  const isTablet = screenWidth >= 600;
   const { refreshData } = useApp();
 
   const handleRefresh = React.useCallback(async () => {
@@ -279,7 +286,7 @@ export default function PlayerDetailScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }, isTablet && styles.scrollContentTablet]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -291,7 +298,7 @@ export default function PlayerDetailScreen() {
         }
       >
         {/* Profile Card */}
-        <Animated.View entering={FadeInDown.duration(400)} style={styles.profileCard}>
+        <Animated.View entering={FadeInDown.duration(400)} style={[styles.profileCard, isTablet && styles.profileCardTablet]}>
           <View style={styles.avatar}>
             {player.avatar ? (
               <Image
@@ -590,7 +597,7 @@ export default function PlayerDetailScreen() {
         </Animated.View>
 
         {/* Quick Stats */}
-        <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.quickStats}>
+        <Animated.View entering={FadeInDown.duration(400).delay(100)} style={[styles.quickStats, isTablet && styles.quickStatsTablet]}>
           <View style={styles.quickStatItem}>
             <Text style={styles.quickStatValue}>{player.stats.matchesPlayed}</Text>
             <Text style={styles.quickStatLabel}>{t('player', 'matchesUpper')}</Text>
@@ -636,8 +643,9 @@ export default function PlayerDetailScreen() {
           </Animated.View>
         )}
 
+        <View style={isTablet ? styles.tabletRow : undefined}>
         {/* Performance Rings */}
-        <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
+        <Animated.View entering={FadeInDown.duration(400).delay(200)} style={[styles.section, isTablet && styles.tabletHalf]}>
           <Text style={styles.sectionTitle}>{t('player', 'performance')}</Text>
           <View style={styles.ringsContainer}>
             <View style={styles.ringItem}>
@@ -660,7 +668,7 @@ export default function PlayerDetailScreen() {
         </Animated.View>
 
         {/* Detailed Stats */}
-        <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
+        <Animated.View entering={FadeInDown.duration(400).delay(300)} style={[styles.section, isTablet && styles.tabletHalf]}>
           <Text style={styles.sectionTitle}>{t('player', 'details')}</Text>
           <View style={styles.detailsCard}>
             <View style={styles.detailRow}>
@@ -696,6 +704,8 @@ export default function PlayerDetailScreen() {
             </View>
           </View>
         </Animated.View>
+
+        </View>
 
         {/* Contact Visibility Toggle - only when public and has contact */}
         {canEdit && !isSharedItem && (player?.isPublic ?? false) && (player?.phone || player?.email) && (
@@ -839,6 +849,25 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
+  },
+  scrollContentTablet: {
+    maxWidth: 960,
+    alignSelf: 'center' as const,
+    width: '100%',
+    paddingHorizontal: 24,
+  },
+  profileCardTablet: {
+    padding: 32,
+  },
+  quickStatsTablet: {
+    marginTop: 20,
+  },
+  tabletRow: {
+    flexDirection: 'row' as const,
+    gap: 16,
+  },
+  tabletHalf: {
+    flex: 1,
   },
   profileCard: {
     backgroundColor: theme.surface,
