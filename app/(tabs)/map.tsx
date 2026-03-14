@@ -227,8 +227,7 @@ export default function MapScreen() {
   const [mapMode, setMapMode] = useState<MapMode>('all');
   const [showManageModal, setShowManageModal] = useState(false);
   const [currentRegion, setCurrentRegion] = useState(config.map.defaultRegion);
-  const [showPublicAccess, setShowPublicAccess] = useState(true);
-  const [showPrivateAccess, setShowPrivateAccess] = useState(true);
+
   const mapRef = useRef<any>(null);
 
   // Public items state
@@ -302,18 +301,8 @@ export default function MapScreen() {
     const showPublic = true;
 
     if (filter === 'all' || filter === 'terrains') {
-      const filterAccess = (items: any[]) => {
-        if (showPublicAccess && showPrivateAccess) return items;
-        if (!showPublicAccess && !showPrivateAccess) return items;
-        return items.filter((it: any) => {
-          const isPub = it.publicAccess !== false && it.public_access !== false;
-          if (showPublicAccess && isPub) return true;
-          if (showPrivateAccess && !isPub) return true;
-          return false;
-        });
-      };
-      if (showOwn) addItems(filterAccess(ownData.terrains), 'terrains', false);
-      if (showPublic) addItems(filterAccess(pubData.terrains), 'terrains', true);
+      if (showOwn) addItems(ownData.terrains, 'terrains', false);
+      if (showPublic) addItems(pubData.terrains, 'terrains', true);
     }
     if (filter === 'all' || filter === 'clubs') {
       if (showOwn) addItems(ownData.clubs, 'clubs', false);
@@ -336,7 +325,7 @@ export default function MapScreen() {
       seen.add(key);
       return true;
     });
-  }, [ownData, pubData, filter, search, mapMode, showPublicAccess, showPrivateAccess]);
+  }, [ownData, pubData, filter, search, mapMode]);
 
   // Compute clusters
   const clusters = useMemo(() => {
@@ -619,20 +608,7 @@ export default function MapScreen() {
               <Text style={[styles.chipText, filter === k && styles.chipTextActive]}>{MARKER_CONFIG[k].label}</Text>
             </Pressable>
           ))}
-          {/* Terrain access checkboxes */}
-          {(filter === 'all' || filter === 'terrains') ? (
-            <>
-              <View style={styles.chipSeparator} />
-              <Pressable style={styles.checkboxItem} onPress={() => { Haptics.selectionAsync(); setShowPublicAccess(v => !v); }}>
-                <MaterialIcons name={showPublicAccess ? 'check-box' : 'check-box-outline-blank'} size={18} color={showPublicAccess ? theme.success : theme.textMuted} />
-                <Text style={[styles.checkboxLabel, showPublicAccess && { color: theme.success }]}>{t('directory', 'publicAccessShort')}</Text>
-              </Pressable>
-              <Pressable style={styles.checkboxItem} onPress={() => { Haptics.selectionAsync(); setShowPrivateAccess(v => !v); }}>
-                <MaterialIcons name={showPrivateAccess ? 'check-box' : 'check-box-outline-blank'} size={18} color={showPrivateAccess ? theme.error : theme.textMuted} />
-                <Text style={[styles.checkboxLabel, showPrivateAccess && { color: theme.error }]}>{t('directory', 'privateAccessShort')}</Text>
-              </Pressable>
-            </>
-          ) : null}
+
         </ScrollView>
 
         {/* Action bar with inline stats */}
@@ -760,7 +736,7 @@ export default function MapScreen() {
               <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 40 }} />
             ) : (
               <>
-                {renderManageSection('players', myItems.players, 'person', theme.primary, t('map', 'players'))}
+                {renderManageSection('players', myItems.players.filter((p: any) => p.id === user?.id), 'person', theme.primary, t('map', 'players'))}
                 {renderManageSection('clubs', myItems.clubs, 'home', theme.accent, t('map', 'clubs'))}
                 {renderManageSection('terrains', myItems.terrains, 'sports-soccer', theme.success, t('map', 'terrains'))}
                 {renderManageSection('tournaments', myItems.tournaments, 'emoji-events', theme.carreauColor, t('map', 'tournaments'))}
@@ -825,9 +801,7 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: theme.primary },
   chipText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
   chipTextActive: { color: '#FFF' },
-  chipSeparator: { width: 1, height: 20, backgroundColor: theme.border, marginHorizontal: 2 },
-  checkboxItem: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 6 },
-  checkboxLabel: { fontSize: 12, fontWeight: '600', color: theme.textMuted },
+
   // Single markers
   marker: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF', ...theme.shadows.card },
   markerPublic: { borderColor: theme.success, borderWidth: 3 },
