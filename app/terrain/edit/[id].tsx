@@ -49,7 +49,7 @@ export default function EditTerrainScreen() {
   const [description, setDescription] = useState('');
   const [clubId, setClubId] = useState<string | undefined>();
   const [courtsCount, setCourtsCount] = useState('1');
-  const [isPublic, setIsPublic] = useState(true);
+  const [publicAccess, setPublicAccess] = useState(true);
   const [lighting, setLighting] = useState(false);
   const [covered, setCovered] = useState(false);
   const [environment, setEnvironment] = useState<'indoor' | 'outdoor'>('outdoor');
@@ -80,7 +80,7 @@ export default function EditTerrainScreen() {
       setDescription(terrain.description || '');
       setClubId(terrain.clubId);
       setCourtsCount(String(terrain.courtsCount));
-      setIsPublic(terrain.isPublic);
+      setPublicAccess(terrain.publicAccess ?? true);
       setLighting(terrain.lighting);
       setCovered(terrain.covered);
       setLatitude(terrain.location.latitude);
@@ -302,7 +302,7 @@ export default function EditTerrainScreen() {
         description: description.trim() || undefined,
         clubId,
         clubName: selectedClub?.name,
-        isPublic,
+        publicAccess,
         courtsCount: parseInt(courtsCount) || 1,
         lighting,
         covered,
@@ -689,10 +689,10 @@ export default function EditTerrainScreen() {
                   </View>
                 </View>
                 <Switch
-                  value={isPublic}
-                  onValueChange={setIsPublic}
+                  value={publicAccess}
+                  onValueChange={setPublicAccess}
                   trackColor={{ false: theme.border, true: theme.primary + '50' }}
-                  thumbColor={isPublic ? theme.primary : theme.textMuted}
+                  thumbColor={publicAccess ? theme.primary : theme.textMuted}
                 />
               </View>
               <View style={styles.featureDivider} />

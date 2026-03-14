@@ -42,7 +42,7 @@ export default function NewTerrainScreen() {
   const [description, setDescription] = useState('');
   const [clubId, setClubId] = useState<string | undefined>();
   const [courtsCount, setCourtsCount] = useState('1');
-  const [isPublic, setIsPublic] = useState(true);
+  const [publicAccess, setPublicAccess] = useState(true);
   const [lighting, setLighting] = useState(false);
   const [covered, setCovered] = useState(false);
   const [environment, setEnvironment] = useState<'indoor' | 'outdoor'>('outdoor');
@@ -169,7 +169,8 @@ export default function NewTerrainScreen() {
       facilities: [],
       clubId,
       clubName: selectedClub?.name,
-      isPublic,
+      isPublic: false,
+      publicAccess,
       courtsCount: parseInt(courtsCount) || 1,
       lighting,
       covered,
@@ -387,7 +388,7 @@ export default function NewTerrainScreen() {
                     <Text style={styles.featureDescription}>{t('terrain', 'openToAll')}</Text>
                   </View>
                 </View>
-                <Switch value={isPublic} onValueChange={setIsPublic} trackColor={{ false: theme.border, true: theme.primary + '50' }} thumbColor={isPublic ? theme.primary : theme.textMuted} />
+                <Switch value={publicAccess} onValueChange={setPublicAccess} trackColor={{ false: theme.border, true: theme.primary + '50' }} thumbColor={publicAccess ? theme.primary : theme.textMuted} />
               </View>
               <View style={styles.featureDivider} />
               <View style={styles.featureRow}>

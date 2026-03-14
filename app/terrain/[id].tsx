@@ -321,10 +321,10 @@ export default function TerrainDetailScreen() {
             <Text style={styles.quickInfoLabel}>{t('terrain', 'covered')}</Text>
           </View>
           <View style={styles.quickInfoItem}>
-            <View style={[styles.quickInfoIcon, { backgroundColor: terrain.isPublic ? theme.success + '15' : theme.error + '15' }]}>
-              <MaterialIcons name={terrain.isPublic ? 'public' : 'lock'} size={20} color={terrain.isPublic ? theme.success : theme.error} />
+            <View style={[styles.quickInfoIcon, { backgroundColor: terrain.publicAccess ? theme.success + '15' : theme.error + '15' }]}>
+              <MaterialIcons name={terrain.publicAccess ? 'public' : 'lock'} size={20} color={terrain.publicAccess ? theme.success : theme.error} />
             </View>
-            <Text style={styles.quickInfoValue}>{terrain.isPublic ? t('terrain', 'publicLabel') : t('terrain', 'privateLabel')}</Text>
+            <Text style={styles.quickInfoValue}>{terrain.publicAccess ? t('terrain', 'publicLabel') : t('terrain', 'privateLabel')}</Text>
             <Text style={styles.quickInfoLabel}>{t('terrain', 'accessLabel')}</Text>
           </View>
         </Animated.View>

@@ -415,6 +415,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         clubId: t.club_id,
         clubName: t.club_name,
         isPublic: t.is_public ?? true,
+        publicAccess: t.public_access ?? true,
         courtsCount: t.courts_count || 1,
         lighting: t.lighting ?? false,
         covered: t.covered ?? false,
@@ -841,6 +842,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         club_id: terrain.clubId,
         club_name: terrain.clubName,
         is_public: terrain.isPublic,
+        public_access: terrain.publicAccess ?? true,
         courts_count: terrain.courtsCount,
         lighting: terrain.lighting,
         covered: terrain.covered,
@@ -862,6 +864,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           clubId: data.club_id,
           clubName: data.club_name,
           isPublic: data.is_public,
+          publicAccess: data.public_access ?? true,
           courtsCount: data.courts_count,
           lighting: data.lighting,
           covered: data.covered,
@@ -1141,6 +1144,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.clubId !== undefined) dbUpdates.club_id = updates.clubId;
       if (updates.clubName !== undefined) dbUpdates.club_name = updates.clubName;
       if (updates.isPublic !== undefined) dbUpdates.is_public = updates.isPublic;
+      if (updates.publicAccess !== undefined) dbUpdates.public_access = updates.publicAccess;
       if (updates.courtsCount !== undefined) dbUpdates.courts_count = updates.courtsCount;
       if (updates.lighting !== undefined) dbUpdates.lighting = updates.lighting;
       if (updates.covered !== undefined) dbUpdates.covered = updates.covered;
