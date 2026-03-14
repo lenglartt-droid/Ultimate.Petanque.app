@@ -25,6 +25,7 @@ import { TerrainType } from '@/constants/config';
 import { useLanguage } from '@/hooks/useLanguage';
 import { SharedOverlayBadge } from '@/components/ui/SharedBadge';
 import AdBanner from '@/components/ui/AdBanner';
+import MergePickerModal from '@/components/ui/MergePickerModal';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -40,6 +41,10 @@ export default function DirectoryScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [showDuplicateBanner, setShowDuplicateBanner] = useState(true);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [mergeTarget, setMergeTarget] = useState<{ type: 'player' | 'club' | 'terrain' | 'tournament'; id: string } | null>(null);
+  const [dismissedPairs, setDismissedPairs] = useState<Set<string>>(new Set());
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -82,6 +87,55 @@ export default function DirectoryScreen() {
     tournamentScope: 'all',
     tournamentCity: 'all',
   });
+
+  // Levenshtein-based duplicate detection
+  const duplicates = useMemo(() => {
+    const normalize = (s: string) => s.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const levenshtein = (a: string, b: string): number => {
+      if (a.length === 0) return b.length;
+      if (b.length === 0) return a.length;
+      const matrix: number[][] = [];
+      for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+      for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+      for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+          const cost = b[i - 1] === a[j - 1] ? 0 : 1;
+          matrix[i][j] = Math.min(matrix[i - 1][j] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j - 1] + cost);
+        }
+      }
+      return matrix[b.length][a.length];
+    };
+    const similarity = (a: string, b: string): number => {
+      const na = normalize(a);
+      const nb = normalize(b);
+      if (na === nb) return 100;
+      if (na.includes(nb) || nb.includes(na)) return 85;
+      const maxLen = Math.max(na.length, nb.length);
+      if (maxLen === 0) return 0;
+      return Math.round((1 - levenshtein(na, nb) / maxLen) * 100);
+    };
+    const findDuplicates = <T extends { id: string; name: string }>(items: T[], type: string) => {
+      const pairs: { itemA: T; itemB: T; score: number; type: string; pairKey: string }[] = [];
+      for (let i = 0; i < items.length; i++) {
+        for (let j = i + 1; j < items.length; j++) {
+          const score = similarity(items[i].name, items[j].name);
+          if (score >= 70) {
+            const pairKey = `${type}-${[items[i].id, items[j].id].sort().join('-')}`;
+            if (!dismissedPairs.has(pairKey)) {
+              pairs.push({ itemA: items[i], itemB: items[j], score, type, pairKey });
+            }
+          }
+        }
+      }
+      return pairs;
+    };
+    return [
+      ...findDuplicates(players, 'player'),
+      ...findDuplicates(clubs, 'club'),
+      ...findDuplicates(terrains, 'terrain'),
+      ...findDuplicates(tournaments, 'tournament'),
+    ].sort((a, b) => b.score - a.score);
+  }, [players, clubs, terrains, tournaments, dismissedPairs]);
 
   // Set active tab from navigation param
   React.useEffect(() => {
@@ -883,6 +937,28 @@ export default function DirectoryScreen() {
         ) : null}
       </View>
 
+      {/* Duplicate Detection Banner */}
+      {duplicates.length > 0 && showDuplicateBanner ? (
+        <Animated.View entering={FadeIn.duration(200)} style={styles.duplicateBanner}>
+          <View style={styles.duplicateBannerIcon}>
+            <MaterialIcons name="content-copy" size={18} color={theme.warning} />
+          </View>
+          <View style={styles.duplicateBannerContent}>
+            <Text style={styles.duplicateBannerTitle}>{t('directory', 'duplicateBannerTitle')}</Text>
+            <Text style={styles.duplicateBannerDesc}>{duplicates.length} {t('directory', 'duplicateBannerDesc')}</Text>
+          </View>
+          <Pressable
+            style={styles.duplicateBannerBtn}
+            onPress={() => { Haptics.selectionAsync(); setShowDuplicateModal(true); }}
+          >
+            <Text style={styles.duplicateBannerBtnText}>{t('directory', 'duplicateBannerAction')}</Text>
+          </Pressable>
+          <Pressable style={styles.duplicateBannerClose} onPress={() => setShowDuplicateBanner(false)} hitSlop={8}>
+            <MaterialIcons name="close" size={14} color={theme.textMuted} />
+          </Pressable>
+        </Animated.View>
+      ) : null}
+
       {/* Ad Banner */}
       <AdBanner position="inline" />
 
@@ -922,7 +998,100 @@ export default function DirectoryScreen() {
         />
       </View>
 
-      {/* Filter Modal */}
+      {/* Duplicate Detection Modal */}
+      <Modal
+        visible={showDuplicateModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowDuplicateModal(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <View style={styles.modalHeaderLeft}>
+              <View style={[styles.modalIcon, { backgroundColor: theme.warning + '15' }]}>
+                <MaterialIcons name="content-copy" size={20} color={theme.warning} />
+              </View>
+              <Text style={styles.modalTitle}>{t('directory', 'duplicateModalTitle')}</Text>
+            </View>
+            <Pressable style={styles.modalCloseButton} onPress={() => setShowDuplicateModal(false)}>
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+          </View>
+          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+            {duplicates.map((dup, idx) => {
+              const typeIcons: Record<string, { icon: string; color: string }> = {
+                player: { icon: 'person', color: theme.primary },
+                club: { icon: 'home', color: theme.accent },
+                terrain: { icon: 'sports-soccer', color: theme.success },
+                tournament: { icon: 'emoji-events', color: theme.carreauColor },
+              };
+              const cfg = typeIcons[dup.type] || typeIcons.player;
+              return (
+                <View key={dup.pairKey} style={styles.duplicateCard}>
+                  <View style={styles.duplicateCardHeader}>
+                    <View style={[styles.duplicateTypeIcon, { backgroundColor: cfg.color + '15' }]}>
+                      <MaterialIcons name={cfg.icon as any} size={16} color={cfg.color} />
+                    </View>
+                    <View style={styles.duplicateScoreBadge}>
+                      <Text style={styles.duplicateScoreText}>{dup.score}%</Text>
+                    </View>
+                  </View>
+                  <View style={styles.duplicateNames}>
+                    <View style={styles.duplicateNameItem}>
+                      <Text style={styles.duplicateNameText} numberOfLines={1}>{dup.itemA.name}</Text>
+                    </View>
+                    <MaterialIcons name="compare-arrows" size={18} color={theme.textMuted} />
+                    <View style={styles.duplicateNameItem}>
+                      <Text style={styles.duplicateNameText} numberOfLines={1}>{dup.itemB.name}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.duplicateActions}>
+                    <Pressable
+                      style={styles.duplicateMergeBtn}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setShowDuplicateModal(false);
+                        setMergeTarget({ type: dup.type as any, id: dup.itemA.id });
+                      }}
+                    >
+                      <MaterialIcons name="merge-type" size={16} color="#FFF" />
+                      <Text style={styles.duplicateMergeBtnText}>{t('directory', 'duplicateMerge')}</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.duplicateDismissBtn}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setDismissedPairs(prev => new Set([...prev, dup.pairKey]));
+                      }}
+                    >
+                      <MaterialIcons name="visibility-off" size={16} color={theme.textSecondary} />
+                      <Text style={styles.duplicateDismissBtnText}>{t('directory', 'duplicateDismiss')}</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              );
+            })}
+            {duplicates.length === 0 ? (
+              <View style={styles.emptyState}>
+                <MaterialIcons name="check-circle" size={48} color={theme.success} />
+                <Text style={[styles.emptyTitle, { color: theme.success }]}>{t('common', 'noResults')}</Text>
+              </View>
+            ) : null}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Merge Picker Modal */}
+      {mergeTarget ? (
+        <MergePickerModal
+          visible={!!mergeTarget}
+          onClose={() => setMergeTarget(null)}
+          itemType={mergeTarget.type}
+          currentItemId={mergeTarget.id}
+        />
+      ) : null}
+
+      {/* Filter Modal */
       <Modal
         visible={showFilters}
         animationType="slide"
@@ -1504,4 +1673,114 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFF',
   },
+  // Duplicate Banner
+  duplicateBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    backgroundColor: theme.warning + '08',
+    borderRadius: theme.borderRadius.md,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: theme.warning + '25',
+  },
+  duplicateBannerIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: theme.warning + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  duplicateBannerContent: { flex: 1 },
+  duplicateBannerTitle: { fontSize: 13, fontWeight: '700', color: theme.textPrimary },
+  duplicateBannerDesc: { fontSize: 11, color: theme.textSecondary, marginTop: 2 },
+  duplicateBannerBtn: {
+    backgroundColor: theme.warning,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.sm,
+    marginLeft: 8,
+  },
+  duplicateBannerBtnText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
+  duplicateBannerClose: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Duplicate Modal Cards
+  duplicateCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    marginBottom: 12,
+    ...theme.shadows.card,
+  },
+  duplicateCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  duplicateTypeIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  duplicateScoreBadge: {
+    backgroundColor: theme.warning + '15',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: theme.borderRadius.full,
+  },
+  duplicateScoreText: { fontSize: 13, fontWeight: '700', color: theme.warning },
+  duplicateNames: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
+  },
+  duplicateNameItem: {
+    flex: 1,
+    backgroundColor: theme.backgroundSecondary,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: theme.borderRadius.sm,
+  },
+  duplicateNameText: { fontSize: 14, fontWeight: '600', color: theme.textPrimary, textAlign: 'center' },
+  duplicateActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  duplicateMergeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: theme.primary,
+    paddingVertical: 10,
+    borderRadius: theme.borderRadius.md,
+  },
+  duplicateMergeBtnText: { fontSize: 14, fontWeight: '600', color: '#FFF' },
+  duplicateDismissBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: theme.backgroundSecondary,
+    paddingVertical: 10,
+    borderRadius: theme.borderRadius.md,
+  },
+  duplicateDismissBtnText: { fontSize: 14, fontWeight: '600', color: theme.textSecondary },
 });

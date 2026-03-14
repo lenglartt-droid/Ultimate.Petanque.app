@@ -373,6 +373,27 @@ export default function MapScreen() {
     tournaments: tournaments.length,
   }), [terrains.length, clubs.length, players.length, tournaments.length]);
 
+  // Non-geolocated items count
+  const noGeoCount = useMemo(() => {
+    const noGeoTerrains = terrains.filter(i => !hasValidLocation(i)).length;
+    const noGeoClubs = clubs.filter(i => !hasValidLocation(i)).length;
+    const noGeoPlayers = players.filter(i => !hasValidLocation(i)).length;
+    const noGeoTournaments = tournaments.filter(i => !hasValidLocation(i)).length;
+    return noGeoTerrains + noGeoClubs + noGeoPlayers + noGeoTournaments;
+  }, [terrains, clubs, players, tournaments, hasValidLocation]);
+
+  const [showNoGeoBanner, setShowNoGeoBanner] = useState(true);
+  const [showNoGeoModal, setShowNoGeoModal] = useState(false);
+
+  const noGeoItems = useMemo(() => {
+    const items: { id: string; name: string; type: string; icon: string; color: string; route: string }[] = [];
+    terrains.filter(i => !hasValidLocation(i)).forEach(i => items.push({ id: i.id, name: i.name, type: t('map', 'terrainSingular'), icon: 'sports-soccer', color: theme.success, route: `/terrain/edit/${i.id}` }));
+    clubs.filter(i => !hasValidLocation(i)).forEach(i => items.push({ id: i.id, name: i.name, type: t('map', 'clubSingular'), icon: 'home', color: theme.accent, route: `/club/edit/${i.id}` }));
+    players.filter(i => !hasValidLocation(i)).forEach(i => items.push({ id: i.id, name: i.name, type: t('map', 'playerSingular'), icon: 'person', color: theme.primary, route: `/player/edit/${i.id}` }));
+    tournaments.filter(i => !hasValidLocation(i)).forEach(i => items.push({ id: i.id, name: i.name, type: t('map', 'tournamentSingular'), icon: 'emoji-events', color: theme.carreauColor, route: `/tournament/edit/${i.id}` }));
+    return items;
+  }, [terrains, clubs, players, tournaments, hasValidLocation, t]);
+
   const counts = useMemo(() => {
     const countType = (type: string) => results.filter(r => r.itemType === type).length;
     return {
@@ -683,6 +704,25 @@ export default function MapScreen() {
         </View>
       ) : null}
 
+      {/* No-Geo Banner */}
+      {noGeoCount > 0 && showNoGeoBanner && Platform.OS !== 'web' ? (
+        <Animated.View entering={FadeInDown.duration(300)} style={[styles.noGeoBanner, { bottom: 175 }]}>
+          <View style={styles.noGeoBannerIcon}>
+            <MaterialIcons name="location-off" size={20} color={theme.warning} />
+          </View>
+          <View style={styles.noGeoBannerContent}>
+            <Text style={styles.noGeoBannerTitle}>{t('map', 'noGeoBannerTitle')}</Text>
+            <Text style={styles.noGeoBannerDesc}>{noGeoCount} {t('map', 'noGeoBannerDesc')}</Text>
+          </View>
+          <Pressable style={styles.noGeoBannerBtn} onPress={() => { Haptics.selectionAsync(); setShowNoGeoModal(true); }}>
+            <Text style={styles.noGeoBannerBtnText}>{t('map', 'noGeoBannerAction')}</Text>
+          </Pressable>
+          <Pressable style={styles.noGeoBannerClose} onPress={() => setShowNoGeoBanner(false)} hitSlop={8}>
+            <MaterialIcons name="close" size={14} color={theme.textMuted} />
+          </Pressable>
+        </Animated.View>
+      ) : null}
+
       {/* Bottom Panel */}
       <View style={styles.bottomPanel}>
         {/* Search bar (expandable) */}
@@ -818,6 +858,46 @@ export default function MapScreen() {
           </Pressable>
         </Animated.View>
       ) : null}
+
+      {/* No-Geo Items Modal */}
+      <Modal visible={showNoGeoModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowNoGeoModal(false)}>
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('map', 'noGeoModalTitle')}</Text>
+            <Pressable style={styles.modalClose} onPress={() => setShowNoGeoModal(false)}>
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+          </View>
+          <View style={styles.manageInfo}>
+            <MaterialIcons name="location-off" size={18} color={theme.warning} />
+            <Text style={styles.manageInfoText}>{noGeoCount} {t('map', 'noGeoBannerDesc')}</Text>
+          </View>
+          <ScrollView style={styles.modalContent} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }} showsVerticalScrollIndicator={false}>
+            {noGeoItems.map(item => (
+              <Pressable
+                key={`${item.type}-${item.id}`}
+                style={styles.noGeoItem}
+                onPress={() => {
+                  setShowNoGeoModal(false);
+                  router.push(item.route as any);
+                }}
+              >
+                <View style={[styles.noGeoItemIcon, { backgroundColor: item.color + '15' }]}>
+                  <MaterialIcons name={item.icon as any} size={20} color={item.color} />
+                </View>
+                <View style={styles.noGeoItemInfo}>
+                  <Text style={styles.noGeoItemName} numberOfLines={1}>{item.name}</Text>
+                  <Text style={styles.noGeoItemType}>{item.type}</Text>
+                </View>
+                <View style={styles.noGeoItemBtn}>
+                  <MaterialIcons name="edit-location-alt" size={18} color={theme.primary} />
+                  <Text style={styles.noGeoItemBtnText}>{t('map', 'noGeoEditBtn')}</Text>
+                </View>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
 
       {/* Manage Public Items Modal */}
       <Modal visible={showManageModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowManageModal(false)}>
@@ -1029,4 +1109,46 @@ const styles = StyleSheet.create({
   legendDot: { width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF' },
   legendLabel: { fontSize: 12, color: theme.textSecondary, fontWeight: '500' },
   legendBorderSample: { width: 14, height: 14, borderRadius: 7, backgroundColor: theme.textMuted + '30', borderWidth: 2.5, borderColor: theme.success },
+  // No-Geo Banner
+  noGeoBanner: {
+    position: 'absolute', left: 12, right: 12,
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    borderRadius: theme.borderRadius.md, padding: 12,
+    ...theme.shadows.cardElevated, borderLeftWidth: 3, borderLeftColor: theme.warning,
+  },
+  noGeoBannerIcon: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: theme.warning + '15',
+    alignItems: 'center', justifyContent: 'center', marginRight: 10,
+  },
+  noGeoBannerContent: { flex: 1 },
+  noGeoBannerTitle: { fontSize: 13, fontWeight: '700', color: theme.textPrimary },
+  noGeoBannerDesc: { fontSize: 11, color: theme.textSecondary, marginTop: 2 },
+  noGeoBannerBtn: {
+    backgroundColor: theme.warning, paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: theme.borderRadius.sm, marginLeft: 8,
+  },
+  noGeoBannerBtnText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
+  noGeoBannerClose: {
+    position: 'absolute', top: 4, right: 4, width: 20, height: 20,
+    borderRadius: 10, alignItems: 'center', justifyContent: 'center',
+  },
+  // No-Geo Modal items
+  noGeoItem: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md, padding: 14, marginBottom: 8, gap: 12,
+    ...theme.shadows.card,
+  },
+  noGeoItemIcon: {
+    width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
+  },
+  noGeoItemInfo: { flex: 1 },
+  noGeoItemName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  noGeoItemType: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  noGeoItemBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: theme.primary + '15', paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: theme.borderRadius.sm,
+  },
+  noGeoItemBtnText: { fontSize: 12, fontWeight: '600', color: theme.primary },
 });
