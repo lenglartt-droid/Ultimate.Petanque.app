@@ -256,8 +256,9 @@ export default function MyPlayerCardScreen() {
     }
   };
 
-  // Resolve profile terrain
-  const profileTerrain = selfPlayer?.terrainId ? getTerrainById(selfPlayer.terrainId) : null;
+  // Resolve profile terrain - with fallback to terrainName for shared contexts
+  const profileTerrainEntity = selfPlayer?.terrainId ? getTerrainById(selfPlayer.terrainId) : null;
+  const profileTerrainName = profileTerrainEntity?.name || selfPlayer?.terrainName || null;
 
   // Calculate preferred role from match history
   const roleAnalysis = React.useMemo(() => {
@@ -501,15 +502,20 @@ export default function MyPlayerCardScreen() {
           )}
           
           {/* Terrain de pratique */}
-          {profileTerrain ? (
+          {profileTerrainEntity ? (
             <Pressable 
               style={styles.terrainBadge}
-              onPress={() => router.push(`/terrain/${profileTerrain.id}`)}
+              onPress={() => router.push(`/terrain/${profileTerrainEntity.id}`)}
             >
               <MaterialIcons name="sports-soccer" size={16} color={theme.success} />
-              <Text style={styles.terrainBadgeText}>{profileTerrain.name}</Text>
+              <Text style={styles.terrainBadgeText}>{profileTerrainEntity.name}</Text>
               <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
             </Pressable>
+          ) : profileTerrainName ? (
+            <View style={styles.terrainBadge}>
+              <MaterialIcons name="sports-soccer" size={16} color={theme.success} />
+              <Text style={styles.terrainBadgeText}>{profileTerrainName}</Text>
+            </View>
           ) : null}
 
           {/* Handedness */}

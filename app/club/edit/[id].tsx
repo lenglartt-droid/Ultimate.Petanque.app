@@ -43,7 +43,7 @@ const FACILITY_KEYS: { id: string; key: string; icon: string }[] = [
 export default function EditClubScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { getClubById, updateClub, terrains } = useApp();
+  const { getClubById, updateClub, terrains, loading: appLoading } = useApp();
   const { t } = useLanguage();
   const { showAlert } = useAlert();
 
@@ -248,10 +248,16 @@ export default function EditClubScreen() {
             <MaterialIcons name="close" size={24} color={theme.textPrimary} />
           </Pressable>
         </View>
-        <View style={styles.emptyContainer}>
-          <MaterialIcons name="error-outline" size={64} color={theme.textMuted} />
-          <Text style={styles.emptyText}>{t('club', 'clubNotFound')}</Text>
-        </View>
+        {appLoading ? (
+          <View style={styles.emptyContainer}>
+            <ActivityIndicator size="large" color={theme.primary} />
+          </View>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <MaterialIcons name="error-outline" size={64} color={theme.textMuted} />
+            <Text style={styles.emptyText}>{t('club', 'clubNotFound')}</Text>
+          </View>
+        )}
       </SafeAreaView>
     );
   }

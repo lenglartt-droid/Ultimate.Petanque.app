@@ -29,7 +29,7 @@ type TournamentStatus = 'À venir' | 'En cours' | 'Terminé';
 export default function EditTournamentScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getTournamentById, updateTournament, clubs } = useApp();
+  const { getTournamentById, updateTournament, clubs, loading: appLoading } = useApp();
   const { t, language } = useLanguage();
 
   const tournament = getTournamentById(id!);
@@ -224,10 +224,16 @@ export default function EditTournamentScreen() {
           <Text style={styles.headerTitle}>{t('tournament', 'editTournament')}</Text>
           <View style={{ width: 40 }} />
         </View>
-        <View style={styles.emptyContainer}>
-          <MaterialIcons name="error-outline" size={64} color={theme.textMuted} />
-          <Text style={styles.emptyText}>{t('tournament', 'tournamentNotFound')}</Text>
-        </View>
+        {appLoading ? (
+          <View style={styles.emptyContainer}>
+            <ActivityIndicator size="large" color={theme.primary} />
+          </View>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <MaterialIcons name="error-outline" size={64} color={theme.textMuted} />
+            <Text style={styles.emptyText}>{t('tournament', 'tournamentNotFound')}</Text>
+          </View>
+        )}
       </SafeAreaView>
     );
   }

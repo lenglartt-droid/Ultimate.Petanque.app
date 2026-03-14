@@ -36,7 +36,7 @@ import MergeComparisonModal, { MergeField } from '@/components/ui/MergeCompariso
 export default function EditTerrainScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { getTerrainById, updateTerrain, clubs } = useApp();
+  const { getTerrainById, updateTerrain, clubs, loading: appLoading } = useApp();
   const { t } = useLanguage();
   const { showAlert } = useAlert();
 
@@ -327,10 +327,16 @@ export default function EditTerrainScreen() {
             <MaterialIcons name="close" size={24} color={theme.textPrimary} />
           </Pressable>
         </View>
-        <View style={styles.emptyContainer}>
-          <MaterialIcons name="error-outline" size={64} color={theme.textMuted} />
-          <Text style={styles.emptyText}>{t('terrain', 'terrainNotFound')}</Text>
-        </View>
+        {appLoading ? (
+          <View style={styles.emptyContainer}>
+            <ActivityIndicator size="large" color={theme.primary} />
+          </View>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <MaterialIcons name="error-outline" size={64} color={theme.textMuted} />
+            <Text style={styles.emptyText}>{t('terrain', 'terrainNotFound')}</Text>
+          </View>
+        )}
       </SafeAreaView>
     );
   }
