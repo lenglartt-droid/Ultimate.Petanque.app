@@ -249,6 +249,19 @@ export default function NewMatchScreen() {
     return boulesSets.find(bs => bs.id === selectedBoulesSetId) || null;
   }, [selectedBoulesSetId, boulesSets]);
 
+  // Sort terrains by match frequency (most played first)
+  const sortedTerrains = useMemo(() => {
+    const terrainMatchCount: Record<string, number> = {};
+    matches.forEach(m => {
+      if (m.terrainId) {
+        terrainMatchCount[m.terrainId] = (terrainMatchCount[m.terrainId] || 0) + 1;
+      }
+    });
+    return [...terrains]
+      .map(t => ({ ...t, _matchCount: terrainMatchCount[t.id] || 0 }))
+      .sort((a, b) => b._matchCount - a._matchCount);
+  }, [terrains, matches]);
+
   const maxPlayersPerTeam = useMemo(() => {
     switch (format) {
       case 'Tête-à-tête': return 1;
@@ -2064,7 +2077,7 @@ export default function NewMatchScreen() {
           </View>
 
           <FlatList
-            data={terrains}
+            data={sortedTerrains}
             keyExtractor={item => item.id}
             style={styles.playersList}
             contentContainerStyle={styles.playersListContent}
@@ -2093,7 +2106,15 @@ export default function NewMatchScreen() {
                   <MaterialIcons name="place" size={22} color="#FFF" />
                 </View>
                 <View style={styles.playerInfo}>
-                  <Text style={styles.playerName}>{terrain.name}</Text>
+                  <View style={styles.playerNameRow}>
+                    <Text style={styles.playerName}>{terrain.name}</Text>
+                    {(terrain as any)._matchCount > 0 ? (
+                      <View style={styles.terrainMatchBadge}>
+                        <MaterialIcons name="sports" size={10} color={theme.primary} />
+                        <Text style={styles.terrainMatchBadgeText}>{(terrain as any)._matchCount}</Text>
+                      </View>
+                    ) : null}
+                  </View>
                   <Text style={styles.playerMeta}>{t('terrainTypes', terrain.type)} • {terrain.city}</Text>
                 </View>
                 <MaterialIcons 
@@ -2426,6 +2447,8 @@ const styles = StyleSheet.create({
   createPlayerSubtitle: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
   emptySearch: { alignItems: 'center', paddingVertical: 40 },
   emptySearchText: { fontSize: 14, color: theme.textMuted, marginTop: 10 },
+  terrainMatchBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.primary + '15', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
+  terrainMatchBadgeText: { fontSize: 11, fontWeight: '700', color: theme.primary },
   // Fullscreen styles
   fullscreenContainer: { flex: 1, backgroundColor: '#0A0F1A' },
   fullscreenSafeArea: { flex: 1 },
