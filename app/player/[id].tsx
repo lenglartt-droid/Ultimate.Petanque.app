@@ -102,6 +102,74 @@ export default function PlayerDetailScreen() {
     'Tireur': { icon: 'gps-fixed', color: '#F97316' },
   };
 
+  const terrainTypeIcons: Record<string, { icon: string; color: string }> = {
+    'Stabilisé': { icon: 'landscape', color: '#6B7280' },
+    'Graviers': { icon: 'grain', color: '#92400E' },
+    'Sable': { icon: 'beach-access', color: '#D97706' },
+    'Cailloux': { icon: 'terrain', color: '#6D28D9' },
+    'Terre battue': { icon: 'grass', color: '#15803D' },
+  };
+
+  const partnerColors = ['#3B82F6', '#8B5CF6', '#F97316', '#10B981', '#EC4899', '#6366F1', '#14B8A6'];
+
+  // Terrain type analysis from match history
+  const terrainAnalysis = React.useMemo(() => {
+    if (!id) return { terrainCounts: {} as Record<string, number>, totalWithTerrain: 0, preferredTerrain: '' };
+    const terrainCounts: Record<string, number> = {};
+    const allMatches = matches.filter(m =>
+      m.teamA.players.includes(id) || m.teamB.players.includes(id)
+    );
+    allMatches.forEach(match => {
+      if (match.terrainType) {
+        terrainCounts[match.terrainType] = (terrainCounts[match.terrainType] || 0) + 1;
+      }
+    });
+    const totalWithTerrain = Object.values(terrainCounts).reduce((a, b) => a + b, 0);
+    const preferredTerrain = totalWithTerrain > 0
+      ? Object.entries(terrainCounts).reduce((a, b) => b[1] > a[1] ? b : a)[0]
+      : '';
+    return { terrainCounts, totalWithTerrain, preferredTerrain };
+  }, [matches, id]);
+
+  // Partner analysis from match history
+  const partnerAnalysis = React.useMemo(() => {
+    if (!id) return { partnerCounts: {} as Record<string, { count: number; name: string }>, totalWithPartners: 0, preferredPartner: { id: '', name: '', count: 0 } };
+    const partnerCounts: Record<string, { count: number; name: string }> = {};
+    const allMatches = matches.filter(m =>
+      m.teamA.players.includes(id) || m.teamB.players.includes(id)
+    );
+    allMatches.forEach(match => {
+      const inTeamA = match.teamA.players.includes(id);
+      const inTeamB = match.teamB.players.includes(id);
+      if (inTeamA && match.teamA.players.length > 1) {
+        match.teamA.players.forEach((pid, idx) => {
+          if (pid !== id) {
+            if (!partnerCounts[pid]) {
+              partnerCounts[pid] = { count: 0, name: match.teamA.playerNames[idx] || pid };
+            }
+            partnerCounts[pid].count++;
+          }
+        });
+      } else if (inTeamB && match.teamB.players.length > 1) {
+        match.teamB.players.forEach((pid, idx) => {
+          if (pid !== id) {
+            if (!partnerCounts[pid]) {
+              partnerCounts[pid] = { count: 0, name: match.teamB.playerNames[idx] || pid };
+            }
+            partnerCounts[pid].count++;
+          }
+        });
+      }
+    });
+    const totalWithPartners = Object.values(partnerCounts).reduce((a, b) => a + b.count, 0);
+    let preferredPartner = { id: '', name: '', count: 0 };
+    if (totalWithPartners > 0) {
+      const best = Object.entries(partnerCounts).reduce((a, b) => b[1].count > a[1].count ? b : a);
+      preferredPartner = { id: best[0], name: best[1].name, count: best[1].count };
+    }
+    return { partnerCounts, totalWithPartners, preferredPartner };
+  }, [matches, id]);
+
   const handleDelete = () => {
     if (isSelf) {
       Alert.alert(t('player', 'impossible'), t('player', 'cannotDeleteSelf'));
@@ -240,6 +308,89 @@ export default function PlayerDetailScreen() {
             </View>
           )}
           
+          {/* Preferred Terrain from Match History */}
+          {terrainAnalysis.totalWithTerrain > 0 && (
+            <View style={styles.preferredRoleCard}>
+              <Text style={styles.preferredRoleTitle}>{t('player', 'preferredTerrain')}</Text>
+              <View style={styles.preferredRoleContent}>
+                <View style={[styles.preferredRoleIcon, { backgroundColor: terrainTypeIcons[terrainAnalysis.preferredTerrain]?.color || theme.primary }]}>
+                  <MaterialIcons 
+                    name={(terrainTypeIcons[terrainAnalysis.preferredTerrain]?.icon || 'sports-soccer') as any} 
+                    size={20} 
+                    color="#FFF" 
+                  />
+                </View>
+                <View style={styles.preferredRoleInfo}>
+                  <Text style={styles.preferredRoleName}>{t('terrainTypes', terrainAnalysis.preferredTerrain)}</Text>
+                  <Text style={styles.preferredRoleStats}>
+                    {terrainAnalysis.terrainCounts[terrainAnalysis.preferredTerrain]} {t('player', 'outOf')} {terrainAnalysis.totalWithTerrain} {t('player', 'matchesLabel')}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.roleBreakdown}>
+                {Object.entries(terrainAnalysis.terrainCounts).map(([terrainType, count]) => {
+                  const config = terrainTypeIcons[terrainType];
+                  const pct = terrainAnalysis.totalWithTerrain > 0 ? Math.round((count / terrainAnalysis.totalWithTerrain) * 100) : 0;
+                  return (
+                    <View key={terrainType} style={styles.roleBreakdownItem}>
+                      <MaterialIcons name={(config?.icon || 'sports-soccer') as any} size={14} color={config?.color || theme.textMuted} />
+                      <Text style={[styles.roleBreakdownLabel, { width: 18 }]}>{terrainType.substring(0, 2)}</Text>
+                      <View style={styles.roleBreakdownBarBg}>
+                        <View style={[styles.roleBreakdownBar, { width: `${pct}%`, backgroundColor: config?.color || theme.primary }]} />
+                      </View>
+                      <Text style={styles.roleBreakdownPct}>{pct}%</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {/* Preferred Partner from Match History */}
+          {partnerAnalysis.totalWithPartners > 0 && (
+            <View style={styles.preferredRoleCard}>
+              <Text style={styles.preferredRoleTitle}>{t('player', 'preferredPartner')}</Text>
+              <View style={styles.preferredRoleContent}>
+                <View style={[styles.preferredRoleIcon, { backgroundColor: partnerColors[0] }]}>
+                  <MaterialIcons name="people" size={20} color="#FFF" />
+                </View>
+                <View style={styles.preferredRoleInfo}>
+                  <Text style={styles.preferredRoleName}>{partnerAnalysis.preferredPartner.name}</Text>
+                  <Text style={styles.preferredRoleStats}>
+                    {partnerAnalysis.preferredPartner.count} {t('player', 'outOf')} {partnerAnalysis.totalWithPartners} {t('player', 'matchesLabel')}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.partnerBreakdown}>
+                {Object.entries(partnerAnalysis.partnerCounts)
+                  .sort((a, b) => b[1].count - a[1].count)
+                  .slice(0, 5)
+                  .map(([pid, info], idx) => {
+                    const pct = partnerAnalysis.totalWithPartners > 0 ? Math.round((info.count / partnerAnalysis.totalWithPartners) * 100) : 0;
+                    const color = partnerColors[idx % partnerColors.length];
+                    return (
+                      <View key={pid} style={styles.partnerBreakdownItem}>
+                        <View style={[styles.partnerAvatar, { backgroundColor: color + '20' }]}>
+                          <Text style={[styles.partnerAvatarText, { color }]}>
+                            {info.name.charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={styles.partnerInfoCol}>
+                          <Text style={styles.partnerName} numberOfLines={1}>{info.name}</Text>
+                          <View style={styles.partnerBarRow}>
+                            <View style={styles.roleBreakdownBarBg}>
+                              <View style={[styles.roleBreakdownBar, { width: `${pct}%`, backgroundColor: color }]} />
+                            </View>
+                            <Text style={styles.partnerPct}>{info.count} ({pct}%)</Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
+              </View>
+            </View>
+          )}
+
           {/* Terrain de pratique */}
           {terrain && (
             <Pressable 
@@ -838,5 +989,51 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.accent,
     marginTop: 2,
+  },
+  // Partner breakdown
+  partnerBreakdown: {
+    gap: 10,
+    marginTop: 4,
+  },
+  partnerBreakdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: theme.backgroundSecondary,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: theme.borderRadius.md,
+  },
+  partnerAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  partnerAvatarText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  partnerInfoCol: {
+    flex: 1,
+    gap: 4,
+  },
+  partnerName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  partnerBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  partnerPct: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textSecondary,
+    minWidth: 50,
+    textAlign: 'right',
   },
 });
