@@ -632,21 +632,46 @@ export default function MyPlayerCardScreen() {
             </View>
           )}
 
-          {/* Preferred Partner from Match History - Compact Row */}
-          {partnerAnalysis.totalWithPartners > 0 && (
-            <View style={styles.preferredRoleCard}>
-              <Text style={styles.preferredRoleTitle}>{t('player', 'preferredPartner')}</Text>
-              <View style={styles.roleBreakdown}>
-                {Object.entries(partnerAnalysis.partnerCounts)
-                  .sort((a, b) => b[1].count - a[1].count)
-                  .slice(0, 3)
-                  .map(([pid, info], idx) => {
+          {/* Preferred Partner from Match History */}
+          {partnerAnalysis.totalWithPartners > 0 && (() => {
+            const sortedPartners = Object.entries(partnerAnalysis.partnerCounts)
+              .sort((a, b) => b[1].count - a[1].count);
+            const topPartner = sortedPartners[0];
+            if (!topPartner) return null;
+            const topPartnerPlayer = players.find(p => p.id === topPartner[0]);
+            return (
+              <View style={styles.preferredRoleCard}>
+                <Text style={styles.preferredRoleTitle}>{t('player', 'preferredPartner')}</Text>
+                <View style={styles.preferredRoleContent}>
+                  <View style={[styles.preferredRoleIcon, { backgroundColor: partnerColors[0], overflow: 'hidden' }]}>
+                    {topPartnerPlayer?.avatar ? (
+                      <Image source={{ uri: topPartnerPlayer.avatar }} style={{ width: 44, height: 44, borderRadius: 22 }} contentFit="cover" />
+                    ) : (
+                      <Text style={{ fontSize: 18, fontWeight: '700', color: '#FFF' }}>{topPartner[1].name.charAt(0).toUpperCase()}</Text>
+                    )}
+                  </View>
+                  <View style={styles.preferredRoleInfo}>
+                    <Text style={styles.preferredRoleName}>{topPartner[1].name}</Text>
+                    <Text style={styles.preferredRoleStats}>
+                      {topPartner[1].count} {t('player', 'outOf')} {partnerAnalysis.totalWithPartners} {t('player', 'matchesLabel')}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.roleBreakdown}>
+                  {sortedPartners.slice(0, 3).map(([pid, info], idx) => {
                     const pct = partnerAnalysis.totalWithPartners > 0 ? Math.round((info.count / partnerAnalysis.totalWithPartners) * 100) : 0;
                     const color = partnerColors[idx % partnerColors.length];
+                    const pp = players.find(p => p.id === pid);
                     return (
                       <View key={pid} style={styles.roleBreakdownItem}>
-                        <MaterialIcons name="person" size={14} color={color} />
-                        <Text style={styles.roleBreakdownLabel} numberOfLines={1}>{info.name.split(' ')[0].substring(0, 4)}</Text>
+                        <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: color, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                          {pp?.avatar ? (
+                            <Image source={{ uri: pp.avatar }} style={{ width: 20, height: 20, borderRadius: 10 }} contentFit="cover" />
+                          ) : (
+                            <Text style={{ fontSize: 9, fontWeight: '700', color: '#FFF' }}>{info.name.charAt(0)}</Text>
+                          )}
+                        </View>
+                        <Text style={[styles.roleBreakdownLabel, { width: 'auto', maxWidth: 40 }]} numberOfLines={1}>{info.name.split(' ')[0].substring(0, 5)}</Text>
                         <View style={styles.roleBreakdownBarBg}>
                           <View style={[styles.roleBreakdownBar, { width: `${pct}%`, backgroundColor: color }]} />
                         </View>
@@ -654,9 +679,10 @@ export default function MyPlayerCardScreen() {
                       </View>
                     );
                   })}
+                </View>
               </View>
-            </View>
-          )}
+            );
+          })()}
         </Animated.View>
 
         {/* Federation Card Section */}

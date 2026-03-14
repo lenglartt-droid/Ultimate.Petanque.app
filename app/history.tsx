@@ -1025,7 +1025,7 @@ export default function HistoryScreen() {
           
           {editingChallenge && (
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
               {/* Challenge Header Card */}
               <View style={styles.detailHeaderCard}>
                 <View style={styles.detailHeaderTop}>
