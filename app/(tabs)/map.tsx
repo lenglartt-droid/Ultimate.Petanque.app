@@ -32,6 +32,7 @@ import {
 import AdBanner from '@/components/ui/AdBanner';
 
 type MarkerType = 'all' | 'terrains' | 'clubs' | 'tournaments' | 'players';
+type TerrainAccessFilter = 'all' | 'public' | 'private';
 type MapMode = 'all' | 'public';
 
 let MapViewComponent: React.ComponentType<any> | null = null;
@@ -227,6 +228,7 @@ export default function MapScreen() {
   const [mapMode, setMapMode] = useState<MapMode>('all');
   const [showManageModal, setShowManageModal] = useState(false);
   const [currentRegion, setCurrentRegion] = useState(config.map.defaultRegion);
+  const [terrainAccessFilter, setTerrainAccessFilter] = useState<TerrainAccessFilter>('all');
   const mapRef = useRef<any>(null);
 
   // Public items state
@@ -300,8 +302,12 @@ export default function MapScreen() {
     const showPublic = true;
 
     if (filter === 'all' || filter === 'terrains') {
-      if (showOwn) addItems(ownData.terrains, 'terrains', false);
-      if (showPublic) addItems(pubData.terrains, 'terrains', true);
+      const filterAccess = (items: any[]) => {
+        if (terrainAccessFilter === 'all') return items;
+        return items.filter((it: any) => terrainAccessFilter === 'public' ? (it.publicAccess !== false && it.public_access !== false) : (it.publicAccess === false || it.public_access === false));
+      };
+      if (showOwn) addItems(filterAccess(ownData.terrains), 'terrains', false);
+      if (showPublic) addItems(filterAccess(pubData.terrains), 'terrains', true);
     }
     if (filter === 'all' || filter === 'clubs') {
       if (showOwn) addItems(ownData.clubs, 'clubs', false);
@@ -324,7 +330,7 @@ export default function MapScreen() {
       seen.add(key);
       return true;
     });
-  }, [ownData, pubData, filter, search, mapMode]);
+  }, [ownData, pubData, filter, search, mapMode, terrainAccessFilter]);
 
   // Compute clusters
   const clusters = useMemo(() => {
@@ -654,6 +660,26 @@ export default function MapScreen() {
                 <Text style={[styles.chipText, filter === k && styles.chipTextActive]}>{MARKER_CONFIG[k].label} ({counts[k]})</Text>
               </Pressable>
             ))}
+            {/* Terrain access filter */}
+            {(filter === 'all' || filter === 'terrains') ? (
+              <>
+                <View style={styles.chipSeparator} />
+                <Pressable
+                  style={[styles.chip, terrainAccessFilter === 'public' && { backgroundColor: theme.success }]}
+                  onPress={() => { Haptics.selectionAsync(); setTerrainAccessFilter(terrainAccessFilter === 'public' ? 'all' : 'public'); }}
+                >
+                  <MaterialIcons name="public" size={14} color={terrainAccessFilter === 'public' ? '#FFF' : theme.textSecondary} />
+                  <Text style={[styles.chipText, terrainAccessFilter === 'public' && styles.chipTextActive]}>{t('directory', 'publicAccessShort')}</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.chip, terrainAccessFilter === 'private' && { backgroundColor: theme.error }]}
+                  onPress={() => { Haptics.selectionAsync(); setTerrainAccessFilter(terrainAccessFilter === 'private' ? 'all' : 'private'); }}
+                >
+                  <MaterialIcons name="lock" size={14} color={terrainAccessFilter === 'private' ? '#FFF' : theme.textSecondary} />
+                  <Text style={[styles.chipText, terrainAccessFilter === 'private' && styles.chipTextActive]}>{t('directory', 'privateAccessShort')}</Text>
+                </Pressable>
+              </>
+            ) : null}
           </ScrollView>
         </Animated.View>
       </SafeAreaView>
@@ -798,6 +824,7 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: theme.primary },
   chipText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
   chipTextActive: { color: '#FFF' },
+  chipSeparator: { width: 1, height: 20, backgroundColor: theme.border, marginHorizontal: 2 },
   // Single markers
   marker: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF', ...theme.shadows.card },
   markerPublic: { borderColor: theme.success, borderWidth: 3 },

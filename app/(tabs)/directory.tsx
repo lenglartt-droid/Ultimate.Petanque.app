@@ -63,6 +63,7 @@ export default function DirectoryScreen() {
     terrainLighting: 'all' as 'all' | 'yes' | 'no',
     terrainCovered: 'all' as 'all' | 'yes' | 'no',
     terrainEnvironment: 'all' as 'all' | 'indoor' | 'outdoor',
+    terrainAccess: 'all' as 'all' | 'public' | 'private',
     // Tournament filters
     tournamentStatus: 'all' as TournamentStatus,
     tournamentFormat: 'all',
@@ -103,7 +104,7 @@ export default function DirectoryScreen() {
   const activeFilterCounts = useMemo(() => ({
     players: [filters.playerClub, filters.playerCity, filters.playerCountry, filters.playerLevel, filters.playerRole].filter(f => f !== 'all').length,
     clubs: [filters.clubCity, filters.clubCountry].filter(f => f !== 'all').length,
-    terrains: [filters.terrainType, filters.terrainCity, filters.terrainLighting, filters.terrainCovered, filters.terrainEnvironment].filter(f => f !== 'all').length,
+    terrains: [filters.terrainType, filters.terrainCity, filters.terrainLighting, filters.terrainCovered, filters.terrainEnvironment, filters.terrainAccess].filter(f => f !== 'all').length,
     tournaments: [filters.tournamentStatus, filters.tournamentFormat, filters.tournamentLevel, filters.tournamentCategory, filters.tournamentRegistration, filters.tournamentScope, filters.tournamentCity].filter(f => f !== 'all').length,
   }), [filters]);
 
@@ -188,7 +189,9 @@ export default function DirectoryScreen() {
         (filters.terrainCovered === 'yes' ? tr.covered : !tr.covered);
       const matchesEnvironment = filters.terrainEnvironment === 'all' || 
         (tr.environment || 'outdoor') === filters.terrainEnvironment;
-      return matchesSearch && matchesType && matchesCity && matchesLighting && matchesCovered && matchesEnvironment;
+      const matchesAccess = filters.terrainAccess === 'all' ||
+        (filters.terrainAccess === 'public' ? (tr.publicAccess !== false) : (tr.publicAccess === false));
+      return matchesSearch && matchesType && matchesCity && matchesLighting && matchesCovered && matchesEnvironment && matchesAccess;
     });
   }, [terrains, searchQuery, filters]);
 
@@ -214,7 +217,7 @@ export default function DirectoryScreen() {
     } else if (activeTab === 'clubs') {
       setFilters(f => ({ ...f, clubCity: 'all', clubCountry: 'all' }));
     } else if (activeTab === 'terrains') {
-      setFilters(f => ({ ...f, terrainType: 'all', terrainCity: 'all', terrainLighting: 'all', terrainCovered: 'all', terrainEnvironment: 'all' }));
+      setFilters(f => ({ ...f, terrainType: 'all', terrainCity: 'all', terrainLighting: 'all', terrainCovered: 'all', terrainEnvironment: 'all', terrainAccess: 'all' }));
     } else if (activeTab === 'tournaments') {
       setFilters(f => ({ ...f, tournamentStatus: 'all', tournamentFormat: 'all', tournamentLevel: 'all', tournamentCategory: 'all', tournamentRegistration: 'all', tournamentScope: 'all', tournamentCity: 'all' }));
     }
@@ -415,6 +418,12 @@ export default function DirectoryScreen() {
                 <MaterialIcons name="roofing" size={10} color={theme.primary} />
               </View>
             )}
+            {item.publicAccess === false ? (
+              <View style={[styles.tag, { backgroundColor: theme.error + '15' }]}>
+                <MaterialIcons name="lock" size={10} color={theme.error} />
+                <Text style={[styles.tagText, { color: theme.error }]}>{t('directory', 'privateAccessShort')}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
         <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
@@ -602,6 +611,15 @@ export default function DirectoryScreen() {
               value={filters.terrainCovered}
               onChange={(v) => setFilters(f => ({ ...f, terrainCovered: v as 'all' | 'yes' | 'no' }))}
               icons={{ yes: 'roofing', no: 'wb-sunny' }}
+              allLabel={t('directory', 'allLabel')}
+            />
+            <FilterSection
+              title={t('directory', 'accessFilterLabel')}
+              options={['all', 'public', 'private']}
+              labels={{ all: t('directory', 'allLabel'), public: t('directory', 'publicAccessLabel'), private: t('directory', 'privateAccessLabel') }}
+              value={filters.terrainAccess}
+              onChange={(v) => setFilters(f => ({ ...f, terrainAccess: v as 'all' | 'public' | 'private' }))}
+              icons={{ public: 'public', private: 'lock' }}
               allLabel={t('directory', 'allLabel')}
             />
           </>
@@ -807,6 +825,7 @@ export default function DirectoryScreen() {
                 {filters.terrainCity !== 'all' && <ActiveFilterChip label={filters.terrainCity} onRemove={() => setFilters(f => ({ ...f, terrainCity: 'all' }))} />}
                 {filters.terrainLighting !== 'all' && <ActiveFilterChip label={filters.terrainLighting === 'yes' ? t('directory', 'litLabel') : t('directory', 'notLitLabel')} onRemove={() => setFilters(f => ({ ...f, terrainLighting: 'all' }))} icon="lightbulb" />}
                 {filters.terrainCovered !== 'all' && <ActiveFilterChip label={filters.terrainCovered === 'yes' ? t('directory', 'coveredLabel') : t('directory', 'outdoorShort')} onRemove={() => setFilters(f => ({ ...f, terrainCovered: 'all' }))} icon="roofing" />}
+                {filters.terrainAccess !== 'all' && <ActiveFilterChip label={filters.terrainAccess === 'public' ? t('directory', 'publicAccessShort') : t('directory', 'privateAccessShort')} onRemove={() => setFilters(f => ({ ...f, terrainAccess: 'all' }))} icon={filters.terrainAccess === 'public' ? 'public' : 'lock'} />}
               </>
             )}
             {activeTab === 'tournaments' && (
