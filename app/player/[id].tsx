@@ -270,6 +270,20 @@ export default function PlayerDetailScreen() {
             </Pressable>
           )}
           
+          {/* Handedness */}
+          {player.handedness ? (
+            <View style={styles.handednessContainer}>
+              <MaterialIcons 
+                name={player.handedness === 'left' ? 'front-hand' : player.handedness === 'ambidextrous' ? 'swap-horiz' : 'back-hand'} 
+                size={16} 
+                color="#6366F1" 
+              />
+              <Text style={styles.handednessText}>
+                {player.handedness === 'right' ? t('player', 'rightHanded') : player.handedness === 'left' ? t('player', 'leftHanded') : t('player', 'ambidextrous')}
+              </Text>
+            </View>
+          ) : null}
+
           {/* Preferred Role from Match History */}
           {roleAnalysis.totalWithRoles > 0 && (
             <View style={styles.preferredRoleCard}>
@@ -688,6 +702,21 @@ const styles = StyleSheet.create({
   clubName: {
     fontSize: 15,
     color: theme.textSecondary,
+  },
+  handednessContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#6366F1' + '12',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: theme.borderRadius.full,
+    marginBottom: 8,
+  },
+  handednessText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6366F1',
   },
   preferredRoleCard: {
     width: '100%',

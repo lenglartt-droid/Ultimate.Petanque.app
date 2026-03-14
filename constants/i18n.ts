@@ -1641,6 +1641,11 @@ export const translations = {
     uploadingCard: { fr: 'Envoi en cours...', en: 'Uploading...' },
     pdfDocument: { fr: 'Document PDF', en: 'PDF Document' },
     tapToView: { fr: 'Appuyez pour visualiser', en: 'Tap to view' },
+    handedness: { fr: 'Latéralité', en: 'Handedness' },
+    rightHanded: { fr: 'Droitier', en: 'Right-handed' },
+    leftHanded: { fr: 'Gaucher', en: 'Left-handed' },
+    ambidextrous: { fr: 'Ambidextre', en: 'Ambidextrous' },
+    selectHandedness: { fr: 'Sélectionner votre latéralité', en: 'Select your handedness' },
     // Stats section (edit page)
     statistics: { fr: 'STATISTIQUES', en: 'STATISTICS' },
     matchesPlayed: { fr: 'Matchs joués', en: 'Matches played' },

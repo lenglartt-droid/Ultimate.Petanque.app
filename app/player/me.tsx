@@ -497,6 +497,20 @@ export default function MyPlayerCardScreen() {
             </Pressable>
           )}
           
+          {/* Handedness */}
+          {selfPlayer.handedness ? (
+            <View style={styles.handednessContainer}>
+              <MaterialIcons 
+                name={selfPlayer.handedness === 'left' ? 'front-hand' : selfPlayer.handedness === 'ambidextrous' ? 'swap-horiz' : 'back-hand'} 
+                size={16} 
+                color="#6366F1" 
+              />
+              <Text style={styles.handednessText}>
+                {selfPlayer.handedness === 'right' ? t('player', 'rightHanded') : selfPlayer.handedness === 'left' ? t('player', 'leftHanded') : t('player', 'ambidextrous')}
+              </Text>
+            </View>
+          ) : null}
+
           {/* Preferred Role from Match History */}
           {roleAnalysis.totalWithRoles > 0 && (
             <View style={styles.preferredRoleCard}>
@@ -1122,6 +1136,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: theme.primary,
+  },
+  handednessContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#6366F1' + '12',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: theme.borderRadius.full,
+    marginBottom: 12,
+  },
+  handednessText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6366F1',
   },
   contactSection: {
     flexDirection: 'row',

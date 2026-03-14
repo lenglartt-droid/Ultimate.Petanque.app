@@ -288,6 +288,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           email: p.email,
           country: p.country,
           boules: p.boules,
+          handedness: p.handedness,
           stats: p.stats || {
             matchesPlayed: 0, wins: 0, losses: 0, winRate: 0,
             tirRate: 0, pointRate: 0, carreauRate: 0,
@@ -348,6 +349,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         email: p.email,
         country: p.country,
         boules: p.boules,
+        handedness: p.handedness,
         isPublic: p.is_public ?? false,
         stats: p.stats || {
           matchesPlayed: 0, wins: 0, losses: 0, winRate: 0,
@@ -1009,6 +1011,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.email !== undefined) dbUpdates.email = updates.email;
       if (updates.country !== undefined) dbUpdates.country = updates.country;
       if (updates.boules !== undefined) dbUpdates.boules = updates.boules;
+      if (updates.handedness !== undefined) dbUpdates.handedness = updates.handedness;
       if (updates.stats !== undefined) dbUpdates.stats = updates.stats;
       dbUpdates.updated_at = new Date().toISOString();
 

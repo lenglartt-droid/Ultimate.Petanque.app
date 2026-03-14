@@ -55,6 +55,8 @@ export default function EditPlayerScreen() {
   });
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  // Handedness
+  const [handedness, setHandedness] = useState<'right' | 'left' | 'ambidextrous' | ''>('');
   // Boules info
   const [boulesName, setBoulesName] = useState('');
   const [boulesDiameter, setBoulesDiameter] = useState('');
@@ -77,6 +79,7 @@ export default function EditPlayerScreen() {
       });
       setPhone(player.phone || '');
       setEmail(player.email || '');
+      setHandedness(player.handedness || '');
       // Boules
       setBoulesName(player.boules?.name || '');
       setBoulesDiameter(player.boules?.diameter?.toString() || '');
@@ -238,6 +241,7 @@ export default function EditPlayerScreen() {
       club: selectedClub?.name,
       phone: phone.trim() || undefined,
       email: email.trim() || undefined,
+      handedness: handedness || undefined,
       boules,
       location: location.city ? {
         city: location.city,
@@ -491,6 +495,38 @@ export default function EditPlayerScreen() {
                   autoCapitalize="none"
                 />
               </View>
+            </View>
+          </Animated.View>
+
+          {/* Handedness */}
+          <Animated.View entering={FadeInDown.duration(400).delay(360)} style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('player', 'handedness')}</Text>
+            <View style={styles.optionsContainer}>
+              {([{ id: 'right' as const, icon: 'back-hand', label: t('player', 'rightHanded') }, { id: 'left' as const, icon: 'front-hand', label: t('player', 'leftHanded') }, { id: 'ambidextrous' as const, icon: 'swap-horiz', label: t('player', 'ambidextrous') }]).map(h => (
+                <Pressable
+                  key={h.id}
+                  style={[
+                    styles.optionButton,
+                    handedness === h.id && { backgroundColor: '#6366F1' }
+                  ]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setHandedness(handedness === h.id ? '' : h.id);
+                  }}
+                >
+                  <MaterialIcons 
+                    name={h.icon as any} 
+                    size={20} 
+                    color={handedness === h.id ? '#FFF' : theme.textSecondary} 
+                  />
+                  <Text style={[
+                    styles.optionText,
+                    handedness === h.id && styles.optionTextActive
+                  ]}>
+                    {h.label}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
           </Animated.View>
 

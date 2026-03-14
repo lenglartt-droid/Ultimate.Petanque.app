@@ -51,6 +51,9 @@ export default function ProfileScreen() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   
+  // Handedness
+  const [handedness, setHandedness] = useState<'right' | 'left' | 'ambidextrous' | ''>('');
+
   // Terrain field
   const [terrainId, setTerrainId] = useState<string | null>(null);
   const [terrainName, setTerrainName] = useState('');
@@ -169,6 +172,9 @@ export default function ProfileScreen() {
         }
         if (selfPlayer?.email) {
           setEmail(selfPlayer.email);
+        }
+        if (selfPlayer?.handedness) {
+          setHandedness(selfPlayer.handedness);
         }
         
 
@@ -370,6 +376,7 @@ export default function ProfileScreen() {
           terrainName: terrainName || undefined,
           phone: phone.trim() || undefined,
           email: email.trim() || undefined,
+          handedness: handedness || undefined,
         });
       }
 
@@ -771,6 +778,35 @@ export default function ProfileScreen() {
                     autoCapitalize="none"
                   />
                 </View>
+              </View>
+            </View>
+
+            {/* Handedness Selection */}
+            <View style={styles.fieldCard}>
+              <View style={styles.fieldHeader}>
+                <MaterialIcons name="back-hand" size={18} color="#6366F1" />
+                <Text style={styles.fieldLabel}>{t('player', 'handedness')}</Text>
+              </View>
+              <View style={styles.optionGrid}>
+                {([{ id: 'right', icon: 'back-hand', label: t('player', 'rightHanded') }, { id: 'left', icon: 'front-hand', label: t('player', 'leftHanded') }, { id: 'ambidextrous', icon: 'swap-horiz', label: t('player', 'ambidextrous') }] as const).map((h) => (
+                  <Pressable
+                    key={h.id}
+                    style={[styles.optionCard, handedness === h.id && { borderColor: '#6366F1', backgroundColor: '#6366F1' + '10' }]}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setHandedness(handedness === h.id ? '' : h.id);
+                    }}
+                  >
+                    <MaterialIcons 
+                      name={h.icon as any} 
+                      size={24} 
+                      color={handedness === h.id ? '#6366F1' : theme.textSecondary} 
+                    />
+                    <Text style={[styles.optionText, handedness === h.id && { color: '#6366F1' }]}>
+                      {h.label}
+                    </Text>
+                  </Pressable>
+                ))}
               </View>
             </View>
 

@@ -24,6 +24,7 @@ export interface Player {
   terrainName?: string;
   country?: string;
   boules?: BoulesInfo;
+  handedness?: 'right' | 'left' | 'ambidextrous';
   isPublic?: boolean;
   location?: {
     latitude: number;
