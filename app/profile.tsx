@@ -426,10 +426,16 @@ export default function ProfileScreen() {
 
       // Also update the player record
       if (user?.id) {
-        const boulesData = (boulesName.trim() || boulesDiameter.trim() || boulesWeight.trim() || boulesSerialNumber.trim())
+        // Only build boulesData from manual fields if no equipment sets exist
+        // When equipment sets exist, primary set is managed via the picker
+        const hasEquipmentSets = boulesSets.length > 0;
+        const boulesData = !hasEquipmentSets && (boulesName.trim() || boulesDiameter.trim() || boulesWeight.trim() || boulesSerialNumber.trim())
           ? { name: boulesName.trim(), diameter: boulesDiameter.trim(), weight: boulesWeight.trim(), serialNumber: boulesSerialNumber.trim() || undefined }
-          : undefined;
-        await updatePlayer(user.id, {
+          : hasEquipmentSets
+            ? undefined // Let the equipment picker manage boules data
+            : undefined;
+
+        const playerUpdates: Record<string, any> = {
           name: username.trim(),
           nickname: nickname.trim() || null,
           role,
@@ -441,18 +447,23 @@ export default function ProfileScreen() {
           phone: phone.trim() || null,
           email: email.trim() || null,
           handedness: handedness || null,
-          boules: boulesData,
-          location: location.city ? {
+          country: location.country || 'France',
+        };
+
+        if (boulesData) {
+          playerUpdates.boules = boulesData;
+        }
+
+        if (location.city) {
+          playerUpdates.location = {
             city: location.city,
             latitude: location.latitude,
             longitude: location.longitude,
-          } : undefined,
-          country: location.country || 'France',
-        });
-      }
+          };
+        }
 
-      // Boules sync is now managed via the equipment picker;
-      // primary set is set directly via setPrimaryBoulesSet in the picker
+        await updatePlayer(user.id, playerUpdates);
+      }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showAlert(t('common', 'success'), t('profile', 'profileUpdated'));
@@ -955,7 +966,7 @@ export default function ProfileScreen() {
               />
             </View>
 
-            {/* Role Selection */}
+            {/* Role & Level Row */}
             <View style={styles.fieldCard}>
               <View style={styles.fieldHeader}>
                 <MaterialIcons name="sports" size={18} color={theme.accent} />
@@ -1013,40 +1024,6 @@ export default function ProfileScreen() {
               </View>
             </View>
 
-            {/* Contact Info */}
-            <View style={styles.fieldCard}>
-              <View style={styles.fieldHeader}>
-                <MaterialIcons name="contact-phone" size={18} color={theme.warning} />
-                <Text style={styles.fieldLabel}>{t('profile', 'contact')}</Text>
-              </View>
-              <View style={styles.contactFieldContainer}>
-                <View style={styles.contactFieldRow}>
-                  <MaterialIcons name="phone" size={20} color={theme.textSecondary} />
-                  <TextInput
-                    style={styles.contactFieldInput}
-                    value={phone}
-                    onChangeText={setPhone}
-                    placeholder={t('profile', 'phone')}
-                    placeholderTextColor={theme.textMuted}
-                    keyboardType="phone-pad"
-                  />
-                </View>
-                <View style={styles.contactFieldDivider} />
-                <View style={styles.contactFieldRow}>
-                  <MaterialIcons name="email" size={20} color={theme.textSecondary} />
-                  <TextInput
-                    style={styles.contactFieldInput}
-                    value={email}
-                    onChangeText={setEmail}
-                    placeholder={t('profile', 'emailAddress')}
-                    placeholderTextColor={theme.textMuted}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                  />
-                </View>
-              </View>
-            </View>
-
             {/* Handedness Selection */}
             <View style={styles.fieldCard}>
               <View style={styles.fieldHeader}>
@@ -1075,65 +1052,6 @@ export default function ProfileScreen() {
                 ))}
               </View>
             </View>
-
-            {/* Location */}
-            <View style={styles.fieldCard}>
-              <View style={styles.fieldHeader}>
-                <MaterialIcons name="place" size={18} color={theme.success} />
-                <Text style={styles.fieldLabel}>{t('profile', 'locationLabel')}</Text>
-              </View>
-              <LocationPicker
-                label=""
-                value={location}
-                onChange={setLocation}
-                placeholder={t('profile', 'locationPlaceholder')}
-                showCityOnly
-              />
-            </View>
-
-            {/* Auto-fill location suggestion */}
-            {(() => {
-              const locationEmpty = !location.latitude && !location.longitude;
-              if (!locationEmpty) return null;
-              const suggestions: { label: string; icon: string; color: string; city: string; lat: number; lng: number; address?: string; country?: string }[] = [];
-              if (terrainId) {
-                const tr = terrains.find(te => te.id === terrainId);
-                if (tr && tr.location && (tr.location.latitude || tr.location.longitude)) {
-                  suggestions.push({ label: t('profile', 'useTerrainLocation'), icon: 'sports-soccer', color: theme.success, city: tr.city, lat: tr.location.latitude, lng: tr.location.longitude, address: tr.address });
-                }
-              }
-              if (clubId) {
-                const cl = clubs.find(c => c.id === clubId);
-                if (cl && cl.location && (cl.location.latitude || cl.location.longitude)) {
-                  suggestions.push({ label: t('profile', 'useClubLocation'), icon: 'home', color: theme.accent, city: cl.city, lat: cl.location.latitude, lng: cl.location.longitude, address: cl.address });
-                }
-              }
-              if (suggestions.length === 0) return null;
-              return suggestions.map((sug, idx) => (
-                <Pressable
-                  key={idx}
-                  style={styles.autoFillLocationBtn}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setLocation({
-                      address: sug.address || '',
-                      city: sug.city || '',
-                      country: sug.country || 'France',
-                      latitude: sug.lat,
-                      longitude: sug.lng,
-                    });
-                  }}
-                >
-                  <View style={[styles.autoFillLocationIcon, { backgroundColor: sug.color + '15' }]}>
-                    <MaterialIcons name={sug.icon as any} size={16} color={sug.color} />
-                  </View>
-                  <Text style={styles.autoFillLocationText} numberOfLines={1}>{sug.label}</Text>
-                  <View style={styles.autoFillLocationArrow}>
-                    <MaterialIcons name="my-location" size={16} color={theme.primary} />
-                  </View>
-                </Pressable>
-              ));
-            })()}
 
             {/* Club Selection */}
             <View style={styles.fieldCard}>
@@ -1174,6 +1092,7 @@ export default function ProfileScreen() {
                 </Pressable>
               )}
             </View>
+
             {/* Boules / Equipment - pick from registered sets */}
             <View style={styles.fieldCard}>
               <View style={styles.fieldHeader}>
@@ -1277,6 +1196,99 @@ export default function ProfileScreen() {
                 </Pressable>
               )}
             </View>
+
+            {/* Contact Info */}
+            <View style={styles.fieldCard}>
+              <View style={styles.fieldHeader}>
+                <MaterialIcons name="contact-phone" size={18} color={theme.warning} />
+                <Text style={styles.fieldLabel}>{t('profile', 'contact')}</Text>
+              </View>
+              <View style={styles.contactFieldContainer}>
+                <View style={styles.contactFieldRow}>
+                  <MaterialIcons name="phone" size={20} color={theme.textSecondary} />
+                  <TextInput
+                    style={styles.contactFieldInput}
+                    value={phone}
+                    onChangeText={setPhone}
+                    placeholder={t('profile', 'phone')}
+                    placeholderTextColor={theme.textMuted}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+                <View style={styles.contactFieldDivider} />
+                <View style={styles.contactFieldRow}>
+                  <MaterialIcons name="email" size={20} color={theme.textSecondary} />
+                  <TextInput
+                    style={styles.contactFieldInput}
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder={t('profile', 'emailAddress')}
+                    placeholderTextColor={theme.textMuted}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                </View>
+              </View>
+            </View>
+
+            {/* Location */}
+            <View style={styles.fieldCard}>
+              <View style={styles.fieldHeader}>
+                <MaterialIcons name="place" size={18} color={theme.success} />
+                <Text style={styles.fieldLabel}>{t('profile', 'locationLabel')}</Text>
+              </View>
+              <LocationPicker
+                label=""
+                value={location}
+                onChange={setLocation}
+                placeholder={t('profile', 'locationPlaceholder')}
+                showCityOnly
+              />
+            </View>
+
+            {/* Auto-fill location suggestion */}
+            {(() => {
+              const locationEmpty = !location.latitude && !location.longitude;
+              if (!locationEmpty) return null;
+              const suggestions: { label: string; icon: string; color: string; city: string; lat: number; lng: number; address?: string; country?: string }[] = [];
+              if (terrainId) {
+                const tr = terrains.find(te => te.id === terrainId);
+                if (tr && tr.location && (tr.location.latitude || tr.location.longitude)) {
+                  suggestions.push({ label: t('profile', 'useTerrainLocation'), icon: 'sports-soccer', color: theme.success, city: tr.city, lat: tr.location.latitude, lng: tr.location.longitude, address: tr.address });
+                }
+              }
+              if (clubId) {
+                const cl = clubs.find(c => c.id === clubId);
+                if (cl && cl.location && (cl.location.latitude || cl.location.longitude)) {
+                  suggestions.push({ label: t('profile', 'useClubLocation'), icon: 'home', color: theme.accent, city: cl.city, lat: cl.location.latitude, lng: cl.location.longitude, address: cl.address });
+                }
+              }
+              if (suggestions.length === 0) return null;
+              return suggestions.map((sug, idx) => (
+                <Pressable
+                  key={idx}
+                  style={styles.autoFillLocationBtn}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setLocation({
+                      address: sug.address || '',
+                      city: sug.city || '',
+                      country: sug.country || 'France',
+                      latitude: sug.lat,
+                      longitude: sug.lng,
+                    });
+                  }}
+                >
+                  <View style={[styles.autoFillLocationIcon, { backgroundColor: sug.color + '15' }]}>
+                    <MaterialIcons name={sug.icon as any} size={16} color={sug.color} />
+                  </View>
+                  <Text style={styles.autoFillLocationText} numberOfLines={1}>{sug.label}</Text>
+                  <View style={styles.autoFillLocationArrow}>
+                    <MaterialIcons name="my-location" size={16} color={theme.primary} />
+                  </View>
+                </Pressable>
+              ));
+            })()}
           </Animated.View>
         )}
 

@@ -37,7 +37,7 @@ const defaultScreenWidth = Dimensions.get('window').width;
 // TYPES & CONSTANTS
 // ============================================
 type TimeFilter = 'today' | 'week' | 'month' | '3months' | '6months' | 'year' | 'all';
-type ProgressionFilter = '4weeks' | '8weeks' | '3months' | '6months' | 'year';
+type ProgressionFilter = '4weeks' | '8weeks' | '3months' | '6months' | 'year' | '2years' | '5years' | '10years' | '25years';
 type StatsCategory = 'performance' | 'tir' | 'point' | 'errors';
 
 const TIME_FILTER_KEYS: { id: TimeFilter; key: string }[] = [
@@ -56,6 +56,10 @@ const PROGRESSION_FILTER_KEYS: { id: ProgressionFilter; key: string; weeks: numb
   { id: '3months', key: 'threeMonths', weeks: 13 },
   { id: '6months', key: 'sixMonths', weeks: 26 },
   { id: 'year', key: 'year', weeks: 52 },
+  { id: '2years', key: 'twoYears', weeks: 104 },
+  { id: '5years', key: 'fiveYears', weeks: 260 },
+  { id: '10years', key: 'tenYears', weeks: 520 },
+  { id: '25years', key: 'twentyFiveYears', weeks: 1300 },
 ];
 
 const CATEGORY_TAB_KEYS: { id: StatsCategory; key: string; icon: string; color: string }[] = [
@@ -1214,6 +1218,9 @@ export default function StatsScreen() {
     
     const sortedMatches = [...matches].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
+    // For periods > 52 weeks, group by month instead of week
+    const useMonthly = weeksToShow > 52;
+    
     const weeklyData: { 
       week: string; weekDate: Date; matches: number; wins: number; winRate: number;
       tirSuccess: number; tirTotal: number; tirRate: number;
@@ -1221,61 +1228,119 @@ export default function StatsScreen() {
       carreaux: number; errors: number; errorRate: number;
     }[] = [];
     
-    if (sortedMatches.length === 0) return { weeklyData, weeksToShow };
+    if (sortedMatches.length === 0) return { weeklyData, weeksToShow, useMonthly };
     
     const now = new Date();
-    const startDate = new Date(now);
-    startDate.setDate(startDate.getDate() - (weeksToShow * 7));
-    startDate.setDate(startDate.getDate() - startDate.getDay());
     
-    const currentDate = new Date(startDate);
-    
-    while (currentDate <= now) {
-      const weekStart = new Date(currentDate);
-      const weekEnd = new Date(currentDate);
-      weekEnd.setDate(weekEnd.getDate() + 6);
+    if (useMonthly) {
+      // Monthly grouping for long periods
+      const totalMonths = Math.ceil(weeksToShow / 4.33);
+      const startDate = new Date(now);
+      startDate.setMonth(startDate.getMonth() - totalMonths);
+      startDate.setDate(1);
       
-      const weekMatches = sortedMatches.filter(m => {
-        const matchDate = new Date(m.date);
-        return matchDate >= weekStart && matchDate <= weekEnd;
-      });
+      const currentDate = new Date(startDate);
       
-      let tirSuccess = 0, tirTotal = 0, pointSuccess = 0, pointTotal = 0, carreaux = 0;
-      weekMatches.forEach(match => {
-        if (match.playerActions) {
-          match.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
-            tirTotal += pa.actions.tirs;
-            tirSuccess += pa.actions.tirsSuccess;
-            pointTotal += pa.actions.points;
-            pointSuccess += pa.actions.pointsSuccess;
-            carreaux += pa.actions.carreaux;
-          });
-        }
-      });
+      while (currentDate <= now) {
+        const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+        const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
+        
+        const monthMatches = sortedMatches.filter(m => {
+          const matchDate = new Date(m.date);
+          return matchDate >= monthStart && matchDate <= monthEnd;
+        });
+        
+        let tirSuccess = 0, tirTotal = 0, pointSuccess = 0, pointTotal = 0, carreaux = 0;
+        monthMatches.forEach(match => {
+          if (match.playerActions) {
+            match.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
+              tirTotal += pa.actions.tirs;
+              tirSuccess += pa.actions.tirsSuccess;
+              pointTotal += pa.actions.points;
+              pointSuccess += pa.actions.pointsSuccess;
+              carreaux += pa.actions.carreaux;
+            });
+          }
+        });
+        
+        const wins = monthMatches.filter(m => m.winner === 'A').length;
+        const totalAttempts = tirTotal + pointTotal;
+        const totalSuccess = tirSuccess + pointSuccess;
+        const errors = totalAttempts - totalSuccess;
+        
+        const monthLabel = `${monthStart.getMonth() + 1}/${String(monthStart.getFullYear()).slice(-2)}`;
+        
+        weeklyData.push({
+          week: monthLabel,
+          weekDate: new Date(monthStart),
+          matches: monthMatches.length,
+          wins,
+          winRate: monthMatches.length > 0 ? Math.round((wins / monthMatches.length) * 100) : 0,
+          tirSuccess, tirTotal,
+          tirRate: tirTotal > 0 ? Math.round((tirSuccess / tirTotal) * 100) : 0,
+          pointSuccess, pointTotal,
+          pointRate: pointTotal > 0 ? Math.round((pointSuccess / pointTotal) * 100) : 0,
+          carreaux, errors,
+          errorRate: totalAttempts > 0 ? Math.round((errors / totalAttempts) * 100) : 0,
+        });
+        
+        currentDate.setMonth(currentDate.getMonth() + 1);
+      }
+    } else {
+      // Weekly grouping for shorter periods
+      const startDate = new Date(now);
+      startDate.setDate(startDate.getDate() - (weeksToShow * 7));
+      startDate.setDate(startDate.getDate() - startDate.getDay());
       
-      const wins = weekMatches.filter(m => m.winner === 'A').length;
-      const totalAttempts = tirTotal + pointTotal;
-      const totalSuccess = tirSuccess + pointSuccess;
-      const errors = totalAttempts - totalSuccess;
+      const currentDate = new Date(startDate);
       
-      weeklyData.push({
-        week: `${weekStart.getDate()}/${weekStart.getMonth() + 1}`,
-        weekDate: new Date(weekStart),
-        matches: weekMatches.length,
-        wins,
-        winRate: weekMatches.length > 0 ? Math.round((wins / weekMatches.length) * 100) : 0,
-        tirSuccess, tirTotal,
-        tirRate: tirTotal > 0 ? Math.round((tirSuccess / tirTotal) * 100) : 0,
-        pointSuccess, pointTotal,
-        pointRate: pointTotal > 0 ? Math.round((pointSuccess / pointTotal) * 100) : 0,
-        carreaux, errors,
-        errorRate: totalAttempts > 0 ? Math.round((errors / totalAttempts) * 100) : 0,
-      });
-      
-      currentDate.setDate(currentDate.getDate() + 7);
+      while (currentDate <= now) {
+        const weekStart = new Date(currentDate);
+        const weekEnd = new Date(currentDate);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        
+        const weekMatches = sortedMatches.filter(m => {
+          const matchDate = new Date(m.date);
+          return matchDate >= weekStart && matchDate <= weekEnd;
+        });
+        
+        let tirSuccess = 0, tirTotal = 0, pointSuccess = 0, pointTotal = 0, carreaux = 0;
+        weekMatches.forEach(match => {
+          if (match.playerActions) {
+            match.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
+              tirTotal += pa.actions.tirs;
+              tirSuccess += pa.actions.tirsSuccess;
+              pointTotal += pa.actions.points;
+              pointSuccess += pa.actions.pointsSuccess;
+              carreaux += pa.actions.carreaux;
+            });
+          }
+        });
+        
+        const wins = weekMatches.filter(m => m.winner === 'A').length;
+        const totalAttempts = tirTotal + pointTotal;
+        const totalSuccess = tirSuccess + pointSuccess;
+        const errors = totalAttempts - totalSuccess;
+        
+        weeklyData.push({
+          week: `${weekStart.getDate()}/${weekStart.getMonth() + 1}`,
+          weekDate: new Date(weekStart),
+          matches: weekMatches.length,
+          wins,
+          winRate: weekMatches.length > 0 ? Math.round((wins / weekMatches.length) * 100) : 0,
+          tirSuccess, tirTotal,
+          tirRate: tirTotal > 0 ? Math.round((tirSuccess / tirTotal) * 100) : 0,
+          pointSuccess, pointTotal,
+          pointRate: pointTotal > 0 ? Math.round((pointSuccess / pointTotal) * 100) : 0,
+          carreaux, errors,
+          errorRate: totalAttempts > 0 ? Math.round((errors / totalAttempts) * 100) : 0,
+        });
+        
+        currentDate.setDate(currentDate.getDate() + 7);
+      }
     }
     
-    return { weeklyData, weeksToShow };
+    return { weeklyData, weeksToShow, useMonthly };
   }, [matches, progressionFilter]);
 
   // Calculate trends
@@ -2948,18 +3013,18 @@ export default function StatsScreen() {
       {/* Enhanced Progression Modal */}
       <Modal visible={showProgressionModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowProgressionModal(false)}>
         <SafeAreaView edges={['top']} style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <View>
-              <Text style={styles.modalTitle}>{t('stats', 'progressionTitle')}</Text>
-              <Text style={styles.modalSubtitle}>{t('stats', 'performanceEvolution')}</Text>
+          <View style={styles.progressionModalHeader}>
+            <View style={styles.progressionModalHeaderTop}>
+              <View>
+                <Text style={styles.progressionModalTitle}>{t('stats', 'progressionTitle')}</Text>
+                <Text style={styles.progressionModalSubtitle}>{t('stats', 'performanceEvolution')}</Text>
+              </View>
+              <Pressable style={styles.progressionModalCloseBtn} onPress={() => setShowProgressionModal(false)}>
+                <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+              </Pressable>
             </View>
-            <Pressable style={styles.modalCloseButton} onPress={() => setShowProgressionModal(false)}>
-              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
-            </Pressable>
-          </View>
 
-          {/* Progression Time Filter */}
-          <View style={styles.progressionFilterContainer}>
+            {/* Progression Time Filter */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.progressionFilterScroll}>
               {PROGRESSION_FILTERS.map(filter => (
                 <Pressable
@@ -3233,13 +3298,13 @@ export default function StatsScreen() {
                   </View>
                   <View style={styles.summaryTable}>
                     <View style={styles.summaryHeader}>
-                      <Text style={[styles.summaryCell, styles.summaryCellHeader, { flex: 1.2 }]}>{t('stats', 'weekShort')}</Text>
+                      <Text style={[styles.summaryCell, styles.summaryCellHeader, { flex: 1.2 }]}>{progressionData.useMonthly ? (language === 'fr' ? 'Mois' : 'Month') : t('stats', 'weekShort')}</Text>
                       <Text style={[styles.summaryCell, styles.summaryCellHeader, { flex: 1 }]}>{t('stats', 'gamesShort')}</Text>
                       <Text style={[styles.summaryCell, styles.summaryCellHeader, { flex: 1 }]}>{t('stats', 'winsShort')}</Text>
                       <Text style={[styles.summaryCell, styles.summaryCellHeader, { flex: 1 }]}>{t('stats', 'shotShort')}</Text>
                       <Text style={[styles.summaryCell, styles.summaryCellHeader, { flex: 1 }]}>{t('stats', 'pointShort')}</Text>
                     </View>
-                    {progressionData.weeklyData.slice(-8).map((data, i) => (
+                    {progressionData.weeklyData.filter(d => d.matches > 0).slice(-12).map((data, i) => (
                       <View key={i} style={[styles.summaryRow, i % 2 === 0 && styles.summaryRowAlt]}>
                         <Text style={[styles.summaryCell, { flex: 1.2 }]}>{data.week}</Text>
                         <Text style={[styles.summaryCell, { flex: 1 }]}>{data.matches}</Text>
@@ -3871,9 +3936,13 @@ const styles = StyleSheet.create({
   modalCloseButton: { padding: 8 },
   modalContent: { flex: 1 },
   modalScrollContent: { padding: 16, paddingBottom: 32 },
-  progressionFilterContainer: { backgroundColor: theme.surface, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
+  progressionModalHeader: { backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border, paddingBottom: 14 },
+  progressionModalHeaderTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 14 },
+  progressionModalTitle: { fontSize: 22, fontWeight: '800', color: theme.textPrimary },
+  progressionModalSubtitle: { fontSize: 13, color: theme.textSecondary, marginTop: 2 },
+  progressionModalCloseBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
   progressionFilterScroll: { paddingHorizontal: 16, gap: 8 },
-  progressionFilterPill: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: theme.borderRadius.full, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
+  progressionFilterPill: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: theme.borderRadius.full, backgroundColor: theme.backgroundSecondary, borderWidth: 1.5, borderColor: theme.border },
   progressionFilterPillActive: { backgroundColor: theme.primary, borderColor: theme.primary },
   progressionFilterText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
   progressionFilterTextActive: { color: '#FFF' },
