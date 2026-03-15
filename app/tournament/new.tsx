@@ -13,7 +13,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn, Layout } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import theme from '@/constants/theme';
@@ -418,7 +418,7 @@ export default function NewTournamentScreen() {
           </SectionCard>
 
           {/* Club - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(175)} style={[styles.sectionCard, { zIndex: 10 }]}>
+          <Animated.View entering={FadeInDown.duration(350).delay(175)} layout={Layout.duration(250)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowClubSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.primaryLight + '15' }]}>
                 <MaterialIcons name="home-work" size={18} color={theme.primaryLight} />
@@ -429,8 +429,8 @@ export default function NewTournamentScreen() {
               </View>
               <MaterialIcons name={showClubSection ? 'expand-less' : 'expand-more'} size={24} color={theme.textMuted} />
             </Pressable>
-            {showClubSection && (
-              <Animated.View entering={FadeInDown.duration(200)} style={styles.accordionContent}>
+            {showClubSection ? (
+              <View style={styles.accordionContent}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
                   <Pressable
                     style={[styles.chipBtn, !clubId && styles.chipBtnActive]}
@@ -448,12 +448,12 @@ export default function NewTournamentScreen() {
                     </Pressable>
                   ))}
                 </ScrollView>
-              </Animated.View>
-            )}
+              </View>
+            ) : null}
           </Animated.View>
 
           {/* Financial & Prize - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(200)} style={[styles.sectionCard, { zIndex: 9 }]}>
+          <Animated.View entering={FadeInDown.duration(350).delay(200)} layout={Layout.duration(250)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowFinancesSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.carreauColor + '15' }]}>
                 <MaterialIcons name="payments" size={18} color={theme.carreauColor} />
@@ -464,8 +464,8 @@ export default function NewTournamentScreen() {
               </View>
               <MaterialIcons name={showFinancesSection ? 'expand-less' : 'expand-more'} size={24} color={theme.textMuted} />
             </Pressable>
-            {showFinancesSection && (
-              <Animated.View entering={FadeInDown.duration(200)} style={styles.accordionContent}>
+            {showFinancesSection ? (
+              <View style={styles.accordionContent}>
                 <View style={styles.financeRow}>
                   <View style={styles.financeField}>
                     <Text style={styles.financeLabel}>{t('tournament', 'registrationCost')}</Text>
@@ -489,8 +489,8 @@ export default function NewTournamentScreen() {
                     />
                   </View>
                 </View>
-              </Animated.View>
-            )}
+              </View>
+            ) : null}
           </Animated.View>
 
           {/* Format */}
@@ -568,7 +568,7 @@ export default function NewTournamentScreen() {
           {/* =================== CLASSIFICATION (ACCORDIONS) =================== */}
 
           {/* Tournament Level - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(300)} style={[styles.sectionCard, { zIndex: 7 }]}>
+          <Animated.View entering={FadeInDown.duration(350).delay(300)} layout={Layout.duration(250)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowLevelSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.success + '15' }]}>
                 <MaterialIcons name="signal-cellular-alt" size={18} color={theme.success} />
@@ -579,8 +579,8 @@ export default function NewTournamentScreen() {
               </View>
               <MaterialIcons name={showLevelSection ? 'expand-less' : 'expand-more'} size={24} color={theme.textMuted} />
             </Pressable>
-            {showLevelSection && (
-              <Animated.View entering={FadeInDown.duration(200)} style={styles.accordionContent}>
+            {showLevelSection ? (
+              <View style={styles.accordionContent}>
                 <View style={styles.levelGrid}>
                   {config.tournamentLevels.map(level => {
                     const isActive = tournamentLevel === level && !showCustomLevelInput;
@@ -604,8 +604,8 @@ export default function NewTournamentScreen() {
                     <Text style={[styles.levelChipText, showCustomLevelInput && styles.levelChipTextActive]}>{t('tournament', 'otherLevel')}</Text>
                   </Pressable>
                 </View>
-                {showCustomLevelInput && (
-                  <Animated.View entering={FadeInDown.duration(250)} style={[styles.customInput, { marginBottom: 4 }]}>
+                {showCustomLevelInput ? (
+                  <View style={[styles.customInput, { marginBottom: 4 }]}>
                     <TextInput
                       style={styles.customInputField}
                       value={customLevel}
@@ -615,14 +615,14 @@ export default function NewTournamentScreen() {
                       autoFocus
                     />
                     {customLevel.trim() ? <MaterialIcons name="check-circle" size={18} color={theme.success} /> : null}
-                  </Animated.View>
-                )}
-              </Animated.View>
-            )}
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
           </Animated.View>
 
           {/* Tournament Category - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(325)} style={[styles.sectionCard, { zIndex: 6 }]}>
+          <Animated.View entering={FadeInDown.duration(350).delay(325)} layout={Layout.duration(250)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowCategorySection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.warning + '15' }]}>
                 <MaterialIcons name="verified" size={18} color={theme.warning} />
@@ -633,8 +633,8 @@ export default function NewTournamentScreen() {
               </View>
               <MaterialIcons name={showCategorySection ? 'expand-less' : 'expand-more'} size={24} color={theme.textMuted} />
             </Pressable>
-            {showCategorySection && (
-              <Animated.View entering={FadeInDown.duration(200)} style={styles.accordionContent}>
+            {showCategorySection ? (
+              <View style={styles.accordionContent}>
                 <View style={styles.chipGrid}>
                   {config.tournamentCategories.map(cat => {
                     const isActive = tournamentCategory === cat;
@@ -649,12 +649,12 @@ export default function NewTournamentScreen() {
                     );
                   })}
                 </View>
-              </Animated.View>
-            )}
+              </View>
+            ) : null}
           </Animated.View>
 
           {/* Registration - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(350)} style={[styles.sectionCard, { zIndex: 5 }]}>
+          <Animated.View entering={FadeInDown.duration(350).delay(350)} layout={Layout.duration(250)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowRegistrationSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.primary + '15' }]}>
                 <MaterialIcons name="how-to-reg" size={18} color={theme.primary} />
@@ -665,8 +665,8 @@ export default function NewTournamentScreen() {
               </View>
               <MaterialIcons name={showRegistrationSection ? 'expand-less' : 'expand-more'} size={24} color={theme.textMuted} />
             </Pressable>
-            {showRegistrationSection && (
-              <Animated.View entering={FadeInDown.duration(200)} style={styles.accordionContent}>
+            {showRegistrationSection ? (
+              <View style={styles.accordionContent}>
                 <View style={styles.chipGrid}>
                   {config.registrationTypes.map(reg => {
                     const isActive = registrationType === reg;
@@ -681,12 +681,12 @@ export default function NewTournamentScreen() {
                     );
                   })}
                 </View>
-              </Animated.View>
-            )}
+              </View>
+            ) : null}
           </Animated.View>
 
           {/* Scope - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(375)} style={[styles.sectionCard, { zIndex: 4 }]}>
+          <Animated.View entering={FadeInDown.duration(350).delay(375)} layout={Layout.duration(250)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowScopeSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.accent + '15' }]}>
                 <MaterialIcons name="public" size={18} color={theme.accent} />
@@ -697,8 +697,8 @@ export default function NewTournamentScreen() {
               </View>
               <MaterialIcons name={showScopeSection ? 'expand-less' : 'expand-more'} size={24} color={theme.textMuted} />
             </Pressable>
-            {showScopeSection && (
-              <Animated.View entering={FadeInDown.duration(200)} style={styles.accordionContent}>
+            {showScopeSection ? (
+              <View style={styles.accordionContent}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
                   {config.tournamentScopes.map(scope => {
                     const isActive = tournamentScope === scope;
@@ -713,14 +713,14 @@ export default function NewTournamentScreen() {
                     );
                   })}
                 </ScrollView>
-              </Animated.View>
-            )}
+              </View>
+            ) : null}
           </Animated.View>
 
           {/* =================== DÉTAILS (ACCORDIONS) =================== */}
 
           {/* Participants - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(400)} style={[styles.sectionCard, { zIndex: 3 }]}>
+          <Animated.View entering={FadeInDown.duration(350).delay(400)} layout={Layout.duration(250)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowParticipantsSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.carreauColor + '15' }]}>
                 <MaterialIcons name="people-outline" size={18} color={theme.carreauColor} />
@@ -731,8 +731,8 @@ export default function NewTournamentScreen() {
               </View>
               <MaterialIcons name={showParticipantsSection ? 'expand-less' : 'expand-more'} size={24} color={theme.textMuted} />
             </Pressable>
-            {showParticipantsSection && (
-              <Animated.View entering={FadeInDown.duration(200)} style={styles.accordionContent}>
+            {showParticipantsSection ? (
+              <View style={styles.accordionContent}>
                 <View style={styles.participantsRow}>
                   {['8', '16', '24', '32', '48', '64', '128'].map(num => {
                     const isActive = maxParticipants === num;
@@ -747,12 +747,12 @@ export default function NewTournamentScreen() {
                     );
                   })}
                 </View>
-              </Animated.View>
-            )}
+              </View>
+            ) : null}
           </Animated.View>
 
           {/* Description - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(425)} style={[styles.sectionCard, { zIndex: 2 }]}>
+          <Animated.View entering={FadeInDown.duration(350).delay(425)} layout={Layout.duration(250)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowDescriptionSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.textSecondary + '15' }]}>
                 <MaterialIcons name="description" size={18} color={theme.textSecondary} />
@@ -763,8 +763,8 @@ export default function NewTournamentScreen() {
               </View>
               <MaterialIcons name={showDescriptionSection ? 'expand-less' : 'expand-more'} size={24} color={theme.textMuted} />
             </Pressable>
-            {showDescriptionSection && (
-              <Animated.View entering={FadeInDown.duration(200)} style={styles.accordionContent}>
+            {showDescriptionSection ? (
+              <View style={styles.accordionContent}>
                 <TextInput
                   style={[styles.textInput, styles.textArea]}
                   value={description}
@@ -775,8 +775,8 @@ export default function NewTournamentScreen() {
                   numberOfLines={4}
                   textAlignVertical="top"
                 />
-              </Animated.View>
-            )}
+              </View>
+            ) : null}
           </Animated.View>
 
         </ScrollView>
