@@ -472,6 +472,7 @@ export default function HistoryScreen() {
   const [trainingSubFilter, setTrainingSubFilter] = useState<TrainingSubFilter>('all');
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodOption>('all');
   const [showPeriodModal, setShowPeriodModal] = useState(false);
+  const [viewingMatch, setViewingMatch] = useState<Match | null>(null);
   const [editingChallenge, setEditingChallenge] = useState<Challenge | null>(null);
   const [showChallengeShare, setShowChallengeShare] = useState(false);
   const [isEditingChallengeFields, setIsEditingChallengeFields] = useState(false);
@@ -659,7 +660,7 @@ export default function HistoryScreen() {
   // Handlers
   const handleMatchPress = useCallback((match: Match) => {
     Haptics.selectionAsync();
-    router.push(`/match/${match.id}`);
+    setViewingMatch(match);
   }, []);
 
   const handleChallengePress = useCallback((challenge: Challenge) => {
@@ -1624,6 +1625,279 @@ export default function HistoryScreen() {
         </SafeAreaView>
       </Modal>
 
+      {/* Match Detail Modal */}
+      <Modal
+        visible={!!viewingMatch}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setViewingMatch(null)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <View style={{ width: 36 }} />
+            <Text style={styles.modalTitle}>{t('history', 'matchDetails') || (language === 'fr' ? 'Détails du match' : 'Match Details')}</Text>
+            <Pressable style={styles.modalClose} onPress={() => setViewingMatch(null)}>
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+          </View>
+          
+          {viewingMatch && (() => {
+            const m = viewingMatch;
+            const isWin = m.winner === 'A';
+            const isTournament = m.mode === 'Tournoi';
+            const matchTerrain = m.terrainId ? terrains.find(tr => tr.id === m.terrainId) : null;
+            const matchBoules = m.boulesSetId ? boulesSets.find(bs => bs.id === m.boulesSetId) : null;
+            const meneTotalA = m.menes?.reduce((s, me) => s + (me.teamAPoints || 0), 0) || 0;
+            const meneTotalB = m.menes?.reduce((s, me) => s + (me.teamBPoints || 0), 0) || 0;
+
+            // Series info
+            const sMatches = m.seriesInfo?.seriesId ? matches.filter(sm => sm.seriesInfo?.seriesId === m.seriesInfo?.seriesId).sort((a, b) => (a.seriesInfo?.matchNumber || 0) - (b.seriesInfo?.matchNumber || 0)) : [];
+            const sWinsA = sMatches.filter(sm => sm.winner === 'A').length;
+            const sWinsB = sMatches.filter(sm => sm.winner === 'B').length;
+
+            return (
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 80 }} showsVerticalScrollIndicator={false}>
+                {/* Header Card */}
+                <View style={styles.detailHeaderCard}>
+                  <View style={styles.detailHeaderTop}>
+                    <View style={[styles.detailIcon, { backgroundColor: isTournament ? theme.carreauColor + '18' : theme.primary + '18' }]}>
+                      <MaterialIcons name={isTournament ? 'emoji-events' : 'fitness-center'} size={30} color={isTournament ? theme.carreauColor : theme.primary} />
+                    </View>
+                    <View style={styles.detailInfo}>
+                      <Text style={styles.detailName}>
+                        {isTournament ? (m.tournamentName || t('modes', 'tournament')) : t('modes', 'training')}
+                      </Text>
+                      <Text style={styles.detailDate}>
+                        {new Date(m.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long' })}
+                      </Text>
+                      <Text style={styles.detailTime}>
+                        {new Date(m.date).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                    </View>
+                  </View>
+                  {/* Badges */}
+                  <View style={styles.detailHeaderBadges}>
+                    <View style={[styles.detailModeBadge, { backgroundColor: (isTournament ? theme.carreauColor : theme.primary) + '15' }]}>
+                      <MaterialIcons name={isTournament ? 'emoji-events' : 'fitness-center'} size={13} color={isTournament ? theme.carreauColor : theme.primary} />
+                      <Text style={[styles.detailModeBadgeText, { color: isTournament ? theme.carreauColor : theme.primary }]}>
+                        {isTournament ? t('modes', 'tournament') : t('modes', 'training')}
+                      </Text>
+                    </View>
+                    <View style={[styles.detailModeBadge, { backgroundColor: theme.backgroundSecondary }]}>
+                      <MaterialIcons name="groups" size={13} color={theme.textSecondary} />
+                      <Text style={[styles.detailModeBadgeText, { color: theme.textSecondary }]}>{t('formats', m.format)}</Text>
+                    </View>
+                    {matchTerrain ? (
+                      <View style={[styles.detailModeBadge, { backgroundColor: theme.success + '15' }]}>
+                        <MaterialIcons name="place" size={13} color={theme.success} />
+                        <Text style={[styles.detailModeBadgeText, { color: theme.success }]} numberOfLines={1}>{matchTerrain.name}</Text>
+                      </View>
+                    ) : null}
+                    {matchBoules ? (
+                      <View style={[styles.detailModeBadge, { backgroundColor: '#D97706' + '15' }]}>
+                        <MaterialIcons name="sports-baseball" size={13} color={'#D97706'} />
+                        <Text style={[styles.detailModeBadgeText, { color: '#D97706' }]} numberOfLines={1}>
+                          {matchBoules.name}{matchBoules.diameter ? ` \u2022 ${matchBoules.diameter}mm` : ''}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {m.duration > 0 ? (
+                      <View style={[styles.detailModeBadge, { backgroundColor: theme.backgroundSecondary }]}>
+                        <MaterialIcons name="timer" size={13} color={theme.textSecondary} />
+                        <Text style={[styles.detailModeBadgeText, { color: theme.textSecondary }]}>{m.duration} min</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+
+                {/* Score Card */}
+                <View style={[styles.detailScoreCard, { borderLeftWidth: 4, borderLeftColor: isWin ? theme.success : theme.error }]}>
+                  <View style={styles.mdScoreRow}>
+                    <View style={styles.mdTeamCol}>
+                      <Text style={styles.mdTeamLabel}>{t('history', 'me')}</Text>
+                      <Text style={styles.mdTeamNames} numberOfLines={2}>{m.teamA.playerNames.join(' \u2022 ')}</Text>
+                    </View>
+                    <View style={styles.mdScoreCenter}>
+                      <View style={styles.mdScoreBox}>
+                        <Text style={[styles.mdScoreNum, isWin && { color: theme.success }]}>{m.teamA.score}</Text>
+                        <Text style={styles.mdScoreSep}>-</Text>
+                        <Text style={[styles.mdScoreNum, !isWin && { color: theme.error }]}>{m.teamB.score}</Text>
+                      </View>
+                      <View style={[styles.mdResultBadge, { backgroundColor: isWin ? theme.success + '15' : theme.error + '15' }]}>
+                        <MaterialIcons name={isWin ? 'check-circle' : 'cancel'} size={14} color={isWin ? theme.success : theme.error} />
+                        <Text style={[styles.mdResultText, { color: isWin ? theme.success : theme.error }]}>
+                          {isWin ? t('history', 'victory') : t('history', 'defeat')}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={[styles.mdTeamCol, { alignItems: 'flex-end' }]}>
+                      <Text style={styles.mdTeamLabel}>{t('history', 'opp')}</Text>
+                      <Text style={[styles.mdTeamNames, { textAlign: 'right' }]} numberOfLines={2}>{m.teamB.playerNames.join(' \u2022 ')}</Text>
+                    </View>
+                  </View>
+                  {/* Player roles */}
+                  {m.teamA.playerRoles && m.teamA.playerRoles.length > 0 ? (
+                    <View style={styles.mdRolesRow}>
+                      {m.teamA.playerRoles.map((pr, idx) => {
+                        const rc: Record<string, { icon: string; color: string }> = { 'Pointeur': { icon: 'radio-button-on', color: '#3B82F6' }, 'Milieu': { icon: 'swap-horiz', color: '#8B5CF6' }, 'Tireur': { icon: 'gps-fixed', color: '#F97316' } };
+                        const cfg = rc[pr.role] || { icon: 'person', color: theme.textMuted };
+                        return (
+                          <View key={pr.playerId} style={[styles.mdRoleBadge, { backgroundColor: cfg.color + '15' }]}>
+                            <MaterialIcons name={cfg.icon as any} size={11} color={cfg.color} />
+                            <Text style={[styles.mdRoleBadgeText, { color: cfg.color }]}>{m.teamA.playerNames[idx]?.split(' ')[0]} - {t('roles', pr.role)}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+                </View>
+
+                {/* Series Info */}
+                {sMatches.length > 1 ? (
+                  <View style={styles.mdSeriesCard}>
+                    <View style={styles.mdSeriesHeader}>
+                      <MaterialIcons name="replay" size={16} color={theme.accent} />
+                      <Text style={styles.mdSeriesTitle}>Best of {sMatches.length >= 3 ? '3' : sMatches.length}</Text>
+                      <View style={[styles.mdSeriesScoreBadge, { backgroundColor: sWinsA > sWinsB ? theme.success + '15' : sWinsB > sWinsA ? theme.error + '15' : theme.warning + '15' }]}>
+                        <Text style={[styles.mdSeriesScoreText, { color: sWinsA > sWinsB ? theme.success : sWinsB > sWinsA ? theme.error : theme.warning }]}>{sWinsA} - {sWinsB}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.mdSeriesList}>
+                      {sMatches.map((sm, idx) => {
+                        const sCurrent = sm.id === m.id;
+                        const sWin = sm.winner === 'A';
+                        return (
+                          <Pressable
+                            key={sm.id}
+                            style={[styles.mdSeriesMatch, sCurrent && styles.mdSeriesMatchCurrent]}
+                            onPress={() => { if (!sCurrent) { setViewingMatch(sm); Haptics.selectionAsync(); } }}
+                          >
+                            <View style={[styles.mdSeriesDot, { backgroundColor: sWin ? theme.success : theme.error }]} />
+                            <Text style={styles.mdSeriesMatchLabel}>
+                              {sm.seriesInfo?.isFinale ? (language === 'fr' ? 'Finale' : 'Final') : `M${idx + 1}`}
+                            </Text>
+                            <Text style={[styles.mdSeriesMatchScore, sWin && { color: theme.success }, !sWin && { color: theme.error }]}>
+                              {sm.teamA.score}-{sm.teamB.score}
+                            </Text>
+                            {sCurrent ? <MaterialIcons name="chevron-right" size={14} color={theme.primary} /> : null}
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ) : null}
+
+                {/* Menes */}
+                {m.menes && m.menes.length > 0 ? (
+                  <View style={styles.mdMenesCard}>
+                    <View style={styles.mdMenesHeader}>
+                      <MaterialIcons name="format-list-numbered" size={16} color={theme.primary} />
+                      <Text style={styles.mdMenesTitle}>{t('match', 'menesCount')} ({m.menes.length})</Text>
+                    </View>
+                    {m.menes.map((mene, idx) => (
+                      <View key={idx} style={styles.mdMeneRow}>
+                        <Text style={styles.mdMeneNum}>#{idx + 1}</Text>
+                        <View style={styles.mdMeneScores}>
+                          <Text style={[styles.mdMeneScore, (mene.teamAPoints || 0) > 0 && { color: theme.success, fontWeight: '700' }]}>{mene.teamAPoints || 0}</Text>
+                          <Text style={styles.mdMeneSep}>-</Text>
+                          <Text style={[styles.mdMeneScore, (mene.teamBPoints || 0) > 0 && { color: theme.error, fontWeight: '700' }]}>{mene.teamBPoints || 0}</Text>
+                        </View>
+                        <View style={styles.mdMeneCumul}>
+                          <Text style={styles.mdMeneCumulText}>
+                            {m.menes!.slice(0, idx + 1).reduce((s, me) => s + (me.teamAPoints || 0), 0)}-{m.menes!.slice(0, idx + 1).reduce((s, me) => s + (me.teamBPoints || 0), 0)}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                    <View style={styles.mdMeneTotalRow}>
+                      <Text style={styles.mdMeneTotalLabel}>Total</Text>
+                      <Text style={[styles.mdMeneTotalVal, { color: theme.success }]}>{meneTotalA}</Text>
+                      <Text style={styles.mdMeneSep}>-</Text>
+                      <Text style={[styles.mdMeneTotalVal, { color: theme.error }]}>{meneTotalB}</Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                {/* Player Actions Summary */}
+                {m.playerActions && m.playerActions.length > 0 ? (
+                  <View style={styles.mdActionsCard}>
+                    <View style={styles.mdActionsHeader}>
+                      <MaterialIcons name="sports" size={16} color={theme.tirColor} />
+                      <Text style={styles.mdActionsTitle}>{t('match', 'playerActions')}</Text>
+                    </View>
+                    {m.playerActions.map(pa => {
+                      const tirRate = pa.actions.tirs > 0 ? Math.round((pa.actions.tirsSuccess / pa.actions.tirs) * 100) : 0;
+                      const pointRate = pa.actions.points > 0 ? Math.round((pa.actions.pointsSuccess / pa.actions.points) * 100) : 0;
+                      return (
+                        <View key={pa.playerId} style={styles.mdActionRow}>
+                          <View style={styles.mdActionPlayerInfo}>
+                            <View style={[styles.mdActionDot, { backgroundColor: pa.team === 'A' ? theme.primary : theme.accent }]} />
+                            <Text style={styles.mdActionPlayerName} numberOfLines={1}>{pa.playerName}</Text>
+                          </View>
+                          <View style={styles.mdActionStatsRow}>
+                            {pa.actions.tirs > 0 ? (
+                              <View style={styles.mdActionStat}>
+                                <MaterialIcons name="gps-fixed" size={12} color={theme.tirColor} />
+                                <Text style={styles.mdActionStatText}>{pa.actions.tirsSuccess}/{pa.actions.tirs} ({tirRate}%)</Text>
+                              </View>
+                            ) : null}
+                            {pa.actions.points > 0 ? (
+                              <View style={styles.mdActionStat}>
+                                <MaterialIcons name="adjust" size={12} color={theme.pointColor} />
+                                <Text style={styles.mdActionStatText}>{pa.actions.pointsSuccess}/{pa.actions.points} ({pointRate}%)</Text>
+                              </View>
+                            ) : null}
+                            {pa.actions.carreaux > 0 ? (
+                              <View style={styles.mdActionStat}>
+                                <MaterialIcons name="stars" size={12} color={theme.carreauColor} />
+                                <Text style={[styles.mdActionStatText, { color: theme.carreauColor }]}>{pa.actions.carreaux}</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : null}
+
+                {/* Tournament phase info */}
+                {isTournament && m.tournamentPhase ? (
+                  <View style={styles.mdPhaseCard}>
+                    <MaterialIcons name="flag" size={16} color={theme.carreauColor} />
+                    <Text style={styles.mdPhaseText}>{t('tournamentPhases', m.tournamentPhase)}</Text>
+                  </View>
+                ) : null}
+
+                {/* Actions */}
+                <View style={styles.detailActions}>
+                  <Pressable style={styles.deleteBtn} onPress={() => {
+                    Alert.alert(t('match', 'deleteMatch'), t('match', 'deleteMatchConfirm'), [
+                      { text: t('common', 'cancel'), style: 'cancel' },
+                      { text: t('common', 'delete'), style: 'destructive', onPress: () => {
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                        deleteMatch(m.id);
+                        setViewingMatch(null);
+                      }},
+                    ]);
+                  }}>
+                    <MaterialIcons name="delete" size={18} color={theme.error} />
+                    <Text style={styles.deleteBtnText}>{t('common', 'delete')}</Text>
+                  </Pressable>
+                  <Pressable style={styles.closeBtn} onPress={() => {
+                    Haptics.selectionAsync();
+                    setViewingMatch(null);
+                    router.push(`/match/${m.id}`);
+                  }}>
+                    <MaterialIcons name="edit" size={18} color="#FFF" />
+                    <Text style={styles.closeBtnText}>{t('match', 'editMatch') || (language === 'fr' ? 'Modifier' : 'Edit')}</Text>
+                  </Pressable>
+                </View>
+              </ScrollView>
+            );
+          })()}
+        </SafeAreaView>
+      </Modal>
+
       {/* Challenge Share Modal */}
       {editingChallenge ? (
         <ShareModal
@@ -1767,6 +2041,61 @@ const styles = StyleSheet.create({
   },
   resultText: { fontSize: 11, fontWeight: '600' },
   formatText: { fontSize: 11, color: theme.textMuted },
+  
+  // Match Detail Modal
+  mdScoreRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  mdTeamCol: { flex: 1 },
+  mdTeamLabel: { fontSize: 9, fontWeight: '700', color: theme.textMuted, letterSpacing: 0.5, marginBottom: 4 },
+  mdTeamNames: { fontSize: 13, fontWeight: '600', color: theme.textPrimary, lineHeight: 18 },
+  mdScoreCenter: { alignItems: 'center', paddingHorizontal: 12 },
+  mdScoreBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, marginBottom: 8 },
+  mdScoreNum: { fontSize: 32, fontWeight: '800', color: theme.textSecondary, minWidth: 36, textAlign: 'center' },
+  mdScoreSep: { fontSize: 18, color: theme.textMuted, marginHorizontal: 6 },
+  mdResultBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 5, borderRadius: theme.borderRadius.full },
+  mdResultText: { fontSize: 12, fontWeight: '700' },
+  mdRolesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border },
+  mdRoleBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: theme.borderRadius.full },
+  mdRoleBadgeText: { fontSize: 10, fontWeight: '600' },
+  // Series in match detail
+  mdSeriesCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: theme.accent + '30', ...theme.shadows.card },
+  mdSeriesHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  mdSeriesTitle: { flex: 1, fontSize: 14, fontWeight: '700', color: theme.accent },
+  mdSeriesScoreBadge: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: theme.borderRadius.full },
+  mdSeriesScoreText: { fontSize: 14, fontWeight: '800' },
+  mdSeriesList: { gap: 6 },
+  mdSeriesMatch: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.sm },
+  mdSeriesMatchCurrent: { borderWidth: 1.5, borderColor: theme.primary + '40', backgroundColor: theme.primary + '06' },
+  mdSeriesDot: { width: 8, height: 8, borderRadius: 4 },
+  mdSeriesMatchLabel: { flex: 1, fontSize: 13, fontWeight: '600', color: theme.textPrimary },
+  mdSeriesMatchScore: { fontSize: 15, fontWeight: '700', color: theme.textSecondary },
+  // Menes in match detail
+  mdMenesCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 16, ...theme.shadows.card },
+  mdMenesHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  mdMenesTitle: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
+  mdMeneRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: theme.border + '60' },
+  mdMeneNum: { width: 32, fontSize: 12, fontWeight: '600', color: theme.textMuted },
+  mdMeneScores: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  mdMeneScore: { fontSize: 16, fontWeight: '600', color: theme.textSecondary, width: 24, textAlign: 'center' },
+  mdMeneSep: { fontSize: 12, color: theme.textMuted },
+  mdMeneCumul: { marginLeft: 'auto', backgroundColor: theme.backgroundSecondary, paddingHorizontal: 10, paddingVertical: 3, borderRadius: theme.borderRadius.sm },
+  mdMeneCumulText: { fontSize: 11, fontWeight: '600', color: theme.textMuted },
+  mdMeneTotalRow: { flexDirection: 'row', alignItems: 'center', paddingTop: 10, marginTop: 4 },
+  mdMeneTotalLabel: { width: 32, fontSize: 12, fontWeight: '700', color: theme.textSecondary },
+  mdMeneTotalVal: { fontSize: 18, fontWeight: '800', width: 24, textAlign: 'center' },
+  // Player Actions in match detail
+  mdActionsCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 16, ...theme.shadows.card },
+  mdActionsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  mdActionsTitle: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
+  mdActionRow: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border + '60' },
+  mdActionPlayerInfo: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  mdActionDot: { width: 8, height: 8, borderRadius: 4 },
+  mdActionPlayerName: { fontSize: 14, fontWeight: '600', color: theme.textPrimary },
+  mdActionStatsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingLeft: 16 },
+  mdActionStat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  mdActionStatText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  // Phase badge in match detail
+  mdPhaseCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.carreauColor + '10', borderRadius: theme.borderRadius.md, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: theme.carreauColor + '25' },
+  mdPhaseText: { fontSize: 14, fontWeight: '600', color: theme.carreauColor },
   
   // Series Card
   seriesCard: {
