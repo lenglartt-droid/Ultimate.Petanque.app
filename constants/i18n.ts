@@ -1488,6 +1488,8 @@ export const translations = {
     noTerrains: { fr: 'Aucun terrain enregistré', en: 'No courts registered' },
     noPlayersFound: { fr: 'Aucun joueur trouvé', en: 'No players found' },
     otherTeam: { fr: 'Autre équipe', en: 'Other team' },
+    suggestedPartner: { fr: 'Partenaire suggéré', en: 'Suggested partner' },
+    addBtn: { fr: 'Ajouter', en: 'Add' },
     selected: { fr: 'sélectionné(s)', en: 'selected' },
     playerRoles: { fr: 'Rôles des joueurs', en: 'Player roles' },
     reset: { fr: 'Réinitialiser', en: 'Reset' },

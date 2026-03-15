@@ -451,28 +451,8 @@ export default function ProfileScreen() {
         });
       }
 
-      // Auto-sync boules to boules_sets as primary set
-      if (boulesData && user?.id) {
-        const primarySet = boulesSets.find(s => s.isPrimary);
-        if (primarySet) {
-          // Update existing primary set
-          await updateBoulesSet(primarySet.id, {
-            name: boulesData.name || primarySet.name || (language === 'fr' ? 'Mon set principal' : 'My primary set'),
-            diameter: boulesData.diameter ? parseFloat(String(boulesData.diameter)) : undefined,
-            weight: boulesData.weight ? parseInt(String(boulesData.weight), 10) : undefined,
-            serialNumber: boulesData.serialNumber || undefined,
-          });
-        } else {
-          // Create new primary set
-          await addBoulesSet({
-            name: boulesData.name || (language === 'fr' ? 'Mon set principal' : 'My primary set'),
-            diameter: boulesData.diameter ? parseFloat(String(boulesData.diameter)) : undefined,
-            weight: boulesData.weight ? parseInt(String(boulesData.weight), 10) : undefined,
-            serialNumber: boulesData.serialNumber || undefined,
-            isPrimary: true,
-          });
-        }
-      }
+      // Boules sync is now managed via the equipment picker;
+      // primary set is set directly via setPrimaryBoulesSet in the picker
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showAlert(t('common', 'success'), t('profile', 'profileUpdated'));
@@ -1194,50 +1174,68 @@ export default function ProfileScreen() {
                 </Pressable>
               )}
             </View>
-            {/* Boules / Equipment */}
+            {/* Boules / Equipment - pick from registered sets */}
             <View style={styles.fieldCard}>
               <View style={styles.fieldHeader}>
                 <MaterialIcons name="sports-baseball" size={18} color={theme.accent} />
                 <Text style={styles.fieldLabel}>{t('player', 'boulesLabel')}</Text>
               </View>
-              <TextInput
-                style={[styles.fieldInput, { marginBottom: 10 }]}
-                value={boulesName}
-                onChangeText={setBoulesName}
-                placeholder={t('player', 'boulesPlaceholder')}
-                placeholderTextColor={theme.textMuted}
-              />
-              <View style={styles.boulesEditRow}>
-                <View style={styles.boulesEditField}>
-                  <Text style={styles.boulesEditLabel}>{t('player', 'diameterLabel')}</Text>
-                  <TextInput
-                    style={styles.fieldInput}
-                    value={boulesDiameter}
-                    onChangeText={setBoulesDiameter}
-                    placeholder="70.5"
-                    placeholderTextColor={theme.textMuted}
-                    keyboardType="decimal-pad"
-                  />
+              {boulesSets.length > 0 ? (
+                <View style={styles.boulesSetPickerList}>
+                  {boulesSets.map(bs => {
+                    const isSelected = bs.isPrimary;
+                    return (
+                      <Pressable
+                        key={bs.id}
+                        style={[styles.boulesSetPickerItem, isSelected && styles.boulesSetPickerItemActive]}
+                        onPress={() => {
+                          Haptics.selectionAsync();
+                          setPrimaryBoulesSet(bs.id);
+                          setBoulesName(bs.name || '');
+                          setBoulesDiameter(bs.diameter ? String(bs.diameter) : '');
+                          setBoulesWeight(bs.weight ? String(bs.weight) : '');
+                          setBoulesSerialNumber(bs.serialNumber || '');
+                        }}
+                      >
+                        <View style={[styles.boulesSetPickerIcon, isSelected && styles.boulesSetPickerIconActive]}>
+                          <MaterialIcons name="sports-baseball" size={20} color={isSelected ? '#FFF' : theme.textSecondary} />
+                        </View>
+                        <View style={styles.boulesSetPickerInfo}>
+                          <Text style={[styles.boulesSetPickerName, isSelected && styles.boulesSetPickerNameActive]}>{bs.name}</Text>
+                          <Text style={styles.boulesSetPickerMeta}>
+                            {[bs.brand, bs.diameter ? `${bs.diameter}mm` : '', bs.weight ? `${bs.weight}g` : ''].filter(Boolean).join(' \u2022 ')}
+                          </Text>
+                        </View>
+                        {isSelected ? (
+                          <View style={styles.boulesSetPickerCheck}>
+                            <MaterialIcons name="star" size={14} color="#FFF" />
+                          </View>
+                        ) : (
+                          <MaterialIcons name="radio-button-unchecked" size={22} color={theme.border} />
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                  <Pressable
+                    style={styles.boulesSetPickerAddBtn}
+                    onPress={() => router.push('/equipment')}
+                  >
+                    <MaterialIcons name="add-circle-outline" size={20} color={theme.accent} />
+                    <Text style={styles.boulesSetPickerAddText}>{language === 'fr' ? 'Gerer les sets' : 'Manage sets'}</Text>
+                    <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+                  </Pressable>
                 </View>
-                <View style={styles.boulesEditField}>
-                  <Text style={styles.boulesEditLabel}>{t('player', 'weightLabel')}</Text>
-                  <TextInput
-                    style={styles.fieldInput}
-                    value={boulesWeight}
-                    onChangeText={setBoulesWeight}
-                    placeholder="690"
-                    placeholderTextColor={theme.textMuted}
-                    keyboardType="decimal-pad"
-                  />
-                </View>
-              </View>
-              <TextInput
-                style={[styles.fieldInput, { marginTop: 10 }]}
-                value={boulesSerialNumber}
-                onChangeText={setBoulesSerialNumber}
-                placeholder={language === 'fr' ? 'Numero de serie (optionnel)' : 'Serial number (optional)'}
-                placeholderTextColor={theme.textMuted}
-              />
+              ) : (
+                <Pressable
+                  style={[styles.selectClubButton, { borderColor: theme.accent + '30' }]}
+                  onPress={() => router.push('/equipment')}
+                >
+                  <MaterialIcons name="add-circle-outline" size={22} color={theme.accent} />
+                  <Text style={[styles.selectClubButtonText, { color: theme.accent }]}>
+                    {language === 'fr' ? 'Ajouter un set de boules' : 'Add a boules set'}
+                  </Text>
+                </Pressable>
+              )}
             </View>
 
             {/* Terrain Selection */}
@@ -3189,6 +3187,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
+    gap: 8,
     borderTopWidth: 1,
     borderTopColor: theme.border,
   },
@@ -3198,10 +3197,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 10,
+    paddingVertical: 12,
     backgroundColor: theme.primary + '10',
     borderRadius: theme.borderRadius.md,
-    marginRight: 8,
   },
   fedReplaceBtnText: {
     fontSize: 14,
@@ -3209,12 +3207,78 @@ const styles = StyleSheet.create({
     color: theme.primary,
   },
   fedRemoveBtn: {
-    width: 44,
-    height: 44,
+    width: 48,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.error + '10',
     borderRadius: theme.borderRadius.md,
+  },
+  // Boules set picker styles
+  boulesSetPickerList: {
+    gap: 8,
+  },
+  boulesSetPickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.md,
+    padding: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  boulesSetPickerItemActive: {
+    borderColor: theme.accent,
+    backgroundColor: theme.accent + '08',
+  },
+  boulesSetPickerIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: theme.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  boulesSetPickerIconActive: {
+    backgroundColor: theme.accent,
+  },
+  boulesSetPickerInfo: {
+    flex: 1,
+  },
+  boulesSetPickerName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  boulesSetPickerNameActive: {
+    color: theme.accent,
+  },
+  boulesSetPickerMeta: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 2,
+  },
+  boulesSetPickerCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: theme.carreauColor,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  boulesSetPickerAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  boulesSetPickerAddText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.accent,
   },
   fedAddCard: {
     backgroundColor: theme.surface,

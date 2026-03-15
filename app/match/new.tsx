@@ -2264,6 +2264,47 @@ export default function NewMatchScreen() {
                   </Pressable>
                 ) : null}
 
+                {/* Suggested Partner Banner */}
+                {showPlayerPicker === 'A' && mostPlayedPartner && (format === 'Doublette' || format === 'Triplette') && (() => {
+                  const isSelected = teamAPlayers.some(p => p.playerId === mostPlayedPartner.id);
+                  const isInOtherTeam = teamBPlayers.some(p => p.playerId === mostPlayedPartner.id);
+                  if (isInOtherTeam) return null;
+                  return (
+                    <View style={styles.suggestedPartnerBanner}>
+                      <View style={styles.suggestedPartnerHeader}>
+                        <MaterialIcons name="auto-awesome" size={16} color={theme.carreauColor} />
+                        <Text style={styles.suggestedPartnerLabel}>{t('match', 'suggestedPartner')}</Text>
+                      </View>
+                      <View style={styles.suggestedPartnerRow}>
+                        <View style={[styles.playerAvatar, isSelected && styles.playerAvatarSelected, { width: 40, height: 40, borderRadius: 20 }]}>
+                          <Text style={[styles.playerAvatarText, { fontSize: 14 }]}>{mostPlayedPartner.name.split(' ').map(n => n[0]).join('')}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.playerName}>{mostPlayedPartner.name}</Text>
+                          <Text style={styles.playerMeta}>{t('roles', mostPlayedPartner.role)} • {t('levels', mostPlayedPartner.level)}</Text>
+                        </View>
+                        {isSelected ? (
+                          <Pressable
+                            style={styles.suggestedPartnerRemoveBtn}
+                            onPress={() => { Haptics.selectionAsync(); setTeamAPlayers(prev => prev.filter(p => p.playerId !== mostPlayedPartner.id)); }}
+                          >
+                            <MaterialIcons name="close" size={18} color={theme.error} />
+                            <Text style={styles.suggestedPartnerRemoveText}>{t('common', 'delete')}</Text>
+                          </Pressable>
+                        ) : (
+                          <Pressable
+                            style={styles.suggestedPartnerAddBtn}
+                            onPress={() => togglePlayer(mostPlayedPartner.id, 'A')}
+                          >
+                            <MaterialIcons name="add" size={18} color="#FFF" />
+                            <Text style={styles.suggestedPartnerAddText}>{t('match', 'addBtn')}</Text>
+                          </Pressable>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })()}
+
                 {showPlayerPicker && availableRoles.length > 0 && (showPlayerPicker === 'A' ? teamAPlayers : teamBPlayers).length > 0 ? (
                   <View style={styles.roleSelectionSection}>
                     <Text style={styles.roleSelectionTitle}>{t('match', 'playerRoles')}</Text>
@@ -2507,6 +2548,15 @@ const styles = StyleSheet.create({
   emptySearchText: { fontSize: 14, color: theme.textMuted, marginTop: 10 },
   terrainMatchBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.primary + '15', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
   terrainMatchBadgeText: { fontSize: 11, fontWeight: '700', color: theme.primary },
+  // Suggested partner
+  suggestedPartnerBanner: { backgroundColor: theme.carreauColor + '08', borderRadius: theme.borderRadius.lg, padding: 12, marginBottom: 12, borderWidth: 1.5, borderColor: theme.carreauColor + '25' },
+  suggestedPartnerHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
+  suggestedPartnerLabel: { fontSize: 11, fontWeight: '700', color: theme.carreauColor, letterSpacing: 0.5, textTransform: 'uppercase' },
+  suggestedPartnerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  suggestedPartnerRemoveBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.error + '15', paddingHorizontal: 12, paddingVertical: 8, borderRadius: theme.borderRadius.md },
+  suggestedPartnerRemoveText: { fontSize: 12, fontWeight: '600', color: theme.error },
+  suggestedPartnerAddBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.primary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: theme.borderRadius.md },
+  suggestedPartnerAddText: { fontSize: 12, fontWeight: '600', color: '#FFF' },
   // Fullscreen styles
   fullscreenContainer: { flex: 1, backgroundColor: '#0A0F1A' },
   fullscreenSafeArea: { flex: 1 },
