@@ -18,13 +18,14 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, router } from 'expo-router';
 import { uploadPlayerAvatar } from '@/services/storageService';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
+import { SectionCard, StepIndicator } from '@/components/ui/FormSectionCard';
 
 const levels = ['Débutant', 'Intermédiaire', 'Confirmé', 'Expert'] as const;
 
@@ -367,6 +368,8 @@ export default function EditPlayerScreen() {
         </Pressable>
       </View>
 
+      <StepIndicator step={name.trim() ? 3 : 1} total={3} label={name.trim() ? t('tournament', 'readyToCreate') : t('player', 'nameIsRequired')} />
+
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -406,92 +409,42 @@ export default function EditPlayerScreen() {
           </Animated.View>
 
           {/* Name */}
-          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('player', 'nameLabel')}</Text>
-            <TextInput
-              style={styles.textInput}
-              value={name}
-              onChangeText={setName}
-              placeholder={t('player', 'namePlaceholder')}
-              placeholderTextColor={theme.textMuted}
-              autoCapitalize="words"
-            />
-          </Animated.View>
-
-          {/* Nickname */}
-          <Animated.View entering={FadeInDown.duration(400).delay(120)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('player', 'nicknameLabel')}</Text>
-            <TextInput
-              style={styles.textInput}
-              value={nickname}
-              onChangeText={setNickname}
-              placeholder={t('player', 'nicknamePlaceholder')}
-              placeholderTextColor={theme.textMuted}
-            />
-          </Animated.View>
+          <SectionCard title={t('player', 'nameLabel')} icon="person" color={theme.primary} delay={50} required>
+            <TextInput style={styles.textInput} value={name} onChangeText={setName} placeholder={t('player', 'namePlaceholder')} placeholderTextColor={theme.textMuted} autoCapitalize="words" />
+            <TextInput style={[styles.textInput, { marginTop: 10 }]} value={nickname} onChangeText={setNickname} placeholder={t('player', 'nicknamePlaceholder')} placeholderTextColor={theme.textMuted} />
+          </SectionCard>
 
           {/* Role */}
-          <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('player', 'roleLabel')}</Text>
+          <SectionCard title={t('player', 'roleLabel')} icon="sports" color={theme.tirColor} delay={100} required>
             <View style={styles.optionsContainer}>
-              {config.playerRoles.map(r => (
-                <Pressable
-                  key={r}
-                  style={[
-                    styles.optionButton,
-                    role === r && styles.optionButtonActive
-                  ]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setRole(r);
-                  }}
-                >
-                  <MaterialIcons 
-                    name={r === 'Tireur' ? 'gps-fixed' : r === 'Pointeur' ? 'radio-button-on' : 'swap-horiz'} 
-                    size={20} 
-                    color={role === r ? '#FFF' : theme.textSecondary} 
-                  />
-                  <Text style={[
-                    styles.optionText,
-                    role === r && styles.optionTextActive
-                  ]}>
-                    {t('roles', r)}
-                  </Text>
-                </Pressable>
-              ))}
+              {config.playerRoles.map(r => {
+                const cfg = { 'Tireur': { icon: 'gps-fixed', color: '#EF4444' }, 'Pointeur': { icon: 'radio-button-on', color: '#10B981' }, 'Milieu': { icon: 'swap-horiz', color: '#3B82F6' } }[r] || { icon: 'sports', color: theme.primary };
+                const isActive = role === r;
+                return (
+                  <Pressable key={r} style={[styles.optionButton, isActive && { borderColor: cfg.color, backgroundColor: cfg.color + '08' }]} onPress={() => { Haptics.selectionAsync(); setRole(r); }}>
+                    <View style={[styles.optionIconBox, isActive && { backgroundColor: cfg.color }]}>
+                      <MaterialIcons name={cfg.icon as any} size={22} color={isActive ? '#FFF' : theme.textSecondary} />
+                    </View>
+                    <Text style={[styles.optionText, isActive && { color: cfg.color }]}>{t('roles', r)}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Level */}
-          <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('player', 'levelLabel')}</Text>
+          <SectionCard title={t('player', 'levelLabel')} icon="signal-cellular-alt" color={theme.success} delay={150}>
             <View style={styles.levelContainer}>
               {levels.map(l => (
-                <Pressable
-                  key={l}
-                  style={[
-                    styles.levelChip,
-                    level === l && styles.levelChipActive
-                  ]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setLevel(l);
-                  }}
-                >
-                  <Text style={[
-                    styles.levelText,
-                    level === l && styles.levelTextActive
-                  ]}>
-                    {t('levels', l)}
-                  </Text>
+                <Pressable key={l} style={[styles.levelChip, level === l && styles.levelChipActive]} onPress={() => { Haptics.selectionAsync(); setLevel(l); }}>
+                  <Text style={[styles.levelText, level === l && styles.levelTextActive]}>{t('levels', l)}</Text>
                 </Pressable>
               ))}
             </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Club */}
-          <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('player', 'clubLabel')}</Text>
+          <SectionCard title={t('player', 'clubLabel')} icon="home-work" color={theme.accent} delay={200}>
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
@@ -535,11 +488,10 @@ export default function EditPlayerScreen() {
                 </Pressable>
               ))}
             </ScrollView>
-          </Animated.View>
+          </SectionCard>
 
           {/* Terrain */}
-          <Animated.View entering={FadeInDown.duration(400).delay(260)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('player', 'terrainLabel')}</Text>
+          <SectionCard title={t('player', 'terrainLabel')} icon="place" color={theme.success} delay={250}>
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
@@ -590,10 +542,10 @@ export default function EditPlayerScreen() {
                 </Pressable>
               ))}
             </ScrollView>
-          </Animated.View>
+          </SectionCard>
 
           {/* Location */}
-          <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
+          <SectionCard title={t('player', 'locationLabel')} icon="my-location" color={theme.primaryLight} delay={300}>
             <LocationPicker
               label={t('player', 'locationLabel')}
               value={location}
@@ -644,11 +596,10 @@ export default function EditPlayerScreen() {
                 </Pressable>
               ));
             })()}
-          </Animated.View>
+          </SectionCard>
 
           {/* Contact Info */}
-          <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('player', 'contactLabel')}</Text>
+          <SectionCard title={t('player', 'contactLabel')} icon="contacts" color={theme.textSecondary} delay={350}>
             <View style={styles.contactInputs}>
               <View style={styles.contactInputContainer}>
                 <MaterialIcons name="phone" size={20} color={theme.textSecondary} style={styles.contactIcon} />
@@ -674,11 +625,10 @@ export default function EditPlayerScreen() {
                 />
               </View>
             </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Handedness */}
-          <Animated.View entering={FadeInDown.duration(400).delay(360)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('player', 'handedness')}</Text>
+          <SectionCard title={t('player', 'handedness')} icon="front-hand" color="#6366F1" delay={360}>
             <View style={styles.optionsContainer}>
               {([{ id: 'right' as const, icon: 'back-hand', label: t('player', 'rightHanded') }, { id: 'left' as const, icon: 'front-hand', label: t('player', 'leftHanded') }, { id: 'ambidextrous' as const, icon: 'swap-horiz', label: t('player', 'ambidextrous') }]).map(h => (
                 <Pressable
@@ -706,12 +656,10 @@ export default function EditPlayerScreen() {
                 </Pressable>
               ))}
             </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Boules Section */}
-          <Animated.View entering={FadeInDown.duration(400).delay(370)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('player', 'boulesLabel')}</Text>
-            <View style={styles.boulesCard}>
+          <SectionCard title={t('player', 'boulesLabel')} icon="sports-baseball" color="#D97706" delay={370}>
               <TextInput
                 style={[styles.textInput, { marginBottom: 12 }]}
                 value={boulesName}
@@ -743,8 +691,7 @@ export default function EditPlayerScreen() {
                   />
                 </View>
               </View>
-            </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Preferred Role (read-only) */}
           {roleAnalysis.totalWithRoles > 0 && (
@@ -876,8 +823,7 @@ export default function EditPlayerScreen() {
           )}
 
           {/* Stats Preview */}
-          <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('player', 'statistics')}</Text>
+          <SectionCard title={t('player', 'statistics')} icon="bar-chart" color={theme.primary} delay={400}>
             <View style={styles.statsCard}>
               <View style={styles.statRow}>
                 <Text style={styles.statLabel}>{t('player', 'matchesPlayed')}</Text>
@@ -899,7 +845,7 @@ export default function EditPlayerScreen() {
             <Text style={styles.statsNote}>
               {t('player', 'statsAutoCalculated')}
             </Text>
-          </Animated.View>
+          </SectionCard>
         </ScrollView>
 
         {/* Save Button */}
@@ -961,7 +907,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 24,
+    paddingTop: 16,
   },
   avatarSection: {
     alignItems: 'center',
@@ -1020,13 +966,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   textInput: {
-    backgroundColor: theme.surface,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    backgroundColor: theme.backgroundSecondary,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
     borderRadius: theme.borderRadius.md,
-    fontSize: 16,
+    fontSize: 15,
     color: theme.textPrimary,
-    ...theme.shadows.card,
+    borderWidth: 1,
+    borderColor: theme.border,
   },
   optionsContainer: {
     flexDirection: 'row',
@@ -1034,22 +981,26 @@ const styles = StyleSheet.create({
   },
   optionButton: {
     flex: 1,
-    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.md,
+    padding: 14,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  optionIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: theme.textMuted + '15',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    backgroundColor: theme.surface,
-    paddingVertical: 14,
-    borderRadius: theme.borderRadius.md,
-    ...theme.shadows.card,
-  },
-  optionButtonActive: {
-    backgroundColor: theme.primary,
+    marginBottom: 8,
   },
   optionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.textPrimary,
   },
   optionTextActive: {
     color: '#FFF',
@@ -1060,25 +1011,24 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   levelChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: theme.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: theme.borderRadius.md,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: 'transparent',
-    ...theme.shadows.card,
   },
   levelChipActive: {
-    borderColor: theme.primary,
-    backgroundColor: theme.primary + '10',
+    borderColor: theme.success,
+    backgroundColor: theme.success + '08',
   },
   levelText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     color: theme.textSecondary,
   },
   levelTextActive: {
-    color: theme.primary,
+    color: theme.success,
   },
   clubsScroll: {
     gap: 10,
@@ -1195,8 +1145,8 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingHorizontal: 16,
-    paddingTop: 16,
-    backgroundColor: theme.backgroundSecondary,
+    paddingTop: 12,
+    backgroundColor: theme.surface,
     borderTopWidth: 1,
     borderTopColor: theme.border,
   },
@@ -1206,12 +1156,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
     backgroundColor: theme.primary,
-    paddingVertical: 18,
+    paddingVertical: 16,
     borderRadius: theme.borderRadius.md,
+    ...theme.shadows.cardElevated,
+  },
+  saveButtonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
   },
   saveButtonText: {
-    fontSize: 17,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: '#FFF',
   },
   // Read-only analysis cards

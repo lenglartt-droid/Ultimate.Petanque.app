@@ -32,6 +32,7 @@ import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAlert } from '@/template';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
+import { SectionCard, StepIndicator } from '@/components/ui/FormSectionCard';
 import {
   checkDuplicatePublicClubsExcluding,
   fetchPublicClubById,
@@ -406,6 +407,8 @@ export default function EditClubScreen() {
         <View style={{ width: 40 }} />
       </View>
 
+      <StepIndicator step={[name.trim(), location.city.trim()].filter(Boolean).length + 1} total={3} label={!name.trim() ? t('tournament', 'startWithName') : !location.city.trim() ? t('tournament', 'chooseLocation') : t('tournament', 'readyToCreate')} />
+
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -424,8 +427,7 @@ export default function EditClubScreen() {
           </Animated.View>
 
           {/* Name */}
-          <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('club', 'clubNameRequired')}</Text>
+          <SectionCard title={t('club', 'clubNameRequired').replace(' *', '')} icon="home-work" color={theme.accent} delay={50} required>
             <TextInput
               style={styles.textInput}
               value={name}
@@ -434,10 +436,10 @@ export default function EditClubScreen() {
               placeholderTextColor={theme.textMuted}
               autoCapitalize="words"
             />
-          </Animated.View>
+          </SectionCard>
 
           {/* Location */}
-          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+          <SectionCard title={t('club', 'locationLabel')} icon="place" color={theme.success} delay={100} required>
             <LocationPicker
               label={t('club', 'locationLabel')}
               value={location}
@@ -446,7 +448,7 @@ export default function EditClubScreen() {
               required
               showAddressField
             />
-          </Animated.View>
+          </SectionCard>
 
           {/* Duplicate Detection Banner */}
           {checkingDuplicates ? (
@@ -533,8 +535,7 @@ export default function EditClubScreen() {
           ) : null}
 
           {/* Description */}
-          <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('club', 'descriptionLabel')}</Text>
+          <SectionCard title={t('club', 'descriptionLabel')} icon="description" color={theme.textSecondary} delay={150}>
             <TextInput
               style={[styles.textInput, styles.textArea]}
               value={description}
@@ -545,11 +546,10 @@ export default function EditClubScreen() {
               numberOfLines={4}
               textAlignVertical="top"
             />
-          </Animated.View>
+          </SectionCard>
 
           {/* Terrain Association */}
-          <Animated.View entering={FadeInDown.duration(400).delay(175)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('club', 'mainTerrainLabel')}</Text>
+          <SectionCard title={t('club', 'mainTerrainLabel')} icon="sports-soccer" color={theme.primary} delay={175}>
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
@@ -611,11 +611,10 @@ export default function EditClubScreen() {
                 </Pressable>
               ))}
             </ScrollView>
-          </Animated.View>
+          </SectionCard>
 
           {/* Facilities */}
-          <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('club', 'facilitiesLabel')}</Text>
+          <SectionCard title={t('club', 'facilitiesLabel')} icon="sports" color={theme.tirColor} delay={200}>
             <View style={styles.facilitiesGrid}>
               {FACILITY_KEYS.map(facility => (
                 <Pressable
@@ -640,11 +639,10 @@ export default function EditClubScreen() {
                 </Pressable>
               ))}
             </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Membership Cost */}
-          <Animated.View entering={FadeInDown.duration(400).delay(225)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('club', 'membershipCostLabel')}</Text>
+          <SectionCard title={t('club', 'membershipCostLabel')} icon="payments" color={theme.carreauColor} delay={225}>
             <TextInput
               style={styles.textInput}
               value={membershipCost}
@@ -653,11 +651,10 @@ export default function EditClubScreen() {
               placeholderTextColor={theme.textMuted}
               keyboardType="numeric"
             />
-          </Animated.View>
+          </SectionCard>
 
           {/* Founded Year */}
-          <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('club', 'foundedYearLabel')}</Text>
+          <SectionCard title={t('club', 'foundedYearLabel')} icon="event" color={theme.primaryLight} delay={250}>
             <TextInput
               style={styles.textInput}
               value={foundedYear}
@@ -667,11 +664,10 @@ export default function EditClubScreen() {
               keyboardType="number-pad"
               maxLength={4}
             />
-          </Animated.View>
+          </SectionCard>
 
           {/* Contact */}
-          <Animated.View entering={FadeInDown.duration(400).delay(275)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('club', 'contactLabel')}</Text>
+          <SectionCard title={t('club', 'contactLabel')} icon="contacts" color={theme.textSecondary} delay={275}>
             <View style={styles.contactInputContainer}>
               <MaterialIcons name="email" size={20} color={theme.textSecondary} />
               <TextInput
@@ -695,11 +691,10 @@ export default function EditClubScreen() {
                 keyboardType="phone-pad"
               />
             </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Club Card */}
-          <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('club', 'clubCardLabel')}</Text>
+          <SectionCard title={t('club', 'clubCardLabel')} icon="badge" color={theme.primary} delay={300}>
             {uploadingCard ? (
               <View style={styles.clubCardLoading}>
                 <ActivityIndicator size="large" color={theme.primary} />
@@ -740,7 +735,7 @@ export default function EditClubScreen() {
                 <Text style={styles.clubCardUploadDesc}>{t('club', 'clubCardDesc')}</Text>
               </Pressable>
             )}
-          </Animated.View>
+          </SectionCard>
         </ScrollView>
 
         {/* Save Button */}
@@ -822,7 +817,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 24,
+    paddingTop: 16,
   },
   emptyContainer: {
     flex: 1,
@@ -857,13 +852,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   textInput: {
-    backgroundColor: theme.surface,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    backgroundColor: theme.backgroundSecondary,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
     borderRadius: theme.borderRadius.md,
-    fontSize: 16,
+    fontSize: 15,
     color: theme.textPrimary,
-    ...theme.shadows.card,
+    borderWidth: 1,
+    borderColor: theme.border,
   },
   textArea: {
     minHeight: 100,
@@ -916,8 +912,8 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingHorizontal: 16,
-    paddingTop: 16,
-    backgroundColor: theme.backgroundSecondary,
+    paddingTop: 12,
+    backgroundColor: theme.surface,
     borderTopWidth: 1,
     borderTopColor: theme.border,
   },
@@ -927,15 +923,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
     backgroundColor: theme.accent,
-    paddingVertical: 18,
+    paddingVertical: 16,
     borderRadius: theme.borderRadius.md,
+    ...theme.shadows.cardElevated,
   },
   saveButtonDisabled: {
     backgroundColor: theme.textMuted,
+    opacity: 0.6,
   },
   saveButtonText: {
-    fontSize: 17,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: '#FFF',
   },
   terrainsScroll: {

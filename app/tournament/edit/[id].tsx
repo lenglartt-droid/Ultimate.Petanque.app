@@ -23,6 +23,7 @@ import config, { GameFormat, TournamentType, TournamentLevel, TournamentCategory
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
+import { SectionCard, StepIndicator } from '@/components/ui/FormSectionCard';
 
 type TournamentStatus = 'À venir' | 'En cours' | 'Terminé';
 
@@ -249,6 +250,8 @@ export default function EditTournamentScreen() {
         <View style={{ width: 40 }} />
       </View>
 
+      <StepIndicator step={[name.trim(), location.city.trim()].filter(Boolean).length + 1} total={3} label={!name.trim() ? t('tournament', 'startWithName') : !location.city.trim() ? t('tournament', 'chooseLocation') : t('tournament', 'readyToCreate')} />
+
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -267,8 +270,7 @@ export default function EditTournamentScreen() {
           </Animated.View>
 
           {/* Name */}
-          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('tournament', 'tournamentNameRequired')}</Text>
+          <SectionCard title={t('tournament', 'tournamentNameRequired').replace(' *', '')} icon="emoji-events" color={theme.carreauColor} delay={50} required>
             <TextInput
               style={styles.textInput}
               value={name}
@@ -277,11 +279,10 @@ export default function EditTournamentScreen() {
               placeholderTextColor={theme.textMuted}
               autoCapitalize="words"
             />
-          </Animated.View>
+          </SectionCard>
 
           {/* Status */}
-          <Animated.View entering={FadeInDown.duration(400).delay(125)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('tournament', 'statusLabel')}</Text>
+          <SectionCard title={t('tournament', 'statusLabel')} icon="flag" color={theme.warning} delay={75}>
             <View style={styles.statusContainer}>
               {(['À venir', 'En cours', 'Terminé'] as TournamentStatus[]).map(s => {
                 const statusConfig = {
@@ -317,11 +318,10 @@ export default function EditTournamentScreen() {
                 );
               })}
             </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Date */}
-          <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('tournament', 'dateRequired')}</Text>
+          <SectionCard title={t('tournament', 'dateRequired').replace(' *', '')} icon="event" color={theme.primary} delay={100} required>
             <Pressable 
               style={styles.dateButton}
               onPress={() => setShowDatePicker(true)}
@@ -385,11 +385,10 @@ export default function EditTournamentScreen() {
                 />
               )}
             </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Type */}
-          <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('tournament', 'cadrageUpper')}</Text>
+          <SectionCard title={t('tournament', 'cadrageUpper')} icon="category" color={theme.tirColor} delay={150}>
             <View style={styles.typeContainer}>
               {config.tournamentTypes.map(ct => (
                 <Pressable
@@ -440,11 +439,10 @@ export default function EditTournamentScreen() {
                 </View>
               </Animated.View>
             )}
-          </Animated.View>
+          </SectionCard>
 
           {/* Tournament Level */}
-          <Animated.View entering={FadeInDown.duration(400).delay(225)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('tournament', 'tournamentLevelUpper')}</Text>
+          <SectionCard title={t('tournament', 'tournamentLevelUpper')} icon="signal-cellular-alt" color={theme.success} delay={175}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
               {config.tournamentLevels.map(level => (
                 <Pressable
@@ -518,11 +516,10 @@ export default function EditTournamentScreen() {
                 )}
               </Animated.View>
             )}
-          </Animated.View>
+          </SectionCard>
 
           {/* Tournament Category */}
-          <Animated.View entering={FadeInDown.duration(400).delay(235)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('tournament', 'tournamentTypeUpper')}</Text>
+          <SectionCard title={t('tournament', 'tournamentTypeUpper')} icon="sports" color={theme.warning} delay={200}>
             <View style={styles.categoryContainer}>
               {config.tournamentCategories.map(cat => (
                 <Pressable
@@ -545,11 +542,10 @@ export default function EditTournamentScreen() {
                 </Pressable>
               ))}
             </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Registration Type */}
-          <Animated.View entering={FadeInDown.duration(400).delay(245)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('tournament', 'registrationTypeUpper')}</Text>
+          <SectionCard title={t('tournament', 'registrationTypeUpper')} icon="how-to-reg" color={theme.primary} delay={225}>
             <View style={styles.registrationContainer}>
               {config.registrationTypes.map(reg => (
                 <Pressable
@@ -572,11 +568,10 @@ export default function EditTournamentScreen() {
                 </Pressable>
               ))}
             </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Tournament Scope */}
-          <Animated.View entering={FadeInDown.duration(400).delay(248)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('tournament', 'scopeUpper')}</Text>
+          <SectionCard title={t('tournament', 'scopeUpper')} icon="public" color={theme.accent} delay={238}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
               {config.tournamentScopes.map(scope => (
                 <Pressable
@@ -599,11 +594,10 @@ export default function EditTournamentScreen() {
                 </Pressable>
               ))}
             </ScrollView>
-          </Animated.View>
+          </SectionCard>
 
           {/* Format */}
-          <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('tournament', 'formatUpper')}</Text>
+          <SectionCard title={t('tournament', 'formatUpper')} icon="groups" color={theme.accent} delay={250}>
             <View style={styles.formatContainer}>
               {config.game.formats.map(f => (
                 <Pressable
@@ -626,10 +620,10 @@ export default function EditTournamentScreen() {
                 </Pressable>
               ))}
             </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Location */}
-          <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
+          <SectionCard title={t('tournament', 'tournamentLocation')} icon="place" color={theme.error} delay={275} required>
             <LocationPicker
               label={t('tournament', 'tournamentLocation')}
               value={location}
@@ -638,11 +632,10 @@ export default function EditTournamentScreen() {
               required
               showAddressField
             />
-          </Animated.View>
+          </SectionCard>
 
           {/* Organizing Club */}
-          <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('tournament', 'organizingClubUpper')}</Text>
+          <SectionCard title={t('tournament', 'organizingClubUpper')} icon="home-work" color={theme.primaryLight} delay={300}>
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
@@ -686,11 +679,10 @@ export default function EditTournamentScreen() {
                 </Pressable>
               ))}
             </ScrollView>
-          </Animated.View>
+          </SectionCard>
 
           {/* Max Participants */}
-          <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('tournament', 'maxParticipantsUpper')}</Text>
+          <SectionCard title={t('tournament', 'maxParticipantsUpper')} icon="people" color={theme.carreauColor} delay={325}>
             <View style={styles.participantsContainer}>
               {['16', '24', '32', '48', '64'].map(num => (
                 <Pressable
@@ -713,11 +705,10 @@ export default function EditTournamentScreen() {
                 </Pressable>
               ))}
             </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Registration Cost */}
-          <Animated.View entering={FadeInDown.duration(400).delay(450)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('tournament', 'registrationCostUpper')}</Text>
+          <SectionCard title={t('tournament', 'registrationCostUpper')} icon="payments" color={theme.error} delay={350}>
             <TextInput
               style={styles.textInput}
               value={registrationCost}
@@ -726,11 +717,10 @@ export default function EditTournamentScreen() {
               placeholderTextColor={theme.textMuted}
               keyboardType="numeric"
             />
-          </Animated.View>
+          </SectionCard>
 
           {/* Prize */}
-          <Animated.View entering={FadeInDown.duration(400).delay(475)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('tournament', 'prizeUpper')}</Text>
+          <SectionCard title={t('tournament', 'prizeUpper')} icon="emoji-events" color={theme.success} delay={375}>
             <TextInput
               style={styles.textInput}
               value={prize}
@@ -738,13 +728,12 @@ export default function EditTournamentScreen() {
               placeholder={t('tournament', 'prizePlaceholderLong')}
               placeholderTextColor={theme.textMuted}
             />
-          </Animated.View>
+          </SectionCard>
 
           {/* Final Result & Prize Won (only for finished tournaments) */}
           {status === 'Terminé' && (
             <>
-              <Animated.View entering={FadeInDown.duration(400).delay(488)} style={styles.section}>
-                <Text style={styles.sectionTitle}>{t('tournament', 'finalResultUpper')}</Text>
+              <SectionCard title={t('tournament', 'finalResultUpper')} icon="workspace-premium" color={theme.carreauColor} delay={400}>
                 <View style={styles.finalResultContainer}>
                   {['1er', '2ème', '3ème', 'Demi-finale', 'Quart de finale', '1/8 finale', 'Poules', 'Autre'].map(result => {
                     const resultConfig: Record<string, { icon: string; color: string }> = {
@@ -777,9 +766,8 @@ export default function EditTournamentScreen() {
                     );
                   })}
                 </View>
-              </Animated.View>
-              <Animated.View entering={FadeInDown.duration(400).delay(490)} style={styles.section}>
-                <Text style={styles.sectionTitle}>{t('tournament', 'prizeWonUpper')}</Text>
+              </SectionCard>
+              <SectionCard title={t('tournament', 'prizeWonUpper')} icon="savings" color={theme.success} delay={425}>
                 <TextInput
                   style={styles.textInput}
                   value={prizeWon}
@@ -788,13 +776,12 @@ export default function EditTournamentScreen() {
                   placeholderTextColor={theme.textMuted}
                   keyboardType="numeric"
                 />
-              </Animated.View>
+              </SectionCard>
             </>
           )}
 
           {/* Description */}
-          <Animated.View entering={FadeInDown.duration(400).delay(525)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('tournament', 'description').toUpperCase()}</Text>
+          <SectionCard title={t('tournament', 'description').toUpperCase()} icon="description" color={theme.textSecondary} delay={450}>
             <TextInput
               style={[styles.textInput, styles.textArea]}
               value={description}
@@ -805,7 +792,7 @@ export default function EditTournamentScreen() {
               numberOfLines={4}
               textAlignVertical="top"
             />
-          </Animated.View>
+          </SectionCard>
         </ScrollView>
 
         {/* Save Button */}
@@ -864,7 +851,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 24,
+    paddingTop: 16,
   },
   iconSection: {
     alignItems: 'center',
@@ -889,13 +876,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   textInput: {
-    backgroundColor: theme.surface,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    backgroundColor: theme.backgroundSecondary,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
     borderRadius: theme.borderRadius.md,
-    fontSize: 16,
+    fontSize: 15,
     color: theme.textPrimary,
-    ...theme.shadows.card,
+    borderWidth: 1,
+    borderColor: theme.border,
   },
   textArea: {
     minHeight: 100,
@@ -1048,8 +1036,8 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingHorizontal: 16,
-    paddingTop: 16,
-    backgroundColor: theme.backgroundSecondary,
+    paddingTop: 12,
+    backgroundColor: theme.surface,
     borderTopWidth: 1,
     borderTopColor: theme.border,
   },
@@ -1059,15 +1047,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
     backgroundColor: theme.carreauColor,
-    paddingVertical: 18,
+    paddingVertical: 16,
     borderRadius: theme.borderRadius.md,
+    ...theme.shadows.cardElevated,
   },
   saveButtonDisabled: {
     backgroundColor: theme.textMuted,
+    opacity: 0.6,
   },
   saveButtonText: {
-    fontSize: 17,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: '#FFF',
   },
   // Cadrage rules styles

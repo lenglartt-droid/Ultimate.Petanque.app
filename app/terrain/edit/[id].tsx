@@ -26,6 +26,7 @@ import config, { TerrainType } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAlert } from '@/template';
+import { SectionCard, StepIndicator } from '@/components/ui/FormSectionCard';
 import {
   checkDuplicatePublicTerrainsExcluding,
   fetchPublicTerrainById,
@@ -357,6 +358,8 @@ export default function EditTerrainScreen() {
         <View style={{ width: 40 }} />
       </View>
 
+      <StepIndicator step={[name.trim(), address.trim(), city.trim()].filter(Boolean).length + 1} total={4} label={!name.trim() ? t('tournament', 'startWithName') : (!address.trim() || !city.trim()) ? t('tournament', 'chooseLocation') : t('tournament', 'readyToCreate')} />
+
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -368,8 +371,7 @@ export default function EditTerrainScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* Photos Section */}
-          <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('terrain', 'photosLabel')} ({photos.length}/5)</Text>
+          <SectionCard title={`${t('terrain', 'photosLabel')} (${photos.length}/5)`} icon="photo-camera" color={theme.primary} delay={50}>
             <View style={styles.photosContainer}>
               {photos.map((photo, index) => (
                 <View key={index} style={styles.photoItem}>
@@ -395,11 +397,10 @@ export default function EditTerrainScreen() {
                 </View>
               )}
             </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Name */}
-          <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('terrain', 'terrainNameRequired')}</Text>
+          <SectionCard title={t('terrain', 'terrainNameRequired').replace(' *', '')} icon="landscape" color={theme.accent} delay={100} required>
             <TextInput
               style={styles.textInput}
               value={name}
@@ -408,11 +409,10 @@ export default function EditTerrainScreen() {
               placeholderTextColor={theme.textMuted}
               autoCapitalize="words"
             />
-          </Animated.View>
+          </SectionCard>
 
           {/* Type */}
-          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('terrain', 'terrainTypeRequired')}</Text>
+          <SectionCard title={t('terrain', 'terrainTypeRequired').replace(' *', '')} icon="terrain" color={theme.success} delay={150} required>
             <View style={styles.typeContainer}>
               {config.terrainTypes.map((tt) => (
                 <Pressable
@@ -448,12 +448,12 @@ export default function EditTerrainScreen() {
                 </Pressable>
               ))}
             </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Address */}
-          <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
+          <SectionCard title={t('terrain', 'addressRequired').replace(' *', '')} icon="place" color={theme.error} delay={200} required>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{t('terrain', 'addressRequired')}</Text>
+              <View />
               <Pressable 
                 style={styles.locationButton}
                 onPress={getCurrentLocation}
@@ -525,7 +525,7 @@ export default function EditTerrainScreen() {
                 </Pressable>
               </Animated.View>
             ) : null}
-          </Animated.View>
+          </SectionCard>
 
           {/* Duplicate Detection Banner */}
           {checkingDuplicates ? (
@@ -613,8 +613,7 @@ export default function EditTerrainScreen() {
           ) : null}
 
           {/* Club */}
-          <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('terrain', 'associatedClub')}</Text>
+          <SectionCard title={t('terrain', 'associatedClub')} icon="home-work" color={theme.primaryLight} delay={250}>
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
@@ -658,11 +657,10 @@ export default function EditTerrainScreen() {
                 </Pressable>
               ))}
             </ScrollView>
-          </Animated.View>
+          </SectionCard>
 
           {/* Courts Count */}
-          <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('terrain', 'courtsCount')}</Text>
+          <SectionCard title={t('terrain', 'courtsCount')} icon="grid-view" color={theme.carreauColor} delay={300}>
             <View style={styles.countsContainer}>
               {['1', '2', '4', '6', '8', '10', '12', '18'].map(num => (
                 <Pressable
@@ -685,11 +683,10 @@ export default function EditTerrainScreen() {
                 </Pressable>
               ))}
             </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Features */}
-          <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('terrain', 'features')}</Text>
+          <SectionCard title={t('terrain', 'features')} icon="tune" color={theme.tirColor} delay={350}>
             <View style={styles.featuresCard}>
               <View style={styles.featureRow}>
                 <View style={styles.featureInfo}>
@@ -739,11 +736,10 @@ export default function EditTerrainScreen() {
                 />
               </View>
             </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Environment */}
-          <Animated.View entering={FadeInDown.duration(400).delay(325)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('terrain', 'environment')}</Text>
+          <SectionCard title={t('terrain', 'environment')} icon="park" color={theme.success} delay={375}>
             <View style={styles.environmentContainer}>
               {config.terrainEnvironments.map((env) => (
                 <Pressable
@@ -779,11 +775,10 @@ export default function EditTerrainScreen() {
                 </Pressable>
               ))}
             </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Description */}
-          <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('terrain', 'descriptionLabel')}</Text>
+          <SectionCard title={t('terrain', 'descriptionLabel')} icon="description" color={theme.textSecondary} delay={400}>
             <TextInput
               style={[styles.textInput, styles.textArea]}
               value={description}
@@ -794,7 +789,7 @@ export default function EditTerrainScreen() {
               numberOfLines={4}
               textAlignVertical="top"
             />
-          </Animated.View>
+          </SectionCard>
         </ScrollView>
 
         {/* Save Button */}
@@ -864,7 +859,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 24,
+    paddingTop: 16,
   },
   emptyContainer: {
     flex: 1,
@@ -936,13 +931,14 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   textInput: {
-    backgroundColor: theme.surface,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    backgroundColor: theme.backgroundSecondary,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
     borderRadius: theme.borderRadius.md,
-    fontSize: 16,
+    fontSize: 15,
     color: theme.textPrimary,
-    ...theme.shadows.card,
+    borderWidth: 1,
+    borderColor: theme.border,
   },
   textArea: {
     minHeight: 100,
@@ -1081,8 +1077,8 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingHorizontal: 16,
-    paddingTop: 16,
-    backgroundColor: theme.backgroundSecondary,
+    paddingTop: 12,
+    backgroundColor: theme.surface,
     borderTopWidth: 1,
     borderTopColor: theme.border,
   },
@@ -1092,15 +1088,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
     backgroundColor: theme.accent,
-    paddingVertical: 18,
+    paddingVertical: 16,
     borderRadius: theme.borderRadius.md,
+    ...theme.shadows.cardElevated,
   },
   saveButtonDisabled: {
     backgroundColor: theme.textMuted,
+    opacity: 0.6,
   },
   saveButtonText: {
-    fontSize: 17,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: '#FFF',
   },
   // Section header styles
