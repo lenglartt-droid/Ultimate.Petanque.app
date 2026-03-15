@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -104,6 +106,23 @@ export default function NewPlayerScreen() {
   const [boulesDiameter, setBoulesDiameter] = useState('');
   const [boulesWeight, setBoulesWeight] = useState('');
 
+  // Picker modals
+  const [showLevelPicker, setShowLevelPicker] = useState(false);
+  const [showClubPicker, setShowClubPicker] = useState(false);
+  const [showTerrainPicker, setShowTerrainPicker] = useState(false);
+  const [clubSearch, setClubSearch] = useState('');
+  const [terrainSearch, setTerrainSearch] = useState('');
+
+  const filteredClubs = useMemo(() => {
+    const s = clubSearch.toLowerCase();
+    return clubs.filter(c => !s || c.name.toLowerCase().includes(s) || c.city.toLowerCase().includes(s));
+  }, [clubs, clubSearch]);
+
+  const filteredTerrains = useMemo(() => {
+    const s = terrainSearch.toLowerCase();
+    return terrains.filter(tr => !s || tr.name.toLowerCase().includes(s) || tr.city.toLowerCase().includes(s));
+  }, [terrains, terrainSearch]);
+
   // Progress
   const progressFilled = [name.trim(), true, true].filter(Boolean).length;
   const progressTotal = 3;
@@ -171,6 +190,9 @@ export default function NewPlayerScreen() {
     router.back();
   };
 
+  const selectedClub = clubId ? clubs.find(c => c.id === clubId) : null;
+  const selectedTerrain = terrainId ? terrains.find(tr => tr.id === terrainId) : null;
+
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
       {/* Header */}
@@ -212,83 +234,15 @@ export default function NewPlayerScreen() {
             <Text style={styles.avatarHint}>{t('player', 'tapToAddPhoto')}</Text>
           </Animated.View>
 
-          {/* Name */}
+          {/* 1. Nom */}
           <SectionCard title={t('player', 'nameLabel')} icon="person" color={theme.primary} delay={50} required>
             <TextInput style={styles.textInput} value={name} onChangeText={setName} placeholder={t('player', 'namePlaceholder')} placeholderTextColor={theme.textMuted} autoCapitalize="words" autoFocus />
             <TextInput style={[styles.textInput, { marginTop: 10 }]} value={nickname} onChangeText={setNickname} placeholder={t('player', 'nicknamePlaceholder')} placeholderTextColor={theme.textMuted} />
           </SectionCard>
 
-          {/* Role */}
-          <SectionCard title={t('player', 'roleLabel')} icon="sports" color={theme.tirColor} delay={100} required>
-            <View style={styles.roleGrid}>
-              {config.playerRoles.map(r => {
-                const cfg = ROLE_CONFIG[r] || { icon: 'sports', color: theme.primary };
-                const isActive = role === r;
-                return (
-                  <Pressable key={r} style={[styles.roleCard, isActive && { borderColor: cfg.color, backgroundColor: cfg.color + '08' }]} onPress={() => { Haptics.selectionAsync(); setRole(r); }}>
-                    <View style={[styles.roleCardIconBox, isActive && { backgroundColor: cfg.color }]}>
-                      <MaterialIcons name={cfg.icon as any} size={22} color={isActive ? '#FFF' : theme.textSecondary} />
-                    </View>
-                    <Text style={[styles.roleCardName, isActive && { color: cfg.color }]}>{t('roles', r)}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </SectionCard>
-
-          {/* Level */}
-          <SectionCard title={t('player', 'levelLabel')} icon="signal-cellular-alt" color={theme.success} delay={150}>
-            <View style={styles.levelGrid}>
-              {levels.map(l => {
-                const isActive = level === l;
-                const ico = LEVEL_CONFIG[l]?.icon || 'star';
-                return (
-                  <Pressable key={l} style={[styles.levelChip, isActive && styles.levelChipActive]} onPress={() => { Haptics.selectionAsync(); setLevel(l); }}>
-                    <MaterialIcons name={ico as any} size={14} color={isActive ? theme.success : theme.textMuted} />
-                    <Text style={[styles.levelChipText, isActive && styles.levelChipTextActive]}>{t('levels', l)}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </SectionCard>
-
-          {/* Club */}
-          <SectionCard title={t('player', 'clubLabel')} icon="home-work" color={theme.accent} delay={200}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
-              <Pressable style={[styles.chipBtn, !clubId && styles.chipBtnActive]} onPress={() => { Haptics.selectionAsync(); setClubId(undefined); }}>
-                <Text style={[styles.chipBtnText, !clubId && styles.chipBtnTextActive]}>{t('player', 'noClub')}</Text>
-              </Pressable>
-              {clubs.map(club => (
-                <Pressable key={club.id} style={[styles.chipBtn, clubId === club.id && styles.chipBtnActive]} onPress={() => { Haptics.selectionAsync(); setClubId(club.id); }}>
-                  <Text style={[styles.chipBtnText, clubId === club.id && styles.chipBtnTextActive]}>{club.name}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </SectionCard>
-
-          {/* Terrain */}
-          <SectionCard title={t('player', 'practiceTerrain')} icon="place" color={theme.success} delay={250}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
-              <Pressable style={[styles.terrainChip, !terrainId && styles.terrainChipActive]} onPress={() => { Haptics.selectionAsync(); setTerrainId(undefined); }}>
-                <MaterialIcons name="not-listed-location" size={18} color={!terrainId ? '#FFF' : theme.textSecondary} />
-                <Text style={[styles.terrainChipText, !terrainId && styles.terrainChipTextActive]}>{t('player', 'undefined')}</Text>
-              </Pressable>
-              {terrains.map(terrain => (
-                <Pressable key={terrain.id} style={[styles.terrainChip, terrainId === terrain.id && styles.terrainChipActive]} onPress={() => { Haptics.selectionAsync(); setTerrainId(terrain.id); }}>
-                  <MaterialIcons name="sports-soccer" size={18} color={terrainId === terrain.id ? '#FFF' : theme.textSecondary} />
-                  <View style={{ maxWidth: 120 }}>
-                    <Text style={[styles.terrainChipText, terrainId === terrain.id && styles.terrainChipTextActive]} numberOfLines={1}>{terrain.name}</Text>
-                    <Text style={[styles.terrainChipSubtext, terrainId === terrain.id && styles.terrainChipSubtextActive]}>{terrain.city} {'\u2022'} {t('terrainTypes', terrain.type)}</Text>
-                  </View>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </SectionCard>
-
-          {/* Location */}
-          <SectionCard title={t('player', 'locationLabel')} icon="my-location" color={theme.primaryLight} delay={300}>
+          {/* 2. Localisation */}
+          <SectionCard title={t('player', 'locationLabel')} icon="my-location" color={theme.primaryLight} delay={100}>
             <LocationPicker label="" value={location} onChange={setLocation} placeholder={t('player', 'searchCity')} showCityOnly />
-            {/* Auto-fill suggestions */}
             {(() => {
               const empty = !location.latitude && !location.longitude;
               if (!empty) return null;
@@ -305,8 +259,99 @@ export default function NewPlayerScreen() {
             })()}
           </SectionCard>
 
-          {/* Boules */}
-          <SectionCard title={t('player', 'boulesLabel')} icon="sports-baseball" color="#D97706" delay={350}>
+          {/* 3. Terrain de pratique (Picker) */}
+          <SectionCard title={t('player', 'practiceTerrain')} icon="place" color={theme.success} delay={150}>
+            <Pressable style={styles.pickerButton} onPress={() => { setTerrainSearch(''); setShowTerrainPicker(true); }}>
+              {selectedTerrain ? (
+                <View style={styles.pickerSelected}>
+                  <MaterialIcons name="sports-soccer" size={20} color={theme.success} />
+                  <View style={styles.pickerSelectedInfo}>
+                    <Text style={styles.pickerSelectedName}>{selectedTerrain.name}</Text>
+                    <Text style={styles.pickerSelectedSub}>{selectedTerrain.city} {'\u2022'} {t('terrainTypes', selectedTerrain.type)}</Text>
+                  </View>
+                  <Pressable onPress={(e) => { e.stopPropagation(); setTerrainId(undefined); Haptics.selectionAsync(); }} hitSlop={8}>
+                    <MaterialIcons name="close" size={18} color={theme.textMuted} />
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={styles.pickerPlaceholder}>
+                  <MaterialIcons name="place" size={20} color={theme.textMuted} />
+                  <Text style={styles.pickerPlaceholderText}>{t('player', 'noTerrain')}</Text>
+                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                </View>
+              )}
+            </Pressable>
+          </SectionCard>
+
+          {/* 4. Contact */}
+          <SectionCard title={t('player', 'contactLabel')} icon="contacts" color={theme.textSecondary} delay={200}>
+            <View style={styles.contactRow}>
+              <MaterialIcons name="phone" size={20} color={theme.textSecondary} />
+              <TextInput style={styles.contactInput} value={phone} onChangeText={setPhone} placeholder={t('player', 'phonePlaceholder')} placeholderTextColor={theme.textMuted} keyboardType="phone-pad" />
+            </View>
+            <View style={[styles.contactRow, { marginTop: 10 }]}>
+              <MaterialIcons name="email" size={20} color={theme.textSecondary} />
+              <TextInput style={styles.contactInput} value={email} onChangeText={setEmail} placeholder={t('player', 'emailPlaceholder')} placeholderTextColor={theme.textMuted} keyboardType="email-address" autoCapitalize="none" />
+            </View>
+          </SectionCard>
+
+          {/* 5. Club (Picker) */}
+          <SectionCard title={t('player', 'clubLabel')} icon="home-work" color={theme.accent} delay={250}>
+            <Pressable style={styles.pickerButton} onPress={() => { setClubSearch(''); setShowClubPicker(true); }}>
+              {selectedClub ? (
+                <View style={styles.pickerSelected}>
+                  <MaterialIcons name="home-work" size={20} color={theme.accent} />
+                  <View style={styles.pickerSelectedInfo}>
+                    <Text style={styles.pickerSelectedName}>{selectedClub.name}</Text>
+                    <Text style={styles.pickerSelectedSub}>{selectedClub.city}</Text>
+                  </View>
+                  <Pressable onPress={(e) => { e.stopPropagation(); setClubId(undefined); Haptics.selectionAsync(); }} hitSlop={8}>
+                    <MaterialIcons name="close" size={18} color={theme.textMuted} />
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={styles.pickerPlaceholder}>
+                  <MaterialIcons name="home-work" size={20} color={theme.textMuted} />
+                  <Text style={styles.pickerPlaceholderText}>{t('player', 'noClub')}</Text>
+                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                </View>
+              )}
+            </Pressable>
+          </SectionCard>
+
+          {/* 6. Rôle */}
+          <SectionCard title={t('player', 'roleLabel')} icon="sports" color={theme.tirColor} delay={300} required>
+            <View style={styles.roleGrid}>
+              {config.playerRoles.map(r => {
+                const cfg = ROLE_CONFIG[r] || { icon: 'sports', color: theme.primary };
+                const isActive = role === r;
+                return (
+                  <Pressable key={r} style={[styles.roleCard, isActive && { borderColor: cfg.color, backgroundColor: cfg.color + '08' }]} onPress={() => { Haptics.selectionAsync(); setRole(r); }}>
+                    <View style={[styles.roleCardIconBox, isActive && { backgroundColor: cfg.color }]}>
+                      <MaterialIcons name={cfg.icon as any} size={22} color={isActive ? '#FFF' : theme.textSecondary} />
+                    </View>
+                    <Text style={[styles.roleCardName, isActive && { color: cfg.color }]}>{t('roles', r)}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </SectionCard>
+
+          {/* 7. Niveau (Picker) */}
+          <SectionCard title={t('player', 'levelLabel')} icon="signal-cellular-alt" color={theme.success} delay={350}>
+            <Pressable style={styles.pickerButton} onPress={() => setShowLevelPicker(true)}>
+              <View style={styles.pickerSelected}>
+                <MaterialIcons name={(LEVEL_CONFIG[level]?.icon || 'star') as any} size={20} color={theme.success} />
+                <View style={styles.pickerSelectedInfo}>
+                  <Text style={styles.pickerSelectedName}>{t('levels', level)}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              </View>
+            </Pressable>
+          </SectionCard>
+
+          {/* 8. Boules */}
+          <SectionCard title={t('player', 'boulesLabel')} icon="sports-baseball" color="#D97706" delay={400}>
             <TextInput style={styles.textInput} value={boulesName} onChangeText={setBoulesName} placeholder={t('player', 'boulesPlaceholder')} placeholderTextColor={theme.textMuted} />
             <View style={styles.specsRow}>
               <View style={{ flex: 1 }}>
@@ -317,18 +362,6 @@ export default function NewPlayerScreen() {
                 <Text style={styles.specLabel}>{t('player', 'weightLabel')}</Text>
                 <TextInput style={styles.textInput} value={boulesWeight} onChangeText={setBoulesWeight} placeholder="Ex: 700" placeholderTextColor={theme.textMuted} keyboardType="number-pad" />
               </View>
-            </View>
-          </SectionCard>
-
-          {/* Contact */}
-          <SectionCard title={t('player', 'contactLabel')} icon="contacts" color={theme.textSecondary} delay={400}>
-            <View style={styles.contactRow}>
-              <MaterialIcons name="phone" size={20} color={theme.textSecondary} />
-              <TextInput style={styles.contactInput} value={phone} onChangeText={setPhone} placeholder={t('player', 'phonePlaceholder')} placeholderTextColor={theme.textMuted} keyboardType="phone-pad" />
-            </View>
-            <View style={[styles.contactRow, { marginTop: 10 }]}>
-              <MaterialIcons name="email" size={20} color={theme.textSecondary} />
-              <TextInput style={styles.contactInput} value={email} onChangeText={setEmail} placeholder={t('player', 'emailPlaceholder')} placeholderTextColor={theme.textMuted} keyboardType="email-address" autoCapitalize="none" />
             </View>
           </SectionCard>
         </ScrollView>
@@ -345,6 +378,127 @@ export default function NewPlayerScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Level Picker Modal */}
+      <Modal visible={showLevelPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowLevelPicker(false)}>
+        <SafeAreaView edges={['top']} style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('player', 'levelLabel')}</Text>
+            <Pressable style={styles.modalCloseBtn} onPress={() => setShowLevelPicker(false)}>
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+          </View>
+          <View style={styles.modalContent}>
+            {levels.map(l => {
+              const isActive = level === l;
+              const ico = LEVEL_CONFIG[l]?.icon || 'star';
+              return (
+                <Pressable key={l} style={[styles.modalItem, isActive && styles.modalItemActive]} onPress={() => { Haptics.selectionAsync(); setLevel(l); setShowLevelPicker(false); }}>
+                  <View style={[styles.modalItemIcon, { backgroundColor: (isActive ? theme.success : theme.textMuted) + '15' }]}>
+                    <MaterialIcons name={ico as any} size={22} color={isActive ? theme.success : theme.textSecondary} />
+                  </View>
+                  <Text style={[styles.modalItemText, isActive && { color: theme.success, fontWeight: '700' }]}>{t('levels', l)}</Text>
+                  {isActive ? <MaterialIcons name="check-circle" size={22} color={theme.success} /> : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Club Picker Modal */}
+      <Modal visible={showClubPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowClubPicker(false)}>
+        <SafeAreaView edges={['top']} style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('player', 'clubLabel')}</Text>
+            <Pressable style={styles.modalCloseBtn} onPress={() => setShowClubPicker(false)}>
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+          </View>
+          <View style={styles.modalSearchContainer}>
+            <MaterialIcons name="search" size={20} color={theme.textMuted} />
+            <TextInput style={styles.modalSearchInput} value={clubSearch} onChangeText={setClubSearch} placeholder={t('profile', 'searchClub')} placeholderTextColor={theme.textMuted} autoFocus />
+          </View>
+          {/* No club option */}
+          <Pressable style={[styles.modalPickerItem, !clubId && styles.modalPickerItemActive]} onPress={() => { Haptics.selectionAsync(); setClubId(undefined); setShowClubPicker(false); }}>
+            <View style={[styles.modalPickerItemIcon, { backgroundColor: theme.textMuted + '15' }]}>
+              <MaterialIcons name="block" size={20} color={theme.textMuted} />
+            </View>
+            <Text style={styles.modalPickerItemName}>{t('player', 'noClub')}</Text>
+            {!clubId ? <MaterialIcons name="check-circle" size={20} color={theme.accent} /> : null}
+          </Pressable>
+          <FlatList
+            data={filteredClubs}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
+            renderItem={({ item: club }) => (
+              <Pressable style={[styles.modalPickerItem, { marginHorizontal: 0 }, clubId === club.id && styles.modalPickerItemActive]} onPress={() => { Haptics.selectionAsync(); setClubId(club.id); setShowClubPicker(false); }}>
+                <View style={[styles.modalPickerItemIcon, { backgroundColor: theme.accent + '15' }]}>
+                  <MaterialIcons name="home-work" size={20} color={theme.accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalPickerItemName}>{club.name}</Text>
+                  <Text style={styles.modalPickerItemSub}>{club.city}</Text>
+                </View>
+                {clubId === club.id ? <MaterialIcons name="check-circle" size={20} color={theme.accent} /> : null}
+              </Pressable>
+            )}
+            ListEmptyComponent={
+              <View style={styles.modalEmpty}>
+                <MaterialIcons name="home-work" size={40} color={theme.textMuted} />
+                <Text style={styles.modalEmptyText}>{t('profile', 'noClubRegistered')}</Text>
+              </View>
+            }
+          />
+        </SafeAreaView>
+      </Modal>
+
+      {/* Terrain Picker Modal */}
+      <Modal visible={showTerrainPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowTerrainPicker(false)}>
+        <SafeAreaView edges={['top']} style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('player', 'practiceTerrain')}</Text>
+            <Pressable style={styles.modalCloseBtn} onPress={() => setShowTerrainPicker(false)}>
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+          </View>
+          <View style={styles.modalSearchContainer}>
+            <MaterialIcons name="search" size={20} color={theme.textMuted} />
+            <TextInput style={styles.modalSearchInput} value={terrainSearch} onChangeText={setTerrainSearch} placeholder={t('profile', 'searchTerrain')} placeholderTextColor={theme.textMuted} autoFocus />
+          </View>
+          {/* No terrain option */}
+          <Pressable style={[styles.modalPickerItem, !terrainId && styles.modalPickerItemActive]} onPress={() => { Haptics.selectionAsync(); setTerrainId(undefined); setShowTerrainPicker(false); }}>
+            <View style={[styles.modalPickerItemIcon, { backgroundColor: theme.textMuted + '15' }]}>
+              <MaterialIcons name="not-listed-location" size={20} color={theme.textMuted} />
+            </View>
+            <Text style={styles.modalPickerItemName}>{t('player', 'noTerrain')}</Text>
+            {!terrainId ? <MaterialIcons name="check-circle" size={20} color={theme.success} /> : null}
+          </Pressable>
+          <FlatList
+            data={filteredTerrains}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
+            renderItem={({ item: terrain }) => (
+              <Pressable style={[styles.modalPickerItem, { marginHorizontal: 0 }, terrainId === terrain.id && styles.modalPickerItemActive]} onPress={() => { Haptics.selectionAsync(); setTerrainId(terrain.id); setShowTerrainPicker(false); }}>
+                <View style={[styles.modalPickerItemIcon, { backgroundColor: theme.success + '15' }]}>
+                  <MaterialIcons name="sports-soccer" size={20} color={theme.success} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalPickerItemName}>{terrain.name}</Text>
+                  <Text style={styles.modalPickerItemSub}>{terrain.city} {'\u2022'} {t('terrainTypes', terrain.type)}</Text>
+                </View>
+                {terrainId === terrain.id ? <MaterialIcons name="check-circle" size={20} color={theme.success} /> : null}
+              </Pressable>
+            )}
+            ListEmptyComponent={
+              <View style={styles.modalEmpty}>
+                <MaterialIcons name="place" size={40} color={theme.textMuted} />
+                <Text style={styles.modalEmptyText}>{t('profile', 'noTerrainRegistered')}</Text>
+              </View>
+            }
+          />
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -388,27 +542,14 @@ const styles = StyleSheet.create({
   roleCardIconBox: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.textMuted + '15', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
   roleCardName: { fontSize: 13, fontWeight: '700', color: theme.textPrimary },
 
-  // Level
-  levelGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  levelChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, borderWidth: 1.5, borderColor: 'transparent' },
-  levelChipActive: { borderColor: theme.success, backgroundColor: theme.success + '08' },
-  levelChipText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
-  levelChipTextActive: { color: theme.success },
-
-  // Chips
-  chipScroll: { gap: 8 },
-  chipBtn: { paddingHorizontal: 14, paddingVertical: 10, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.full, borderWidth: 1.5, borderColor: 'transparent' },
-  chipBtnActive: { borderColor: theme.accent, backgroundColor: theme.accent + '08' },
-  chipBtnText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
-  chipBtnTextActive: { color: theme.accent },
-
-  // Terrain chips
-  terrainChip: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, borderWidth: 1.5, borderColor: 'transparent' },
-  terrainChipActive: { borderColor: theme.success, backgroundColor: theme.success },
-  terrainChipText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
-  terrainChipTextActive: { color: '#FFF' },
-  terrainChipSubtext: { fontSize: 10, color: theme.textMuted, marginTop: 1 },
-  terrainChipSubtextActive: { color: 'rgba(255,255,255,0.7)' },
+  // Picker button
+  pickerButton: { backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' },
+  pickerSelected: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
+  pickerSelectedInfo: { flex: 1 },
+  pickerSelectedName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  pickerSelectedSub: { fontSize: 12, color: theme.textMuted, marginTop: 2 },
+  pickerPlaceholder: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
+  pickerPlaceholderText: { flex: 1, fontSize: 15, color: theme.textMuted },
 
   // Auto-fill
   autoFillBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.primary + '08', borderRadius: theme.borderRadius.md, padding: 12, marginTop: 10, borderWidth: 1, borderColor: theme.primary + '20', borderStyle: 'dashed' as any },
@@ -429,4 +570,24 @@ const styles = StyleSheet.create({
   saveButtonDisabled: { backgroundColor: theme.textMuted, opacity: 0.6 },
   saveButtonPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   saveButtonText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
+
+  // Modals
+  modalContainer: { flex: 1, backgroundColor: theme.backgroundSecondary },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: theme.textPrimary },
+  modalCloseBtn: { padding: 8 },
+  modalSearchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, marginHorizontal: 16, marginVertical: 12, paddingHorizontal: 14, paddingVertical: 10, borderRadius: theme.borderRadius.md, gap: 10, borderWidth: 1, borderColor: theme.border },
+  modalSearchInput: { flex: 1, fontSize: 15, color: theme.textPrimary, padding: 0 },
+  modalContent: { padding: 16, gap: 8 },
+  modalItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 16, paddingHorizontal: 16, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, ...theme.shadows.card },
+  modalItemActive: { borderWidth: 2, borderColor: theme.success },
+  modalItemIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  modalItemText: { flex: 1, fontSize: 16, fontWeight: '600', color: theme.textPrimary },
+  modalPickerItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, marginHorizontal: 16, marginBottom: 8, ...theme.shadows.card },
+  modalPickerItemActive: { borderWidth: 2, borderColor: theme.primary },
+  modalPickerItemIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  modalPickerItemName: { flex: 1, fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  modalPickerItemSub: { fontSize: 12, color: theme.textMuted, marginTop: 2 },
+  modalEmpty: { alignItems: 'center', paddingVertical: 40 },
+  modalEmptyText: { fontSize: 14, color: theme.textMuted, marginTop: 10 },
 });
