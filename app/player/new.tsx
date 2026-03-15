@@ -102,6 +102,7 @@ export default function NewPlayerScreen() {
   });
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [handedness, setHandedness] = useState<'right' | 'left' | 'ambidextrous' | ''>('');
   const [boulesName, setBoulesName] = useState('');
   const [boulesDiameter, setBoulesDiameter] = useState('');
   const [boulesWeight, setBoulesWeight] = useState('');
@@ -180,7 +181,7 @@ export default function NewPlayerScreen() {
     addPlayer({
       name: name.trim(), nickname: nickname.trim() || undefined, avatar: avatarUrl, role, level,
       clubId, club: selectedClub?.name, terrainId, terrainName: selectedTerrain?.name,
-      phone: phone.trim() || undefined, email: email.trim() || undefined, boules,
+      phone: phone.trim() || undefined, email: email.trim() || undefined, handedness: handedness || undefined, boules,
       location: location.city ? { city: location.city, latitude: location.latitude, longitude: location.longitude } : undefined,
       country: location.country || 'France',
       stats: { matchesPlayed: 0, wins: 0, losses: 0, winRate: 0, tirRate: 0, pointRate: 0, carreauRate: 0, avgPointsScored: 0, avgPointsConceded: 0 },
@@ -337,8 +338,20 @@ export default function NewPlayerScreen() {
             </View>
           </SectionCard>
 
-          {/* 7. Niveau (Picker) */}
-          <SectionCard title={t('player', 'levelLabel')} icon="signal-cellular-alt" color={theme.success} delay={350}>
+          {/* 7. Latéralité */}
+          <SectionCard title={t('player', 'handedness')} icon="front-hand" color="#6366F1" delay={330}>
+            <View style={styles.roleGrid}>
+              {([{ id: 'right' as const, icon: 'back-hand', label: t('player', 'rightHanded') }, { id: 'left' as const, icon: 'front-hand', label: t('player', 'leftHanded') }, { id: 'ambidextrous' as const, icon: 'swap-horiz', label: t('player', 'ambidextrous') }]).map(h => (
+                <Pressable key={h.id} style={[styles.roleCard, handedness === h.id && { backgroundColor: '#6366F1', borderColor: '#6366F1' }]} onPress={() => { Haptics.selectionAsync(); setHandedness(handedness === h.id ? '' : h.id); }}>
+                  <MaterialIcons name={h.icon as any} size={22} color={handedness === h.id ? '#FFF' : theme.textSecondary} />
+                  <Text style={[styles.roleCardName, handedness === h.id && { color: '#FFF' }]}>{h.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </SectionCard>
+
+          {/* 8. Niveau (Picker) */}
+          <SectionCard title={t('player', 'levelLabel')} icon="signal-cellular-alt" color={theme.success} delay={380}>
             <Pressable style={styles.pickerButton} onPress={() => setShowLevelPicker(true)}>
               <View style={styles.pickerSelected}>
                 <MaterialIcons name={(LEVEL_CONFIG[level]?.icon || 'star') as any} size={20} color={theme.success} />
@@ -350,8 +363,8 @@ export default function NewPlayerScreen() {
             </Pressable>
           </SectionCard>
 
-          {/* 8. Boules */}
-          <SectionCard title={t('player', 'boulesLabel')} icon="sports-baseball" color="#D97706" delay={400}>
+          {/* 9. Boules */}
+          <SectionCard title={t('player', 'boulesLabel')} icon="sports-baseball" color="#D97706" delay={430}>
             <TextInput style={styles.textInput} value={boulesName} onChangeText={setBoulesName} placeholder={t('player', 'boulesPlaceholder')} placeholderTextColor={theme.textMuted} />
             <View style={styles.specsRow}>
               <View style={{ flex: 1 }}>
