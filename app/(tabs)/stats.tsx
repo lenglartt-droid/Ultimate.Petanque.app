@@ -315,6 +315,7 @@ export default function StatsScreen() {
   const [category, setCategory] = useState<StatsCategory>('performance');
   const [showProgressionModal, setShowProgressionModal] = useState(false);
   const [progressionFilter, setProgressionFilter] = useState<ProgressionFilter>('8weeks');
+  const [chartTooltip, setChartTooltip] = useState<{ chart: string; index: number } | null>(null);
 
   // Item filter state
   const [itemFilterType, setItemFilterType] = useState<ItemFilterType>('all');
@@ -3030,7 +3031,7 @@ export default function StatsScreen() {
                 <Pressable
                   key={filter.id}
                   style={[styles.progressionFilterPill, progressionFilter === filter.id && styles.progressionFilterPillActive]}
-                  onPress={() => { Haptics.selectionAsync(); setProgressionFilter(filter.id); }}
+                  onPress={() => { Haptics.selectionAsync(); setProgressionFilter(filter.id); setChartTooltip(null); }}
                 >
                   <Text style={[styles.progressionFilterText, progressionFilter === filter.id && styles.progressionFilterTextActive]}>
                     {filter.label}
@@ -3101,12 +3102,26 @@ export default function StatsScreen() {
                         return (
                           <G key={i}>
                             {i > 0 && <Line x1={prevX} y1={prevY} x2={x} y2={y} stroke={theme.primary} strokeWidth="2.5" />}
-                            <Circle cx={x} cy={y} r={isTablet ? 6 : 5} fill={theme.primary} />
-                            {data.matches > 0 && <SvgText x={x} y={y - 10} fontSize={isTablet ? '11' : '9'} fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.winRate}%</SvgText>}
+                            <Circle cx={x} cy={y} r={20} fill="transparent" onPress={() => { Haptics.selectionAsync(); setChartTooltip(chartTooltip?.chart === 'winRate' && chartTooltip?.index === i ? null : { chart: 'winRate', index: i }); }} />
+                            <Circle cx={x} cy={y} r={isTablet ? 6 : 5} fill={chartTooltip?.chart === 'winRate' && chartTooltip?.index === i ? '#FFF' : theme.primary} stroke={chartTooltip?.chart === 'winRate' && chartTooltip?.index === i ? theme.primary : 'none'} strokeWidth={2} />
+                            {data.matches > 0 && !(chartTooltip?.chart === 'winRate' && chartTooltip?.index === i) && <SvgText x={x} y={y - 10} fontSize={isTablet ? '11' : '9'} fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.winRate}%</SvgText>}
                           </G>
                         );
                       })}
                     </Svg>
+                    {chartTooltip?.chart === 'winRate' && chartTooltip.index < progressionData.weeklyData.length && (() => {
+                      const d = progressionData.weeklyData[chartTooltip.index];
+                      const tx = 45 + (chartTooltip.index * ((modalChartWidth - 45) / Math.max(progressionData.weeklyData.length - 1, 1)));
+                      const ty = (modalChartHeight - 20) - (d.winRate / 100) * (modalChartHeight - 40);
+                      return (
+                        <Pressable style={[styles.chartTooltip, { left: Math.max(4, Math.min(tx - 68, modalChartWidth - 140)), top: Math.max(0, ty - 68) }]} onPress={() => setChartTooltip(null)}>
+                          <View style={styles.chartTooltipArrow} />
+                          <Text style={styles.chartTooltipTitle}>{d.week}</Text>
+                          <Text style={styles.chartTooltipRow}>{d.matches} {t('stats', 'gamesUnit')} \u2022 {d.wins}V-{d.matches - d.wins}D</Text>
+                          <Text style={[styles.chartTooltipValue, { color: theme.primary }]}>{d.winRate}%</Text>
+                        </Pressable>
+                      );
+                    })()}
                   </View>
                 </View>
 
@@ -3138,12 +3153,25 @@ export default function StatsScreen() {
                         return (
                           <G key={i}>
                             {i > 0 && <Line x1={prevX} y1={prevY} x2={x} y2={y} stroke={theme.tirColor} strokeWidth="2.5" />}
-                            <Circle cx={x} cy={y} r={isTablet ? 6 : 5} fill={theme.tirColor} />
-                            {data.tirTotal > 0 && <SvgText x={x} y={y - 10} fontSize={isTablet ? '11' : '9'} fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.tirRate}%</SvgText>}
+                            <Circle cx={x} cy={y} r={20} fill="transparent" onPress={() => { Haptics.selectionAsync(); setChartTooltip(chartTooltip?.chart === 'tir' && chartTooltip?.index === i ? null : { chart: 'tir', index: i }); }} />
+                            <Circle cx={x} cy={y} r={isTablet ? 6 : 5} fill={chartTooltip?.chart === 'tir' && chartTooltip?.index === i ? '#FFF' : theme.tirColor} stroke={chartTooltip?.chart === 'tir' && chartTooltip?.index === i ? theme.tirColor : 'none'} strokeWidth={2} />
+                            {data.tirTotal > 0 && !(chartTooltip?.chart === 'tir' && chartTooltip?.index === i) && <SvgText x={x} y={y - 10} fontSize={isTablet ? '11' : '9'} fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.tirRate}%</SvgText>}
                           </G>
                         );
                       })}
                     </Svg>
+                    {chartTooltip?.chart === 'tir' && chartTooltip.index < progressionData.weeklyData.length && (() => {
+                      const d = progressionData.weeklyData[chartTooltip.index];
+                      const tx = 45 + (chartTooltip.index * ((modalChartWidth - 45) / Math.max(progressionData.weeklyData.length - 1, 1)));
+                      const ty = (modalChartHeight - 20) - (d.tirRate / 100) * (modalChartHeight - 40);
+                      return (
+                        <Pressable style={[styles.chartTooltip, { left: Math.max(4, Math.min(tx - 68, modalChartWidth - 140)), top: Math.max(0, ty - 68) }]} onPress={() => setChartTooltip(null)}>
+                          <Text style={styles.chartTooltipTitle}>{d.week}</Text>
+                          <Text style={styles.chartTooltipRow}>{d.tirSuccess}/{d.tirTotal} {t('stats', 'shotsUnit')}</Text>
+                          <Text style={[styles.chartTooltipValue, { color: theme.tirColor }]}>{d.tirRate}%</Text>
+                        </Pressable>
+                      );
+                    })()}
                   </View>
                 </View>
                 </View>
@@ -3178,12 +3206,25 @@ export default function StatsScreen() {
                         return (
                           <G key={i}>
                             {i > 0 && <Line x1={prevX} y1={prevY} x2={x} y2={y} stroke={theme.pointColor} strokeWidth="2.5" />}
-                            <Circle cx={x} cy={y} r={isTablet ? 6 : 5} fill={theme.pointColor} />
-                            {data.pointTotal > 0 && <SvgText x={x} y={y - 10} fontSize={isTablet ? '11' : '9'} fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.pointRate}%</SvgText>}
+                            <Circle cx={x} cy={y} r={20} fill="transparent" onPress={() => { Haptics.selectionAsync(); setChartTooltip(chartTooltip?.chart === 'point' && chartTooltip?.index === i ? null : { chart: 'point', index: i }); }} />
+                            <Circle cx={x} cy={y} r={isTablet ? 6 : 5} fill={chartTooltip?.chart === 'point' && chartTooltip?.index === i ? '#FFF' : theme.pointColor} stroke={chartTooltip?.chart === 'point' && chartTooltip?.index === i ? theme.pointColor : 'none'} strokeWidth={2} />
+                            {data.pointTotal > 0 && !(chartTooltip?.chart === 'point' && chartTooltip?.index === i) && <SvgText x={x} y={y - 10} fontSize={isTablet ? '11' : '9'} fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.pointRate}%</SvgText>}
                           </G>
                         );
                       })}
                     </Svg>
+                    {chartTooltip?.chart === 'point' && chartTooltip.index < progressionData.weeklyData.length && (() => {
+                      const d = progressionData.weeklyData[chartTooltip.index];
+                      const tx = 45 + (chartTooltip.index * ((modalChartWidth - 45) / Math.max(progressionData.weeklyData.length - 1, 1)));
+                      const ty = (modalChartHeight - 20) - (d.pointRate / 100) * (modalChartHeight - 40);
+                      return (
+                        <Pressable style={[styles.chartTooltip, { left: Math.max(4, Math.min(tx - 68, modalChartWidth - 140)), top: Math.max(0, ty - 68) }]} onPress={() => setChartTooltip(null)}>
+                          <Text style={styles.chartTooltipTitle}>{d.week}</Text>
+                          <Text style={styles.chartTooltipRow}>{d.pointSuccess}/{d.pointTotal} {t('stats', 'pointsUnit')}</Text>
+                          <Text style={[styles.chartTooltipValue, { color: theme.pointColor }]}>{d.pointRate}%</Text>
+                        </Pressable>
+                      );
+                    })()}
                   </View>
                 </View>
 
@@ -3208,6 +3249,7 @@ export default function StatsScreen() {
                         const barHeight = Math.max((data.carreaux / maxCarreaux) * barAreaH, data.carreaux > 0 ? 4 : 0);
                         return (
                           <G key={i}>
+                            <Rect x={x} y={(modalBarChartHeight - 30) - barHeight} width={barWidth} height={Math.max(barHeight, 20)} fill={chartTooltip?.chart === 'carreaux' && chartTooltip?.index === i ? theme.carreauColor + '60' : 'transparent'} rx="3" onPress={() => { Haptics.selectionAsync(); setChartTooltip(chartTooltip?.chart === 'carreaux' && chartTooltip?.index === i ? null : { chart: 'carreaux', index: i }); }} />
                             <Rect x={x} y={(modalBarChartHeight - 30) - barHeight} width={barWidth} height={barHeight} fill={theme.carreauColor} rx="3" />
                             {data.carreaux > 0 && <SvgText x={x + barWidth / 2} y={(modalBarChartHeight - 35) - barHeight} fontSize={isTablet ? '12' : '10'} fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.carreaux}</SvgText>}
                             <SvgText x={x + barWidth / 2} y={modalBarChartHeight - 10} fontSize={isTablet ? '10' : '8'} fill={theme.textMuted} textAnchor="middle">{data.week}</SvgText>
@@ -3215,6 +3257,21 @@ export default function StatsScreen() {
                         );
                       })}
                     </Svg>
+                    {chartTooltip?.chart === 'carreaux' && chartTooltip.index < progressionData.weeklyData.length && (() => {
+                      const d = progressionData.weeklyData[chartTooltip.index];
+                      const barWidth = Math.max((modalChartWidth - 40) / progressionData.weeklyData.length - 6, 8);
+                      const tx = 40 + (chartTooltip.index * ((modalChartWidth - 16) / progressionData.weeklyData.length)) + barWidth / 2;
+                      const maxC = Math.max(...progressionData.weeklyData.map(dd => dd.carreaux), 1);
+                      const barH = Math.max((d.carreaux / maxC) * (modalBarChartHeight - 50), 4);
+                      const ty = (modalBarChartHeight - 30) - barH;
+                      return (
+                        <Pressable style={[styles.chartTooltip, { left: Math.max(4, Math.min(tx - 68, modalChartWidth - 140)), top: Math.max(0, ty - 68) }]} onPress={() => setChartTooltip(null)}>
+                          <Text style={styles.chartTooltipTitle}>{d.week}</Text>
+                          <Text style={styles.chartTooltipRow}>{d.matches} {t('stats', 'gamesUnit')}</Text>
+                          <Text style={[styles.chartTooltipValue, { color: theme.carreauColor }]}>{d.carreaux} {t('stats', 'carreauxLabel')}</Text>
+                        </Pressable>
+                      );
+                    })()}
                   </View>
                 </View>
                 </View>
@@ -3965,7 +4022,12 @@ const styles = StyleSheet.create({
   modalScrollContentTablet: { maxWidth: 960, alignSelf: 'center' as const, width: '100%', paddingHorizontal: 24 },
   modalTabletRow: { flexDirection: 'row' as const, gap: 16, marginBottom: 0 },
   modalTabletHalf: { flex: 1 },
-  chartContainer: { alignItems: 'center', marginBottom: 8 },
+  chartContainer: { alignItems: 'center', marginBottom: 8, position: 'relative' as const },
+  // Chart tooltip
+  chartTooltip: { position: 'absolute' as const, backgroundColor: theme.surface, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, minWidth: 136, zIndex: 100, ...theme.shadows.cardElevated, borderWidth: 1, borderColor: theme.border },
+  chartTooltipTitle: { fontSize: 12, fontWeight: '700', color: theme.textPrimary, marginBottom: 3 },
+  chartTooltipRow: { fontSize: 11, color: theme.textSecondary, marginBottom: 2 },
+  chartTooltipValue: { fontSize: 16, fontWeight: '800' },
   summaryTable: { borderRadius: theme.borderRadius.md, overflow: 'hidden', borderWidth: 1, borderColor: theme.border },
   summaryHeader: { flexDirection: 'row', backgroundColor: theme.backgroundSecondary, paddingVertical: 10 },
   summaryRow: { flexDirection: 'row', paddingVertical: 10, borderTopWidth: 1, borderTopColor: theme.border },
