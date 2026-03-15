@@ -131,7 +131,7 @@ export default function NewClubScreen() {
       },
       membersCount: 0,
       foundedYear: parseInt(foundedYear) || new Date().getFullYear(),
-      description: description.trim(),
+      description: description.trim() || undefined,
       facilities: facilityLabels,
       contactEmail: contactEmail.trim() || undefined,
       contactPhone: contactPhone.trim() || undefined,

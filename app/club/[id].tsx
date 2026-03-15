@@ -48,6 +48,7 @@ export default function ClubDetailScreen() {
   const { user } = useAuth();
   const { t, language } = useLanguage();
 
+  const { terrains: allTerrains } = useApp();
   const club = getClubById(id!);
   const clubPlayers = players.filter(p => p.clubId === id);
   const clubTournaments = tournaments.filter(tr => tr.clubId === id);
@@ -230,9 +231,9 @@ export default function ClubDetailScreen() {
           ) : null}
           <View style={styles.clubMeta}>
             <MaterialIcons name="place" size={16} color={theme.textSecondary} />
-            <Text style={styles.clubMetaText}>{club.city}</Text>
+            <Text style={styles.clubMetaText}>{club.address ? `${club.address}, ` : ''}{club.city}</Text>
           </View>
-          <Text style={styles.clubDescription}>{club.description}</Text>
+          {club.description ? <Text style={styles.clubDescription}>{club.description}</Text> : null}
         </Animated.View>
 
         {/* Quick Stats */}
@@ -273,6 +274,32 @@ export default function ClubDetailScreen() {
             </Pressable>
           </View>
         </Animated.View>
+
+        {/* Main Terrain */}
+        {club.terrainId ? (() => {
+          const mainTerrain = allTerrains.find(t => t.id === club.terrainId);
+          if (!mainTerrain) return null;
+          return (
+            <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('club', 'mainTerrainLabel')}</Text>
+              <Pressable
+                style={styles.locationCard}
+                onPress={() => router.push(`/terrain/${mainTerrain.id}`)}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: theme.success + '15', alignItems: 'center', justifyContent: 'center' }}>
+                    <MaterialIcons name="sports-soccer" size={22} color={theme.success} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.locationAddress}>{mainTerrain.name}</Text>
+                    <Text style={styles.locationCity}>{t('terrainTypes', mainTerrain.type)} \u2022 {mainTerrain.city}</Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                </View>
+              </Pressable>
+            </Animated.View>
+          );
+        })() : null}
 
         {/* Facilities */}
         <Animated.View entering={FadeInDown.duration(400).delay(300)} style={[styles.section, isTablet && styles.tabletHalf]}>

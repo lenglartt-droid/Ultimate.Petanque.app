@@ -645,7 +645,12 @@ export default function NewChallengeScreen() {
     Alert.alert(t('challenge', 'challengeFinished'), t('challenge', 'whatToDo'), [
       {
         text: t('challenge', 'restartLabel'),
-        onPress: () => {
+        onPress: async () => {
+          // Save current challenge before restarting
+          const data = buildChallengeData();
+          if (data) {
+            await addChallenge(data);
+          }
           setIsStarted(false);
           setShots([]);
           setOpponentShots([]);
@@ -661,6 +666,7 @@ export default function NewChallengeScreen() {
           setIsFinished(false);
           setShotTimerRunning(false);
           setCurrentTurn('player');
+          setNotationRecords([]);
         },
       },
       {
@@ -672,7 +678,7 @@ export default function NewChallengeScreen() {
         },
       },
     ]);
-  }, [t]);
+  }, [t, buildChallengeData, addChallenge]);
 
   // ============================================
   // RENDER: Challenge Type Selection

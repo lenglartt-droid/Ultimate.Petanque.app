@@ -48,6 +48,7 @@ export default function EditClubScreen() {
   const { showAlert } = useAlert();
 
   const club = getClubById(id || '');
+  const { getTerrainById } = useApp();
 
   const [name, setName] = useState('');
   const [location, setLocation] = useState<LocationData>({
@@ -215,12 +216,27 @@ export default function EditClubScreen() {
 
       const selectedTerrain = terrains.find(tr => tr.id === selectedTerrainId);
 
+      // If club has no geolocation but selected terrain does, use terrain location
+      let finalLat = location.latitude;
+      let finalLng = location.longitude;
+      let finalAddress = location.address.trim();
+      let finalCity = location.city.trim();
+      if ((!finalLat && !finalLng) && selectedTerrainId) {
+        const linkedTerrain = terrains.find(tr => tr.id === selectedTerrainId);
+        if (linkedTerrain && (linkedTerrain.location.latitude || linkedTerrain.location.longitude)) {
+          finalLat = linkedTerrain.location.latitude;
+          finalLng = linkedTerrain.location.longitude;
+          if (!finalAddress) finalAddress = linkedTerrain.address || '';
+          if (!finalCity) finalCity = linkedTerrain.city || finalCity;
+        }
+      }
+
       await updateClub(club.id, {
         name: name.trim(),
-        address: location.address.trim(),
-        city: location.city.trim(),
+        address: finalAddress,
+        city: finalCity,
         country: location.country || 'France',
-        location: { latitude: location.latitude, longitude: location.longitude },
+        location: { latitude: finalLat, longitude: finalLng },
         foundedYear: parseInt(foundedYear) || undefined,
         description: description.trim() || undefined,
         facilities: facilityLabels,

@@ -1562,7 +1562,7 @@ export default function NewMatchScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* Mode & Terrain Selection */}
-          {!isTournamentMode && (
+          {!isTournamentMode ? (
             <Animated.View entering={FadeInDown.duration(300)} style={styles.setupCard}>
               <View style={styles.modeBanner}>
                 <View style={styles.modeBannerIcon}>
@@ -1586,6 +1586,31 @@ export default function NewMatchScreen() {
                 </View>
                 <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
               </Pressable>
+
+              <Pressable style={styles.terrainSelector} onPress={() => setShowBoulesSetPicker(true)}>
+                <View style={styles.terrainSelectorIcon}>
+                  <MaterialIcons name="sports-baseball" size={20} color={selectedBoulesSet ? theme.accent : theme.textMuted} />
+                </View>
+                <View style={styles.terrainSelectorContent}>
+                  <Text style={styles.terrainSelectorLabel}>{t('match', 'boulesSet')}</Text>
+                  <Text style={[styles.terrainSelectorValue, !selectedBoulesSet && styles.terrainSelectorPlaceholder]} numberOfLines={1}>
+                    {selectedBoulesSet ? `${selectedBoulesSet.name}${selectedBoulesSet.diameter ? ` \u2022 ${selectedBoulesSet.diameter}mm` : ''}${selectedBoulesSet.weight ? ` \u2022 ${selectedBoulesSet.weight}g` : ''}` : t('match', 'chooseBoulesSet')}
+                  </Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              </Pressable>
+            </Animated.View>
+          ) : (
+            <Animated.View entering={FadeInDown.duration(300)} style={styles.setupCard}>
+              <View style={styles.modeBanner}>
+                <View style={[styles.modeBannerIcon, { backgroundColor: theme.carreauColor }]}>
+                  <MaterialIcons name="emoji-events" size={20} color="#FFF" />
+                </View>
+                <View style={styles.modeBannerContent}>
+                  <Text style={styles.modeBannerText}>{linkedTournament?.name}</Text>
+                  <Text style={styles.modeBannerSubtext}>{t('formats', format)} \u2022 {t('tournamentTypes', linkedTournament?.type || 'Mixte')}</Text>
+                </View>
+              </View>
 
               <Pressable style={styles.terrainSelector} onPress={() => setShowBoulesSetPicker(true)}>
                 <View style={styles.terrainSelectorIcon}>
