@@ -518,6 +518,7 @@ export function buildClubDbPayload(club: Record<string, any>): Record<string, an
     terrain_id: club.terrainId,
     terrain_name: club.terrainName,
     membership_cost: club.membershipCost,
+    club_card_url: club.clubCardUrl || null,
   };
 }
 
@@ -630,6 +631,7 @@ export function buildUpdateDbPayload(table: string, updates: Record<string, any>
       contactPhone: 'contact_phone', terrainId: 'terrain_id',
       terrainName: 'terrain_name', membershipCost: 'membership_cost',
       showContactPublic: 'show_contact_public',
+      clubCardUrl: 'club_card_url',
     },
     tournaments: {
       name: 'name', date: 'date', endDate: 'end_date', type: 'type',

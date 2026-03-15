@@ -347,7 +347,81 @@ export default function ClubDetailScreen() {
             <Text style={styles.clubMetaText}>{club.address ? `${club.address}, ` : ''}{club.city}</Text>
           </View>
           {club.description ? <Text style={styles.clubDescription}>{club.description}</Text> : null}
+
+          {/* Facilities inline */}
+          {club.facilities && club.facilities.length > 0 ? (
+            <View style={styles.inlineFacilitiesSection}>
+              <View style={styles.facilitiesGridInline}>
+                {club.facilities.map((facility, index) => (
+                  <View key={index} style={styles.facilityTagInline}>
+                    <MaterialIcons name="check-circle" size={14} color={theme.success} />
+                    <Text style={styles.facilityTextInline}>{t('facilityLabels', facility) || facility}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : null}
+
+          {/* Contact inline */}
+          {(club.contactEmail || club.contactPhone) && !isSharedItem && (club.showContactPublic !== false || !club.isPublic) ? (
+            <View style={styles.inlineContactSection}>
+              {club.contactEmail ? (
+                <Pressable style={styles.contactRowInline} onPress={() => Linking.openURL(`mailto:${club.contactEmail}`)}>
+                  <MaterialIcons name="email" size={18} color={theme.primary} />
+                  <Text style={styles.contactTextInline}>{club.contactEmail}</Text>
+                </Pressable>
+              ) : null}
+              {club.contactPhone ? (
+                <Pressable style={styles.contactRowInline} onPress={() => Linking.openURL(`tel:${club.contactPhone}`)}>
+                  <MaterialIcons name="phone" size={18} color={theme.primary} />
+                  <Text style={styles.contactTextInline}>{club.contactPhone}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
         </Animated.View>
+
+        {/* Club Card - right after main card */}
+        {clubCardUrl ? (
+          <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('club', 'clubCardLabel')}</Text>
+            <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, overflow: 'hidden', ...theme.shadows.card }}>
+              <Pressable style={{ position: 'relative', minHeight: 180 }} onPress={() => clubCardType === 'pdf' ? Linking.openURL(clubCardUrl) : setShowCardFullscreen(true)}>
+                {clubCardType === 'image' ? (
+                  <Image source={{ uri: clubCardUrl }} style={{ width: '100%', height: 200 }} contentFit="cover" transition={200} />
+                ) : (
+                  <View style={{ width: '100%', height: 160, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.backgroundSecondary, gap: 8 }}>
+                    <MaterialIcons name="picture-as-pdf" size={48} color={theme.error} />
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: theme.textPrimary }}>{t('player', 'pdfDocument')}</Text>
+                    <Text style={{ fontSize: 13, color: theme.textSecondary }}>{t('player', 'tapToView')}</Text>
+                  </View>
+                )}
+              </Pressable>
+              {canEdit && !isSharedItem ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, gap: 8, borderTopWidth: 1, borderTopColor: theme.border }}>
+                  <Pressable style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, backgroundColor: theme.primary + '10', borderRadius: theme.borderRadius.md }} onPress={showClubCardUploadOptions}>
+                    <MaterialIcons name="refresh" size={18} color={theme.primary} />
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: theme.primary }}>{t('club', 'replaceClubCard')}</Text>
+                  </Pressable>
+                  <Pressable style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.error + '10', borderRadius: theme.borderRadius.md }} onPress={handleRemoveClubCard}>
+                    <MaterialIcons name="delete-outline" size={18} color={theme.error} />
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
+          </Animated.View>
+        ) : canEdit && !isSharedItem ? (
+          <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('club', 'clubCardLabel')}</Text>
+            <Pressable style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 32, alignItems: 'center', borderWidth: 2, borderColor: theme.primary + '25', borderStyle: 'dashed', ...theme.shadows.card }} onPress={showClubCardUploadOptions}>
+              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                <MaterialIcons name="badge" size={32} color={theme.primary} />
+              </View>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: theme.primary, marginBottom: 6 }}>{t('club', 'addClubCard')}</Text>
+              <Text style={{ fontSize: 13, color: theme.textSecondary, textAlign: 'center' }}>{t('club', 'clubCardDesc')}</Text>
+            </Pressable>
+          </Animated.View>
+        ) : null}
 
         {/* Quick Stats */}
         <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.quickStats}>
@@ -393,7 +467,7 @@ export default function ClubDetailScreen() {
           const mainTerrain = allTerrains.find(t => t.id === club.terrainId);
           if (!mainTerrain) return null;
           return (
-            <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
+            <Animated.View entering={FadeInDown.duration(400).delay(250)} style={[styles.section, isTablet && styles.tabletHalf]}>
               <Text style={styles.sectionTitle}>{t('club', 'mainTerrainLabel')}</Text>
               <Pressable
                 style={styles.locationCard}
@@ -414,49 +488,7 @@ export default function ClubDetailScreen() {
           );
         })() : null}
 
-        {/* Facilities */}
-        <Animated.View entering={FadeInDown.duration(400).delay(300)} style={[styles.section, isTablet && styles.tabletHalf]}>
-          <Text style={styles.sectionTitle}>{t('club', 'facilitiesLabel')}</Text>
-          <View style={styles.facilitiesGrid}>
-            {club.facilities.map((facility, index) => (
-              <View key={index} style={styles.facilityTag}>
-                <MaterialIcons name="check-circle" size={16} color={theme.success} />
-                <Text style={styles.facilityText}>{t('facilityLabels', facility) || facility}</Text>
-              </View>
-            ))}
-          </View>
-        </Animated.View>
-
         </View>
-
-        {/* Contact - hidden for shared items, and hidden on public if showContactPublic is false */}
-        {(club.contactEmail || club.contactPhone) && !isSharedItem && (club.showContactPublic !== false || !club.isPublic) && (
-          <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('club', 'contactLabel')}</Text>
-            <View style={styles.contactCard}>
-              {club.contactEmail && (
-                <Pressable 
-                  style={styles.contactRow}
-                  onPress={() => Linking.openURL(`mailto:${club.contactEmail}`)}
-                >
-                  <MaterialIcons name="email" size={20} color={theme.primary} />
-                  <Text style={styles.contactText}>{club.contactEmail}</Text>
-                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-                </Pressable>
-              )}
-              {club.contactPhone && (
-                <Pressable 
-                  style={[styles.contactRow, !club.contactEmail && { borderTopWidth: 0 }]}
-                  onPress={() => Linking.openURL(`tel:${club.contactPhone}`)}
-                >
-                  <MaterialIcons name="phone" size={20} color={theme.primary} />
-                  <Text style={styles.contactText}>{club.contactPhone}</Text>
-                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-                </Pressable>
-              )}
-            </View>
-          </Animated.View>
-        )}
 
         <View style={isTablet ? styles.tabletRow : undefined}>
         {/* Members */}
@@ -530,59 +562,15 @@ export default function ClubDetailScreen() {
         )}
         </View>
 
-        {/* Club Card Section */}
-        {canEdit && !isSharedItem && (
-          <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('club', 'clubCardLabel')}</Text>
-            {uploadingCard ? (
-              <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 40, alignItems: 'center', gap: 12, ...theme.shadows.card }}>
-                <ActivityIndicator size="large" color={theme.primary} />
-                <Text style={{ fontSize: 14, color: theme.textSecondary }}>{t('club', 'uploadingClubCard')}</Text>
-              </View>
-            ) : clubCardUrl ? (
-              <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, overflow: 'hidden', ...theme.shadows.card }}>
-                <Pressable style={{ position: 'relative', minHeight: 180 }} onPress={() => clubCardType === 'pdf' ? Linking.openURL(clubCardUrl) : setShowCardFullscreen(true)}>
-                  {clubCardType === 'image' ? (
-                    <Image source={{ uri: clubCardUrl }} style={{ width: '100%', height: 200 }} contentFit="cover" transition={200} />
-                  ) : (
-                    <View style={{ width: '100%', height: 160, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.backgroundSecondary, gap: 8 }}>
-                      <MaterialIcons name="picture-as-pdf" size={48} color={theme.error} />
-                      <Text style={{ fontSize: 16, fontWeight: '600', color: theme.textPrimary }}>{t('player', 'pdfDocument')}</Text>
-                      <Text style={{ fontSize: 13, color: theme.textSecondary }}>{t('player', 'tapToView')}</Text>
-                    </View>
-                  )}
-                </Pressable>
-                <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, gap: 8, borderTopWidth: 1, borderTopColor: theme.border }}>
-                  <Pressable style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, backgroundColor: theme.primary + '10', borderRadius: theme.borderRadius.md }} onPress={showClubCardUploadOptions}>
-                    <MaterialIcons name="refresh" size={18} color={theme.primary} />
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: theme.primary }}>{t('club', 'replaceClubCard')}</Text>
-                  </Pressable>
-                  <Pressable style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.error + '10', borderRadius: theme.borderRadius.md }} onPress={handleRemoveClubCard}>
-                    <MaterialIcons name="delete-outline" size={18} color={theme.error} />
-                  </Pressable>
-                </View>
-              </View>
-            ) : (
-              <Pressable style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 32, alignItems: 'center', borderWidth: 2, borderColor: theme.primary + '25', borderStyle: 'dashed', ...theme.shadows.card }} onPress={showClubCardUploadOptions}>
-                <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-                  <MaterialIcons name="badge" size={32} color={theme.primary} />
-                </View>
-                <Text style={{ fontSize: 16, fontWeight: '600', color: theme.primary, marginBottom: 6 }}>{t('club', 'addClubCard')}</Text>
-                <Text style={{ fontSize: 13, color: theme.textSecondary, textAlign: 'center', marginBottom: 16 }}>{t('club', 'clubCardDesc')}</Text>
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: theme.borderRadius.full }}>
-                    <MaterialIcons name="image" size={14} color={theme.textSecondary} />
-                    <Text style={{ fontSize: 12, fontWeight: '500', color: theme.textSecondary }}>JPG / PNG</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: theme.borderRadius.full }}>
-                    <MaterialIcons name="picture-as-pdf" size={14} color={theme.textSecondary} />
-                    <Text style={{ fontSize: 12, fontWeight: '500', color: theme.textSecondary }}>PDF</Text>
-                  </View>
-                </View>
-              </Pressable>
-            )}
+        {/* Upload in progress overlay */}
+        {uploadingCard ? (
+          <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
+            <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 40, alignItems: 'center', gap: 12, ...theme.shadows.card }}>
+              <ActivityIndicator size="large" color={theme.primary} />
+              <Text style={{ fontSize: 14, color: theme.textSecondary }}>{t('club', 'uploadingClubCard')}</Text>
+            </View>
           </Animated.View>
-        )}
+        ) : null}
 
         {/* Contact Visibility Toggle - only when public */}
         {canEdit && !isSharedItem && (club.isPublic ?? false) && (club.contactEmail || club.contactPhone) && (
@@ -805,6 +793,48 @@ const styles = StyleSheet.create({
     color: theme.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
+  },
+  inlineFacilitiesSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  facilitiesGridInline: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  facilityTagInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: theme.success + '10',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.full,
+  },
+  facilityTextInline: {
+    fontSize: 12,
+    color: theme.success,
+    fontWeight: '500',
+  },
+  inlineContactSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+    gap: 8,
+  },
+  contactRowInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  contactTextInline: {
+    fontSize: 14,
+    color: theme.primary,
   },
   quickStats: {
     flexDirection: 'row',

@@ -203,6 +203,7 @@ function mapClubFromDb(c: any): Club {
     terrainId: c.terrain_id, terrainName: c.terrain_name,
     membershipCost: c.membership_cost ? parseFloat(c.membership_cost) : undefined,
     isPublic: c.is_public ?? false, showContactPublic: c.show_contact_public ?? false,
+    clubCardUrl: c.club_card_url || undefined,
   };
 }
 
@@ -1129,6 +1130,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         terrain_id: club.terrainId,
         terrain_name: club.terrainName,
         membership_cost: club.membershipCost,
+        club_card_url: club.clubCardUrl || null,
       }).select().single();
 
       if (error) throw error;
@@ -1153,6 +1155,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           membershipCost: data.membership_cost ? parseFloat(data.membership_cost) : undefined,
           isPublic: data.is_public ?? false,
           showContactPublic: data.show_contact_public ?? false,
+          clubCardUrl: data.club_card_url || undefined,
         };
         setClubs(prev => [...prev, newClub]);
       }
@@ -1533,6 +1536,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.terrainName !== undefined) dbUpdates.terrain_name = updates.terrainName;
       if (updates.membershipCost !== undefined) dbUpdates.membership_cost = updates.membershipCost;
       if (updates.showContactPublic !== undefined) dbUpdates.show_contact_public = updates.showContactPublic;
+      if ((updates as any).clubCardUrl !== undefined) dbUpdates.club_card_url = (updates as any).clubCardUrl || null;
       dbUpdates.updated_at = new Date().toISOString();
 
       await supabase.from('clubs').update(dbUpdates).eq('id', id);

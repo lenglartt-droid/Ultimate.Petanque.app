@@ -135,6 +135,7 @@ export default function NewTournamentScreen() {
   const [showParticipantsSection, setShowParticipantsSection] = useState(false);
   const [showFinancesSection, setShowFinancesSection] = useState(false);
   const [showDescriptionSection, setShowDescriptionSection] = useState(false);
+  const [showClubSection, setShowClubSection] = useState(false);
 
   const selectedTerrain = terrains.find(t => t.id === terrainId);
 
@@ -343,8 +344,157 @@ export default function NewTournamentScreen() {
             )}
           </SectionCard>
 
+          {/* =================== LIEU =================== */}
+
+          {/* Terrain */}
+          <SectionCard title={t('tournament', 'location')} icon="place" color={theme.success} delay={150} required>
+            <View style={styles.terrainHeaderRow}>
+              <Text style={styles.fieldHint}>{t('tournament', 'selectTerrainOrAddress')}</Text>
+              <Pressable style={styles.addTerrainBtn} onPress={() => router.push('/terrain/new')}>
+                <MaterialIcons name="add" size={14} color={theme.primary} />
+                <Text style={styles.addTerrainBtnText}>{t('tournament', 'terrainBtn')}</Text>
+              </Pressable>
+            </View>
+
+            {terrains.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.terrainsScroll}>
+                <Pressable
+                  style={[styles.terrainOption, !terrainId && styles.terrainOptionActive]}
+                  onPress={() => { Haptics.selectionAsync(); setTerrainId(undefined); }}
+                >
+                  <MaterialIcons name="edit-location" size={20} color={!terrainId ? theme.success : theme.textMuted} />
+                  <Text style={[styles.terrainOptionText, !terrainId && styles.terrainOptionTextActive]}>{t('tournament', 'otherLocation')}</Text>
+                </Pressable>
+                {terrains.map(terrain => {
+                  const tc = config.terrainTypes.find(t => t.id === terrain.type);
+                  const isActive = terrainId === terrain.id;
+                  return (
+                    <Pressable
+                      key={terrain.id}
+                      style={[styles.terrainCardNew, isActive && styles.terrainCardNewActive]}
+                      onPress={() => { Haptics.selectionAsync(); setTerrainId(terrain.id); }}
+                    >
+                      <View style={[styles.terrainCardNewIcon, isActive && styles.terrainCardNewIconActive]}>
+                        <MaterialIcons name={(tc?.icon as any) || 'landscape'} size={18} color={isActive ? '#FFF' : theme.textSecondary} />
+                      </View>
+                      <Text style={[styles.terrainCardNewName, isActive && styles.terrainCardNewNameActive]} numberOfLines={1}>{terrain.name}</Text>
+                      <Text style={styles.terrainCardNewCity}>{terrain.city}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            ) : (
+              <View style={styles.noTerrainsBox}>
+                <MaterialIcons name="landscape" size={32} color={theme.textMuted} />
+                <Text style={styles.noTerrainsText}>{t('tournament', 'noTerrainsRegistered')}</Text>
+                <Pressable style={styles.createTerrainBtn} onPress={() => router.push('/terrain/new')}>
+                  <MaterialIcons name="add" size={16} color={theme.primary} />
+                  <Text style={styles.createTerrainBtnText}>{t('tournament', 'createTerrain')}</Text>
+                </Pressable>
+              </View>
+            )}
+
+            {!terrainId && (
+              <Animated.View entering={FadeInDown.duration(250)} style={{ marginTop: 16 }}>
+                <LocationPicker
+                  label={t('tournament', 'tournamentLocation')}
+                  value={manualLocation}
+                  onChange={setManualLocation}
+                  placeholder={t('tournament', 'searchAddress')}
+                  required
+                  showAddressField
+                />
+              </Animated.View>
+            )}
+
+            {selectedTerrain ? (
+              <Animated.View entering={FadeIn.duration(200)} style={styles.selectedTerrainBanner}>
+                <MaterialIcons name="check-circle" size={16} color={theme.success} />
+                <Text style={styles.selectedTerrainBannerText}>
+                  {selectedTerrain.name} — {selectedTerrain.address}, {selectedTerrain.city}
+                </Text>
+              </Animated.View>
+            ) : null}
+          </SectionCard>
+
+          {/* Club - Accordion */}
+          <Animated.View entering={FadeInDown.duration(350).delay(175)} style={styles.sectionCard}>
+            <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowClubSection(p => !p); }}>
+              <View style={[styles.sectionCardIcon, { backgroundColor: theme.primaryLight + '15' }]}>
+                <MaterialIcons name="home-work" size={18} color={theme.primaryLight} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionCardTitle}>{t('tournament', 'organizingClub')}</Text>
+                {clubId ? <Text style={[styles.accordionValueText, { color: theme.primaryLight }]}>{clubs.find(c => c.id === clubId)?.name}</Text> : null}
+              </View>
+              <MaterialIcons name={showClubSection ? 'expand-less' : 'expand-more'} size={24} color={theme.textMuted} />
+            </Pressable>
+            {showClubSection && (
+              <Animated.View entering={FadeInDown.duration(200)} style={styles.accordionContent}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
+                  <Pressable
+                    style={[styles.chipBtn, !clubId && styles.chipBtnActive]}
+                    onPress={() => { Haptics.selectionAsync(); setClubId(undefined); }}
+                  >
+                    <Text style={[styles.chipBtnText, !clubId && styles.chipBtnTextActive]}>{t('tournament', 'none')}</Text>
+                  </Pressable>
+                  {clubs.map(club => (
+                    <Pressable
+                      key={club.id}
+                      style={[styles.chipBtn, clubId === club.id && styles.chipBtnActive]}
+                      onPress={() => { Haptics.selectionAsync(); setClubId(club.id); }}
+                    >
+                      <Text style={[styles.chipBtnText, clubId === club.id && styles.chipBtnTextActive]}>{club.name}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </Animated.View>
+            )}
+          </Animated.View>
+
+          {/* Financial & Prize - Accordion */}
+          <Animated.View entering={FadeInDown.duration(350).delay(200)} style={styles.sectionCard}>
+            <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowFinancesSection(p => !p); }}>
+              <View style={[styles.sectionCardIcon, { backgroundColor: theme.carreauColor + '15' }]}>
+                <MaterialIcons name="payments" size={18} color={theme.carreauColor} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionCardTitle}>{t('tournament', 'finances')}</Text>
+                {(registrationCost || prize) ? <Text style={[styles.accordionValueText, { color: theme.carreauColor }]}>{registrationCost ? `${registrationCost}\u20ac` : ''}{registrationCost && prize ? ' \u2022 ' : ''}{prize || ''}</Text> : <Text style={styles.sectionCardSubtitle}>{t('tournament', 'financesSubtitle')}</Text>}
+              </View>
+              <MaterialIcons name={showFinancesSection ? 'expand-less' : 'expand-more'} size={24} color={theme.textMuted} />
+            </Pressable>
+            {showFinancesSection && (
+              <Animated.View entering={FadeInDown.duration(200)} style={styles.accordionContent}>
+                <View style={styles.financeRow}>
+                  <View style={styles.financeField}>
+                    <Text style={styles.financeLabel}>{t('tournament', 'registrationCost')}</Text>
+                    <TextInput
+                      style={styles.financeInput}
+                      value={registrationCost}
+                      onChangeText={setRegistrationCost}
+                      placeholder="0"
+                      placeholderTextColor={theme.textMuted}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <View style={styles.financeField}>
+                    <Text style={styles.financeLabel}>{t('tournament', 'prize')}</Text>
+                    <TextInput
+                      style={styles.financeInput}
+                      value={prize}
+                      onChangeText={setPrize}
+                      placeholder={t('tournament', 'prizePlaceholder')}
+                      placeholderTextColor={theme.textMuted}
+                    />
+                  </View>
+                </View>
+              </Animated.View>
+            )}
+          </Animated.View>
+
           {/* Format */}
-          <SectionCard title={t('tournament', 'gameFormat')} icon="groups" color={theme.accent} delay={150} required>
+          <SectionCard title={t('tournament', 'gameFormat')} icon="groups" color={theme.accent} delay={225} required>
             <View style={styles.formatGrid}>
               {config.game.formats.map(f => {
                 const cfg = FORMAT_CONFIG_KEYS[f];
@@ -415,104 +565,10 @@ export default function NewTournamentScreen() {
             )}
           </SectionCard>
 
-          {/* =================== LIEU =================== */}
-
-          {/* Terrain */}
-          <SectionCard title={t('tournament', 'location')} icon="place" color={theme.success} delay={250} required>
-            <View style={styles.terrainHeaderRow}>
-              <Text style={styles.fieldHint}>{t('tournament', 'selectTerrainOrAddress')}</Text>
-              <Pressable style={styles.addTerrainBtn} onPress={() => router.push('/terrain/new')}>
-                <MaterialIcons name="add" size={14} color={theme.primary} />
-                <Text style={styles.addTerrainBtnText}>{t('tournament', 'terrainBtn')}</Text>
-              </Pressable>
-            </View>
-
-            {terrains.length > 0 ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.terrainsScroll}>
-                <Pressable
-                  style={[styles.terrainOption, !terrainId && styles.terrainOptionActive]}
-                  onPress={() => { Haptics.selectionAsync(); setTerrainId(undefined); }}
-                >
-                  <MaterialIcons name="edit-location" size={20} color={!terrainId ? theme.success : theme.textMuted} />
-                  <Text style={[styles.terrainOptionText, !terrainId && styles.terrainOptionTextActive]}>{t('tournament', 'otherLocation')}</Text>
-                </Pressable>
-                {terrains.map(terrain => {
-                  const tc = config.terrainTypes.find(t => t.id === terrain.type);
-                  const isActive = terrainId === terrain.id;
-                  return (
-                    <Pressable
-                      key={terrain.id}
-                      style={[styles.terrainCardNew, isActive && styles.terrainCardNewActive]}
-                      onPress={() => { Haptics.selectionAsync(); setTerrainId(terrain.id); }}
-                    >
-                      <View style={[styles.terrainCardNewIcon, isActive && styles.terrainCardNewIconActive]}>
-                        <MaterialIcons name={(tc?.icon as any) || 'landscape'} size={18} color={isActive ? '#FFF' : theme.textSecondary} />
-                      </View>
-                      <Text style={[styles.terrainCardNewName, isActive && styles.terrainCardNewNameActive]} numberOfLines={1}>{terrain.name}</Text>
-                      <Text style={styles.terrainCardNewCity}>{terrain.city}</Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            ) : (
-              <View style={styles.noTerrainsBox}>
-                <MaterialIcons name="landscape" size={32} color={theme.textMuted} />
-                <Text style={styles.noTerrainsText}>{t('tournament', 'noTerrainsRegistered')}</Text>
-                <Pressable style={styles.createTerrainBtn} onPress={() => router.push('/terrain/new')}>
-                  <MaterialIcons name="add" size={16} color={theme.primary} />
-                  <Text style={styles.createTerrainBtnText}>{t('tournament', 'createTerrain')}</Text>
-                </Pressable>
-              </View>
-            )}
-
-            {!terrainId && (
-              <Animated.View entering={FadeInDown.duration(250)} style={{ marginTop: 16 }}>
-                <LocationPicker
-                  label={t('tournament', 'tournamentLocation')}
-                  value={manualLocation}
-                  onChange={setManualLocation}
-                  placeholder={t('tournament', 'searchAddress')}
-                  required
-                  showAddressField
-                />
-              </Animated.View>
-            )}
-
-            {selectedTerrain ? (
-              <Animated.View entering={FadeIn.duration(200)} style={styles.selectedTerrainBanner}>
-                <MaterialIcons name="check-circle" size={16} color={theme.success} />
-                <Text style={styles.selectedTerrainBannerText}>
-                  {selectedTerrain.name} — {selectedTerrain.address}, {selectedTerrain.city}
-                </Text>
-              </Animated.View>
-            ) : null}
-          </SectionCard>
-
-          {/* Club */}
-          <SectionCard title={t('tournament', 'organizingClub')} icon="home-work" color={theme.primaryLight} delay={300}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
-              <Pressable
-                style={[styles.chipBtn, !clubId && styles.chipBtnActive]}
-                onPress={() => { Haptics.selectionAsync(); setClubId(undefined); }}
-              >
-                <Text style={[styles.chipBtnText, !clubId && styles.chipBtnTextActive]}>{t('tournament', 'none')}</Text>
-              </Pressable>
-              {clubs.map(club => (
-                <Pressable
-                  key={club.id}
-                  style={[styles.chipBtn, clubId === club.id && styles.chipBtnActive]}
-                  onPress={() => { Haptics.selectionAsync(); setClubId(club.id); }}
-                >
-                  <Text style={[styles.chipBtnText, clubId === club.id && styles.chipBtnTextActive]}>{club.name}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </SectionCard>
-
           {/* =================== CLASSIFICATION (ACCORDIONS) =================== */}
 
           {/* Tournament Level - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(350)} style={styles.sectionCard}>
+          <Animated.View entering={FadeInDown.duration(350).delay(300)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowLevelSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.success + '15' }]}>
                 <MaterialIcons name="signal-cellular-alt" size={18} color={theme.success} />
@@ -549,7 +605,7 @@ export default function NewTournamentScreen() {
                   </Pressable>
                 </View>
                 {showCustomLevelInput && (
-                  <Animated.View entering={FadeInDown.duration(250)} style={styles.customInput}>
+                  <Animated.View entering={FadeInDown.duration(250)} style={[styles.customInput, { marginBottom: 4 }]}>
                     <TextInput
                       style={styles.customInputField}
                       value={customLevel}
@@ -566,7 +622,7 @@ export default function NewTournamentScreen() {
           </Animated.View>
 
           {/* Tournament Category - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(375)} style={styles.sectionCard}>
+          <Animated.View entering={FadeInDown.duration(350).delay(325)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowCategorySection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.warning + '15' }]}>
                 <MaterialIcons name="verified" size={18} color={theme.warning} />
@@ -598,7 +654,7 @@ export default function NewTournamentScreen() {
           </Animated.View>
 
           {/* Registration - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(400)} style={styles.sectionCard}>
+          <Animated.View entering={FadeInDown.duration(350).delay(350)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowRegistrationSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.primary + '15' }]}>
                 <MaterialIcons name="how-to-reg" size={18} color={theme.primary} />
@@ -630,7 +686,7 @@ export default function NewTournamentScreen() {
           </Animated.View>
 
           {/* Scope - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(425)} style={styles.sectionCard}>
+          <Animated.View entering={FadeInDown.duration(350).delay(375)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowScopeSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.accent + '15' }]}>
                 <MaterialIcons name="public" size={18} color={theme.accent} />
@@ -664,7 +720,7 @@ export default function NewTournamentScreen() {
           {/* =================== DÉTAILS (ACCORDIONS) =================== */}
 
           {/* Participants - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(450)} style={styles.sectionCard}>
+          <Animated.View entering={FadeInDown.duration(350).delay(400)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowParticipantsSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.carreauColor + '15' }]}>
                 <MaterialIcons name="people-outline" size={18} color={theme.carreauColor} />
@@ -695,49 +751,8 @@ export default function NewTournamentScreen() {
             )}
           </Animated.View>
 
-          {/* Financial & Prize - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(475)} style={styles.sectionCard}>
-            <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowFinancesSection(p => !p); }}>
-              <View style={[styles.sectionCardIcon, { backgroundColor: theme.carreauColor + '15' }]}>
-                <MaterialIcons name="payments" size={18} color={theme.carreauColor} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.sectionCardTitle}>{t('tournament', 'finances')}</Text>
-                {(registrationCost || prize) ? <Text style={[styles.accordionValueText, { color: theme.carreauColor }]}>{registrationCost ? `${registrationCost}\u20ac` : ''}{registrationCost && prize ? ' \u2022 ' : ''}{prize || ''}</Text> : <Text style={styles.sectionCardSubtitle}>{t('tournament', 'financesSubtitle')}</Text>}
-              </View>
-              <MaterialIcons name={showFinancesSection ? 'expand-less' : 'expand-more'} size={24} color={theme.textMuted} />
-            </Pressable>
-            {showFinancesSection && (
-              <Animated.View entering={FadeInDown.duration(200)} style={styles.accordionContent}>
-                <View style={styles.financeRow}>
-                  <View style={styles.financeField}>
-                    <Text style={styles.financeLabel}>{t('tournament', 'registrationCost')}</Text>
-                    <TextInput
-                      style={styles.financeInput}
-                      value={registrationCost}
-                      onChangeText={setRegistrationCost}
-                      placeholder="0"
-                      placeholderTextColor={theme.textMuted}
-                      keyboardType="numeric"
-                    />
-                  </View>
-                  <View style={styles.financeField}>
-                    <Text style={styles.financeLabel}>{t('tournament', 'prize')}</Text>
-                    <TextInput
-                      style={styles.financeInput}
-                      value={prize}
-                      onChangeText={setPrize}
-                      placeholder={t('tournament', 'prizePlaceholder')}
-                      placeholderTextColor={theme.textMuted}
-                    />
-                  </View>
-                </View>
-              </Animated.View>
-            )}
-          </Animated.View>
-
           {/* Description - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(500)} style={styles.sectionCard}>
+          <Animated.View entering={FadeInDown.duration(350).delay(425)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowDescriptionSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.textSecondary + '15' }]}>
                 <MaterialIcons name="description" size={18} color={theme.textSecondary} />
