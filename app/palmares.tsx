@@ -15,6 +15,7 @@ import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn, FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import Svg, { Circle, Line, G, Text as SvgText, Rect } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -69,14 +70,18 @@ interface PerformanceBadge {
 
 const BadgeCard = React.memo(({ badge, index }: { badge: PerformanceBadge; index: number }) => (
   <Animated.View entering={FadeInDown.duration(250).delay(index * 40)}>
-    <View style={[styles.badgeCard, !badge.earned && styles.badgeCardLocked]}>
-      <View style={[styles.badgeIconCircle, { backgroundColor: badge.earned ? badge.bgColor : theme.backgroundSecondary }]}>
-        <MaterialIcons name={badge.icon as any} size={22} color={badge.earned ? badge.color : theme.textMuted} />
+    <View style={[styles.badgeCard, !badge.earned && styles.badgeCardLocked, badge.earned && { borderColor: badge.color + '25' }]}>
+      <View style={styles.badgeTop}>
+        <View style={[styles.badgeIconCircle, { backgroundColor: badge.earned ? badge.bgColor : theme.backgroundSecondary }]}>
+          <MaterialIcons name={badge.icon as any} size={24} color={badge.earned ? badge.color : theme.textMuted} />
+        </View>
+        {badge.earned && badge.value ? (
+          <View style={[styles.badgeValuePill, { backgroundColor: badge.color + '12' }]}>
+            <Text style={[styles.badgeValue, { color: badge.color }]}>{badge.value}</Text>
+          </View>
+        ) : null}
       </View>
       <Text style={[styles.badgeLabel, !badge.earned && { color: theme.textMuted }]} numberOfLines={1}>{badge.label}</Text>
-      {badge.earned && badge.value ? (
-        <Text style={[styles.badgeValue, { color: badge.color }]}>{badge.value}</Text>
-      ) : null}
       {!badge.earned && badge.progress !== undefined ? (
         <View style={styles.badgeProgressBar}>
           <View style={[styles.badgeProgressFill, { width: `${Math.min(badge.progress, 100)}%`, backgroundColor: badge.color + '60' }]} />
@@ -85,7 +90,7 @@ const BadgeCard = React.memo(({ badge, index }: { badge: PerformanceBadge; index
       <Text style={styles.badgeDesc} numberOfLines={2}>{badge.description}</Text>
       {!badge.earned ? (
         <View style={styles.badgeLockOverlay}>
-          <MaterialIcons name="lock-outline" size={12} color={theme.textMuted} />
+          <MaterialIcons name="lock-outline" size={14} color={theme.textMuted} />
         </View>
       ) : null}
     </View>
@@ -550,71 +555,78 @@ export default function PalmaresScreen() {
         ListHeaderComponent={() => (
           <>
             {/* ============ PODIUM HERO ============ */}
-            <Animated.View entering={FadeInDown.duration(500)} style={styles.heroCard}>
-              {summary.podiums > 0 ? (
-                <View style={styles.podiumContainer}>
-                  <Animated.View entering={FadeInUp.duration(500).delay(200)} style={styles.podiumColumn}>
-                    <View style={[styles.podiumMedalCircle, { backgroundColor: '#C0C0C0' + '18', borderColor: '#C0C0C0' + '40', borderWidth: 2 }]}>
-                      <MaterialIcons name="workspace-premium" size={24} color="#A8B4C0" />
+            <Animated.View entering={FadeInDown.duration(500)} style={styles.heroCardOuter}>
+              <LinearGradient
+                colors={['#0F172A', '#1E3A5F', '#1E3A5F']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.heroCard}
+              >
+                {summary.podiums > 0 ? (
+                  <View style={styles.podiumContainer}>
+                    <Animated.View entering={FadeInUp.duration(500).delay(200)} style={styles.podiumColumn}>
+                      <View style={[styles.podiumMedalCircle, { backgroundColor: 'rgba(192,192,192,0.15)', borderColor: 'rgba(192,192,192,0.35)', borderWidth: 2 }]}>
+                        <MaterialIcons name="workspace-premium" size={26} color="#C0C8D4" />
+                      </View>
+                      <Text style={[styles.podiumCount, { color: '#C0C8D4' }]}>{summary.seconds}</Text>
+                      <LinearGradient colors={['rgba(192,192,192,0.25)', 'rgba(192,192,192,0.08)']} style={[styles.podiumBar, styles.podiumBar2nd]}>
+                        <Text style={[styles.podiumBarText, { color: '#C0C8D4' }]}>{language === 'en' ? '2nd' : '2e'}</Text>
+                      </LinearGradient>
+                    </Animated.View>
+                    <Animated.View entering={FadeInUp.duration(600).delay(100)} style={styles.podiumColumn}>
+                      <View style={[styles.podiumMedalCircle, styles.podiumMedalGold]}>
+                        <MaterialIcons name="emoji-events" size={34} color="#FFD700" />
+                      </View>
+                      <Text style={[styles.podiumCount, { color: '#FFD700', fontSize: 24, fontWeight: '900' }]}>{summary.titles}</Text>
+                      <LinearGradient colors={['rgba(255,215,0,0.3)', 'rgba(255,215,0,0.08)']} style={[styles.podiumBar, styles.podiumBar1st]}>
+                        <Text style={[styles.podiumBarText, { fontWeight: '800', color: '#FFD700' }]}>{language === 'en' ? '1st' : '1er'}</Text>
+                      </LinearGradient>
+                    </Animated.View>
+                    <Animated.View entering={FadeInUp.duration(500).delay(300)} style={styles.podiumColumn}>
+                      <View style={[styles.podiumMedalCircle, { backgroundColor: 'rgba(205,127,50,0.15)', borderColor: 'rgba(205,127,50,0.35)', borderWidth: 2 }]}>
+                        <MaterialIcons name="military-tech" size={26} color="#D4956A" />
+                      </View>
+                      <Text style={[styles.podiumCount, { color: '#D4956A' }]}>{summary.thirds}</Text>
+                      <LinearGradient colors={['rgba(205,127,50,0.25)', 'rgba(205,127,50,0.08)']} style={[styles.podiumBar, styles.podiumBar3rd]}>
+                        <Text style={[styles.podiumBarText, { color: '#D4956A' }]}>{language === 'en' ? '3rd' : '3e'}</Text>
+                      </LinearGradient>
+                    </Animated.View>
+                  </View>
+                ) : (
+                  <View style={styles.heroIconRow}>
+                    <View style={styles.heroIcon}>
+                      <MaterialIcons name="emoji-events" size={44} color="#FFD700" />
                     </View>
-                    <Text style={[styles.podiumCount, { color: '#8A9BAE' }]}>{summary.seconds}</Text>
-                    <View style={[styles.podiumBar, styles.podiumBar2nd]}>
-                      <Text style={styles.podiumBarText}>{language === 'en' ? '2nd' : '2e'}</Text>
-                    </View>
-                  </Animated.View>
-                  <Animated.View entering={FadeInUp.duration(600).delay(100)} style={styles.podiumColumn}>
-                    <View style={[styles.podiumMedalCircle, { backgroundColor: '#FFD700' + '15', borderColor: '#FFD700' + '50', borderWidth: 2.5 }]}>
-                      <MaterialIcons name="emoji-events" size={30} color="#FFD700" />
-                    </View>
-                    <Text style={[styles.podiumCount, { color: '#DAA520', fontSize: 22 }]}>{summary.titles}</Text>
-                    <View style={[styles.podiumBar, styles.podiumBar1st]}>
-                      <Text style={[styles.podiumBarText, { fontWeight: '800' }]}>{language === 'en' ? '1st' : '1er'}</Text>
-                    </View>
-                  </Animated.View>
-                  <Animated.View entering={FadeInUp.duration(500).delay(300)} style={styles.podiumColumn}>
-                    <View style={[styles.podiumMedalCircle, { backgroundColor: '#CD7F32' + '15', borderColor: '#CD7F32' + '35', borderWidth: 2 }]}>
-                      <MaterialIcons name="military-tech" size={24} color="#CD7F32" />
-                    </View>
-                    <Text style={[styles.podiumCount, { color: '#CD7F32' }]}>{summary.thirds}</Text>
-                    <View style={[styles.podiumBar, styles.podiumBar3rd]}>
-                      <Text style={styles.podiumBarText}>{language === 'en' ? '3rd' : '3e'}</Text>
-                    </View>
-                  </Animated.View>
-                </View>
-              ) : (
-                <View style={styles.heroIconRow}>
-                  <View style={styles.heroIcon}>
-                    <MaterialIcons name="emoji-events" size={40} color={theme.carreauColor} />
+                  </View>
+                )}
+
+                <Text style={styles.heroTitle}>{summary.totalTournaments} {t('palmares', 'tournois')}</Text>
+                <Text style={styles.heroSubtitle}>
+                  {summary.totalMatches} {t('palmares', 'matchs')} • {summary.totalWins} {t('palmares', 'victoires')} • {summary.avgWinRate}% {t('palmares', 'taux')}
+                </Text>
+
+                <View style={styles.heroStatsRow}>
+                  <View style={styles.heroStatItem}>
+                    <Text style={[styles.heroStatValue, { color: '#FFD700' }]}>{summary.titles}</Text>
+                    <Text style={styles.heroStatLabel}>{t('palmares', 'titres')}</Text>
+                  </View>
+                  <View style={styles.heroStatDivider} />
+                  <View style={styles.heroStatItem}>
+                    <Text style={[styles.heroStatValue, { color: '#60A5FA' }]}>{summary.podiums}</Text>
+                    <Text style={styles.heroStatLabel}>{t('palmares', 'podiums')}</Text>
+                  </View>
+                  <View style={styles.heroStatDivider} />
+                  <View style={styles.heroStatItem}>
+                    <Text style={[styles.heroStatValue, { color: '#34D399' }]}>{summary.avgWinRate}%</Text>
+                    <Text style={styles.heroStatLabel}>{t('palmares', 'victoires')}</Text>
+                  </View>
+                  <View style={styles.heroStatDivider} />
+                  <View style={styles.heroStatItem}>
+                    <Text style={[styles.heroStatValue, { color: '#FBBF24' }]}>{summary.totalCarreaux}</Text>
+                    <Text style={styles.heroStatLabel}>{t('palmares', 'carreaux')}</Text>
                   </View>
                 </View>
-              )}
-
-              <Text style={styles.heroTitle}>{summary.totalTournaments} {t('palmares', 'tournois')}</Text>
-              <Text style={styles.heroSubtitle}>
-                {summary.totalMatches} {t('palmares', 'matchs')} • {summary.totalWins} {t('palmares', 'victoires')} • {summary.avgWinRate}% {t('palmares', 'taux')}
-              </Text>
-
-              <View style={styles.heroStatsRow}>
-                <View style={styles.heroStatItem}>
-                  <Text style={[styles.heroStatValue, { color: theme.carreauColor }]}>{summary.titles}</Text>
-                  <Text style={styles.heroStatLabel}>{t('palmares', 'titres')}</Text>
-                </View>
-                <View style={styles.heroStatDivider} />
-                <View style={styles.heroStatItem}>
-                  <Text style={[styles.heroStatValue, { color: theme.accent }]}>{summary.podiums}</Text>
-                  <Text style={styles.heroStatLabel}>{t('palmares', 'podiums')}</Text>
-                </View>
-                <View style={styles.heroStatDivider} />
-                <View style={styles.heroStatItem}>
-                  <Text style={[styles.heroStatValue, { color: theme.success }]}>{summary.avgWinRate}%</Text>
-                  <Text style={styles.heroStatLabel}>{t('palmares', 'victoires')}</Text>
-                </View>
-                <View style={styles.heroStatDivider} />
-                <View style={styles.heroStatItem}>
-                  <Text style={[styles.heroStatValue, { color: theme.tirColor }]}>{summary.totalCarreaux}</Text>
-                  <Text style={styles.heroStatLabel}>{t('palmares', 'carreaux')}</Text>
-                </View>
-              </View>
+              </LinearGradient>
             </Animated.View>
 
             {/* ============ ADVANCED STATS ============ */}
@@ -1057,30 +1069,37 @@ const styles = StyleSheet.create({
   listContentTablet: { maxWidth: 960, alignSelf: 'center' as const, width: '100%', paddingHorizontal: 24 },
 
   // Hero
-  heroCard: {
-    backgroundColor: theme.surface, borderRadius: theme.borderRadius.xl,
-    padding: 24, alignItems: 'center', marginBottom: 12, ...theme.shadows.cardElevated,
+  heroCardOuter: {
+    marginBottom: 12,
+    borderRadius: theme.borderRadius.xl,
+    overflow: 'hidden',
+    ...theme.shadows.cardElevated,
   },
-  heroIconRow: { marginBottom: 12 },
-  heroIcon: { width: 80, height: 80, borderRadius: 24, backgroundColor: theme.carreauColor + '12', alignItems: 'center', justifyContent: 'center' },
-  heroTitle: { fontSize: 24, fontWeight: '800', color: theme.textPrimary, letterSpacing: -0.5 },
-  heroSubtitle: { fontSize: 13, color: theme.textSecondary, marginTop: 4, marginBottom: 20 },
-  heroStatsRow: { flexDirection: 'row', alignItems: 'center', width: '100%', backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.lg, paddingVertical: 16, paddingHorizontal: 8 },
+  heroCard: {
+    borderRadius: theme.borderRadius.xl,
+    padding: 28, alignItems: 'center',
+  },
+  heroIconRow: { marginBottom: 16 },
+  heroIcon: { width: 88, height: 88, borderRadius: 28, backgroundColor: 'rgba(255,215,0,0.12)', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(255,215,0,0.25)' },
+  heroTitle: { fontSize: 26, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 },
+  heroSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 6, marginBottom: 22 },
+  heroStatsRow: { flexDirection: 'row', alignItems: 'center', width: '100%', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: theme.borderRadius.lg, paddingVertical: 18, paddingHorizontal: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
   heroStatItem: { flex: 1, alignItems: 'center' },
-  heroStatValue: { fontSize: 20, fontWeight: '800', color: theme.textPrimary },
-  heroStatLabel: { fontSize: 10, color: theme.textMuted, marginTop: 2, fontWeight: '500' },
-  heroStatDivider: { width: 1, height: 28, backgroundColor: theme.border },
+  heroStatValue: { fontSize: 22, fontWeight: '800', color: '#FFFFFF' },
+  heroStatLabel: { fontSize: 10, color: 'rgba(255,255,255,0.5)', marginTop: 3, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  heroStatDivider: { width: 1, height: 32, backgroundColor: 'rgba(255,255,255,0.1)' },
 
   // Podium
-  podiumContainer: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', marginBottom: 16, gap: 14 },
-  podiumColumn: { alignItems: 'center', gap: 6 },
-  podiumMedalCircle: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
-  podiumCount: { fontSize: 18, fontWeight: '800' },
-  podiumBar: { width: 68, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 8, borderTopLeftRadius: 10, borderTopRightRadius: 10 },
-  podiumBar1st: { height: 76, backgroundColor: '#FFD700' + '20', borderWidth: 2, borderBottomWidth: 0, borderColor: '#FFD700' + '40' },
-  podiumBar2nd: { height: 54, backgroundColor: '#C0C0C0' + '18', borderWidth: 2, borderBottomWidth: 0, borderColor: '#C0C0C0' + '30' },
-  podiumBar3rd: { height: 42, backgroundColor: '#CD7F32' + '15', borderWidth: 2, borderBottomWidth: 0, borderColor: '#CD7F32' + '28' },
-  podiumBarText: { fontSize: 11, fontWeight: '700', color: theme.textSecondary },
+  podiumContainer: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', marginBottom: 20, gap: 16 },
+  podiumColumn: { alignItems: 'center', gap: 8 },
+  podiumMedalCircle: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center' },
+  podiumMedalGold: { backgroundColor: 'rgba(255,215,0,0.15)', borderColor: 'rgba(255,215,0,0.45)', borderWidth: 2.5 },
+  podiumCount: { fontSize: 20, fontWeight: '800' },
+  podiumBar: { width: 74, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 10, borderTopLeftRadius: 14, borderTopRightRadius: 14, borderWidth: 1, borderBottomWidth: 0, borderColor: 'rgba(255,255,255,0.08)' },
+  podiumBar1st: { height: 88 },
+  podiumBar2nd: { height: 62 },
+  podiumBar3rd: { height: 48 },
+  podiumBarText: { fontSize: 12, fontWeight: '700' },
 
   // Advanced Stats
   advancedStatsCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 12, ...theme.shadows.card },
@@ -1108,34 +1127,36 @@ const styles = StyleSheet.create({
   badgeCountPill: { backgroundColor: theme.primary + '15', paddingHorizontal: 10, paddingVertical: 3, borderRadius: theme.borderRadius.full },
   badgeCountText: { fontSize: 12, fontWeight: '700', color: theme.primary },
   badgesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
-  badgeCard: { width: (screenWidth - 32 - 30) / 4, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 10, alignItems: 'center', ...theme.shadows.card, minHeight: 110 },
-  badgeCardLocked: { opacity: 0.45 },
-  badgeIconCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
-  badgeLabel: { fontSize: 11, fontWeight: '700', color: theme.textPrimary, textAlign: 'center', marginBottom: 2 },
-  badgeValue: { fontSize: 10, fontWeight: '600', textAlign: 'center', marginBottom: 2 },
-  badgeDesc: { fontSize: 8, color: theme.textMuted, textAlign: 'center', lineHeight: 11 },
-  badgeLockOverlay: { position: 'absolute', top: 6, right: 6 },
-  badgeProgressBar: { width: '80%', height: 3, backgroundColor: theme.border, borderRadius: 2, overflow: 'hidden', marginBottom: 3 },
+  badgeCard: { width: (screenWidth - 32 - 20) / 3, backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 14, alignItems: 'center', ...theme.shadows.card, minHeight: 130, borderWidth: 1.5, borderColor: 'transparent' },
+  badgeCardLocked: { opacity: 0.4 },
+  badgeTop: { alignItems: 'center', marginBottom: 8 },
+  badgeIconCircle: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  badgeValuePill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: theme.borderRadius.full },
+  badgeLabel: { fontSize: 12, fontWeight: '700', color: theme.textPrimary, textAlign: 'center', marginBottom: 3 },
+  badgeValue: { fontSize: 10, fontWeight: '700', textAlign: 'center' },
+  badgeDesc: { fontSize: 9, color: theme.textMuted, textAlign: 'center', lineHeight: 13 },
+  badgeLockOverlay: { position: 'absolute', top: 8, right: 8 },
+  badgeProgressBar: { width: '85%', height: 4, backgroundColor: theme.border, borderRadius: 2, overflow: 'hidden', marginBottom: 4 },
   badgeProgressFill: { height: '100%', borderRadius: 2 },
 
-  // Filters - improved
-  filtersSection: { marginBottom: 12, backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 14, ...theme.shadows.card },
-  filterHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  filterSectionLabel: { fontSize: 13, fontWeight: '700', color: theme.textPrimary, letterSpacing: 0.5, textTransform: 'uppercase' },
-  clearFiltersBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: theme.error + '10', borderRadius: theme.borderRadius.full },
+  // Filters - modern pills
+  filtersSection: { marginBottom: 12, backgroundColor: theme.surface, borderRadius: theme.borderRadius.xl, padding: 16, ...theme.shadows.card },
+  filterHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  filterSectionLabel: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
+  clearFiltersBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.error + '08', borderRadius: theme.borderRadius.full, borderWidth: 1, borderColor: theme.error + '20' },
   clearFiltersBtnText: { fontSize: 11, fontWeight: '600', color: theme.error },
-  filterRow: { gap: 8, paddingBottom: 10 },
+  filterRow: { gap: 8, paddingBottom: 12 },
   filterRowWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
-  filterChip: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: theme.borderRadius.full, backgroundColor: theme.backgroundSecondary, borderWidth: 1.5, borderColor: theme.border },
+  filterChip: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: theme.borderRadius.full, backgroundColor: theme.backgroundSecondary, borderWidth: 1.5, borderColor: 'transparent' },
   filterChipActive: { backgroundColor: theme.primary, borderColor: theme.primary },
   filterChipText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
   filterChipTextActive: { color: '#FFF' },
-  filterChipSmall: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 7, borderRadius: theme.borderRadius.full, backgroundColor: theme.backgroundSecondary, borderWidth: 1.5, borderColor: theme.border },
-  filterChipSmallActive: { borderColor: theme.primary, backgroundColor: theme.primary + '10' },
-  filterChipPodiumActive: { borderColor: theme.carreauColor, backgroundColor: theme.carreauColor + '10' },
+  filterChipSmall: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: theme.borderRadius.full, backgroundColor: theme.backgroundSecondary, borderWidth: 1.5, borderColor: 'transparent' },
+  filterChipSmallActive: { borderColor: theme.primary, backgroundColor: theme.primary + '08' },
+  filterChipPodiumActive: { borderColor: theme.carreauColor, backgroundColor: theme.carreauColor + '08' },
   filterChipSmallText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
   filterChipSmallTextActive: { color: theme.primary },
-  filterSeparator: { width: 1, height: 20, backgroundColor: theme.border, marginHorizontal: 4 },
+  filterSeparator: { width: 1, height: 22, backgroundColor: theme.border + '80', marginHorizontal: 6 },
 
   // Group Toggle
   groupToggleContainer: { flexDirection: 'row', backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 4, marginBottom: 12, ...theme.shadows.card },
