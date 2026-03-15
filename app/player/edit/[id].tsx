@@ -433,8 +433,20 @@ export default function EditPlayerScreen() {
             </View>
           </SectionCard>
 
-          {/* 7. Niveau (Picker) */}
-          <SectionCard title={t('player', 'levelLabel')} icon="signal-cellular-alt" color={theme.success} delay={350}>
+          {/* 7. Latéralité */}
+          <SectionCard title={t('player', 'handedness')} icon="front-hand" color="#6366F1" delay={330}>
+            <View style={styles.roleGrid}>
+              {([{ id: 'right' as const, icon: 'back-hand', label: t('player', 'rightHanded') }, { id: 'left' as const, icon: 'front-hand', label: t('player', 'leftHanded') }, { id: 'ambidextrous' as const, icon: 'swap-horiz', label: t('player', 'ambidextrous') }]).map(h => (
+                <Pressable key={h.id} style={[styles.roleCard, handedness === h.id && { backgroundColor: '#6366F1', borderColor: '#6366F1' }]} onPress={() => { Haptics.selectionAsync(); setHandedness(handedness === h.id ? '' : h.id); }}>
+                  <MaterialIcons name={h.icon as any} size={22} color={handedness === h.id ? '#FFF' : theme.textSecondary} />
+                  <Text style={[styles.roleCardName, handedness === h.id && { color: '#FFF' }]}>{h.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </SectionCard>
+
+          {/* 8. Niveau (Picker) */}
+          <SectionCard title={t('player', 'levelLabel')} icon="signal-cellular-alt" color={theme.success} delay={380}>
             <Pressable style={styles.pickerButton} onPress={() => setShowLevelPicker(true)}>
               <View style={styles.pickerSelected}>
                 <MaterialIcons name={(LEVEL_CONFIG[level]?.icon || 'star') as any} size={20} color={theme.success} />
@@ -446,20 +458,8 @@ export default function EditPlayerScreen() {
             </Pressable>
           </SectionCard>
 
-          {/* Handedness (between Niveau and Boules) */}
-          <SectionCard title={t('player', 'handedness')} icon="front-hand" color="#6366F1" delay={370}>
-            <View style={styles.roleGrid}>
-              {([{ id: 'right' as const, icon: 'back-hand', label: t('player', 'rightHanded') }, { id: 'left' as const, icon: 'front-hand', label: t('player', 'leftHanded') }, { id: 'ambidextrous' as const, icon: 'swap-horiz', label: t('player', 'ambidextrous') }]).map(h => (
-                <Pressable key={h.id} style={[styles.roleCard, handedness === h.id && { backgroundColor: '#6366F1', borderColor: '#6366F1' }]} onPress={() => { Haptics.selectionAsync(); setHandedness(handedness === h.id ? '' : h.id); }}>
-                  <MaterialIcons name={h.icon as any} size={22} color={handedness === h.id ? '#FFF' : theme.textSecondary} />
-                  <Text style={[styles.roleCardName, handedness === h.id && { color: '#FFF' }]}>{h.label}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </SectionCard>
-
-          {/* 8. Boules */}
-          <SectionCard title={t('player', 'boulesLabel')} icon="sports-baseball" color="#D97706" delay={400}>
+          {/* 9. Boules */}
+          <SectionCard title={t('player', 'boulesLabel')} icon="sports-baseball" color="#D97706" delay={430}>
             <TextInput style={styles.textInput} value={boulesName} onChangeText={setBoulesName} placeholder={t('player', 'boulesPlaceholder')} placeholderTextColor={theme.textMuted} />
             <View style={styles.specsRow}>
               <View style={{ flex: 1 }}>
