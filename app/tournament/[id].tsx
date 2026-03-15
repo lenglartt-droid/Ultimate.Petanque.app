@@ -526,125 +526,188 @@ export default function TournamentDetailScreen() {
           />
         }
       >
-        {/* Tournament Header Card */}
-        <Animated.View entering={FadeInDown.duration(300)} style={[styles.tournamentCard, isTablet && styles.tournamentCardTablet]}>
-          <View style={styles.tournamentRow}>
-            <View style={styles.tournamentIcon}>
-              <MaterialIcons name="emoji-events" size={28} color={theme.carreauColor} />
-            </View>
-            <View style={styles.tournamentInfo}>
-              <Text style={styles.tournamentName} numberOfLines={2}>{tournament.name}</Text>
-              {sharedPermission ? (
-                <View style={{ marginBottom: 4 }}>
-                  <SharedBadge permission={sharedPermission} size="small" />
-                </View>
-              ) : null}
-              <View style={styles.tournamentMeta}>
-                <MaterialIcons name="event" size={14} color={theme.textSecondary} />
-                <Text style={styles.tournamentMetaText}>
-                  {new Date(tournament.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
-                </Text>
-                <View style={styles.dot} />
-                <Text style={styles.tournamentMetaText}>{tournament.location.city}</Text>
-                <View style={styles.dot} />
-                <Text style={styles.tournamentMetaText}>{t('formats', tournament.format)}</Text>
+        {/* Tournament Hero Card */}
+        <Animated.View entering={FadeInDown.duration(400)} style={[styles.heroCard, isTablet && styles.tournamentCardTablet]}>
+          {/* Accent banner */}
+          <View style={[styles.heroAccent, { backgroundColor: journeyStatus.color }]} />
+          
+          <View style={styles.heroContent}>
+            {/* Trophy + Name */}
+            <View style={styles.heroTopRow}>
+              <View style={styles.heroTrophyCircle}>
+                <MaterialIcons name="emoji-events" size={32} color={theme.carreauColor} />
+              </View>
+              <View style={styles.heroTitleArea}>
+                <Text style={styles.heroTournamentName} numberOfLines={2}>{tournament.name}</Text>
+                {sharedPermission ? (
+                  <View style={{ marginTop: 4 }}>
+                    <SharedBadge permission={sharedPermission} size="small" />
+                  </View>
+                ) : null}
               </View>
             </View>
+
+            {/* Meta pills */}
+            <View style={styles.heroMetaRow}>
+              <View style={styles.heroMetaPill}>
+                <MaterialIcons name="event" size={13} color={theme.primary} />
+                <Text style={styles.heroMetaPillText}>
+                  {new Date(tournament.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </Text>
+              </View>
+              <View style={styles.heroMetaPill}>
+                <MaterialIcons name="place" size={13} color={theme.success} />
+                <Text style={styles.heroMetaPillText}>{tournament.location.city}</Text>
+              </View>
+              <View style={styles.heroMetaPill}>
+                <MaterialIcons name="groups" size={13} color={theme.accent} />
+                <Text style={styles.heroMetaPillText}>{t('formats', tournament.format)}</Text>
+              </View>
+            </View>
+
+            {/* Final Result Banner */}
+            {tournament.finalResult && tournament.status === 'Terminé' && (() => {
+              const resultConfig: Record<string, { icon: string; color: string }> = {
+                '1er': { icon: 'emoji-events', color: '#FFD700' },
+                '2ème': { icon: 'workspace-premium', color: '#A8B4C0' },
+                '3ème': { icon: 'military-tech', color: '#CD7F32' },
+                'Demi-finale': { icon: 'trending-up', color: theme.primary },
+                'Quart de finale': { icon: 'trending-flat', color: theme.warning },
+                '1/8 finale': { icon: 'sports', color: theme.textSecondary },
+                'Poules': { icon: 'group', color: theme.textSecondary },
+                'Autre': { icon: 'more-horiz', color: theme.textMuted },
+              };
+              const cfg = resultConfig[tournament.finalResult || ''] || { icon: 'sports', color: theme.textSecondary };
+              return (
+                <View style={[styles.heroResultBanner, { backgroundColor: cfg.color + '12', borderColor: cfg.color + '30' }]}>
+                  <View style={[styles.heroResultIcon, { backgroundColor: cfg.color + '20' }]}>
+                    <MaterialIcons name={cfg.icon as any} size={24} color={cfg.color} />
+                  </View>
+                  <Text style={[styles.heroResultText, { color: cfg.color }]}>
+                    {t('palmaresResults', tournament.finalResult)}
+                  </Text>
+                </View>
+              );
+            })()}
+
+            {/* Classification Badges */}
+            {(tournament.tournamentLevel || tournament.tournamentCategory || tournament.registrationType || tournament.tournamentScope) ? (
+              <View style={styles.classificationBadgesContainer}>
+                {tournament.tournamentLevel ? (
+                  <View style={[styles.classificationBadge, { backgroundColor: theme.success + '12' }]}>
+                    <MaterialIcons name="signal-cellular-alt" size={11} color={theme.success} />
+                    <Text style={[styles.classificationBadgeText, { color: theme.success }]}>{t('tournamentLevels', tournament.tournamentLevel)}</Text>
+                  </View>
+                ) : null}
+                {tournament.tournamentCategory ? (
+                  <View style={[styles.classificationBadge, { backgroundColor: theme.warning + '12' }]}>
+                    <MaterialIcons name="category" size={11} color={theme.warning} />
+                    <Text style={[styles.classificationBadgeText, { color: theme.warning }]}>{t('tournamentCategories', tournament.tournamentCategory)}</Text>
+                  </View>
+                ) : null}
+                {tournament.registrationType ? (
+                  <View style={[styles.classificationBadge, { backgroundColor: theme.primary + '12' }]}>
+                    <MaterialIcons name="how-to-reg" size={11} color={theme.primary} />
+                    <Text style={[styles.classificationBadgeText, { color: theme.primary }]}>{t('registrationTypes', tournament.registrationType)}</Text>
+                  </View>
+                ) : null}
+                {tournament.tournamentScope ? (
+                  <View style={[styles.classificationBadge, { backgroundColor: theme.accent + '12' }]}>
+                    <MaterialIcons name="public" size={11} color={theme.accent} />
+                    <Text style={[styles.classificationBadgeText, { color: theme.accent }]}>{t('tournamentScopes', tournament.tournamentScope)}</Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
+            {/* Terrain Info */}
+            {terrain ? (
+              <Pressable
+                style={styles.heroTerrainRow}
+                onPress={() => router.push(`/terrain/${terrain.id}`)}
+              >
+                <View style={styles.heroTerrainIcon}>
+                  <MaterialIcons
+                    name={config.terrainTypes.find(t => t.id === terrain.type)?.icon as any || 'landscape'}
+                    size={16}
+                    color={theme.accent}
+                  />
+                </View>
+                <Text style={styles.heroTerrainName} numberOfLines={1}>{terrain.name}</Text>
+                <Text style={styles.heroTerrainType}>{t('terrainTypes', terrain.type)}</Text>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
+            ) : null}
           </View>
-          
-          {/* Final Result Badge */}
-          {tournament.finalResult && tournament.status === 'Terminé' && (() => {
-            const resultConfig: Record<string, { icon: string; color: string }> = {
-              '1er': { icon: 'emoji-events', color: theme.carreauColor },
-              '2ème': { icon: 'workspace-premium', color: theme.accent },
-              '3ème': { icon: 'military-tech', color: '#CD7F32' },
-              'Demi-finale': { icon: 'trending-up', color: theme.primary },
-              'Quart de finale': { icon: 'trending-flat', color: theme.warning },
-              '1/8 finale': { icon: 'sports', color: theme.textSecondary },
-              'Poules': { icon: 'group', color: theme.textSecondary },
-              'Autre': { icon: 'more-horiz', color: theme.textMuted },
-            };
-            const cfg = resultConfig[tournament.finalResult || ''] || { icon: 'sports', color: theme.textSecondary };
-            return (
-              <View style={styles.finalResultBanner}>
-                <MaterialIcons name={cfg.icon as any} size={20} color={cfg.color} />
-                <Text style={[styles.finalResultBannerText, { color: cfg.color }]}>
-                  {t('palmaresResults', tournament.finalResult)}
-                </Text>
-              </View>
-            );
-          })()}
-          
-          {/* Tournament Classification Badges */}
-          {(tournament.tournamentLevel || tournament.tournamentCategory || tournament.registrationType || tournament.tournamentScope) && (
-            <View style={styles.classificationBadgesContainer}>
-              {tournament.tournamentLevel && (
-                <View style={[styles.classificationBadge, { backgroundColor: theme.success + '15' }]}>
-                  <MaterialIcons name="signal-cellular-alt" size={12} color={theme.success} />
-                  <Text style={[styles.classificationBadgeText, { color: theme.success }]}>{t('tournamentLevels', tournament.tournamentLevel)}</Text>
-                </View>
-              )}
-              {tournament.tournamentCategory && (
-                <View style={[styles.classificationBadge, { backgroundColor: theme.warning + '15' }]}>
-                  <MaterialIcons name="category" size={12} color={theme.warning} />
-                  <Text style={[styles.classificationBadgeText, { color: theme.warning }]}>{t('tournamentCategories', tournament.tournamentCategory)}</Text>
-                </View>
-              )}
-              {tournament.registrationType && (
-                <View style={[styles.classificationBadge, { backgroundColor: theme.primary + '15' }]}>
-                  <MaterialIcons name="how-to-reg" size={12} color={theme.primary} />
-                  <Text style={[styles.classificationBadgeText, { color: theme.primary }]}>{t('registrationTypes', tournament.registrationType)}</Text>
-                </View>
-              )}
-              {tournament.tournamentScope && (
-                <View style={[styles.classificationBadge, { backgroundColor: theme.accent + '15' }]}>
-                  <MaterialIcons name="public" size={12} color={theme.accent} />
-                  <Text style={[styles.classificationBadgeText, { color: theme.accent }]}>{t('tournamentScopes', tournament.tournamentScope)}</Text>
-                </View>
-              )}
-            </View>
-          )}
-          
-          {/* Terrain Info */}
-          {terrain && (
-            <Pressable 
-              style={styles.terrainInfoRow}
-              onPress={() => router.push(`/terrain/${terrain.id}`)}
-            >
-              <View style={styles.terrainInfoIcon}>
-                <MaterialIcons 
-                  name={config.terrainTypes.find(t => t.id === terrain.type)?.icon as any || 'landscape'} 
-                  size={18} 
-                  color={theme.accent} 
-                />
-              </View>
-              <View style={styles.terrainInfoContent}>
-                <Text style={styles.terrainInfoName}>{terrain.name}</Text>
-                <Text style={styles.terrainInfoType}>{t('terrainTypes', terrain.type)} • {terrain.address}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-            </Pressable>
-          )}
         </Animated.View>
 
         <View style={isTablet ? styles.tabletRow : undefined}>
-        {/* Status Card */}
-        <Animated.View entering={FadeInDown.duration(300).delay(50)} style={[styles.statusCard, isTablet && styles.tabletHalf]}>
-          <View style={[styles.statusIconBox, { backgroundColor: journeyStatus.color + '20' }]}>
-            <MaterialIcons name={journeyStatus.icon as any} size={32} color={journeyStatus.color} />
-          </View>
-          <View style={styles.statusInfo}>
-            <Text style={[styles.statusLabel, { color: journeyStatus.color }]}>{journeyStatus.label}</Text>
-            <Text style={styles.statusSubtext}>
-              {myStats.wins}V - {myStats.losses}D • {myStats.pointDiff > 0 ? '+' : ''}{myStats.pointDiff} pts
-            </Text>
-          </View>
-          {myStats.tirRate !== null && (
-            <View style={styles.statusStat}>
-              <Text style={[styles.statusStatValue, { color: theme.tirColor }]}>{myStats.tirRate}%</Text>
-              <Text style={styles.statusStatLabel}>{t('tournament', 'shotLabel')}</Text>
+        {/* Status & Stats Card */}
+        <Animated.View entering={FadeInDown.duration(400).delay(60)} style={[styles.statusCardNew, isTablet && styles.tabletHalf]}>
+          {/* Status Header */}
+          <View style={styles.statusHeaderRow}>
+            <View style={[styles.statusIconCircle, { backgroundColor: journeyStatus.color + '18', borderColor: journeyStatus.color + '40' }]}>
+              <MaterialIcons name={journeyStatus.icon as any} size={28} color={journeyStatus.color} />
             </View>
-          )}
+            <View style={styles.statusHeaderInfo}>
+              <Text style={[styles.statusLabelNew, { color: journeyStatus.color }]}>{journeyStatus.label}</Text>
+              <Text style={styles.statusSubtextNew}>{t('tournamentTypes', tournament.type)} • {t('formats', tournament.format)}</Text>
+            </View>
+          </View>
+
+          {/* Stats Grid */}
+          {myStats.played > 0 ? (
+            <View style={styles.statsGridNew}>
+              <View style={styles.statsGridItem}>
+                <Text style={styles.statsGridValue}>{myStats.played}</Text>
+                <Text style={styles.statsGridLabel}>{t('tournament', 'matchesLabel')}</Text>
+              </View>
+              <View style={styles.statsGridDivider} />
+              <View style={styles.statsGridItem}>
+                <Text style={[styles.statsGridValue, { color: theme.success }]}>{myStats.wins}</Text>
+                <Text style={styles.statsGridLabel}>{t('tournament', 'victoriesLabel')}</Text>
+              </View>
+              <View style={styles.statsGridDivider} />
+              <View style={styles.statsGridItem}>
+                <Text style={[styles.statsGridValue, { color: theme.error }]}>{myStats.losses}</Text>
+                <Text style={styles.statsGridLabel}>{t('tournament', 'defeatsLabel')}</Text>
+              </View>
+              <View style={styles.statsGridDivider} />
+              <View style={styles.statsGridItem}>
+                <Text style={[styles.statsGridValue, { color: theme.primary }]}>{myStats.winRate}%</Text>
+                <Text style={styles.statsGridLabel}>{language === 'en' ? 'Win' : 'Vict.'}</Text>
+              </View>
+              {myStats.tirRate !== null ? (
+                <>
+                  <View style={styles.statsGridDivider} />
+                  <View style={styles.statsGridItem}>
+                    <Text style={[styles.statsGridValue, { color: theme.tirColor }]}>{myStats.tirRate}%</Text>
+                    <Text style={styles.statsGridLabel}>{t('tournament', 'shotLabel')}</Text>
+                  </View>
+                </>
+              ) : null}
+              <View style={styles.statsGridDivider} />
+              <View style={styles.statsGridItem}>
+                <Text style={[styles.statsGridValue, { color: myStats.pointDiff >= 0 ? theme.success : theme.error }]}>
+                  {myStats.pointDiff > 0 ? '+' : ''}{myStats.pointDiff}
+                </Text>
+                <Text style={styles.statsGridLabel}>Diff.</Text>
+              </View>
+            </View>
+          ) : null}
+
+          {/* Win/Loss Visual Bar */}
+          {myStats.played > 0 ? (
+            <View style={styles.winLossBarContainer}>
+              <View style={styles.winLossBar}>
+                <View style={[styles.winLossBarFill, { width: `${myStats.winRate}%`, backgroundColor: theme.success }]} />
+              </View>
+              <View style={styles.winLossLabels}>
+                <Text style={[styles.winLossLabel, { color: theme.success }]}>{myStats.wins}V</Text>
+                <Text style={[styles.winLossLabel, { color: theme.error }]}>{myStats.losses}D</Text>
+              </View>
+            </View>
+          ) : null}
         </Animated.View>
 
         {/* Phase Progress */}
@@ -656,11 +719,11 @@ export default function TournamentDetailScreen() {
               <Text style={styles.cadrageBadgeText}>{t('tournamentTypes', tournament.type)}</Text>
             </View>
           </View>
-          <View style={styles.progressCard}>
-            <ScrollView 
-              horizontal 
+          <View style={styles.progressCardNew}>
+            <ScrollView
+              horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.phasesScroll}
+              contentContainerStyle={styles.phasesScrollNew}
             >
               {tournamentPhases.map((phase, index) => {
                 const isCompleted = index < currentPhaseIndex;
@@ -670,49 +733,78 @@ export default function TournamentDetailScreen() {
                 const lastMatchInPhase = matchesInPhase[matchesInPhase.length - 1];
                 const wonPhase = lastMatchInPhase?.winner === 'A';
                 const showMatchCount = (tournament.type === 'Suisse' || tournament.type === 'Poules') && matchesInPhase.length > 0;
-                
+                const isLast = index === tournamentPhases.length - 1;
+
                 return (
-                  <View key={phase.id} style={styles.phaseItem}>
+                  <View key={phase.id} style={styles.phaseStepContainer}>
+                    {/* Connector line before */}
+                    {index > 0 ? (
+                      <View style={[
+                        styles.phaseConnector,
+                        isCompleted && wonPhase && { backgroundColor: theme.success },
+                        isCompleted && !wonPhase && { backgroundColor: theme.error },
+                      ]} />
+                    ) : null}
+
+                    {/* Phase circle */}
                     <View style={[
-                      styles.phaseCircle,
-                      isCompleted && wonPhase && styles.phaseCircleWon,
-                      isCompleted && !wonPhase && styles.phaseCircleLost,
-                      isCurrent && styles.phaseCircleCurrent,
+                      styles.phaseCircleNew,
+                      isCompleted && wonPhase && styles.phaseCircleNewWon,
+                      isCompleted && !wonPhase && styles.phaseCircleNewLost,
+                      isCurrent && styles.phaseCircleNewCurrent,
+                      !isCompleted && !isCurrent && styles.phaseCircleNewFuture,
                     ]}>
                       {isCompleted && hasMatchInPhase ? (
-                        <MaterialIcons 
-                          name={wonPhase ? 'check' : 'close'} 
-                          size={16} 
-                          color="#FFF" 
+                        <MaterialIcons
+                          name={wonPhase ? 'check' : 'close'}
+                          size={18}
+                          color="#FFF"
                         />
                       ) : showMatchCount ? (
-                        <Text style={[styles.phaseNumber, isCurrent && styles.phaseNumberCurrent]}>
+                        <Text style={[
+                          styles.phaseNumberNew,
+                          isCurrent && { color: theme.primary, fontWeight: '800' as const },
+                        ]}>
                           {matchesInPhase.length}
                         </Text>
                       ) : (
-                        <Text style={[styles.phaseNumber, isCurrent && styles.phaseNumberCurrent]}>
+                        <Text style={[
+                          styles.phaseNumberNew,
+                          isCurrent && { color: theme.primary, fontWeight: '800' as const },
+                        ]}>
                           {index + 1}
                         </Text>
                       )}
                     </View>
+
+                    {/* Phase label */}
                     <Text style={[
-                      styles.phaseLabel,
-                      isCompleted && styles.phaseLabelCompleted,
-                      isCurrent && styles.phaseLabelCurrent
+                      styles.phaseLabelNew,
+                      isCompleted && wonPhase && { color: theme.success, fontWeight: '600' as const },
+                      isCompleted && !wonPhase && { color: theme.error, fontWeight: '600' as const },
+                      isCurrent && { color: theme.primary, fontWeight: '700' as const },
                     ]}>
                       {phase.short}
                     </Text>
-                    {index < tournamentPhases.length - 1 && (
-                      <View style={[styles.phaseLine, isCompleted && wonPhase && styles.phaseLineCompleted]} />
-                    )}
+
+                    {/* Match count badge for pool/swiss */}
+                    {showMatchCount && matchesInPhase.length > 1 ? (
+                      <View style={[styles.phaseMatchCountBadge, { backgroundColor: (wonPhase ? theme.success : theme.error) + '20' }]}>
+                        <Text style={[styles.phaseMatchCountText, { color: wonPhase ? theme.success : theme.error }]}>
+                          {matchesInPhase.filter(m => m.winner === 'A').length}V-{matchesInPhase.filter(m => m.winner === 'B').length}D
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
                 );
               })}
             </ScrollView>
-            
-            <View style={styles.cadrageDescription}>
-              <MaterialIcons name="info-outline" size={14} color={theme.textMuted} />
-              <Text style={styles.cadrageDescriptionText}>
+
+            <View style={styles.cadrageDescNew}>
+              <View style={styles.cadrageDescIconBg}>
+                <MaterialIcons name="info-outline" size={14} color={theme.tirColor} />
+              </View>
+              <Text style={styles.cadrageDescText}>
                 {tournament.type === 'Poules' && t('tournament', 'poulesDesc')}
                 {tournament.type === 'Élimination directe' && t('tournament', 'eliminationDesc')}
                 {tournament.type === 'Mixte' && t('tournament', 'mixteDesc')}
@@ -735,64 +827,90 @@ export default function TournamentDetailScreen() {
           </View>
 
           {myMatches.length > 0 ? (
-            <View style={styles.matchList}>
-              {myMatches.map((match) => {
+            <View style={styles.timelineContainer}>
+              {/* Vertical timeline line */}
+              <View style={styles.timelineLine} />
+
+              {myMatches.map((match, idx) => {
                 const isWin = match.winner === 'A';
-                
+                const dotColor = isWin ? theme.success : theme.error;
+                const isFirst = idx === 0;
+                const isLast = idx === myMatches.length - 1;
+
                 return (
-                  <Pressable 
+                  <Pressable
                     key={match.id}
-                    style={[styles.matchCard, isWin ? styles.matchCardWin : styles.matchCardLoss]}
+                    style={styles.timelineItem}
                     onPress={() => router.push(`/match/${match.id}`)}
                   >
-                    <View style={styles.matchHeader}>
-                      <View style={[styles.matchBadge, { backgroundColor: isWin ? theme.success + '20' : theme.error + '20' }]}>
-                        <Text style={[styles.matchBadgeText, { color: isWin ? theme.success : theme.error }]}>
-                          {match.tournamentPhase ? t('tournamentPhases', match.tournamentPhase) : t('tournamentPhases', 'Match')}
-                        </Text>
-                      </View>
-                      {match.tournamentBracket && (
-                        <View style={styles.bracketTag}>
-                          <Text style={styles.bracketTagText}>{t('tournament', 'bracketLabel')} {match.tournamentBracket}</Text>
-                        </View>
-                      )}
-                      <View style={{ flex: 1 }} />
-                      <Text style={styles.matchDate}>
-                        {new Date(match.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
-                      </Text>
-                    </View>
-                    
-                    <View style={styles.matchBody}>
-                      <View style={styles.matchTeam}>
-                        <Text style={styles.matchTeamLabel}>{t('tournament', 'meLabel')}</Text>
-                        <Text style={[styles.matchScore, isWin && styles.matchScoreWin]}>
-                          {match.teamA.score}
-                        </Text>
-                      </View>
-                      <View style={styles.matchVs}>
-                        <Text style={styles.matchVsText}>-</Text>
-                      </View>
-                      <View style={[styles.matchTeam, { alignItems: 'flex-end' }]}>
-                        <Text style={styles.matchTeamLabel} numberOfLines={1}>
-                          {match.teamB.playerNames[0] || t('tournament', 'opponentLabel')}
-                        </Text>
-                        <Text style={[styles.matchScore, !isWin && styles.matchScoreWin]}>
-                          {match.teamB.score}
-                        </Text>
+                    {/* Timeline dot */}
+                    <View style={styles.timelineDotCol}>
+                      <View style={[styles.timelineDot, { backgroundColor: dotColor, borderColor: dotColor + '40' }]}>
+                        <MaterialIcons
+                          name={isWin ? 'check' : 'close'}
+                          size={12}
+                          color="#FFF"
+                        />
                       </View>
                     </View>
 
-                    <View style={styles.matchFooter}>
-                      <MaterialIcons 
-                        name={isWin ? 'check-circle' : 'cancel'} 
-                        size={16} 
-                        color={isWin ? theme.success : theme.error} 
-                      />
-                      <Text style={[styles.matchResult, { color: isWin ? theme.success : theme.error }]}>
-                        {isWin ? t('tournament', 'victory') : t('tournament', 'defeat')}
-                      </Text>
-                      <View style={{ flex: 1 }} />
-                      <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+                    {/* Match card */}
+                    <View style={[styles.timelineCard, { borderLeftColor: dotColor }]}>
+                      {/* Card header */}
+                      <View style={styles.tlCardHeader}>
+                        <View style={[styles.tlPhaseBadge, { backgroundColor: dotColor + '15' }]}>
+                          <Text style={[styles.tlPhaseBadgeText, { color: dotColor }]}>
+                            {match.tournamentPhase ? t('tournamentPhases', match.tournamentPhase) : t('tournamentPhases', 'Match')}
+                          </Text>
+                        </View>
+                        {match.tournamentBracket ? (
+                          <View style={styles.tlBracketTag}>
+                            <Text style={styles.tlBracketTagText}>{match.tournamentBracket}</Text>
+                          </View>
+                        ) : null}
+                        <View style={{ flex: 1 }} />
+                        <Text style={styles.tlDate}>
+                          {new Date(match.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
+                        </Text>
+                      </View>
+
+                      {/* Score row */}
+                      <View style={styles.tlScoreRow}>
+                        <View style={styles.tlTeam}>
+                          <Text style={styles.tlTeamLabel}>{t('tournament', 'meLabel')}</Text>
+                          <Text style={styles.tlTeamNames} numberOfLines={1}>
+                            {match.teamA.playerNames.slice(0, 2).join(' • ')}
+                          </Text>
+                        </View>
+                        <View style={styles.tlScoreBox}>
+                          <Text style={[styles.tlScoreNum, isWin && { color: theme.success }]}>{match.teamA.score}</Text>
+                          <Text style={styles.tlScoreSep}>-</Text>
+                          <Text style={[styles.tlScoreNum, !isWin && { color: theme.error }]}>{match.teamB.score}</Text>
+                        </View>
+                        <View style={[styles.tlTeam, { alignItems: 'flex-end' }]}>
+                          <Text style={styles.tlTeamLabel}>{t('tournament', 'opponentLabel')}</Text>
+                          <Text style={styles.tlTeamNames} numberOfLines={1}>
+                            {match.teamB.playerNames.slice(0, 2).join(' • ')}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Card footer */}
+                      <View style={styles.tlCardFooter}>
+                        <View style={[styles.tlResultBadge, { backgroundColor: dotColor + '12' }]}>
+                          <MaterialIcons name={isWin ? 'check-circle' : 'cancel'} size={13} color={dotColor} />
+                          <Text style={[styles.tlResultText, { color: dotColor }]}>
+                            {isWin ? t('tournament', 'victory') : t('tournament', 'defeat')}
+                          </Text>
+                        </View>
+                        {match.duration > 0 ? (
+                          <Text style={styles.tlDuration}>
+                            {Math.floor(match.duration / 60)}:{(match.duration % 60).toString().padStart(2, '0')}
+                          </Text>
+                        ) : null}
+                        <View style={{ flex: 1 }} />
+                        <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
+                      </View>
                     </View>
                   </Pressable>
                 );
@@ -1492,44 +1610,118 @@ const styles = StyleSheet.create({
     color: theme.textMuted,
     marginTop: 12,
   },
+  // Hero Card
+  heroCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.xl,
+    marginBottom: 14,
+    overflow: 'hidden',
+    ...theme.shadows.cardElevated,
+  },
+  heroAccent: {
+    height: 5,
+    width: '100%',
+  },
+  heroContent: {
+    padding: 18,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  heroTrophyCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: theme.carreauColor + '12',
+    borderWidth: 2,
+    borderColor: theme.carreauColor + '30',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  heroTitleArea: {
+    flex: 1,
+  },
+  heroTournamentName: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: theme.textPrimary,
+    letterSpacing: -0.3,
+  },
+  heroMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+  },
+  heroMetaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: theme.backgroundSecondary,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.full,
+  },
+  heroMetaPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  heroResultBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: theme.borderRadius.lg,
+    borderWidth: 1.5,
+    marginBottom: 14,
+  },
+  heroResultIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroResultText: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  heroTerrainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  heroTerrainIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: theme.accent + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroTerrainName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textPrimary,
+  },
+  heroTerrainType: {
+    fontSize: 12,
+    color: theme.textMuted,
+  },
   tournamentCard: {
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg,
     padding: 16,
     marginBottom: 12,
     ...theme.shadows.card,
-  },
-  tournamentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  tournamentIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: theme.carreauColor + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  tournamentInfo: {
-    flex: 1,
-  },
-  tournamentName: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: theme.textPrimary,
-    marginBottom: 6,
-  },
-  tournamentMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
-  tournamentMetaText: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    marginLeft: 4,
   },
   classificationBadgesContainer: {
     flexDirection: 'row',
@@ -1601,48 +1793,90 @@ const styles = StyleSheet.create({
     backgroundColor: theme.textMuted,
     marginHorizontal: 6,
   },
-  statusCard: {
+  // Status Card New
+  statusCardNew: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.xl,
+    padding: 18,
+    marginBottom: 16,
+    ...theme.shadows.cardElevated,
+  },
+  statusHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    marginBottom: 20,
-    ...theme.shadows.card,
+    marginBottom: 16,
   },
-  statusIconBox: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
+  statusIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 2.5,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
   },
-  statusInfo: {
+  statusHeaderInfo: {
     flex: 1,
   },
-  statusLabel: {
+  statusLabelNew: {
     fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 2,
+    fontWeight: '800',
+    letterSpacing: -0.3,
   },
-  statusSubtext: {
-    fontSize: 13,
+  statusSubtextNew: {
+    fontSize: 12,
     color: theme.textSecondary,
+    marginTop: 2,
   },
-  statusStat: {
+  statsGridNew: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: 16,
-    borderLeftWidth: 1,
-    borderLeftColor: theme.border,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.lg,
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    marginBottom: 12,
   },
-  statusStatValue: {
-    fontSize: 22,
-    fontWeight: '700',
+  statsGridItem: {
+    flex: 1,
+    alignItems: 'center',
   },
-  statusStatLabel: {
-    fontSize: 11,
+  statsGridValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: theme.textPrimary,
+  },
+  statsGridLabel: {
+    fontSize: 10,
     color: theme.textMuted,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  statsGridDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: theme.border,
+  },
+  winLossBarContainer: {
+    gap: 6,
+  },
+  winLossBar: {
+    height: 6,
+    backgroundColor: theme.error + '30',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  winLossBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  winLossLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  winLossLabel: {
+    fontSize: 10,
+    fontWeight: '700',
   },
   section: {
     marginBottom: 20,
@@ -1688,176 +1922,244 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 10,
   },
-  progressCard: {
+  // Phase Progress New
+  progressCardNew: {
     backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    ...theme.shadows.card,
+    borderRadius: theme.borderRadius.xl,
+    padding: 18,
+    ...theme.shadows.cardElevated,
   },
-  phasesScroll: {
-    gap: 8,
-  },
-  phaseItem: {
-    alignItems: 'center',
+  phasesScrollNew: {
+    alignItems: 'flex-start',
     paddingHorizontal: 4,
-    position: 'relative',
+    paddingBottom: 4,
   },
-  phaseCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: theme.backgroundSecondary,
-    borderWidth: 2,
-    borderColor: theme.border,
+  phaseStepContainer: {
+    alignItems: 'center',
+    flexDirection: 'column',
+    position: 'relative',
+    minWidth: 56,
+  },
+  phaseConnector: {
+    position: 'absolute',
+    top: 20,
+    left: -16,
+    width: 16,
+    height: 3,
+    backgroundColor: theme.border,
+    borderRadius: 1.5,
+  },
+  phaseCircleNew: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 6,
+    borderWidth: 2.5,
+    borderColor: 'transparent',
   },
-  phaseCircleWon: {
+  phaseCircleNewWon: {
     backgroundColor: theme.success,
     borderColor: theme.success,
   },
-  phaseCircleLost: {
+  phaseCircleNewLost: {
     backgroundColor: theme.error,
     borderColor: theme.error,
   },
-  phaseCircleCurrent: {
+  phaseCircleNewCurrent: {
+    backgroundColor: theme.primary + '10',
     borderColor: theme.primary,
     borderWidth: 3,
   },
-  phaseNumber: {
-    fontSize: 13,
-    fontWeight: '600',
+  phaseCircleNewFuture: {
+    backgroundColor: theme.backgroundSecondary,
+    borderColor: theme.border,
+  },
+  phaseNumberNew: {
+    fontSize: 14,
+    fontWeight: '700',
     color: theme.textMuted,
   },
-  phaseNumberCurrent: {
-    color: theme.primary,
-  },
-  phaseLabel: {
+  phaseLabelNew: {
     fontSize: 11,
     color: theme.textMuted,
     fontWeight: '500',
+    textAlign: 'center',
   },
-  phaseLabelCompleted: {
-    color: theme.textSecondary,
+  phaseMatchCountBadge: {
+    marginTop: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: theme.borderRadius.full,
   },
-  phaseLabelCurrent: {
-    color: theme.primary,
-    fontWeight: '600',
+  phaseMatchCountText: {
+    fontSize: 9,
+    fontWeight: '700',
   },
-  phaseLine: {
-    position: 'absolute',
-    top: 16,
-    left: 44,
-    width: 20,
-    height: 2,
-    backgroundColor: theme.border,
-  },
-  phaseLineCompleted: {
-    backgroundColor: theme.success,
-  },
-  cadrageDescription: {
+  cadrageDescNew: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     marginTop: 16,
-    paddingTop: 12,
+    paddingTop: 14,
     borderTopWidth: 1,
     borderTopColor: theme.border,
   },
-  cadrageDescriptionText: {
+  cadrageDescIconBg: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme.tirColor + '12',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cadrageDescText: {
     fontSize: 12,
     color: theme.textMuted,
     flex: 1,
+    lineHeight: 17,
   },
-  matchList: {
-    gap: 12,
+  // Timeline
+  timelineContainer: {
+    position: 'relative',
+    paddingLeft: 24,
   },
-  matchCard: {
+  timelineLine: {
+    position: 'absolute',
+    left: 11,
+    top: 12,
+    bottom: 12,
+    width: 2.5,
+    backgroundColor: theme.border,
+    borderRadius: 1.5,
+  },
+  timelineItem: {
+    flexDirection: 'row',
+    marginBottom: 14,
+  },
+  timelineDotCol: {
+    position: 'absolute',
+    left: -24,
+    top: 18,
+    width: 24,
+    alignItems: 'center',
+    zIndex: 2,
+  },
+  timelineDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+  },
+  timelineCard: {
+    flex: 1,
     backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    overflow: 'hidden',
+    borderRadius: theme.borderRadius.lg,
     borderLeftWidth: 4,
+    overflow: 'hidden',
     ...theme.shadows.card,
   },
-  matchCardWin: {
-    borderLeftColor: theme.success,
-  },
-  matchCardLoss: {
-    borderLeftColor: theme.error,
-  },
-  matchHeader: {
+  tlCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: theme.backgroundSecondary,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 6,
     gap: 8,
   },
-  matchBadge: {
+  tlPhaseBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: theme.borderRadius.sm,
+    borderRadius: theme.borderRadius.full,
   },
-  matchBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
+  tlPhaseBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
-  bracketTag: {
+  tlBracketTag: {
     paddingHorizontal: 8,
     paddingVertical: 3,
-    backgroundColor: theme.primary + '15',
-    borderRadius: theme.borderRadius.sm,
+    backgroundColor: theme.primary + '12',
+    borderRadius: theme.borderRadius.full,
   },
-  bracketTagText: {
-    fontSize: 11,
+  tlBracketTagText: {
+    fontSize: 10,
     fontWeight: '600',
     color: theme.primary,
   },
-  matchDate: {
-    fontSize: 12,
+  tlDate: {
+    fontSize: 11,
     color: theme.textMuted,
   },
-  matchBody: {
+  tlScoreRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
-  matchTeam: {
+  tlTeam: {
     flex: 1,
   },
-  matchTeamLabel: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    marginBottom: 4,
-  },
-  matchScore: {
-    fontSize: 28,
+  tlTeamLabel: {
+    fontSize: 9,
     fontWeight: '700',
-    color: theme.textSecondary,
+    color: theme.textMuted,
+    letterSpacing: 0.5,
+    marginBottom: 2,
   },
-  matchScoreWin: {
+  tlTeamNames: {
+    fontSize: 12,
+    fontWeight: '500',
     color: theme.textPrimary,
   },
-  matchVs: {
-    paddingHorizontal: 12,
-  },
-  matchVsText: {
-    fontSize: 18,
-    color: theme.textMuted,
-  },
-  matchFooter: {
+  tlScoreBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    marginHorizontal: 10,
+  },
+  tlScoreNum: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: theme.textSecondary,
+    minWidth: 22,
+    textAlign: 'center',
+  },
+  tlScoreSep: {
+    fontSize: 14,
+    color: theme.textMuted,
+    marginHorizontal: 4,
+  },
+  tlCardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderTopWidth: 1,
     borderTopColor: theme.border,
-    gap: 6,
+    gap: 8,
   },
-  matchResult: {
-    fontSize: 13,
+  tlResultBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: theme.borderRadius.full,
+  },
+  tlResultText: {
+    fontSize: 11,
     fontWeight: '600',
+  },
+  tlDuration: {
+    fontSize: 11,
+    color: theme.textMuted,
   },
   emptyMatches: {
     backgroundColor: theme.surface,
