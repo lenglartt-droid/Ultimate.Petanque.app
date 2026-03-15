@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -33,6 +33,49 @@ import {
   PublicTerrain,
 } from '@/services/publicItemsService';
 
+// ============================================
+// SectionCard
+// ============================================
+function SectionCard({ children, title, subtitle, icon, color, delay = 0, required = false }: {
+  children: React.ReactNode;
+  title: string;
+  subtitle?: string;
+  icon: string;
+  color: string;
+  delay?: number;
+  required?: boolean;
+}) {
+  return (
+    <Animated.View entering={FadeInDown.duration(350).delay(delay)} style={styles.sectionCard}>
+      <View style={styles.sectionCardHeader}>
+        <View style={[styles.sectionCardIcon, { backgroundColor: color + '15' }]}>
+          <MaterialIcons name={icon as any} size={18} color={color} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={styles.sectionCardTitle}>{title}</Text>
+            {required ? <View style={styles.requiredDot} /> : null}
+          </View>
+          {subtitle ? <Text style={styles.sectionCardSubtitle}>{subtitle}</Text> : null}
+        </View>
+      </View>
+      {children}
+    </Animated.View>
+  );
+}
+
+function StepIndicator({ step, total, label }: { step: number; total: number; label: string }) {
+  const pct = Math.round((step / total) * 100);
+  return (
+    <View style={styles.stepIndicator}>
+      <View style={styles.stepBarTrack}>
+        <Animated.View entering={FadeIn.duration(600)} style={[styles.stepBarFill, { width: `${pct}%` }]} />
+      </View>
+      <Text style={styles.stepLabel}>{label}</Text>
+    </View>
+  );
+}
+
 export default function NewTerrainScreen() {
   const insets = useSafeAreaInsets();
   const { addTerrain, clubs } = useApp();
@@ -51,93 +94,68 @@ export default function NewTerrainScreen() {
   const [covered, setCovered] = useState(false);
   const [environment, setEnvironment] = useState<'indoor' | 'outdoor'>('outdoor');
   const [photos, setPhotos] = useState<string[]>([]);
-  const [location, setLocation] = useState<LocationData>({
-    address: '', city: '', country: 'France', latitude: 0, longitude: 0,
-  });
+  const [location, setLocation] = useState<LocationData>({ address: '', city: '', country: 'France', latitude: 0, longitude: 0 });
 
-  // Duplicate detection state
+  // Duplicates
   const [duplicates, setDuplicates] = useState<(PublicTerrain & { matchType: 'exact' | 'city' })[]>([]);
   const [checkingDuplicates, setCheckingDuplicates] = useState(false);
   const [duplicatesDismissed, setDuplicatesDismissed] = useState(false);
   const [importingId, setImportingId] = useState<string | null>(null);
 
-  // Check for duplicates when city changes
   useEffect(() => {
     const trimmedCity = location.city.trim();
-    if (trimmedCity.length < 2) {
-      setDuplicates([]);
-      setDuplicatesDismissed(false);
-      return;
-    }
-
+    if (trimmedCity.length < 2) { setDuplicates([]); setDuplicatesDismissed(false); return; }
     const timer = setTimeout(async () => {
       setCheckingDuplicates(true);
       const { duplicates: found } = await checkDuplicatePublicTerrains(trimmedCity, location.address.trim());
-      setDuplicates(found);
-      setDuplicatesDismissed(false);
-      setCheckingDuplicates(false);
+      setDuplicates(found); setDuplicatesDismissed(false); setCheckingDuplicates(false);
     }, 800);
-
     return () => clearTimeout(timer);
   }, [location.city, location.address]);
 
   const handleImportDuplicate = useCallback(async (item: PublicTerrain) => {
-    setImportingId(item.id);
-    Haptics.selectionAsync();
+    setImportingId(item.id); Haptics.selectionAsync();
     const { newItemId, error } = await importPublicItemToDirectory('terrains', item.id);
     setImportingId(null);
-    if (error) {
-      showAlert(t('common', 'error'), error);
-    } else {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showAlert(t('common', 'success'), t('map', 'importSuccess'));
-      router.back();
-    }
+    if (error) { showAlert(t('common', 'error'), error); }
+    else { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); showAlert(t('common', 'success'), t('map', 'importSuccess')); router.back(); }
   }, [showAlert, t]);
 
+  // Progress
+  const progress = useMemo(() => {
+    let filled = 0; const total = 4;
+    if (name.trim()) filled++;
+    filled++; // type always filled
+    if (location.address.trim()) filled++;
+    if (location.city.trim()) filled++;
+    return { filled, total };
+  }, [name, location.address, location.city]);
+
+  const progressLabel = useMemo(() => {
+    if (!name.trim()) return t('tournament', 'startWithName');
+    if (!location.address.trim() || !location.city.trim()) return t('tournament', 'chooseLocation');
+    return t('tournament', 'readyToCreate');
+  }, [name, location.address, location.city, t]);
+
+  const canSave = name.trim() && location.address.trim() && location.city.trim();
+
   const handleSave = async () => {
-    if (!name.trim()) {
-      Alert.alert(t('common', 'error'), t('terrain', 'errorNameRequired'));
-      return;
-    }
-    if (!location.address.trim()) {
-      Alert.alert(t('common', 'error'), t('terrain', 'errorAddressRequired'));
-      return;
-    }
-    if (!location.city.trim()) {
-      Alert.alert(t('common', 'error'), t('terrain', 'errorCityRequired'));
-      return;
-    }
+    if (!name.trim()) { Alert.alert(t('common', 'error'), t('terrain', 'errorNameRequired')); return; }
+    if (!location.address.trim()) { Alert.alert(t('common', 'error'), t('terrain', 'errorAddressRequired')); return; }
+    if (!location.city.trim()) { Alert.alert(t('common', 'error'), t('terrain', 'errorCityRequired')); return; }
     setIsSaving(true);
     try {
-      // Upload photos to Supabase Storage
       const uploadedPhotos = user?.id ? await uploadTerrainPhotos(user.id, photos) : [];
       const selectedClub = clubs.find(c => c.id === clubId);
       await addTerrain({
-        name: name.trim(),
-        address: location.address.trim(),
-        city: location.city.trim(),
+        name: name.trim(), address: location.address.trim(), city: location.city.trim(),
         location: { latitude: location.latitude, longitude: location.longitude },
-        type,
-        description: description.trim() || undefined,
-        facilities: [],
-        clubId,
-        clubName: selectedClub?.name,
-        isPublic: false,
-        publicAccess,
-        courtsCount: parseInt(courtsCount) || 1,
-        lighting,
-        covered,
-        environment,
-        photos: uploadedPhotos,
+        type, description: description.trim() || undefined, facilities: [],
+        clubId, clubName: selectedClub?.name, isPublic: false, publicAccess,
+        courtsCount: parseInt(courtsCount) || 1, lighting, covered, environment, photos: uploadedPhotos,
       });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.back();
-    } catch (error) {
-      Alert.alert(t('common', 'error'), t('terrain', 'errorSave'));
-    } finally {
-      setIsSaving(false);
-    }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); router.back();
+    } catch (error) { Alert.alert(t('common', 'error'), t('terrain', 'errorSave')); } finally { setIsSaving(false); }
   };
 
   const showDuplicates = duplicates.length > 0 && !duplicatesDismissed;
@@ -145,92 +163,85 @@ export default function NewTerrainScreen() {
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
+        <Pressable style={styles.headerBtn} onPress={() => router.back()}>
           <MaterialIcons name="close" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>{t('terrain', 'newTerrain')}</Text>
-        <View style={{ width: 40 }} />
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>{t('terrain', 'newTerrain')}</Text>
+        </View>
+        <View style={styles.headerBtn} />
       </View>
 
+      <StepIndicator step={progress.filled} total={progress.total} label={progressLabel} />
+
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Photos Section */}
-          <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('terrain', 'photosLabel')} ({photos.length}/5)</Text>
-            <View style={styles.photosContainer}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+
+          {/* Photos */}
+          <SectionCard title={`${t('terrain', 'photosLabel')} (${photos.length}/5)`} icon="photo-camera" color={theme.primary} delay={50}>
+            <View style={styles.photosGrid}>
               {photos.map((photo, index) => (
                 <View key={index} style={styles.photoItem}>
                   <Image source={{ uri: photo }} style={styles.photoImage} contentFit="cover" />
-                  <Pressable style={styles.removePhotoButton} onPress={() => { setPhotos(prev => prev.filter((_, i) => i !== index)); Haptics.selectionAsync(); }}>
-                    <MaterialIcons name="close" size={16} color="#FFF" />
+                  <Pressable style={styles.removePhotoBtn} onPress={() => { setPhotos(prev => prev.filter((_, i) => i !== index)); Haptics.selectionAsync(); }}>
+                    <MaterialIcons name="close" size={14} color="#FFF" />
                   </Pressable>
                 </View>
               ))}
-              {photos.length < 5 && (
-                <View style={styles.addPhotoButtons}>
-                  <Pressable style={styles.addPhotoButton} onPress={async () => {
+              {photos.length < 5 ? (
+                <>
+                  <Pressable style={styles.addPhotoBtn} onPress={async () => {
                     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
                     if (status !== 'granted') { Alert.alert(t('common', 'error'), t('terrain', 'galleryPermissionMsg')); return; }
                     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsMultipleSelection: true, quality: 0.8, selectionLimit: 5 - photos.length });
                     if (!result.canceled && result.assets) { setPhotos(prev => [...prev, ...result.assets.map(a => a.uri)].slice(0, 5)); Haptics.selectionAsync(); }
                   }}>
-                    <MaterialIcons name="photo-library" size={24} color={theme.primary} />
+                    <MaterialIcons name="photo-library" size={22} color={theme.primary} />
                     <Text style={styles.addPhotoText}>{t('terrain', 'gallery')}</Text>
                   </Pressable>
-                  <Pressable style={styles.addPhotoButton} onPress={async () => {
+                  <Pressable style={styles.addPhotoBtn} onPress={async () => {
                     const { status } = await ImagePicker.requestCameraPermissionsAsync();
                     if (status !== 'granted') { Alert.alert(t('common', 'error'), t('terrain', 'cameraPermissionMsg')); return; }
                     const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
-                    if (!result.canceled && result.assets && result.assets[0]) { setPhotos(prev => [...prev, result.assets[0].uri].slice(0, 5)); Haptics.selectionAsync(); }
+                    if (!result.canceled && result.assets?.[0]) { setPhotos(prev => [...prev, result.assets[0].uri].slice(0, 5)); Haptics.selectionAsync(); }
                   }}>
-                    <MaterialIcons name="camera-alt" size={24} color={theme.primary} />
+                    <MaterialIcons name="camera-alt" size={22} color={theme.primary} />
                     <Text style={styles.addPhotoText}>{t('terrain', 'photo')}</Text>
                   </Pressable>
-                </View>
-              )}
+                </>
+              ) : null}
             </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Name */}
-          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('terrain', 'terrainNameRequired')}</Text>
+          <SectionCard title={t('terrain', 'terrainNameRequired').replace(' *', '')} icon="landscape" color={theme.accent} delay={100} required>
             <TextInput style={styles.textInput} value={name} onChangeText={setName} placeholder={t('terrain', 'namePlaceholder')} placeholderTextColor={theme.textMuted} autoCapitalize="words" autoFocus />
-          </Animated.View>
+          </SectionCard>
 
           {/* Type */}
-          <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('terrain', 'terrainTypeRequired')}</Text>
-            <View style={styles.typeContainer}>
-              {config.terrainTypes.map((tt) => (
-                <Pressable key={tt.id} style={[styles.typeCard, type === tt.id && styles.typeCardActive]} onPress={() => { Haptics.selectionAsync(); setType(tt.id); }}>
-                  <View style={[styles.typeIconContainer, type === tt.id && styles.typeIconContainerActive]}>
-                    <MaterialIcons name={tt.icon as any} size={24} color={type === tt.id ? '#FFF' : theme.textSecondary} />
-                  </View>
-                  <Text style={[styles.typeName, type === tt.id && styles.typeNameActive]}>{t('terrainTypes', tt.id)}</Text>
-                  <Text style={styles.typeDescription} numberOfLines={2}>{t('terrainTypeDescs', tt.id)}</Text>
-                </Pressable>
-              ))}
+          <SectionCard title={t('terrain', 'terrainTypeRequired').replace(' *', '')} icon="terrain" color={theme.success} delay={150} required>
+            <View style={styles.typeGrid}>
+              {config.terrainTypes.map((tt) => {
+                const isActive = type === tt.id;
+                return (
+                  <Pressable key={tt.id} style={[styles.typeCard, isActive && styles.typeCardActive]} onPress={() => { Haptics.selectionAsync(); setType(tt.id); }}>
+                    <View style={[styles.typeCardIconBox, isActive && styles.typeCardIconBoxActive]}>
+                      <MaterialIcons name={tt.icon as any} size={22} color={isActive ? '#FFF' : theme.textSecondary} />
+                    </View>
+                    <Text style={[styles.typeCardName, isActive && styles.typeCardNameActive]}>{t('terrainTypes', tt.id)}</Text>
+                    <Text style={styles.typeCardDesc} numberOfLines={2}>{t('terrainTypeDescs', tt.id)}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
-          </Animated.View>
+          </SectionCard>
 
-          {/* Address - using LocationPicker */}
-          <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-            <LocationPicker
-              label={t('terrain', 'addressRequired')}
-              value={location}
-              onChange={setLocation}
-              placeholder={t('terrain', 'streetNumber')}
-              required
-              showAddressField
-            />
-          </Animated.View>
+          {/* Address */}
+          <SectionCard title={t('terrain', 'addressRequired').replace(' *', '')} icon="place" color={theme.error} delay={200} required>
+            <LocationPicker label="" value={location} onChange={setLocation} placeholder={t('terrain', 'streetNumber')} required showAddressField />
+          </SectionCard>
 
-          {/* Duplicate Detection Banner */}
+          {/* Duplicate Detection */}
           {checkingDuplicates ? (
             <Animated.View entering={FadeIn.duration(200)} style={styles.duplicateCheckingRow}>
               <ActivityIndicator size="small" color={theme.primary} />
@@ -243,71 +254,28 @@ export default function NewTerrainScreen() {
               <View style={styles.duplicateHeader}>
                 <View style={styles.duplicateHeaderLeft}>
                   <MaterialIcons name="info" size={20} color={theme.warning} />
-                  <Text style={styles.duplicateTitle}>
-                    {duplicates.length === 1 ? t('map', 'duplicateFound') : t('map', 'duplicatesFound')}
-                  </Text>
+                  <Text style={styles.duplicateTitle}>{duplicates.length === 1 ? t('map', 'duplicateFound') : t('map', 'duplicatesFound')}</Text>
                 </View>
-                <Pressable onPress={() => setDuplicatesDismissed(true)} hitSlop={8}>
-                  <MaterialIcons name="close" size={18} color={theme.textMuted} />
-                </Pressable>
+                <Pressable onPress={() => setDuplicatesDismissed(true)} hitSlop={8}><MaterialIcons name="close" size={18} color={theme.textMuted} /></Pressable>
               </View>
               <Text style={styles.duplicateDesc}>{t('map', 'duplicateTerrainDesc')}</Text>
-
-              {duplicates.slice(0, 3).map((dup) => (
+              {duplicates.slice(0, 3).map(dup => (
                 <View key={dup.id} style={styles.duplicateCard}>
                   <View style={styles.duplicateCardTop}>
-                    <View style={[styles.duplicateIcon, { backgroundColor: theme.success }]}>
-                      <MaterialIcons name="sports-soccer" size={16} color="#FFF" />
-                    </View>
+                    <View style={[styles.duplicateIcon, { backgroundColor: theme.success }]}><MaterialIcons name="sports-soccer" size={16} color="#FFF" /></View>
                     <View style={styles.duplicateCardInfo}>
                       <Text style={styles.duplicateCardName} numberOfLines={1}>{dup.name}</Text>
-                      <Text style={styles.duplicateCardMeta} numberOfLines={1}>
-                        {dup.city} {dup.address ? `\u2022 ${dup.address}` : ''}
-                      </Text>
+                      <Text style={styles.duplicateCardMeta} numberOfLines={1}>{dup.city} {dup.address ? `\u2022 ${dup.address}` : ''}</Text>
                     </View>
                     <View style={[styles.matchBadge, dup.matchType === 'exact' ? styles.matchBadgeExact : styles.matchBadgeCity]}>
-                      <Text style={[styles.matchBadgeText, dup.matchType === 'exact' ? styles.matchBadgeTextExact : styles.matchBadgeTextCity]}>
-                        {dup.matchType === 'exact' ? t('map', 'exactMatch') : t('map', 'cityMatch')}
-                      </Text>
+                      <Text style={[styles.matchBadgeText, dup.matchType === 'exact' ? styles.matchBadgeTextExact : styles.matchBadgeTextCity]}>{dup.matchType === 'exact' ? t('map', 'exactMatch') : t('map', 'cityMatch')}</Text>
                     </View>
                   </View>
-                  <View style={styles.duplicateCardDetails}>
-                    <View style={styles.duplicateDetailChip}>
-                      <MaterialIcons name={config.terrainTypes.find(tt => tt.id === dup.type)?.icon as any || 'landscape'} size={12} color={theme.textSecondary} />
-                      <Text style={styles.duplicateDetailText}>{t('terrainTypes', dup.type)}</Text>
-                    </View>
-                    <View style={styles.duplicateDetailChip}>
-                      <Text style={styles.duplicateDetailText}>{dup.courtsCount} {dup.courtsCount > 1 ? t('map', 'courts') : t('map', 'court')}</Text>
-                    </View>
-                    {dup.lighting ? (
-                      <View style={styles.duplicateDetailChip}>
-                        <MaterialIcons name="lightbulb" size={12} color={theme.warning} />
-                      </View>
-                    ) : null}
-                    {dup.clubName ? (
-                      <View style={styles.duplicateDetailChip}>
-                        <MaterialIcons name="home" size={12} color={theme.accent} />
-                        <Text style={styles.duplicateDetailText} numberOfLines={1}>{dup.clubName}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  <Pressable
-                    style={styles.importDuplicateBtn}
-                    onPress={() => handleImportDuplicate(dup)}
-                    disabled={importingId === dup.id}
-                  >
-                    {importingId === dup.id ? (
-                      <ActivityIndicator size="small" color="#FFF" />
-                    ) : (
-                      <>
-                        <MaterialIcons name="add-circle" size={16} color="#FFF" />
-                        <Text style={styles.importDuplicateBtnText}>{t('map', 'importInstead')}</Text>
-                      </>
-                    )}
+                  <Pressable style={styles.importDuplicateBtn} onPress={() => handleImportDuplicate(dup)} disabled={importingId === dup.id}>
+                    {importingId === dup.id ? <ActivityIndicator size="small" color="#FFF" /> : (<><MaterialIcons name="add-circle" size={16} color="#FFF" /><Text style={styles.importDuplicateBtnText}>{t('map', 'importInstead')}</Text></>)}
                   </Pressable>
                 </View>
               ))}
-
               <Pressable style={styles.continueCreateBtn} onPress={() => setDuplicatesDismissed(true)}>
                 <Text style={styles.continueCreateBtnText}>{t('map', 'continueCreation')}</Text>
                 <MaterialIcons name="arrow-forward" size={16} color={theme.textSecondary} />
@@ -316,42 +284,42 @@ export default function NewTerrainScreen() {
           ) : null}
 
           {/* Club */}
-          <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('terrain', 'associatedClub')}</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.clubsScroll}>
-              <Pressable style={[styles.clubChip, !clubId && styles.clubChipActive]} onPress={() => { Haptics.selectionAsync(); setClubId(undefined); }}>
-                <Text style={[styles.clubChipText, !clubId && styles.clubChipTextActive]}>{t('terrain', 'noneLabel')}</Text>
+          <SectionCard title={t('terrain', 'associatedClub')} icon="home-work" color={theme.primaryLight} delay={250}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
+              <Pressable style={[styles.chipBtn, !clubId && styles.chipBtnActive]} onPress={() => { Haptics.selectionAsync(); setClubId(undefined); }}>
+                <Text style={[styles.chipBtnText, !clubId && styles.chipBtnTextActive]}>{t('terrain', 'noneLabel')}</Text>
               </Pressable>
               {clubs.map(club => (
-                <Pressable key={club.id} style={[styles.clubChip, clubId === club.id && styles.clubChipActive]} onPress={() => { Haptics.selectionAsync(); setClubId(club.id); }}>
-                  <Text style={[styles.clubChipText, clubId === club.id && styles.clubChipTextActive]}>{club.name}</Text>
+                <Pressable key={club.id} style={[styles.chipBtn, clubId === club.id && styles.chipBtnActive]} onPress={() => { Haptics.selectionAsync(); setClubId(club.id); }}>
+                  <Text style={[styles.chipBtnText, clubId === club.id && styles.chipBtnTextActive]}>{club.name}</Text>
                 </Pressable>
               ))}
             </ScrollView>
-          </Animated.View>
+          </SectionCard>
 
           {/* Courts Count */}
-          <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('terrain', 'courtsCount')}</Text>
-            <View style={styles.countsContainer}>
-              {['1', '2', '4', '6', '8', '10', '12', '18'].map(num => (
-                <Pressable key={num} style={[styles.countChip, courtsCount === num && styles.countChipActive]} onPress={() => { Haptics.selectionAsync(); setCourtsCount(num); }}>
-                  <Text style={[styles.countText, courtsCount === num && styles.countTextActive]}>{num}</Text>
-                </Pressable>
-              ))}
+          <SectionCard title={t('terrain', 'courtsCount')} icon="grid-view" color={theme.carreauColor} delay={300}>
+            <View style={styles.countsRow}>
+              {['1', '2', '4', '6', '8', '10', '12', '18'].map(num => {
+                const isActive = courtsCount === num;
+                return (
+                  <Pressable key={num} style={[styles.countPill, isActive && styles.countPillActive]} onPress={() => { Haptics.selectionAsync(); setCourtsCount(num); }}>
+                    <Text style={[styles.countPillText, isActive && styles.countPillTextActive]}>{num}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Features */}
-          <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('terrain', 'features')}</Text>
+          <SectionCard title={t('terrain', 'features')} icon="tune" color={theme.tirColor} delay={350}>
             <View style={styles.featuresCard}>
               <View style={styles.featureRow}>
                 <View style={styles.featureInfo}>
-                  <MaterialIcons name="public" size={24} color={theme.primary} />
-                  <View>
+                  <MaterialIcons name="public" size={22} color={theme.primary} />
+                  <View style={{ flex: 1 }}>
                     <Text style={styles.featureTitle}>{t('terrain', 'publicAccess')}</Text>
-                    <Text style={styles.featureDescription}>{t('terrain', 'openToAll')}</Text>
+                    <Text style={styles.featureDesc}>{t('terrain', 'openToAll')}</Text>
                   </View>
                 </View>
                 <Switch value={publicAccess} onValueChange={setPublicAccess} trackColor={{ false: theme.border, true: theme.primary + '50' }} thumbColor={publicAccess ? theme.primary : theme.textMuted} />
@@ -359,10 +327,10 @@ export default function NewTerrainScreen() {
               <View style={styles.featureDivider} />
               <View style={styles.featureRow}>
                 <View style={styles.featureInfo}>
-                  <MaterialIcons name="lightbulb" size={24} color={theme.warning} />
-                  <View>
+                  <MaterialIcons name="lightbulb" size={22} color={theme.warning} />
+                  <View style={{ flex: 1 }}>
                     <Text style={styles.featureTitle}>{t('terrain', 'lighting')}</Text>
-                    <Text style={styles.featureDescription}>{t('terrain', 'eveningPlay')}</Text>
+                    <Text style={styles.featureDesc}>{t('terrain', 'eveningPlay')}</Text>
                   </View>
                 </View>
                 <Switch value={lighting} onValueChange={setLighting} trackColor={{ false: theme.border, true: theme.warning + '50' }} thumbColor={lighting ? theme.warning : theme.textMuted} />
@@ -370,50 +338,49 @@ export default function NewTerrainScreen() {
               <View style={styles.featureDivider} />
               <View style={styles.featureRow}>
                 <View style={styles.featureInfo}>
-                  <MaterialIcons name="roofing" size={24} color={theme.accent} />
-                  <View>
+                  <MaterialIcons name="roofing" size={22} color={theme.accent} />
+                  <View style={{ flex: 1 }}>
                     <Text style={styles.featureTitle}>{t('terrain', 'covered')}</Text>
-                    <Text style={styles.featureDescription}>{t('terrain', 'weatherProtection')}</Text>
+                    <Text style={styles.featureDesc}>{t('terrain', 'weatherProtection')}</Text>
                   </View>
                 </View>
                 <Switch value={covered} onValueChange={setCovered} trackColor={{ false: theme.border, true: theme.accent + '50' }} thumbColor={covered ? theme.accent : theme.textMuted} />
               </View>
             </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Environment */}
-          <Animated.View entering={FadeInDown.duration(400).delay(375)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('terrain', 'environment')}</Text>
-            <View style={styles.environmentContainer}>
-              {config.terrainEnvironments.map((env) => (
-                <Pressable key={env.id} style={[styles.environmentCard, environment === env.id && styles.environmentCardActive]} onPress={() => { Haptics.selectionAsync(); setEnvironment(env.id as 'indoor' | 'outdoor'); }}>
-                  <View style={[styles.environmentIconContainer, environment === env.id && styles.environmentIconContainerActive]}>
-                    <MaterialIcons name={env.icon as any} size={28} color={environment === env.id ? '#FFF' : theme.textSecondary} />
-                  </View>
-                  <Text style={[styles.environmentName, environment === env.id && styles.environmentNameActive]}>{t('terrainEnv', env.id + 'Label')}</Text>
-                  <Text style={styles.environmentDescription}>{t('terrainEnv', env.id + 'Desc')}</Text>
-                </Pressable>
-              ))}
+          <SectionCard title={t('terrain', 'environment')} icon="park" color={theme.success} delay={375}>
+            <View style={styles.envGrid}>
+              {config.terrainEnvironments.map(env => {
+                const isActive = environment === env.id;
+                return (
+                  <Pressable key={env.id} style={[styles.envCard, isActive && styles.envCardActive]} onPress={() => { Haptics.selectionAsync(); setEnvironment(env.id as 'indoor' | 'outdoor'); }}>
+                    <View style={[styles.envCardIconBox, isActive && styles.envCardIconBoxActive]}>
+                      <MaterialIcons name={env.icon as any} size={26} color={isActive ? '#FFF' : theme.textSecondary} />
+                    </View>
+                    <Text style={[styles.envCardName, isActive && styles.envCardNameActive]}>{t('terrainEnv', env.id + 'Label')}</Text>
+                    <Text style={styles.envCardDesc}>{t('terrainEnv', env.id + 'Desc')}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Description */}
-          <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('terrain', 'descriptionLabel')}</Text>
+          <SectionCard title={t('terrain', 'descriptionLabel')} icon="description" color={theme.textSecondary} delay={400}>
             <TextInput style={[styles.textInput, styles.textArea]} value={description} onChangeText={setDescription} placeholder={t('terrain', 'descriptionPlaceholder')} placeholderTextColor={theme.textMuted} multiline numberOfLines={4} textAlignVertical="top" />
-          </Animated.View>
+          </SectionCard>
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-          <Pressable style={[styles.saveButton, (!name.trim() || !location.address.trim() || !location.city.trim() || isSaving) && styles.saveButtonDisabled]} onPress={handleSave} disabled={isSaving}>
-            {isSaving ? (
-              <ActivityIndicator size="small" color="#FFF" />
-            ) : (
-              <>
-                <MaterialIcons name="check" size={24} color="#FFF" />
-                <Text style={styles.saveButtonText}>{t('terrain', 'createTerrain')}</Text>
-              </>
-            )}
+          <Pressable
+            style={({ pressed }) => [styles.saveButton, (!canSave || isSaving) && styles.saveButtonDisabled, pressed && canSave && !isSaving && styles.saveButtonPressed]}
+            onPress={handleSave}
+            disabled={!canSave || isSaving}
+          >
+            {isSaving ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="add-location-alt" size={22} color="#FFF" />}
+            <Text style={styles.saveButtonText}>{t('terrain', 'createTerrain')}</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -423,84 +390,96 @@ export default function NewTerrainScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.backgroundSecondary },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
-  backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  headerBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerCenter: { flex: 1, alignItems: 'center' },
+  headerTitle: { fontSize: 17, fontWeight: '700', color: theme.textPrimary },
+  stepIndicator: { paddingHorizontal: 16, paddingVertical: 10, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  stepBarTrack: { height: 4, backgroundColor: theme.border, borderRadius: 2, overflow: 'hidden', marginBottom: 6 },
+  stepBarFill: { height: '100%', backgroundColor: theme.accent, borderRadius: 2 },
+  stepLabel: { fontSize: 11, color: theme.textSecondary, fontWeight: '500' },
   scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 24 },
-  photosContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  photoItem: { width: 100, height: 100, borderRadius: 12, overflow: 'hidden', position: 'relative' },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
+
+  // SectionCard
+  sectionCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 14, ...theme.shadows.card },
+  sectionCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+  sectionCardIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  sectionCardTitle: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
+  sectionCardSubtitle: { fontSize: 11, color: theme.textMuted, marginTop: 1 },
+  requiredDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.error },
+
+  // Inputs
+  textInput: { backgroundColor: theme.backgroundSecondary, paddingHorizontal: 14, paddingVertical: 13, borderRadius: theme.borderRadius.md, fontSize: 15, color: theme.textPrimary, borderWidth: 1, borderColor: theme.border },
+  textArea: { minHeight: 90, paddingTop: 13 },
+
+  // Photos
+  photosGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  photoItem: { width: 90, height: 90, borderRadius: theme.borderRadius.md, overflow: 'hidden', position: 'relative' },
   photoImage: { width: '100%', height: '100%' },
-  removePhotoButton: { position: 'absolute', top: 4, right: 4, width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
-  addPhotoButtons: { flexDirection: 'row', gap: 12 },
-  addPhotoButton: { width: 100, height: 100, borderRadius: 12, backgroundColor: theme.surface, borderWidth: 2, borderColor: theme.border, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 4 },
-  addPhotoText: { fontSize: 12, color: theme.primary, fontWeight: '500' },
-  section: { marginBottom: 24 },
-  sectionTitle: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, letterSpacing: 1, marginBottom: 12 },
-  textInput: { backgroundColor: theme.surface, paddingHorizontal: 16, paddingVertical: 14, borderRadius: theme.borderRadius.md, fontSize: 16, color: theme.textPrimary, ...theme.shadows.card },
-  textArea: { minHeight: 100, paddingTop: 14 },
-  typeContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  typeCard: { width: '48%', backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 14, borderWidth: 2, borderColor: 'transparent', alignItems: 'center', minHeight: 120, ...theme.shadows.card },
+  removePhotoBtn: { position: 'absolute', top: 4, right: 4, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
+  addPhotoBtn: { width: 90, height: 90, borderRadius: theme.borderRadius.md, backgroundColor: theme.backgroundSecondary, borderWidth: 1.5, borderColor: theme.border, borderStyle: 'dashed' as any, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  addPhotoText: { fontSize: 11, color: theme.primary, fontWeight: '600' },
+
+  // Type grid
+  typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  typeCard: { width: '47%', backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, padding: 12, borderWidth: 2, borderColor: 'transparent', alignItems: 'center', minHeight: 110 },
   typeCardActive: { borderColor: theme.accent, backgroundColor: theme.accent + '08' },
-  typeIconContainer: { width: 48, height: 48, borderRadius: 12, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  typeIconContainerActive: { backgroundColor: theme.accent },
-  typeName: { fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginBottom: 4, textAlign: 'center' },
-  typeNameActive: { color: theme.accent },
-  typeDescription: { fontSize: 11, color: theme.textSecondary, textAlign: 'center', lineHeight: 14 },
-  clubsScroll: { gap: 10 },
-  clubChip: { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, borderWidth: 2, borderColor: 'transparent', ...theme.shadows.card },
-  clubChipActive: { borderColor: theme.primary, backgroundColor: theme.primary + '10' },
-  clubChipText: { fontSize: 14, fontWeight: '600', color: theme.textSecondary },
-  clubChipTextActive: { color: theme.primary },
-  countsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  countChip: { minWidth: 50, alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, borderWidth: 2, borderColor: 'transparent', ...theme.shadows.card },
-  countChipActive: { borderColor: theme.accent, backgroundColor: theme.accent + '10' },
-  countText: { fontSize: 15, fontWeight: '600', color: theme.textSecondary },
-  countTextActive: { color: theme.accent },
-  featuresCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, ...theme.shadows.card },
+  typeCardIconBox: { width: 44, height: 44, borderRadius: 12, backgroundColor: theme.textMuted + '15', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  typeCardIconBoxActive: { backgroundColor: theme.accent },
+  typeCardName: { fontSize: 13, fontWeight: '700', color: theme.textPrimary, marginBottom: 2, textAlign: 'center' },
+  typeCardNameActive: { color: theme.accent },
+  typeCardDesc: { fontSize: 10, color: theme.textMuted, textAlign: 'center', lineHeight: 13 },
+
+  // Chips
+  chipScroll: { gap: 8 },
+  chipBtn: { paddingHorizontal: 14, paddingVertical: 10, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.full, borderWidth: 1.5, borderColor: 'transparent' },
+  chipBtnActive: { borderColor: theme.primary, backgroundColor: theme.primary + '08' },
+  chipBtnText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  chipBtnTextActive: { color: theme.primary },
+
+  // Courts count
+  countsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  countPill: { minWidth: 44, alignItems: 'center', paddingVertical: 10, paddingHorizontal: 14, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.full, borderWidth: 1.5, borderColor: 'transparent' },
+  countPillActive: { borderColor: theme.carreauColor, backgroundColor: theme.carreauColor + '10' },
+  countPillText: { fontSize: 14, fontWeight: '700', color: theme.textSecondary },
+  countPillTextActive: { color: theme.carreauColor },
+
+  // Features
+  featuresCard: { backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, padding: 14 },
   featureRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   featureInfo: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  featureTitle: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
-  featureDescription: { fontSize: 12, color: theme.textSecondary },
-  featureDivider: { height: 1, backgroundColor: theme.border, marginVertical: 14 },
-  footer: { paddingHorizontal: 16, paddingTop: 16, backgroundColor: theme.backgroundSecondary, borderTopWidth: 1, borderTopColor: theme.border },
-  saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.accent, paddingVertical: 18, borderRadius: theme.borderRadius.md },
-  saveButtonDisabled: { backgroundColor: theme.textMuted },
-  saveButtonText: { fontSize: 17, fontWeight: '600', color: '#FFF' },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  locationButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.primary + '15', borderRadius: theme.borderRadius.sm },
-  locationButtonText: { fontSize: 12, fontWeight: '600', color: theme.primary },
-  geocodeButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.primary, paddingVertical: 14, borderRadius: theme.borderRadius.md },
-  geocodeButtonDisabled: { backgroundColor: theme.textMuted },
-  geocodeButtonText: { fontSize: 14, fontWeight: '600', color: '#FFF' },
-  environmentContainer: { flexDirection: 'row', gap: 12 },
-  environmentCard: { flex: 1, backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, borderWidth: 2, borderColor: 'transparent', alignItems: 'center', ...theme.shadows.card },
-  environmentCardActive: { borderColor: theme.primary, backgroundColor: theme.primary + '08' },
-  environmentIconContainer: { width: 56, height: 56, borderRadius: 28, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  environmentIconContainerActive: { backgroundColor: theme.primary },
-  environmentName: { fontSize: 14, fontWeight: '600', color: theme.textPrimary, textAlign: 'center', marginBottom: 4 },
-  environmentNameActive: { color: theme.primary },
-  environmentDescription: { fontSize: 11, color: theme.textSecondary, textAlign: 'center', lineHeight: 14 },
-  locationPreview: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.success + '10', paddingHorizontal: 14, paddingVertical: 12, borderRadius: theme.borderRadius.md, marginTop: 12, borderWidth: 1, borderColor: theme.success + '30' },
-  locationPreviewInfo: { flex: 1 },
-  locationPreviewTitle: { fontSize: 14, fontWeight: '600', color: theme.success },
-  locationPreviewCoords: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
-  // Duplicate detection styles
-  duplicateCheckingRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 16 },
+  featureTitle: { fontSize: 14, fontWeight: '600', color: theme.textPrimary },
+  featureDesc: { fontSize: 11, color: theme.textSecondary },
+  featureDivider: { height: 1, backgroundColor: theme.border, marginVertical: 12 },
+
+  // Environment
+  envGrid: { flexDirection: 'row', gap: 12 },
+  envCard: { flex: 1, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, padding: 14, borderWidth: 2, borderColor: 'transparent', alignItems: 'center' },
+  envCardActive: { borderColor: theme.primary, backgroundColor: theme.primary + '08' },
+  envCardIconBox: { width: 52, height: 52, borderRadius: 26, backgroundColor: theme.textMuted + '15', alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  envCardIconBoxActive: { backgroundColor: theme.primary },
+  envCardName: { fontSize: 13, fontWeight: '700', color: theme.textPrimary, textAlign: 'center', marginBottom: 4 },
+  envCardNameActive: { color: theme.primary },
+  envCardDesc: { fontSize: 10, color: theme.textMuted, textAlign: 'center', lineHeight: 13 },
+
+  // Footer
+  footer: { paddingHorizontal: 16, paddingTop: 12, backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border },
+  saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.accent, paddingVertical: 16, borderRadius: theme.borderRadius.md, ...theme.shadows.cardElevated },
+  saveButtonDisabled: { backgroundColor: theme.textMuted, opacity: 0.6 },
+  saveButtonPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+  saveButtonText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
+
+  // Duplicates
+  duplicateCheckingRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 14 },
   duplicateCheckingText: { fontSize: 13, color: theme.textMuted },
-  duplicateSection: {
-    backgroundColor: theme.warning + '08', borderRadius: theme.borderRadius.lg, padding: 16,
-    marginBottom: 24, borderWidth: 1, borderColor: theme.warning + '30',
-  },
+  duplicateSection: { backgroundColor: theme.warning + '08', borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: theme.warning + '30' },
   duplicateHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   duplicateHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   duplicateTitle: { fontSize: 15, fontWeight: '700', color: theme.warning },
   duplicateDesc: { fontSize: 13, color: theme.textSecondary, lineHeight: 18, marginBottom: 14 },
-  duplicateCard: {
-    backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 14,
-    marginBottom: 10, ...theme.shadows.card,
-  },
-  duplicateCardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  duplicateCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 14, marginBottom: 10, ...theme.shadows.card },
+  duplicateCardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   duplicateIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   duplicateCardInfo: { flex: 1, marginRight: 8 },
   duplicateCardName: { fontSize: 14, fontWeight: '600', color: theme.textPrimary },
@@ -511,17 +490,8 @@ const styles = StyleSheet.create({
   matchBadgeText: { fontSize: 10, fontWeight: '600' },
   matchBadgeTextExact: { color: theme.warning },
   matchBadgeTextCity: { color: theme.primary },
-  duplicateCardDetails: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
-  duplicateDetailChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: theme.borderRadius.sm },
-  duplicateDetailText: { fontSize: 11, color: theme.textSecondary, fontWeight: '500' },
-  importDuplicateBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    backgroundColor: theme.primary, paddingVertical: 10, borderRadius: theme.borderRadius.md,
-  },
+  importDuplicateBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: theme.primary, paddingVertical: 10, borderRadius: theme.borderRadius.md },
   importDuplicateBtnText: { fontSize: 13, fontWeight: '600', color: '#FFF' },
-  continueCreateBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    paddingVertical: 10, marginTop: 4,
-  },
+  continueCreateBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, marginTop: 4 },
   continueCreateBtnText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
 });

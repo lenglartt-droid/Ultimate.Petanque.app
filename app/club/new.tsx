@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,6 @@ import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
-import * as Haptics2 from 'expo-haptics';
 import { useAlert } from '@/template';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 import {
@@ -38,6 +37,49 @@ const FACILITY_KEYS: { id: string; key: string; icon: string }[] = [
   { id: 'eclairage', key: 'facilityLighting', icon: 'lightbulb' },
   { id: 'ecole', key: 'facilitySchool', icon: 'school' },
 ];
+
+// ============================================
+// SectionCard - Shared visual pattern
+// ============================================
+function SectionCard({ children, title, subtitle, icon, color, delay = 0, required = false }: {
+  children: React.ReactNode;
+  title: string;
+  subtitle?: string;
+  icon: string;
+  color: string;
+  delay?: number;
+  required?: boolean;
+}) {
+  return (
+    <Animated.View entering={FadeInDown.duration(350).delay(delay)} style={styles.sectionCard}>
+      <View style={styles.sectionCardHeader}>
+        <View style={[styles.sectionCardIcon, { backgroundColor: color + '15' }]}>
+          <MaterialIcons name={icon as any} size={18} color={color} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={styles.sectionCardTitle}>{title}</Text>
+            {required ? <View style={styles.requiredDot} /> : null}
+          </View>
+          {subtitle ? <Text style={styles.sectionCardSubtitle}>{subtitle}</Text> : null}
+        </View>
+      </View>
+      {children}
+    </Animated.View>
+  );
+}
+
+function StepIndicator({ step, total, label }: { step: number; total: number; label: string }) {
+  const pct = Math.round((step / total) * 100);
+  return (
+    <View style={styles.stepIndicator}>
+      <View style={styles.stepBarTrack}>
+        <Animated.View entering={FadeIn.duration(600)} style={[styles.stepBarFill, { width: `${pct}%` }]} />
+      </View>
+      <Text style={styles.stepLabel}>{label}</Text>
+    </View>
+  );
+}
 
 export default function NewClubScreen() {
   const insets = useSafeAreaInsets();
@@ -61,6 +103,20 @@ export default function NewClubScreen() {
   const [selectedFacilities, setSelectedFacilities] = useState<string[]>([]);
   const [selectedTerrainId, setSelectedTerrainId] = useState<string | undefined>();
   const { terrains } = useApp();
+
+  // Progress
+  const progress = useMemo(() => {
+    let filled = 0; const total = 3;
+    if (name.trim()) filled++;
+    if (location.city.trim()) filled++;
+    filled++; // always 1 bonus
+    return { filled, total };
+  }, [name, location.city]);
+  const progressLabel = useMemo(() => {
+    if (!name.trim()) return t('tournament', 'startWithName');
+    if (!location.city.trim()) return t('tournament', 'chooseLocation');
+    return t('tournament', 'readyToCreate');
+  }, [name, location.city, t]);
 
   // Duplicate detection state
   const [duplicates, setDuplicates] = useState<(PublicClub & { matchType: 'exact' | 'city' })[]>([]);
@@ -169,12 +225,16 @@ export default function NewClubScreen() {
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
+        <Pressable style={styles.headerBtn} onPress={() => router.back()}>
           <MaterialIcons name="close" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>{t('club', 'newClub')}</Text>
-        <View style={{ width: 40 }} />
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>{t('club', 'newClub')}</Text>
+        </View>
+        <View style={styles.headerBtn} />
       </View>
+
+      <StepIndicator step={progress.filled} total={progress.total} label={progressLabel} />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView
@@ -191,22 +251,21 @@ export default function NewClubScreen() {
           </Animated.View>
 
           {/* Name */}
-          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('club', 'clubNameRequired')}</Text>
+          <SectionCard title={t('club', 'clubNameRequired').replace(' *', '')} icon="home-work" color={theme.accent} delay={50} required>
             <TextInput style={styles.textInput} value={name} onChangeText={setName} placeholder={t('club', 'namePlaceholder')} placeholderTextColor={theme.textMuted} autoCapitalize="words" autoFocus />
-          </Animated.View>
+          </SectionCard>
 
           {/* Location */}
-          <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
+          <SectionCard title={t('club', 'locationLabel')} icon="place" color={theme.success} delay={100} required>
             <LocationPicker
-              label={t('club', 'locationLabel')}
+              label=""
               value={location}
               onChange={setLocation}
               placeholder={t('club', 'searchAddress')}
               required
               showAddressField
             />
-          </Animated.View>
+          </SectionCard>
 
           {/* Duplicate Detection Banner */}
           {checkingDuplicates ? (
@@ -293,8 +352,7 @@ export default function NewClubScreen() {
           ) : null}
 
           {/* Terrain Association */}
-          <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('club', 'mainTerrainLabel')}</Text>
+          <SectionCard title={t('club', 'mainTerrainLabel')} icon="sports-soccer" color={theme.primary} delay={200}>
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
@@ -321,11 +379,10 @@ export default function NewClubScreen() {
                 </Pressable>
               ))}
             </ScrollView>
-          </Animated.View>
+          </SectionCard>
 
           {/* Facilities */}
-          <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('club', 'facilitiesLabel')}</Text>
+          <SectionCard title={t('club', 'facilitiesLabel')} icon="sports" color={theme.tirColor} delay={250}>
             <View style={styles.facilitiesGrid}>
               {FACILITY_KEYS.map(facility => (
                 <Pressable key={facility.id} style={[styles.facilityChip, selectedFacilities.includes(facility.id) && styles.facilityChipActive]} onPress={() => toggleFacility(facility.id)}>
@@ -334,43 +391,42 @@ export default function NewClubScreen() {
                 </Pressable>
               ))}
             </View>
-          </Animated.View>
+          </SectionCard>
 
           {/* Membership Cost */}
-          <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('club', 'membershipCostLabel')}</Text>
+          <SectionCard title={t('club', 'membershipCostLabel')} icon="payments" color={theme.carreauColor} delay={300}>
             <TextInput style={styles.textInput} value={membershipCost} onChangeText={setMembershipCost} placeholder="Ex: 50" placeholderTextColor={theme.textMuted} keyboardType="numeric" />
-          </Animated.View>
+          </SectionCard>
 
           {/* Description */}
-          <Animated.View entering={FadeInDown.duration(400).delay(325)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('club', 'descriptionLabel')}</Text>
+          <SectionCard title={t('club', 'descriptionLabel')} icon="description" color={theme.textSecondary} delay={325}>
             <TextInput style={[styles.textInput, styles.textArea]} value={description} onChangeText={setDescription} placeholder={t('club', 'descriptionPlaceholder')} placeholderTextColor={theme.textMuted} multiline numberOfLines={4} textAlignVertical="top" />
-          </Animated.View>
+          </SectionCard>
 
           {/* Founded Year */}
-          <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('club', 'foundedYearLabel')}</Text>
+          <SectionCard title={t('club', 'foundedYearLabel')} icon="event" color={theme.primaryLight} delay={350}>
             <TextInput style={styles.textInput} value={foundedYear} onChangeText={setFoundedYear} placeholder={t('club', 'foundedYearPlaceholder')} placeholderTextColor={theme.textMuted} keyboardType="number-pad" maxLength={4} />
-          </Animated.View>
+          </SectionCard>
 
           {/* Contact */}
-          <Animated.View entering={FadeInDown.duration(400).delay(375)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('club', 'contactLabel')}</Text>
+          <SectionCard title={t('club', 'contactLabel')} icon="contacts" color={theme.textSecondary} delay={375}>
             <View style={styles.contactInputContainer}>
               <MaterialIcons name="email" size={20} color={theme.textSecondary} />
               <TextInput style={styles.contactInput} value={contactEmail} onChangeText={setContactEmail} placeholder={t('club', 'emailPlaceholder')} placeholderTextColor={theme.textMuted} keyboardType="email-address" autoCapitalize="none" />
             </View>
-            <View style={[styles.contactInputContainer, { marginTop: 12 }]}>
+            <View style={[styles.contactInputContainer, { marginTop: 10 }]}>
               <MaterialIcons name="phone" size={20} color={theme.textSecondary} />
               <TextInput style={styles.contactInput} value={contactPhone} onChangeText={setContactPhone} placeholder={t('club', 'phonePlaceholder')} placeholderTextColor={theme.textMuted} keyboardType="phone-pad" />
             </View>
-          </Animated.View>
+          </SectionCard>
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-          <Pressable style={[styles.saveButton, (!name.trim() || !location.city.trim()) && styles.saveButtonDisabled]} onPress={handleSave}>
-            <MaterialIcons name="check" size={24} color="#FFF" />
+          <Pressable
+            style={({ pressed }) => [styles.saveButton, (!name.trim() || !location.city.trim()) && styles.saveButtonDisabled, pressed && name.trim() && location.city.trim() && styles.saveButtonPressed]}
+            onPress={handleSave}
+          >
+            <MaterialIcons name="home" size={22} color="#FFF" />
             <Text style={styles.saveButtonText}>{t('club', 'createClub')}</Text>
           </Pressable>
         </View>
@@ -381,31 +437,42 @@ export default function NewClubScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.backgroundSecondary },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
-  backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  headerBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerCenter: { flex: 1, alignItems: 'center' },
+  headerTitle: { fontSize: 17, fontWeight: '700', color: theme.textPrimary },
+  stepIndicator: { paddingHorizontal: 16, paddingVertical: 10, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  stepBarTrack: { height: 4, backgroundColor: theme.border, borderRadius: 2, overflow: 'hidden', marginBottom: 6 },
+  stepBarFill: { height: '100%', backgroundColor: theme.accent, borderRadius: 2 },
+  stepLabel: { fontSize: 11, color: theme.textSecondary, fontWeight: '500' },
   scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 24 },
-  iconSection: { alignItems: 'center', marginBottom: 24 },
-  clubIcon: { width: 100, height: 100, borderRadius: 20, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' },
-  section: { marginBottom: 24 },
-  sectionTitle: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, letterSpacing: 1, marginBottom: 12 },
-  textInput: { backgroundColor: theme.surface, paddingHorizontal: 16, paddingVertical: 14, borderRadius: theme.borderRadius.md, fontSize: 16, color: theme.textPrimary, ...theme.shadows.card },
-  textArea: { minHeight: 100, paddingTop: 14 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
+  iconSection: { alignItems: 'center', marginBottom: 14 },
+  clubIcon: { width: 96, height: 96, borderRadius: 20, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' },
+  // SectionCard
+  sectionCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 14, ...theme.shadows.card },
+  sectionCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+  sectionCardIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  sectionCardTitle: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
+  sectionCardSubtitle: { fontSize: 11, color: theme.textMuted, marginTop: 1 },
+  requiredDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.error },
+  textInput: { backgroundColor: theme.backgroundSecondary, paddingHorizontal: 14, paddingVertical: 13, borderRadius: theme.borderRadius.md, fontSize: 15, color: theme.textPrimary, borderWidth: 1, borderColor: theme.border },
+  textArea: { minHeight: 90, paddingTop: 13 },
   facilitiesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  facilityChip: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, borderWidth: 2, borderColor: 'transparent', ...theme.shadows.card },
+  facilityChip: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, borderWidth: 1.5, borderColor: 'transparent' },
   facilityChipActive: { borderColor: theme.accent, backgroundColor: theme.accent + '10' },
   facilityText: { fontSize: 13, fontWeight: '500', color: theme.textSecondary },
   facilityTextActive: { color: theme.accent, fontWeight: '600' },
-  contactInputContainer: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.surface, paddingHorizontal: 16, paddingVertical: 14, borderRadius: theme.borderRadius.md, ...theme.shadows.card },
-  contactInput: { flex: 1, fontSize: 16, color: theme.textPrimary },
-  footer: { paddingHorizontal: 16, paddingTop: 16, backgroundColor: theme.backgroundSecondary, borderTopWidth: 1, borderTopColor: theme.border },
-  saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.accent, paddingVertical: 18, borderRadius: theme.borderRadius.md },
-  saveButtonDisabled: { backgroundColor: theme.textMuted },
-  saveButtonText: { fontSize: 17, fontWeight: '600', color: '#FFF' },
+  contactInputContainer: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 14, borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.border },
+  contactInput: { flex: 1, paddingVertical: 13, fontSize: 15, color: theme.textPrimary },
+  footer: { paddingHorizontal: 16, paddingTop: 12, backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border },
+  saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.accent, paddingVertical: 16, borderRadius: theme.borderRadius.md, ...theme.shadows.cardElevated },
+  saveButtonDisabled: { backgroundColor: theme.textMuted, opacity: 0.6 },
+  saveButtonPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+  saveButtonText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
   // Terrain association styles
   terrainsScroll: { gap: 10 },
-  terrainChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, borderWidth: 2, borderColor: 'transparent', ...theme.shadows.card },
+  terrainChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, borderWidth: 1.5, borderColor: 'transparent' },
   terrainChipActive: { borderColor: theme.primary, backgroundColor: theme.primary },
   terrainChipText: { fontSize: 14, fontWeight: '600' as const, color: theme.textSecondary },
   terrainChipTextActive: { color: '#FFF' },
