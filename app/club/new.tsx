@@ -19,6 +19,7 @@ import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
+import * as Haptics2 from 'expo-haptics';
 import { useAlert } from '@/template';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 import {
@@ -58,6 +59,8 @@ export default function NewClubScreen() {
   const [contactPhone, setContactPhone] = useState('');
   const [membershipCost, setMembershipCost] = useState('');
   const [selectedFacilities, setSelectedFacilities] = useState<string[]>([]);
+  const [selectedTerrainId, setSelectedTerrainId] = useState<string | undefined>();
+  const { terrains } = useApp();
 
   // Duplicate detection state
   const [duplicates, setDuplicates] = useState<(PublicClub & { matchType: 'exact' | 'city' })[]>([]);
@@ -120,14 +123,31 @@ export default function NewClubScreen() {
       id => FACILITY_KEYS.find(f => f.id === id) ? t('club', FACILITY_KEYS.find(f => f.id === id)!.key) : ''
     ).filter(Boolean);
 
+    // If no geolocation but selected terrain has one, use terrain location
+    let finalLat = location.latitude;
+    let finalLng = location.longitude;
+    let finalAddress = location.address.trim();
+    let finalCity = location.city.trim();
+    if ((!finalLat && !finalLng) && selectedTerrainId) {
+      const linkedTerrain = terrains.find(tr => tr.id === selectedTerrainId);
+      if (linkedTerrain && (linkedTerrain.location.latitude || linkedTerrain.location.longitude)) {
+        finalLat = linkedTerrain.location.latitude;
+        finalLng = linkedTerrain.location.longitude;
+        if (!finalAddress) finalAddress = linkedTerrain.address || '';
+        if (!finalCity) finalCity = linkedTerrain.city || finalCity;
+      }
+    }
+
+    const selectedTerrain = terrains.find(tr => tr.id === selectedTerrainId);
+
     addClub({
       name: name.trim(),
-      address: location.address.trim(),
-      city: location.city.trim(),
+      address: finalAddress,
+      city: finalCity,
       country: location.country || 'France',
       location: {
-        latitude: location.latitude,
-        longitude: location.longitude,
+        latitude: finalLat,
+        longitude: finalLng,
       },
       membersCount: 0,
       foundedYear: parseInt(foundedYear) || new Date().getFullYear(),
@@ -136,6 +156,8 @@ export default function NewClubScreen() {
       contactEmail: contactEmail.trim() || undefined,
       contactPhone: contactPhone.trim() || undefined,
       membershipCost: membershipCost ? parseFloat(membershipCost) : undefined,
+      terrainId: selectedTerrainId,
+      terrainName: selectedTerrain?.name,
     });
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -301,8 +323,39 @@ export default function NewClubScreen() {
             <TextInput style={styles.textInput} value={membershipCost} onChangeText={setMembershipCost} placeholder="Ex: 50" placeholderTextColor={theme.textMuted} keyboardType="numeric" />
           </Animated.View>
 
+          {/* Terrain Association */}
+          <Animated.View entering={FadeInDown.duration(400).delay(340)} style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('club', 'mainTerrainLabel')}</Text>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.terrainsScroll}
+            >
+              <Pressable
+                style={[styles.terrainChip, !selectedTerrainId && styles.terrainChipActive]}
+                onPress={() => { setSelectedTerrainId(undefined); Haptics.selectionAsync(); }}
+              >
+                <MaterialIcons name="not-listed-location" size={18} color={!selectedTerrainId ? '#FFF' : theme.textSecondary} />
+                <Text style={[styles.terrainChipText, !selectedTerrainId && styles.terrainChipTextActive]}>{t('club', 'noneLabel')}</Text>
+              </Pressable>
+              {terrains.map(terrain => (
+                <Pressable
+                  key={terrain.id}
+                  style={[styles.terrainChip, selectedTerrainId === terrain.id && styles.terrainChipActive]}
+                  onPress={() => { setSelectedTerrainId(terrain.id); Haptics.selectionAsync(); }}
+                >
+                  <MaterialIcons name="sports-soccer" size={18} color={selectedTerrainId === terrain.id ? '#FFF' : theme.textSecondary} />
+                  <View>
+                    <Text style={[styles.terrainChipText, selectedTerrainId === terrain.id && styles.terrainChipTextActive]} numberOfLines={1}>{terrain.name}</Text>
+                    <Text style={[styles.terrainChipSubtext, selectedTerrainId === terrain.id && styles.terrainChipSubtextActive]}>{terrain.city} \u2022 {t('terrainTypes', terrain.type)}</Text>
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </Animated.View>
+
           {/* Contact */}
-          <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
+          <Animated.View entering={FadeInDown.duration(400).delay(370)} style={styles.section}>
             <Text style={styles.sectionTitle}>{t('club', 'contactLabel')}</Text>
             <View style={styles.contactInputContainer}>
               <MaterialIcons name="email" size={20} color={theme.textSecondary} />
@@ -350,6 +403,14 @@ const styles = StyleSheet.create({
   saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.accent, paddingVertical: 18, borderRadius: theme.borderRadius.md },
   saveButtonDisabled: { backgroundColor: theme.textMuted },
   saveButtonText: { fontSize: 17, fontWeight: '600', color: '#FFF' },
+  // Terrain association styles
+  terrainsScroll: { gap: 10 },
+  terrainChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, borderWidth: 2, borderColor: 'transparent', ...theme.shadows.card },
+  terrainChipActive: { borderColor: theme.primary, backgroundColor: theme.primary },
+  terrainChipText: { fontSize: 14, fontWeight: '600' as const, color: theme.textSecondary },
+  terrainChipTextActive: { color: '#FFF' },
+  terrainChipSubtext: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
+  terrainChipSubtextActive: { color: 'rgba(255,255,255,0.7)' },
   // Duplicate detection styles
   duplicateCheckingRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 16 },
   duplicateCheckingText: { fontSize: 13, color: theme.textMuted },

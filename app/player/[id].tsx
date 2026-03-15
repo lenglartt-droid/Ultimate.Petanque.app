@@ -367,6 +367,13 @@ export default function PlayerDetailScreen() {
             <View style={[styles.badge, { backgroundColor: theme.primaryLight + '30' }]}>
               <Text style={[styles.badgeText, { color: theme.primary }]}>{t('roles', player.role)}</Text>
             </View>
+            {player.handedness ? (
+              <View style={[styles.badge, { backgroundColor: '#6366F1' + '15' }]}>
+                <Text style={[styles.badgeText, { color: '#6366F1' }]}>
+                  {player.handedness === 'right' ? t('player', 'rightHanded') : player.handedness === 'left' ? t('player', 'leftHanded') : t('player', 'ambidextrous')}
+                </Text>
+              </View>
+            ) : null}
           </View>
           {/* Contact Section */}
           {(player.phone || player.email) && !isSharedItem && (player.showContactPublic !== false || !player.isPublic) ? (
@@ -496,20 +503,6 @@ export default function PlayerDetailScreen() {
               </Pressable>
             );
           })()}
-
-          {/* Handedness */}
-          {player.handedness ? (
-            <View style={styles.handednessContainer}>
-              <MaterialIcons 
-                name={player.handedness === 'left' ? 'front-hand' : player.handedness === 'ambidextrous' ? 'swap-horiz' : 'back-hand'} 
-                size={16} 
-                color="#6366F1" 
-              />
-              <Text style={styles.handednessText}>
-                {player.handedness === 'right' ? t('player', 'rightHanded') : player.handedness === 'left' ? t('player', 'leftHanded') : t('player', 'ambidextrous')}
-              </Text>
-            </View>
-          ) : null}
 
         </Animated.View>
         </View>

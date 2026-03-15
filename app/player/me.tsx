@@ -309,6 +309,21 @@ export default function MyPlayerCardScreen() {
               <MaterialIcons name="trending-up" size={16} color={theme.textSecondary} />
               <Text style={styles.metaText}>{t('levels', selfPlayer.level)}</Text>
             </View>
+            {selfPlayer.handedness ? (
+              <>
+                <View style={styles.metaDivider} />
+                <View style={styles.metaItem}>
+                  <MaterialIcons 
+                    name={selfPlayer.handedness === 'left' ? 'front-hand' : selfPlayer.handedness === 'ambidextrous' ? 'swap-horiz' : 'back-hand'} 
+                    size={16} 
+                    color="#6366F1" 
+                  />
+                  <Text style={[styles.metaText, { color: '#6366F1' }]}>
+                    {selfPlayer.handedness === 'right' ? t('player', 'rightHanded') : selfPlayer.handedness === 'left' ? t('player', 'leftHanded') : t('player', 'ambidextrous')}
+                  </Text>
+                </View>
+              </>
+            ) : null}
           </View>
 
           {/* Contact Section */}
@@ -390,20 +405,6 @@ export default function MyPlayerCardScreen() {
               <MaterialIcons name="place" size={16} color={theme.textSecondary} />
               <Text style={styles.locationText}>
                 {[selfPlayer.location?.city, selfPlayer.country].filter(Boolean).join(', ')}
-              </Text>
-            </View>
-          ) : null}
-
-          {/* Handedness */}
-          {selfPlayer.handedness ? (
-            <View style={styles.handednessContainer}>
-              <MaterialIcons 
-                name={selfPlayer.handedness === 'left' ? 'front-hand' : selfPlayer.handedness === 'ambidextrous' ? 'swap-horiz' : 'back-hand'} 
-                size={16} 
-                color="#6366F1" 
-              />
-              <Text style={styles.handednessText}>
-                {selfPlayer.handedness === 'right' ? t('player', 'rightHanded') : selfPlayer.handedness === 'left' ? t('player', 'leftHanded') : t('player', 'ambidextrous')}
               </Text>
             </View>
           ) : null}

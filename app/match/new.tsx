@@ -281,7 +281,32 @@ export default function NewMatchScreen() {
     );
   }, [players, playerSearch]);
 
-  // Auto-include self player
+  // Compute most played partner for pre-selection
+  const mostPlayedPartner = useMemo(() => {
+    if (!selfPlayer) return null;
+    const partnerCounts: Record<string, number> = {};
+    matches.forEach(m => {
+      const inA = m.teamA.players.includes(selfPlayer.id);
+      const inB = m.teamB.players.includes(selfPlayer.id);
+      if (inA && m.teamA.players.length > 1) {
+        m.teamA.players.forEach(pid => {
+          if (pid !== selfPlayer.id) partnerCounts[pid] = (partnerCounts[pid] || 0) + 1;
+        });
+      } else if (inB && m.teamB.players.length > 1) {
+        m.teamB.players.forEach(pid => {
+          if (pid !== selfPlayer.id) partnerCounts[pid] = (partnerCounts[pid] || 0) + 1;
+        });
+      }
+    });
+    const entries = Object.entries(partnerCounts);
+    if (entries.length === 0) return null;
+    entries.sort((a, b) => b[1] - a[1]);
+    const bestId = entries[0][0];
+    const partner = players.find(p => p.id === bestId);
+    return partner || null;
+  }, [selfPlayer, matches, players]);
+
+  // Auto-include self player (and most played partner for doublette/triplette)
   useEffect(() => {
     if (isRevanche) return;
     if (!selfPlayer || teamAPlayers.length > 0) return;
@@ -294,12 +319,20 @@ export default function NewMatchScreen() {
         });
         setTeamAPlayers(playersWithRoles);
       } else {
-        setTeamAPlayers([{ playerId: selfPlayer.id, role: (selfPlayer.role || 'Milieu') as PlayerRoleType }]);
+        const initial: TeamPlayerWithRole[] = [{ playerId: selfPlayer.id, role: (selfPlayer.role || 'Milieu') as PlayerRoleType }];
+        if (mostPlayedPartner && (format === 'Doublette' || format === 'Triplette')) {
+          initial.push({ playerId: mostPlayedPartner.id, role: (mostPlayedPartner.role || 'Milieu') as PlayerRoleType });
+        }
+        setTeamAPlayers(initial);
       }
     } else {
-      setTeamAPlayers([{ playerId: selfPlayer.id, role: (selfPlayer.role || 'Milieu') as PlayerRoleType }]);
+      const initial: TeamPlayerWithRole[] = [{ playerId: selfPlayer.id, role: (selfPlayer.role || 'Milieu') as PlayerRoleType }];
+      if (mostPlayedPartner && (format === 'Doublette' || format === 'Triplette')) {
+        initial.push({ playerId: mostPlayedPartner.id, role: (mostPlayedPartner.role || 'Milieu') as PlayerRoleType });
+      }
+      setTeamAPlayers(initial);
     }
-  }, [selfPlayer, isTournamentMode, tournamentHistory.lastTeamAPlayers, players]);
+  }, [selfPlayer, isTournamentMode, tournamentHistory.lastTeamAPlayers, players, mostPlayedPartner, format]);
 
   // Pre-populate teams from revanche
   useEffect(() => {
