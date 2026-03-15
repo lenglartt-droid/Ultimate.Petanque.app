@@ -10,12 +10,22 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Modal,
+  Dimensions,
+  Linking,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import { decode } from 'base64-arraybuffer';
+import { getSupabaseClient } from '@/template';
+import { useAuth } from '@/template';
 
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
@@ -49,6 +59,8 @@ export default function EditClubScreen() {
 
   const club = getClubById(id || '');
   const { getTerrainById } = useApp();
+  const { user } = useAuth();
+  const supabase = getSupabaseClient();
 
   const [name, setName] = useState('');
   const [location, setLocation] = useState<LocationData>({
@@ -68,6 +80,18 @@ export default function EditClubScreen() {
   const [selectedTerrainId, setSelectedTerrainId] = useState<string | undefined>();
   
   const [isSaving, setIsSaving] = useState(false);
+
+  // Club card state
+  const [clubCardUrl, setClubCardUrl] = useState<string | null>(null);
+  const [clubCardType, setClubCardType] = useState<'image' | 'pdf'>('image');
+  const [uploadingCard, setUploadingCard] = useState(false);
+  const [showCardFullscreen, setShowCardFullscreen] = useState(false);
+  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
+
+  useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
+    return () => sub?.remove();
+  }, []);
 
   // Duplicate detection state
   const [duplicates, setDuplicates] = useState<(PublicClub & { matchType: 'exact' | 'city' })[]>([]);
@@ -102,8 +126,101 @@ export default function EditClubScreen() {
       setSelectedFacilities(facilityIds);
       setSelectedTerrainId(club.terrainId);
       setMembershipCost(club.membershipCost ? String(club.membershipCost) : '');
+      // Club card
+      if (club.clubCardUrl) {
+        setClubCardUrl(club.clubCardUrl);
+        setClubCardType(club.clubCardUrl.toLowerCase().endsWith('.pdf') ? 'pdf' : 'image');
+      } else {
+        setClubCardUrl(null);
+      }
     }
   }, [club]);
+
+  // Club card upload
+  const uploadClubCardFile = useCallback(async (fileUri: string, fileName: string, mimeType: string) => {
+    if (!club || !user) return;
+    setUploadingCard(true);
+    try {
+      const fileExt = fileName.split('.').pop()?.toLowerCase() || 'jpg';
+      const storagePath = `${user.id}/${club.id}_card_${Date.now()}.${fileExt}`;
+      let base64Data: string;
+      if (Platform.OS === 'web') {
+        const response = await fetch(fileUri);
+        const blob = await response.blob();
+        base64Data = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => { const result = reader.result as string; resolve(result.split(',')[1]); };
+          reader.readAsDataURL(blob);
+        });
+      } else {
+        base64Data = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
+      }
+      const { error: uploadError } = await supabase.storage.from('club-cards').upload(storagePath, decode(base64Data), { contentType: mimeType, upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from('club-cards').getPublicUrl(storagePath);
+      const publicUrl = urlData.publicUrl;
+      await updateClub(club.id, { clubCardUrl: publicUrl } as any);
+      setClubCardUrl(publicUrl);
+      setClubCardType(fileExt === 'pdf' ? 'pdf' : 'image');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showAlert(t('common', 'success'), t('club', 'clubCardUpdated'));
+    } catch (error: any) {
+      console.log('Error uploading club card:', error);
+      showAlert(t('common', 'error'), error.message || t('club', 'errorUploadClubCard'));
+    } finally {
+      setUploadingCard(false);
+    }
+  }, [club, user, supabase, updateClub, showAlert, t]);
+
+  const showClubCardUploadOptions = useCallback(() => {
+    Alert.alert(
+      t('club', 'clubCardLabel'), t('club', 'clubCardDesc'),
+      [
+        { text: t('player', 'fromCamera'), onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') { showAlert(t('profile', 'permissionRequired'), t('profile', 'cameraPermission')); return; }
+          const result = await ImagePicker.launchCameraAsync({ quality: 0.9 });
+          if (!result.canceled && result.assets[0]) {
+            const ext = result.assets[0].uri.split('.').pop()?.toLowerCase() || 'jpg';
+            await uploadClubCardFile(result.assets[0].uri, `club_card.${ext}`, `image/${ext === 'jpg' ? 'jpeg' : ext}`);
+          }
+        }},
+        { text: t('player', 'fromGallery'), onPress: async () => {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== 'granted') { showAlert(t('profile', 'permissionRequired'), t('profile', 'galleryPermission')); return; }
+          const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.9 });
+          if (!result.canceled && result.assets[0]) {
+            const ext = result.assets[0].uri.split('.').pop()?.toLowerCase() || 'jpg';
+            await uploadClubCardFile(result.assets[0].uri, `club_card.${ext}`, `image/${ext === 'jpg' ? 'jpeg' : ext}`);
+          }
+        }},
+        { text: t('player', 'fromFiles'), onPress: async () => {
+          try {
+            const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], copyToCacheDirectory: true });
+            if (!result.canceled && result.assets && result.assets[0]) {
+              await uploadClubCardFile(result.assets[0].uri, result.assets[0].name || 'club_card.pdf', result.assets[0].mimeType || 'application/pdf');
+            }
+          } catch (e) { console.log('Error picking document:', e); }
+        }},
+        { text: t('common', 'cancel'), style: 'cancel' },
+      ]
+    );
+  }, [t, uploadClubCardFile, showAlert]);
+
+  const handleRemoveClubCard = useCallback(() => {
+    Alert.alert(t('club', 'removeClubCard'), '', [
+      { text: t('common', 'cancel'), style: 'cancel' },
+      { text: t('common', 'delete'), style: 'destructive', onPress: async () => {
+        if (!club) return;
+        try {
+          await updateClub(club.id, { clubCardUrl: undefined } as any);
+          setClubCardUrl(null);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          showAlert(t('common', 'success'), t('club', 'clubCardRemoved'));
+        } catch (e: any) { showAlert(t('common', 'error'), e.message); }
+      }},
+    ]);
+  }, [club, updateClub, showAlert, t]);
 
   // Check for duplicates when city/name changes
   useEffect(() => {
@@ -238,10 +355,10 @@ export default function EditClubScreen() {
         country: location.country || 'France',
         location: { latitude: finalLat, longitude: finalLng },
         foundedYear: parseInt(foundedYear) || undefined,
-        description: description.trim() || undefined,
+        description: description.trim() || null,
         facilities: facilityLabels,
-        contactEmail: contactEmail.trim() || undefined,
-        contactPhone: contactPhone.trim() || undefined,
+        contactEmail: contactEmail.trim() || null,
+        contactPhone: contactPhone.trim() || null,
         membershipCost: membershipCost ? parseFloat(membershipCost) : undefined,
         terrainId: selectedTerrainId,
         terrainName: selectedTerrain?.name,
@@ -579,6 +696,51 @@ export default function EditClubScreen() {
               />
             </View>
           </Animated.View>
+
+          {/* Club Card */}
+          <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('club', 'clubCardLabel')}</Text>
+            {uploadingCard ? (
+              <View style={styles.clubCardLoading}>
+                <ActivityIndicator size="large" color={theme.primary} />
+                <Text style={styles.clubCardLoadingText}>{t('club', 'uploadingClubCard')}</Text>
+              </View>
+            ) : clubCardUrl ? (
+              <View style={styles.clubCardContainer}>
+                <Pressable
+                  style={styles.clubCardPreview}
+                  onPress={() => clubCardType === 'pdf' ? Linking.openURL(clubCardUrl) : setShowCardFullscreen(true)}
+                >
+                  {clubCardType === 'image' ? (
+                    <Image source={{ uri: clubCardUrl }} style={styles.clubCardImage} contentFit="cover" transition={200} />
+                  ) : (
+                    <View style={styles.clubCardPdf}>
+                      <MaterialIcons name="picture-as-pdf" size={48} color={theme.error} />
+                      <Text style={styles.clubCardPdfText}>{t('player', 'pdfDocument')}</Text>
+                      <Text style={styles.clubCardPdfHint}>{t('player', 'tapToView')}</Text>
+                    </View>
+                  )}
+                </Pressable>
+                <View style={styles.clubCardActions}>
+                  <Pressable style={styles.clubCardReplaceBtn} onPress={showClubCardUploadOptions}>
+                    <MaterialIcons name="refresh" size={18} color={theme.primary} />
+                    <Text style={styles.clubCardReplaceBtnText}>{t('club', 'replaceClubCard')}</Text>
+                  </Pressable>
+                  <Pressable style={styles.clubCardRemoveBtn} onPress={handleRemoveClubCard}>
+                    <MaterialIcons name="delete-outline" size={18} color={theme.error} />
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <Pressable style={styles.clubCardUploadBtn} onPress={showClubCardUploadOptions}>
+                <View style={styles.clubCardUploadIcon}>
+                  <MaterialIcons name="badge" size={32} color={theme.primary} />
+                </View>
+                <Text style={styles.clubCardUploadTitle}>{t('club', 'addClubCard')}</Text>
+                <Text style={styles.clubCardUploadDesc}>{t('club', 'clubCardDesc')}</Text>
+              </Pressable>
+            )}
+          </Animated.View>
         </ScrollView>
 
         {/* Save Button */}
@@ -602,6 +764,18 @@ export default function EditClubScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+      {/* Club Card Fullscreen Modal */}
+      <Modal visible={showCardFullscreen} animationType="fade" transparent onRequestClose={() => setShowCardFullscreen(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', alignItems: 'center', justifyContent: 'center' }}>
+          <Pressable style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }} onPress={() => setShowCardFullscreen(false)}>
+            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
+              <MaterialIcons name="close" size={28} color="#FFF" />
+            </View>
+          </Pressable>
+          {clubCardUrl ? <Image source={{ uri: clubCardUrl }} style={{ width: screenWidth, height: screenWidth * 1.4 }} contentFit="contain" transition={200} /> : null}
+        </View>
+      </Modal>
+
       {/* Merge Comparison Modal */}
       <MergeComparisonModal
         visible={showCompareModal}
@@ -838,4 +1012,21 @@ const styles = StyleSheet.create({
     paddingVertical: 10, marginTop: 4,
   },
   continueEditBtnText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
+  // Club card styles
+  clubCardLoading: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 40, alignItems: 'center', gap: 12, ...theme.shadows.card },
+  clubCardLoadingText: { fontSize: 14, color: theme.textSecondary },
+  clubCardContainer: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, overflow: 'hidden', ...theme.shadows.card },
+  clubCardPreview: { position: 'relative', minHeight: 180 },
+  clubCardImage: { width: '100%', height: 200 },
+  clubCardPdf: { width: '100%', height: 160, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.backgroundSecondary, gap: 8 },
+  clubCardPdfText: { fontSize: 16, fontWeight: '600', color: theme.textPrimary },
+  clubCardPdfHint: { fontSize: 13, color: theme.textSecondary },
+  clubCardActions: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 8, borderTopWidth: 1, borderTopColor: theme.border },
+  clubCardReplaceBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, backgroundColor: theme.primary + '10', borderRadius: theme.borderRadius.md },
+  clubCardReplaceBtnText: { fontSize: 14, fontWeight: '600', color: theme.primary },
+  clubCardRemoveBtn: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.error + '10', borderRadius: theme.borderRadius.md },
+  clubCardUploadBtn: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 32, alignItems: 'center', borderWidth: 2, borderColor: theme.primary + '25', borderStyle: 'dashed' as any, ...theme.shadows.card },
+  clubCardUploadIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  clubCardUploadTitle: { fontSize: 16, fontWeight: '600', color: theme.primary, marginBottom: 6 },
+  clubCardUploadDesc: { fontSize: 13, color: theme.textSecondary, textAlign: 'center' },
 });

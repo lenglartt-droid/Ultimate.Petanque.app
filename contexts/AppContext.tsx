@@ -1528,10 +1528,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.location !== undefined) dbUpdates.location = updates.location;
       if (updates.membersCount !== undefined) dbUpdates.members_count = updates.membersCount;
       if (updates.foundedYear !== undefined) dbUpdates.founded_year = updates.foundedYear;
-      if (updates.description !== undefined) dbUpdates.description = updates.description;
+      if (updates.description !== undefined) dbUpdates.description = updates.description || null;
       if (updates.facilities !== undefined) dbUpdates.facilities = updates.facilities;
-      if (updates.contactEmail !== undefined) dbUpdates.contact_email = updates.contactEmail;
-      if (updates.contactPhone !== undefined) dbUpdates.contact_phone = updates.contactPhone;
+      if (updates.contactEmail !== undefined) dbUpdates.contact_email = updates.contactEmail || null;
+      if (updates.contactPhone !== undefined) dbUpdates.contact_phone = updates.contactPhone || null;
       if (updates.terrainId !== undefined) dbUpdates.terrain_id = updates.terrainId;
       if (updates.terrainName !== undefined) dbUpdates.terrain_name = updates.terrainName;
       if (updates.membershipCost !== undefined) dbUpdates.membership_cost = updates.membershipCost;

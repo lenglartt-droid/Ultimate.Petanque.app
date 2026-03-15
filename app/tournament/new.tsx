@@ -418,7 +418,7 @@ export default function NewTournamentScreen() {
           </SectionCard>
 
           {/* Club - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(175)} style={styles.sectionCard}>
+          <Animated.View entering={FadeInDown.duration(350).delay(175)} style={[styles.sectionCard, { zIndex: 10 }]}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowClubSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.primaryLight + '15' }]}>
                 <MaterialIcons name="home-work" size={18} color={theme.primaryLight} />
@@ -453,7 +453,7 @@ export default function NewTournamentScreen() {
           </Animated.View>
 
           {/* Financial & Prize - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(200)} style={styles.sectionCard}>
+          <Animated.View entering={FadeInDown.duration(350).delay(200)} style={[styles.sectionCard, { zIndex: 9 }]}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowFinancesSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.carreauColor + '15' }]}>
                 <MaterialIcons name="payments" size={18} color={theme.carreauColor} />
@@ -568,7 +568,7 @@ export default function NewTournamentScreen() {
           {/* =================== CLASSIFICATION (ACCORDIONS) =================== */}
 
           {/* Tournament Level - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(300)} style={styles.sectionCard}>
+          <Animated.View entering={FadeInDown.duration(350).delay(300)} style={[styles.sectionCard, { zIndex: 7 }]}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowLevelSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.success + '15' }]}>
                 <MaterialIcons name="signal-cellular-alt" size={18} color={theme.success} />
@@ -622,7 +622,7 @@ export default function NewTournamentScreen() {
           </Animated.View>
 
           {/* Tournament Category - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(325)} style={styles.sectionCard}>
+          <Animated.View entering={FadeInDown.duration(350).delay(325)} style={[styles.sectionCard, { zIndex: 6 }]}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowCategorySection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.warning + '15' }]}>
                 <MaterialIcons name="verified" size={18} color={theme.warning} />
@@ -654,7 +654,7 @@ export default function NewTournamentScreen() {
           </Animated.View>
 
           {/* Registration - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(350)} style={styles.sectionCard}>
+          <Animated.View entering={FadeInDown.duration(350).delay(350)} style={[styles.sectionCard, { zIndex: 5 }]}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowRegistrationSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.primary + '15' }]}>
                 <MaterialIcons name="how-to-reg" size={18} color={theme.primary} />
@@ -686,7 +686,7 @@ export default function NewTournamentScreen() {
           </Animated.View>
 
           {/* Scope - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(375)} style={styles.sectionCard}>
+          <Animated.View entering={FadeInDown.duration(350).delay(375)} style={[styles.sectionCard, { zIndex: 4 }]}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowScopeSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.accent + '15' }]}>
                 <MaterialIcons name="public" size={18} color={theme.accent} />
@@ -720,7 +720,7 @@ export default function NewTournamentScreen() {
           {/* =================== DÉTAILS (ACCORDIONS) =================== */}
 
           {/* Participants - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(400)} style={styles.sectionCard}>
+          <Animated.View entering={FadeInDown.duration(350).delay(400)} style={[styles.sectionCard, { zIndex: 3 }]}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowParticipantsSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.carreauColor + '15' }]}>
                 <MaterialIcons name="people-outline" size={18} color={theme.carreauColor} />
@@ -752,7 +752,7 @@ export default function NewTournamentScreen() {
           </Animated.View>
 
           {/* Description - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(425)} style={styles.sectionCard}>
+          <Animated.View entering={FadeInDown.duration(350).delay(425)} style={[styles.sectionCard, { zIndex: 2 }]}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowDescriptionSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.textSecondary + '15' }]}>
                 <MaterialIcons name="description" size={18} color={theme.textSecondary} />
