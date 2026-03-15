@@ -61,8 +61,11 @@ export default function EditMatchScreen() {
   const [format, setFormat] = useState<GameFormat>('Doublette');
   const [teamAScore, setTeamAScore] = useState(0);
   const [teamBScore, setTeamBScore] = useState(0);
-  const [teamANames, setTeamANames] = useState('');
-  const [teamBNames, setTeamBNames] = useState('');
+  const [teamAPlayers, setTeamAPlayers] = useState<{id: string, name: string}[]>([]);
+  const [teamBPlayers, setTeamBPlayers] = useState<{id: string, name: string}[]>([]);
+  const [showPlayerPicker, setShowPlayerPicker] = useState(false);
+  const [pickingForTeam, setPickingForTeam] = useState<'A' | 'B'>('A');
+  const [playerSearch, setPlayerSearch] = useState('');
   const [matchDate, setMatchDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -104,8 +107,8 @@ export default function EditMatchScreen() {
       setFormat(match.format);
       setTeamAScore(match.teamA.score);
       setTeamBScore(match.teamB.score);
-      setTeamANames(match.teamA.playerNames.join(', '));
-      setTeamBNames(match.teamB.playerNames.join(', '));
+      setTeamAPlayers(match.teamA.players.map((pid, idx) => ({ id: pid, name: match.teamA.playerNames[idx] || pid })));
+      setTeamBPlayers(match.teamB.players.map((pid, idx) => ({ id: pid, name: match.teamB.playerNames[idx] || pid })));
       setMatchDate(new Date(match.date));
       setDuration(match.duration);
       setMenes(match.menes?.map(m => ({ teamAPoints: m.teamAPoints || 0, teamBPoints: m.teamBPoints || 0, duration: m.duration || 0 })) || []);
@@ -132,22 +135,50 @@ export default function EditMatchScreen() {
 
   // Build a list of team A and team B players for actions editing
   const teamAPlayersList = useMemo(() => {
-    if (!match) return [];
-    return match.teamA.players.map((pid, idx) => ({
-      id: pid,
-      name: match.teamA.playerNames[idx] || t('match', 'playerDefault'),
-      team: 'A' as const,
-    }));
-  }, [match, t]);
+    return teamAPlayers.map(p => ({ id: p.id, name: p.name, team: 'A' as const }));
+  }, [teamAPlayers]);
 
   const teamBPlayersList = useMemo(() => {
-    if (!match) return [];
-    return match.teamB.players.map((pid, idx) => ({
-      id: pid,
-      name: match.teamB.playerNames[idx] || t('match', 'playerDefault'),
-      team: 'B' as const,
-    }));
-  }, [match, t]);
+    return teamBPlayers.map(p => ({ id: p.id, name: p.name, team: 'B' as const }));
+  }, [teamBPlayers]);
+
+  const maxPlayersPerTeam = useMemo(() => {
+    if (format === 'Tête-à-tête') return 1;
+    if (format === 'Doublette') return 2;
+    return 3;
+  }, [format]);
+
+  const filteredPickerPlayers = useMemo(() => {
+    const search = playerSearch.toLowerCase();
+    const selectedIds = new Set([...teamAPlayers.map(p => p.id), ...teamBPlayers.map(p => p.id)]);
+    return players.filter(p => {
+      if (selectedIds.has(p.id)) return false;
+      if (search && !p.name.toLowerCase().includes(search)) return false;
+      return true;
+    });
+  }, [players, teamAPlayers, teamBPlayers, playerSearch]);
+
+  const handleAddPlayer = useCallback((playerId: string, playerName: string) => {
+    Haptics.selectionAsync();
+    if (pickingForTeam === 'A') {
+      if (teamAPlayers.length >= maxPlayersPerTeam) return;
+      setTeamAPlayers(prev => [...prev, { id: playerId, name: playerName }]);
+    } else {
+      if (teamBPlayers.length >= maxPlayersPerTeam) return;
+      setTeamBPlayers(prev => [...prev, { id: playerId, name: playerName }]);
+    }
+  }, [pickingForTeam, teamAPlayers, teamBPlayers, maxPlayersPerTeam]);
+
+  const handleRemovePlayer = useCallback((team: 'A' | 'B', playerId: string) => {
+    Haptics.selectionAsync();
+    if (team === 'A') {
+      setTeamAPlayers(prev => prev.filter(p => p.id !== playerId));
+      setPlayerActions(prev => prev.filter(pa => pa.playerId !== playerId));
+    } else {
+      setTeamBPlayers(prev => prev.filter(p => p.id !== playerId));
+      setPlayerActions(prev => prev.filter(pa => pa.playerId !== playerId));
+    }
+  }, []);
 
   const getPlayerAction = useCallback((playerId: string): PlayerAction | undefined => {
     return playerActions.find(pa => pa.playerId === playerId);
@@ -447,8 +478,8 @@ export default function EditMatchScreen() {
       date: matchDate.toISOString(),
       mode,
       format,
-      teamA: { ...match.teamA, playerNames: teamANames.split(',').map(n => n.trim()).filter(n => n), score: finalTeamAScore },
-      teamB: { ...match.teamB, playerNames: teamBNames.split(',').map(n => n.trim()).filter(n => n), score: finalTeamBScore },
+      teamA: { ...match.teamA, players: teamAPlayers.map(p => p.id), playerNames: teamAPlayers.map(p => p.name), score: finalTeamAScore },
+      teamB: { ...match.teamB, players: teamBPlayers.map(p => p.id), playerNames: teamBPlayers.map(p => p.name), score: finalTeamBScore },
       winner,
       duration,
       menes: menes.map((m, i) => ({ ...m, number: i + 1 })),
@@ -761,45 +792,18 @@ export default function EditMatchScreen() {
             </Pressable>
           </Animated.View>
 
-          {/* Mode Selection */}
+          {/* Mode (read-only) */}
           {!match.tournamentId && (
             <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
               <Text style={styles.sectionTitle}>{t('match', 'modeLabel')}</Text>
-              <View style={styles.modeContainer}>
-                {config.matchModes.map(m => (
-                  <Pressable key={m} style={[styles.modeButton, mode === m && styles.modeButtonActive]}
-                    onPress={() => { Haptics.selectionAsync(); setMode(m); if (m === 'Tournoi' && !selectedTournamentId) { setTournamentSearch(''); setShowTournamentPicker(true); } }}>
-                    <MaterialIcons name={m === 'Entraînement' ? 'fitness-center' : 'emoji-events'} size={20} color={mode === m ? '#FFF' : theme.textSecondary} />
-                    <Text style={[styles.modeText, mode === m && styles.modeTextActive]}>
-                      {m === 'Entraînement' ? t('modes', 'training') : t('modes', 'tournament')}
-                    </Text>
-                  </Pressable>
-                ))}
+              <View style={styles.modeBadgeContainer}>
+                <View style={[styles.modeBadgeReadonly, { backgroundColor: (mode === 'Tournoi' ? theme.carreauColor : theme.primary) + '12', borderColor: (mode === 'Tournoi' ? theme.carreauColor : theme.primary) + '30' }]}>
+                  <MaterialIcons name={mode === 'Entraînement' ? 'fitness-center' : 'emoji-events'} size={22} color={mode === 'Tournoi' ? theme.carreauColor : theme.primary} />
+                  <Text style={[styles.modeBadgeReadonlyText, { color: mode === 'Tournoi' ? theme.carreauColor : theme.primary }]}>
+                    {mode === 'Entraînement' ? t('modes', 'training') : t('modes', 'tournament')}
+                  </Text>
+                </View>
               </View>
-
-              {/* Tournament selection */}
-              {mode === 'Tournoi' && (
-                <Pressable style={[styles.pickerButton, { marginTop: 12 }]} onPress={() => { setTournamentSearch(''); setShowTournamentPicker(true); }}>
-                  {selectedTournament ? (
-                    <View style={styles.pickerSelected}>
-                      <MaterialIcons name="emoji-events" size={20} color={theme.carreauColor} />
-                      <View style={styles.pickerSelectedInfo}>
-                        <Text style={styles.pickerSelectedName}>{selectedTournament.name}</Text>
-                        <Text style={styles.pickerSelectedSub}>{selectedTournament.location?.city} • {t('formats', selectedTournament.format)}</Text>
-                      </View>
-                      <Pressable onPress={(e) => { e.stopPropagation(); setSelectedTournamentId(null); Haptics.selectionAsync(); }}>
-                        <MaterialIcons name="close" size={18} color={theme.textMuted} />
-                      </Pressable>
-                    </View>
-                  ) : (
-                    <View style={styles.pickerPlaceholder}>
-                      <MaterialIcons name="emoji-events" size={20} color={theme.textMuted} />
-                      <Text style={styles.pickerPlaceholderText}>{t('matchEdit', 'selectTournament')}</Text>
-                      <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-                    </View>
-                  )}
-                </Pressable>
-              )}
             </Animated.View>
           )}
 
@@ -841,40 +845,58 @@ export default function EditMatchScreen() {
           <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
             <Text style={styles.sectionTitle}>{t('match', 'teamsLabel')}</Text>
             <View style={styles.teamsCard}>
+              {/* Team A */}
               <View style={styles.teamInputGroup}>
-                <Text style={styles.teamLabel}>{t('match', 'myTeam')}</Text>
-                <TextInput style={styles.teamInput} value={teamANames} onChangeText={setTeamANames} placeholder={t('match', 'namesSeparatedByCommas')} placeholderTextColor={theme.textMuted} />
-                {match?.teamA.playerRoles && match.teamA.playerRoles.length > 0 && (
-                  <View style={styles.rolesDisplay}>
-                    {match.teamA.playerRoles.map((pr, idx) => {
-                      const rc = ROLE_CONFIG[pr.role as PlayerRole];
-                      return (
-                        <View key={pr.playerId} style={[styles.roleDisplayBadge, { backgroundColor: rc.color + '15' }]}>
-                          <MaterialIcons name={rc.icon as any} size={12} color={rc.color} />
-                          <Text style={[styles.roleDisplayText, { color: rc.color }]}>{match.teamA.playerNames[idx]?.split(' ')[0] || ''} - {t('roles', rc.labelKey)}</Text>
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
+                <View style={styles.teamHeaderRow}>
+                  <Text style={styles.teamLabel}>{t('match', 'myTeam')}</Text>
+                  <Text style={styles.teamCountLabel}>{teamAPlayers.length}/{maxPlayersPerTeam}</Text>
+                </View>
+                <View style={styles.playerChipsContainer}>
+                  {teamAPlayers.map(p => (
+                    <View key={p.id} style={styles.playerChip}>
+                      <View style={[styles.playerChipAvatar, { backgroundColor: theme.primary }]}>
+                        <Text style={styles.playerChipAvatarText}>{p.name.charAt(0).toUpperCase()}</Text>
+                      </View>
+                      <Text style={styles.playerChipName} numberOfLines={1}>{p.name}</Text>
+                      <Pressable style={styles.playerChipRemove} onPress={() => handleRemovePlayer('A', p.id)} hitSlop={6}>
+                        <MaterialIcons name="close" size={14} color={theme.textMuted} />
+                      </Pressable>
+                    </View>
+                  ))}
+                  {teamAPlayers.length < maxPlayersPerTeam ? (
+                    <Pressable style={styles.addPlayerChip} onPress={() => { setPickingForTeam('A'); setPlayerSearch(''); setShowPlayerPicker(true); }}>
+                      <MaterialIcons name="person-add" size={18} color={theme.primary} />
+                      <Text style={styles.addPlayerChipText}>{t('match', 'addPlayers')}</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               </View>
               <View style={styles.teamDivider} />
+              {/* Team B */}
               <View style={styles.teamInputGroup}>
-                <Text style={styles.teamLabel}>{t('match', 'opponent')}</Text>
-                <TextInput style={styles.teamInput} value={teamBNames} onChangeText={setTeamBNames} placeholder={t('match', 'namesSeparatedByCommas')} placeholderTextColor={theme.textMuted} />
-                {match?.teamB.playerRoles && match.teamB.playerRoles.length > 0 && (
-                  <View style={styles.rolesDisplay}>
-                    {match.teamB.playerRoles.map((pr, idx) => {
-                      const rc = ROLE_CONFIG[pr.role as PlayerRole];
-                      return (
-                        <View key={pr.playerId} style={[styles.roleDisplayBadge, { backgroundColor: rc.color + '15' }]}>
-                          <MaterialIcons name={rc.icon as any} size={12} color={rc.color} />
-                          <Text style={[styles.roleDisplayText, { color: rc.color }]}>{match.teamB.playerNames[idx]?.split(' ')[0] || ''} - {t('roles', rc.labelKey)}</Text>
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
+                <View style={styles.teamHeaderRow}>
+                  <Text style={styles.teamLabel}>{t('match', 'opponent')}</Text>
+                  <Text style={styles.teamCountLabel}>{teamBPlayers.length}/{maxPlayersPerTeam}</Text>
+                </View>
+                <View style={styles.playerChipsContainer}>
+                  {teamBPlayers.map(p => (
+                    <View key={p.id} style={[styles.playerChip, { borderColor: theme.accent + '30' }]}>
+                      <View style={[styles.playerChipAvatar, { backgroundColor: theme.accent }]}>
+                        <Text style={styles.playerChipAvatarText}>{p.name.charAt(0).toUpperCase()}</Text>
+                      </View>
+                      <Text style={styles.playerChipName} numberOfLines={1}>{p.name}</Text>
+                      <Pressable style={styles.playerChipRemove} onPress={() => handleRemovePlayer('B', p.id)} hitSlop={6}>
+                        <MaterialIcons name="close" size={14} color={theme.textMuted} />
+                      </Pressable>
+                    </View>
+                  ))}
+                  {teamBPlayers.length < maxPlayersPerTeam ? (
+                    <Pressable style={styles.addPlayerChip} onPress={() => { setPickingForTeam('B'); setPlayerSearch(''); setShowPlayerPicker(true); }}>
+                      <MaterialIcons name="person-add" size={18} color={theme.accent} />
+                      <Text style={[styles.addPlayerChipText, { color: theme.accent }]}>{t('match', 'addPlayers')}</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               </View>
             </View>
           </Animated.View>
@@ -1065,6 +1087,94 @@ export default function EditMatchScreen() {
         forceReadOnly
       />
 
+      {/* Player Picker Modal */}
+      <Modal visible={showPlayerPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowPlayerPicker(false)}>
+        <SafeAreaView edges={['top']} style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
+              {pickingForTeam === 'A' ? t('match', 'myTeam') : t('match', 'opponent')}
+            </Text>
+            <Pressable style={styles.modalCloseBtn} onPress={() => setShowPlayerPicker(false)}>
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+          </View>
+          <View style={styles.modalSearchContainer}>
+            <MaterialIcons name="search" size={20} color={theme.textMuted} />
+            <TextInput
+              style={styles.modalSearchInput}
+              value={playerSearch}
+              onChangeText={setPlayerSearch}
+              placeholder={t('match', 'addPlayers')}
+              placeholderTextColor={theme.textMuted}
+              autoFocus
+            />
+          </View>
+          {/* Current selection */}
+          {(() => {
+            const currentTeam = pickingForTeam === 'A' ? teamAPlayers : teamBPlayers;
+            if (currentTeam.length === 0) return null;
+            return (
+              <View style={styles.pickerCurrentTeam}>
+                <Text style={styles.pickerCurrentTeamLabel}>{t('match', 'selected')} ({currentTeam.length}/{maxPlayersPerTeam})</Text>
+                <View style={styles.pickerCurrentTeamChips}>
+                  {currentTeam.map(p => (
+                    <View key={p.id} style={styles.pickerSelectedChip}>
+                      <Text style={styles.pickerSelectedChipText}>{p.name}</Text>
+                      <Pressable onPress={() => handleRemovePlayer(pickingForTeam, p.id)} hitSlop={6}>
+                        <MaterialIcons name="close" size={14} color={theme.primary} />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            );
+          })()}
+          <FlatList
+            data={filteredPickerPlayers}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+            renderItem={({ item: p }) => {
+              const currentTeamCount = pickingForTeam === 'A' ? teamAPlayers.length : teamBPlayers.length;
+              const isFull = currentTeamCount >= maxPlayersPerTeam;
+              return (
+                <Pressable
+                  style={[styles.modalItem, isFull && { opacity: 0.4 }]}
+                  onPress={() => { if (!isFull) { handleAddPlayer(p.id, p.name); } }}
+                  disabled={isFull}
+                >
+                  <View style={[styles.pickerPlayerAvatar, { backgroundColor: (pickingForTeam === 'A' ? theme.primary : theme.accent) + '15' }]}>
+                    <Text style={[styles.pickerPlayerAvatarText, { color: pickingForTeam === 'A' ? theme.primary : theme.accent }]}>
+                      {p.name.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={styles.modalItemContent}>
+                    <Text style={styles.modalItemTitle}>{p.name}</Text>
+                    <View style={styles.modalItemMeta}>
+                      <Text style={styles.modalItemMetaText}>{t('roles', p.role)}</Text>
+                      <View style={styles.modalItemDot} />
+                      <Text style={styles.modalItemMetaText}>{t('levels', p.level)}</Text>
+                      {p.club ? (
+                        <>
+                          <View style={styles.modalItemDot} />
+                          <Text style={styles.modalItemMetaText}>{p.club}</Text>
+                        </>
+                      ) : null}
+                    </View>
+                  </View>
+                  <MaterialIcons name="add-circle-outline" size={22} color={isFull ? theme.textMuted : theme.primary} />
+                </Pressable>
+              );
+            }}
+            ListEmptyComponent={
+              <View style={styles.modalEmpty}>
+                <MaterialIcons name="person-search" size={48} color={theme.textMuted} />
+                <Text style={styles.modalEmptyText}>{t('match', 'noPlayersFound')}</Text>
+              </View>
+            }
+          />
+        </SafeAreaView>
+      </Modal>
+
       {/* Detailed Shot Notation Modal */}
       {editingActionPlayer && (
         <SimplifiedShotNotation
@@ -1119,12 +1229,30 @@ const styles = StyleSheet.create({
   formatChipTextActive: { color: theme.primary },
   teamsCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, ...theme.shadows.card },
   teamInputGroup: { marginBottom: 4 },
-  teamLabel: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginBottom: 8 },
-  teamInput: { backgroundColor: theme.backgroundSecondary, paddingHorizontal: 14, paddingVertical: 12, borderRadius: theme.borderRadius.md, fontSize: 15, color: theme.textPrimary },
+  teamHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  teamLabel: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  teamCountLabel: { fontSize: 11, fontWeight: '600', color: theme.textMuted, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   teamDivider: { height: 1, backgroundColor: theme.border, marginVertical: 16 },
-  rolesDisplay: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
-  roleDisplayBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-  roleDisplayText: { fontSize: 11, fontWeight: '600' },
+  playerChipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  playerChip: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.backgroundSecondary, paddingVertical: 8, paddingLeft: 8, paddingRight: 12, borderRadius: theme.borderRadius.full, borderWidth: 1, borderColor: theme.primary + '30' },
+  playerChipAvatar: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  playerChipAvatarText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
+  playerChipName: { fontSize: 14, fontWeight: '600', color: theme.textPrimary, maxWidth: 120 },
+  playerChipRemove: { width: 20, height: 20, borderRadius: 10, backgroundColor: theme.border, alignItems: 'center', justifyContent: 'center' },
+  addPlayerChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: theme.borderRadius.full, borderWidth: 1.5, borderColor: theme.primary + '40', borderStyle: 'dashed' as any },
+  addPlayerChipText: { fontSize: 13, fontWeight: '600', color: theme.primary },
+  // Mode read-only badge
+  modeBadgeContainer: {},
+  modeBadgeReadonly: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 14, borderRadius: theme.borderRadius.md, borderWidth: 1 },
+  modeBadgeReadonlyText: { fontSize: 15, fontWeight: '700' },
+  // Player picker
+  pickerCurrentTeam: { paddingHorizontal: 16, paddingVertical: 10, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  pickerCurrentTeamLabel: { fontSize: 11, fontWeight: '600', color: theme.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  pickerCurrentTeamChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  pickerSelectedChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.primary + '12', paddingVertical: 6, paddingHorizontal: 12, borderRadius: theme.borderRadius.full, borderWidth: 1, borderColor: theme.primary + '30' },
+  pickerSelectedChipText: { fontSize: 13, fontWeight: '600', color: theme.primary },
+  pickerPlayerAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 4 },
+  pickerPlayerAvatarText: { fontSize: 16, fontWeight: '700' },
   scoreContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, ...theme.shadows.card },
   teamScore: { flex: 1, alignItems: 'center' },
   scoreLabel: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginBottom: 12 },
