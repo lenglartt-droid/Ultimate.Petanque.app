@@ -1025,9 +1025,9 @@ export default function HistoryScreen() {
             )}
           </View>
           
-          {editingChallenge && (
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} enabled={isEditingChallengeFields}>
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 80 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {editingChallenge && (() => {
+            const scrollContent = (
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 100 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" bounces={true}>
               {/* Challenge Header Card */}
               <View style={styles.detailHeaderCard}>
                 <View style={styles.detailHeaderTop}>
@@ -1616,8 +1616,17 @@ export default function HistoryScreen() {
                 </>
               )}
             </ScrollView>
-            </KeyboardAvoidingView>
-          )}
+            );
+
+            if (isEditingChallengeFields) {
+              return (
+                <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+                  {scrollContent}
+                </KeyboardAvoidingView>
+              );
+            }
+            return scrollContent;
+          })()}
         </SafeAreaView>
       </Modal>
 
