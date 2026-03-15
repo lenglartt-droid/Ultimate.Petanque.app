@@ -317,6 +317,10 @@ export default function NewMatchScreen() {
           const player = players.find(p => p.id === id);
           return { playerId: id, role: (player?.role || 'Milieu') as PlayerRoleType };
         });
+        // If previous team was only self, try adding most played partner
+        if (playersWithRoles.length === 1 && playersWithRoles[0].playerId === selfPlayer.id && mostPlayedPartner && (format === 'Doublette' || format === 'Triplette')) {
+          playersWithRoles.push({ playerId: mostPlayedPartner.id, role: (mostPlayedPartner.role || 'Milieu') as PlayerRoleType });
+        }
         setTeamAPlayers(playersWithRoles);
       } else {
         const initial: TeamPlayerWithRole[] = [{ playerId: selfPlayer.id, role: (selfPlayer.role || 'Milieu') as PlayerRoleType }];

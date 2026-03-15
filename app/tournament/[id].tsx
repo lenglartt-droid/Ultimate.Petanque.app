@@ -733,40 +733,6 @@ export default function TournamentDetailScreen() {
             <Text style={styles.sectionTitle}>{t('tournament', 'myMatches')}</Text>
             <Text style={styles.sectionCount}>{myMatches.length}</Text>
           </View>
-          
-          {/* Visibility Toggle - only for owner */}
-          {canEdit && !isSharedItem && (
-            <View style={styles.visibilitySection}>
-              <Text style={styles.sectionTitle}>{t('map', 'visibility').toUpperCase()}</Text>
-              <Pressable
-                style={styles.visibilityCard}
-                onPress={handleTogglePublic}
-                disabled={togglingPublic}
-              >
-                <View style={[styles.visibilityIcon, { backgroundColor: isPublicState ? theme.success + '15' : theme.textMuted + '15' }]}>
-                  <MaterialIcons name={isPublicState ? 'public' : 'lock'} size={22} color={isPublicState ? theme.success : theme.textMuted} />
-                </View>
-                <View style={styles.visibilityInfo}>
-                  <Text style={styles.visibilityTitle}>{t('map', 'visibilityToggle')}</Text>
-                  <Text style={styles.visibilityDesc}>
-                    {isPublicState ? t('map', 'publicItemsDesc') : t('map', 'makePublic')}
-                  </Text>
-                </View>
-                <View style={[styles.visibilityBadge, { backgroundColor: isPublicState ? theme.success + '20' : theme.textMuted + '15' }]}>
-                  <Text style={[styles.visibilityBadgeText, { color: isPublicState ? theme.success : theme.textMuted }]}>
-                    {isPublicState ? t('map', 'publicLabel') : t('map', 'privateLabel')}
-                  </Text>
-                </View>
-              </Pressable>
-            </View>
-          )}
-
-          {/* Modification Logs - only visible to owner */}
-          <ModificationLogsSection
-            itemType="tournament"
-            itemId={id!}
-            isOwner={!isSharedItem && !!user?.id}
-          />
 
           {myMatches.length > 0 ? (
             <View style={styles.matchList}>
@@ -839,6 +805,40 @@ export default function TournamentDetailScreen() {
               <Text style={styles.emptyMatchesHint}>{t('tournament', 'addFirstMatch')}</Text>
             </View>
           )}
+
+          {/* Visibility Toggle - only for owner */}
+          {canEdit && !isSharedItem && (
+            <View style={styles.visibilitySection}>
+              <Text style={styles.sectionTitle}>{t('map', 'visibility').toUpperCase()}</Text>
+              <Pressable
+                style={styles.visibilityCard}
+                onPress={handleTogglePublic}
+                disabled={togglingPublic}
+              >
+                <View style={[styles.visibilityIcon, { backgroundColor: isPublicState ? theme.success + '15' : theme.textMuted + '15' }]}>
+                  <MaterialIcons name={isPublicState ? 'public' : 'lock'} size={22} color={isPublicState ? theme.success : theme.textMuted} />
+                </View>
+                <View style={styles.visibilityInfo}>
+                  <Text style={styles.visibilityTitle}>{t('map', 'visibilityToggle')}</Text>
+                  <Text style={styles.visibilityDesc}>
+                    {isPublicState ? t('map', 'publicItemsDesc') : t('map', 'makePublic')}
+                  </Text>
+                </View>
+                <View style={[styles.visibilityBadge, { backgroundColor: isPublicState ? theme.success + '20' : theme.textMuted + '15' }]}>
+                  <Text style={[styles.visibilityBadgeText, { color: isPublicState ? theme.success : theme.textMuted }]}>
+                    {isPublicState ? t('map', 'publicLabel') : t('map', 'privateLabel')}
+                  </Text>
+                </View>
+              </Pressable>
+            </View>
+          )}
+
+          {/* Modification Logs - only visible to owner */}
+          <ModificationLogsSection
+            itemType="tournament"
+            itemId={id!}
+            isOwner={!isSharedItem && !!user?.id}
+          />
         </Animated.View>
       </ScrollView>
 

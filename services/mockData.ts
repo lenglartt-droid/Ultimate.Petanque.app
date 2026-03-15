@@ -88,6 +88,7 @@ export interface Club {
   membershipCost?: number;
   isPublic?: boolean;
   showContactPublic?: boolean;
+  clubCardUrl?: string;
 }
 
 export interface TournamentNotification {

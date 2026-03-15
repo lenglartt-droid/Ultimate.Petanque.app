@@ -10,12 +10,21 @@ import {
   ActivityIndicator,
   RefreshControl,
   Dimensions,
+  Platform,
+  Modal,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import * as Linking2 from 'expo-linking';
+import { decode } from 'base64-arraybuffer';
+import { getSupabaseClient } from '@/template';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -63,6 +72,14 @@ export default function ClubDetailScreen() {
   const isSharedItem = sharedPermission !== null;
   const isReadOnly = sharedPermission === 'read';
   const canEdit = !isReadOnly;
+  const supabase = getSupabaseClient();
+
+  // Club card state
+  const [clubCardUrl, setClubCardUrl] = React.useState<string | null>(null);
+  const [clubCardType, setClubCardType] = React.useState<'image' | 'pdf'>('image');
+  const [uploadingCard, setUploadingCard] = React.useState(false);
+  const [showCardFullscreen, setShowCardFullscreen] = React.useState(false);
+  const [screenWidth2, setScreenWidth2] = React.useState(() => Dimensions.get('window').width);
 
   const isFavorite = id ? isFavoriteClub(id) : false;
 
@@ -82,6 +99,102 @@ export default function ClubDetailScreen() {
   React.useEffect(() => {
     if (club) setIsPublicState(club.isPublic ?? false);
   }, [club?.id, club?.isPublic]);
+
+  // Load club card URL
+  React.useEffect(() => {
+    if (club?.clubCardUrl) {
+      setClubCardUrl(club.clubCardUrl);
+      setClubCardType(club.clubCardUrl.toLowerCase().endsWith('.pdf') ? 'pdf' : 'image');
+    } else {
+      setClubCardUrl(null);
+    }
+  }, [club?.clubCardUrl]);
+
+  // Club card upload helpers
+  const uploadClubCardFile = React.useCallback(async (fileUri: string, fileName: string, mimeType: string) => {
+    if (!club || !user) return;
+    setUploadingCard(true);
+    try {
+      const fileExt = fileName.split('.').pop()?.toLowerCase() || 'jpg';
+      const storagePath = `${user.id}/${club.id}_card_${Date.now()}.${fileExt}`;
+      let base64Data: string;
+      if (Platform.OS === 'web') {
+        const response = await fetch(fileUri);
+        const blob = await response.blob();
+        base64Data = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => { const result = reader.result as string; resolve(result.split(',')[1]); };
+          reader.readAsDataURL(blob);
+        });
+      } else {
+        base64Data = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
+      }
+      const { error: uploadError } = await supabase.storage.from('club-cards').upload(storagePath, decode(base64Data), { contentType: mimeType, upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from('club-cards').getPublicUrl(storagePath);
+      const publicUrl = urlData.publicUrl;
+      await updateClub(club.id, { clubCardUrl: publicUrl } as any);
+      setClubCardUrl(publicUrl);
+      setClubCardType(fileExt === 'pdf' ? 'pdf' : 'image');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showAlert(t('common', 'success'), t('club', 'clubCardUpdated'));
+    } catch (error: any) {
+      console.log('Error uploading club card:', error);
+      showAlert(t('common', 'error'), error.message || t('club', 'errorUploadClubCard'));
+    } finally {
+      setUploadingCard(false);
+    }
+  }, [club, user, supabase, updateClub, showAlert, t]);
+
+  const showClubCardUploadOptions = React.useCallback(() => {
+    Alert.alert(
+      t('club', 'clubCardLabel'), t('club', 'clubCardDesc'),
+      [
+        { text: t('player', 'fromCamera'), onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') { showAlert(t('profile', 'permissionRequired'), t('profile', 'cameraPermission')); return; }
+          const result = await ImagePicker.launchCameraAsync({ quality: 0.9 });
+          if (!result.canceled && result.assets[0]) {
+            const ext = result.assets[0].uri.split('.').pop()?.toLowerCase() || 'jpg';
+            await uploadClubCardFile(result.assets[0].uri, `club_card.${ext}`, `image/${ext === 'jpg' ? 'jpeg' : ext}`);
+          }
+        }},
+        { text: t('player', 'fromGallery'), onPress: async () => {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== 'granted') { showAlert(t('profile', 'permissionRequired'), t('profile', 'galleryPermission')); return; }
+          const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.9 });
+          if (!result.canceled && result.assets[0]) {
+            const ext = result.assets[0].uri.split('.').pop()?.toLowerCase() || 'jpg';
+            await uploadClubCardFile(result.assets[0].uri, `club_card.${ext}`, `image/${ext === 'jpg' ? 'jpeg' : ext}`);
+          }
+        }},
+        { text: t('player', 'fromFiles'), onPress: async () => {
+          try {
+            const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], copyToCacheDirectory: true });
+            if (!result.canceled && result.assets && result.assets[0]) {
+              await uploadClubCardFile(result.assets[0].uri, result.assets[0].name || 'club_card.pdf', result.assets[0].mimeType || 'application/pdf');
+            }
+          } catch (e) { console.log('Error picking document:', e); }
+        }},
+        { text: t('common', 'cancel'), style: 'cancel' },
+      ]
+    );
+  }, [t, uploadClubCardFile, showAlert]);
+
+  const handleRemoveClubCard = React.useCallback(() => {
+    Alert.alert(t('club', 'removeClubCard'), '', [
+      { text: t('common', 'cancel'), style: 'cancel' },
+      { text: t('common', 'delete'), style: 'destructive', onPress: async () => {
+        if (!club) return;
+        try {
+          await updateClub(club.id, { clubCardUrl: undefined } as any);
+          setClubCardUrl(null);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          showAlert(t('common', 'success'), t('club', 'clubCardRemoved'));
+        } catch (e: any) { showAlert(t('common', 'error'), e.message); }
+      }},
+    ]);
+  }, [club, updateClub, showAlert, t]);
 
   const handleTogglePublic = React.useCallback(async () => {
     if (!club || togglingPublic || isSharedItem) return;
@@ -417,6 +530,60 @@ export default function ClubDetailScreen() {
         )}
         </View>
 
+        {/* Club Card Section */}
+        {canEdit && !isSharedItem && (
+          <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('club', 'clubCardLabel')}</Text>
+            {uploadingCard ? (
+              <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 40, alignItems: 'center', gap: 12, ...theme.shadows.card }}>
+                <ActivityIndicator size="large" color={theme.primary} />
+                <Text style={{ fontSize: 14, color: theme.textSecondary }}>{t('club', 'uploadingClubCard')}</Text>
+              </View>
+            ) : clubCardUrl ? (
+              <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, overflow: 'hidden', ...theme.shadows.card }}>
+                <Pressable style={{ position: 'relative', minHeight: 180 }} onPress={() => clubCardType === 'pdf' ? Linking.openURL(clubCardUrl) : setShowCardFullscreen(true)}>
+                  {clubCardType === 'image' ? (
+                    <Image source={{ uri: clubCardUrl }} style={{ width: '100%', height: 200 }} contentFit="cover" transition={200} />
+                  ) : (
+                    <View style={{ width: '100%', height: 160, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.backgroundSecondary, gap: 8 }}>
+                      <MaterialIcons name="picture-as-pdf" size={48} color={theme.error} />
+                      <Text style={{ fontSize: 16, fontWeight: '600', color: theme.textPrimary }}>{t('player', 'pdfDocument')}</Text>
+                      <Text style={{ fontSize: 13, color: theme.textSecondary }}>{t('player', 'tapToView')}</Text>
+                    </View>
+                  )}
+                </Pressable>
+                <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, gap: 8, borderTopWidth: 1, borderTopColor: theme.border }}>
+                  <Pressable style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, backgroundColor: theme.primary + '10', borderRadius: theme.borderRadius.md }} onPress={showClubCardUploadOptions}>
+                    <MaterialIcons name="refresh" size={18} color={theme.primary} />
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: theme.primary }}>{t('club', 'replaceClubCard')}</Text>
+                  </Pressable>
+                  <Pressable style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.error + '10', borderRadius: theme.borderRadius.md }} onPress={handleRemoveClubCard}>
+                    <MaterialIcons name="delete-outline" size={18} color={theme.error} />
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <Pressable style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 32, alignItems: 'center', borderWidth: 2, borderColor: theme.primary + '25', borderStyle: 'dashed', ...theme.shadows.card }} onPress={showClubCardUploadOptions}>
+                <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                  <MaterialIcons name="badge" size={32} color={theme.primary} />
+                </View>
+                <Text style={{ fontSize: 16, fontWeight: '600', color: theme.primary, marginBottom: 6 }}>{t('club', 'addClubCard')}</Text>
+                <Text style={{ fontSize: 13, color: theme.textSecondary, textAlign: 'center', marginBottom: 16 }}>{t('club', 'clubCardDesc')}</Text>
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: theme.borderRadius.full }}>
+                    <MaterialIcons name="image" size={14} color={theme.textSecondary} />
+                    <Text style={{ fontSize: 12, fontWeight: '500', color: theme.textSecondary }}>JPG / PNG</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: theme.borderRadius.full }}>
+                    <MaterialIcons name="picture-as-pdf" size={14} color={theme.textSecondary} />
+                    <Text style={{ fontSize: 12, fontWeight: '500', color: theme.textSecondary }}>PDF</Text>
+                  </View>
+                </View>
+              </Pressable>
+            )}
+          </Animated.View>
+        )}
+
         {/* Contact Visibility Toggle - only when public */}
         {canEdit && !isSharedItem && (club.isPublic ?? false) && (club.contactEmail || club.contactPhone) && (
           <Animated.View entering={FadeInDown.duration(400).delay(640)} style={styles.section}>
@@ -495,6 +662,18 @@ export default function ClubDetailScreen() {
         itemType="club"
         currentItemId={id!}
       />
+
+      {/* Club Card Fullscreen Modal */}
+      <Modal visible={showCardFullscreen} animationType="fade" transparent onRequestClose={() => setShowCardFullscreen(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', alignItems: 'center', justifyContent: 'center' }}>
+          <Pressable style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }} onPress={() => setShowCardFullscreen(false)}>
+            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
+              <MaterialIcons name="close" size={28} color="#FFF" />
+            </View>
+          </Pressable>
+          {clubCardUrl ? <Image source={{ uri: clubCardUrl }} style={{ width: screenWidth, height: screenWidth * 1.4 }} contentFit="contain" transition={200} /> : null}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

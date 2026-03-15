@@ -292,39 +292,8 @@ export default function NewClubScreen() {
             </Animated.View>
           ) : null}
 
-          {/* Description */}
-          <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('club', 'descriptionLabel')}</Text>
-            <TextInput style={[styles.textInput, styles.textArea]} value={description} onChangeText={setDescription} placeholder={t('club', 'descriptionPlaceholder')} placeholderTextColor={theme.textMuted} multiline numberOfLines={4} textAlignVertical="top" />
-          </Animated.View>
-
-          {/* Founded Year */}
-          <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('club', 'foundedYearLabel')}</Text>
-            <TextInput style={styles.textInput} value={foundedYear} onChangeText={setFoundedYear} placeholder={t('club', 'foundedYearPlaceholder')} placeholderTextColor={theme.textMuted} keyboardType="number-pad" maxLength={4} />
-          </Animated.View>
-
-          {/* Facilities */}
-          <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('club', 'facilitiesLabel')}</Text>
-            <View style={styles.facilitiesGrid}>
-              {FACILITY_KEYS.map(facility => (
-                <Pressable key={facility.id} style={[styles.facilityChip, selectedFacilities.includes(facility.id) && styles.facilityChipActive]} onPress={() => toggleFacility(facility.id)}>
-                  <MaterialIcons name={facility.icon as any} size={20} color={selectedFacilities.includes(facility.id) ? theme.accent : theme.textSecondary} />
-                  <Text style={[styles.facilityText, selectedFacilities.includes(facility.id) && styles.facilityTextActive]}>{t('club', facility.key)}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </Animated.View>
-
-          {/* Membership Cost */}
-          <Animated.View entering={FadeInDown.duration(400).delay(325)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('club', 'membershipCostLabel')}</Text>
-            <TextInput style={styles.textInput} value={membershipCost} onChangeText={setMembershipCost} placeholder="Ex: 50" placeholderTextColor={theme.textMuted} keyboardType="numeric" />
-          </Animated.View>
-
           {/* Terrain Association */}
-          <Animated.View entering={FadeInDown.duration(400).delay(340)} style={styles.section}>
+          <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
             <Text style={styles.sectionTitle}>{t('club', 'mainTerrainLabel')}</Text>
             <ScrollView 
               horizontal 
@@ -354,8 +323,39 @@ export default function NewClubScreen() {
             </ScrollView>
           </Animated.View>
 
+          {/* Facilities */}
+          <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('club', 'facilitiesLabel')}</Text>
+            <View style={styles.facilitiesGrid}>
+              {FACILITY_KEYS.map(facility => (
+                <Pressable key={facility.id} style={[styles.facilityChip, selectedFacilities.includes(facility.id) && styles.facilityChipActive]} onPress={() => toggleFacility(facility.id)}>
+                  <MaterialIcons name={facility.icon as any} size={20} color={selectedFacilities.includes(facility.id) ? theme.accent : theme.textSecondary} />
+                  <Text style={[styles.facilityText, selectedFacilities.includes(facility.id) && styles.facilityTextActive]}>{t('club', facility.key)}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </Animated.View>
+
+          {/* Membership Cost */}
+          <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('club', 'membershipCostLabel')}</Text>
+            <TextInput style={styles.textInput} value={membershipCost} onChangeText={setMembershipCost} placeholder="Ex: 50" placeholderTextColor={theme.textMuted} keyboardType="numeric" />
+          </Animated.View>
+
+          {/* Description */}
+          <Animated.View entering={FadeInDown.duration(400).delay(325)} style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('club', 'descriptionLabel')}</Text>
+            <TextInput style={[styles.textInput, styles.textArea]} value={description} onChangeText={setDescription} placeholder={t('club', 'descriptionPlaceholder')} placeholderTextColor={theme.textMuted} multiline numberOfLines={4} textAlignVertical="top" />
+          </Animated.View>
+
+          {/* Founded Year */}
+          <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('club', 'foundedYearLabel')}</Text>
+            <TextInput style={styles.textInput} value={foundedYear} onChangeText={setFoundedYear} placeholder={t('club', 'foundedYearPlaceholder')} placeholderTextColor={theme.textMuted} keyboardType="number-pad" maxLength={4} />
+          </Animated.View>
+
           {/* Contact */}
-          <Animated.View entering={FadeInDown.duration(400).delay(370)} style={styles.section}>
+          <Animated.View entering={FadeInDown.duration(400).delay(375)} style={styles.section}>
             <Text style={styles.sectionTitle}>{t('club', 'contactLabel')}</Text>
             <View style={styles.contactInputContainer}>
               <MaterialIcons name="email" size={20} color={theme.textSecondary} />

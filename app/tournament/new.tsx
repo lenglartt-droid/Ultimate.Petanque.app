@@ -127,6 +127,15 @@ export default function NewTournamentScreen() {
   const [registrationType, setRegistrationType] = useState<RegistrationType | undefined>();
   const [tournamentScope, setTournamentScope] = useState<TournamentScope | undefined>();
 
+  // Accordion state for optional sections
+  const [showLevelSection, setShowLevelSection] = useState(false);
+  const [showCategorySection, setShowCategorySection] = useState(false);
+  const [showRegistrationSection, setShowRegistrationSection] = useState(false);
+  const [showScopeSection, setShowScopeSection] = useState(false);
+  const [showParticipantsSection, setShowParticipantsSection] = useState(false);
+  const [showFinancesSection, setShowFinancesSection] = useState(false);
+  const [showDescriptionSection, setShowDescriptionSection] = useState(false);
+
   const selectedTerrain = terrains.find(t => t.id === terrainId);
 
   // Progress calculation
@@ -500,163 +509,260 @@ export default function NewTournamentScreen() {
             </ScrollView>
           </SectionCard>
 
-          {/* =================== CLASSIFICATION =================== */}
+          {/* =================== CLASSIFICATION (ACCORDIONS) =================== */}
 
-          {/* Tournament Level */}
-          <SectionCard title={t('tournament', 'levelTitle')} subtitle={t('tournament', 'levelSubtitle')} icon="signal-cellular-alt" color={theme.success} delay={350}>
-            <View style={styles.levelGrid}>
-              {config.tournamentLevels.map(level => {
-                const isActive = tournamentLevel === level && !showCustomLevelInput;
-                const ico = LEVEL_ICONS[level] || 'star';
-                return (
+          {/* Tournament Level - Accordion */}
+          <Animated.View entering={FadeInDown.duration(350).delay(350)} style={styles.sectionCard}>
+            <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowLevelSection(p => !p); }}>
+              <View style={[styles.sectionCardIcon, { backgroundColor: theme.success + '15' }]}>
+                <MaterialIcons name="signal-cellular-alt" size={18} color={theme.success} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionCardTitle}>{t('tournament', 'levelTitle')}</Text>
+                {tournamentLevel ? <Text style={[styles.accordionValueText, { color: theme.success }]}>{showCustomLevelInput ? customLevel : t('tournamentLevels', tournamentLevel)}</Text> : <Text style={styles.sectionCardSubtitle}>{t('tournament', 'levelSubtitle')}</Text>}
+              </View>
+              <MaterialIcons name={showLevelSection ? 'expand-less' : 'expand-more'} size={24} color={theme.textMuted} />
+            </Pressable>
+            {showLevelSection && (
+              <Animated.View entering={FadeInDown.duration(200)} style={styles.accordionContent}>
+                <View style={styles.levelGrid}>
+                  {config.tournamentLevels.map(level => {
+                    const isActive = tournamentLevel === level && !showCustomLevelInput;
+                    const ico = LEVEL_ICONS[level] || 'star';
+                    return (
+                      <Pressable
+                        key={level}
+                        style={[styles.levelChip, isActive && styles.levelChipActive]}
+                        onPress={() => { Haptics.selectionAsync(); setShowCustomLevelInput(false); setCustomLevel(''); setTournamentLevel(tournamentLevel === level ? undefined : level); }}
+                      >
+                        <MaterialIcons name={ico as any} size={14} color={isActive ? theme.success : theme.textMuted} />
+                        <Text style={[styles.levelChipText, isActive && styles.levelChipTextActive]} numberOfLines={1}>{t('tournamentLevels', level)}</Text>
+                      </Pressable>
+                    );
+                  })}
                   <Pressable
-                    key={level}
-                    style={[styles.levelChip, isActive && styles.levelChipActive]}
-                    onPress={() => { Haptics.selectionAsync(); setShowCustomLevelInput(false); setCustomLevel(''); setTournamentLevel(tournamentLevel === level ? undefined : level); }}
+                    style={[styles.levelChip, showCustomLevelInput && styles.levelChipActive]}
+                    onPress={() => { Haptics.selectionAsync(); setShowCustomLevelInput(prev => { const next = !prev; if (next) { setTournamentLevel(customLevel.trim() || undefined); } else { setCustomLevel(''); } return next; }); }}
                   >
-                    <MaterialIcons name={ico as any} size={14} color={isActive ? theme.success : theme.textMuted} />
-                    <Text style={[styles.levelChipText, isActive && styles.levelChipTextActive]} numberOfLines={1}>{t('tournamentLevels', level)}</Text>
+                    <MaterialIcons name="add" size={14} color={showCustomLevelInput ? theme.success : theme.textMuted} />
+                    <Text style={[styles.levelChipText, showCustomLevelInput && styles.levelChipTextActive]}>{t('tournament', 'otherLevel')}</Text>
                   </Pressable>
-                );
-              })}
-              <Pressable
-                style={[styles.levelChip, showCustomLevelInput && styles.levelChipActive]}
-                onPress={() => { Haptics.selectionAsync(); setShowCustomLevelInput(!showCustomLevelInput); if (!showCustomLevelInput) setTournamentLevel(undefined); }}
-              >
-                <MaterialIcons name="add" size={14} color={showCustomLevelInput ? theme.success : theme.textMuted} />
-                <Text style={[styles.levelChipText, showCustomLevelInput && styles.levelChipTextActive]}>{t('tournament', 'otherLevel')}</Text>
-              </Pressable>
-            </View>
-            {showCustomLevelInput && (
-              <Animated.View entering={FadeInDown.duration(250)} style={styles.customInput}>
-                <TextInput
-                  style={styles.customInputField}
-                  value={customLevel}
-                  onChangeText={(text) => { setCustomLevel(text); setTournamentLevel(text.trim() || undefined); }}
-                  placeholder={t('tournament', 'customLevelPlaceholder')}
-                  placeholderTextColor={theme.textMuted}
-                  autoFocus
-                />
-                {customLevel.trim() ? <MaterialIcons name="check-circle" size={18} color={theme.success} /> : null}
+                </View>
+                {showCustomLevelInput && (
+                  <Animated.View entering={FadeInDown.duration(250)} style={styles.customInput}>
+                    <TextInput
+                      style={styles.customInputField}
+                      value={customLevel}
+                      onChangeText={(text) => { setCustomLevel(text); setTournamentLevel(text.trim() || undefined); }}
+                      placeholder={t('tournament', 'customLevelPlaceholderLong')}
+                      placeholderTextColor={theme.textMuted}
+                      autoFocus
+                    />
+                    {customLevel.trim() ? <MaterialIcons name="check-circle" size={18} color={theme.success} /> : null}
+                  </Animated.View>
+                )}
               </Animated.View>
             )}
-          </SectionCard>
+          </Animated.View>
 
-          {/* Tournament Category */}
-          <SectionCard title={t('tournament', 'tournamentType')} icon="verified" color={theme.warning} delay={375}>
-            <View style={styles.chipGrid}>
-              {config.tournamentCategories.map(cat => {
-                const isActive = tournamentCategory === cat;
-                return (
-                  <Pressable
-                    key={cat}
-                    style={[styles.chipOutline, isActive && styles.chipOutlineActiveWarn]}
-                    onPress={() => { Haptics.selectionAsync(); setTournamentCategory(tournamentCategory === cat ? undefined : cat); }}
-                  >
-                    <Text style={[styles.chipOutlineText, isActive && styles.chipOutlineTextWarn]}>{t('tournamentCategories', cat)}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </SectionCard>
-
-          {/* Registration & Scope in one row */}
-          <View style={styles.twoColRow}>
-            <SectionCard title={t('tournament', 'registration')} icon="how-to-reg" color={theme.primary} delay={400}>
-              <View style={styles.chipGrid}>
-                {config.registrationTypes.map(reg => {
-                  const isActive = registrationType === reg;
-                  return (
-                    <Pressable
-                      key={reg}
-                      style={[styles.chipOutline, isActive && styles.chipOutlineActivePrimary]}
-                      onPress={() => { Haptics.selectionAsync(); setRegistrationType(registrationType === reg ? undefined : reg); }}
-                    >
-                      <Text style={[styles.chipOutlineText, isActive && styles.chipOutlineTextPrimary]}>{t('registrationTypes', reg)}</Text>
-                    </Pressable>
-                  );
-                })}
+          {/* Tournament Category - Accordion */}
+          <Animated.View entering={FadeInDown.duration(350).delay(375)} style={styles.sectionCard}>
+            <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowCategorySection(p => !p); }}>
+              <View style={[styles.sectionCardIcon, { backgroundColor: theme.warning + '15' }]}>
+                <MaterialIcons name="verified" size={18} color={theme.warning} />
               </View>
-            </SectionCard>
-          </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionCardTitle}>{t('tournament', 'tournamentType')}</Text>
+                {tournamentCategory ? <Text style={[styles.accordionValueText, { color: theme.warning }]}>{t('tournamentCategories', tournamentCategory)}</Text> : null}
+              </View>
+              <MaterialIcons name={showCategorySection ? 'expand-less' : 'expand-more'} size={24} color={theme.textMuted} />
+            </Pressable>
+            {showCategorySection && (
+              <Animated.View entering={FadeInDown.duration(200)} style={styles.accordionContent}>
+                <View style={styles.chipGrid}>
+                  {config.tournamentCategories.map(cat => {
+                    const isActive = tournamentCategory === cat;
+                    return (
+                      <Pressable
+                        key={cat}
+                        style={[styles.chipOutline, isActive && styles.chipOutlineActiveWarn]}
+                        onPress={() => { Haptics.selectionAsync(); setTournamentCategory(tournamentCategory === cat ? undefined : cat); }}
+                      >
+                        <Text style={[styles.chipOutlineText, isActive && styles.chipOutlineTextWarn]}>{t('tournamentCategories', cat)}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </Animated.View>
+            )}
+          </Animated.View>
 
-          <SectionCard title={t('tournament', 'scope')} subtitle={t('tournament', 'scopeSubtitle')} icon="public" color={theme.accent} delay={425}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
-              {config.tournamentScopes.map(scope => {
-                const isActive = tournamentScope === scope;
-                return (
-                  <Pressable
-                    key={scope}
-                    style={[styles.chipBtn, isActive && styles.chipBtnActiveAccent]}
-                    onPress={() => { Haptics.selectionAsync(); setTournamentScope(tournamentScope === scope ? undefined : scope); }}
-                  >
-                    <Text style={[styles.chipBtnText, isActive && styles.chipBtnTextAccent]}>{t('tournamentScopes', scope)}</Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </SectionCard>
+          {/* Registration - Accordion */}
+          <Animated.View entering={FadeInDown.duration(350).delay(400)} style={styles.sectionCard}>
+            <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowRegistrationSection(p => !p); }}>
+              <View style={[styles.sectionCardIcon, { backgroundColor: theme.primary + '15' }]}>
+                <MaterialIcons name="how-to-reg" size={18} color={theme.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionCardTitle}>{t('tournament', 'registration')}</Text>
+                {registrationType ? <Text style={[styles.accordionValueText, { color: theme.primary }]}>{t('registrationTypes', registrationType)}</Text> : null}
+              </View>
+              <MaterialIcons name={showRegistrationSection ? 'expand-less' : 'expand-more'} size={24} color={theme.textMuted} />
+            </Pressable>
+            {showRegistrationSection && (
+              <Animated.View entering={FadeInDown.duration(200)} style={styles.accordionContent}>
+                <View style={styles.chipGrid}>
+                  {config.registrationTypes.map(reg => {
+                    const isActive = registrationType === reg;
+                    return (
+                      <Pressable
+                        key={reg}
+                        style={[styles.chipOutline, isActive && styles.chipOutlineActivePrimary]}
+                        onPress={() => { Haptics.selectionAsync(); setRegistrationType(registrationType === reg ? undefined : reg); }}
+                      >
+                        <Text style={[styles.chipOutlineText, isActive && styles.chipOutlineTextPrimary]}>{t('registrationTypes', reg)}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </Animated.View>
+            )}
+          </Animated.View>
 
-          {/* =================== DÉTAILS =================== */}
+          {/* Scope - Accordion */}
+          <Animated.View entering={FadeInDown.duration(350).delay(425)} style={styles.sectionCard}>
+            <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowScopeSection(p => !p); }}>
+              <View style={[styles.sectionCardIcon, { backgroundColor: theme.accent + '15' }]}>
+                <MaterialIcons name="public" size={18} color={theme.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionCardTitle}>{t('tournament', 'scope')}</Text>
+                {tournamentScope ? <Text style={[styles.accordionValueText, { color: theme.accent }]}>{t('tournamentScopes', tournamentScope)}</Text> : <Text style={styles.sectionCardSubtitle}>{t('tournament', 'scopeSubtitle')}</Text>}
+              </View>
+              <MaterialIcons name={showScopeSection ? 'expand-less' : 'expand-more'} size={24} color={theme.textMuted} />
+            </Pressable>
+            {showScopeSection && (
+              <Animated.View entering={FadeInDown.duration(200)} style={styles.accordionContent}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
+                  {config.tournamentScopes.map(scope => {
+                    const isActive = tournamentScope === scope;
+                    return (
+                      <Pressable
+                        key={scope}
+                        style={[styles.chipBtn, isActive && styles.chipBtnActiveAccent]}
+                        onPress={() => { Haptics.selectionAsync(); setTournamentScope(tournamentScope === scope ? undefined : scope); }}
+                      >
+                        <Text style={[styles.chipBtnText, isActive && styles.chipBtnTextAccent]}>{t('tournamentScopes', scope)}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </Animated.View>
+            )}
+          </Animated.View>
 
-          {/* Participants */}
-          <SectionCard title={t('tournament', 'maxParticipants')} icon="people-outline" color={theme.carreauColor} delay={450}>
-            <View style={styles.participantsRow}>
-              {['8', '16', '24', '32', '48', '64', '128'].map(num => {
-                const isActive = maxParticipants === num;
-                return (
-                  <Pressable
-                    key={num}
-                    style={[styles.participantPill, isActive && styles.participantPillActive]}
-                    onPress={() => { Haptics.selectionAsync(); setMaxParticipants(num); }}
-                  >
-                    <Text style={[styles.participantPillText, isActive && styles.participantPillTextActive]}>{num}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </SectionCard>
+          {/* =================== DÉTAILS (ACCORDIONS) =================== */}
 
-          {/* Financial & Prize */}
-          <SectionCard title={t('tournament', 'finances')} subtitle={t('tournament', 'financesSubtitle')} icon="payments" color={theme.carreauColor} delay={475}>
-            <View style={styles.financeRow}>
-              <View style={styles.financeField}>
-                <Text style={styles.financeLabel}>{t('tournament', 'registrationCost')}</Text>
+          {/* Participants - Accordion */}
+          <Animated.View entering={FadeInDown.duration(350).delay(450)} style={styles.sectionCard}>
+            <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowParticipantsSection(p => !p); }}>
+              <View style={[styles.sectionCardIcon, { backgroundColor: theme.carreauColor + '15' }]}>
+                <MaterialIcons name="people-outline" size={18} color={theme.carreauColor} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionCardTitle}>{t('tournament', 'maxParticipants')}</Text>
+                <Text style={[styles.accordionValueText, { color: theme.carreauColor }]}>{maxParticipants}</Text>
+              </View>
+              <MaterialIcons name={showParticipantsSection ? 'expand-less' : 'expand-more'} size={24} color={theme.textMuted} />
+            </Pressable>
+            {showParticipantsSection && (
+              <Animated.View entering={FadeInDown.duration(200)} style={styles.accordionContent}>
+                <View style={styles.participantsRow}>
+                  {['8', '16', '24', '32', '48', '64', '128'].map(num => {
+                    const isActive = maxParticipants === num;
+                    return (
+                      <Pressable
+                        key={num}
+                        style={[styles.participantPill, isActive && styles.participantPillActive]}
+                        onPress={() => { Haptics.selectionAsync(); setMaxParticipants(num); }}
+                      >
+                        <Text style={[styles.participantPillText, isActive && styles.participantPillTextActive]}>{num}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </Animated.View>
+            )}
+          </Animated.View>
+
+          {/* Financial & Prize - Accordion */}
+          <Animated.View entering={FadeInDown.duration(350).delay(475)} style={styles.sectionCard}>
+            <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowFinancesSection(p => !p); }}>
+              <View style={[styles.sectionCardIcon, { backgroundColor: theme.carreauColor + '15' }]}>
+                <MaterialIcons name="payments" size={18} color={theme.carreauColor} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionCardTitle}>{t('tournament', 'finances')}</Text>
+                {(registrationCost || prize) ? <Text style={[styles.accordionValueText, { color: theme.carreauColor }]}>{registrationCost ? `${registrationCost}\u20ac` : ''}{registrationCost && prize ? ' \u2022 ' : ''}{prize || ''}</Text> : <Text style={styles.sectionCardSubtitle}>{t('tournament', 'financesSubtitle')}</Text>}
+              </View>
+              <MaterialIcons name={showFinancesSection ? 'expand-less' : 'expand-more'} size={24} color={theme.textMuted} />
+            </Pressable>
+            {showFinancesSection && (
+              <Animated.View entering={FadeInDown.duration(200)} style={styles.accordionContent}>
+                <View style={styles.financeRow}>
+                  <View style={styles.financeField}>
+                    <Text style={styles.financeLabel}>{t('tournament', 'registrationCost')}</Text>
+                    <TextInput
+                      style={styles.financeInput}
+                      value={registrationCost}
+                      onChangeText={setRegistrationCost}
+                      placeholder="0"
+                      placeholderTextColor={theme.textMuted}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <View style={styles.financeField}>
+                    <Text style={styles.financeLabel}>{t('tournament', 'prize')}</Text>
+                    <TextInput
+                      style={styles.financeInput}
+                      value={prize}
+                      onChangeText={setPrize}
+                      placeholder={t('tournament', 'prizePlaceholder')}
+                      placeholderTextColor={theme.textMuted}
+                    />
+                  </View>
+                </View>
+              </Animated.View>
+            )}
+          </Animated.View>
+
+          {/* Description - Accordion */}
+          <Animated.View entering={FadeInDown.duration(350).delay(500)} style={styles.sectionCard}>
+            <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowDescriptionSection(p => !p); }}>
+              <View style={[styles.sectionCardIcon, { backgroundColor: theme.textSecondary + '15' }]}>
+                <MaterialIcons name="description" size={18} color={theme.textSecondary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionCardTitle}>{t('tournament', 'description')}</Text>
+                {description.trim() ? <Text style={styles.accordionValueText} numberOfLines={1}>{description.trim()}</Text> : <Text style={styles.sectionCardSubtitle}>{t('tournament', 'descriptionSubtitle')}</Text>}
+              </View>
+              <MaterialIcons name={showDescriptionSection ? 'expand-less' : 'expand-more'} size={24} color={theme.textMuted} />
+            </Pressable>
+            {showDescriptionSection && (
+              <Animated.View entering={FadeInDown.duration(200)} style={styles.accordionContent}>
                 <TextInput
-                  style={styles.financeInput}
-                  value={registrationCost}
-                  onChangeText={setRegistrationCost}
-                  placeholder="0"
+                  style={[styles.textInput, styles.textArea]}
+                  value={description}
+                  onChangeText={setDescription}
+                  placeholder={t('tournament', 'descriptionPlaceholder')}
                   placeholderTextColor={theme.textMuted}
-                  keyboardType="numeric"
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
                 />
-              </View>
-              <View style={styles.financeField}>
-                <Text style={styles.financeLabel}>{t('tournament', 'prize')}</Text>
-                <TextInput
-                  style={styles.financeInput}
-                  value={prize}
-                  onChangeText={setPrize}
-                  placeholder={t('tournament', 'prizePlaceholder')}
-                  placeholderTextColor={theme.textMuted}
-                />
-              </View>
-            </View>
-          </SectionCard>
-
-          {/* Description */}
-          <SectionCard title={t('tournament', 'description')} subtitle={t('tournament', 'descriptionSubtitle')} icon="description" color={theme.textSecondary} delay={500}>
-            <TextInput
-              style={[styles.textInput, styles.textArea]}
-              value={description}
-              onChangeText={setDescription}
-              placeholder={t('tournament', 'descriptionPlaceholder')}
-              placeholderTextColor={theme.textMuted}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />
-          </SectionCard>
+              </Animated.View>
+            )}
+          </Animated.View>
 
         </ScrollView>
 
@@ -891,6 +997,10 @@ const styles = StyleSheet.create({
 
   // Two col
   twoColRow: {},
+  // Accordion
+  accordionHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
+  accordionContent: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: theme.border },
+  accordionValueText: { fontSize: 12, fontWeight: '600' as const, color: theme.textSecondary, marginTop: 2 },
 
   // Footer
   footer: {
