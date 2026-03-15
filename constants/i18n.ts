@@ -1036,6 +1036,7 @@ export const translations = {
     noActivity: { fr: 'Aucune activité ne correspond à vos filtres', en: 'No activity matches your filters' },
     resetFilters: { fr: 'Réinitialiser', en: 'Reset' },
     challengeDetails: { fr: 'Détails du défi', en: 'Challenge details' },
+     matchDetails: { fr: 'Détails du match', en: 'Match Details' },
     radarComparison: { fr: 'Comparaison 1v1', en: '1v1 Comparison' },
     radarSuccessRate: { fr: 'Reussite', en: 'Success' },
     radarCarreaux: { fr: 'Carreaux', en: 'Carreaux' },

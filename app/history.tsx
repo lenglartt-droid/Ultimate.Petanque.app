@@ -465,7 +465,7 @@ const ChallengeStatsSummary = React.memo(({ challenges, t }: { challenges: Chall
 
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
-  const { matches, challenges, deleteChallenge, updateChallenge, refreshData, boulesSets, terrains } = useApp();
+  const { matches, challenges, deleteChallenge, updateChallenge, deleteMatch, refreshData, boulesSets, terrains } = useApp();
   const { t, language } = useLanguage();
   
   const [contentFilter, setContentFilter] = useState<ContentFilter>('all');
@@ -483,6 +483,7 @@ export default function HistoryScreen() {
   const [editTotalPoints, setEditTotalPoints] = useState('');
   const [savingChallenge, setSavingChallenge] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [showMatchShare, setShowMatchShare] = useState(false);
 
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
   useEffect(() => {
@@ -1025,8 +1026,8 @@ export default function HistoryScreen() {
           </View>
           
           {editingChallenge && (
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} enabled={isEditingChallengeFields}>
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 80 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" bounces nestedScrollEnabled>
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} enabled={isEditingChallengeFields}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 80 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               {/* Challenge Header Card */}
               <View style={styles.detailHeaderCard}>
                 <View style={styles.detailHeaderTop}>
@@ -1050,14 +1051,7 @@ export default function HistoryScreen() {
                       })}
                     </Text>
                   </View>
-                  {!isEditingChallengeFields ? (
-                    <Pressable
-                      style={styles.cdEditBtn}
-                      onPress={() => setIsEditingChallengeFields(true)}
-                    >
-                      <MaterialIcons name="edit" size={18} color={theme.primary} />
-                    </Pressable>
-                  ) : null}
+
                 </View>
                 {/* Mode badges */}
                 <View style={styles.detailHeaderBadges}>
@@ -1581,20 +1575,6 @@ export default function HistoryScreen() {
                 )}
               </View>
 
-              {/* Share button */}
-              {!isEditingChallengeFields ? (
-                <Pressable
-                  style={styles.shareParticipantsBtn}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setShowChallengeShare(true);
-                  }}
-                >
-                  <MaterialIcons name="share" size={18} color={theme.primary} />
-                  <Text style={styles.shareParticipantsBtnText}>{t('matchEdit', 'shareWithParticipants')}</Text>
-                </Pressable>
-              ) : null}
-
               {/* Actions */}
               {isEditingChallengeFields ? (
                 <View style={styles.detailActions}>
@@ -1609,15 +1589,31 @@ export default function HistoryScreen() {
                   </Pressable>
                 </View>
               ) : (
-                <View style={styles.detailActions}>
-                  <Pressable style={styles.deleteBtn} onPress={handleDeleteChallenge}>
-                    <MaterialIcons name="delete" size={18} color={theme.error} />
-                    <Text style={styles.deleteBtnText}>{t('common', 'delete')}</Text>
+                <>
+                  <Pressable
+                    style={styles.shareParticipantsBtn}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setShowChallengeShare(true);
+                    }}
+                  >
+                    <MaterialIcons name="share" size={18} color={theme.primary} />
+                    <Text style={styles.shareParticipantsBtnText}>{t('matchEdit', 'shareWithParticipants')}</Text>
                   </Pressable>
-                  <Pressable style={styles.closeBtn} onPress={() => { setEditingChallenge(null); setIsEditingChallengeFields(false); }}>
-                    <Text style={styles.closeBtnText}>{t('common', 'close')}</Text>
-                  </Pressable>
-                </View>
+                  <View style={styles.detailActions}>
+                    <Pressable style={styles.deleteBtn} onPress={handleDeleteChallenge}>
+                      <MaterialIcons name="delete" size={18} color={theme.error} />
+                      <Text style={styles.deleteBtnText}>{t('common', 'delete')}</Text>
+                    </Pressable>
+                    <Pressable style={styles.closeBtn} onPress={() => {
+                      Haptics.selectionAsync();
+                      setIsEditingChallengeFields(true);
+                    }}>
+                      <MaterialIcons name="edit" size={18} color="#FFF" />
+                      <Text style={styles.closeBtnText}>{t('match', 'editMatch') || (language === 'fr' ? 'Modifier' : 'Edit')}</Text>
+                    </Pressable>
+                  </View>
+                </>
               )}
             </ScrollView>
             </KeyboardAvoidingView>
@@ -1635,7 +1631,7 @@ export default function HistoryScreen() {
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <View style={{ width: 36 }} />
-            <Text style={styles.modalTitle}>{t('history', 'matchDetails') || (language === 'fr' ? 'Détails du match' : 'Match Details')}</Text>
+            <Text style={styles.modalTitle}>{t('history', 'matchDetails')}</Text>
             <Pressable style={styles.modalClose} onPress={() => setViewingMatch(null)}>
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>
@@ -1868,6 +1864,18 @@ export default function HistoryScreen() {
                   </View>
                 ) : null}
 
+                {/* Share button */}
+                <Pressable
+                  style={styles.shareParticipantsBtn}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setShowMatchShare(true);
+                  }}
+                >
+                  <MaterialIcons name="share" size={18} color={theme.primary} />
+                  <Text style={styles.shareParticipantsBtnText}>{t('matchEdit', 'shareWithParticipants')}</Text>
+                </Pressable>
+
                 {/* Actions */}
                 <View style={styles.detailActions}>
                   <Pressable style={styles.deleteBtn} onPress={() => {
@@ -1906,6 +1914,17 @@ export default function HistoryScreen() {
           itemType="challenge"
           itemId={editingChallenge.id}
           itemName={`${t('challenge', CHALLENGE_CONFIG[editingChallenge.type].nameKey)} - ${editingChallenge.playerName || ''}`}
+        />
+      ) : null}
+
+      {/* Match Share Modal */}
+      {viewingMatch ? (
+        <ShareModal
+          visible={showMatchShare}
+          onClose={() => setShowMatchShare(false)}
+          itemType="match"
+          itemId={viewingMatch.id}
+          itemName={`${viewingMatch.teamA.playerNames.join(', ')} vs ${viewingMatch.teamB.playerNames.join(', ')}`}
         />
       ) : null}
     </SafeAreaView>
