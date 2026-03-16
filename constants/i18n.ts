@@ -771,6 +771,14 @@ export const translations = {
     importing: { fr: 'Import en cours...', en: 'Importing...' },
     importSuccess: { fr: 'Fiche importée dans votre annuaire', en: 'Card imported into your directory' },
     visibility: { fr: 'Visibilité', en: 'Visibility' },
+    // Duplicate detection keys for creation/edit pages
+    checkingDuplicates: { fr: 'Vérification des doublons...', en: 'Checking for duplicates...' },
+    nameMatch: { fr: 'Nom similaire', en: 'Similar name' },
+    mergeWithPublic: { fr: 'Fusionner avec cette fiche', en: 'Merge with this card' },
+    keepMine: { fr: 'Garder ma version', en: 'Keep my version' },
+    mergeSuccess: { fr: 'Fusion appliquée', en: 'Merge applied' },
+    myData: { fr: 'Mes données', en: 'My data' },
+    publicData: { fr: 'Données publiques', en: 'Public data' },
   },
 
   // ============================================
@@ -1147,6 +1155,15 @@ export const translations = {
     membership: { fr: 'Cotisation', en: 'Membership' },
     viewOnMap: { fr: 'Voir sur la carte', en: 'View on map' },
     organizedTournaments: { fr: 'Tournois organisés', en: 'Organized tournaments' },
+    // Facility keys for club creation/edit
+    facilityOutdoor: { fr: 'Terrains extérieurs', en: 'Outdoor courts' },
+    facilityCovered: { fr: 'Couvert', en: 'Covered' },
+    facilityClubhouse: { fr: 'Club house', en: 'Clubhouse' },
+    facilityBar: { fr: 'Bar / Buvette', en: 'Bar / Snack bar' },
+    facilityParking: { fr: 'Parking', en: 'Parking' },
+    facilityChanging: { fr: 'Vestiaires', en: 'Changing rooms' },
+    facilityLighting: { fr: 'Éclairage', en: 'Lighting' },
+    facilitySchool: { fr: 'École de pétanque', en: 'Petanque school' },
   },
 
   // ============================================
