@@ -28,6 +28,7 @@ import SharedBadge from '@/components/ui/SharedBadge';
 import MergePickerModal from '@/components/ui/MergePickerModal';
 import { isSharedWithMe, saveSharedItemToMyAccount } from '@/services/shareService';
 import { toggleItemPublic } from '@/services/publicItemsService';
+import { getMeetupsForTerrain, Meetup } from '@/services/meetupService';
 import { useAlert } from '@/template';
 import { useAuth } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -179,6 +180,20 @@ export default function TerrainDetailScreen() {
 
   // Get tournaments at this terrain
   const terrainTournaments = tournaments.filter(t => t.terrainId === terrain.id);
+
+  // Meetups state
+  const [meetups, setMeetups] = useState<Meetup[]>([]);
+  const [meetupsLoading, setMeetupsLoading] = useState(false);
+
+  useEffect(() => {
+    if (terrain?.id) {
+      setMeetupsLoading(true);
+      getMeetupsForTerrain(terrain.id).then(({ meetups: m }) => {
+        setMeetups(m);
+        setMeetupsLoading(false);
+      });
+    }
+  }, [terrain?.id]);
 
   // Check if terrain has photos
   const hasPhotos = terrain.photos && terrain.photos.length > 0;
@@ -502,6 +517,55 @@ export default function TerrainDetailScreen() {
         </Animated.View>
 
         </View>
+
+        {/* Upcoming Meetups */}
+        <Animated.View entering={FadeInDown.duration(400).delay(370)} style={styles.section}>
+          <View style={styles.meetupSectionHeader}>
+            <Text style={styles.sectionTitle}>{t('meetup', 'upcomingMeetups').toUpperCase()}</Text>
+            <Pressable
+              style={styles.meetupAddBtn}
+              onPress={() => router.push({ pathname: '/meetup/new', params: { terrainId: terrain.id } } as any)}
+            >
+              <MaterialIcons name="add" size={18} color={theme.primary} />
+              <Text style={styles.meetupAddBtnText}>{t('meetup', 'createMeetupShort')}</Text>
+            </Pressable>
+          </View>
+          {meetups.length > 0 ? (
+            meetups.slice(0, 5).map((m, idx) => {
+              const mDate = new Date(m.date);
+              const isOwner = user && m.creator_id === user.id;
+              return (
+                <Pressable
+                  key={m.id}
+                  style={styles.meetupCard}
+                  onPress={() => router.push(`/meetup/${m.id}` as any)}
+                >
+                  <View style={styles.meetupDateBadge}>
+                    <Text style={styles.meetupDateDay}>{mDate.getDate()}</Text>
+                    <Text style={styles.meetupDateMonth}>{mDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}</Text>
+                  </View>
+                  <View style={styles.meetupCardContent}>
+                    <Text style={styles.meetupCardTitle} numberOfLines={1}>{m.title}</Text>
+                    <Text style={styles.meetupCardTime}>
+                      {mDate.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </View>
+                  {isOwner ? (
+                    <View style={styles.meetupOwnerBadge}>
+                      <MaterialIcons name="person" size={12} color={theme.primary} />
+                    </View>
+                  ) : null}
+                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                </Pressable>
+              );
+            })
+          ) : (
+            <View style={styles.meetupEmptyCard}>
+              <MaterialIcons name="event" size={32} color={theme.textMuted} />
+              <Text style={styles.meetupEmptyText}>{t('meetup', 'noMeetups')}</Text>
+            </View>
+          )}
+        </Animated.View>
 
         {/* Upcoming Tournaments */}
         {terrainTournaments.length > 0 && (
@@ -1178,6 +1242,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+
+  // Meetup section
+  meetupSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  meetupAddBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.primary + '12', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
+  meetupAddBtnText: { fontSize: 12, fontWeight: '700', color: theme.primary },
+  meetupCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: 14, padding: 14, marginBottom: 10, gap: 12, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border },
+  meetupDateBadge: { width: 48, height: 48, borderRadius: 12, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center' },
+  meetupDateDay: { fontSize: 18, fontWeight: '900', color: theme.primary, lineHeight: 20 },
+  meetupDateMonth: { fontSize: 9, fontWeight: '700', color: theme.primary, letterSpacing: 0.5 },
+  meetupCardContent: { flex: 1 },
+  meetupCardTitle: { fontSize: 15, fontWeight: '600', color: theme.textPrimary, marginBottom: 2 },
+  meetupCardTime: { fontSize: 13, color: theme.textSecondary },
+  meetupOwnerBadge: { width: 24, height: 24, borderRadius: 12, backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center' },
+  meetupEmptyCard: { alignItems: 'center', backgroundColor: theme.surface, borderRadius: 14, paddingVertical: 24, gap: 8, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border },
+  meetupEmptyText: { fontSize: 14, color: theme.textMuted },
 
   // ===== Preview Modal =====
   pvOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' as const },

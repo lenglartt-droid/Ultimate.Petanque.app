@@ -2326,6 +2326,57 @@ export const translations = {
   },
 
   // ============================================
+  // MEETUP
+  // ============================================
+  meetup: {
+    newMeetup: { fr: 'Nouveau Rendez-vous', en: 'New Meetup' },
+    meetupLabel: { fr: 'Rendez-vous', en: 'Meetup' },
+    meetupCreated: { fr: 'RDV créé !', en: 'Meetup created!' },
+    meetupTitle: { fr: 'Titre du RDV', en: 'Meetup title' },
+    titlePlaceholder: { fr: 'Ex: Partie du dimanche', en: 'Ex: Sunday game' },
+    titleRequired: { fr: 'Le titre est requis', en: 'Title is required' },
+    terrain: { fr: 'Terrain', en: 'Court' },
+    terrainRequired: { fr: 'Le terrain est requis', en: 'Court is required' },
+    dateAndTime: { fr: 'Date et heure', en: 'Date and time' },
+    dateMustBeFuture: { fr: 'La date doit être dans le futur', en: 'Date must be in the future' },
+    maxParticipants: { fr: 'Participants max', en: 'Max participants' },
+    notesLabel: { fr: 'Notes', en: 'Notes' },
+    notesPlaceholder: { fr: 'Informations complémentaires...', en: 'Additional information...' },
+    createMeetup: { fr: 'Créer le rendez-vous', en: 'Create meetup' },
+    shareCodeLabel: { fr: 'Code de partage', en: 'Share code' },
+    copyCode: { fr: 'Copier le code', en: 'Copy code' },
+    codeCopied: { fr: 'Code copié dans le presse-papier', en: 'Code copied to clipboard' },
+    shareCodeToInvite: { fr: 'Partagez ce code avec les joueurs que vous souhaitez inviter', en: 'Share this code with players you want to invite' },
+    shareInstructions: { fr: 'Les joueurs peuvent rejoindre le RDV en saisissant ce code dans Profil > Code de partage ou en ouvrant directement la page du rendez-vous.', en: 'Players can join the meetup by entering this code in Profile > Share code or by opening the meetup page directly.' },
+    participants: { fr: 'Participants', en: 'Participants' },
+    accepted: { fr: 'Confirmé', en: 'Confirmed' },
+    declined: { fr: 'Décliné', en: 'Declined' },
+    pending: { fr: 'En attente', en: 'Pending' },
+    accept: { fr: 'Accepter', en: 'Accept' },
+    decline: { fr: 'Décliner', en: 'Decline' },
+    cancelMeetup: { fr: 'Annuler le RDV', en: 'Cancel meetup' },
+    cancelConfirm: { fr: 'Voulez-vous annuler ce rendez-vous ? Les participants seront informés.', en: 'Do you want to cancel this meetup? Participants will be notified.' },
+    deleteMeetup: { fr: 'Supprimer le RDV', en: 'Delete meetup' },
+    deleteConfirm: { fr: 'Supprimer définitivement ce rendez-vous ?', en: 'Permanently delete this meetup?' },
+    meetupNotFound: { fr: 'Rendez-vous introuvable', en: 'Meetup not found' },
+    meetupPassed: { fr: 'Ce rendez-vous est passé', en: 'This meetup has passed' },
+    meetupCancelled: { fr: 'Ce rendez-vous a été annulé', en: 'This meetup has been cancelled' },
+    noResponsesYet: { fr: 'Aucune réponse pour le moment', en: 'No responses yet' },
+    unknownUser: { fr: 'Utilisateur', en: 'User' },
+    upcomingMeetups: { fr: 'Prochains RDV', en: 'Upcoming meetups' },
+    noMeetups: { fr: 'Aucun rendez-vous prévu', en: 'No meetups scheduled' },
+    createMeetupShort: { fr: 'Planifier un RDV', en: 'Plan a meetup' },
+    joinMeetup: { fr: 'Rejoindre un RDV', en: 'Join a meetup' },
+    enterMeetupCode: { fr: 'Saisir un code de RDV', en: 'Enter meetup code' },
+    enterCodePlaceholder: { fr: 'Code RDV (ex: RDV-ABC123)', en: 'Meetup code (ex: RDV-ABC123)' },
+    invalidCode: { fr: 'Code introuvable ou expiré', en: 'Code not found or expired' },
+    confirmedCount: { fr: 'confirmé(s)', en: 'confirmed' },
+    seeDetails: { fr: 'Voir le détail', en: 'See details' },
+    yourMeetup: { fr: 'Votre RDV', en: 'Your meetup' },
+    invited: { fr: 'Invité', en: 'Invited' },
+  },
+
+  // ============================================
   // FAQ
   // ============================================
   faq: {

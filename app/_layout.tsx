@@ -163,6 +163,20 @@ function LayoutInner() {
                 }} 
               />
               <Stack.Screen 
+                name="meetup/new" 
+                options={{ 
+                  presentation: 'modal',
+                  animation: 'slide_from_bottom',
+                }} 
+              />
+              <Stack.Screen 
+                name="meetup/[id]" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="history" 
                 options={{ 
                   presentation: 'card',
