@@ -883,6 +883,9 @@ export const translations = {
     removeFederationCard: { fr: 'Supprimer la carte de fédération ?', en: 'Remove federation card?' },
     federationCardRemoved: { fr: 'Carte de fédération supprimée', en: 'Federation card removed' },
     addFederationCard: { fr: 'Ajouter la carte de fédération', en: 'Add federation card' },
+    viewFullscreen: { fr: 'Voir en plein écran', en: 'View fullscreen' },
+    uploadingCard: { fr: 'Chargement de la carte...', en: 'Uploading card...' },
+    replaceFederationCard: { fr: 'Remplacer la carte', en: 'Replace card' },
   },
 
   // ============================================
@@ -2000,6 +2003,16 @@ export const translations = {
     confirmPassword: { fr: 'Confirmer le mot de passe', en: 'Confirm password' },
     retypePassword: { fr: 'Retapez le mot de passe', en: 'Retype password' },
     changeBtn: { fr: 'Changer le mot de passe', en: 'Change password' },
+  },
+
+  // ============================================
+  // TERRAIN ENVIRONMENT
+  // ============================================
+  terrainEnv: {
+    indoorLabel: { fr: 'Intérieur (Boulodrome)', en: 'Indoor (Boulodrome)' },
+    indoorDesc: { fr: 'Terrain couvert, jeu toute saison', en: 'Covered court, all-season play' },
+    outdoorLabel: { fr: 'Extérieur', en: 'Outdoor' },
+    outdoorDesc: { fr: 'Terrain en plein air', en: 'Open-air court' },
   },
 
   // ============================================
