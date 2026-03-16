@@ -267,6 +267,16 @@ export default function HomeScreen() {
           </LinearGradient>
         </Animated.View>
 
+        {/* ========== BRAND BANNER ========== */}
+        <Animated.View entering={FadeInDown.duration(400).delay(40)} style={[styles.bannerSection, isTablet && styles.sectionTablet]}>
+          <Image
+            source={require('@/assets/images/banner-home.png')}
+            style={styles.bannerImage}
+            contentFit="cover"
+            transition={200}
+          />
+        </Animated.View>
+
         {/* ========== QUICK ACTIONS ========== */}
         <Animated.View entering={FadeInDown.duration(400).delay(80)} style={[styles.section, isTablet && styles.sectionTablet]}>
           <Text style={styles.sectionTitle}>{t('home', 'whatDoYouWant')}</Text>
@@ -344,74 +354,6 @@ export default function HomeScreen() {
                   </View>
                 ) : null}
               </LinearGradient>
-            </Pressable>
-          </Animated.View>
-        ) : null}
-
-        {/* ========== LAST 3 RESULTS TIMELINE ========== */}
-        {recentResults.length > 0 ? (
-          <Animated.View entering={FadeInDown.duration(400).delay(200)} style={[styles.section, isTablet && styles.sectionTablet]}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>{t('history', 'history')}</Text>
-              <Pressable onPress={() => router.push('/history')}>
-                <Text style={styles.seeAllBtn}>{t('common', 'seeAll')}</Text>
-              </Pressable>
-            </View>
-            <View style={styles.timeline}>
-              {recentResults.map((item, idx) => {
-                const d = new Date(item.date);
-                const isLast = idx === recentResults.length - 1;
-                return (
-                  <Pressable
-                    key={item.id}
-                    style={({ pressed }) => [styles.timelineItem, pressed && { opacity: 0.85 }]}
-                    onPress={() => item.type === 'match' ? router.push(`/match/${item.id}`) : router.push('/history')}
-                  >
-                    {/* Timeline line */}
-                    <View style={styles.timelineLine}>
-                      <View style={[styles.timelineDot, { backgroundColor: resultColor(item.result) }]}>
-                        <MaterialIcons
-                          name={item.result === 'win' ? 'check' : item.result === 'loss' ? 'close' : 'remove'}
-                          size={12}
-                          color="#FFF"
-                        />
-                      </View>
-                      {!isLast ? <View style={styles.timelineConnector} /> : null}
-                    </View>
-                    {/* Content */}
-                    <View style={styles.timelineContent}>
-                      <View style={styles.timelineContentTop}>
-                        <View style={[styles.timelineTypeIcon, { backgroundColor: (item.type === 'match' ? theme.primary : theme.accent) + '12' }]}>
-                          <MaterialIcons name={item.icon} size={16} color={item.type === 'match' ? theme.primary : theme.accent} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.timelineTitle} numberOfLines={1}>{item.title}</Text>
-                          <Text style={styles.timelineSub} numberOfLines={1}>{item.subtitle}</Text>
-                        </View>
-                        <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={[styles.timelineScore, { color: resultColor(item.result) }]}>{item.score}</Text>
-                          <Text style={[styles.timelineResult, { color: resultColor(item.result) }]}>{resultLabel(item.result)}</Text>
-                        </View>
-                      </View>
-                      <Text style={styles.timelineDate}>
-                        {d.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </Animated.View>
-        ) : (matches.length === 0 && challenges.length === 0) ? (
-          <Animated.View entering={FadeIn.duration(500).delay(200)} style={[styles.emptyCard, isTablet && styles.emptyCardTablet]}>
-            <View style={styles.emptyIconBg}>
-              <MaterialIcons name="sports" size={44} color={theme.primary} />
-            </View>
-            <Text style={styles.emptyTitle}>{t('home', 'welcomeTitle')}</Text>
-            <Text style={styles.emptyText}>{t('home', 'welcomeText')}</Text>
-            <Pressable style={styles.emptyCta} onPress={() => router.push('/match/new')}>
-              <MaterialIcons name="play-arrow" size={20} color="#FFF" />
-              <Text style={styles.emptyCtaText}>{t('home', 'firstMatch')}</Text>
             </Pressable>
           </Animated.View>
         ) : null}
@@ -528,17 +470,74 @@ export default function HomeScreen() {
           ) : null}
         </Animated.View>
 
+        {/* ========== LAST 3 RESULTS TIMELINE ========== */}
+        {recentResults.length > 0 ? (
+          <Animated.View entering={FadeInDown.duration(400).delay(380)} style={[styles.section, isTablet && styles.sectionTablet]}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>{t('history', 'history')}</Text>
+              <Pressable onPress={() => router.push('/history')}>
+                <Text style={styles.seeAllBtn}>{t('common', 'seeAll')}</Text>
+              </Pressable>
+            </View>
+            <View style={styles.timeline}>
+              {recentResults.map((item, idx) => {
+                const d = new Date(item.date);
+                const isLast = idx === recentResults.length - 1;
+                return (
+                  <Pressable
+                    key={item.id}
+                    style={({ pressed }) => [styles.timelineItem, pressed && { opacity: 0.85 }]}
+                    onPress={() => item.type === 'match' ? router.push(`/match/${item.id}`) : router.push('/history')}
+                  >
+                    <View style={styles.timelineLine}>
+                      <View style={[styles.timelineDot, { backgroundColor: resultColor(item.result) }]}>
+                        <MaterialIcons
+                          name={item.result === 'win' ? 'check' : item.result === 'loss' ? 'close' : 'remove'}
+                          size={12}
+                          color="#FFF"
+                        />
+                      </View>
+                      {!isLast ? <View style={styles.timelineConnector} /> : null}
+                    </View>
+                    <View style={styles.timelineContent}>
+                      <View style={styles.timelineContentTop}>
+                        <View style={[styles.timelineTypeIcon, { backgroundColor: (item.type === 'match' ? theme.primary : theme.accent) + '12' }]}>
+                          <MaterialIcons name={item.icon} size={16} color={item.type === 'match' ? theme.primary : theme.accent} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.timelineTitle} numberOfLines={1}>{item.title}</Text>
+                          <Text style={styles.timelineSub} numberOfLines={1}>{item.subtitle}</Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={[styles.timelineScore, { color: resultColor(item.result) }]}>{item.score}</Text>
+                          <Text style={[styles.timelineResult, { color: resultColor(item.result) }]}>{resultLabel(item.result)}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.timelineDate}>
+                        {d.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Animated.View>
+        ) : (matches.length === 0 && challenges.length === 0) ? (
+          <Animated.View entering={FadeIn.duration(500).delay(380)} style={[styles.emptyCard, isTablet && styles.emptyCardTablet]}>
+            <View style={styles.emptyIconBg}>
+              <MaterialIcons name="sports" size={44} color={theme.primary} />
+            </View>
+            <Text style={styles.emptyTitle}>{t('home', 'welcomeTitle')}</Text>
+            <Text style={styles.emptyText}>{t('home', 'welcomeText')}</Text>
+            <Pressable style={styles.emptyCta} onPress={() => router.push('/match/new')}>
+              <MaterialIcons name="play-arrow" size={20} color="#FFF" />
+              <Text style={styles.emptyCtaText}>{t('home', 'firstMatch')}</Text>
+            </Pressable>
+          </Animated.View>
+        ) : null}
+
         {/* Ad Banner */}
         <AdBanner position="inline" />
-
-        {/* History Button */}
-        <Animated.View entering={FadeInDown.duration(400).delay(380)} style={[styles.section, isTablet && styles.sectionTablet]}>
-          <Pressable style={({ pressed }) => [styles.historyBtn, pressed && styles.historyBtnPressed]} onPress={() => router.push('/history')}>
-            <MaterialIcons name="history" size={22} color={theme.primary} />
-            <Text style={styles.historyBtnText}>{t('home', 'viewHistory')}</Text>
-            <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-          </Pressable>
-        </Animated.View>
       </ScrollView>
 
       {/* ========== JOIN MEETUP MODAL ========== */}
@@ -815,10 +814,9 @@ const styles = StyleSheet.create({
   meetupEmpty: { alignItems: 'center', paddingVertical: 20, gap: 8 },
   meetupEmptyText: { fontSize: 13, color: theme.textMuted, fontWeight: '500' },
 
-  // ========== HISTORY BUTTON ==========
-  historyBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: 16, padding: 16, gap: 12, borderWidth: 1, borderColor: theme.primary + '30', ...theme.shadows.card },
-  historyBtnPressed: { transform: [{ scale: 0.98 }], opacity: 0.9, backgroundColor: theme.primary + '08' },
-  historyBtnText: { flex: 1, fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  // ========== BRAND BANNER ==========
+  bannerSection: { paddingHorizontal: 16, marginBottom: 20 },
+  bannerImage: { width: '100%', height: 100, borderRadius: 16 },
 
   // ========== JOIN MODAL ==========
   joinOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 24 },
