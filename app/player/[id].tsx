@@ -476,6 +476,28 @@ export default function PlayerDetailScreen() {
                   </View>
                 ) : null}
 
+                {/* Radar Legend */}
+                {radarData.length >= 3 ? (
+                  <View style={s.radarLegend}>
+                    {[
+                      { color: radarData[0]?.color, label: radarData[0]?.label, desc: language === 'fr' ? 'Fidelite au role favori' : 'Preferred role loyalty' },
+                      { color: radarData[1]?.color, label: radarData[1]?.label, desc: language === 'fr' ? 'Fidelite au terrain favori' : 'Preferred terrain loyalty' },
+                      { color: radarData[2]?.color, label: radarData[2]?.label, desc: language === 'fr' ? 'Regularite avec le partenaire' : 'Partner consistency' },
+                      { color: radarData[3]?.color, label: radarData[3]?.label, desc: language === 'fr' ? 'Taux de victoire global' : 'Overall win rate' },
+                      { color: radarData[4]?.color, label: radarData[4]?.label, desc: language === 'fr' ? 'Reussite au tir' : 'Shot accuracy' },
+                    ].map((item, i) => (
+                      <View key={i} style={s.radarLegendItem}>
+                        <View style={[s.radarLegendDot, { backgroundColor: item.color }]} />
+                        <View style={s.radarLegendTexts}>
+                          <Text style={s.radarLegendLabel}>{item.label}</Text>
+                          <Text style={s.radarLegendDesc}>{item.desc}</Text>
+                        </View>
+                        <Text style={[s.radarLegendValue, { color: item.color }]}>{radarData[i]?.value}%</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+
                 {/* Preferred Role */}
                 {roleAnalysis.totalWithRoles > 0 ? (
                   <View style={s.prefItem}>
@@ -787,7 +809,14 @@ const s = StyleSheet.create({
   sectionDesc: { fontSize: 12, color: theme.textMuted, lineHeight: 17, marginBottom: 12 },
 
   // Radar container
-  radarContainer: { alignItems: 'center', marginBottom: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: theme.border },
+  radarContainer: { alignItems: 'center', marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
+  radarLegend: { marginBottom: 14, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: theme.border },
+  radarLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
+  radarLegendDot: { width: 8, height: 8, borderRadius: 4 },
+  radarLegendTexts: { flex: 1 },
+  radarLegendLabel: { fontSize: 13, fontWeight: '600', color: theme.textPrimary },
+  radarLegendDesc: { fontSize: 11, color: theme.textMuted, marginTop: 1 },
+  radarLegendValue: { fontSize: 14, fontWeight: '700' },
 
   // Preference items
   prefItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border + '60' },
