@@ -1959,6 +1959,28 @@ export const translations = {
   },
 
   // ============================================
+  // FACILITY LABELS
+  // ============================================
+  facilityLabels: {
+    'Parking': { fr: 'Parking', en: 'Parking' },
+    'Toilettes': { fr: 'Toilettes', en: 'Restrooms' },
+    'Buvette': { fr: 'Buvette', en: 'Snack bar' },
+    'Vestiaires': { fr: 'Vestiaires', en: 'Changing rooms' },
+    'Eclairage': { fr: 'Eclairage', en: 'Lighting' },
+    'Boulodrome couvert': { fr: 'Boulodrome couvert', en: 'Covered boulodrome' },
+    'Terrasse': { fr: 'Terrasse', en: 'Terrace' },
+    'Gradins': { fr: 'Gradins', en: 'Bleachers' },
+    'Wi-Fi': { fr: 'Wi-Fi', en: 'Wi-Fi' },
+    'Location de boules': { fr: 'Location de boules', en: 'Boules rental' },
+    'Douches': { fr: 'Douches', en: 'Showers' },
+    'Restaurant': { fr: 'Restaurant', en: 'Restaurant' },
+    'Boutique': { fr: 'Boutique', en: 'Shop' },
+    'Tribune': { fr: 'Tribune', en: 'Grandstand' },
+    'Espace enfants': { fr: 'Espace enfants', en: 'Kids area' },
+    'Accessibilite PMR': { fr: 'Accessibilite PMR', en: 'Wheelchair accessible' },
+  },
+
+  // ============================================
   // FAQ
   // ============================================
   faq: {

@@ -759,7 +759,10 @@ export default function ClubDetailScreen() {
                     </View>
                     <Switch
                       value={previewShowContacts}
-                      onValueChange={setPreviewShowContacts}
+                      onValueChange={(val) => {
+                        setPreviewShowContacts(val);
+                        if (club) updateClub(club.id, { showContactPublic: val } as any);
+                      }}
                       trackColor={{ false: theme.border, true: theme.success + '60' }}
                       thumbColor={previewShowContacts ? theme.success : theme.textMuted}
                     />
@@ -899,7 +902,10 @@ export default function ClubDetailScreen() {
                     </View>
                     <Switch
                       value={previewShowContacts}
-                      onValueChange={setPreviewShowContacts}
+                      onValueChange={(val) => {
+                        setPreviewShowContacts(val);
+                        if (club) updateClub(club.id, { showContactPublic: val } as any);
+                      }}
                       trackColor={{ false: theme.border, true: theme.success + '60' }}
                       thumbColor={previewShowContacts ? theme.success : theme.textMuted}
                     />

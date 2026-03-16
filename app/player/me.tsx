@@ -835,7 +835,10 @@ export default function MyPlayerCardScreen() {
                     </View>
                     <Switch
                       value={previewShowContacts}
-                      onValueChange={setPreviewShowContacts}
+                      onValueChange={(val) => {
+                        setPreviewShowContacts(val);
+                        if (selfPlayer) updatePlayer(selfPlayer.id, { showContactPublic: val });
+                      }}
                       trackColor={{ false: theme.border, true: theme.success + '60' }}
                       thumbColor={previewShowContacts ? theme.success : theme.textMuted}
                     />
@@ -1009,7 +1012,10 @@ export default function MyPlayerCardScreen() {
                     </View>
                     <Switch
                       value={previewShowContacts}
-                      onValueChange={setPreviewShowContacts}
+                      onValueChange={(val) => {
+                        setPreviewShowContacts(val);
+                        if (selfPlayer) updatePlayer(selfPlayer.id, { showContactPublic: val });
+                      }}
                       trackColor={{ false: theme.border, true: theme.success + '60' }}
                       thumbColor={previewShowContacts ? theme.success : theme.textMuted}
                     />
