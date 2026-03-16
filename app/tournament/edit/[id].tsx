@@ -44,6 +44,14 @@ const LEVEL_ICONS: Record<string, string> = {
   'Jeunes (Cadets)': 'school', 'Jeunes (Juniors)': 'sports',
 };
 
+const FINAL_RESULTS = ['1er', '2ème', '3ème', 'Demi-finale', 'Quart de finale', '1/8 finale', 'Poules', 'Autre'] as const;
+const FINAL_RESULT_CFG: Record<string, { icon: string; color: string }> = {
+  '1er': { icon: 'emoji-events', color: theme.carreauColor }, '2ème': { icon: 'workspace-premium', color: theme.accent },
+  '3ème': { icon: 'military-tech', color: '#CD7F32' }, 'Demi-finale': { icon: 'trending-up', color: theme.primary },
+  'Quart de finale': { icon: 'trending-flat', color: theme.warning }, '1/8 finale': { icon: 'sports', color: theme.textSecondary },
+  'Poules': { icon: 'group', color: theme.textSecondary }, 'Autre': { icon: 'more-horiz', color: theme.textMuted },
+};
+
 function SectionCard({ children, title, subtitle, icon, color, delay = 0, required = false }: {
   children: React.ReactNode; title: string; subtitle?: string; icon: string; color: string; delay?: number; required?: boolean;
 }) {
@@ -104,6 +112,7 @@ export default function EditTournamentScreen() {
   const [type, setType] = useState<TournamentType>('Poules');
   const [format, setFormat] = useState<GameFormat>('Doublette');
   const [status, setStatus] = useState<TournamentStatus>('À venir');
+  const [terrainId, setTerrainId] = useState<string | undefined>();
   const [location, setLocation] = useState<LocationData>({ address: '', city: '', country: 'France', latitude: 0, longitude: 0 });
   const [clubId, setClubId] = useState<string | undefined>();
   const [maxParticipants, setMaxParticipants] = useState('32');
@@ -119,15 +128,25 @@ export default function EditTournamentScreen() {
   const [registrationType, setRegistrationType] = useState<RegistrationType | undefined>();
   const [tournamentScope, setTournamentScope] = useState<TournamentScope | undefined>();
 
-  // Club picker modal
+  // Modal states
+  const [showTerrainPicker, setShowTerrainPicker] = useState(false);
+  const [terrainSearch, setTerrainSearch] = useState('');
   const [showClubPicker, setShowClubPicker] = useState(false);
   const [clubSearch, setClubSearch] = useState('');
+  const [showCadragePicker, setShowCadragePicker] = useState(false);
+  const [showResultPicker, setShowResultPicker] = useState(false);
+
+  const filteredTerrains = useMemo(() => {
+    const s = terrainSearch.toLowerCase();
+    return terrains.filter(tr => !s || tr.name.toLowerCase().includes(s) || tr.city.toLowerCase().includes(s));
+  }, [terrains, terrainSearch]);
 
   const filteredClubs = useMemo(() => {
     const s = clubSearch.toLowerCase();
     return clubs.filter(c => !s || c.name.toLowerCase().includes(s) || c.city.toLowerCase().includes(s));
   }, [clubs, clubSearch]);
 
+  const selectedTerrainObj = terrainId ? terrains.find(t => t.id === terrainId) : null;
   const selectedClubObj = clubId ? clubs.find(c => c.id === clubId) : null;
 
   // Accordion state
@@ -146,6 +165,7 @@ export default function EditTournamentScreen() {
       setType(tournament.type);
       setFormat(tournament.format);
       setStatus(tournament.status);
+      setTerrainId(tournament.terrainId);
       setLocation({ address: tournament.location.name || '', city: tournament.location.city || '', country: 'France', latitude: tournament.location.latitude || 0, longitude: tournament.location.longitude || 0 });
       setClubId(tournament.clubId);
       setMaxParticipants(tournament.maxParticipants?.toString() || '32');
@@ -185,17 +205,20 @@ export default function EditTournamentScreen() {
     if (selectedDate) { setEndDate(selectedDate); const newStatus = getStatusFromDate(date, selectedDate); setStatus(newStatus); Haptics.selectionAsync(); }
   };
 
-  const progressFilled = [name.trim(), location.city.trim()].filter(Boolean).length + 1;
-  const progressLabel = !name.trim() ? t('tournament', 'startWithName') : !location.city.trim() ? t('tournament', 'chooseLocation') : t('tournament', 'readyToCreate');
+  const hasLocation = terrainId || location.city.trim();
+  const progressFilled = [name.trim(), hasLocation ? 'yes' : ''].filter(Boolean).length + 1;
+  const progressLabel = !name.trim() ? t('tournament', 'startWithName') : !hasLocation ? t('tournament', 'chooseLocation') : t('tournament', 'readyToCreate');
 
   const handleSave = () => {
     if (!name.trim()) { Alert.alert(t('common', 'error'), t('tournament', 'errorNameRequired')); return; }
-    if (!location.city.trim()) { Alert.alert(t('common', 'error'), t('tournament', 'errorCityRequired')); return; }
+    if (!terrainId && !location.city.trim()) { Alert.alert(t('common', 'error'), t('tournament', 'errorCityRequired')); return; }
     const selectedClub = clubs.find(c => c.id === clubId);
+    const terrain = terrains.find(t => t.id === terrainId);
     updateTournament(id!, {
       name: name.trim(), date: date.toISOString(), endDate: endDate ? endDate.toISOString() : undefined,
       type, format, status,
-      location: { name: location.address.trim() || location.city.trim(), city: location.city.trim(), latitude: location.latitude, longitude: location.longitude },
+      location: { name: terrain?.name || location.address.trim() || location.city.trim(), city: terrain?.city || location.city.trim(), latitude: terrain?.location.latitude || location.latitude, longitude: terrain?.location.longitude || location.longitude },
+      terrainId: terrain?.id, terrainName: terrain?.name, terrainType: terrain?.type,
       clubId, clubName: selectedClub?.name, maxParticipants: parseInt(maxParticipants) || 32,
       prize: prize.trim() || undefined, description: description.trim() || undefined,
       tournamentLevel, tournamentCategory, registrationType, tournamentScope,
@@ -290,9 +313,33 @@ export default function EditTournamentScreen() {
             </View>
           </SectionCard>
 
-          {/* 4. Lieu */}
+          {/* 4. Lieu (Modal Terrain Picker) */}
           <SectionCard title={t('tournament', 'location')} icon="place" color={theme.success} delay={150} required>
-            <LocationPicker label={t('tournament', 'tournamentLocation')} value={location} onChange={setLocation} placeholder={t('tournament', 'searchAddress')} required showAddressField />
+            <Pressable style={styles.pickerButton} onPress={() => { setTerrainSearch(''); setShowTerrainPicker(true); }}>
+              {selectedTerrainObj ? (
+                <View style={styles.pickerSelected}>
+                  <MaterialIcons name="sports-soccer" size={20} color={theme.success} />
+                  <View style={styles.pickerSelectedInfo}>
+                    <Text style={styles.pickerSelectedName}>{selectedTerrainObj.name}</Text>
+                    <Text style={styles.pickerSelectedSub}>{selectedTerrainObj.address}, {selectedTerrainObj.city}</Text>
+                  </View>
+                  <Pressable onPress={(e) => { e.stopPropagation(); setTerrainId(undefined); Haptics.selectionAsync(); }} hitSlop={8}>
+                    <MaterialIcons name="close" size={18} color={theme.textMuted} />
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={styles.pickerPlaceholder}>
+                  <MaterialIcons name="place" size={20} color={theme.textMuted} />
+                  <Text style={styles.pickerPlaceholderText}>{t('tournament', 'selectTerrainOrAddress')}</Text>
+                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                </View>
+              )}
+            </Pressable>
+            {!terrainId ? (
+              <Animated.View entering={FadeInDown.duration(250)} style={{ marginTop: 14 }}>
+                <LocationPicker label={t('tournament', 'tournamentLocation')} value={location} onChange={setLocation} placeholder={t('tournament', 'searchAddress')} required showAddressField />
+              </Animated.View>
+            ) : null}
           </SectionCard>
 
           {/* 5. Format */}
@@ -311,19 +358,18 @@ export default function EditTournamentScreen() {
             </View>
           </SectionCard>
 
-          {/* 6. Cadrage */}
+          {/* 6. Cadrage (Modal Picker) */}
           <SectionCard title={t('tournament', 'cadrage')} icon="account-tree" color={theme.tirColor} delay={200}>
-            <View style={styles.cadrageGrid}>
-              {config.tournamentTypes.map(ct => {
-                const ico = CADRAGE_ICONS[ct] || 'tune'; const isActive = type === ct;
-                return (
-                  <Pressable key={ct} style={[styles.cadrageChip, isActive && styles.cadrageChipActive]} onPress={() => { Haptics.selectionAsync(); setType(ct); }}>
-                    <MaterialIcons name={ico as any} size={16} color={isActive ? theme.tirColor : theme.textMuted} />
-                    <Text style={[styles.cadrageChipText, isActive && styles.cadrageChipTextActive]}>{t('tournamentTypes', ct)}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            <Pressable style={styles.pickerButton} onPress={() => setShowCadragePicker(true)}>
+              <View style={styles.pickerSelected}>
+                <MaterialIcons name={(CADRAGE_ICONS[type] || 'tune') as any} size={20} color={theme.tirColor} />
+                <View style={styles.pickerSelectedInfo}>
+                  <Text style={styles.pickerSelectedName}>{t('tournamentTypes', type)}</Text>
+                  <Text style={styles.pickerSelectedSub} numberOfLines={1}>{CADRAGE_CONFIG[type]?.description}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              </View>
+            </Pressable>
             {type && CADRAGE_CONFIG[type] ? (
               <Animated.View entering={FadeIn.duration(250)} style={styles.cadrageInfo}>
                 <View style={styles.cadrageInfoHeader}><MaterialIcons name="info-outline" size={16} color={theme.tirColor} /><Text style={styles.cadrageInfoTitle}>{CADRAGE_CONFIG[type].description}</Text></View>
@@ -362,7 +408,8 @@ export default function EditTournamentScreen() {
             </Pressable>
           </SectionCard>
 
-          {/* 8. Finances - Accordion */}
+          {/* 8-13: Accordions (Finances, Niveau, Catégorie, Inscription, Envergure, Participants) */}
+          {/* 8. Finances */}
           <Animated.View entering={FadeInDown.duration(350).delay(250)} layout={Layout.duration(250)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowFinancesSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.carreauColor + '15' }]}><MaterialIcons name="payments" size={18} color={theme.carreauColor} /></View>
@@ -382,7 +429,7 @@ export default function EditTournamentScreen() {
             ) : null}
           </Animated.View>
 
-          {/* 9. Niveau - Accordion */}
+          {/* 9. Niveau */}
           <Animated.View entering={FadeInDown.duration(350).delay(275)} layout={Layout.duration(250)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowLevelSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.success + '15' }]}><MaterialIcons name="signal-cellular-alt" size={18} color={theme.success} /></View>
@@ -420,7 +467,7 @@ export default function EditTournamentScreen() {
             ) : null}
           </Animated.View>
 
-          {/* 10. Catégorie - Accordion */}
+          {/* 10. Catégorie */}
           <Animated.View entering={FadeInDown.duration(350).delay(300)} layout={Layout.duration(250)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowCategorySection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.warning + '15' }]}><MaterialIcons name="verified" size={18} color={theme.warning} /></View>
@@ -442,7 +489,7 @@ export default function EditTournamentScreen() {
             ) : null}
           </Animated.View>
 
-          {/* 11. Inscription - Accordion */}
+          {/* 11. Inscription */}
           <Animated.View entering={FadeInDown.duration(350).delay(325)} layout={Layout.duration(250)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowRegistrationSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.primary + '15' }]}><MaterialIcons name="how-to-reg" size={18} color={theme.primary} /></View>
@@ -464,7 +511,7 @@ export default function EditTournamentScreen() {
             ) : null}
           </Animated.View>
 
-          {/* 12. Envergure - Accordion */}
+          {/* 12. Envergure */}
           <Animated.View entering={FadeInDown.duration(350).delay(350)} layout={Layout.duration(250)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowScopeSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.accent + '15' }]}><MaterialIcons name="public" size={18} color={theme.accent} /></View>
@@ -486,7 +533,7 @@ export default function EditTournamentScreen() {
             ) : null}
           </Animated.View>
 
-          {/* 13. Participants - Accordion */}
+          {/* 13. Participants */}
           <Animated.View entering={FadeInDown.duration(350).delay(375)} layout={Layout.duration(250)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowParticipantsSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.carreauColor + '15' }]}><MaterialIcons name="people-outline" size={18} color={theme.carreauColor} /></View>
@@ -508,27 +555,28 @@ export default function EditTournamentScreen() {
             ) : null}
           </Animated.View>
 
-          {/* 14. Résultat final (only for finished tournaments) */}
+          {/* 14. Résultat final (Modal Picker - only for finished tournaments) */}
           {status === 'Terminé' ? (
             <SectionCard title={t('tournament', 'finalResultUpper')} icon="workspace-premium" color={theme.carreauColor} delay={400}>
-              <View style={styles.finalResultGrid}>
-                {['1er', '2ème', '3ème', 'Demi-finale', 'Quart de finale', '1/8 finale', 'Poules', 'Autre'].map(result => {
-                  const resultCfg: Record<string, { icon: string; color: string }> = {
-                    '1er': { icon: 'emoji-events', color: theme.carreauColor }, '2ème': { icon: 'workspace-premium', color: theme.accent },
-                    '3ème': { icon: 'military-tech', color: '#CD7F32' }, 'Demi-finale': { icon: 'trending-up', color: theme.primary },
-                    'Quart de finale': { icon: 'trending-flat', color: theme.warning }, '1/8 finale': { icon: 'sports', color: theme.textSecondary },
-                    'Poules': { icon: 'group', color: theme.textSecondary }, 'Autre': { icon: 'more-horiz', color: theme.textMuted },
-                  };
-                  const cfg = resultCfg[result] || { icon: 'help', color: theme.textMuted };
-                  const isSelected = finalResult === result;
-                  return (
-                    <Pressable key={result} style={[styles.finalResultChip, isSelected && [styles.finalResultChipActive, { borderColor: cfg.color }]]} onPress={() => { Haptics.selectionAsync(); setFinalResult(finalResult === result ? undefined : result); }}>
-                      <MaterialIcons name={cfg.icon as any} size={18} color={isSelected ? cfg.color : theme.textSecondary} />
-                      <Text style={[styles.finalResultText, isSelected && { color: cfg.color }]}>{result}</Text>
+              <Pressable style={styles.pickerButton} onPress={() => setShowResultPicker(true)}>
+                {finalResult ? (
+                  <View style={styles.pickerSelected}>
+                    <MaterialIcons name={(FINAL_RESULT_CFG[finalResult]?.icon || 'help') as any} size={20} color={FINAL_RESULT_CFG[finalResult]?.color || theme.textMuted} />
+                    <View style={styles.pickerSelectedInfo}>
+                      <Text style={[styles.pickerSelectedName, { color: FINAL_RESULT_CFG[finalResult]?.color }]}>{finalResult}</Text>
+                    </View>
+                    <Pressable onPress={(e) => { e.stopPropagation(); setFinalResult(undefined); Haptics.selectionAsync(); }} hitSlop={8}>
+                      <MaterialIcons name="close" size={18} color={theme.textMuted} />
                     </Pressable>
-                  );
-                })}
-              </View>
+                  </View>
+                ) : (
+                  <View style={styles.pickerPlaceholder}>
+                    <MaterialIcons name="workspace-premium" size={20} color={theme.textMuted} />
+                    <Text style={styles.pickerPlaceholderText}>{t('tournament', 'none')}</Text>
+                    <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                  </View>
+                )}
+              </Pressable>
             </SectionCard>
           ) : null}
 
@@ -539,7 +587,7 @@ export default function EditTournamentScreen() {
             </SectionCard>
           ) : null}
 
-          {/* 16. Description - Accordion */}
+          {/* 16. Description */}
           <Animated.View entering={FadeInDown.duration(350).delay(450)} layout={Layout.duration(250)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowDescriptionSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.textSecondary + '15' }]}><MaterialIcons name="description" size={18} color={theme.textSecondary} /></View>
@@ -559,12 +607,108 @@ export default function EditTournamentScreen() {
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-          <Pressable style={({ pressed }) => [styles.saveButton, (!name.trim() || !location.city.trim()) && styles.saveButtonDisabled, pressed && name.trim() && location.city.trim() && styles.saveButtonPressed]} onPress={handleSave}>
+          <Pressable style={({ pressed }) => [styles.saveButton, (!name.trim() || (!terrainId && !location.city.trim())) && styles.saveButtonDisabled, pressed && name.trim() && (terrainId || location.city.trim()) && styles.saveButtonPressed]} onPress={handleSave}>
             <MaterialIcons name="check" size={22} color="#FFF" />
             <Text style={styles.saveButtonText}>{t('tournament', 'saveChanges')}</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Terrain Picker Modal */}
+      <Modal visible={showTerrainPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowTerrainPicker(false)}>
+        <SafeAreaView edges={['top']} style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('tournament', 'location')}</Text>
+            <Pressable style={styles.modalCloseBtn} onPress={() => setShowTerrainPicker(false)}><MaterialIcons name="close" size={24} color={theme.textPrimary} /></Pressable>
+          </View>
+          <View style={styles.modalSearchContainer}>
+            <MaterialIcons name="search" size={20} color={theme.textMuted} />
+            <TextInput style={styles.modalSearchInput} value={terrainSearch} onChangeText={setTerrainSearch} placeholder={t('profile', 'searchTerrain')} placeholderTextColor={theme.textMuted} autoFocus />
+          </View>
+          <Pressable style={[styles.modalPickerItem, !terrainId && styles.modalPickerItemActive]} onPress={() => { Haptics.selectionAsync(); setTerrainId(undefined); setShowTerrainPicker(false); }}>
+            <View style={[styles.modalPickerItemIcon, { backgroundColor: theme.textMuted + '15' }]}><MaterialIcons name="edit-location" size={20} color={theme.textMuted} /></View>
+            <View style={{ flex: 1 }}><Text style={styles.modalPickerItemName}>{t('tournament', 'otherLocation')}</Text><Text style={styles.modalPickerItemSub}>{t('tournament', 'manualAddressEntry')}</Text></View>
+            {!terrainId ? <MaterialIcons name="check-circle" size={20} color={theme.success} /> : null}
+          </Pressable>
+          <FlatList data={filteredTerrains} keyExtractor={(item) => item.id} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }} renderItem={({ item: tr }) => {
+            const tc = config.terrainTypes.find(t => t.id === tr.type);
+            return (
+              <Pressable style={[styles.modalPickerItem, { marginHorizontal: 0 }, terrainId === tr.id && styles.modalPickerItemActive]} onPress={() => { Haptics.selectionAsync(); setTerrainId(tr.id); setShowTerrainPicker(false); }}>
+                <View style={[styles.modalPickerItemIcon, { backgroundColor: theme.success + '15' }]}><MaterialIcons name={(tc?.icon as any) || 'landscape'} size={20} color={theme.success} /></View>
+                <View style={{ flex: 1 }}><Text style={styles.modalPickerItemName}>{tr.name}</Text><Text style={styles.modalPickerItemSub}>{tr.address}, {tr.city}</Text></View>
+                {terrainId === tr.id ? <MaterialIcons name="check-circle" size={20} color={theme.success} /> : null}
+              </Pressable>
+            );
+          }} ListEmptyComponent={<View style={styles.modalEmpty}><MaterialIcons name="landscape" size={40} color={theme.textMuted} /><Text style={styles.modalEmptyText}>{t('tournament', 'noTerrainsRegistered')}</Text></View>} />
+        </SafeAreaView>
+      </Modal>
+
+      {/* Cadrage Picker Modal */}
+      <Modal visible={showCadragePicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCadragePicker(false)}>
+        <SafeAreaView edges={['top']} style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('tournament', 'cadrage')}</Text>
+            <Pressable style={styles.modalCloseBtn} onPress={() => setShowCadragePicker(false)}><MaterialIcons name="close" size={24} color={theme.textPrimary} /></Pressable>
+          </View>
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+            {config.tournamentTypes.map(ct => {
+              const cadrageIcon = CADRAGE_ICONS[ct] || 'tune';
+              const isActive = type === ct;
+              const cfg = CADRAGE_CONFIG[ct];
+              return (
+                <Pressable key={ct} style={[styles.cadrageModalItem, isActive && styles.cadrageModalItemActive]} onPress={() => { Haptics.selectionAsync(); setType(ct); setShowCadragePicker(false); }}>
+                  <View style={styles.cadrageModalItemHeader}>
+                    <View style={[styles.cadrageModalItemIconBox, isActive && { backgroundColor: theme.tirColor }]}>
+                      <MaterialIcons name={cadrageIcon as any} size={22} color={isActive ? '#FFF' : theme.textSecondary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.cadrageModalItemName, isActive && { color: theme.tirColor }]}>{t('tournamentTypes', ct)}</Text>
+                      {cfg ? <Text style={styles.cadrageModalItemDesc} numberOfLines={2}>{cfg.description}</Text> : null}
+                    </View>
+                    {isActive ? <MaterialIcons name="check-circle" size={22} color={theme.tirColor} /> : null}
+                  </View>
+                  {cfg ? (
+                    <View style={styles.cadrageModalItemDetails}>
+                      <View style={styles.cadrageModalItemStat}><MaterialIcons name="sports" size={12} color={theme.textMuted} /><Text style={styles.cadrageModalItemStatText}>{cfg.matches}</Text></View>
+                      <View style={styles.cadrageModalItemStat}><MaterialIcons name="flag" size={12} color={theme.textMuted} /><Text style={styles.cadrageModalItemStatText}>{cfg.points}</Text></View>
+                    </View>
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Result Picker Modal */}
+      <Modal visible={showResultPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowResultPicker(false)}>
+        <SafeAreaView edges={['top']} style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('tournament', 'finalResultUpper')}</Text>
+            <Pressable style={styles.modalCloseBtn} onPress={() => setShowResultPicker(false)}><MaterialIcons name="close" size={24} color={theme.textPrimary} /></Pressable>
+          </View>
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+            <Pressable style={[styles.modalPickerItem, !finalResult && styles.modalPickerItemActive]} onPress={() => { Haptics.selectionAsync(); setFinalResult(undefined); setShowResultPicker(false); }}>
+              <View style={[styles.modalPickerItemIcon, { backgroundColor: theme.textMuted + '15' }]}><MaterialIcons name="block" size={20} color={theme.textMuted} /></View>
+              <Text style={styles.modalPickerItemName}>{t('tournament', 'none')}</Text>
+              {!finalResult ? <MaterialIcons name="check-circle" size={20} color={theme.carreauColor} /> : null}
+            </Pressable>
+            {FINAL_RESULTS.map(result => {
+              const cfg = FINAL_RESULT_CFG[result] || { icon: 'help', color: theme.textMuted };
+              const isSelected = finalResult === result;
+              return (
+                <Pressable key={result} style={[styles.resultModalItem, isSelected && { borderColor: cfg.color }]} onPress={() => { Haptics.selectionAsync(); setFinalResult(result); setShowResultPicker(false); }}>
+                  <View style={[styles.resultModalItemIconBox, { backgroundColor: cfg.color + '15' }]}>
+                    <MaterialIcons name={cfg.icon as any} size={24} color={cfg.color} />
+                  </View>
+                  <Text style={[styles.resultModalItemName, isSelected && { color: cfg.color }]}>{result}</Text>
+                  {isSelected ? <MaterialIcons name="check-circle" size={22} color={cfg.color} /> : null}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
 
       {/* Club Picker Modal */}
       <Modal visible={showClubPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowClubPicker(false)}>
@@ -643,12 +787,7 @@ const styles = StyleSheet.create({
   formatCardNameActive: { color: theme.accent },
   formatCardMeta: { fontSize: 10, color: theme.textMuted },
 
-  // Cadrage
-  cadrageGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  cadrageChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, borderWidth: 1.5, borderColor: 'transparent' },
-  cadrageChipActive: { borderColor: theme.tirColor, backgroundColor: theme.tirColor + '08' },
-  cadrageChipText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
-  cadrageChipTextActive: { color: theme.tirColor },
+  // Cadrage info
   cadrageInfo: { marginTop: 12, padding: 12, backgroundColor: theme.tirColor + '06', borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.tirColor + '15' },
   cadrageInfoHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   cadrageInfoTitle: { fontSize: 13, fontWeight: '600', color: theme.tirColor, flex: 1 },
@@ -705,12 +844,6 @@ const styles = StyleSheet.create({
   financeLabel: { fontSize: 11, fontWeight: '600', color: theme.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
   financeInput: { backgroundColor: theme.backgroundSecondary, paddingHorizontal: 14, paddingVertical: 12, borderRadius: theme.borderRadius.md, fontSize: 15, color: theme.textPrimary, borderWidth: 1, borderColor: theme.border },
 
-  // Final result
-  finalResultGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  finalResultChip: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, borderWidth: 2, borderColor: 'transparent' },
-  finalResultChipActive: { backgroundColor: theme.backgroundSecondary },
-  finalResultText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
-
   // Accordion
   accordionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   accordionContent: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: theme.border },
@@ -724,12 +857,28 @@ const styles = StyleSheet.create({
   modalSearchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, marginHorizontal: 16, marginVertical: 12, paddingHorizontal: 14, paddingVertical: 10, borderRadius: theme.borderRadius.md, gap: 10, borderWidth: 1, borderColor: theme.border },
   modalSearchInput: { flex: 1, fontSize: 15, color: theme.textPrimary, padding: 0 },
   modalPickerItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, marginHorizontal: 16, marginBottom: 8, ...theme.shadows.card },
-  modalPickerItemActive: { borderWidth: 2, borderColor: theme.primaryLight },
+  modalPickerItemActive: { borderWidth: 2, borderColor: theme.success },
   modalPickerItemIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   modalPickerItemName: { flex: 1, fontSize: 15, fontWeight: '600', color: theme.textPrimary },
   modalPickerItemSub: { fontSize: 12, color: theme.textMuted, marginTop: 2 },
   modalEmpty: { alignItems: 'center', paddingVertical: 40 },
   modalEmptyText: { fontSize: 14, color: theme.textMuted, marginTop: 10 },
+
+  // Cadrage modal
+  cadrageModalItem: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 10, borderWidth: 2, borderColor: 'transparent', ...theme.shadows.card },
+  cadrageModalItemActive: { borderColor: theme.tirColor, backgroundColor: theme.tirColor + '06' },
+  cadrageModalItemHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  cadrageModalItemIconBox: { width: 44, height: 44, borderRadius: 12, backgroundColor: theme.textMuted + '15', alignItems: 'center', justifyContent: 'center' },
+  cadrageModalItemName: { fontSize: 15, fontWeight: '700', color: theme.textPrimary },
+  cadrageModalItemDesc: { fontSize: 12, color: theme.textSecondary, marginTop: 3, lineHeight: 17 },
+  cadrageModalItemDetails: { flexDirection: 'row', gap: 16, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border },
+  cadrageModalItemStat: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  cadrageModalItemStatText: { fontSize: 11, color: theme.textMuted, fontWeight: '500' },
+
+  // Result modal
+  resultModalItem: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 10, borderWidth: 2, borderColor: 'transparent', ...theme.shadows.card },
+  resultModalItemIconBox: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  resultModalItemName: { flex: 1, fontSize: 16, fontWeight: '700', color: theme.textPrimary },
 
   // Footer
   footer: { paddingHorizontal: 16, paddingTop: 12, backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border },

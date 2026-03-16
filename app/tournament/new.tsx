@@ -101,15 +101,24 @@ export default function NewTournamentScreen() {
   const [registrationType, setRegistrationType] = useState<RegistrationType | undefined>();
   const [tournamentScope, setTournamentScope] = useState<TournamentScope | undefined>();
 
-  // Club picker modal
+  // Modal states
+  const [showTerrainPicker, setShowTerrainPicker] = useState(false);
+  const [terrainSearch, setTerrainSearch] = useState('');
   const [showClubPicker, setShowClubPicker] = useState(false);
   const [clubSearch, setClubSearch] = useState('');
+  const [showCadragePicker, setShowCadragePicker] = useState(false);
+
+  const filteredTerrains = useMemo(() => {
+    const s = terrainSearch.toLowerCase();
+    return terrains.filter(tr => !s || tr.name.toLowerCase().includes(s) || tr.city.toLowerCase().includes(s));
+  }, [terrains, terrainSearch]);
 
   const filteredClubs = useMemo(() => {
     const s = clubSearch.toLowerCase();
     return clubs.filter(c => !s || c.name.toLowerCase().includes(s) || c.city.toLowerCase().includes(s));
   }, [clubs, clubSearch]);
 
+  const selectedTerrainObj = terrainId ? terrains.find(t => t.id === terrainId) : null;
   const selectedClubObj = clubId ? clubs.find(c => c.id === clubId) : null;
 
   // Accordion state
@@ -120,8 +129,6 @@ export default function NewTournamentScreen() {
   const [showParticipantsSection, setShowParticipantsSection] = useState(false);
   const [showFinancesSection, setShowFinancesSection] = useState(false);
   const [showDescriptionSection, setShowDescriptionSection] = useState(false);
-
-  const selectedTerrain = terrains.find(t => t.id === terrainId);
 
   const progress = useMemo(() => {
     let filled = 0; const total = 4;
@@ -243,50 +250,31 @@ export default function NewTournamentScreen() {
             {showEndDatePicker ? <DateTimePicker value={endDate || date} mode="date" display="default" onChange={handleEndDateChange} minimumDate={date} /> : null}
           </SectionCard>
 
-          {/* 3. Lieu */}
+          {/* 3. Lieu (Modal Picker) */}
           <SectionCard title={t('tournament', 'location')} icon="place" color={theme.success} delay={150} required>
-            <View style={styles.terrainHeaderRow}>
-              <Text style={styles.fieldHint}>{t('tournament', 'selectTerrainOrAddress')}</Text>
-              <Pressable style={styles.addTerrainBtn} onPress={() => router.push('/terrain/new')}>
-                <MaterialIcons name="add" size={14} color={theme.primary} /><Text style={styles.addTerrainBtnText}>{t('tournament', 'terrainBtn')}</Text>
-              </Pressable>
-            </View>
-            {terrains.length > 0 ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.terrainsScroll}>
-                <Pressable style={[styles.terrainOption, !terrainId && styles.terrainOptionActive]} onPress={() => { Haptics.selectionAsync(); setTerrainId(undefined); }}>
-                  <MaterialIcons name="edit-location" size={20} color={!terrainId ? theme.success : theme.textMuted} />
-                  <Text style={[styles.terrainOptionText, !terrainId && styles.terrainOptionTextActive]}>{t('tournament', 'otherLocation')}</Text>
-                </Pressable>
-                {terrains.map(terrain => {
-                  const tc = config.terrainTypes.find(t => t.id === terrain.type);
-                  const isActive = terrainId === terrain.id;
-                  return (
-                    <Pressable key={terrain.id} style={[styles.terrainCardNew, isActive && styles.terrainCardNewActive]} onPress={() => { Haptics.selectionAsync(); setTerrainId(terrain.id); }}>
-                      <View style={[styles.terrainCardNewIcon, isActive && styles.terrainCardNewIconActive]}><MaterialIcons name={(tc?.icon as any) || 'landscape'} size={18} color={isActive ? '#FFF' : theme.textSecondary} /></View>
-                      <Text style={[styles.terrainCardNewName, isActive && styles.terrainCardNewNameActive]} numberOfLines={1}>{terrain.name}</Text>
-                      <Text style={styles.terrainCardNewCity}>{terrain.city}</Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            ) : (
-              <View style={styles.noTerrainsBox}>
-                <MaterialIcons name="landscape" size={32} color={theme.textMuted} />
-                <Text style={styles.noTerrainsText}>{t('tournament', 'noTerrainsRegistered')}</Text>
-                <Pressable style={styles.createTerrainBtn} onPress={() => router.push('/terrain/new')}>
-                  <MaterialIcons name="add" size={16} color={theme.primary} /><Text style={styles.createTerrainBtnText}>{t('tournament', 'createTerrain')}</Text>
-                </Pressable>
-              </View>
-            )}
+            <Pressable style={styles.pickerButton} onPress={() => { setTerrainSearch(''); setShowTerrainPicker(true); }}>
+              {selectedTerrainObj ? (
+                <View style={styles.pickerSelected}>
+                  <MaterialIcons name="sports-soccer" size={20} color={theme.success} />
+                  <View style={styles.pickerSelectedInfo}>
+                    <Text style={styles.pickerSelectedName}>{selectedTerrainObj.name}</Text>
+                    <Text style={styles.pickerSelectedSub}>{selectedTerrainObj.address}, {selectedTerrainObj.city}</Text>
+                  </View>
+                  <Pressable onPress={(e) => { e.stopPropagation(); setTerrainId(undefined); Haptics.selectionAsync(); }} hitSlop={8}>
+                    <MaterialIcons name="close" size={18} color={theme.textMuted} />
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={styles.pickerPlaceholder}>
+                  <MaterialIcons name="place" size={20} color={theme.textMuted} />
+                  <Text style={styles.pickerPlaceholderText}>{t('tournament', 'selectTerrainOrAddress')}</Text>
+                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                </View>
+              )}
+            </Pressable>
             {!terrainId ? (
-              <Animated.View entering={FadeInDown.duration(250)} style={{ marginTop: 16 }}>
+              <Animated.View entering={FadeInDown.duration(250)} style={{ marginTop: 14 }}>
                 <LocationPicker label={t('tournament', 'tournamentLocation')} value={manualLocation} onChange={setManualLocation} placeholder={t('tournament', 'searchAddress')} required showAddressField />
-              </Animated.View>
-            ) : null}
-            {selectedTerrain ? (
-              <Animated.View entering={FadeIn.duration(200)} style={styles.selectedTerrainBanner}>
-                <MaterialIcons name="check-circle" size={16} color={theme.success} />
-                <Text style={styles.selectedTerrainBannerText}>{selectedTerrain.name} — {selectedTerrain.address}, {selectedTerrain.city}</Text>
               </Animated.View>
             ) : null}
           </SectionCard>
@@ -308,19 +296,18 @@ export default function NewTournamentScreen() {
             </View>
           </SectionCard>
 
-          {/* 5. Cadrage */}
+          {/* 5. Cadrage (Modal Picker) */}
           <SectionCard title={t('tournament', 'cadrage')} subtitle={t('tournament', 'competitionType')} icon="account-tree" color={theme.tirColor} delay={200}>
-            <View style={styles.cadrageGrid}>
-              {config.tournamentTypes.map(ct => {
-                const cadrageIcon = CADRAGE_ICONS[ct] || 'tune'; const isActive = type === ct;
-                return (
-                  <Pressable key={ct} style={[styles.cadrageChip, isActive && styles.cadrageChipActive]} onPress={() => { Haptics.selectionAsync(); setType(ct); }}>
-                    <MaterialIcons name={cadrageIcon as any} size={16} color={isActive ? theme.tirColor : theme.textMuted} />
-                    <Text style={[styles.cadrageChipText, isActive && styles.cadrageChipTextActive]}>{t('tournamentTypes', ct)}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            <Pressable style={styles.pickerButton} onPress={() => setShowCadragePicker(true)}>
+              <View style={styles.pickerSelected}>
+                <MaterialIcons name={(CADRAGE_ICONS[type] || 'tune') as any} size={20} color={theme.tirColor} />
+                <View style={styles.pickerSelectedInfo}>
+                  <Text style={styles.pickerSelectedName}>{t('tournamentTypes', type)}</Text>
+                  <Text style={styles.pickerSelectedSub} numberOfLines={1}>{CADRAGE_CONFIG[type]?.description}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              </View>
+            </Pressable>
             {type && CADRAGE_CONFIG[type] ? (
               <Animated.View entering={FadeIn.duration(250)} style={styles.cadrageInfo}>
                 <View style={styles.cadrageInfoHeader}><MaterialIcons name="info-outline" size={16} color={theme.tirColor} /><Text style={styles.cadrageInfoTitle}>{CADRAGE_CONFIG[type].description}</Text></View>
@@ -532,6 +519,77 @@ export default function NewTournamentScreen() {
         </View>
       </KeyboardAvoidingView>
 
+      {/* Terrain Picker Modal */}
+      <Modal visible={showTerrainPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowTerrainPicker(false)}>
+        <SafeAreaView edges={['top']} style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('tournament', 'location')}</Text>
+            <Pressable style={styles.modalCloseBtn} onPress={() => setShowTerrainPicker(false)}><MaterialIcons name="close" size={24} color={theme.textPrimary} /></Pressable>
+          </View>
+          <View style={styles.modalSearchContainer}>
+            <MaterialIcons name="search" size={20} color={theme.textMuted} />
+            <TextInput style={styles.modalSearchInput} value={terrainSearch} onChangeText={setTerrainSearch} placeholder={t('profile', 'searchTerrain')} placeholderTextColor={theme.textMuted} autoFocus />
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, marginBottom: 4 }}>
+            <Pressable style={styles.addNewItemBtn} onPress={() => { setShowTerrainPicker(false); router.push('/terrain/new'); }}>
+              <MaterialIcons name="add" size={14} color={theme.primary} /><Text style={styles.addNewItemBtnText}>{t('tournament', 'terrainBtn')}</Text>
+            </Pressable>
+          </View>
+          <Pressable style={[styles.modalPickerItem, !terrainId && styles.modalPickerItemActive]} onPress={() => { Haptics.selectionAsync(); setTerrainId(undefined); setShowTerrainPicker(false); }}>
+            <View style={[styles.modalPickerItemIcon, { backgroundColor: theme.textMuted + '15' }]}><MaterialIcons name="edit-location" size={20} color={theme.textMuted} /></View>
+            <View style={{ flex: 1 }}><Text style={styles.modalPickerItemName}>{t('tournament', 'otherLocation')}</Text><Text style={styles.modalPickerItemSub}>{t('tournament', 'manualAddressEntry')}</Text></View>
+            {!terrainId ? <MaterialIcons name="check-circle" size={20} color={theme.success} /> : null}
+          </Pressable>
+          <FlatList data={filteredTerrains} keyExtractor={(item) => item.id} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }} renderItem={({ item: tr }) => {
+            const tc = config.terrainTypes.find(t => t.id === tr.type);
+            return (
+              <Pressable style={[styles.modalPickerItem, { marginHorizontal: 0 }, terrainId === tr.id && styles.modalPickerItemActive]} onPress={() => { Haptics.selectionAsync(); setTerrainId(tr.id); setShowTerrainPicker(false); }}>
+                <View style={[styles.modalPickerItemIcon, { backgroundColor: theme.success + '15' }]}><MaterialIcons name={(tc?.icon as any) || 'landscape'} size={20} color={theme.success} /></View>
+                <View style={{ flex: 1 }}><Text style={styles.modalPickerItemName}>{tr.name}</Text><Text style={styles.modalPickerItemSub}>{tr.address}, {tr.city}</Text></View>
+                {terrainId === tr.id ? <MaterialIcons name="check-circle" size={20} color={theme.success} /> : null}
+              </Pressable>
+            );
+          }} ListEmptyComponent={<View style={styles.modalEmpty}><MaterialIcons name="landscape" size={40} color={theme.textMuted} /><Text style={styles.modalEmptyText}>{t('tournament', 'noTerrainsRegistered')}</Text></View>} />
+        </SafeAreaView>
+      </Modal>
+
+      {/* Cadrage Picker Modal */}
+      <Modal visible={showCadragePicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCadragePicker(false)}>
+        <SafeAreaView edges={['top']} style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('tournament', 'cadrage')}</Text>
+            <Pressable style={styles.modalCloseBtn} onPress={() => setShowCadragePicker(false)}><MaterialIcons name="close" size={24} color={theme.textPrimary} /></Pressable>
+          </View>
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+            {config.tournamentTypes.map(ct => {
+              const cadrageIcon = CADRAGE_ICONS[ct] || 'tune';
+              const isActive = type === ct;
+              const cfg = CADRAGE_CONFIG[ct];
+              return (
+                <Pressable key={ct} style={[styles.cadrageModalItem, isActive && styles.cadrageModalItemActive]} onPress={() => { Haptics.selectionAsync(); setType(ct); setShowCadragePicker(false); }}>
+                  <View style={styles.cadrageModalItemHeader}>
+                    <View style={[styles.cadrageModalItemIconBox, isActive && { backgroundColor: theme.tirColor }]}>
+                      <MaterialIcons name={cadrageIcon as any} size={22} color={isActive ? '#FFF' : theme.textSecondary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.cadrageModalItemName, isActive && { color: theme.tirColor }]}>{t('tournamentTypes', ct)}</Text>
+                      {cfg ? <Text style={styles.cadrageModalItemDesc} numberOfLines={2}>{cfg.description}</Text> : null}
+                    </View>
+                    {isActive ? <MaterialIcons name="check-circle" size={22} color={theme.tirColor} /> : null}
+                  </View>
+                  {cfg ? (
+                    <View style={styles.cadrageModalItemDetails}>
+                      <View style={styles.cadrageModalItemStat}><MaterialIcons name="sports" size={12} color={theme.textMuted} /><Text style={styles.cadrageModalItemStatText}>{cfg.matches}</Text></View>
+                      <View style={styles.cadrageModalItemStat}><MaterialIcons name="flag" size={12} color={theme.textMuted} /><Text style={styles.cadrageModalItemStatText}>{cfg.points}</Text></View>
+                    </View>
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
       {/* Club Picker Modal */}
       <Modal visible={showClubPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowClubPicker(false)}>
         <SafeAreaView edges={['top']} style={styles.modalContainer}>
@@ -610,12 +668,7 @@ const styles = StyleSheet.create({
   formatCardNameActive: { color: theme.accent },
   formatCardMeta: { fontSize: 10, color: theme.textMuted },
 
-  // Cadrage
-  cadrageGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  cadrageChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, borderWidth: 1.5, borderColor: 'transparent' },
-  cadrageChipActive: { borderColor: theme.tirColor, backgroundColor: theme.tirColor + '08' },
-  cadrageChipText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
-  cadrageChipTextActive: { color: theme.tirColor },
+  // Cadrage info (shown below picker)
   cadrageInfo: { marginTop: 12, padding: 12, backgroundColor: theme.tirColor + '06', borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.tirColor + '15' },
   cadrageInfoHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   cadrageInfoTitle: { fontSize: 13, fontWeight: '600', color: theme.tirColor, flex: 1 },
@@ -626,30 +679,6 @@ const styles = StyleSheet.create({
   cadrageInfoBullet: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   bulletDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: theme.tirColor },
   bulletText: { fontSize: 12, color: theme.textSecondary },
-
-  // Terrain
-  terrainHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  fieldHint: { flex: 1, fontSize: 11, color: theme.textMuted },
-  addTerrainBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: theme.primary + '12', borderRadius: theme.borderRadius.sm },
-  addTerrainBtnText: { fontSize: 11, fontWeight: '600', color: theme.primary },
-  terrainsScroll: { gap: 10, paddingBottom: 2 },
-  terrainOption: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, borderWidth: 1.5, borderColor: 'transparent' },
-  terrainOptionActive: { borderColor: theme.success, backgroundColor: theme.success + '08' },
-  terrainOptionText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
-  terrainOptionTextActive: { color: theme.success },
-  terrainCardNew: { width: 130, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, padding: 12, alignItems: 'center', borderWidth: 1.5, borderColor: 'transparent' },
-  terrainCardNewActive: { borderColor: theme.success, backgroundColor: theme.success + '08' },
-  terrainCardNewIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: theme.textMuted + '15', alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
-  terrainCardNewIconActive: { backgroundColor: theme.success },
-  terrainCardNewName: { fontSize: 12, fontWeight: '600', color: theme.textPrimary, textAlign: 'center', marginBottom: 2 },
-  terrainCardNewNameActive: { color: theme.success },
-  terrainCardNewCity: { fontSize: 10, color: theme.textMuted },
-  noTerrainsBox: { backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, padding: 20, alignItems: 'center', gap: 8, borderWidth: 1, borderColor: theme.border, borderStyle: 'dashed' as 'dashed' },
-  noTerrainsText: { fontSize: 13, color: theme.textMuted },
-  createTerrainBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: theme.primary + '15', borderRadius: theme.borderRadius.md },
-  createTerrainBtnText: { fontSize: 13, fontWeight: '600', color: theme.primary },
-  selectedTerrainBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: theme.success + '08', borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.success + '20' },
-  selectedTerrainBannerText: { fontSize: 12, color: theme.success, flex: 1, fontWeight: '500' },
 
   // Picker
   pickerButton: { backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' },
@@ -709,12 +738,25 @@ const styles = StyleSheet.create({
   modalSearchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, marginHorizontal: 16, marginVertical: 12, paddingHorizontal: 14, paddingVertical: 10, borderRadius: theme.borderRadius.md, gap: 10, borderWidth: 1, borderColor: theme.border },
   modalSearchInput: { flex: 1, fontSize: 15, color: theme.textPrimary, padding: 0 },
   modalPickerItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, marginHorizontal: 16, marginBottom: 8, ...theme.shadows.card },
-  modalPickerItemActive: { borderWidth: 2, borderColor: theme.primaryLight },
+  modalPickerItemActive: { borderWidth: 2, borderColor: theme.success },
   modalPickerItemIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   modalPickerItemName: { flex: 1, fontSize: 15, fontWeight: '600', color: theme.textPrimary },
   modalPickerItemSub: { fontSize: 12, color: theme.textMuted, marginTop: 2 },
   modalEmpty: { alignItems: 'center', paddingVertical: 40 },
   modalEmptyText: { fontSize: 14, color: theme.textMuted, marginTop: 10 },
+  addNewItemBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.primary + '12', borderRadius: theme.borderRadius.sm },
+  addNewItemBtnText: { fontSize: 12, fontWeight: '600', color: theme.primary },
+
+  // Cadrage modal items
+  cadrageModalItem: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 10, borderWidth: 2, borderColor: 'transparent', ...theme.shadows.card },
+  cadrageModalItemActive: { borderColor: theme.tirColor, backgroundColor: theme.tirColor + '06' },
+  cadrageModalItemHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  cadrageModalItemIconBox: { width: 44, height: 44, borderRadius: 12, backgroundColor: theme.textMuted + '15', alignItems: 'center', justifyContent: 'center' },
+  cadrageModalItemName: { fontSize: 15, fontWeight: '700', color: theme.textPrimary },
+  cadrageModalItemDesc: { fontSize: 12, color: theme.textSecondary, marginTop: 3, lineHeight: 17 },
+  cadrageModalItemDetails: { flexDirection: 'row', gap: 16, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border },
+  cadrageModalItemStat: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  cadrageModalItemStatText: { fontSize: 11, color: theme.textMuted, fontWeight: '500' },
 
   // Footer
   footer: { paddingHorizontal: 16, paddingTop: 12, backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border },

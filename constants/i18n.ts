@@ -1865,6 +1865,7 @@ export const translations = {
     selectTerrainOrAddress: { fr: 'Sélectionnez un terrain enregistré ou saisissez une adresse', en: 'Select a registered court or enter an address' },
     terrainBtn: { fr: 'Terrain', en: 'Court' },
     otherLocation: { fr: 'Autre lieu', en: 'Other location' },
+    manualAddressEntry: { fr: 'Saisie manuelle de l\'adresse', en: 'Manual address entry' },
     noTerrainsRegistered: { fr: 'Aucun terrain enregistré', en: 'No courts registered' },
     createTerrain: { fr: 'Créer un terrain', en: 'Create a court' },
     tournamentLocation: { fr: 'LIEU DU TOURNOI', en: 'TOURNAMENT LOCATION' },
