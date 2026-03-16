@@ -1650,6 +1650,8 @@ export const translations = {
     manageBoulesSets: { fr: 'Gérer vos sets de boules', en: 'Manage your boules sets' },
     deleteConfirm: { fr: 'Supprimer', en: 'Delete' },
     preferredBoules: { fr: 'Boules préférées', en: 'Preferred Boules' },
+    boulesLabel: { fr: 'Boules', en: 'Boules' },
+    matchesUnit: { fr: 'matchs', en: 'matches' },
   },
 
   // ============================================
@@ -2024,6 +2026,8 @@ export const translations = {
     noHistoryDesc: { fr: 'Les synchronisations hors-ligne apparaîtront ici', en: 'Offline sync replays will appear here' },
     justNow: { fr: "À l'instant", en: 'Just now' },
     yesterday: { fr: 'Hier', en: 'Yesterday' },
+    daysAgo: { fr: 'j', en: 'd' },
+    retryAllCount: { fr: 'Réessayer tout', en: 'Retry all' },
   },
 
   // ============================================
@@ -2071,6 +2075,7 @@ export const translations = {
     statusLabel: { fr: 'Statut', en: 'Status' },
     contactsVisibleOnMap: { fr: 'Vos contacts sont actuellement visibles sur la carte publique.', en: 'Your contacts are currently visible on the public map.' },
     contactsHiddenOnMap: { fr: 'Vos contacts sont masqués sur la carte publique.', en: 'Your contacts are hidden on the public map.' },
+    geoNoteOtherPlayer: { fr: 'Cette fiche sera géolocalisée et visible sur la Carte pour tous les utilisateurs.', en: 'This card will be geolocated and visible on the Map to all users.' },
   },
 
   // ============================================
@@ -2090,6 +2095,73 @@ export const translations = {
     partnerConsistency: { fr: 'Régularité avec le partenaire', en: 'Partner consistency' },
     overallWinRate: { fr: 'Taux de victoire global', en: 'Overall win rate' },
     shotAccuracy: { fr: 'Réussite au tir', en: 'Shot accuracy' },
+    matchesUnit: { fr: 'matchs', en: 'matches' },
+  },
+
+  // ============================================
+  // HISTORY (challenge detail extras)
+  // ============================================
+  historyExtra: {
+    confrontation: { fr: 'Confrontation', en: 'Matchup' },
+    editWorkshopDistScore: { fr: 'Modifier atelier, distance, score', en: 'Edit workshop, distance, score' },
+    tapToggleLongCarreau: { fr: 'Appuyer = basculer, Maintenir = carreau', en: 'Tap = toggle, Long press = carreau' },
+    successLabel: { fr: 'Réussi', en: 'Success' },
+    missLabel: { fr: 'Raté', en: 'Miss' },
+    addNotes: { fr: 'Ajouter des notes...', en: 'Add notes...' },
+    noNotes: { fr: 'Aucune note', en: 'No notes' },
+    deleteChallenge: { fr: 'Supprimer ce défi ?', en: 'Delete this challenge?' },
+    finale: { fr: 'Finale', en: 'Final' },
+  },
+
+  // ============================================
+  // OFFLINE BANNER
+  // ============================================
+  offlineBanner: {
+    neverSynced: { fr: 'jamais synchronisé', en: 'never synced' },
+    syncing: { fr: 'Synchronisation...', en: 'Syncing...' },
+    operations: { fr: 'opérations', en: 'operations' },
+    offlineMode: { fr: 'Mode hors-ligne', en: 'Offline mode' },
+    lastSync: { fr: 'Dernière sync ', en: 'Last sync ' },
+    pending: { fr: 'en attente', en: 'pending' },
+    lessThan1Min: { fr: "il y a moins d'1 min", en: 'less than 1 min ago' },
+  },
+
+  // ============================================
+  // CONFLICT RESOLUTION
+  // ============================================
+  conflict: {
+    detected: { fr: 'Conflit détecté', en: 'Conflict detected' },
+    conflictingFields: { fr: 'champ(s) en conflit', en: 'conflicting field(s)' },
+    fieldLabel: { fr: 'Champ', en: 'Field' },
+    localLabel: { fr: 'Local', en: 'Local' },
+    serverLabel: { fr: 'Serveur', en: 'Server' },
+    keepLocal: { fr: 'Garder local', en: 'Keep local' },
+    keepServer: { fr: 'Garder serveur', en: 'Keep server' },
+    skipConflict: { fr: 'Ignorer ce conflit', en: 'Skip this conflict' },
+    modifiedOffline: { fr: 'Cet enregistrement a été modifié sur le serveur pendant que vous étiez hors-ligne. Choisissez quelle version conserver.', en: 'This record was modified on the server while you were offline. Choose which version to keep.' },
+    timestampsOnly: { fr: 'Timestamps différents uniquement', en: 'Only timestamps differ' },
+  },
+
+  // ============================================
+  // STATS EXTRA (hardcoded strings)
+  // ============================================
+  statsExtra: {
+    withPartner: { fr: 'avec', en: 'with' },
+    shotLabel: { fr: 'Tir', en: 'Shot' },
+    winsLabel: { fr: 'Victoires', en: 'Wins' },
+    carreauLabel: { fr: 'Carreau', en: 'Carreau' },
+    setsComparison: { fr: 'Comparaison des sets', en: 'Sets Comparison' },
+    bestWinRateWith: { fr: 'Meilleur taux de victoire avec', en: 'Best win rate with' },
+    lessEffective: { fr: 'est moins performant', en: 'is less effective' },
+    monthLabel: { fr: 'Mois', en: 'Month' },
+    noItemsFound: { fr: 'aucun élément trouvé', en: 'no items found' },
+  },
+
+  // ============================================
+  // DIRECTORY EXTRA
+  // ============================================
+  directoryExtra: {
+    noPrefix: { fr: 'Aucun', en: 'No' },
   },
 
   // ============================================

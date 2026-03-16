@@ -71,7 +71,7 @@ export default function ConflictResolutionModal({
   onResolve,
   remaining,
 }: ConflictResolutionModalProps) {
-  const { language } = useLanguage();
+  const { t, language } = useLanguage();
 
   if (!conflict) return null;
 
@@ -107,7 +107,7 @@ export default function ConflictResolutionModal({
               <MaterialIcons name="sync-problem" size={16} color="#FFF" />
             </View>
             <Text style={styles.headerTitle}>
-              {language === 'fr' ? 'Conflit detecte' : 'Conflict detected'}
+              {t('conflict', 'detected')}
             </Text>
           </View>
           {remaining > 0 ? (
@@ -132,7 +132,7 @@ export default function ConflictResolutionModal({
                 {conflict.itemName || tableLabel}
               </Text>
               <Text style={styles.infoSubtitle}>
-                {tableLabel} · {diffKeys.length} {language === 'fr' ? 'champ(s) en conflit' : 'conflicting field(s)'}
+                {tableLabel} · {diffKeys.length} {t('conflict', 'conflictingFields')}
               </Text>
             </View>
           </Animated.View>
@@ -153,19 +153,19 @@ export default function ConflictResolutionModal({
             <View style={styles.comparisonHeader}>
               <View style={styles.comparisonFieldCol}>
                 <Text style={styles.comparisonColLabel}>
-                  {language === 'fr' ? 'Champ' : 'Field'}
+                  {t('conflict', 'fieldLabel')}
                 </Text>
               </View>
               <View style={[styles.comparisonValueCol, styles.localCol]}>
                 <MaterialIcons name="phone-android" size={14} color={theme.primary} />
                 <Text style={[styles.comparisonColLabel, { color: theme.primary }]}>
-                  {language === 'fr' ? 'Local' : 'Local'}
+                  {t('conflict', 'localLabel')}
                 </Text>
               </View>
               <View style={[styles.comparisonValueCol, styles.serverCol]}>
                 <MaterialIcons name="cloud" size={14} color={theme.success} />
                 <Text style={[styles.comparisonColLabel, { color: theme.success }]}>
-                  {language === 'fr' ? 'Serveur' : 'Server'}
+                  {t('conflict', 'serverLabel')}
                 </Text>
               </View>
             </View>
@@ -214,7 +214,7 @@ export default function ConflictResolutionModal({
           >
             <MaterialIcons name="phone-android" size={20} color="#FFF" />
             <Text style={styles.actionBtnText}>
-              {language === 'fr' ? 'Garder local' : 'Keep local'}
+              {t('conflict', 'keepLocal')}
             </Text>
           </Pressable>
 
@@ -224,7 +224,7 @@ export default function ConflictResolutionModal({
           >
             <MaterialIcons name="cloud" size={20} color="#FFF" />
             <Text style={styles.actionBtnText}>
-              {language === 'fr' ? 'Garder serveur' : 'Keep server'}
+              {t('conflict', 'keepServer')}
             </Text>
           </Pressable>
         </View>
@@ -235,7 +235,7 @@ export default function ConflictResolutionModal({
         >
           <MaterialIcons name="skip-next" size={18} color={theme.textSecondary} />
           <Text style={styles.skipBtnText}>
-            {language === 'fr' ? 'Ignorer ce conflit' : 'Skip this conflict'}
+            {t('conflict', 'skipConflict')}
           </Text>
         </Pressable>
       </SafeAreaView>

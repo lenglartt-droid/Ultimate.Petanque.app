@@ -23,7 +23,7 @@ export default function OfflineBanner() {
   const insets = useSafeAreaInsets();
   const { isConnected } = useNetworkStatus();
   const { refreshData, isReplayingQueue, replayProgress } = useApp();
-  const { language } = useLanguage();
+  const { t, language } = useLanguage();
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [queueCount, setQueueCount] = useState(0);
@@ -85,11 +85,11 @@ export default function OfflineBanner() {
 
   const getTimeSinceSync = useCallback((): string => {
     if (!lastSync) {
-      return language === 'fr' ? 'jamais synchronise' : 'never synced';
+      return t('offlineBanner', 'neverSynced');
     }
     const diff = Date.now() - new Date(lastSync).getTime();
     const minutes = Math.floor(diff / 60000);
-    if (minutes < 1) return language === 'fr' ? "il y a moins d'1 min" : 'less than 1 min ago';
+    if (minutes < 1) return t('offlineBanner', 'lessThan1Min');
     if (minutes < 60) return language === 'fr' ? `il y a ${minutes} min` : `${minutes} min ago`;
     const hours = Math.floor(minutes / 60);
     if (hours < 24) return language === 'fr' ? `il y a ${hours}h` : `${hours}h ago`;
@@ -127,11 +127,11 @@ export default function OfflineBanner() {
         </Animated.View>
         <View style={styles.textContainer}>
           <Text style={styles.title}>
-            {language === 'fr' ? 'Synchronisation...' : 'Syncing...'}
+            {t('offlineBanner', 'syncing')}
           </Text>
           <Text style={styles.subtitle}>
             {replayProgress.current}/{replayProgress.total}{' '}
-            {language === 'fr' ? 'operations' : 'operations'}
+            {t('offlineBanner', 'operations')}
           </Text>
           {/* Progress bar */}
           <View style={styles.progressBarTrack}>
@@ -158,7 +158,7 @@ export default function OfflineBanner() {
       <View style={styles.textContainer}>
         <View style={styles.titleRow}>
           <Text style={styles.title}>
-            {language === 'fr' ? 'Mode hors-ligne' : 'Offline mode'}
+            {t('offlineBanner', 'offlineMode')}
           </Text>
           {queueCount > 0 ? (
             <View style={styles.queueBadge}>
@@ -168,10 +168,10 @@ export default function OfflineBanner() {
           ) : null}
         </View>
         <Text style={styles.subtitle}>
-          {language === 'fr' ? 'Derniere sync ' : 'Last sync '}
+          {t('offlineBanner', 'lastSync')}
           {getTimeSinceSync()}
           {queueCount > 0
-            ? ` · ${queueCount} ${language === 'fr' ? 'en attente' : 'pending'}`
+            ? ` · ${queueCount} ${t('offlineBanner', 'pending')}`
             : ''}
         </Text>
       </View>

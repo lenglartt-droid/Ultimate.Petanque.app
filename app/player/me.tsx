@@ -277,11 +277,11 @@ export default function MyPlayerCardScreen() {
     const terrainPct = terrainAnalysis.totalWithTerrain > 0 ? Math.round((terrainAnalysis.terrainCounts[terrainAnalysis.preferredTerrain] / terrainAnalysis.totalWithTerrain) * 100) : 50;
     const partnerPct = partnerAnalysis.totalWithPartners > 0 ? Math.round((partnerAnalysis.preferredPartner.count / partnerAnalysis.totalWithPartners) * 100) : 50;
     return [
-      { label: language === 'fr' ? 'Role' : 'Role', value: rolePct, color: roleIcons[roleAnalysis.preferredRole]?.color || theme.primary },
-      { label: language === 'fr' ? 'Terrain' : 'Terrain', value: terrainPct, color: theme.success },
-      { label: language === 'fr' ? 'Duo' : 'Partner', value: partnerPct, color: '#EC4899' },
-      { label: language === 'fr' ? 'Victoire' : 'Win', value: userStats.winRate, color: theme.carreauColor },
-      { label: language === 'fr' ? 'Tir' : 'Shot', value: tirRate, color: theme.accent },
+      { label: t('gamePreferences', 'roleLabel'), value: rolePct, color: roleIcons[roleAnalysis.preferredRole]?.color || theme.primary },
+      { label: t('gamePreferences', 'terrainLabel'), value: terrainPct, color: theme.success },
+      { label: t('gamePreferences', 'partnerLabel'), value: partnerPct, color: '#EC4899' },
+      { label: t('gamePreferences', 'winLabel'), value: userStats.winRate, color: theme.carreauColor },
+      { label: t('gamePreferences', 'shotLabel'), value: tirRate, color: theme.accent },
     ];
   }, [selfPlayer, roleAnalysis, terrainAnalysis, partnerAnalysis, userStats.winRate, tirRate, language]);
 
@@ -442,9 +442,9 @@ export default function MyPlayerCardScreen() {
                   <View style={[s.sectionIconBox, { backgroundColor: '#8B5CF6' + '15' }]}>
                     <MaterialIcons name="psychology" size={18} color="#8B5CF6" />
                   </View>
-                  <Text style={s.sectionTitle}>{language === 'fr' ? 'Preferences de jeu' : 'Game Preferences'}</Text>
+                  <Text style={s.sectionTitle}>{t('gamePreferences', 'title')}</Text>
                 </View>
-                <Text style={s.sectionDesc}>{language === 'fr' ? 'Analyse automatique basee sur vos matchs : role favori, terrain prefere, partenaire regulier et equipement.' : 'Automatic analysis based on your matches: preferred role, terrain, regular partner and equipment.'}</Text>
+                <Text style={s.sectionDesc}>{t('gamePreferences', 'descSelf')}</Text>
 
                 {/* Mini Radar */}
                 {radarData.length >= 3 ? (
@@ -457,11 +457,11 @@ export default function MyPlayerCardScreen() {
                 {radarData.length >= 3 ? (
                   <View style={s.radarLegend}>
                     {[
-                      { color: radarData[0]?.color, label: radarData[0]?.label, desc: language === 'fr' ? 'Fidelite au role favori' : 'Preferred role loyalty' },
-                      { color: radarData[1]?.color, label: radarData[1]?.label, desc: language === 'fr' ? 'Fidelite au terrain favori' : 'Preferred terrain loyalty' },
-                      { color: radarData[2]?.color, label: radarData[2]?.label, desc: language === 'fr' ? 'Regularite avec le partenaire' : 'Partner consistency' },
-                      { color: radarData[3]?.color, label: radarData[3]?.label, desc: language === 'fr' ? 'Taux de victoire global' : 'Overall win rate' },
-                      { color: radarData[4]?.color, label: radarData[4]?.label, desc: language === 'fr' ? 'Reussite au tir' : 'Shot accuracy' },
+                      { color: radarData[0]?.color, label: radarData[0]?.label, desc: t('gamePreferences', 'roleLoyalty') },
+                      { color: radarData[1]?.color, label: radarData[1]?.label, desc: t('gamePreferences', 'terrainLoyalty') },
+                      { color: radarData[2]?.color, label: radarData[2]?.label, desc: t('gamePreferences', 'partnerConsistency') },
+                      { color: radarData[3]?.color, label: radarData[3]?.label, desc: t('gamePreferences', 'overallWinRate') },
+                      { color: radarData[4]?.color, label: radarData[4]?.label, desc: t('gamePreferences', 'shotAccuracy') },
                     ].map((item, i) => (
                       <View key={i} style={s.radarLegendItem}>
                         <View style={[s.radarLegendDot, { backgroundColor: item.color }]} />
@@ -519,7 +519,7 @@ export default function MyPlayerCardScreen() {
                         <Text style={s.prefItemLabel}>{t('player', 'preferredPartner')}</Text>
                         <Text style={s.prefItemValue}>{partnerAnalysis.preferredPartner.name}</Text>
                       </View>
-                      <Text style={s.prefItemPct}>{partnerAnalysis.preferredPartner.count} {language === 'fr' ? 'matchs' : 'matches'}</Text>
+                      <Text style={s.prefItemPct}>{partnerAnalysis.preferredPartner.count} {t('gamePreferences', 'matchesUnit')}</Text>
                     </View>
                   );
                 })() : null}
@@ -531,10 +531,10 @@ export default function MyPlayerCardScreen() {
                       <MaterialIcons name="sports-baseball" size={18} color={theme.accent} />
                     </View>
                     <View style={s.prefItemInfo}>
-                      <Text style={s.prefItemLabel}>{language === 'fr' ? 'Boules preferees' : 'Preferred Boules'}</Text>
+                      <Text style={s.prefItemLabel}>{t('equipment', 'preferredBoules')}</Text>
                       <Text style={s.prefItemValue}>{preferredBoulesAnalysis.set.name}</Text>
                     </View>
-                    <Text style={s.prefItemPct}>{preferredBoulesAnalysis.stats.matches} {language === 'fr' ? 'matchs' : 'matches'}</Text>
+                    <Text style={s.prefItemPct}>{preferredBoulesAnalysis.stats.matches} {t('gamePreferences', 'matchesUnit')}</Text>
                   </View>
                 ) : selfPlayer.boules && (selfPlayer.boules.name || selfPlayer.boules.diameter) ? (
                   <View style={s.prefItem}>
@@ -542,7 +542,7 @@ export default function MyPlayerCardScreen() {
                       <MaterialIcons name="sports-baseball" size={18} color={theme.accent} />
                     </View>
                     <View style={s.prefItemInfo}>
-                      <Text style={s.prefItemLabel}>{language === 'fr' ? 'Boules' : 'Boules'}</Text>
+                      <Text style={s.prefItemLabel}>{t('equipment', 'boulesLabel')}</Text>
                       <Text style={s.prefItemValue}>{selfPlayer.boules.name || t('player', 'boulesLabel')}</Text>
                     </View>
                   </View>
@@ -691,8 +691,8 @@ export default function MyPlayerCardScreen() {
               <MaterialIcons name="shield" size={14} color={theme.warning} />
               <Text style={s.privacyNoteText}>
                 {selfPlayer.showContactPublic
-                  ? (language === 'fr' ? 'Vos contacts sont actuellement visibles sur la carte publique.' : 'Your contacts are currently visible on the public map.')
-                  : (language === 'fr' ? 'Vos contacts sont masques sur la carte publique.' : 'Your contacts are hidden on the public map.')}
+                  ? t('preview', 'contactsVisibleOnMap')
+                  : t('preview', 'contactsHiddenOnMap')}
               </Text>
             </View>
           ) : null}
@@ -716,8 +716,8 @@ export default function MyPlayerCardScreen() {
                 <MaterialIcons name="public" size={22} color={theme.success} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.pvHeaderTitle}>{language === 'fr' ? 'Apercu carte publique' : 'Public Card Preview'}</Text>
-                <Text style={s.pvHeaderSub}>{language === 'fr' ? 'Voici comment votre fiche apparaitra sur la Carte' : 'This is how your card will appear on the Map'}</Text>
+                <Text style={s.pvHeaderTitle}>{t('preview', 'publicPlayerTitle')}</Text>
+                <Text style={s.pvHeaderSub}>{t('preview', 'publicPlayerDesc')}</Text>
               </View>
               <Pressable style={s.pvCloseBtn} onPress={() => setShowPublicPreview(false)} hitSlop={8}>
                 <MaterialIcons name="close" size={22} color={theme.textSecondary} />
@@ -827,10 +827,10 @@ export default function MyPlayerCardScreen() {
                       <MaterialIcons name={previewShowContacts ? 'contact-phone' : 'phone-disabled'} size={18} color={previewShowContacts ? theme.success : theme.textMuted} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.pvToggleTitle}>{language === 'fr' ? 'Afficher les contacts' : 'Show contacts'}</Text>
+                      <Text style={s.pvToggleTitle}>{t('preview', 'showContacts')}</Text>
                       <Text style={s.pvToggleDesc}>{previewShowContacts
-                        ? (language === 'fr' ? 'Votre telephone et email seront visibles' : 'Your phone and email will be visible')
-                        : (language === 'fr' ? 'Vos contacts resteront masques' : 'Your contacts will remain hidden')
+                        ? t('preview', 'contactsVisiblePlayer')
+                        : t('preview', 'contactsHiddenPlayer')
                       }</Text>
                     </View>
                     <Switch
@@ -849,10 +849,7 @@ export default function MyPlayerCardScreen() {
               {/* Geolocation note */}
               <View style={s.pvNote}>
                 <MaterialIcons name="map" size={16} color={theme.primary} />
-                <Text style={s.pvNoteText}>{language === 'fr'
-                  ? 'Votre fiche sera geolocalisee et visible sur la Carte pour tous les utilisateurs.'
-                  : 'Your card will be geolocated and visible on the Map to all users.'
-                }</Text>
+                <Text style={s.pvNoteText}>{t('preview', 'geoNotePlayer')}</Text>
               </View>
             </ScrollView>
 
@@ -867,8 +864,8 @@ export default function MyPlayerCardScreen() {
                   <>
                     <MaterialIcons name={isPublic ? 'lock' : 'public'} size={18} color="#FFF" />
                     <Text style={s.pvConfirmText}>{isPublic
-                      ? (language === 'fr' ? 'Rendre privee' : 'Make Private')
-                      : (language === 'fr' ? 'Rendre publique' : 'Make Public')
+                      ? t('preview', 'makePrivateFem')
+                      : t('preview', 'makePublicFem')
                     }</Text>
                   </>
                 )}
@@ -887,8 +884,8 @@ export default function MyPlayerCardScreen() {
                 <MaterialIcons name="share" size={22} color={theme.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.pvHeaderTitle}>{language === 'fr' ? 'Apercu du partage' : 'Share Preview'}</Text>
-                <Text style={s.pvHeaderSub}>{language === 'fr' ? 'Voici ce que le destinataire verra' : 'This is what the recipient will see'}</Text>
+                <Text style={s.pvHeaderTitle}>{t('preview', 'shareTitle')}</Text>
+                <Text style={s.pvHeaderSub}>{t('preview', 'shareDesc')}</Text>
               </View>
               <Pressable style={s.pvCloseBtn} onPress={() => setShowSharePreview(false)} hitSlop={8}>
                 <MaterialIcons name="close" size={22} color={theme.textSecondary} />
@@ -899,7 +896,7 @@ export default function MyPlayerCardScreen() {
               {/* Read-only badge */}
               <View style={s.pvReadOnlyBadge}>
                 <MaterialIcons name="lock" size={14} color={theme.warning} />
-                <Text style={s.pvReadOnlyText}>{language === 'fr' ? 'Lecture seule - Le destinataire ne pourra pas modifier votre fiche' : 'Read-only - The recipient cannot edit your card'}</Text>
+                <Text style={s.pvReadOnlyText}>{t('preview', 'readOnlyPlayer')}</Text>
               </View>
 
               {/* Preview Card (same layout) */}
@@ -1004,10 +1001,10 @@ export default function MyPlayerCardScreen() {
                       <MaterialIcons name={previewShowContacts ? 'contact-phone' : 'phone-disabled'} size={18} color={previewShowContacts ? theme.success : theme.textMuted} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.pvToggleTitle}>{language === 'fr' ? 'Afficher les contacts' : 'Show contacts'}</Text>
+                      <Text style={s.pvToggleTitle}>{t('preview', 'showContacts')}</Text>
                       <Text style={s.pvToggleDesc}>{previewShowContacts
-                        ? (language === 'fr' ? 'Votre telephone et email seront visibles' : 'Your phone and email will be visible')
-                        : (language === 'fr' ? 'Vos contacts resteront masques' : 'Your contacts will remain hidden')
+                        ? t('preview', 'contactsVisiblePlayer')
+                        : t('preview', 'contactsHiddenPlayer')
                       }</Text>
                     </View>
                     <Switch
@@ -1026,10 +1023,7 @@ export default function MyPlayerCardScreen() {
               {/* Share note */}
               <View style={s.pvNote}>
                 <MaterialIcons name="visibility" size={16} color={theme.primary} />
-                <Text style={s.pvNoteText}>{language === 'fr'
-                  ? 'Le destinataire aura un acces en lecture seule a votre fiche joueur.'
-                  : 'The recipient will have read-only access to your player card.'
-                }</Text>
+                <Text style={s.pvNoteText}>{t('preview', 'shareNotePlayer')}</Text>
               </View>
             </ScrollView>
 
@@ -1039,7 +1033,7 @@ export default function MyPlayerCardScreen() {
               </Pressable>
               <Pressable style={[s.pvConfirmBtn, { backgroundColor: theme.primary }]} onPress={handleConfirmShare}>
                 <MaterialIcons name="share" size={18} color="#FFF" />
-                <Text style={s.pvConfirmText}>{language === 'fr' ? 'Partager' : 'Share'}</Text>
+                <Text style={s.pvConfirmText}>{t('preview', 'shareBtn')}</Text>
               </Pressable>
             </View>
           </View>

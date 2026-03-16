@@ -58,7 +58,7 @@ const OP_COLORS: Record<string, string> = {
 };
 
 export default function SyncHistoryScreen() {
-  const { language } = useLanguage();
+  const { t, language } = useLanguage();
   const { refreshData, isReplayingQueue, retryFailedOps } = useApp();
   const { isConnected } = useNetworkStatus();
   const [history, setHistory] = useState<SyncHistoryEntry[]>([]);
@@ -148,12 +148,12 @@ export default function SyncHistoryScreen() {
 
   const handleClearAllFailed = () => {
     Alert.alert(
-      language === 'fr' ? 'Supprimer les echecs' : 'Clear failed ops',
-      language === 'fr' ? 'Supprimer toutes les operations echouees ?' : 'Remove all failed operations?',
+      t('syncHistory', 'clearFailedTitle'),
+      t('syncHistory', 'clearFailedMsg'),
       [
-        { text: language === 'fr' ? 'Annuler' : 'Cancel', style: 'cancel' },
+        { text: t('common', 'cancel'), style: 'cancel' },
         {
-          text: language === 'fr' ? 'Supprimer' : 'Clear',
+          text: t('syncHistory', 'clearBtn'),
           style: 'destructive',
           onPress: async () => {
             await clearFailedOperations();
@@ -167,12 +167,12 @@ export default function SyncHistoryScreen() {
 
   const handleClearHistory = () => {
     Alert.alert(
-      language === 'fr' ? 'Effacer historique' : 'Clear history',
-      language === 'fr' ? 'Supprimer tout historique de synchronisation ?' : 'Delete all sync history?',
+      t('syncHistory', 'clearHistoryTitle'),
+      t('syncHistory', 'clearHistoryMsg'),
       [
-        { text: language === 'fr' ? 'Annuler' : 'Cancel', style: 'cancel' },
+        { text: t('common', 'cancel'), style: 'cancel' },
         {
-          text: language === 'fr' ? 'Effacer' : 'Clear',
+          text: t('syncHistory', 'clearBtn'),
           style: 'destructive',
           onPress: async () => {
             await clearSyncHistory();
@@ -198,12 +198,12 @@ export default function SyncHistoryScreen() {
     });
 
     if (diffDays === 0) {
-      if (diffMin < 1) return language === 'fr' ? "A l'instant" : 'Just now';
+      if (diffMin < 1) return t('syncHistory', 'justNow');
       if (diffMin < 60) return `${diffMin} min · ${timeStr}`;
       return `${diffHours}h · ${timeStr}`;
     }
-    if (diffDays === 1) return `${language === 'fr' ? 'Hier' : 'Yesterday'} · ${timeStr}`;
-    if (diffDays < 7) return `${diffDays}${language === 'fr' ? 'j' : 'd'} · ${timeStr}`;
+    if (diffDays === 1) return `${t('syncHistory', 'yesterday')} · ${timeStr}`;
+    if (diffDays < 7) return `${diffDays}${t('syncHistory', 'daysAgo')} · ${timeStr}`;
 
     return date.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', {
       day: 'numeric',
@@ -242,12 +242,12 @@ export default function SyncHistoryScreen() {
               <MaterialIcons name="error" size={16} color={theme.error} />
             </View>
             <Text style={styles.failedTitle}>
-              {failedOps.length} {language === 'fr' ? 'operation(s) echouee(s)' : 'failed operation(s)'}
+              {failedOps.length} {t('syncHistory', 'failedOps')}
             </Text>
           </View>
           <Pressable onPress={handleClearAllFailed} hitSlop={8}>
             <Text style={styles.failedClearBtn}>
-              {language === 'fr' ? 'Tout supprimer' : 'Clear all'}
+              {t('syncHistory', 'clearAllFailed')}
             </Text>
           </Pressable>
         </View>
@@ -323,7 +323,7 @@ export default function SyncHistoryScreen() {
                       <>
                         <MaterialIcons name="replay" size={14} color="#FFF" />
                         <Text style={styles.failedCardRetryBtnText}>
-                          {language === 'fr' ? 'Reessayer' : 'Retry'}
+                          {t('syncHistory', 'retry')}
                         </Text>
                       </>
                     )}
@@ -358,8 +358,8 @@ export default function SyncHistoryScreen() {
           )}
           <Text style={styles.retryAllBtnText}>
             {retryingAll
-              ? (language === 'fr' ? 'Reessai en cours...' : 'Retrying...')
-              : (language === 'fr' ? `Reessayer tout (${failedOps.length})` : `Retry all (${failedOps.length})`)}
+              ? t('syncHistory', 'retrying')
+              : `${t('syncHistory', 'retryAllCount')} (${failedOps.length})`}
           </Text>
         </Pressable>
       </Animated.View>
@@ -396,7 +396,7 @@ export default function SyncHistoryScreen() {
               <MaterialIcons name="check" size={14} color={theme.success} />
               <Text style={[styles.entryStatValue, { color: theme.success }]}>{item.succeeded}</Text>
               <Text style={styles.entryStatLabel}>
-                {language === 'fr' ? 'reussies' : 'succeeded'}
+                {t('syncHistory', 'succeeded')}
               </Text>
             </View>
 
@@ -405,7 +405,7 @@ export default function SyncHistoryScreen() {
                 <MaterialIcons name="close" size={14} color={theme.error} />
                 <Text style={[styles.entryStatValue, { color: theme.error }]}>{item.failed}</Text>
                 <Text style={styles.entryStatLabel}>
-                  {language === 'fr' ? 'echouees' : 'failed'}
+                  {t('syncHistory', 'failed')}
                 </Text>
               </View>
             ) : null}
@@ -415,7 +415,7 @@ export default function SyncHistoryScreen() {
                 <MaterialIcons name="sync-problem" size={14} color={theme.warning} />
                 <Text style={[styles.entryStatValue, { color: theme.warning }]}>{item.conflictsDetected}</Text>
                 <Text style={styles.entryStatLabel}>
-                  {language === 'fr' ? 'conflits' : 'conflicts'}
+                  {t('syncHistory', 'conflicts')}
                 </Text>
               </View>
             ) : null}
@@ -438,7 +438,7 @@ export default function SyncHistoryScreen() {
               ))}
               {item.errors.length > 3 ? (
                 <Text style={styles.moreErrors}>
-                  +{item.errors.length - 3} {language === 'fr' ? 'autres erreurs' : 'more errors'}
+                  +{item.errors.length - 3} {t('syncHistory', 'moreErrors')}
                 </Text>
               ) : null}
             </View>
@@ -466,15 +466,15 @@ export default function SyncHistoryScreen() {
           <View>
             <Text style={styles.queueTitle}>
               {isReplayingQueue
-                ? (language === 'fr' ? 'Synchronisation en cours...' : 'Syncing...')
+                ? t('syncHistory', 'syncing')
                 : queueSize > 0
-                  ? `${queueSize} ${language === 'fr' ? 'en attente' : 'pending'}`
-                  : (language === 'fr' ? 'File vide' : 'Queue empty')}
+                  ? `${queueSize} ${t('syncHistory', 'pending')}`
+                  : t('syncHistory', 'queueEmpty')}
             </Text>
             <Text style={styles.queueSubtitle}>
               {isConnected
-                ? (language === 'fr' ? 'Connecte' : 'Connected')
-                : (language === 'fr' ? 'Hors-ligne' : 'Offline')}
+                ? t('syncHistory', 'connected')
+                : t('syncHistory', 'offline')}
             </Text>
           </View>
         </View>
@@ -500,8 +500,8 @@ export default function SyncHistoryScreen() {
         )}
         <Text style={styles.syncButtonText}>
           {manualSyncing
-            ? (language === 'fr' ? 'Synchronisation...' : 'Syncing...')
-            : (language === 'fr' ? 'Forcer synchronisation complete' : 'Force full sync')}
+            ? t('syncHistory', 'syncingBtn')
+            : t('syncHistory', 'forceFullSync')}
         </Text>
       </Pressable>
 
@@ -511,12 +511,12 @@ export default function SyncHistoryScreen() {
       {/* Section header */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>
-          {language === 'fr' ? 'HISTORIQUE' : 'HISTORY'}
+          {t('syncHistory', 'historyLabel')}
         </Text>
         {history.length > 0 ? (
           <Pressable onPress={handleClearHistory} hitSlop={8}>
             <Text style={styles.clearBtn}>
-              {language === 'fr' ? 'Effacer' : 'Clear'}
+              {t('common', 'clear')}
             </Text>
           </Pressable>
         ) : null}
@@ -530,7 +530,7 @@ export default function SyncHistoryScreen() {
         <MaterialIcons name="cloud-queue" size={48} color={theme.textMuted} />
       </View>
       <Text style={styles.emptyTitle}>
-        {language === 'fr' ? 'Aucun historique' : 'No history'}
+        {t('syncHistory', 'noHistory')}
       </Text>
       <Text style={styles.emptySubtitle}>
         {language === 'fr'
@@ -548,7 +548,7 @@ export default function SyncHistoryScreen() {
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>
-          {language === 'fr' ? 'Synchronisation' : 'Sync History'}
+          {t('syncHistory', 'title')}
         </Text>
         <View style={{ width: 40 }} />
       </View>
