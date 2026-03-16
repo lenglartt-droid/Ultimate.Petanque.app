@@ -224,7 +224,7 @@ export default function FAQScreen() {
               <MaterialIcons name="support-agent" size={36} color="#60A5FA" />
             </View>
             <Text style={s.heroTitle}>{t('faq', 'howCanWeHelp')}</Text>
-            <Text style={s.heroSub}>{totalQs} {t('faq', 'answersAndGuides')} \u2022 {FAQ_DATA.length} {language === 'fr' ? 'categories' : 'categories'}</Text>
+            <Text style={s.heroSub}>{totalQs} {t('faq', 'answersAndGuides')} {"\u2022"} {FAQ_DATA.length} {language === 'fr' ? 'categories' : 'categories'}</Text>
 
             {/* Search in hero */}
             <View style={s.heroSearch}>
