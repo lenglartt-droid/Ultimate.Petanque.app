@@ -24,48 +24,95 @@ import SharedBadge from '@/components/ui/SharedBadge';
 import ShareModal from '@/components/ui/ShareModal';
 import MergePickerModal from '@/components/ui/MergePickerModal';
 import { Image } from 'expo-image';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Polygon, Line, Circle as SvgCircle, Text as SvgText, G } from 'react-native-svg';
 import * as Linking from 'expo-linking';
 
+// ============================================
+// Mini Radar Chart for preferences
+// ============================================
+function MiniRadar({ data, labels, size }: {
+  data: { label: string; value: number; color: string }[];
+  labels: string[];
+  size: number;
+}) {
+  if (data.length < 3) return null;
+  const cx = size / 2;
+  const cy = size / 2;
+  const R = (size - 50) / 2;
+  const n = data.length;
+  const angleStep = (2 * Math.PI) / n;
+  const levels = [33, 66, 100];
 
-function StatRing({ value, color, size = 80 }: { value: number; color: string; size?: number }) {
-  const strokeWidth = 6;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = radius * 2 * Math.PI;
-  const strokeDashoffset = circumference - (value / 100) * circumference;
+  const getPoint = (angle: number, value: number) => ({
+    x: cx + (value / 100) * R * Math.sin(angle),
+    y: cy - (value / 100) * R * Math.cos(angle),
+  });
+
+  const pts = data.map((d, i) => getPoint(i * angleStep, d.value));
+  const polygon = pts.map(p => `${p.x},${p.y}`).join(' ');
 
   return (
-    <View style={{ position: 'relative', width: size, height: size }}>
-      <Svg width={size} height={size}>
-        <Circle cx={size/2} cy={size/2} r={radius} stroke={theme.border} strokeWidth={strokeWidth} fill="none" />
-        <Circle
-          cx={size/2} cy={size/2} r={radius}
-          stroke={color} strokeWidth={strokeWidth}
-          strokeDasharray={circumference} strokeDashoffset={strokeDashoffset}
-          strokeLinecap="round" fill="none" rotation="-90" origin={`${size/2},${size/2}`}
-        />
-      </Svg>
-      <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
-        <Text style={[styles.ringValue, { color }]}>{value}%</Text>
-      </View>
-    </View>
+    <Svg width={size} height={size}>
+      {levels.map(level => {
+        const lpts = Array.from({ length: n }, (_, i) => {
+          const p = getPoint(i * angleStep, level);
+          return `${p.x},${p.y}`;
+        }).join(' ');
+        return <Polygon key={level} points={lpts} fill="none" stroke={theme.border} strokeWidth={0.8} opacity={0.4} />;
+      })}
+      {data.map((_, i) => {
+        const p = getPoint(i * angleStep, 100);
+        return <Line key={i} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke={theme.border} strokeWidth={0.6} opacity={0.4} />;
+      })}
+      <Polygon points={polygon} fill={theme.primary + '18'} stroke={theme.primary} strokeWidth={2} opacity={0.9} />
+      {pts.map((p, i) => (
+        <SvgCircle key={i} cx={p.x} cy={p.y} r={4} fill={data[i].color} stroke="#FFF" strokeWidth={2} />
+      ))}
+      {data.map((d, i) => {
+        const p = getPoint(i * angleStep, 120);
+        return (
+          <G key={`l-${i}`}>
+            <SvgText x={p.x} y={p.y + 4} fontSize="10" fill={theme.textSecondary} textAnchor="middle" fontWeight="600">
+              {labels[i]}
+            </SvgText>
+          </G>
+        );
+      })}
+    </Svg>
   );
+}
+
+function getRoleColor(role: string): string {
+  switch (role) {
+    case 'Tireur': return '#F97316';
+    case 'Pointeur': return '#3B82F6';
+    case 'Milieu': return '#8B5CF6';
+    default: return theme.textSecondary;
+  }
+}
+
+function getRoleIcon(role: string): any {
+  switch (role) {
+    case 'Tireur': return 'gps-fixed';
+    case 'Pointeur': return 'adjust';
+    case 'Milieu': return 'swap-horiz';
+    default: return 'person';
+  }
 }
 
 export default function PlayerDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-
   const { user } = useAuth();
   const { t, language } = useLanguage();
+  const { getPlayerById, getMatchesByPlayer, getClubById, getTerrainById, deletePlayer, updatePlayer, selfPlayer, matches, getSharedPermission, loading: appLoading, boulesSets, players, challenges: allChallenges } = useApp();
 
-  const { getPlayerById, getMatchesByPlayer, getClubById, getTerrainById, deletePlayer, updatePlayer, selfPlayer, matches, getSharedPermission, refreshData: _rd, loading: appLoading, boulesSets } = useApp();
   const player = getPlayerById(id!);
-  const playerMatches = getMatchesByPlayer(id!).slice(0, 5);
+  const playerMatches = getMatchesByPlayer(id!);
+  const recentMatches = playerMatches.slice(0, 5);
   const { clubs, terrains: allTerrains } = useApp();
   const clubEntity = player?.clubId ? getClubById(player.clubId) : null;
   const terrainEntity = player?.terrainId ? getTerrainById(player.terrainId) : null;
-  // For shared players, the club/terrain may not exist in recipient's local context
   const clubDisplayName = clubEntity?.name || player?.club || null;
   const terrainDisplayName = terrainEntity?.name || player?.terrainName || null;
   const isSelf = selfPlayer && player?.id === selfPlayer.id;
@@ -77,11 +124,12 @@ export default function PlayerDetailScreen() {
   const [showShareModal, setShowShareModal] = React.useState(false);
   const [showMergePicker, setShowMergePicker] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
-  const [screenWidth, setScreenWidth] = React.useState(() => Dimensions.get('window').width);
+  const [screenDims, setScreenDims] = React.useState(() => Dimensions.get('window'));
   React.useEffect(() => {
-    const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
+    const sub = Dimensions.addEventListener('change', ({ window }) => setScreenDims(window));
     return () => sub?.remove();
   }, []);
+  const screenWidth = Math.max(1, screenDims.width);
   const isTablet = screenWidth >= 600;
   const { refreshData } = useApp();
 
@@ -91,101 +139,49 @@ export default function PlayerDetailScreen() {
     setRefreshing(false);
   }, [refreshData]);
 
-
-  // Calculate preferred role from match history
+  // Role analysis
   const roleAnalysis = React.useMemo(() => {
     const roleCounts: Record<string, number> = { 'Pointeur': 0, 'Milieu': 0, 'Tireur': 0 };
-    const allMatches = matches.filter(m => 
-      m.teamA.players.includes(id!) || m.teamB.players.includes(id!)
-    );
-    
+    const allMatches = matches.filter(m => m.teamA.players.includes(id!) || m.teamB.players.includes(id!));
     allMatches.forEach(match => {
-      // Check team A roles
       if (match.teamA.players.includes(id!) && match.teamA.playerRoles) {
-        const playerRole = match.teamA.playerRoles.find(pr => pr.playerId === id!);
-        if (playerRole && roleCounts[playerRole.role] !== undefined) {
-          roleCounts[playerRole.role]++;
-        }
+        const pr = match.teamA.playerRoles.find(r => r.playerId === id!);
+        if (pr && roleCounts[pr.role] !== undefined) roleCounts[pr.role]++;
       }
-      // Check team B roles
       if (match.teamB.players.includes(id!) && match.teamB.playerRoles) {
-        const playerRole = match.teamB.playerRoles.find(pr => pr.playerId === id!);
-        if (playerRole && roleCounts[playerRole.role] !== undefined) {
-          roleCounts[playerRole.role]++;
-        }
+        const pr = match.teamB.playerRoles.find(r => r.playerId === id!);
+        if (pr && roleCounts[pr.role] !== undefined) roleCounts[pr.role]++;
       }
     });
-    
     const totalWithRoles = Object.values(roleCounts).reduce((a, b) => a + b, 0);
-    const preferredRole = totalWithRoles > 0 
-      ? Object.entries(roleCounts).reduce((a, b) => b[1] > a[1] ? b : a)[0]
-      : player?.role || 'Milieu';
-    
+    const preferredRole = totalWithRoles > 0 ? Object.entries(roleCounts).reduce((a, b) => b[1] > a[1] ? b : a)[0] : player?.role || 'Milieu';
     return { roleCounts, totalWithRoles, preferredRole };
   }, [matches, id, player?.role]);
 
-  const roleIcons: Record<string, { icon: string; color: string }> = {
-    'Pointeur': { icon: 'radio-button-on', color: '#3B82F6' },
-    'Milieu': { icon: 'swap-horiz', color: '#8B5CF6' },
-    'Tireur': { icon: 'gps-fixed', color: '#F97316' },
-  };
-
-  const terrainTypeIcons: Record<string, { icon: string; color: string }> = {
-    'Stabilisé': { icon: 'landscape', color: '#6B7280' },
-    'Graviers': { icon: 'grain', color: '#92400E' },
-    'Sable': { icon: 'beach-access', color: '#D97706' },
-    'Cailloux': { icon: 'terrain', color: '#6D28D9' },
-    'Terre battue': { icon: 'grass', color: '#15803D' },
-  };
-
-  const partnerColors = ['#3B82F6', '#8B5CF6', '#F97316', '#10B981', '#EC4899', '#6366F1', '#14B8A6'];
-
-  // Terrain type analysis from match history
+  // Terrain analysis
   const terrainAnalysis = React.useMemo(() => {
-    if (!id) return { terrainCounts: {} as Record<string, number>, totalWithTerrain: 0, preferredTerrain: '' };
     const terrainCounts: Record<string, number> = {};
-    const allMatches = matches.filter(m =>
-      m.teamA.players.includes(id) || m.teamB.players.includes(id)
-    );
-    allMatches.forEach(match => {
-      if (match.terrainType) {
-        terrainCounts[match.terrainType] = (terrainCounts[match.terrainType] || 0) + 1;
-      }
-    });
+    const allMatches = matches.filter(m => m.teamA.players.includes(id!) || m.teamB.players.includes(id!));
+    allMatches.forEach(m => { if (m.terrainType) terrainCounts[m.terrainType] = (terrainCounts[m.terrainType] || 0) + 1; });
     const totalWithTerrain = Object.values(terrainCounts).reduce((a, b) => a + b, 0);
-    const preferredTerrain = totalWithTerrain > 0
-      ? Object.entries(terrainCounts).reduce((a, b) => b[1] > a[1] ? b : a)[0]
-      : '';
+    const preferredTerrain = totalWithTerrain > 0 ? Object.entries(terrainCounts).reduce((a, b) => b[1] > a[1] ? b : a)[0] : '';
     return { terrainCounts, totalWithTerrain, preferredTerrain };
   }, [matches, id]);
 
-  // Partner analysis from match history
+  // Partner analysis
   const partnerAnalysis = React.useMemo(() => {
-    if (!id) return { partnerCounts: {} as Record<string, { count: number; name: string }>, totalWithPartners: 0, preferredPartner: { id: '', name: '', count: 0 } };
     const partnerCounts: Record<string, { count: number; name: string }> = {};
-    const allMatches = matches.filter(m =>
-      m.teamA.players.includes(id) || m.teamB.players.includes(id)
-    );
+    const allMatches = matches.filter(m => m.teamA.players.includes(id!) || m.teamB.players.includes(id!));
     allMatches.forEach(match => {
-      const inTeamA = match.teamA.players.includes(id);
-      const inTeamB = match.teamB.players.includes(id);
-      if (inTeamA && match.teamA.players.length > 1) {
+      const inA = match.teamA.players.includes(id!);
+      const inB = match.teamB.players.includes(id!);
+      if (inA && match.teamA.players.length > 1) {
         match.teamA.players.forEach((pid, idx) => {
-          if (pid !== id) {
-            if (!partnerCounts[pid]) {
-              partnerCounts[pid] = { count: 0, name: match.teamA.playerNames[idx] || pid };
-            }
-            partnerCounts[pid].count++;
-          }
+          if (pid !== id!) { if (!partnerCounts[pid]) partnerCounts[pid] = { count: 0, name: match.teamA.playerNames[idx] || pid }; partnerCounts[pid].count++; }
         });
-      } else if (inTeamB && match.teamB.players.length > 1) {
+      } else if (inB && match.teamB.players.length > 1) {
         match.teamB.players.forEach((pid, idx) => {
-          if (pid !== id) {
-            if (!partnerCounts[pid]) {
-              partnerCounts[pid] = { count: 0, name: match.teamB.playerNames[idx] || pid };
-            }
-            partnerCounts[pid].count++;
-          }
+          if (pid !== id!) { if (!partnerCounts[pid]) partnerCounts[pid] = { count: 0, name: match.teamB.playerNames[idx] || pid }; partnerCounts[pid].count++; }
         });
       }
     });
@@ -198,7 +194,7 @@ export default function PlayerDetailScreen() {
     return { partnerCounts, totalWithPartners, preferredPartner };
   }, [matches, id]);
 
-  // Preferred boules analysis based on match performance
+  // Preferred boules
   const preferredBoulesAnalysis = React.useMemo(() => {
     if (!isSelf || !player || boulesSets.length === 0) return null;
     const pid = player.id;
@@ -210,13 +206,9 @@ export default function PlayerDetailScreen() {
       const inB = m.teamB.players.includes(pid);
       if (!inA && !inB) return;
       if (!setPerf[m.boulesSetId]) setPerf[m.boulesSetId] = { matches: 0, wins: 0, tirsSuccess: 0, totalTirs: 0, pointsSuccess: 0, totalPoints: 0, carreaux: 0 };
-      const s = setPerf[m.boulesSetId];
-      s.matches++;
+      const s = setPerf[m.boulesSetId]; s.matches++;
       if ((inA && m.winner === 'A') || (inB && m.winner === 'B')) s.wins++;
-      if (m.playerActions) {
-        const pa = m.playerActions.find(a => a.playerId === pid);
-        if (pa) { s.tirsSuccess += pa.actions.tirsSuccess; s.totalTirs += pa.actions.tirs; s.pointsSuccess += pa.actions.pointsSuccess; s.totalPoints += pa.actions.points; s.carreaux += pa.actions.carreaux; }
-      }
+      if (m.playerActions) { const pa = m.playerActions.find(a => a.playerId === pid); if (pa) { s.tirsSuccess += pa.actions.tirsSuccess; s.totalTirs += pa.actions.tirs; s.pointsSuccess += pa.actions.pointsSuccess; s.totalPoints += pa.actions.points; s.carreaux += pa.actions.carreaux; } }
     });
     const entries = Object.entries(setPerf).filter(([_, s]) => s.matches > 0);
     if (entries.length === 0) return null;
@@ -234,1249 +226,619 @@ export default function PlayerDetailScreen() {
     return { set, stats: best, role };
   }, [isSelf, player?.id, player?.role, matches, boulesSets]);
 
+  // Shot stats
+  let totalTirs = 0, totalTirsSuccess = 0, totalPoints = 0, totalPointsSuccess = 0, totalCarreaux = 0;
+  if (player) {
+    matches.filter(m => m.teamA.players.includes(id!) || m.teamB.players.includes(id!)).forEach(m => {
+      if (m.playerActions) {
+        const inA = m.teamA.players.includes(id!);
+        m.playerActions.filter(pa => pa.playerId === id!).forEach(pa => {
+          totalTirs += pa.actions.tirs; totalTirsSuccess += pa.actions.tirsSuccess;
+          totalPoints += pa.actions.points; totalPointsSuccess += pa.actions.pointsSuccess;
+          totalCarreaux += pa.actions.carreaux;
+        });
+      }
+    });
+  }
+  const tirRate = totalTirs > 0 ? Math.round((totalTirsSuccess / totalTirs) * 100) : (player?.stats.tirRate || 0);
+  const pointRate = totalPoints > 0 ? Math.round((totalPointsSuccess / totalPoints) * 100) : (player?.stats.pointRate || 0);
+  const carreauRate = totalTirsSuccess > 0 ? Math.round((totalCarreaux / totalTirsSuccess) * 100) : (player?.stats.carreauRate || 0);
+
+  const totalMatchCount = playerMatches.length;
+  const tournamentMatches = playerMatches.filter(m => m.mode === 'Tournoi');
+  const trainingMatches = playerMatches.filter(m => m.mode === 'Entraînement');
+
+  // Radar data
+  const radarData = React.useMemo(() => {
+    if (!player) return [];
+    const rolePct = roleAnalysis.totalWithRoles > 0 ? Math.round((roleAnalysis.roleCounts[roleAnalysis.preferredRole] / roleAnalysis.totalWithRoles) * 100) : 50;
+    const terrainPct = terrainAnalysis.totalWithTerrain > 0 ? Math.round((terrainAnalysis.terrainCounts[terrainAnalysis.preferredTerrain] / terrainAnalysis.totalWithTerrain) * 100) : 50;
+    const partnerPct = partnerAnalysis.totalWithPartners > 0 ? Math.round((partnerAnalysis.preferredPartner.count / partnerAnalysis.totalWithPartners) * 100) : 50;
+    return [
+      { label: 'Role', value: rolePct, color: getRoleColor(roleAnalysis.preferredRole) },
+      { label: 'Terrain', value: terrainPct, color: theme.success },
+      { label: language === 'fr' ? 'Duo' : 'Partner', value: partnerPct, color: '#EC4899' },
+      { label: language === 'fr' ? 'Victoire' : 'Win', value: player.stats.winRate, color: theme.carreauColor },
+      { label: language === 'fr' ? 'Tir' : 'Shot', value: tirRate, color: theme.accent },
+    ];
+  }, [player, roleAnalysis, terrainAnalysis, partnerAnalysis, tirRate, language]);
+
   const handleDelete = () => {
-    if (isSelf) {
-      Alert.alert(t('player', 'impossible'), t('player', 'cannotDeleteSelf'));
-      return;
-    }
-    
-    Alert.alert(
-      t('player', 'deletePlayer'),
-      `${t('player', 'deleteConfirm')} "${player?.name}" ? ${t('player', 'deleteIrreversible')}`,
-      [
-        { text: t('common', 'cancel'), style: 'cancel' },
-        {
-          text: t('common', 'delete'),
-          style: 'destructive',
-          onPress: async () => {
-            if (player) {
-              await deletePlayer(player.id);
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              router.back();
-            }
-          },
-        },
-      ]
-    );
+    if (isSelf) { Alert.alert(t('player', 'impossible'), t('player', 'cannotDeleteSelf')); return; }
+    Alert.alert(t('player', 'deletePlayer'), `${t('player', 'deleteConfirm')} "${player?.name}" ? ${t('player', 'deleteIrreversible')}`, [
+      { text: t('common', 'cancel'), style: 'cancel' },
+      { text: t('common', 'delete'), style: 'destructive', onPress: async () => { if (player) { await deletePlayer(player.id); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); router.back(); } } },
+    ]);
   };
 
   if (!player) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Pressable style={styles.backButton} onPress={() => router.back()}>
-            <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
-          </Pressable>
-          <Text style={styles.headerTitle}>{t('player', 'playerProfile')}</Text>
+      <SafeAreaView style={s.container}>
+        <View style={s.header}>
+          <Pressable style={s.headerBtn} onPress={() => router.back()}><MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} /></Pressable>
+          <Text style={s.headerTitle}>{t('player', 'playerProfile')}</Text>
           <View style={{ width: 40 }} />
         </View>
         {appLoading ? (
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator size="large" color={theme.primary} />
-          </View>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="large" color={theme.primary} /></View>
         ) : (
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ color: theme.textSecondary }}>{t('player', 'playerNotFound')}</Text>
-          </View>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: theme.textSecondary }}>{t('player', 'playerNotFound')}</Text></View>
         )}
       </SafeAreaView>
     );
   }
 
-  const levelColors = {
-    'Débutant': theme.textSecondary,
-    'Intermédiaire': theme.primary,
-    'Confirmé': theme.accent,
-    'Expert': theme.success,
-  };
-
   return (
-    <SafeAreaView edges={['top']} style={styles.container}>
+    <SafeAreaView edges={['top']} style={s.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
+      <View style={s.header}>
+        <Pressable style={s.headerBtn} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>{t('player', 'playerProfile')}</Text>
-        <View style={styles.headerActions}>
-          <Pressable style={styles.editButton} onPress={() => setShowShareModal(true)}>
-            <MaterialIcons name="share" size={22} color={theme.success} />
+        <Text style={s.headerTitle}>{t('player', 'playerProfile')}</Text>
+        <View style={s.headerActions}>
+          <Pressable style={s.headerIconBtn} onPress={() => setShowShareModal(true)}>
+            <MaterialIcons name="share" size={20} color={theme.success} />
           </Pressable>
-          {canEdit && (
-            <Pressable style={styles.editButton} onPress={() => setShowMergePicker(true)}>
-              <MaterialIcons name="compare-arrows" size={22} color={theme.accent} />
+          {canEdit ? (
+            <Pressable style={s.headerIconBtn} onPress={() => setShowMergePicker(true)}>
+              <MaterialIcons name="compare-arrows" size={20} color={theme.accent} />
             </Pressable>
-          )}
-          {canEdit && (
-            <Pressable style={styles.editButton} onPress={() => router.push(`/player/edit/${id}`)}>
-              <MaterialIcons name="edit" size={22} color={theme.primary} />
+          ) : null}
+          {canEdit ? (
+            <Pressable style={[s.headerIconBtn, { backgroundColor: theme.primary + '15' }]} onPress={() => router.push(`/player/edit/${id}`)}>
+              <MaterialIcons name="edit" size={20} color={theme.primary} />
             </Pressable>
-          )}
-          {canEdit && !isSelf && !isSharedItem && (
-            <Pressable style={styles.deleteButton} onPress={handleDelete}>
-              <MaterialIcons name="delete" size={22} color={theme.error} />
+          ) : null}
+          {canEdit && !isSelf && !isSharedItem ? (
+            <Pressable style={[s.headerIconBtn, { backgroundColor: theme.error + '15' }]} onPress={handleDelete}>
+              <MaterialIcons name="delete" size={20} color={theme.error} />
             </Pressable>
-          )}
+          ) : null}
         </View>
       </View>
 
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }, isTablet && styles.scrollContentTablet]}
+        style={s.scrollView}
+        contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 32 }, isTablet && s.scrollContentTablet]}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={theme.primary}
-            colors={[theme.primary]}
-          />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
       >
-        <View style={isTablet ? styles.tabletProfileRow : undefined}>
-        <View style={isTablet ? styles.tabletLeftCol : undefined}>
-        {/* Profile Card */}
-        <Animated.View entering={FadeInDown.duration(400)} style={[styles.profileCard, isTablet && styles.profileCardTablet]}>
-          <View style={styles.avatar}>
-            {player.avatar ? (
-              <Image
-                source={{ uri: player.avatar }}
-                style={styles.avatarImage}
-                contentFit="cover"
-                transition={200}
-              />
-            ) : (
-              <Text style={styles.avatarText}>
-                {player.name.split(' ').map(n => n[0]).join('')}
-              </Text>
-            )}
-          </View>
-          <Text style={styles.playerName}>{player.name}</Text>
-          {player.nickname ? (
-            <Text style={styles.playerNickname}>"{player.nickname}"</Text>
-          ) : null}
-          {sharedPermission ? (
-            <View style={{ marginBottom: 8 }}>
-              <SharedBadge permission={sharedPermission} />
-            </View>
-          ) : null}
-          <View style={styles.profileBadges}>
-            <View style={[styles.badge, { backgroundColor: levelColors[player.level] + '20' }]}>
-              <Text style={[styles.badgeText, { color: levelColors[player.level] }]}>{t('levels', player.level)}</Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: theme.primaryLight + '30' }]}>
-              <Text style={[styles.badgeText, { color: theme.primary }]}>{t('roles', player.role)}</Text>
-            </View>
-            {player.handedness ? (
-              <View style={[styles.badge, { backgroundColor: '#6366F1' + '15' }]}>
-                <Text style={[styles.badgeText, { color: '#6366F1' }]}>
-                  {player.handedness === 'right' ? t('player', 'rightHanded') : player.handedness === 'left' ? t('player', 'leftHanded') : t('player', 'ambidextrous')}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-          {/* Contact Section */}
-          {(player.phone || player.email) && !isSharedItem && (player.showContactPublic !== false || !player.isPublic) ? (
-            <>
-            <View style={styles.profileSectionDivider}>
-              <MaterialIcons name="contact-phone" size={15} color={theme.primary} />
-              <Text style={styles.profileSectionLabel}>Contact</Text>
-              <View style={styles.profileSectionLine} />
-            </View>
-            <View style={styles.contactInfo}>
-              {player.phone ? (
-                <Pressable 
-                  style={styles.contactItem}
-                  onPress={() => Linking.openURL(`tel:${player.phone}`)}
-                >
-                  <MaterialIcons name="phone" size={16} color={theme.primary} />
-                  <Text style={styles.contactText}>{player.phone}</Text>
-                </Pressable>
+        <View style={isTablet ? s.tabletRow : undefined}>
+          <View style={isTablet ? s.tabletLeft : undefined}>
+
+            {/* ===== HERO CARD ===== */}
+            <Animated.View entering={FadeInDown.duration(400)} style={s.heroCard}>
+              {/* Shared Badge */}
+              {sharedPermission ? (
+                <View style={{ marginBottom: 8 }}><SharedBadge permission={sharedPermission} /></View>
               ) : null}
-              {player.email ? (
-                <Pressable 
-                  style={styles.contactItem}
-                  onPress={() => Linking.openURL(`mailto:${player.email}`)}
-                >
-                  <MaterialIcons name="email" size={16} color={theme.primary} />
-                  <Text style={styles.contactText}>{player.email}</Text>
-                </Pressable>
-              ) : null}
-            </View>
-            </>
-          ) : null}
 
-          {/* Informations Section */}
-          <View style={styles.profileSectionDivider}>
-            <MaterialIcons name="info-outline" size={15} color={theme.textSecondary} />
-            <Text style={styles.profileSectionLabel}>Informations</Text>
-            <View style={styles.profileSectionLine} />
-          </View>
-          {clubDisplayName ? (
-            clubEntity ? (
-              <Pressable 
-                style={styles.clubLink}
-                onPress={() => router.push(`/club/${clubEntity.id}`)}
-              >
-                <MaterialIcons name="home" size={16} color={theme.textSecondary} />
-                <Text style={styles.clubName}>{clubEntity.name}</Text>
-                <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
-              </Pressable>
-            ) : (
-              <View style={styles.clubLink}>
-                <MaterialIcons name="home" size={16} color={theme.textSecondary} />
-                <Text style={styles.clubName}>{clubDisplayName}</Text>
+              {/* Avatar */}
+              <View style={s.avatarContainer}>
+                <View style={s.avatar}>
+                  {player.avatar ? (
+                    <Image source={{ uri: player.avatar }} style={s.avatarImage} contentFit="cover" transition={200} />
+                  ) : (
+                    <Text style={s.avatarText}>{player.name.split(' ').map(n => n[0]).join('')}</Text>
+                  )}
+                </View>
+                <View style={[s.roleBadgeOnAvatar, { backgroundColor: getRoleColor(player.role) }]}>
+                  <MaterialIcons name={getRoleIcon(player.role)} size={14} color="#FFF" />
+                </View>
               </View>
-            )
-          ) : null}
 
-          {/* Terrain de pratique */}
-          {terrainDisplayName ? (
-            terrainEntity ? (
-              <Pressable 
-                style={styles.terrainLink}
-                onPress={() => router.push(`/terrain/${terrainEntity.id}`)}
-              >
-                <MaterialIcons name="sports-soccer" size={16} color={theme.success} />
-                <Text style={styles.terrainLinkText}>{terrainEntity.name}</Text>
-                <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
-              </Pressable>
-            ) : (
-              <View style={styles.terrainLink}>
-                <MaterialIcons name="sports-soccer" size={16} color={theme.success} />
-                <Text style={styles.terrainLinkText}>{terrainDisplayName}</Text>
-              </View>
-            )
-          ) : null}
-          
-          {/* Location with fallback indicator */}
-          {(() => {
-            const hasOwnLocation = (player.location?.latitude && player.location.latitude !== 0) || (player.location?.longitude && player.location.longitude !== 0);
-            if (hasOwnLocation) return null;
-            // Check if location can be derived from terrain or club
-            let fallbackSource: 'terrain' | 'club' | null = null;
-            let fallbackName = '';
-            let fallbackCity = '';
-            if (player.terrainId) {
-              const tr = allTerrains.find(t => t.id === player.terrainId);
-              if (tr && tr.location && (tr.location.latitude || tr.location.longitude)) {
-                fallbackSource = 'terrain';
-                fallbackName = tr.name;
-                fallbackCity = tr.city;
-              }
-            }
-            if (!fallbackSource && player.clubId) {
-              const cl = clubs.find(c => c.id === player.clubId);
-              if (cl && cl.location && (cl.location.latitude || cl.location.longitude)) {
-                fallbackSource = 'club';
-                fallbackName = cl.name;
-                fallbackCity = cl.city;
-              }
-            }
-            if (!fallbackSource) return null;
-            return (
-              <Pressable
-                style={styles.fallbackLocationBanner}
-                onPress={() => {
-                  if (canEdit) {
-                    Haptics.selectionAsync();
-                    router.push(`/player/edit/${id}`);
-                  }
-                }}
-              >
-                <View style={[styles.fallbackLocationIcon, { backgroundColor: fallbackSource === 'terrain' ? theme.success + '15' : theme.accent + '15' }]}>
-                  <MaterialIcons name={fallbackSource === 'terrain' ? 'sports-soccer' : 'home'} size={16} color={fallbackSource === 'terrain' ? theme.success : theme.accent} />
-                </View>
-                <View style={styles.fallbackLocationInfo}>
-                  <Text style={styles.fallbackLocationTitle}>
-                    {fallbackCity} <Text style={styles.fallbackLocationVia}>{t('player', 'locationFrom')} {fallbackName}</Text>
-                  </Text>
-                  <Text style={styles.fallbackLocationDesc}>
-                    {fallbackSource === 'terrain' ? t('player', 'locationFallbackTerrain') : t('player', 'locationFallbackClub')}
-                  </Text>
-                </View>
-                {canEdit ? (
-                  <View style={styles.fallbackLocationEditBtn}>
-                    <MaterialIcons name="edit-location-alt" size={16} color={theme.primary} />
-                  </View>
-                ) : null}
-              </Pressable>
-            );
-          })()}
+              {/* Name & Nickname */}
+              <Text style={s.heroName}>{player.name}</Text>
+              {player.nickname ? <Text style={s.heroNickname}>"{player.nickname}"</Text> : null}
 
-        </Animated.View>
-        </View>
-
-        <View style={isTablet ? styles.tabletRightCol : undefined}>
-        {/* Game Preferences Section */}
-        {(roleAnalysis.totalWithRoles > 0 || terrainAnalysis.totalWithTerrain > 0 || partnerAnalysis.totalWithPartners > 0 || preferredBoulesAnalysis || (player.boules && (player.boules.name || player.boules.diameter || player.boules.weight))) ? (
-          <Animated.View entering={FadeInDown.duration(400).delay(50)} style={[styles.preferencesCard, isTablet && styles.preferencesCardTablet]}>
-            <View style={styles.profileSectionDivider}>
-              <MaterialIcons name="psychology" size={15} color={theme.accent} />
-              <Text style={styles.profileSectionLabel}>{language === 'fr' ? 'Préférences de jeu' : 'Game Preferences'}</Text>
-              <View style={styles.profileSectionLine} />
-            </View>
-          {roleAnalysis.totalWithRoles > 0 ? (
-            <View style={styles.preferredRoleCard}>
-              <Text style={styles.preferredRoleTitle}>{t('player', 'preferredRole')}</Text>
-              <View style={styles.preferredRoleContent}>
-                <View style={[styles.preferredRoleIcon, { backgroundColor: roleIcons[roleAnalysis.preferredRole]?.color || theme.primary }]}>
-                  <MaterialIcons 
-                    name={(roleIcons[roleAnalysis.preferredRole]?.icon || 'person') as any} 
-                    size={20} 
-                    color="#FFF" 
-                  />
+              {/* Badges Row */}
+              <View style={s.badgesRow}>
+                <View style={[s.pillBadge, { backgroundColor: getRoleColor(player.role) + '15' }]}>
+                  <MaterialIcons name={getRoleIcon(player.role)} size={14} color={getRoleColor(player.role)} />
+                  <Text style={[s.pillBadgeText, { color: getRoleColor(player.role) }]}>{t('roles', player.role)}</Text>
                 </View>
-                <View style={styles.preferredRoleInfo}>
-                  <Text style={styles.preferredRoleName}>{t('roles', roleAnalysis.preferredRole)}</Text>
-                  <Text style={styles.preferredRoleStats}>
-                    {roleAnalysis.roleCounts[roleAnalysis.preferredRole]} {t('player', 'outOf')} {roleAnalysis.totalWithRoles} {t('player', 'matchesLabel')}
-                  </Text>
+                <View style={[s.pillBadge, { backgroundColor: theme.accent + '15' }]}>
+                  <MaterialIcons name="trending-up" size={14} color={theme.accent} />
+                  <Text style={[s.pillBadgeText, { color: theme.accent }]}>{t('levels', player.level)}</Text>
                 </View>
-              </View>
-              <View style={styles.roleBreakdown}>
-                {Object.entries(roleAnalysis.roleCounts).map(([role, count]) => {
-                  const config = roleIcons[role];
-                  const pct = roleAnalysis.totalWithRoles > 0 ? Math.round((count / roleAnalysis.totalWithRoles) * 100) : 0;
-                  return (
-                    <View key={role} style={styles.roleBreakdownItem}>
-                      <MaterialIcons name={config?.icon as any || 'person'} size={14} color={config?.color || theme.textMuted} />
-                      <Text style={styles.roleBreakdownLabel}>{role.charAt(0)}</Text>
-                      <View style={styles.roleBreakdownBarBg}>
-                        <View style={[styles.roleBreakdownBar, { width: `${pct}%`, backgroundColor: config?.color || theme.primary }]} />
-                      </View>
-                      <Text style={styles.roleBreakdownPct}>{pct}%</Text>
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
-          ) : null}
-          
-          {/* Preferred Terrain from Match History */}
-          {terrainAnalysis.totalWithTerrain > 0 ? (
-            <View style={styles.preferredRoleCard}>
-              <Text style={styles.preferredRoleTitle}>{t('player', 'preferredTerrain')}</Text>
-              <View style={styles.preferredRoleContent}>
-                <View style={[styles.preferredRoleIcon, { backgroundColor: terrainTypeIcons[terrainAnalysis.preferredTerrain]?.color || theme.primary }]}>
-                  <MaterialIcons 
-                    name={(terrainTypeIcons[terrainAnalysis.preferredTerrain]?.icon || 'sports-soccer') as any} 
-                    size={20} 
-                    color="#FFF" 
-                  />
-                </View>
-                <View style={styles.preferredRoleInfo}>
-                  <Text style={styles.preferredRoleName}>{t('terrainTypes', terrainAnalysis.preferredTerrain)}</Text>
-                  <Text style={styles.preferredRoleStats}>
-                    {terrainAnalysis.terrainCounts[terrainAnalysis.preferredTerrain]} {t('player', 'outOf')} {terrainAnalysis.totalWithTerrain} {t('player', 'matchesLabel')}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.roleBreakdown}>
-                {Object.entries(terrainAnalysis.terrainCounts).map(([terrainType, count]) => {
-                  const config = terrainTypeIcons[terrainType];
-                  const pct = terrainAnalysis.totalWithTerrain > 0 ? Math.round((count / terrainAnalysis.totalWithTerrain) * 100) : 0;
-                  return (
-                    <View key={terrainType} style={styles.roleBreakdownItem}>
-                      <MaterialIcons name={(config?.icon || 'sports-soccer') as any} size={14} color={config?.color || theme.textMuted} />
-                      <Text style={[styles.roleBreakdownLabel, { width: 18 }]}>{terrainType.substring(0, 2)}</Text>
-                      <View style={styles.roleBreakdownBarBg}>
-                        <View style={[styles.roleBreakdownBar, { width: `${pct}%`, backgroundColor: config?.color || theme.primary }]} />
-                      </View>
-                      <Text style={styles.roleBreakdownPct}>{pct}%</Text>
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
-          ) : null}
-
-          {/* Preferred Partner from Match History */}
-          {partnerAnalysis.totalWithPartners > 0 && (() => {
-            const sortedPartners = Object.entries(partnerAnalysis.partnerCounts)
-              .sort((a, b) => b[1].count - a[1].count);
-            const topPartner = sortedPartners[0];
-            if (!topPartner) return null;
-            const topPartnerPlayer = getPlayerById(topPartner[0]);
-            return (
-              <View style={styles.preferredRoleCard}>
-                <Text style={styles.preferredRoleTitle}>{t('player', 'preferredPartner')}</Text>
-                <View style={styles.preferredRoleContent}>
-                  <View style={[styles.preferredRoleIcon, { backgroundColor: partnerColors[0], overflow: 'hidden' }]}>
-                    {topPartnerPlayer?.avatar ? (
-                      <Image source={{ uri: topPartnerPlayer.avatar }} style={{ width: 44, height: 44, borderRadius: 22 }} contentFit="cover" />
-                    ) : (
-                      <Text style={{ fontSize: 18, fontWeight: '700', color: '#FFF' }}>{topPartner[1].name.charAt(0).toUpperCase()}</Text>
-                    )}
-                  </View>
-                  <View style={styles.preferredRoleInfo}>
-                    <Text style={styles.preferredRoleName}>{topPartner[1].name}</Text>
-                    <Text style={styles.preferredRoleStats}>
-                      {topPartner[1].count} {t('player', 'outOf')} {partnerAnalysis.totalWithPartners} {t('player', 'matchesLabel')}
+                {player.handedness ? (
+                  <View style={[s.pillBadge, { backgroundColor: '#6366F1' + '15' }]}>
+                    <MaterialIcons name={player.handedness === 'left' ? 'front-hand' : player.handedness === 'ambidextrous' ? 'swap-horiz' : 'back-hand'} size={14} color="#6366F1" />
+                    <Text style={[s.pillBadgeText, { color: '#6366F1' }]}>
+                      {player.handedness === 'right' ? t('player', 'rightHanded') : player.handedness === 'left' ? t('player', 'leftHanded') : t('player', 'ambidextrous')}
                     </Text>
                   </View>
-                </View>
-                <View style={styles.roleBreakdown}>
-                  {sortedPartners.slice(0, 3).map(([pid, info], idx) => {
-                    const pct = partnerAnalysis.totalWithPartners > 0 ? Math.round((info.count / partnerAnalysis.totalWithPartners) * 100) : 0;
-                    const color = partnerColors[idx % partnerColors.length];
-                    const pp = getPlayerById(pid);
-                    return (
-                      <View key={pid} style={styles.roleBreakdownItem}>
-                        <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: color, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                          {pp?.avatar ? (
-                            <Image source={{ uri: pp.avatar }} style={{ width: 20, height: 20, borderRadius: 10 }} contentFit="cover" />
-                          ) : (
-                            <Text style={{ fontSize: 9, fontWeight: '700', color: '#FFF' }}>{info.name.charAt(0)}</Text>
-                          )}
-                        </View>
-                        <Text style={[styles.roleBreakdownLabel, { width: 'auto', maxWidth: 40 }]} numberOfLines={1}>{info.name.split(' ')[0].substring(0, 5)}</Text>
-                        <View style={styles.roleBreakdownBarBg}>
-                          <View style={[styles.roleBreakdownBar, { width: `${pct}%`, backgroundColor: color }]} />
-                        </View>
-                        <Text style={styles.roleBreakdownPct}>{pct}%</Text>
+                ) : null}
+              </View>
+
+              {/* Club & Terrain pills */}
+              {(clubDisplayName || terrainDisplayName) ? (
+                <View style={s.infoPillsRow}>
+                  {clubDisplayName ? (
+                    clubEntity ? (
+                      <Pressable style={[s.infoPill, { backgroundColor: theme.carreauColor + '12' }]} onPress={() => router.push(`/club/${clubEntity.id}`)}>
+                        <MaterialIcons name="location-city" size={14} color={theme.carreauColor} />
+                        <Text style={[s.infoPillText, { color: theme.carreauColor }]}>{clubDisplayName}</Text>
+                        <MaterialIcons name="chevron-right" size={14} color={theme.carreauColor} />
+                      </Pressable>
+                    ) : (
+                      <View style={[s.infoPill, { backgroundColor: theme.carreauColor + '12' }]}>
+                        <MaterialIcons name="location-city" size={14} color={theme.carreauColor} />
+                        <Text style={[s.infoPillText, { color: theme.carreauColor }]}>{clubDisplayName}</Text>
                       </View>
-                    );
-                  })}
+                    )
+                  ) : null}
+                  {terrainDisplayName ? (
+                    terrainEntity ? (
+                      <Pressable style={[s.infoPill, { backgroundColor: theme.success + '12' }]} onPress={() => router.push(`/terrain/${terrainEntity.id}`)}>
+                        <MaterialIcons name="sports-soccer" size={14} color={theme.success} />
+                        <Text style={[s.infoPillText, { color: theme.success }]}>{terrainDisplayName}</Text>
+                        <MaterialIcons name="chevron-right" size={14} color={theme.success} />
+                      </Pressable>
+                    ) : (
+                      <View style={[s.infoPill, { backgroundColor: theme.success + '12' }]}>
+                        <MaterialIcons name="sports-soccer" size={14} color={theme.success} />
+                        <Text style={[s.infoPillText, { color: theme.success }]}>{terrainDisplayName}</Text>
+                      </View>
+                    )
+                  ) : null}
                 </View>
-              </View>
-            );
-          })()}
-          {/* Boules préférées - Performance based */}
-          {preferredBoulesAnalysis ? (
-            <View style={styles.preferredRoleCard}>
-              <Text style={styles.preferredRoleTitle}>{language === 'fr' ? 'Boules preferees' : 'Preferred Boules'}</Text>
-              <View style={styles.preferredRoleContent}>
-                <View style={[styles.preferredRoleIcon, { backgroundColor: theme.accent }]}>
-                  <MaterialIcons name="sports-baseball" size={20} color="#FFF" />
-                </View>
-                <View style={styles.preferredRoleInfo}>
-                  <Text style={styles.preferredRoleName}>{preferredBoulesAnalysis.set.name}</Text>
-                  <Text style={styles.preferredRoleStats}>
-                    {[preferredBoulesAnalysis.set.diameter ? `${preferredBoulesAnalysis.set.diameter} mm` : '', preferredBoulesAnalysis.set.weight ? `${preferredBoulesAnalysis.set.weight} g` : ''].filter(Boolean).join(' \u2022 ')}{preferredBoulesAnalysis.stats.matches > 0 ? ` \u2022 ${preferredBoulesAnalysis.stats.matches} ${language === 'fr' ? 'matchs' : 'matches'}` : ''}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.roleBreakdown}>
-                <View style={styles.roleBreakdownItem}>
-                  <MaterialIcons name="emoji-events" size={14} color={theme.success} />
-                  <Text style={styles.roleBreakdownLabel}>{language === 'fr' ? 'V' : 'W'}</Text>
-                  <View style={styles.roleBreakdownBarBg}>
-                    <View style={[styles.roleBreakdownBar, { width: `${preferredBoulesAnalysis.stats.matches > 0 ? Math.round((preferredBoulesAnalysis.stats.wins / preferredBoulesAnalysis.stats.matches) * 100) : 0}%`, backgroundColor: theme.success }]} />
-                  </View>
-                  <Text style={styles.roleBreakdownPct}>{preferredBoulesAnalysis.stats.wins}</Text>
-                </View>
-                {preferredBoulesAnalysis.role === 'Tireur' || preferredBoulesAnalysis.role === 'Milieu' ? (
-                  <View style={styles.roleBreakdownItem}>
-                    <MaterialIcons name="gps-fixed" size={14} color={theme.accent} />
-                    <Text style={styles.roleBreakdownLabel}>T</Text>
-                    <View style={styles.roleBreakdownBarBg}>
-                      <View style={[styles.roleBreakdownBar, { width: `${preferredBoulesAnalysis.stats.totalTirs > 0 ? Math.round((preferredBoulesAnalysis.stats.tirsSuccess / preferredBoulesAnalysis.stats.totalTirs) * 100) : 0}%`, backgroundColor: theme.accent }]} />
-                    </View>
-                    <Text style={styles.roleBreakdownPct}>{preferredBoulesAnalysis.stats.tirsSuccess}</Text>
-                  </View>
-                ) : null}
-                {preferredBoulesAnalysis.role === 'Tireur' ? (
-                  <View style={styles.roleBreakdownItem}>
-                    <MaterialIcons name="stars" size={14} color={theme.carreauColor} />
-                    <Text style={styles.roleBreakdownLabel}>C</Text>
-                    <View style={styles.roleBreakdownBarBg}>
-                      <View style={[styles.roleBreakdownBar, { width: `${preferredBoulesAnalysis.stats.tirsSuccess > 0 ? Math.round((preferredBoulesAnalysis.stats.carreaux / preferredBoulesAnalysis.stats.tirsSuccess) * 100) : 0}%`, backgroundColor: theme.carreauColor }]} />
-                    </View>
-                    <Text style={styles.roleBreakdownPct}>{preferredBoulesAnalysis.stats.carreaux}</Text>
-                  </View>
-                ) : null}
-                {preferredBoulesAnalysis.role === 'Pointeur' || preferredBoulesAnalysis.role === 'Milieu' ? (
-                  <View style={styles.roleBreakdownItem}>
-                    <MaterialIcons name="adjust" size={14} color={theme.primary} />
-                    <Text style={styles.roleBreakdownLabel}>P</Text>
-                    <View style={styles.roleBreakdownBarBg}>
-                      <View style={[styles.roleBreakdownBar, { width: `${preferredBoulesAnalysis.stats.totalPoints > 0 ? Math.round((preferredBoulesAnalysis.stats.pointsSuccess / preferredBoulesAnalysis.stats.totalPoints) * 100) : 0}%`, backgroundColor: theme.primary }]} />
-                    </View>
-                    <Text style={styles.roleBreakdownPct}>{preferredBoulesAnalysis.stats.pointsSuccess}</Text>
-                  </View>
-                ) : null}
-              </View>
-            </View>
-          ) : player.boules && (player.boules.name || player.boules.diameter || player.boules.weight) ? (
-            <View style={styles.preferredRoleCard}>
-              <Text style={styles.preferredRoleTitle}>{language === 'fr' ? 'Boules preferees' : 'Preferred Boules'}</Text>
-              <View style={styles.preferredRoleContent}>
-                <View style={[styles.preferredRoleIcon, { backgroundColor: theme.accent }]}>
-                  <MaterialIcons name="sports-baseball" size={20} color="#FFF" />
-                </View>
-                <View style={styles.preferredRoleInfo}>
-                  <Text style={styles.preferredRoleName}>{player.boules.name || t('player', 'boulesLabel')}</Text>
-                  <Text style={styles.preferredRoleStats}>
-                    {[player.boules.diameter ? `${player.boules.diameter} mm` : '', player.boules.weight ? `${player.boules.weight} g` : '', player.boules.serialNumber ? `N\u00B0${player.boules.serialNumber}` : ''].filter(Boolean).join(' \u2022 ')}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          ) : null}
-          </Animated.View>
-        ) : null}
+              ) : null}
 
-        {/* Quick Stats */}
-        <Animated.View entering={FadeInDown.duration(400).delay(100)} style={[styles.quickStats, isTablet && styles.quickStatsTablet]}>
-          <View style={styles.quickStatItem}>
-            <Text style={styles.quickStatValue}>{player.stats.matchesPlayed}</Text>
-            <Text style={styles.quickStatLabel}>{t('player', 'matchesUpper')}</Text>
+              {/* Contact pills */}
+              {(player.phone || player.email) && !isSharedItem && (player.showContactPublic !== false || !player.isPublic) ? (
+                <View style={s.contactPillsRow}>
+                  {player.phone ? (
+                    <Pressable style={s.contactPill} onPress={() => Linking.openURL(`tel:${player.phone}`)}>
+                      <MaterialIcons name="phone" size={14} color={theme.primary} />
+                      <Text style={s.contactPillText}>{player.phone}</Text>
+                    </Pressable>
+                  ) : null}
+                  {player.email ? (
+                    <Pressable style={s.contactPill} onPress={() => Linking.openURL(`mailto:${player.email}`)}>
+                      <MaterialIcons name="email" size={14} color={theme.primary} />
+                      <Text style={s.contactPillText}>{player.email}</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {/* Location pill */}
+              {(player.location?.city || player.country) ? (
+                <View style={s.locationPill}>
+                  <MaterialIcons name="place" size={14} color={theme.textSecondary} />
+                  <Text style={s.locationPillText}>{[player.location?.city, player.country].filter(Boolean).join(', ')}</Text>
+                </View>
+              ) : null}
+
+              {/* Quick Stats bar */}
+              <View style={s.quickStatsBar}>
+                <View style={s.quickStatItem}>
+                  <Text style={s.quickStatValue}>{player.stats.matchesPlayed}</Text>
+                  <Text style={s.quickStatLabel}>{t('player', 'matchesUpper')}</Text>
+                </View>
+                <View style={s.quickStatDivider} />
+                <View style={s.quickStatItem}>
+                  <Text style={[s.quickStatValue, { color: theme.success }]}>{player.stats.wins}</Text>
+                  <Text style={s.quickStatLabel}>{t('player', 'victories')}</Text>
+                </View>
+                <View style={s.quickStatDivider} />
+                <View style={s.quickStatItem}>
+                  <Text style={[s.quickStatValue, { color: theme.accent }]}>{player.stats.winRate}%</Text>
+                  <Text style={s.quickStatLabel}>{t('player', 'winsLabel')}</Text>
+                </View>
+                <View style={s.quickStatDivider} />
+                <View style={s.quickStatItem}>
+                  <Text style={[s.quickStatValue, { color: theme.error }]}>{player.stats.losses}</Text>
+                  <Text style={s.quickStatLabel}>{t('player', 'defeats')}</Text>
+                </View>
+              </View>
+            </Animated.View>
           </View>
-          <View style={[styles.quickStatItem, styles.quickStatBorder]}>
-            <Text style={[styles.quickStatValue, { color: theme.success }]}>{player.stats.wins}</Text>
-            <Text style={styles.quickStatLabel}>{t('player', 'victories')}</Text>
+
+          <View style={isTablet ? s.tabletRight : undefined}>
+
+            {/* ===== GAME PREFERENCES with Radar ===== */}
+            {(roleAnalysis.totalWithRoles > 0 || terrainAnalysis.totalWithTerrain > 0 || partnerAnalysis.totalWithPartners > 0 || preferredBoulesAnalysis) ? (
+              <Animated.View entering={FadeInDown.duration(400).delay(50)} style={s.sectionCard}>
+                <View style={s.sectionHeader}>
+                  <View style={[s.sectionIconBox, { backgroundColor: '#8B5CF6' + '15' }]}>
+                    <MaterialIcons name="psychology" size={18} color="#8B5CF6" />
+                  </View>
+                  <Text style={s.sectionTitle}>{language === 'fr' ? 'Preferences de jeu' : 'Game Preferences'}</Text>
+                </View>
+
+                {radarData.length >= 3 ? (
+                  <View style={s.radarContainer}>
+                    <MiniRadar data={radarData} labels={radarData.map(d => d.label)} size={Math.min(screenWidth - 96, 220)} />
+                  </View>
+                ) : null}
+
+                {/* Preferred Role */}
+                {roleAnalysis.totalWithRoles > 0 ? (
+                  <View style={s.prefItem}>
+                    <View style={[s.prefItemIcon, { backgroundColor: (getRoleColor(roleAnalysis.preferredRole)) + '15' }]}>
+                      <MaterialIcons name={getRoleIcon(roleAnalysis.preferredRole)} size={18} color={getRoleColor(roleAnalysis.preferredRole)} />
+                    </View>
+                    <View style={s.prefItemInfo}>
+                      <Text style={s.prefItemLabel}>{t('player', 'preferredRole')}</Text>
+                      <Text style={s.prefItemValue}>{t('roles', roleAnalysis.preferredRole)}</Text>
+                    </View>
+                    <Text style={s.prefItemPct}>{Math.round((roleAnalysis.roleCounts[roleAnalysis.preferredRole] / roleAnalysis.totalWithRoles) * 100)}%</Text>
+                  </View>
+                ) : null}
+
+                {/* Preferred Terrain */}
+                {terrainAnalysis.totalWithTerrain > 0 ? (
+                  <View style={s.prefItem}>
+                    <View style={[s.prefItemIcon, { backgroundColor: theme.success + '15' }]}>
+                      <MaterialIcons name="landscape" size={18} color={theme.success} />
+                    </View>
+                    <View style={s.prefItemInfo}>
+                      <Text style={s.prefItemLabel}>{t('player', 'preferredTerrain')}</Text>
+                      <Text style={s.prefItemValue}>{t('terrainTypes', terrainAnalysis.preferredTerrain)}</Text>
+                    </View>
+                    <Text style={s.prefItemPct}>{Math.round((terrainAnalysis.terrainCounts[terrainAnalysis.preferredTerrain] / terrainAnalysis.totalWithTerrain) * 100)}%</Text>
+                  </View>
+                ) : null}
+
+                {/* Preferred Partner */}
+                {partnerAnalysis.totalWithPartners > 0 ? (() => {
+                  const pp = getPlayerById(partnerAnalysis.preferredPartner.id);
+                  return (
+                    <View style={s.prefItem}>
+                      <View style={[s.prefItemIcon, { backgroundColor: '#EC4899' + '15', overflow: 'hidden' }]}>
+                        {pp?.avatar ? (
+                          <Image source={{ uri: pp.avatar }} style={{ width: 36, height: 36, borderRadius: 10 }} contentFit="cover" />
+                        ) : (
+                          <Text style={{ fontSize: 14, fontWeight: '700', color: '#EC4899' }}>{partnerAnalysis.preferredPartner.name.charAt(0)}</Text>
+                        )}
+                      </View>
+                      <View style={s.prefItemInfo}>
+                        <Text style={s.prefItemLabel}>{t('player', 'preferredPartner')}</Text>
+                        <Text style={s.prefItemValue}>{partnerAnalysis.preferredPartner.name}</Text>
+                      </View>
+                      <Text style={s.prefItemPct}>{partnerAnalysis.preferredPartner.count} {language === 'fr' ? 'matchs' : 'matches'}</Text>
+                    </View>
+                  );
+                })() : null}
+
+                {/* Preferred Boules */}
+                {preferredBoulesAnalysis ? (
+                  <View style={s.prefItem}>
+                    <View style={[s.prefItemIcon, { backgroundColor: theme.accent + '15' }]}>
+                      <MaterialIcons name="sports-baseball" size={18} color={theme.accent} />
+                    </View>
+                    <View style={s.prefItemInfo}>
+                      <Text style={s.prefItemLabel}>{language === 'fr' ? 'Boules preferees' : 'Preferred Boules'}</Text>
+                      <Text style={s.prefItemValue}>{preferredBoulesAnalysis.set.name}</Text>
+                    </View>
+                    <Text style={s.prefItemPct}>{preferredBoulesAnalysis.stats.matches} {language === 'fr' ? 'matchs' : 'matches'}</Text>
+                  </View>
+                ) : player.boules && (player.boules.name || player.boules.diameter) ? (
+                  <View style={s.prefItem}>
+                    <View style={[s.prefItemIcon, { backgroundColor: theme.accent + '15' }]}>
+                      <MaterialIcons name="sports-baseball" size={18} color={theme.accent} />
+                    </View>
+                    <View style={s.prefItemInfo}>
+                      <Text style={s.prefItemLabel}>{language === 'fr' ? 'Boules' : 'Boules'}</Text>
+                      <Text style={s.prefItemValue}>{player.boules.name || t('player', 'boulesLabel')}</Text>
+                    </View>
+                  </View>
+                ) : null}
+              </Animated.View>
+            ) : null}
           </View>
-          <View style={styles.quickStatItem}>
-            <Text style={[styles.quickStatValue, { color: theme.error }]}>{player.stats.losses}</Text>
-            <Text style={styles.quickStatLabel}>{t('player', 'defeats')}</Text>
+        </View>
+
+        {/* ===== MATCH STATISTICS ===== */}
+        <Animated.View entering={FadeInDown.duration(400).delay(100)} style={s.sectionCard}>
+          <View style={s.sectionHeader}>
+            <View style={[s.sectionIconBox, { backgroundColor: theme.primary + '15' }]}>
+              <MaterialIcons name="sports" size={18} color={theme.primary} />
+            </View>
+            <Text style={s.sectionTitle}>{t('player', 'matchesSection')}</Text>
+          </View>
+
+          {/* Win/Loss bar */}
+          <View style={s.matchStatRow}>
+            <View style={s.matchStatLabels}>
+              <Text style={[s.matchStatLabel, { color: theme.success }]}>{player.stats.wins} {t('player', 'won')}</Text>
+              <Text style={[s.matchStatLabel, { color: theme.error }]}>{player.stats.losses} {t('player', 'lost')}</Text>
+            </View>
+            <View style={s.progressBarTrack}>
+              <View style={[s.progressBarFill, { flex: Math.max(player.stats.wins, 0.01), backgroundColor: theme.success }]} />
+              <View style={[s.progressBarFill, { flex: Math.max(player.stats.losses, 0.01), backgroundColor: theme.error }]} />
+            </View>
+          </View>
+
+          {/* Mode breakdown */}
+          <View style={s.modeBreakdownRow}>
+            <View style={s.modeBreakdownItem}>
+              <View style={[s.modeBreakdownIcon, { backgroundColor: theme.carreauColor + '15' }]}>
+                <MaterialIcons name="emoji-events" size={16} color={theme.carreauColor} />
+              </View>
+              <View>
+                <Text style={s.modeBreakdownValue}>{tournamentMatches.length}</Text>
+                <Text style={s.modeBreakdownLabel}>{t('player', 'tournaments')}</Text>
+              </View>
+            </View>
+            <View style={s.modeBreakdownItem}>
+              <View style={[s.modeBreakdownIcon, { backgroundColor: theme.primary + '15' }]}>
+                <MaterialIcons name="fitness-center" size={16} color={theme.primary} />
+              </View>
+              <View>
+                <Text style={s.modeBreakdownValue}>{trainingMatches.length}</Text>
+                <Text style={s.modeBreakdownLabel}>{t('player', 'trainings')}</Text>
+              </View>
+            </View>
+            <View style={s.modeBreakdownItem}>
+              <View style={[s.modeBreakdownIcon, { backgroundColor: theme.textSecondary + '15' }]}>
+                <MaterialIcons name="numbers" size={16} color={theme.textSecondary} />
+              </View>
+              <View>
+                <Text style={s.modeBreakdownValue}>{((player.stats.avgPointsScored - player.stats.avgPointsConceded) > 0 ? '+' : '')}{(player.stats.avgPointsScored - player.stats.avgPointsConceded).toFixed(1)}</Text>
+                <Text style={s.modeBreakdownLabel}>{t('player', 'differential')}</Text>
+              </View>
+            </View>
           </View>
         </Animated.View>
 
-        </View>
-        </View>
+        {/* ===== SHOT PERFORMANCE ===== */}
+        <Animated.View entering={FadeInDown.duration(400).delay(150)} style={s.sectionCard}>
+          <View style={s.sectionHeader}>
+            <View style={[s.sectionIconBox, { backgroundColor: theme.accent + '15' }]}>
+              <MaterialIcons name="gps-fixed" size={18} color={theme.accent} />
+            </View>
+            <Text style={s.sectionTitle}>{t('player', 'performancesLabel')}</Text>
+          </View>
 
-        <View style={isTablet ? styles.tabletRow : undefined}>
-        {/* Performance Rings */}
-        <Animated.View entering={FadeInDown.duration(400).delay(200)} style={[styles.section, isTablet && styles.tabletHalf]}>
-          <Text style={styles.sectionTitle}>{t('player', 'performance')}</Text>
-          <View style={styles.ringsContainer}>
-            <View style={styles.ringItem}>
-              <StatRing value={player.stats.winRate} color={theme.primary} />
-              <Text style={styles.ringLabel}>{t('player', 'victories')}</Text>
+          {[
+            { icon: 'gps-fixed', label: t('player', 'shotRate'), rate: tirRate, success: totalTirsSuccess || player.stats.tirRate, total: totalTirs || 100, color: theme.accent },
+            { icon: 'adjust', label: t('player', 'pointRate'), rate: pointRate, success: totalPointsSuccess || player.stats.pointRate, total: totalPoints || 100, color: theme.primary },
+            { icon: 'stars', label: t('player', 'carreauRate'), rate: carreauRate, success: totalCarreaux || player.stats.carreauRate, total: totalTirsSuccess || 100, color: theme.carreauColor },
+          ].map((item, idx) => (
+            <View key={idx} style={[s.perfRow, idx === 2 && { borderBottomWidth: 0 }]}>
+              <View style={[s.perfIcon, { backgroundColor: item.color + '15' }]}>
+                <MaterialIcons name={item.icon as any} size={18} color={item.color} />
+              </View>
+              <View style={s.perfInfo}>
+                <View style={s.perfTopRow}>
+                  <Text style={s.perfLabel}>{item.label}</Text>
+                  <Text style={[s.perfValue, { color: item.color }]}>{item.rate}%</Text>
+                </View>
+                <View style={s.perfBarTrack}>
+                  <View style={[s.perfBarFill, { width: `${item.rate}%`, backgroundColor: item.color }]} />
+                </View>
+                {(totalTirs > 0 || totalPoints > 0) ? (
+                  <Text style={s.perfSubtext}>{item.success} / {item.total}</Text>
+                ) : null}
+              </View>
             </View>
-            <View style={styles.ringItem}>
-              <StatRing value={player.stats.tirRate} color={theme.tirColor} />
-              <Text style={styles.ringLabel}>{t('player', 'shot')}</Text>
+          ))}
+        </Animated.View>
+
+        {/* ===== DETAILED STATS ===== */}
+        <Animated.View entering={FadeInDown.duration(400).delay(200)} style={s.sectionCard}>
+          <View style={s.sectionHeader}>
+            <View style={[s.sectionIconBox, { backgroundColor: theme.warning + '15' }]}>
+              <MaterialIcons name="bar-chart" size={18} color={theme.warning} />
             </View>
-            <View style={styles.ringItem}>
-              <StatRing value={player.stats.pointRate} color={theme.pointColor} />
-              <Text style={styles.ringLabel}>{t('player', 'pointLabel')}</Text>
-            </View>
-            <View style={styles.ringItem}>
-              <StatRing value={player.stats.carreauRate} color={theme.carreauColor} />
-              <Text style={styles.ringLabel}>{t('player', 'carreau')}</Text>
-            </View>
+            <Text style={s.sectionTitle}>{t('player', 'details')}</Text>
+          </View>
+
+          <View style={s.detailRow}>
+            <Text style={s.detailLabel}>{t('player', 'pointsScoredPerMatch')}</Text>
+            <Text style={s.detailValue}>{player.stats.avgPointsScored}</Text>
+          </View>
+          <View style={s.detailRow}>
+            <Text style={s.detailLabel}>{t('player', 'pointsConcededPerMatch')}</Text>
+            <Text style={s.detailValue}>{player.stats.avgPointsConceded}</Text>
+          </View>
+          <View style={[s.detailRow, { borderBottomWidth: 0 }]}>
+            <Text style={s.detailLabel}>{t('player', 'memberSince')}</Text>
+            <Text style={s.detailValue}>{new Date(player.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'long', year: 'numeric' })}</Text>
           </View>
         </Animated.View>
 
-        {/* Detailed Stats */}
-        <Animated.View entering={FadeInDown.duration(400).delay(300)} style={[styles.section, isTablet && styles.tabletHalf]}>
-          <Text style={styles.sectionTitle}>{t('player', 'details')}</Text>
-          <View style={styles.detailsCard}>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>{t('player', 'pointsScoredPerMatch')}</Text>
-              <Text style={styles.detailValue}>{player.stats.avgPointsScored}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>{t('player', 'pointsConcededPerMatch')}</Text>
-              <Text style={styles.detailValue}>{player.stats.avgPointsConceded}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>{t('player', 'differential')}</Text>
-              <Text style={[styles.detailValue, { 
-                color: player.stats.avgPointsScored - player.stats.avgPointsConceded > 0 
-                  ? theme.success 
-                  : theme.error 
-              }]}>
-                {(player.stats.avgPointsScored - player.stats.avgPointsConceded) > 0 ? '+' : ''}
-                {(player.stats.avgPointsScored - player.stats.avgPointsConceded).toFixed(1)}
-              </Text>
-            </View>
-            {player.location && (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>{t('player', 'location')}</Text>
-                <Text style={styles.detailValue}>{player.location.city}</Text>
+        {/* Contact Visibility Toggle */}
+        {canEdit && !isSharedItem && (player?.isPublic ?? false) && (player?.phone || player?.email) ? (
+          <Animated.View entering={FadeInDown.duration(400).delay(250)} style={s.sectionCard}>
+            <Pressable style={s.visibilityRow} onPress={() => { Haptics.selectionAsync(); updatePlayer(player.id, { showContactPublic: !(player.showContactPublic ?? false) }); }}>
+              <View style={[s.sectionIconBox, { backgroundColor: (player.showContactPublic ? theme.success : theme.textMuted) + '15' }]}>
+                <MaterialIcons name={player.showContactPublic ? 'contact-phone' : 'phone-disabled'} size={18} color={player.showContactPublic ? theme.success : theme.textMuted} />
               </View>
-            )}
-            <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
-              <Text style={styles.detailLabel}>{t('player', 'memberSince')}</Text>
-              <Text style={styles.detailValue}>
-                {new Date(player.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'long', year: 'numeric' })}
-              </Text>
-            </View>
-          </View>
-        </Animated.View>
-
-        </View>
-
-        {/* Contact Visibility Toggle - only when public and has contact */}
-        {canEdit && !isSharedItem && (player?.isPublic ?? false) && (player?.phone || player?.email) && (
-          <Animated.View entering={FadeInDown.duration(400).delay(450)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('player', 'contactVisibility')}</Text>
-            <Pressable
-              style={[styles.detailsCard, { flexDirection: 'row', alignItems: 'center', padding: 16 }]}
-              onPress={() => {
-                Haptics.selectionAsync();
-                const newVal = !(player.showContactPublic ?? false);
-                updatePlayer(player.id, { showContactPublic: newVal });
-              }}
-            >
-              <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: (player.showContactPublic ? theme.success : theme.textMuted) + '15', alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
-                <MaterialIcons name={player.showContactPublic ? 'contact-phone' : 'phone-disabled'} size={22} color={player.showContactPublic ? theme.success : theme.textMuted} />
+              <View style={s.visibilityInfo}>
+                <Text style={s.visibilityTitle}>{t('map', 'showContactPublic')}</Text>
+                <Text style={s.visibilityDesc}>{player.showContactPublic ? t('map', 'contactVisibleDesc') : t('map', 'contactHiddenDesc')}</Text>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 15, fontWeight: '600', color: theme.textPrimary }}>{t('map', 'showContactPublic')}</Text>
-                <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 2 }}>
-                  {player.showContactPublic ? t('map', 'contactVisibleDesc') : t('map', 'contactHiddenDesc')}
-                </Text>
-              </View>
-              <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: (player.showContactPublic ? theme.success : theme.textMuted) + '15' }}>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: player.showContactPublic ? theme.success : theme.textMuted }}>
-                  {player.showContactPublic ? t('map', 'visibleLabel') : t('map', 'hiddenLabel')}
-                </Text>
+              <View style={[s.visibilityBadge, { backgroundColor: (player.showContactPublic ? theme.success : theme.textMuted) + '20' }]}>
+                <Text style={[s.visibilityBadgeText, { color: player.showContactPublic ? theme.success : theme.textMuted }]}>{player.showContactPublic ? t('map', 'visibleLabel') : t('map', 'hiddenLabel')}</Text>
               </View>
             </Pressable>
           </Animated.View>
-        )}
+        ) : null}
 
-        {/* Recent Matches */}
-        {playerMatches.length > 0 && (
-          <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('player', 'recentMatches')}</Text>
-            {playerMatches.map(match => {
+        {/* ===== RECENT MATCHES ===== */}
+        {recentMatches.length > 0 ? (
+          <Animated.View entering={FadeInDown.duration(400).delay(300)} style={s.sectionCard}>
+            <View style={s.sectionHeader}>
+              <View style={[s.sectionIconBox, { backgroundColor: theme.success + '15' }]}>
+                <MaterialIcons name="history" size={18} color={theme.success} />
+              </View>
+              <Text style={s.sectionTitle}>{t('player', 'recentMatches')}</Text>
+            </View>
+
+            {recentMatches.map((match, idx) => {
               const isTeamA = match.teamA.players.includes(id!);
               const won = (isTeamA && match.winner === 'A') || (!isTeamA && match.winner === 'B');
-              
               return (
-                <Pressable key={match.id} style={styles.matchCard} onPress={() => router.push(`/match/${match.id}`)}>
-                  <View style={[styles.matchIndicator, { backgroundColor: won ? theme.success : theme.error }]} />
-                  <View style={styles.matchContent}>
-                    <View style={styles.matchHeader}>
-                      <Text style={styles.matchFormat}>{t('formats', match.format)}</Text>
-                      <Text style={styles.matchDate}>
-                        {new Date(match.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
-                      </Text>
-                    </View>
-                    <Text style={styles.matchTeams} numberOfLines={1}>
-                      {match.teamA.playerNames.join(', ')} vs {match.teamB.playerNames.join(', ')}
-                    </Text>
+                <Pressable key={match.id} style={[s.matchCard, idx === recentMatches.length - 1 && { borderBottomWidth: 0 }]} onPress={() => router.push(`/match/${match.id}`)}>
+                  <View style={[s.matchIndicator, { backgroundColor: won ? theme.success : theme.error }]} />
+                  <View style={s.matchContent}>
+                    <Text style={s.matchTeams} numberOfLines={1}>{match.teamA.playerNames.join(', ')} vs {match.teamB.playerNames.join(', ')}</Text>
+                    <Text style={s.matchMeta}>{t('formats', match.format)} \u2022 {new Date(match.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
                   </View>
-                  <View style={styles.matchScore}>
-                    <Text style={[styles.matchScoreText, won && styles.matchScoreWin]}>
-                      {isTeamA ? match.teamA.score : match.teamB.score}
-                    </Text>
-                    <Text style={styles.matchScoreSeparator}>-</Text>
-                    <Text style={[styles.matchScoreText, !won && styles.matchScoreLoss]}>
-                      {isTeamA ? match.teamB.score : match.teamA.score}
-                    </Text>
+                  <View style={s.matchScoreBox}>
+                    <Text style={[s.matchScoreText, won && { color: theme.success }]}>{isTeamA ? match.teamA.score : match.teamB.score}</Text>
+                    <Text style={s.matchScoreSep}>-</Text>
+                    <Text style={[s.matchScoreText, !won && { color: theme.error }]}>{isTeamA ? match.teamB.score : match.teamA.score}</Text>
                   </View>
                 </Pressable>
               );
             })}
           </Animated.View>
-        )}
-        {/* Modification Logs - only visible to owner */}
-        <ModificationLogsSection
-          itemType="player"
-          itemId={id!}
-          isOwner={!isSharedItem && !!user?.id}
-        />
+        ) : null}
+
+        {/* Modification Logs */}
+        <ModificationLogsSection itemType="player" itemId={id!} isOwner={!isSharedItem && !!user?.id} />
       </ScrollView>
 
       {player ? (
-        <ShareModal
-          visible={showShareModal}
-          onClose={() => setShowShareModal(false)}
-          itemType="player"
-          itemId={player.id}
-          itemName={player.name}
-        />
+        <ShareModal visible={showShareModal} onClose={() => setShowShareModal(false)} itemType="player" itemId={player.id} itemName={player.name} />
       ) : null}
 
-      <MergePickerModal
-        visible={showMergePicker}
-        onClose={() => setShowMergePicker(false)}
-        itemType="player"
-        currentItemId={id!}
-      />
+      <MergePickerModal visible={showMergePicker} onClose={() => setShowMergePicker(false)} itemType="player" currentItemId={id!} />
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.backgroundSecondary,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: theme.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  editButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  scrollContentTablet: {
-    maxWidth: 960,
-    alignSelf: 'center' as const,
-    width: '100%',
-    paddingHorizontal: 24,
-  },
-  profileCardTablet: {
-    padding: 28,
-  },
-  quickStatsTablet: {
-    marginTop: 0,
-  },
-  tabletProfileRow: {
-    flexDirection: 'row' as const,
-    gap: 16,
-    marginBottom: 16,
-  },
-  tabletLeftCol: {
-    flex: 1,
-  },
-  tabletRightCol: {
-    flex: 1,
-  },
-  preferencesCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 24,
-    alignItems: 'center' as const,
-    marginBottom: 16,
-    ...theme.shadows.card,
-  },
-  preferencesCardTablet: {
-    padding: 20,
-    marginBottom: 12,
-  },
-  tabletRow: {
-    flexDirection: 'row' as const,
-    gap: 16,
-  },
-  tabletHalf: {
-    flex: 1,
-  },
-  profileCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 24,
-    alignItems: 'center',
-    ...theme.shadows.card,
-  },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: theme.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    overflow: 'hidden',
-  },
-  avatarImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-  },
-  avatarText: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  playerName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: theme.textPrimary,
-    marginBottom: 12,
-  },
-  profileBadges: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 4,
-  },
-  profileSectionDivider: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 20,
-    marginBottom: 12,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: theme.border,
-  },
-  profileSectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: theme.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  profileSectionLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: theme.border,
-  },
-  badge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: theme.borderRadius.full,
-  },
-  badgeText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  clubLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-  },
-  clubName: {
-    fontSize: 15,
-    color: theme.textSecondary,
-  },
-  handednessContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#6366F1' + '12',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: theme.borderRadius.full,
-    marginBottom: 8,
-  },
-  handednessText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#6366F1',
-  },
-  preferredRoleCard: {
-    width: '100%',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: theme.border + '60',
-  },
-  preferredRoleTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: theme.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  preferredRoleContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    marginBottom: 12,
-  },
-  preferredRoleIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  preferredRoleInfo: {
-    alignItems: 'flex-start',
-  },
-  preferredRoleName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: theme.textPrimary,
-  },
-  preferredRoleStats: {
-    fontSize: 12,
-    color: theme.textSecondary,
-  },
-  roleBreakdown: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  roleBreakdownItem: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: theme.backgroundSecondary,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderRadius: theme.borderRadius.md,
-  },
-  roleBreakdownLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: theme.textSecondary,
-    width: 12,
-  },
-  roleBreakdownBarBg: {
-    flex: 1,
-    height: 4,
-    backgroundColor: theme.border,
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  roleBreakdownBar: {
-    height: '100%',
-    borderRadius: 2,
-  },
-  roleBreakdownPct: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: theme.textPrimary,
-    minWidth: 28,
-    textAlign: 'right',
-  },
-  playerNickname: {
-    fontSize: 15,
-    fontStyle: 'italic',
-    color: theme.textSecondary,
-    marginBottom: 12,
-  },
-  terrainLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-  },
-  terrainLinkText: {
-    fontSize: 15,
-    color: theme.success,
-  },
-  contactInfo: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 16,
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: theme.border,
-  },
-  contactItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: theme.primary + '10',
-    borderRadius: theme.borderRadius.full,
-  },
-  contactText: {
-    fontSize: 13,
-    color: theme.primary,
-    fontWeight: '500',
-  },
-  quickStats: {
-    flexDirection: 'row',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    marginTop: 16,
-    ...theme.shadows.card,
-  },
-  quickStatItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  quickStatBorder: {
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: theme.border,
-  },
-  quickStatValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: theme.textPrimary,
-  },
-  quickStatLabel: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    marginTop: 4,
-  },
-  section: {
-    marginTop: 24,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textSecondary,
-    letterSpacing: 1,
-    marginBottom: 12,
-  },
-  ringsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 20,
-    ...theme.shadows.card,
-  },
-  ringItem: {
-    alignItems: 'center',
-  },
-  ringValue: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  ringLabel: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    marginTop: 8,
-  },
-  detailsCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    ...theme.shadows.card,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  detailLabel: {
-    fontSize: 15,
-    color: theme.textSecondary,
-  },
-  detailValue: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  matchCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    marginBottom: 8,
-    overflow: 'hidden',
-    ...theme.shadows.card,
-  },
-  matchIndicator: {
-    width: 4,
-    height: '100%',
-  },
-  matchContent: {
-    flex: 1,
-    padding: 12,
-  },
-  matchHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  matchFormat: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.primary,
-  },
-  matchDate: {
-    fontSize: 12,
-    color: theme.textMuted,
-  },
-  matchTeams: {
-    fontSize: 14,
-    color: theme.textPrimary,
-  },
-  matchScore: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingRight: 16,
-    gap: 4,
-  },
-  matchScoreText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  matchScoreWin: {
-    color: theme.success,
-  },
-  matchScoreLoss: {
-    color: theme.error,
-  },
-  matchScoreSeparator: {
-    fontSize: 14,
-    color: theme.textMuted,
-  },
-  // Boules styles
-  boulesCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    ...theme.shadows.card,
-  },
-  boulesIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 14,
-    backgroundColor: theme.accent + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  boulesInfo: {
-    flex: 1,
-  },
-  boulesName: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: theme.textPrimary,
-    marginBottom: 8,
-  },
-  boulesSpecs: {
-    flexDirection: 'row',
-    gap: 20,
-  },
-  boulesSpecItem: {
-    alignItems: 'flex-start',
-  },
-  boulesSpecLabel: {
-    fontSize: 11,
-    color: theme.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  boulesSpecValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.accent,
-    marginTop: 2,
-  },
-  // Partner breakdown
-  partnerBreakdown: {
-    gap: 10,
-    marginTop: 4,
-  },
-  partnerBreakdownItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: theme.backgroundSecondary,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderRadius: theme.borderRadius.md,
-  },
-  partnerAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  partnerAvatarImg: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-  },
-  partnerAvatarText: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  partnerInfoCol: {
-    flex: 1,
-    gap: 4,
-  },
-  partnerName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  partnerBarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  partnerPct: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: theme.textSecondary,
-    minWidth: 50,
-    textAlign: 'right',
-  },
-  // Fallback location indicator
-  fallbackLocationBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.warning + '08',
-    borderRadius: theme.borderRadius.md,
-    padding: 12,
-    marginTop: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: theme.warning + '25',
-    gap: 10,
-    width: '100%',
-  },
-  fallbackLocationIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fallbackLocationInfo: {
-    flex: 1,
-  },
-  fallbackLocationTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  fallbackLocationVia: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: theme.textSecondary,
-  },
-  fallbackLocationDesc: {
-    fontSize: 11,
-    color: theme.textMuted,
-    marginTop: 2,
-  },
-  fallbackLocationEditBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: theme.primary + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.backgroundSecondary },
+
+  // Header
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  headerBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  headerIconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.success + '15', borderRadius: 20 },
+
+  // Scroll
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 20 },
+  scrollContentTablet: { maxWidth: 960, alignSelf: 'center' as const, width: '100%', paddingHorizontal: 24 },
+  tabletRow: { flexDirection: 'row' as const, gap: 16, marginBottom: 4 },
+  tabletLeft: { flex: 1 },
+  tabletRight: { flex: 1 },
+
+  // Hero Card
+  heroCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.xl, padding: 24, alignItems: 'center', marginBottom: 16, ...theme.shadows.card },
+  avatarContainer: { position: 'relative', marginBottom: 14 },
+  avatar: { width: 100, height: 100, borderRadius: 50, backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  avatarImage: { width: 100, height: 100, borderRadius: 50 },
+  avatarText: { fontSize: 36, fontWeight: '700', color: '#FFF' },
+  roleBadgeOnAvatar: { position: 'absolute', bottom: 0, right: 0, width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: theme.surface },
+  heroName: { fontSize: 24, fontWeight: '700', color: theme.textPrimary, marginBottom: 4 },
+  heroNickname: { fontSize: 15, fontStyle: 'italic', color: theme.textSecondary, marginBottom: 8 },
+
+  // Badges
+  badgesRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginBottom: 12, marginTop: 4 },
+  pillBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  pillBadgeText: { fontSize: 13, fontWeight: '600' },
+
+  // Info pills
+  infoPillsRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginBottom: 8 },
+  infoPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 },
+  infoPillText: { fontSize: 13, fontWeight: '600' },
+
+  // Contact pills
+  contactPillsRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginBottom: 8 },
+  contactPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.primary + '10', borderRadius: 20 },
+  contactPillText: { fontSize: 13, fontWeight: '500', color: theme.primary },
+
+  // Location pill
+  locationPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, marginBottom: 16 },
+  locationPillText: { fontSize: 13, fontWeight: '500', color: theme.textSecondary },
+
+  // Quick Stats bar
+  quickStatsBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.lg, paddingVertical: 14, paddingHorizontal: 16, width: '100%' },
+  quickStatItem: { alignItems: 'center', flex: 1 },
+  quickStatValue: { fontSize: 20, fontWeight: '700', color: theme.textPrimary },
+  quickStatLabel: { fontSize: 10, color: theme.textSecondary, marginTop: 2 },
+  quickStatDivider: { width: 1, height: 28, backgroundColor: theme.border, marginHorizontal: 8 },
+
+  // Section Card
+  sectionCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 14, ...theme.shadows.card },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
+  sectionIconBox: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  sectionTitle: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
+
+  // Radar container
+  radarContainer: { alignItems: 'center', marginBottom: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: theme.border },
+
+  // Preference items
+  prefItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border + '60' },
+  prefItemIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  prefItemInfo: { flex: 1 },
+  prefItemLabel: { fontSize: 11, fontWeight: '600', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  prefItemValue: { fontSize: 15, fontWeight: '700', color: theme.textPrimary, marginTop: 2 },
+  prefItemPct: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
+
+  // Match stats
+  matchStatRow: { marginBottom: 16 },
+  matchStatLabels: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  matchStatLabel: { fontSize: 13, fontWeight: '600' },
+  progressBarTrack: { flexDirection: 'row', height: 10, borderRadius: 5, overflow: 'hidden', backgroundColor: theme.backgroundSecondary },
+  progressBarFill: { height: '100%' },
+
+  modeBreakdownRow: { flexDirection: 'row', gap: 10 },
+  modeBreakdownItem: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, padding: 12 },
+  modeBreakdownIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  modeBreakdownValue: { fontSize: 16, fontWeight: '700', color: theme.textPrimary },
+  modeBreakdownLabel: { fontSize: 10, color: theme.textMuted },
+
+  // Performance rows
+  perfRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
+  perfIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  perfInfo: { flex: 1 },
+  perfTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  perfLabel: { fontSize: 14, fontWeight: '600', color: theme.textPrimary },
+  perfValue: { fontSize: 20, fontWeight: '800' },
+  perfBarTrack: { height: 6, backgroundColor: theme.backgroundSecondary, borderRadius: 3, overflow: 'hidden', marginBottom: 4 },
+  perfBarFill: { height: '100%', borderRadius: 3 },
+  perfSubtext: { fontSize: 11, color: theme.textMuted },
+
+  // Detail rows
+  detailRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
+  detailLabel: { fontSize: 14, color: theme.textSecondary },
+  detailValue: { fontSize: 14, fontWeight: '600', color: theme.textPrimary },
+
+  // Visibility
+  visibilityRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  visibilityInfo: { flex: 1 },
+  visibilityTitle: { fontSize: 14, fontWeight: '600', color: theme.textPrimary },
+  visibilityDesc: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  visibilityBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  visibilityBadgeText: { fontSize: 12, fontWeight: '700' },
+
+  // Match cards
+  matchCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
+  matchIndicator: { width: 4, height: 36, borderRadius: 2, marginRight: 12 },
+  matchContent: { flex: 1 },
+  matchTeams: { fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginBottom: 2 },
+  matchMeta: { fontSize: 12, color: theme.textMuted },
+  matchScoreBox: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 8 },
+  matchScoreText: { fontSize: 18, fontWeight: '700', color: theme.textSecondary },
+  matchScoreSep: { fontSize: 14, color: theme.textMuted },
 });
