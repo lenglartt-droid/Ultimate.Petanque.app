@@ -337,3 +337,153 @@ export async function cancelMeetupReminder(meetupId: string): Promise<void> {
     // Ignore if not found
   }
 }
+
+/**
+ * Invite users directly to a meetup by creating pending responses
+ * Works for public players and shared players whose user_id we know
+ */
+export async function inviteUsersToMeetup(
+  meetupId: string,
+  userIds: string[]
+): Promise<{ invited: number; error: string | null }> {
+  try {
+    if (userIds.length === 0) return { invited: 0, error: null };
+
+    const supabase = getSupabaseClient();
+
+    // Filter out users who already have a response
+    const { data: existing } = await supabase
+      .from('terrain_meetup_responses')
+      .select('user_id')
+      .eq('meetup_id', meetupId)
+      .in('user_id', userIds);
+
+    const existingIds = new Set((existing || []).map((r: any) => r.user_id));
+    const newUserIds = userIds.filter(uid => !existingIds.has(uid));
+
+    if (newUserIds.length === 0) return { invited: 0, error: null };
+
+    const rows = newUserIds.map(uid => ({
+      meetup_id: meetupId,
+      user_id: uid,
+      status: 'pending',
+    }));
+
+    const { error } = await supabase
+      .from('terrain_meetup_responses')
+      .insert(rows);
+
+    if (error) return { invited: 0, error: error.message };
+    return { invited: newUserIds.length, error: null };
+  } catch (e: any) {
+    return { invited: 0, error: e.message };
+  }
+}
+
+/**
+ * Get invitable users: public players + players shared with me
+ * Returns user_id and display info for selection
+ */
+export async function getInvitableUsers(): Promise<{ users: InvitableUser[]; error: string | null }> {
+  try {
+    const supabase = getSupabaseClient();
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData?.user?.id) return { users: [], error: null };
+
+    const myId = userData.user.id;
+    const usersMap = new Map<string, InvitableUser>();
+
+    // 1. Public players (their user_id is the owner)
+    const { data: publicPlayers } = await supabase
+      .from('players')
+      .select('user_id, name, club, role, avatar')
+      .eq('is_public', true)
+      .neq('user_id', myId);
+
+    (publicPlayers || []).forEach((p: any) => {
+      if (p.user_id && !usersMap.has(p.user_id)) {
+        usersMap.set(p.user_id, {
+          userId: p.user_id,
+          name: p.name,
+          club: p.club || '',
+          role: p.role || '',
+          avatar: p.avatar || '',
+          source: 'public',
+        });
+      }
+    });
+
+    // 2. Players shared with me (owner_id is the player owner)
+    const { data: sharedItems } = await supabase
+      .from('shared_items')
+      .select('owner_id, item_type')
+      .eq('shared_with_id', myId)
+      .eq('item_type', 'player');
+
+    if (sharedItems && sharedItems.length > 0) {
+      const ownerIds = [...new Set(sharedItems.map((s: any) => s.owner_id).filter((id: string) => id !== myId && !usersMap.has(id)))];
+      if (ownerIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('user_profiles')
+          .select('id, username, email')
+          .in('id', ownerIds);
+
+        (profiles || []).forEach((p: any) => {
+          if (!usersMap.has(p.id)) {
+            usersMap.set(p.id, {
+              userId: p.id,
+              name: p.username || p.email || 'Utilisateur',
+              club: '',
+              role: '',
+              avatar: '',
+              source: 'shared',
+            });
+          }
+        });
+      }
+    }
+
+    // 3. Users who shared items with me (shared_with_id = me, so owner is known)
+    const { data: itemsSharedWithMe } = await supabase
+      .from('shared_items')
+      .select('owner_id')
+      .eq('shared_with_id', myId)
+      .neq('item_type', 'player');
+
+    if (itemsSharedWithMe && itemsSharedWithMe.length > 0) {
+      const moreOwnerIds = [...new Set(itemsSharedWithMe.map((s: any) => s.owner_id).filter((id: string) => id !== myId && !usersMap.has(id)))];
+      if (moreOwnerIds.length > 0) {
+        const { data: moreProfiles } = await supabase
+          .from('user_profiles')
+          .select('id, username, email')
+          .in('id', moreOwnerIds);
+
+        (moreProfiles || []).forEach((p: any) => {
+          if (!usersMap.has(p.id)) {
+            usersMap.set(p.id, {
+              userId: p.id,
+              name: p.username || p.email || 'Utilisateur',
+              club: '',
+              role: '',
+              avatar: '',
+              source: 'shared',
+            });
+          }
+        });
+      }
+    }
+
+    return { users: Array.from(usersMap.values()), error: null };
+  } catch (e: any) {
+    return { users: [], error: e.message };
+  }
+}
+
+export interface InvitableUser {
+  userId: string;
+  name: string;
+  club: string;
+  role: string;
+  avatar: string;
+  source: 'public' | 'shared';
+}

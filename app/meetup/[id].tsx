@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   TextInput,
   Alert,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -23,6 +25,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import {
   Meetup,
   MeetupResponse,
+  InvitableUser,
   findMeetupByCode,
   getMeetupResponses,
   respondToMeetup,
@@ -31,6 +34,8 @@ import {
   getMyResponseStatus,
   scheduleMeetupReminder,
   cancelMeetupReminder,
+  getInvitableUsers,
+  inviteUsersToMeetup,
 } from '@/services/meetupService';
 
 export default function MeetupDetailScreen() {
@@ -48,6 +53,12 @@ export default function MeetupDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [responding, setResponding] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [invitableUsers, setInvitableUsers] = useState<InvitableUser[]>([]);
+  const [selectedInvitees, setSelectedInvitees] = useState<Set<string>>(new Set());
+  const [loadingInvitees, setLoadingInvitees] = useState(false);
+  const [inviteSending, setInviteSending] = useState(false);
+  const [inviteSearch, setInviteSearch] = useState('');
 
   const isCreator = meetup && user && meetup.creator_id === user.id;
   const terrain = meetup ? terrains.find(tr => tr.id === meetup.terrain_id) : null;
@@ -174,6 +185,50 @@ export default function MeetupDetailScreen() {
     }
   }, [meetup, t, showAlert]);
 
+  const handleOpenInvite = useCallback(async () => {
+    setShowInviteModal(true);
+    setLoadingInvitees(true);
+    setInviteSearch('');
+    setSelectedInvitees(new Set());
+    const { users } = await getInvitableUsers();
+    // Filter out users who already responded
+    const respondedIds = new Set(responses.map(r => r.user_id));
+    setInvitableUsers(users.filter(u => !respondedIds.has(u.userId)));
+    setLoadingInvitees(false);
+  }, [responses]);
+
+  const toggleInvitee = useCallback((userId: string) => {
+    setSelectedInvitees(prev => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+    Haptics.selectionAsync();
+  }, []);
+
+  const handleSendInvitations = useCallback(async () => {
+    if (!meetup || selectedInvitees.size === 0) return;
+    setInviteSending(true);
+    const { invited, error } = await inviteUsersToMeetup(meetup.id, Array.from(selectedInvitees));
+    setInviteSending(false);
+    if (error) {
+      showAlert(t('common', 'error'), error);
+      return;
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    showAlert(t('meetup', 'inviteSuccess'), `${invited} ${t('meetup', 'inviteSuccessDesc')}`);
+    setShowInviteModal(false);
+    // Refresh responses
+    const { responses: resp } = await getMeetupResponses(meetup.id);
+    setResponses(resp);
+  }, [meetup, selectedInvitees, t, showAlert]);
+
+  const filteredInvitableUsers = useMemo(() => {
+    const s = inviteSearch.toLowerCase();
+    return invitableUsers.filter(u => !s || u.name.toLowerCase().includes(s) || u.club.toLowerCase().includes(s));
+  }, [invitableUsers, inviteSearch]);
+
   if (loading) {
     return (
       <SafeAreaView edges={['top']} style={styles.container}>
@@ -222,6 +277,9 @@ export default function MeetupDetailScreen() {
         <View style={styles.headerActions}>
           {isCreator ? (
             <>
+              <Pressable style={styles.actionBtn} onPress={handleOpenInvite}>
+                <MaterialIcons name="person-add" size={20} color={theme.accent} />
+              </Pressable>
               <Pressable style={styles.actionBtn} onPress={handleCopyCode}>
                 <MaterialIcons name="content-copy" size={20} color={theme.primary} />
               </Pressable>
@@ -348,6 +406,86 @@ export default function MeetupDetailScreen() {
         </Animated.View>
       </ScrollView>
 
+      {/* Invite Players Modal */}
+      <Modal visible={showInviteModal} animationType="slide" transparent>
+        <View style={styles.inviteOverlay}>
+          <View style={styles.inviteModal}>
+            <View style={styles.inviteHeader}>
+              <Text style={styles.inviteHeaderTitle}>{t('meetup', 'invitePlayers')}</Text>
+              <Pressable style={styles.inviteCloseBtn} onPress={() => setShowInviteModal(false)}>
+                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+            <View style={styles.inviteSearchBar}>
+              <MaterialIcons name="search" size={18} color={theme.textMuted} />
+              <TextInput style={styles.inviteSearchInput} value={inviteSearch} onChangeText={setInviteSearch} placeholder={`${t('common', 'search')}...`} placeholderTextColor={theme.textMuted} />
+            </View>
+            <View style={styles.inviteInfoBanner}>
+              <MaterialIcons name="info-outline" size={14} color={theme.primary} />
+              <Text style={styles.inviteInfoText}>{t('meetup', 'inviteNote')}</Text>
+            </View>
+            {loadingInvitees ? (
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                <ActivityIndicator size="large" color={theme.primary} />
+              </View>
+            ) : (
+              <FlatList
+                data={filteredInvitableUsers}
+                keyExtractor={item => item.userId}
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
+                keyboardShouldPersistTaps="handled"
+                renderItem={({ item: u }) => {
+                  const isSelected = selectedInvitees.has(u.userId);
+                  return (
+                    <Pressable style={[styles.inviteeRow, isSelected && styles.inviteeRowSelected]} onPress={() => toggleInvitee(u.userId)}>
+                      <View style={styles.inviteeAvatar}>
+                        <Text style={styles.inviteeAvatarText}>{u.name.split(' ').map(n => n[0]).join('').slice(0, 2)}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={styles.inviteeName}>{u.name}</Text>
+                          <View style={[styles.inviteSourceBadge, u.source === 'public' ? { backgroundColor: theme.success + '15' } : { backgroundColor: theme.accent + '15' }]}>
+                            <Text style={[styles.inviteSourceText, { color: u.source === 'public' ? theme.success : theme.accent }]}>
+                              {u.source === 'public' ? t('meetup', 'publicPlayer') : t('meetup', 'sharedPlayer')}
+                            </Text>
+                          </View>
+                        </View>
+                        {u.club || u.role ? <Text style={styles.inviteeSub}>{[u.club, u.role].filter(Boolean).join(' \u2022 ')}</Text> : null}
+                      </View>
+                      <View style={[styles.inviteeCheckbox, isSelected && styles.inviteeCheckboxSelected]}>
+                        {isSelected ? <MaterialIcons name="check" size={14} color="#FFF" /> : null}
+                      </View>
+                    </Pressable>
+                  );
+                }}
+                ListEmptyComponent={
+                  <View style={{ alignItems: 'center', paddingVertical: 32, paddingHorizontal: 20 }}>
+                    <MaterialIcons name="person-search" size={40} color={theme.textMuted} />
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginTop: 10, textAlign: 'center' }}>{t('meetup', 'noInvitablePlayers')}</Text>
+                    <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 4, textAlign: 'center', lineHeight: 17 }}>{t('meetup', 'noInvitablePlayersDesc')}</Text>
+                  </View>
+                }
+              />
+            )}
+            {selectedInvitees.size > 0 ? (
+              <View style={styles.inviteActions}>
+                <Pressable style={[styles.inviteSendBtn, inviteSending && { opacity: 0.6 }]} onPress={handleSendInvitations} disabled={inviteSending}>
+                  {inviteSending ? (
+                    <ActivityIndicator size="small" color="#FFF" />
+                  ) : (
+                    <>
+                      <MaterialIcons name="send" size={18} color="#FFF" />
+                      <Text style={styles.inviteSendText}>{t('meetup', 'inviteSend')} ({selectedInvitees.size})</Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
+
       {/* Bottom Action - Response Buttons or Cancel */}
       {!isPast && meetup.status === 'active' ? (
         <View style={[styles.bottomAction, { paddingBottom: insets.bottom + 16 }]}>
@@ -447,4 +585,27 @@ const styles = StyleSheet.create({
   responseBtnActive: { backgroundColor: theme.error, borderColor: theme.error },
   responseBtnActiveAccept: { backgroundColor: theme.success, borderColor: theme.success },
   responseBtnText: { fontSize: 16, fontWeight: '700' },
+  // Invite modal
+  inviteOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' as const },
+  inviteModal: { backgroundColor: theme.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '80%', minHeight: '50%' },
+  inviteHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: theme.border },
+  inviteHeaderTitle: { fontSize: 17, fontWeight: '700' as const, color: theme.textPrimary },
+  inviteCloseBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.backgroundSecondary, alignItems: 'center' as const, justifyContent: 'center' as const },
+  inviteSearchBar: { flexDirection: 'row' as const, alignItems: 'center' as const, backgroundColor: theme.backgroundSecondary, marginHorizontal: 16, marginTop: 12, marginBottom: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, gap: 8 },
+  inviteSearchInput: { flex: 1, fontSize: 15, color: theme.textPrimary, padding: 0 },
+  inviteInfoBanner: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 8, backgroundColor: theme.primary + '08', borderRadius: 10, padding: 10, marginHorizontal: 16, marginBottom: 12, borderWidth: 1, borderColor: theme.primary + '12' },
+  inviteInfoText: { flex: 1, fontSize: 11, color: theme.textSecondary, lineHeight: 16 },
+  inviteeRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, backgroundColor: theme.backgroundSecondary, borderRadius: 14, padding: 12, marginBottom: 8, borderWidth: 1.5, borderColor: 'transparent' },
+  inviteeRowSelected: { borderColor: theme.primary, backgroundColor: theme.primary + '06' },
+  inviteeAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.accent, alignItems: 'center' as const, justifyContent: 'center' as const },
+  inviteeAvatarText: { fontSize: 14, fontWeight: '700' as const, color: '#FFF' },
+  inviteeName: { fontSize: 14, fontWeight: '600' as const, color: theme.textPrimary },
+  inviteeSub: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
+  inviteSourceBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+  inviteSourceText: { fontSize: 9, fontWeight: '700' as const },
+  inviteeCheckbox: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: theme.border, alignItems: 'center' as const, justifyContent: 'center' as const },
+  inviteeCheckboxSelected: { backgroundColor: theme.primary, borderColor: theme.primary },
+  inviteActions: { paddingHorizontal: 16, paddingVertical: 14, borderTopWidth: 1, borderTopColor: theme.border },
+  inviteSendBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 10, backgroundColor: theme.primary, paddingVertical: 16, borderRadius: 16 },
+  inviteSendText: { fontSize: 16, fontWeight: '700' as const, color: '#FFF' },
 });
