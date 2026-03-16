@@ -46,7 +46,8 @@ import {
   Player,
 } from '@/services/mockData';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const getScreenWidth = () => Math.max(1, Dimensions.get('window').width);
+const INITIAL_WIDTH = getScreenWidth();
 
 // ============================================
 // UTILITY FUNCTIONS
@@ -161,6 +162,16 @@ export default function NewChallengeScreen() {
   const insets = useSafeAreaInsets();
   const { addChallenge, userStats, selfPlayer, players, matches, challenges: pastChallenges, boulesSets, terrains } = useApp();
   const { t } = useLanguage();
+
+  // Responsive dimensions
+  const [screenWidth, setScreenWidth] = useState(INITIAL_WIDTH);
+  useEffect(() => {
+    const update = () => setScreenWidth(getScreenWidth());
+    update();
+    const sub = Dimensions.addEventListener('change', update);
+    return () => sub?.remove();
+  }, []);
+  const isTablet = screenWidth >= 600;
 
   // ============================================
   // CONFIGURATION (translated)
@@ -764,7 +775,7 @@ export default function NewChallengeScreen() {
     return (
       <SafeAreaView edges={['top']} style={styles.container}>
         <View style={styles.header}>
-          <Pressable style={styles.headerBtn} onPress={() => setSelectedType(null)}>
+          <Pressable style={styles.headerBtn} onPress={() => { setSelectedType(null); setChallengeMode(null); setSelectedOpponent(null); setPlayerSearch(''); }}>
             <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
           <Text style={styles.headerTitle}>{config?.name}</Text>
@@ -934,8 +945,8 @@ export default function NewChallengeScreen() {
       <SafeAreaView edges={['top']} style={styles.container}>
         <View style={styles.header}>
           <Pressable style={styles.headerBtn} onPress={() => {
-            if (challengeMode === '1v1' && selectedOpponent) setSelectedOpponent(null);
-            else setChallengeMode(null);
+            if (challengeMode === '1v1' && selectedOpponent) { setSelectedOpponent(null); setPlayerSearch(''); }
+            else { setChallengeMode(null); setSelectedOpponent(null); setPlayerSearch(''); }
           }}>
             <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
@@ -1574,7 +1585,7 @@ const styles = StyleSheet.create({
   
   // Scroll
   scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 20 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 20, maxWidth: 700, alignSelf: 'center' as const, width: '100%' },
   
   // Hero Section (Type Selection)
   heroSection: { alignItems: 'center', paddingVertical: 32, paddingHorizontal: 8 },
@@ -1584,7 +1595,9 @@ const styles = StyleSheet.create({
   
   // Challenge Card
   challengeCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: 20, padding: 18, marginBottom: 14, borderLeftWidth: 0, borderWidth: 1.5, borderColor: theme.border, ...theme.shadows.cardElevated },
+  challengeCardTablet: { padding: 24 },
   challengeCardIcon: { width: 60, height: 60, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  challengeCardIconTablet: { width: 72, height: 72, borderRadius: 22 },
   challengeCardContent: { flex: 1 },
   challengeCardTitle: { fontSize: 17, fontWeight: '700', color: theme.textPrimary, marginBottom: 3 },
   challengeCardDesc: { fontSize: 13, color: theme.textSecondary, marginBottom: 10, lineHeight: 18 },
@@ -1593,13 +1606,15 @@ const styles = StyleSheet.create({
   metaBadgeText: { fontSize: 11, fontWeight: '700' },
   
   // Mode Selection
-  modeContent: { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 40, flexGrow: 1, justifyContent: 'center' },
+  modeContent: { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 40, flexGrow: 1, justifyContent: 'center', maxWidth: 600, alignSelf: 'center' as const, width: '100%' },
   modeHeader: { alignItems: 'center', marginBottom: 36 },
   modeHeaderIcon: { width: 72, height: 72, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 2, borderColor: 'rgba(255,255,255,0.1)' },
   modeHeaderTitle: { fontSize: 24, fontWeight: '800', color: theme.textPrimary, letterSpacing: -0.5 },
   modeGrid: { flexDirection: 'row', gap: 14 },
+  modeGridTablet: { gap: 24, paddingHorizontal: 20 },
   modeCardWrapper: { flex: 1 },
   modeCard: { flex: 1, backgroundColor: theme.surface, borderRadius: 24, padding: 24, alignItems: 'center', ...theme.shadows.cardElevated, borderWidth: 1.5, borderColor: theme.border },
+  modeCardTablet: { padding: 36, borderRadius: 28 },
   modeCardIconBg: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   modeCardTitle: { fontSize: 18, fontWeight: '800', color: theme.textPrimary, marginBottom: 6 },
   modeCardDesc: { fontSize: 13, color: theme.textSecondary, textAlign: 'center', marginBottom: 20, lineHeight: 18, flex: 1 },
@@ -1637,7 +1652,7 @@ const styles = StyleSheet.create({
   emptyStateBtnText: { fontSize: 14, fontWeight: '600', color: theme.primary },
   
   // Ready Screen
-  readyContent: { paddingHorizontal: 16, paddingTop: 32, alignItems: 'center' },
+  readyContent: { paddingHorizontal: 16, paddingTop: 32, alignItems: 'center', maxWidth: 600, alignSelf: 'center' as const, width: '100%' },
   readyHero: { alignItems: 'center', marginBottom: 32 },
   readyHeroIcon: { width: 110, height: 110, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 20, borderWidth: 2.5, borderColor: 'rgba(0,0,0,0.05)' },
   readyHeroTitle: { fontSize: 28, fontWeight: '800', color: theme.textPrimary, marginBottom: 8, letterSpacing: -0.5 },
@@ -1709,16 +1724,16 @@ const styles = StyleSheet.create({
   scoreCompareValue: { fontSize: 22, fontWeight: '800', color: theme.textMuted },
   scoreCompareValueActive: { color: theme.primary },
   scoreCompareSep: { fontSize: 14, fontWeight: '800', color: theme.textMuted, paddingHorizontal: 10 },
-  shotButtonsContainer: { flex: 1, paddingHorizontal: 16, paddingTop: 20, alignItems: 'center' },
+  shotButtonsContainer: { flex: 1, paddingHorizontal: 16, paddingTop: 20, alignItems: 'center', maxWidth: 600, alignSelf: 'center' as const, width: '100%' },
   shotButtonsTitle: { fontSize: 15, fontWeight: '700', color: theme.textPrimary, marginBottom: 16 },
   quickBtnsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, width: '100%' },
-  quickBtnLarge: { width: (SCREEN_WIDTH - 42) / 2, alignItems: 'center', justifyContent: 'center', paddingVertical: 22, borderRadius: 20, ...theme.shadows.cardElevated },
+  quickBtnLarge: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 22, borderRadius: 20, ...theme.shadows.cardElevated },
   quickBtnCarreau: { backgroundColor: theme.carreauColor },
   quickBtnNotation: { backgroundColor: theme.surface, borderWidth: 2, borderColor: theme.tirColor + '40' },
   quickBtnLargeText: { fontSize: 14, fontWeight: '800', color: '#FFF', marginTop: 6, letterSpacing: 0.3 },
   
   // Precision In Progress
-  gameContent: { paddingHorizontal: 16, paddingTop: 16 },
+  gameContent: { paddingHorizontal: 16, paddingTop: 16, maxWidth: 600, alignSelf: 'center' as const, width: '100%' },
   atelierInfoCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: 22, padding: 18, marginBottom: 16, ...theme.shadows.cardElevated, borderWidth: 1.5, borderColor: theme.primary + '20' },
   atelierInfoIcon: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
   atelierInfoContent: { flex: 1 },
@@ -1742,14 +1757,14 @@ const styles = StyleSheet.create({
   scoreCardRing: { width: 100, height: 100, borderRadius: 50, borderWidth: 4, borderColor: theme.primary + '30', alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
   scoreCardValue: { fontSize: 42, fontWeight: '900', color: theme.primary, letterSpacing: -1 },
   scoreCardMax: { fontSize: 13, color: theme.textMuted, marginTop: 4, fontWeight: '600' },
-  scoringButtons: { paddingHorizontal: 16, paddingTop: 14, backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border },
+  scoringButtons: { paddingHorizontal: 16, paddingTop: 14, backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border, maxWidth: 600, alignSelf: 'center' as const, width: '100%' },
   scoringButtonsTitle: { fontSize: 12, fontWeight: '700', color: theme.textSecondary, textAlign: 'center', marginBottom: 12, letterSpacing: 0.5 },
   scoringButtonsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  scoringBtn: { width: (SCREEN_WIDTH - 42) / 2, alignItems: 'center', justifyContent: 'center', paddingVertical: 18, paddingHorizontal: 10, borderRadius: 20, minHeight: 90, ...theme.shadows.cardElevated },
+  scoringBtn: { flex: 1, minWidth: '45%', alignItems: 'center', justifyContent: 'center', paddingVertical: 18, paddingHorizontal: 10, borderRadius: 20, minHeight: 90, ...theme.shadows.cardElevated },
   scoringBtnIconRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
   scoringBtnPoints: { fontSize: 22, fontWeight: '900', color: '#FFF' },
   scoringBtnLabel: { fontSize: 15, fontWeight: '700', color: '#FFF', marginTop: 2 },
-  scoringBtnFullWidth: { width: SCREEN_WIDTH - 32 },
+  scoringBtnFullWidth: { flex: 0, width: '100%' },
   // Atelier step indicators
   atelierStepsRow: { flexDirection: 'row', justifyContent: 'center', gap: 10, paddingHorizontal: 16, marginBottom: 14 },
   atelierStep: { width: 32, height: 32, borderRadius: 16, backgroundColor: theme.border + '80', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'transparent' },

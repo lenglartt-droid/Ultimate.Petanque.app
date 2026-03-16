@@ -141,7 +141,7 @@ export default function HomeScreen() {
               <View style={[styles.mainActionIcon, isTablet && styles.mainActionIconTablet, { backgroundColor: theme.primary }]}>
                 <MaterialIcons name="sports" size={isTablet ? 44 : 36} color="#FFF" />
               </View>
-              <Text style={[styles.mainActionTitle, isTablet && styles.mainActionTitleTablet]}>{t('home', 'match')}</Text>
+              <Text style={[styles.mainActionTitle, isTablet && styles.mainActionTitleTablet]} adjustsFontSizeToFit numberOfLines={1}>{t('home', 'match')}</Text>
               <Text style={[styles.mainActionSubtitle, isTablet && styles.mainActionSubtitleTablet]}>{t('home', 'training')}</Text>
             </Pressable>
 
@@ -152,7 +152,7 @@ export default function HomeScreen() {
               <View style={[styles.mainActionIcon, isTablet && styles.mainActionIconTablet, { backgroundColor: theme.accent }]}>
                 <MaterialIcons name="track-changes" size={isTablet ? 44 : 36} color="#FFF" />
               </View>
-              <Text style={[styles.mainActionTitle, isTablet && styles.mainActionTitleTablet]}>{t('home', 'challenge')}</Text>
+              <Text style={[styles.mainActionTitle, isTablet && styles.mainActionTitleTablet]} adjustsFontSizeToFit numberOfLines={1}>{t('home', 'challenge')}</Text>
               <Text style={[styles.mainActionSubtitle, isTablet && styles.mainActionSubtitleTablet]}>{t('home', 'shotsPoints')}</Text>
             </Pressable>
 
@@ -163,8 +163,8 @@ export default function HomeScreen() {
               <View style={[styles.mainActionIcon, isTablet && styles.mainActionIconTablet, { backgroundColor: theme.carreauColor }]}>
                 <MaterialIcons name="emoji-events" size={isTablet ? 44 : 36} color="#FFF" />
               </View>
-              <Text style={[styles.mainActionTitle, isTablet && styles.mainActionTitleTablet]}>{t('home', 'tournament')}</Text>
-              <Text style={[styles.mainActionSubtitle, isTablet && styles.mainActionSubtitleTablet]}>{t('home', 'myJourney')}</Text>
+              <Text style={[styles.mainActionTitle, isTablet && styles.mainActionTitleTablet]} adjustsFontSizeToFit numberOfLines={1}>{t('home', 'tournament')}</Text>
+              <Text style={[styles.mainActionSubtitle, isTablet && styles.mainActionSubtitleTablet]} adjustsFontSizeToFit numberOfLines={1}>{t('home', 'myJourney')}</Text>
             </Pressable>
           </View>
         </Animated.View>
@@ -641,7 +641,7 @@ const styles = StyleSheet.create({
     ...theme.shadows.card,
   },
   quickAccessText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: theme.textPrimary,
     textAlign: 'center',
