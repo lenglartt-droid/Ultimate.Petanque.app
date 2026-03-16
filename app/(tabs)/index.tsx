@@ -481,7 +481,7 @@ export default function HomeScreen() {
 
         {/* ========== LAST 3 RESULTS TIMELINE ========== */}
         {recentResults.length > 0 ? (
-          <Animated.View entering={FadeInDown.duration(400).delay(380)} style={[styles.section, isTablet && styles.sectionTablet]}>
+          <Animated.View entering={FadeInDown.duration(400).delay(380)} style={[styles.section, isTablet && styles.sectionTablet, { marginTop: 16 }]}>
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionTitle}>{t('history', 'history')}</Text>
               <Pressable onPress={() => router.push('/history')}>

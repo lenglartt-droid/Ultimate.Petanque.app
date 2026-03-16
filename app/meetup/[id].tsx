@@ -490,10 +490,12 @@ export default function MeetupDetailScreen() {
       {!isPast && meetup.status === 'active' ? (
         <View style={[styles.bottomAction, { paddingBottom: insets.bottom + 16 }]}>
           {isCreator ? (
-            <Pressable style={styles.cancelMeetupBtn} onPress={handleCancel}>
-              <MaterialIcons name="cancel" size={20} color={theme.error} />
-              <Text style={styles.cancelMeetupBtnText}>{t('meetup', 'cancelMeetup')}</Text>
-            </Pressable>
+            <View style={styles.responseBtns}>
+              <Pressable style={styles.cancelMeetupBtn} onPress={handleCancel}>
+                <MaterialIcons name="cancel" size={20} color={theme.error} />
+                <Text style={styles.cancelMeetupBtnText}>{t('meetup', 'cancelMeetup')}</Text>
+              </Pressable>
+            </View>
           ) : (
             <View style={styles.responseBtns}>
               <Pressable

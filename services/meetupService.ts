@@ -76,6 +76,19 @@ export async function createMeetup(data: {
       .single();
 
     if (error) return { meetup: null, error: error.message };
+
+    // Auto-accept for creator
+    if (meetup) {
+      await supabase
+        .from('terrain_meetup_responses')
+        .upsert({
+          meetup_id: meetup.id,
+          user_id: userData.user.id,
+          status: 'accepted',
+          responded_at: new Date().toISOString(),
+        }, { onConflict: 'meetup_id,user_id' });
+    }
+
     return { meetup, error: null };
   } catch (e: any) {
     return { meetup: null, error: e.message };
