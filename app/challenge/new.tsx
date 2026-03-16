@@ -9,6 +9,7 @@ import {
   Alert,
   Dimensions,
   TextInput,
+  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -246,6 +247,11 @@ export default function NewChallengeScreen() {
   const [showPostChallengeShare, setShowPostChallengeShare] = useState(false);
   const [isSavingForShare, setIsSavingForShare] = useState(false);
 
+  // Picker modals for terrain & boules set
+  const [showChallTerrainPicker, setShowChallTerrainPicker] = useState(false);
+  const [showChallBoulesSetPicker, setShowChallBoulesSetPicker] = useState(false);
+  const [challTerrainSearch, setChallTerrainSearch] = useState('');
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const config = selectedType ? CHALLENGE_CONFIG[selectedType] : null;
 
@@ -288,6 +294,14 @@ export default function NewChallengeScreen() {
       return acc;
     }, {} as Record<PrecisionAtelier, number>
   ), [opponentPrecisionShots]);
+
+  const filteredChallTerrains = useMemo(() => {
+    const s = challTerrainSearch.toLowerCase();
+    return terrains.filter(tr => !s || tr.name.toLowerCase().includes(s) || tr.city.toLowerCase().includes(s));
+  }, [terrains, challTerrainSearch]);
+
+  const selectedTerrainObj = useMemo(() => selectedTerrainId ? terrains.find(tr => tr.id === selectedTerrainId) || null : null, [selectedTerrainId, terrains]);
+  const selectedBoulesSetObj = useMemo(() => selectedBoulesSetId ? boulesSets.find(bs => bs.id === selectedBoulesSetId) || null : null, [selectedBoulesSetId, boulesSets]);
 
   const filteredPlayers = useMemo(() => {
     let result = players.filter(p => !selfPlayer || p.id !== selfPlayer.id);
@@ -991,75 +1005,45 @@ export default function NewChallengeScreen() {
           )}
 
           {/* Terrain & Boules Set Selectors */}
-          {terrains.length > 0 ? (
-            <Animated.View entering={FadeInDown.duration(400).delay(240)} style={{ width: '100%', marginTop: 16 }}>
-              <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textMuted, letterSpacing: 0.5, marginBottom: 8, textAlign: 'center' }}>{t('challenge', 'terrain').toUpperCase()}</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, justifyContent: 'center', paddingHorizontal: 8 }}>
-                <Pressable
-                  style={[styles.atelierCard, { borderWidth: 2, borderColor: !selectedTerrainId ? theme.primary : 'transparent', minWidth: 80 }]}
-                  onPress={() => { Haptics.selectionAsync(); setSelectedTerrainId(null); }}
-                >
-                  <View style={[styles.atelierIcon, { backgroundColor: theme.textMuted + '15' }]}>
-                    <MaterialIcons name="block" size={18} color={theme.textMuted} />
-                  </View>
-                  <View style={styles.atelierInfo}>
-                    <Text style={styles.atelierName}>-</Text>
-                  </View>
+          <Animated.View entering={FadeInDown.duration(400).delay(240)} style={styles.readyPickersSection}>
+            <Pressable style={styles.readyPickerBtn} onPress={() => { setChallTerrainSearch(''); setShowChallTerrainPicker(true); }}>
+              <View style={[styles.readyPickerIcon, { backgroundColor: selectedTerrainObj ? theme.primary + '15' : theme.textMuted + '10' }]}>
+                <MaterialIcons name="place" size={20} color={selectedTerrainObj ? theme.primary : theme.textMuted} />
+              </View>
+              <View style={styles.readyPickerContent}>
+                <Text style={styles.readyPickerLabel}>{t('challenge', 'terrain')}</Text>
+                <Text style={[styles.readyPickerValue, !selectedTerrainObj && styles.readyPickerPlaceholder]} numberOfLines={1}>
+                  {selectedTerrainObj ? `${selectedTerrainObj.name} \u2022 ${selectedTerrainObj.city}` : t('match', 'chooseTerrain')}
+                </Text>
+              </View>
+              {selectedTerrainObj ? (
+                <Pressable onPress={(e) => { e.stopPropagation(); setSelectedTerrainId(null); Haptics.selectionAsync(); }} hitSlop={8}>
+                  <MaterialIcons name="close" size={18} color={theme.textMuted} />
                 </Pressable>
-                {terrains.map(tr => (
-                  <Pressable
-                    key={tr.id}
-                    style={[styles.atelierCard, { borderWidth: 2, borderColor: selectedTerrainId === tr.id ? theme.primary : 'transparent' }]}
-                    onPress={() => { Haptics.selectionAsync(); setSelectedTerrainId(tr.id); }}
-                  >
-                    <View style={[styles.atelierIcon, { backgroundColor: theme.primary + '15' }]}>
-                      <MaterialIcons name="place" size={18} color={theme.primary} />
-                    </View>
-                    <View style={styles.atelierInfo}>
-                      <Text style={styles.atelierName} numberOfLines={1}>{tr.name}</Text>
-                      <Text style={styles.atelierDesc}>{tr.city}</Text>
-                    </View>
-                    {selectedTerrainId === tr.id ? <MaterialIcons name="check-circle" size={18} color={theme.primary} /> : null}
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </Animated.View>
-          ) : null}
+              ) : (
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              )}
+            </Pressable>
 
-          {boulesSets.length > 0 ? (
-            <Animated.View entering={FadeInDown.duration(400).delay(260)} style={{ width: '100%', marginTop: 16 }}>
-              <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textMuted, letterSpacing: 0.5, marginBottom: 8, textAlign: 'center' }}>{t('challenge', 'boulesSet').toUpperCase()}</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, justifyContent: 'center', paddingHorizontal: 8 }}>
-                <Pressable
-                  style={[styles.atelierCard, { borderWidth: 2, borderColor: !selectedBoulesSetId ? theme.primary : 'transparent', minWidth: 80 }]}
-                  onPress={() => { Haptics.selectionAsync(); setSelectedBoulesSetId(null); }}
-                >
-                  <View style={[styles.atelierIcon, { backgroundColor: theme.textMuted + '15' }]}>
-                    <MaterialIcons name="block" size={18} color={theme.textMuted} />
-                  </View>
-                  <View style={styles.atelierInfo}>
-                    <Text style={styles.atelierName}>-</Text>
-                  </View>
+            <Pressable style={styles.readyPickerBtn} onPress={() => setShowChallBoulesSetPicker(true)}>
+              <View style={[styles.readyPickerIcon, { backgroundColor: selectedBoulesSetObj ? theme.accent + '15' : theme.textMuted + '10' }]}>
+                <MaterialIcons name="sports-baseball" size={20} color={selectedBoulesSetObj ? theme.accent : theme.textMuted} />
+              </View>
+              <View style={styles.readyPickerContent}>
+                <Text style={styles.readyPickerLabel}>{t('challenge', 'boulesSet')}</Text>
+                <Text style={[styles.readyPickerValue, !selectedBoulesSetObj && styles.readyPickerPlaceholder]} numberOfLines={1}>
+                  {selectedBoulesSetObj ? `${selectedBoulesSetObj.name}${selectedBoulesSetObj.diameter ? ` \u2022 ${selectedBoulesSetObj.diameter}mm` : ''}${selectedBoulesSetObj.weight ? ` \u2022 ${selectedBoulesSetObj.weight}g` : ''}` : t('match', 'chooseBoulesSet')}
+                </Text>
+              </View>
+              {selectedBoulesSetObj ? (
+                <Pressable onPress={(e) => { e.stopPropagation(); setSelectedBoulesSetId(null); Haptics.selectionAsync(); }} hitSlop={8}>
+                  <MaterialIcons name="close" size={18} color={theme.textMuted} />
                 </Pressable>
-                {boulesSets.map(bs => (
-                  <Pressable
-                    key={bs.id}
-                    style={[styles.atelierCard, { borderWidth: 2, borderColor: selectedBoulesSetId === bs.id ? theme.accent : 'transparent' }]}
-                    onPress={() => { Haptics.selectionAsync(); setSelectedBoulesSetId(bs.id); }}
-                  >
-                    <View style={[styles.atelierIcon, { backgroundColor: theme.accent + '15' }]}>
-                      <MaterialIcons name="sports-baseball" size={18} color={theme.accent} />
-                    </View>
-                    <View style={styles.atelierInfo}>
-                      <Text style={styles.atelierName} numberOfLines={1}>{bs.name}</Text>
-                      <Text style={styles.atelierDesc}>{[bs.diameter ? `${bs.diameter}mm` : '', bs.weight ? `${bs.weight}g` : ''].filter(Boolean).join(' \u2022 ')}</Text>
-                    </View>
-                    {selectedBoulesSetId === bs.id ? <MaterialIcons name="check-circle" size={18} color={theme.accent} /> : null}
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </Animated.View>
-          ) : null}
+              ) : (
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              )}
+            </Pressable>
+          </Animated.View>
         </ScrollView>
 
         <View style={[styles.bottomAction, { paddingBottom: insets.bottom + 16 }]}>
@@ -1068,6 +1052,87 @@ export default function NewChallengeScreen() {
             <Text style={styles.startBtnText}>{t('challenge', 'start')}</Text>
           </Pressable>
         </View>
+
+        {/* Terrain Picker Modal */}
+        <Modal visible={showChallTerrainPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowChallTerrainPicker(false)}>
+          <SafeAreaView style={styles.pickerModalContainer}>
+            <View style={styles.pickerModalHeader}>
+              <Pressable style={styles.pickerModalCloseBtn} onPress={() => setShowChallTerrainPicker(false)}>
+                <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+              </Pressable>
+              <Text style={styles.pickerModalTitle}>{t('challenge', 'terrain')}</Text>
+              <View style={{ width: 40 }} />
+            </View>
+            <View style={styles.pickerModalSearch}>
+              <MaterialIcons name="search" size={20} color={theme.textMuted} />
+              <TextInput style={styles.pickerModalSearchInput} value={challTerrainSearch} onChangeText={setChallTerrainSearch} placeholder={`${t('common', 'search')}...`} placeholderTextColor={theme.textMuted} autoFocus />
+              {challTerrainSearch.length > 0 ? <Pressable onPress={() => setChallTerrainSearch('')}><MaterialIcons name="close" size={20} color={theme.textMuted} /></Pressable> : null}
+            </View>
+            <Pressable style={[styles.pickerModalItem, !selectedTerrainId && styles.pickerModalItemActive]} onPress={() => { Haptics.selectionAsync(); setSelectedTerrainId(null); setShowChallTerrainPicker(false); }}>
+              <View style={[styles.pickerModalItemIcon, { backgroundColor: theme.textMuted + '15' }]}><MaterialIcons name="block" size={20} color={theme.textMuted} /></View>
+              <Text style={styles.pickerModalItemName}>{t('terrain', 'noneLabel')}</Text>
+              {!selectedTerrainId ? <MaterialIcons name="check-circle" size={20} color={theme.primary} /> : null}
+            </Pressable>
+            <FlatList
+              data={filteredChallTerrains}
+              keyExtractor={item => item.id}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item: tr }) => (
+                <Pressable style={[styles.pickerModalItem, { marginHorizontal: 0 }, selectedTerrainId === tr.id && styles.pickerModalItemActive]} onPress={() => { Haptics.selectionAsync(); setSelectedTerrainId(tr.id); setShowChallTerrainPicker(false); }}>
+                  <View style={[styles.pickerModalItemIcon, { backgroundColor: selectedTerrainId === tr.id ? theme.primary : theme.primary + '15' }]}>
+                    <MaterialIcons name="place" size={20} color={selectedTerrainId === tr.id ? '#FFF' : theme.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.pickerModalItemName}>{tr.name}</Text>
+                    <Text style={styles.pickerModalItemSub}>{tr.city} \u2022 {tr.type}</Text>
+                  </View>
+                  {selectedTerrainId === tr.id ? <MaterialIcons name="check-circle" size={20} color={theme.primary} /> : null}
+                </Pressable>
+              )}
+              ListEmptyComponent={<View style={styles.pickerModalEmpty}><MaterialIcons name="place" size={40} color={theme.textMuted} /><Text style={styles.pickerModalEmptyText}>{t('common', 'noResults')}</Text></View>}
+            />
+          </SafeAreaView>
+        </Modal>
+
+        {/* Boules Set Picker Modal */}
+        <Modal visible={showChallBoulesSetPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowChallBoulesSetPicker(false)}>
+          <SafeAreaView style={styles.pickerModalContainer}>
+            <View style={styles.pickerModalHeader}>
+              <Pressable style={styles.pickerModalCloseBtn} onPress={() => setShowChallBoulesSetPicker(false)}>
+                <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+              </Pressable>
+              <Text style={styles.pickerModalTitle}>{t('challenge', 'boulesSet')}</Text>
+              <View style={{ width: 40 }} />
+            </View>
+            <Pressable style={[styles.pickerModalItem, !selectedBoulesSetId && styles.pickerModalItemActive]} onPress={() => { Haptics.selectionAsync(); setSelectedBoulesSetId(null); setShowChallBoulesSetPicker(false); }}>
+              <View style={[styles.pickerModalItemIcon, { backgroundColor: theme.textMuted + '15' }]}><MaterialIcons name="block" size={20} color={theme.textMuted} /></View>
+              <Text style={styles.pickerModalItemName}>{t('terrain', 'noneLabel')}</Text>
+              {!selectedBoulesSetId ? <MaterialIcons name="check-circle" size={20} color={theme.accent} /> : null}
+            </Pressable>
+            <FlatList
+              data={boulesSets}
+              keyExtractor={item => item.id}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
+              renderItem={({ item: bs }) => (
+                <Pressable style={[styles.pickerModalItem, { marginHorizontal: 0 }, selectedBoulesSetId === bs.id && styles.pickerModalItemActive]} onPress={() => { Haptics.selectionAsync(); setSelectedBoulesSetId(bs.id); setShowChallBoulesSetPicker(false); }}>
+                  <View style={[styles.pickerModalItemIcon, { backgroundColor: selectedBoulesSetId === bs.id ? theme.accent : theme.accent + '15' }]}>
+                    <MaterialIcons name="sports-baseball" size={20} color={selectedBoulesSetId === bs.id ? '#FFF' : theme.accent} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.pickerModalItemName}>{bs.name}</Text>
+                    <Text style={styles.pickerModalItemSub}>{[bs.brand, bs.diameter ? `${bs.diameter}mm` : '', bs.weight ? `${bs.weight}g` : '', bs.hardness].filter(Boolean).join(' \u2022 ')}</Text>
+                  </View>
+                  {bs.isPrimary ? <View style={styles.pickerModalPrimaryBadge}><MaterialIcons name="star" size={10} color="#FFF" /></View> : null}
+                  {selectedBoulesSetId === bs.id ? <MaterialIcons name="check-circle" size={20} color={theme.accent} /> : null}
+                </Pressable>
+              )}
+              ListEmptyComponent={<View style={styles.pickerModalEmpty}><MaterialIcons name="sports-baseball" size={40} color={theme.textMuted} /><Text style={styles.pickerModalEmptyText}>{t('match', 'noBoulesSet')}</Text></View>}
+            />
+          </SafeAreaView>
+        </Modal>
       </SafeAreaView>
     );
   }
@@ -1535,10 +1600,10 @@ const styles = StyleSheet.create({
   modeHeaderTitle: { fontSize: 24, fontWeight: '800', color: theme.textPrimary, letterSpacing: -0.5 },
   modeGrid: { flexDirection: 'row', gap: 14 },
   modeCardWrapper: { flex: 1 },
-  modeCard: { backgroundColor: theme.surface, borderRadius: 24, padding: 24, alignItems: 'center', ...theme.shadows.cardElevated, borderWidth: 1.5, borderColor: theme.border },
+  modeCard: { flex: 1, backgroundColor: theme.surface, borderRadius: 24, padding: 24, alignItems: 'center', ...theme.shadows.cardElevated, borderWidth: 1.5, borderColor: theme.border },
   modeCardIconBg: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   modeCardTitle: { fontSize: 18, fontWeight: '800', color: theme.textPrimary, marginBottom: 6 },
-  modeCardDesc: { fontSize: 13, color: theme.textSecondary, textAlign: 'center', marginBottom: 20, lineHeight: 18 },
+  modeCardDesc: { fontSize: 13, color: theme.textSecondary, textAlign: 'center', marginBottom: 20, lineHeight: 18, flex: 1 },
   modeCardBtn: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14, width: '100%', alignItems: 'center' },
   modeCardBtnText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
   
@@ -1694,4 +1759,27 @@ const styles = StyleSheet.create({
   atelierStepText: { fontSize: 12, fontWeight: '700', color: theme.textMuted },
   atelierStepTextCurrent: { color: theme.primary },
   atelierStepTextDone: { color: '#FFF' },
+  // Ready screen picker buttons
+  readyPickersSection: { width: '100%', marginTop: 20, gap: 10 },
+  readyPickerBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: 16, padding: 14, gap: 12, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border },
+  readyPickerIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  readyPickerContent: { flex: 1 },
+  readyPickerLabel: { fontSize: 11, fontWeight: '600', color: theme.textMuted, letterSpacing: 0.3, marginBottom: 2 },
+  readyPickerValue: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  readyPickerPlaceholder: { color: theme.textMuted, fontStyle: 'italic', fontWeight: '400' },
+  // Picker modal styles
+  pickerModalContainer: { flex: 1, backgroundColor: theme.backgroundSecondary },
+  pickerModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  pickerModalCloseBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  pickerModalTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
+  pickerModalSearch: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, marginHorizontal: 16, marginVertical: 12, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, gap: 10, borderWidth: 1, borderColor: theme.border },
+  pickerModalSearchInput: { flex: 1, fontSize: 15, color: theme.textPrimary, padding: 0 },
+  pickerModalItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16, backgroundColor: theme.surface, borderRadius: 12, marginHorizontal: 16, marginBottom: 8, ...theme.shadows.card },
+  pickerModalItemActive: { borderWidth: 2, borderColor: theme.primary },
+  pickerModalItemIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  pickerModalItemName: { flex: 1, fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  pickerModalItemSub: { fontSize: 12, color: theme.textMuted, marginTop: 2 },
+  pickerModalEmpty: { alignItems: 'center', paddingVertical: 40 },
+  pickerModalEmptyText: { fontSize: 14, color: theme.textMuted, marginTop: 10 },
+  pickerModalPrimaryBadge: { width: 20, height: 20, borderRadius: 10, backgroundColor: theme.carreauColor, alignItems: 'center', justifyContent: 'center', marginRight: 4 },
 });
