@@ -416,6 +416,7 @@ export default function MyPlayerCardScreen() {
                   </View>
                   <Text style={s.sectionTitle}>{language === 'fr' ? 'Preferences de jeu' : 'Game Preferences'}</Text>
                 </View>
+                <Text style={s.sectionDesc}>{language === 'fr' ? 'Analyse automatique basee sur vos matchs : role favori, terrain prefere, partenaire regulier et equipement.' : 'Automatic analysis based on your matches: preferred role, terrain, regular partner and equipment.'}</Text>
 
                 {/* Mini Radar */}
                 {radarData.length >= 3 ? (
@@ -742,6 +743,7 @@ const s = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
   sectionIconBox: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   sectionTitle: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
+  sectionDesc: { fontSize: 12, color: theme.textMuted, lineHeight: 17, marginBottom: 12 },
 
   // Radar container
   radarContainer: { alignItems: 'center', marginBottom: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: theme.border },
