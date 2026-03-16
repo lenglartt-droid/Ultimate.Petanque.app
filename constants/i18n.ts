@@ -1346,6 +1346,9 @@ export const translations = {
     addLabel: { fr: 'Ajouter', en: 'Add' },
     totalLabel: { fr: 'Total', en: 'Total' },
     noMenesRecorded: { fr: 'Aucune mène enregistrée', en: 'No ends recorded' },
+    startMatch: { fr: 'Démarrer le match', en: 'Start match' },
+    teamSelection: { fr: 'Équipes', en: 'Teams' },
+    noBoulesSet: { fr: 'Aucun set de boules', en: 'No boules sets' },
   },
 
   // ============================================
@@ -1410,6 +1413,10 @@ export const translations = {
     exitChallenges: { fr: 'Quitter les d\u00e9fis', en: 'Exit challenges' },
     turnOf: { fr: 'Tour de', en: 'Turn of' },
     yourTurn: { fr: 'Votre tour', en: 'Your turn' },
+    scoreOf: { fr: 'Score de', en: 'Score of' },
+    missedBtn: { fr: 'Raté', en: 'Missed' },
+    succeededBtn: { fr: 'Réussi', en: 'Succeeded' },
+    carreauBtn: { fr: 'Carreau', en: 'Carreau' },
   },
 
   // ============================================
@@ -1701,6 +1708,7 @@ export const translations = {
     noNotifDesc: { fr: 'Les notifications d\'accès à vos fiches apparaîtront ici', en: 'Access notifications for your cards will appear here' },
     longPressInfo: { fr: 'Appui long pour supprimer une notification', en: 'Long press to delete a notification' },
     revokeShare: { fr: 'Révoquer le partage', en: 'Revoke share' },
+    revokeTheShare: { fr: 'Révoquer le partage', en: 'Revoke the share' },
     revokeShareMsg: { fr: 'Révoquer l\'accès à', en: 'Revoke access to' },
     revokeShareMsgEnd: { fr: '?', en: '?' },
     revoke: { fr: 'Révoquer', en: 'Revoke' },
