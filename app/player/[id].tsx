@@ -28,7 +28,7 @@ import { useAlert } from '@/template';
 import { toggleItemPublic } from '@/services/publicItemsService';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup as MeetupType } from '@/services/meetupService';
 import Svg, { Polygon, Line, Circle as SvgCircle, Text as SvgText, G } from 'react-native-svg';
-import { Modal, Switch, ActivityIndicator } from 'react-native';
+import { Modal, Switch } from 'react-native';
 import * as Linking from 'expo-linking';
 
 // ============================================
