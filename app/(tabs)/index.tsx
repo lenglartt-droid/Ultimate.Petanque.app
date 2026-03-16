@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import { useAuth } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import AdBanner from '@/components/ui/AdBanner';
 import { preloadInterstitial } from '@/services/adService';
+import { getMyMeetups, getInvitedMeetups, getMeetupResponses, Meetup, MeetupResponse } from '@/services/meetupService';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -32,6 +33,10 @@ export default function HomeScreen() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'À venir' | 'En cours' | 'Terminé'>('all');
   const [refreshing, setRefreshing] = useState(false);
 
+  // Meetups state
+  const [meetups, setMeetups] = useState<(Meetup & { _source: 'created' | 'invited'; _acceptedCount?: number; _maxParticipants?: number })[]>([]);
+  const [meetupsLoading, setMeetupsLoading] = useState(true);
+
   // Responsive dimensions for tablet
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
   useEffect(() => {
@@ -40,9 +45,47 @@ export default function HomeScreen() {
   }, []);
   const isTablet = screenWidth >= 600;
 
+  const loadMeetups = useCallback(async () => {
+    try {
+      const [{ meetups: created }, { meetups: invited }] = await Promise.all([
+        getMyMeetups(),
+        getInvitedMeetups(),
+      ]);
+
+      const now = new Date();
+      // Merge and deduplicate, keeping only future active meetups
+      const allMap = new Map<string, Meetup & { _source: 'created' | 'invited' }>();
+      created.filter(m => m.status === 'active' && new Date(m.date) > now).forEach(m => allMap.set(m.id, { ...m, _source: 'created' }));
+      invited.filter(m => m.status === 'active' && new Date(m.date) > now).forEach(m => {
+        if (!allMap.has(m.id)) allMap.set(m.id, { ...m, _source: 'invited' });
+      });
+
+      const sorted = Array.from(allMap.values()).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      // Fetch response counts for each meetup
+      const withCounts = await Promise.all(
+        sorted.slice(0, 5).map(async (m) => {
+          const { responses } = await getMeetupResponses(m.id);
+          const acceptedCount = responses.filter((r: MeetupResponse) => r.status === 'accepted').length;
+          return { ...m, _acceptedCount: acceptedCount, _maxParticipants: m.max_participants };
+        })
+      );
+
+      setMeetups(withCounts);
+    } catch {
+      // Silently fail
+    } finally {
+      setMeetupsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadMeetups();
+  }, [loadMeetups]);
+
   const handleRefresh = async () => {
     setRefreshing(true);
-    await refreshData();
+    await Promise.all([refreshData(), loadMeetups()]);
     setRefreshing(false);
   };
 
@@ -234,6 +277,71 @@ export default function HomeScreen() {
             </Pressable>
           </Animated.View>
         )}
+
+        {/* Upcoming Meetups */}
+        {meetups.length > 0 ? (
+          <Animated.View entering={FadeInDown.duration(400).delay(220)} style={[styles.meetupSection, isTablet && styles.meetupSectionTablet]}>
+            <View style={styles.meetupSectionHeader}>
+              <View style={styles.meetupSectionTitleRow}>
+                <MaterialIcons name="event" size={18} color={theme.primary} />
+                <Text style={styles.meetupSectionTitle}>{t('meetup', 'upcomingMeetups')}</Text>
+              </View>
+              <Pressable style={styles.meetupNewBtn} onPress={() => router.push('/meetup/new' as any)}>
+                <MaterialIcons name="add" size={16} color={theme.primary} />
+                <Text style={styles.meetupNewBtnText}>{t('common', 'create')}</Text>
+              </Pressable>
+            </View>
+            {meetups.map((m) => {
+              const mDate = new Date(m.date);
+              const isCreator = m._source === 'created';
+              const daysUntil = Math.max(0, Math.ceil((mDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+              return (
+                <Pressable
+                  key={m.id}
+                  style={({ pressed }) => [styles.meetupItem, pressed && styles.meetupItemPressed]}
+                  onPress={() => router.push(`/meetup/${m.id}` as any)}
+                >
+                  <View style={styles.meetupDateCol}>
+                    <Text style={styles.meetupDateDay}>{mDate.getDate()}</Text>
+                    <Text style={styles.meetupDateMonth}>{mDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}</Text>
+                  </View>
+                  <View style={styles.meetupInfoCol}>
+                    <Text style={styles.meetupItemTitle} numberOfLines={1}>{m.title}</Text>
+                    <View style={styles.meetupItemMeta}>
+                      <MaterialIcons name="schedule" size={12} color={theme.textMuted} />
+                      <Text style={styles.meetupItemTime}>
+                        {mDate.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                      {daysUntil <= 1 ? (
+                        <View style={styles.meetupSoonBadge}>
+                          <Text style={styles.meetupSoonText}>{daysUntil === 0 ? t('notifications', 'todayLabel') : t('notifications', 'tomorrowLabel')}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <View style={styles.meetupItemBottom}>
+                      <View style={styles.meetupConfirmBadge}>
+                        <MaterialIcons name="group" size={12} color={theme.success} />
+                        <Text style={styles.meetupConfirmText}>{m._acceptedCount || 0}/{m._maxParticipants || 8} {t('meetup', 'confirmedCount')}</Text>
+                      </View>
+                      {isCreator ? (
+                        <View style={styles.meetupCreatorBadge}>
+                          <MaterialIcons name="person" size={10} color={theme.primary} />
+                          <Text style={styles.meetupCreatorText}>{t('meetup', 'yourMeetup')}</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.meetupInvitedBadge}>
+                          <MaterialIcons name="mail" size={10} color={theme.accent} />
+                          <Text style={styles.meetupInvitedText}>{t('meetup', 'invited')}</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                </Pressable>
+              );
+            })}
+          </Animated.View>
+        ) : !meetupsLoading ? null : null}
 
         {/* Ad Banner */}
         <AdBanner position="inline" />
@@ -965,5 +1073,156 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: theme.primary,
+  },
+  // Meetup section
+  meetupSection: {
+    marginBottom: 24,
+  },
+  meetupSectionTablet: {
+    marginBottom: 32,
+  },
+  meetupSectionHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    marginBottom: 14,
+  },
+  meetupSectionTitleRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+  },
+  meetupSectionTitle: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+    color: theme.textPrimary,
+  },
+  meetupNewBtn: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    backgroundColor: theme.primary + '12',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  meetupNewBtnText: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: theme.primary,
+  },
+  meetupItem: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: theme.surface,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    gap: 14,
+    borderWidth: 1,
+    borderColor: theme.border,
+    ...theme.shadows.card,
+  },
+  meetupItemPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
+  },
+  meetupDateCol: {
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: theme.primary + '12',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  meetupDateDay: {
+    fontSize: 20,
+    fontWeight: '900' as const,
+    color: theme.primary,
+    lineHeight: 22,
+  },
+  meetupDateMonth: {
+    fontSize: 9,
+    fontWeight: '700' as const,
+    color: theme.primary,
+    letterSpacing: 0.5,
+  },
+  meetupInfoCol: {
+    flex: 1,
+  },
+  meetupItemTitle: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: theme.textPrimary,
+    marginBottom: 4,
+  },
+  meetupItemMeta: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    marginBottom: 6,
+  },
+  meetupItemTime: {
+    fontSize: 12,
+    color: theme.textMuted,
+  },
+  meetupSoonBadge: {
+    backgroundColor: theme.warning + '18',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginLeft: 6,
+  },
+  meetupSoonText: {
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: theme.warning,
+  },
+  meetupItemBottom: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+  },
+  meetupConfirmBadge: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    backgroundColor: theme.success + '12',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  meetupConfirmText: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+    color: theme.success,
+  },
+  meetupCreatorBadge: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 3,
+    backgroundColor: theme.primary + '12',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  meetupCreatorText: {
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: theme.primary,
+  },
+  meetupInvitedBadge: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 3,
+    backgroundColor: theme.accent + '12',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  meetupInvitedText: {
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: theme.accent,
   },
 });
