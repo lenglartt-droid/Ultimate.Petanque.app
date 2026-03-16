@@ -1031,6 +1031,7 @@ export default function NewMatchScreen() {
       >
         <View style={styles.fullscreenContainer}>
           <SafeAreaView style={styles.fullscreenSafeArea}>
+           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false} bounces={false}>
             {/* Compact Top Bar */}
             <View style={styles.fsTopBar}>
               <Pressable 
@@ -1271,7 +1272,7 @@ export default function NewMatchScreen() {
             </View>
 
             {/* Mène Timeline */}
-            <View style={styles.fsMeneTimeline}>
+            <View style={[styles.fsMeneTimeline, { flex: undefined, minHeight: 100 }]}>
               <View style={styles.fsMeneTimelineHeader}>
                 <Text style={styles.fsMeneTimelineTitle}>{t('match', 'matchFlow')}</Text>
                 {menes.length > 0 && (
@@ -1327,6 +1328,7 @@ export default function NewMatchScreen() {
                 </ScrollView>
               )}
             </View>
+           </ScrollView>
 
             {/* Simplified Notation Modal */}
             {advancedNotationPlayer && (
