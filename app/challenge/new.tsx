@@ -967,45 +967,8 @@ export default function NewChallengeScreen() {
             </View>
           </Animated.View>
 
-          {isPrecision && (
-            <View style={styles.readySection}>
-              <Text style={styles.readySectionTitle}>{t('challenge', 'theWorkshops')}</Text>
-              {TRANSLATED_ATELIERS.map((atelier, index) => (
-                <Animated.View key={atelier.id} entering={FadeInDown.duration(300).delay(100 + index * 60)}>
-                  <View style={styles.atelierCard}>
-                    <View style={[styles.atelierIcon, { backgroundColor: theme.primary + '15' }]}>
-                      <MaterialIcons name={atelier.icon as any} size={20} color={theme.primary} />
-                    </View>
-                    <View style={styles.atelierInfo}>
-                      <Text style={styles.atelierName}>{atelier.name}</Text>
-                      <Text style={styles.atelierDesc}>{atelier.description}</Text>
-                    </View>
-                    <Text style={styles.atelierDist}>6-9m</Text>
-                  </View>
-                </Animated.View>
-              ))}
-            </View>
-          )}
-
-          {!isPrecision && (
-            <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.readyInfoCard}>
-              <View style={styles.readyInfoRow}>
-                <MaterialIcons name="timer" size={18} color={theme.textSecondary} />
-                <Text style={styles.readyInfoText}>{t('challenge', 'timedAuto')}</Text>
-              </View>
-              <View style={styles.readyInfoRow}>
-                <MaterialIcons name="stars" size={18} color={theme.carreauColor} />
-                <Text style={styles.readyInfoText}>{t('challenge', 'carreauxCounted')}</Text>
-              </View>
-              <View style={styles.readyInfoRow}>
-                <MaterialIcons name="save" size={18} color={theme.primary} />
-                <Text style={styles.readyInfoText}>{t('challenge', 'resultsSaved')}</Text>
-              </View>
-            </Animated.View>
-          )}
-
           {/* Terrain & Boules Set Selectors */}
-          <Animated.View entering={FadeInDown.duration(400).delay(240)} style={styles.readyPickersSection}>
+          <Animated.View entering={FadeInDown.duration(300).delay(100)} style={styles.readyPickersSection}>
             <Pressable style={styles.readyPickerBtn} onPress={() => { setChallTerrainSearch(''); setShowChallTerrainPicker(true); }}>
               <View style={[styles.readyPickerIcon, { backgroundColor: selectedTerrainObj ? theme.primary + '15' : theme.textMuted + '10' }]}>
                 <MaterialIcons name="place" size={20} color={selectedTerrainObj ? theme.primary : theme.textMuted} />
@@ -1044,6 +1007,42 @@ export default function NewChallengeScreen() {
               )}
             </Pressable>
           </Animated.View>
+
+          {isPrecision && (
+            <View style={styles.readySection}>
+              <Text style={styles.readySectionTitle}>{t('challenge', 'theWorkshops')}</Text>
+              {TRANSLATED_ATELIERS.map((atelier, index) => (
+                <Animated.View key={atelier.id} entering={FadeInDown.duration(300).delay(100 + index * 60)}>
+                  <View style={styles.atelierCard}>
+                    <View style={[styles.atelierIcon, { backgroundColor: theme.primary + '15' }]}>
+                      <MaterialIcons name={atelier.icon as any} size={20} color={theme.primary} />
+                    </View>
+                    <Text style={styles.atelierName}>{atelier.name}</Text>
+                    <Text style={styles.atelierDesc}>{atelier.description}</Text>
+                    <Text style={styles.atelierDist}>6-9m</Text>
+                  </View>
+                </Animated.View>
+              ))}
+            </View>
+          )}
+
+          {!isPrecision && (
+            <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.readyInfoCard}>
+              <View style={styles.readyInfoRow}>
+                <MaterialIcons name="timer" size={18} color={theme.textSecondary} />
+                <Text style={styles.readyInfoText}>{t('challenge', 'timedAuto')}</Text>
+              </View>
+              <View style={styles.readyInfoRow}>
+                <MaterialIcons name="stars" size={18} color={theme.carreauColor} />
+                <Text style={styles.readyInfoText}>{t('challenge', 'carreauxCounted')}</Text>
+              </View>
+              <View style={styles.readyInfoRow}>
+                <MaterialIcons name="save" size={18} color={theme.primary} />
+                <Text style={styles.readyInfoText}>{t('challenge', 'resultsSaved')}</Text>
+              </View>
+            </Animated.View>
+          )}
+
         </ScrollView>
 
         <View style={[styles.bottomAction, { paddingBottom: insets.bottom + 16 }]}>
@@ -1648,16 +1647,16 @@ const styles = StyleSheet.create({
   modeBadgeText: { fontSize: 14, fontWeight: '700', color: theme.primary },
   modeBadgeText1v1: { color: theme.accent },
   readySection: { width: '100%', marginTop: 24 },
-  readySectionTitle: { fontSize: 12, fontWeight: '700', color: theme.textMuted, letterSpacing: 1.5, marginBottom: 12, textTransform: 'uppercase' },
-  atelierCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: 14, padding: 14, marginBottom: 10, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border },
-  atelierIcon: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  readySectionTitle: { fontSize: 12, fontWeight: '700', color: theme.textMuted, letterSpacing: 1.5, marginBottom: 12, textTransform: 'uppercase', textAlign: 'center' },
+  atelierCard: { alignItems: 'center', backgroundColor: theme.surface, borderRadius: 16, padding: 18, marginBottom: 10, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border },
+  atelierIcon: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
   atelierInfo: { flex: 1 },
-  atelierName: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
-  atelierDesc: { fontSize: 11, color: theme.textSecondary, marginTop: 1 },
-  atelierDist: { fontSize: 12, fontWeight: '700', color: theme.primary, backgroundColor: theme.primary + '12', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-  readyInfoCard: { width: '100%', backgroundColor: theme.surface, borderRadius: 20, padding: 20, gap: 14, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border },
-  readyInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  readyInfoText: { fontSize: 14, color: theme.textSecondary, flex: 1 },
+  atelierName: { fontSize: 14, fontWeight: '700', color: theme.textPrimary, textAlign: 'center' },
+  atelierDesc: { fontSize: 11, color: theme.textSecondary, marginTop: 2, textAlign: 'center', lineHeight: 16 },
+  atelierDist: { fontSize: 12, fontWeight: '700', color: theme.primary, backgroundColor: theme.primary + '12', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, marginTop: 10 },
+  readyInfoCard: { width: '100%', backgroundColor: theme.surface, borderRadius: 20, padding: 20, gap: 14, alignItems: 'center', ...theme.shadows.card, borderWidth: 1, borderColor: theme.border },
+  readyInfoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14 },
+  readyInfoText: { fontSize: 14, color: theme.textSecondary },
   bottomAction: { paddingHorizontal: 16, paddingTop: 14, backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border },
   startBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 18, borderRadius: 18, ...theme.shadows.cardElevated },
   startBtnText: { fontSize: 18, fontWeight: '700', color: '#FFF' },
@@ -1760,7 +1759,7 @@ const styles = StyleSheet.create({
   atelierStepTextCurrent: { color: theme.primary },
   atelierStepTextDone: { color: '#FFF' },
   // Ready screen picker buttons
-  readyPickersSection: { width: '100%', marginTop: 20, gap: 10 },
+  readyPickersSection: { width: '100%', marginTop: 4, marginBottom: 8, gap: 10 },
   readyPickerBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: 16, padding: 14, gap: 12, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border },
   readyPickerIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   readyPickerContent: { flex: 1 },
