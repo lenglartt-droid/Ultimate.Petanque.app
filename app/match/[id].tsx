@@ -123,10 +123,20 @@ export default function EditMatchScreen() {
   const matchBoulesSet = useMemo(() => match?.boulesSetId ? boulesSets.find(bs => bs.id === match.boulesSetId) : null, [match?.boulesSetId, boulesSets]);
   const selectedTournament = useMemo(() => selectedTournamentId ? tournaments.find(t => t.id === selectedTournamentId) : null, [selectedTournamentId, tournaments]);
 
-  const filteredTerrains = useMemo(() => {
-    const search = terrainSearch.toLowerCase();
-    return terrains.filter(t => !search || t.name.toLowerCase().includes(search) || t.city.toLowerCase().includes(search));
-  }, [terrains, terrainSearch]);
+  // Sort terrains by match frequency (most played first)
+  const sortedTerrains = useMemo(() => {
+    const terrainMatchCount: Record<string, number> = {};
+    matches.forEach(m => {
+      if (m.terrainId) {
+        terrainMatchCount[m.terrainId] = (terrainMatchCount[m.terrainId] || 0) + 1;
+      }
+    });
+    const s = terrainSearch.toLowerCase();
+    return [...terrains]
+      .filter(t => !s || t.name.toLowerCase().includes(s) || t.city.toLowerCase().includes(s) || (t.type && t.type.toLowerCase().includes(s)))
+      .map(t => ({ ...t, _matchCount: terrainMatchCount[t.id] || 0 }))
+      .sort((a, b) => b._matchCount - a._matchCount);
+  }, [terrains, matches, terrainSearch]);
 
   const filteredTournaments = useMemo(() => {
     const search = tournamentSearch.toLowerCase();
@@ -1003,38 +1013,80 @@ export default function EditMatchScreen() {
       </KeyboardAvoidingView>
 
       {/* Terrain Picker Modal */}
-      <Modal visible={showTerrainPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowTerrainPicker(false)}>
+      <Modal visible={showTerrainPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { setShowTerrainPicker(false); setTerrainSearch(''); }}>
         <SafeAreaView edges={['top']} style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{t('match', 'chooseTerrain')}</Text>
-            <Pressable style={styles.modalCloseBtn} onPress={() => setShowTerrainPicker(false)}><MaterialIcons name="close" size={24} color={theme.textPrimary} /></Pressable>
+            <Text style={styles.modalTitle}>{t('match', 'terrain')}</Text>
+            <Pressable style={styles.modalCloseBtn} onPress={() => { setShowTerrainPicker(false); setTerrainSearch(''); }}><MaterialIcons name="close" size={24} color={theme.textPrimary} /></Pressable>
           </View>
           <View style={styles.modalSearchContainer}>
             <MaterialIcons name="search" size={20} color={theme.textMuted} />
-            <TextInput style={styles.modalSearchInput} value={terrainSearch} onChangeText={setTerrainSearch} placeholder={t('common', 'search') + '...'} placeholderTextColor={theme.textMuted} autoFocus />
+            <TextInput style={styles.modalSearchInput} value={terrainSearch} onChangeText={setTerrainSearch} placeholder={t('profile', 'searchTerrain')} placeholderTextColor={theme.textMuted} autoFocus />
+            {terrainSearch.length > 0 ? (
+              <Pressable onPress={() => setTerrainSearch('')}>
+                <MaterialIcons name="close" size={20} color={theme.textMuted} />
+              </Pressable>
+            ) : null}
           </View>
-          {filteredTerrains.length > 0 ? (
-            <FlatList data={filteredTerrains} keyExtractor={(item) => item.id} contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
-              renderItem={({ item: terrain }) => (
-                <Pressable style={[styles.modalItem, selectedTerrainId === terrain.id && styles.modalItemSelected]} onPress={() => handleSelectTerrain(terrain.id)}>
-                  <View style={[styles.modalItemIndicator, { backgroundColor: theme.success }]} />
-                  <View style={styles.modalItemContent}>
-                    <Text style={styles.modalItemTitle}>{terrain.name}</Text>
-                    <View style={styles.modalItemMeta}>
-                      <Text style={styles.modalItemMetaText}>{terrain.city}</Text>
-                      <View style={styles.modalItemDot} />
-                      <Text style={styles.modalItemMetaText}>{t('terrainTypes', terrain.type)}</Text>
-                      <View style={styles.modalItemDot} />
-                      <Text style={styles.modalItemMetaText}>{terrain.courtsCount} {t('map', 'courts')}</Text>
-                    </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, marginBottom: 4 }}>
+            <Pressable style={styles.terrainAddNewBtn} onPress={() => { setShowTerrainPicker(false); setTerrainSearch(''); router.push('/terrain/new'); }}>
+              <MaterialIcons name="add" size={14} color={theme.primary} />
+              <Text style={styles.terrainAddNewBtnText}>{t('match', 'addTerrain')}</Text>
+            </Pressable>
+          </View>
+          {/* None option */}
+          <Pressable
+            style={[styles.terrainPickerItem, !selectedTerrainId && styles.terrainPickerItemActive]}
+            onPress={() => { Haptics.selectionAsync(); setSelectedTerrainId(null); setShowTerrainPicker(false); setTerrainSearch(''); }}
+          >
+            <View style={[styles.terrainPickerItemIcon, { backgroundColor: theme.textMuted + '15' }]}>
+              <MaterialIcons name="block" size={20} color={theme.textMuted} />
+            </View>
+            <Text style={styles.terrainPickerItemName}>{t('tournament', 'none')}</Text>
+            {!selectedTerrainId ? <MaterialIcons name="check-circle" size={20} color={theme.primary} /> : null}
+          </Pressable>
+          <FlatList
+            data={sortedTerrains}
+            keyExtractor={(item) => item.id}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
+            keyboardShouldPersistTaps="handled"
+            initialNumToRender={15}
+            maxToRenderPerBatch={10}
+            windowSize={5}
+            renderItem={({ item: terrain }) => {
+              const tc = config.terrainTypes.find(t => t.id === terrain.type);
+              return (
+                <Pressable
+                  style={[styles.terrainPickerItem, { marginHorizontal: 0 }, selectedTerrainId === terrain.id && styles.terrainPickerItemActive]}
+                  onPress={() => { Haptics.selectionAsync(); handleSelectTerrain(terrain.id); setTerrainSearch(''); }}
+                >
+                  <View style={[styles.terrainPickerItemIcon, { backgroundColor: selectedTerrainId === terrain.id ? theme.primary : theme.success + '15' }]}>
+                    <MaterialIcons name={(tc?.icon as any) || 'landscape'} size={20} color={selectedTerrainId === terrain.id ? '#FFF' : theme.success} />
                   </View>
-                  {selectedTerrainId === terrain.id && <MaterialIcons name="check-circle" size={22} color={theme.success} />}
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.terrainPickerItemName}>{terrain.name}</Text>
+                      {(terrain as any)._matchCount > 0 ? (
+                        <View style={styles.terrainMatchBadge}>
+                          <MaterialIcons name="sports" size={10} color={theme.primary} />
+                          <Text style={styles.terrainMatchBadgeText}>{(terrain as any)._matchCount}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <Text style={styles.terrainPickerItemSub}>{t('terrainTypes', terrain.type)} \u2022 {terrain.city}</Text>
+                  </View>
+                  {selectedTerrainId === terrain.id ? <MaterialIcons name="check-circle" size={22} color={theme.primary} /> : null}
                 </Pressable>
-              )}
-            />
-          ) : (
-            <View style={styles.modalEmpty}><MaterialIcons name="place" size={48} color={theme.textMuted} /><Text style={styles.modalEmptyText}>{t('match', 'noTerrains')}</Text></View>
-          )}
+              );
+            }}
+            ListEmptyComponent={
+              <View style={styles.modalEmpty}>
+                <MaterialIcons name={terrainSearch ? 'search-off' : 'location-off'} size={40} color={theme.textMuted} />
+                <Text style={styles.modalEmptyText}>{terrainSearch ? t('common', 'noResults') : t('match', 'noTerrains')}</Text>
+              </View>
+            }
+          />
         </SafeAreaView>
       </Modal>
 
@@ -1378,4 +1430,14 @@ const styles = StyleSheet.create({
   modalItemDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: theme.textMuted },
   modalEmpty: { alignItems: 'center', paddingVertical: 48 },
   modalEmptyText: { fontSize: 15, color: theme.textMuted, marginTop: 12 },
+  // Terrain picker styles
+  terrainAddNewBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.primary + '12', borderRadius: theme.borderRadius.sm },
+  terrainAddNewBtnText: { fontSize: 12, fontWeight: '600', color: theme.primary },
+  terrainPickerItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, marginHorizontal: 16, marginBottom: 8, ...theme.shadows.card },
+  terrainPickerItemActive: { borderWidth: 2, borderColor: theme.primary },
+  terrainPickerItemIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  terrainPickerItemName: { flex: 1, fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  terrainPickerItemSub: { fontSize: 12, color: theme.textMuted, marginTop: 2 },
+  terrainMatchBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.primary + '15', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
+  terrainMatchBadgeText: { fontSize: 11, fontWeight: '700', color: theme.primary },
 });
