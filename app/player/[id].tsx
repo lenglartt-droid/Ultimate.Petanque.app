@@ -311,11 +311,11 @@ export default function PlayerDetailScreen() {
     const terrainPct = terrainAnalysis.totalWithTerrain > 0 ? Math.round((terrainAnalysis.terrainCounts[terrainAnalysis.preferredTerrain] / terrainAnalysis.totalWithTerrain) * 100) : 50;
     const partnerPct = partnerAnalysis.totalWithPartners > 0 ? Math.round((partnerAnalysis.preferredPartner.count / partnerAnalysis.totalWithPartners) * 100) : 50;
     return [
-      { label: 'Role', value: rolePct, color: getRoleColor(roleAnalysis.preferredRole) },
-      { label: 'Terrain', value: terrainPct, color: theme.success },
-      { label: language === 'fr' ? 'Duo' : 'Partner', value: partnerPct, color: '#EC4899' },
-      { label: language === 'fr' ? 'Victoire' : 'Win', value: player.stats.winRate, color: theme.carreauColor },
-      { label: language === 'fr' ? 'Tir' : 'Shot', value: tirRate, color: theme.accent },
+      { label: t('gamePreferences', 'roleLabel'), value: rolePct, color: getRoleColor(roleAnalysis.preferredRole) },
+      { label: t('gamePreferences', 'terrainLabel'), value: terrainPct, color: theme.success },
+      { label: t('gamePreferences', 'partnerLabel'), value: partnerPct, color: '#EC4899' },
+      { label: t('gamePreferences', 'winLabel'), value: player.stats.winRate, color: theme.carreauColor },
+      { label: t('gamePreferences', 'shotLabel'), value: tirRate, color: theme.accent },
     ];
   }, [player, roleAnalysis, terrainAnalysis, partnerAnalysis, tirRate, language]);
 
@@ -524,9 +524,9 @@ export default function PlayerDetailScreen() {
                   <View style={[s.sectionIconBox, { backgroundColor: '#8B5CF6' + '15' }]}>
                     <MaterialIcons name="psychology" size={18} color="#8B5CF6" />
                   </View>
-                  <Text style={s.sectionTitle}>{language === 'fr' ? 'Preferences de jeu' : 'Game Preferences'}</Text>
+                  <Text style={s.sectionTitle}>{t('gamePreferences', 'title')}</Text>
                 </View>
-                <Text style={s.sectionDesc}>{language === 'fr' ? 'Analyse automatique basee sur les matchs joues : role favori, terrain prefere, partenaire regulier et equipement.' : 'Automatic analysis based on matches played: preferred role, terrain, regular partner and equipment.'}</Text>
+                <Text style={s.sectionDesc}>{t('gamePreferences', 'descOther')}</Text>
 
                 {radarData.length >= 3 ? (
                   <View style={s.radarContainer}>
@@ -538,11 +538,11 @@ export default function PlayerDetailScreen() {
                 {radarData.length >= 3 ? (
                   <View style={s.radarLegend}>
                     {[
-                      { color: radarData[0]?.color, label: radarData[0]?.label, desc: language === 'fr' ? 'Fidelite au role favori' : 'Preferred role loyalty' },
-                      { color: radarData[1]?.color, label: radarData[1]?.label, desc: language === 'fr' ? 'Fidelite au terrain favori' : 'Preferred terrain loyalty' },
-                      { color: radarData[2]?.color, label: radarData[2]?.label, desc: language === 'fr' ? 'Regularite avec le partenaire' : 'Partner consistency' },
-                      { color: radarData[3]?.color, label: radarData[3]?.label, desc: language === 'fr' ? 'Taux de victoire global' : 'Overall win rate' },
-                      { color: radarData[4]?.color, label: radarData[4]?.label, desc: language === 'fr' ? 'Reussite au tir' : 'Shot accuracy' },
+                      { color: radarData[0]?.color, label: radarData[0]?.label, desc: t('gamePreferences', 'roleLoyalty') },
+                      { color: radarData[1]?.color, label: radarData[1]?.label, desc: t('gamePreferences', 'terrainLoyalty') },
+                      { color: radarData[2]?.color, label: radarData[2]?.label, desc: t('gamePreferences', 'partnerConsistency') },
+                      { color: radarData[3]?.color, label: radarData[3]?.label, desc: t('gamePreferences', 'overallWinRate') },
+                      { color: radarData[4]?.color, label: radarData[4]?.label, desc: t('gamePreferences', 'shotAccuracy') },
                     ].map((item, i) => (
                       <View key={i} style={s.radarLegendItem}>
                         <View style={[s.radarLegendDot, { backgroundColor: item.color }]} />
@@ -600,7 +600,7 @@ export default function PlayerDetailScreen() {
                         <Text style={s.prefItemLabel}>{t('player', 'preferredPartner')}</Text>
                         <Text style={s.prefItemValue}>{partnerAnalysis.preferredPartner.name}</Text>
                       </View>
-                      <Text style={s.prefItemPct}>{partnerAnalysis.preferredPartner.count} {language === 'fr' ? 'matchs' : 'matches'}</Text>
+                      <Text style={s.prefItemPct}>{partnerAnalysis.preferredPartner.count} {t('gamePreferences', 'matchesUnit')}</Text>
                     </View>
                   );
                 })() : null}
@@ -612,10 +612,10 @@ export default function PlayerDetailScreen() {
                       <MaterialIcons name="sports-baseball" size={18} color={theme.accent} />
                     </View>
                     <View style={s.prefItemInfo}>
-                      <Text style={s.prefItemLabel}>{language === 'fr' ? 'Boules preferees' : 'Preferred Boules'}</Text>
+                      <Text style={s.prefItemLabel}>{t('equipment', 'preferredBoules')}</Text>
                       <Text style={s.prefItemValue}>{preferredBoulesAnalysis.set.name}</Text>
                     </View>
-                    <Text style={s.prefItemPct}>{preferredBoulesAnalysis.stats.matches} {language === 'fr' ? 'matchs' : 'matches'}</Text>
+                    <Text style={s.prefItemPct}>{preferredBoulesAnalysis.stats.matches} {t('gamePreferences', 'matchesUnit')}</Text>
                   </View>
                 ) : player.boules && (player.boules.name || player.boules.diameter) ? (
                   <View style={s.prefItem}>
@@ -623,7 +623,7 @@ export default function PlayerDetailScreen() {
                       <MaterialIcons name="sports-baseball" size={18} color={theme.accent} />
                     </View>
                     <View style={s.prefItemInfo}>
-                      <Text style={s.prefItemLabel}>{language === 'fr' ? 'Boules' : 'Boules'}</Text>
+                      <Text style={s.prefItemLabel}>{t('equipment', 'boulesLabel')}</Text>
                       <Text style={s.prefItemValue}>{player.boules.name || t('player', 'boulesLabel')}</Text>
                     </View>
                   </View>
@@ -808,8 +808,8 @@ export default function PlayerDetailScreen() {
                 <MaterialIcons name="share" size={22} color={theme.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.pvHeaderTitle}>{language === 'fr' ? 'Apercu du partage' : 'Share Preview'}</Text>
-                <Text style={s.pvHeaderSub}>{language === 'fr' ? 'Voici ce que le destinataire verra' : 'This is what the recipient will see'}</Text>
+                <Text style={s.pvHeaderTitle}>{t('preview', 'shareTitle')}</Text>
+                <Text style={s.pvHeaderSub}>{t('preview', 'shareDesc')}</Text>
               </View>
               <Pressable style={s.pvCloseBtn} onPress={() => setShowSharePreview(false)} hitSlop={8}>
                 <MaterialIcons name="close" size={22} color={theme.textSecondary} />
@@ -818,7 +818,7 @@ export default function PlayerDetailScreen() {
             <ScrollView style={s.pvScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
               <View style={s.pvReadOnlyBadge}>
                 <MaterialIcons name="lock" size={14} color={theme.warning} />
-                <Text style={s.pvReadOnlyText}>{language === 'fr' ? 'Lecture seule - Le destinataire ne pourra pas modifier cette fiche' : 'Read-only - The recipient cannot edit this card'}</Text>
+                <Text style={s.pvReadOnlyText}>{t('preview', 'readOnlyOtherPlayer')}</Text>
               </View>
               <View style={s.pvCard}>
                 <View style={s.pvAvatarRow}>
@@ -914,10 +914,10 @@ export default function PlayerDetailScreen() {
                       <MaterialIcons name={previewShowContacts ? 'contact-phone' : 'phone-disabled'} size={18} color={previewShowContacts ? theme.success : theme.textMuted} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.pvToggleTitle}>{language === 'fr' ? 'Afficher les contacts' : 'Show contacts'}</Text>
+                      <Text style={s.pvToggleTitle}>{t('preview', 'showContacts')}</Text>
                       <Text style={s.pvToggleDesc}>{previewShowContacts
-                        ? (language === 'fr' ? 'Telephone et email seront visibles' : 'Phone and email will be visible')
-                        : (language === 'fr' ? 'Les contacts resteront masques' : 'Contacts will remain hidden')
+                        ? t('preview', 'contactsVisibleOther')
+                        : t('preview', 'contactsHiddenOther')
                       }</Text>
                     </View>
                     <Switch value={previewShowContacts} onValueChange={setPreviewShowContacts} trackColor={{ false: theme.border, true: theme.success + '60' }} thumbColor={previewShowContacts ? theme.success : theme.textMuted} />
@@ -927,12 +927,12 @@ export default function PlayerDetailScreen() {
               {!isSelf && (player.phone || player.email) ? (
                 <View style={s.pvNote}>
                   <MaterialIcons name="phone-disabled" size={16} color={theme.warning} />
-                  <Text style={s.pvNoteText}>{language === 'fr' ? 'Les informations de contact de ce joueur ne seront pas incluses dans le partage.' : 'This player\'s contact information will not be included in the share.'}</Text>
+                  <Text style={s.pvNoteText}>{t('preview', 'contactsNotIncluded')}</Text>
                 </View>
               ) : null}
               <View style={s.pvNote}>
                 <MaterialIcons name="visibility" size={16} color={theme.primary} />
-                <Text style={s.pvNoteText}>{language === 'fr' ? 'Le destinataire aura un acces en lecture seule a cette fiche joueur.' : 'The recipient will have read-only access to this player card.'}</Text>
+                <Text style={s.pvNoteText}>{t('preview', 'shareNoteOtherPlayer')}</Text>
               </View>
             </ScrollView>
             <View style={s.pvActions}>
@@ -941,7 +941,7 @@ export default function PlayerDetailScreen() {
               </Pressable>
               <Pressable style={[s.pvConfirmBtn, { backgroundColor: theme.primary }]} onPress={handleConfirmShare}>
                 <MaterialIcons name="share" size={18} color="#FFF" />
-                <Text style={s.pvConfirmText}>{language === 'fr' ? 'Partager' : 'Share'}</Text>
+                <Text style={s.pvConfirmText}>{t('preview', 'shareBtn')}</Text>
               </Pressable>
             </View>
           </View>
@@ -957,8 +957,8 @@ export default function PlayerDetailScreen() {
                 <MaterialIcons name="public" size={22} color={theme.success} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.pvHeaderTitle}>{language === 'fr' ? 'Apercu carte publique' : 'Public Card Preview'}</Text>
-                <Text style={s.pvHeaderSub}>{language === 'fr' ? 'Voici comment cette fiche apparaitra sur la Carte' : 'This is how this card will appear on the Map'}</Text>
+                <Text style={s.pvHeaderTitle}>{t('preview', 'publicOtherPlayerTitle')}</Text>
+                <Text style={s.pvHeaderSub}>{t('preview', 'publicOtherPlayerDesc')}</Text>
               </View>
               <Pressable style={s.pvCloseBtn} onPress={() => setShowPublicPreview(false)} hitSlop={8}>
                 <MaterialIcons name="close" size={22} color={theme.textSecondary} />
@@ -1052,10 +1052,10 @@ export default function PlayerDetailScreen() {
                       <MaterialIcons name={previewShowContacts ? 'contact-phone' : 'phone-disabled'} size={18} color={previewShowContacts ? theme.success : theme.textMuted} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.pvToggleTitle}>{language === 'fr' ? 'Afficher les contacts' : 'Show contacts'}</Text>
+                      <Text style={s.pvToggleTitle}>{t('preview', 'showContacts')}</Text>
                       <Text style={s.pvToggleDesc}>{previewShowContacts
-                        ? (language === 'fr' ? 'Telephone et email seront visibles' : 'Phone and email will be visible')
-                        : (language === 'fr' ? 'Les contacts resteront masques' : 'Contacts will remain hidden')
+                        ? t('preview', 'contactsVisibleOther')
+                        : t('preview', 'contactsHiddenOther')
                       }</Text>
                     </View>
                     <Switch value={previewShowContacts} onValueChange={setPreviewShowContacts} trackColor={{ false: theme.border, true: theme.success + '60' }} thumbColor={previewShowContacts ? theme.success : theme.textMuted} />
@@ -1065,12 +1065,12 @@ export default function PlayerDetailScreen() {
               {!isSelf && (player.phone || player.email) ? (
                 <View style={s.pvNote}>
                   <MaterialIcons name="phone-disabled" size={16} color={theme.warning} />
-                  <Text style={s.pvNoteText}>{language === 'fr' ? 'Les informations de contact de ce joueur ne seront pas visibles publiquement.' : 'This player\'s contact information will not be publicly visible.'}</Text>
+                  <Text style={s.pvNoteText}>{t('preview', 'contactsNotPublic')}</Text>
                 </View>
               ) : null}
               <View style={s.pvNote}>
                 <MaterialIcons name="map" size={16} color={theme.primary} />
-                <Text style={s.pvNoteText}>{language === 'fr' ? 'Cette fiche sera geolocalisee et visible sur la Carte pour tous les utilisateurs.' : 'This card will be geolocated and visible on the Map to all users.'}</Text>
+                <Text style={s.pvNoteText}>{t('preview', 'geoNoteOtherPlayer')}</Text>
               </View>
             </ScrollView>
             <View style={s.pvActions}>
@@ -1084,8 +1084,8 @@ export default function PlayerDetailScreen() {
                   <>
                     <MaterialIcons name={isPublicState ? 'lock' : 'public'} size={18} color="#FFF" />
                     <Text style={s.pvConfirmText}>{isPublicState
-                      ? (language === 'fr' ? 'Rendre prive' : 'Make Private')
-                      : (language === 'fr' ? 'Rendre public' : 'Make Public')
+                      ? t('preview', 'makePrivate')
+                      : t('preview', 'makePublic')
                     }</Text>
                   </>
                 )}
