@@ -1205,7 +1205,7 @@ export const translations = {
     scope: { fr: 'Cadre', en: 'Scope' },
     scopeSubtitle: { fr: 'Sélectionnez le cadre du tournoi', en: 'Select tournament scope' },
     terrain: { fr: 'Terrain', en: 'Court' },
-    cadrage: { fr: 'Cadrage', en: 'Bracket' },
+    cadrage: { fr: 'Système de jeu', en: 'Tournament System' },
     competitionType: { fr: 'Type de compétition', en: 'Competition type' },
     organizingClub: { fr: 'Club organisateur', en: 'Organizing club' },
     none: { fr: 'Aucun', en: 'None' },
@@ -1992,6 +1992,60 @@ export const translations = {
   visibility: {
     title: { fr: 'Visibilité', en: 'Visibility' },
     visibilityToggle: { fr: 'Visibilité publique', en: 'Public visibility' },
+  },
+
+  // ============================================
+  // CADRAGE (Tournament format descriptions)
+  // ============================================
+  cadrage: {
+    // Poules
+    poulesDesc: { fr: 'Phase de poules puis élimination directe', en: 'Group stage then direct elimination' },
+    poulesMatches: { fr: 'Plusieurs matchs de poule + phases finales', en: 'Multiple group matches + knockout rounds' },
+    poulesPoints: { fr: 'Classement par points en poule', en: 'Group ranking by points' },
+    poulesSpec1: { fr: 'Chaque équipe joue contre toutes les autres de son groupe', en: 'Each team plays all others in their group' },
+    poulesSpec2: { fr: 'Les meilleurs de chaque poule passent en phase finale', en: 'Top teams from each group advance to knockout' },
+    poulesSpec3: { fr: 'Classement par victoires, puis différence de points', en: 'Ranking by wins, then point difference' },
+    // Élimination directe
+    elimDesc: { fr: 'Élimination directe dès le premier match', en: 'Direct elimination from the first match' },
+    elimMatches: { fr: 'Un match perdu = éliminé', en: 'One loss = eliminated' },
+    elimPoints: { fr: 'Pas de classement par points', en: 'No point-based ranking' },
+    elimSpec1: { fr: 'Tableau à élimination directe', en: 'Single elimination bracket' },
+    elimSpec2: { fr: 'Chaque match est décisif', en: 'Every match is decisive' },
+    elimSpec3: { fr: 'Format rapide et intense', en: 'Fast and intense format' },
+    // Mixte
+    mixteDesc: { fr: 'Phase de poules suivie d\'une élimination directe', en: 'Group stage followed by direct elimination' },
+    mixteMatches: { fr: 'Poules + phases finales', en: 'Groups + knockout rounds' },
+    mixtePoints: { fr: 'Points en poule, puis élimination', en: 'Points in groups, then elimination' },
+    mixteSpec1: { fr: 'Combine les avantages des deux systèmes', en: 'Combines benefits of both systems' },
+    mixteSpec2: { fr: 'Garantit un minimum de matchs pour tous', en: 'Guarantees minimum matches for everyone' },
+    mixteSpec3: { fr: 'Format le plus courant en compétition', en: 'Most common competition format' },
+    // Suisse
+    suisseDesc: { fr: 'Matchs contre adversaires de niveau similaire', en: 'Matches against similar-level opponents' },
+    suisseMatches: { fr: 'Nombre de rondes fixe', en: 'Fixed number of rounds' },
+    suissePoints: { fr: 'Classement par points cumulés', en: 'Ranking by cumulative points' },
+    suisseSpec1: { fr: 'Pas d\'élimination, tout le monde joue toutes les rondes', en: 'No elimination, everyone plays all rounds' },
+    suisseSpec2: { fr: 'Appariement par niveau à chaque ronde', en: 'Level-based pairing each round' },
+    suisseSpec3: { fr: 'Classement final équitable', en: 'Fair final ranking' },
+    // A/B/C
+    abcDesc: { fr: 'Classement A, B, C selon les résultats', en: 'A, B, C ranking based on results' },
+    abcMatches: { fr: 'Matchs avec reclassement progressif', en: 'Matches with progressive reclassification' },
+    abcPoints: { fr: 'Montée/descente selon les résultats', en: 'Promotion/relegation based on results' },
+    abcSpec1: { fr: 'Les gagnants montent en catégorie A', en: 'Winners move up to category A' },
+    abcSpec2: { fr: 'Les perdants descendent en catégorie inférieure', en: 'Losers drop to a lower category' },
+    abcSpec3: { fr: 'Permet de jouer contre des adversaires de son niveau', en: 'Play against opponents at your level' },
+    // Tirage intégral
+    tirageDesc: { fr: 'Tirage au sort intégral à chaque tour', en: 'Full random draw each round' },
+    tirageMatches: { fr: 'Tirage aléatoire des adversaires', en: 'Random opponent draw' },
+    tiragePoints: { fr: 'Classement par points cumulés', en: 'Ranking by cumulative points' },
+    tirageSpec1: { fr: 'Aucun tableau prédéfini', en: 'No predefined bracket' },
+    tirageSpec2: { fr: 'Adversaires aléatoires à chaque tour', en: 'Random opponents each round' },
+    tirageSpec3: { fr: 'Format simple et rapide à organiser', en: 'Simple and quick to organize' },
+    // Autre
+    autreDesc: { fr: 'Format personnalisé ou spécifique', en: 'Custom or specific format' },
+    autreMatches: { fr: 'Selon les règles du tournoi', en: 'According to tournament rules' },
+    autrePoints: { fr: 'Système de points personnalisé', en: 'Custom point system' },
+    autreSpec1: { fr: 'Règles définies par l\'organisateur', en: 'Rules defined by the organizer' },
+    autreSpec2: { fr: 'Adaptable à tous les besoins', en: 'Adaptable to all needs' },
   },
 
   // ============================================
