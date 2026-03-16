@@ -266,6 +266,14 @@ export default function NewChallengeScreen() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const config = selectedType ? CHALLENGE_CONFIG[selectedType] : null;
 
+  // Track navigation direction to avoid replaying entering animations on back
+  const maxStepReached = useRef(0); // 0=type, 1=mode, 2=opponent/ready
+  const currentStep = !selectedType ? 0 : !challengeMode ? 1 : (challengeMode === '1v1' && !selectedOpponent && !isStarted) ? 2 : 3;
+  if (currentStep > maxStepReached.current) maxStepReached.current = currentStep;
+  const isRevisit = currentStep < maxStepReached.current;
+  // Reset max step when going all the way back to type selection
+  if (currentStep === 0) maxStepReached.current = 0;
+
   // ============================================
   // COMPUTED VALUES
   // ============================================
@@ -727,7 +735,7 @@ export default function NewChallengeScreen() {
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
           showsVerticalScrollIndicator={false}
         >
-          <Animated.View entering={FadeInDown.duration(400)} style={styles.heroSection}>
+          <Animated.View entering={isRevisit ? undefined : FadeInDown.duration(400)} style={styles.heroSection}>
             <View style={styles.heroIcon}>
               <MaterialIcons name="emoji-events" size={40} color={theme.carreauColor} />
             </View>
@@ -736,7 +744,7 @@ export default function NewChallengeScreen() {
           </Animated.View>
 
           {(Object.entries(CHALLENGE_CONFIG) as [ChallengeType, typeof CHALLENGE_CONFIG[ChallengeType]][]).map(([type, cfg], index) => (
-            <Animated.View key={type} entering={FadeInDown.duration(400).delay(100 + index * 80)}>
+            <Animated.View key={type} entering={isRevisit ? undefined : FadeInDown.duration(400).delay(100 + index * 80)}>
               <Pressable
                 style={[styles.challengeCard, { borderLeftColor: cfg.color }]}
                 onPress={() => {
@@ -783,7 +791,7 @@ export default function NewChallengeScreen() {
         </View>
 
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.modeContent} showsVerticalScrollIndicator={false}>
-          <Animated.View entering={FadeInDown.duration(400)} style={styles.modeHeader}>
+          <Animated.View entering={isRevisit ? undefined : FadeInDown.duration(400)} style={styles.modeHeader}>
             <View style={[styles.modeHeaderIcon, { backgroundColor: config?.color + '15' }]}>
               <MaterialIcons name={config?.icon || 'sports'} size={28} color={config?.color} />
             </View>
@@ -791,7 +799,7 @@ export default function NewChallengeScreen() {
           </Animated.View>
 
           <View style={styles.modeGrid}>
-            <Animated.View entering={ZoomIn.duration(400).delay(100)} style={styles.modeCardWrapper}>
+            <Animated.View entering={isRevisit ? undefined : ZoomIn.duration(400).delay(100)} style={styles.modeCardWrapper}>
               <Pressable
                 style={styles.modeCard}
                 onPress={() => {
@@ -810,7 +818,7 @@ export default function NewChallengeScreen() {
               </Pressable>
             </Animated.View>
 
-            <Animated.View entering={ZoomIn.duration(400).delay(200)} style={styles.modeCardWrapper}>
+            <Animated.View entering={isRevisit ? undefined : ZoomIn.duration(400).delay(200)} style={styles.modeCardWrapper}>
               <Pressable
                 style={styles.modeCard}
                 onPress={() => {
