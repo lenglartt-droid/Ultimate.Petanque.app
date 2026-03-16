@@ -2065,6 +2065,7 @@ export const translations = {
     geoNoteTerrain: { fr: 'Votre terrain sera géolocalisé et visible sur la Carte pour tous les utilisateurs.', en: 'Your terrain will be geolocated and visible on the Map to all users.' },
     shareNotePlayer: { fr: 'Le destinataire aura un accès en lecture seule à votre fiche joueur.', en: 'The recipient will have read-only access to your player card.' },
     shareNoteClub: { fr: 'Le destinataire aura un accès en lecture seule à votre fiche club.', en: 'The recipient will have read-only access to your club card.' },
+    shareNoteTerrain: { fr: 'Le destinataire aura un accès en lecture seule à votre fiche terrain.', en: 'The recipient will have read-only access to your terrain card.' },
     shareNoteOtherPlayer: { fr: 'Le destinataire aura un accès en lecture seule à cette fiche joueur.', en: 'The recipient will have read-only access to this player card.' },
     makePrivate: { fr: 'Rendre privé', en: 'Make Private' },
     makePublic: { fr: 'Rendre public', en: 'Make Public' },
