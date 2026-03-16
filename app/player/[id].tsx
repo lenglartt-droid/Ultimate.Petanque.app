@@ -407,7 +407,9 @@ export default function PlayerDetailScreen() {
               ) : null}
 
               {/* Contact pills */}
-              {(player.phone || player.email) && !isSharedItem && (player.showContactPublic !== false || !player.isPublic) ? (
+              {(player.phone || player.email) && (
+                isSharedItem ? (player.showContactPublic === true) : (player.showContactPublic !== false || !player.isPublic)
+              ) ? (
                 <View style={s.contactPillsRow}>
                   {player.phone ? (
                     <Pressable style={s.contactPill} onPress={() => Linking.openURL(`tel:${player.phone}`)}>

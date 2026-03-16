@@ -7,6 +7,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   Dimensions,
+  Modal,
+  Switch,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -83,11 +85,14 @@ export default function MyPlayerCardScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { t, language } = useLanguage();
-  const { selfPlayer, userStats, challengeStats, matches, challenges, setItemPublic, getTerrainById, players, boulesSets } = useApp();
+  const { selfPlayer, userStats, challengeStats, matches, challenges, setItemPublic, getTerrainById, players, boulesSets, updatePlayer } = useApp();
   const { showAlert } = useAlert();
   const [showShareModal, setShowShareModal] = React.useState(false);
   const [isPublic, setIsPublic] = React.useState(selfPlayer?.isPublic ?? false);
   const [togglingPublic, setTogglingPublic] = React.useState(false);
+  const [showPublicPreview, setShowPublicPreview] = React.useState(false);
+  const [showSharePreview, setShowSharePreview] = React.useState(false);
+  const [previewShowContacts, setPreviewShowContacts] = React.useState(false);
 
   const [screenDims, setScreenDims] = React.useState(() => Dimensions.get('window'));
   React.useEffect(() => {
@@ -101,8 +106,15 @@ export default function MyPlayerCardScreen() {
     if (selfPlayer) setIsPublic(selfPlayer.isPublic ?? false);
   }, [selfPlayer?.isPublic]);
 
-  const handleTogglePublic = React.useCallback(async () => {
+  const handleTogglePublic = React.useCallback(() => {
     if (!selfPlayer || togglingPublic) return;
+    Haptics.selectionAsync();
+    setPreviewShowContacts(selfPlayer.showContactPublic ?? false);
+    setShowPublicPreview(true);
+  }, [selfPlayer, togglingPublic]);
+
+  const handleConfirmPublic = React.useCallback(async () => {
+    if (!selfPlayer) return;
     setTogglingPublic(true);
     Haptics.selectionAsync();
     const newVal = !isPublic;
@@ -112,9 +124,25 @@ export default function MyPlayerCardScreen() {
     } else {
       setIsPublic(newVal);
       setItemPublic('players', selfPlayer.id, newVal);
+      await updatePlayer(selfPlayer.id, { showContactPublic: previewShowContacts });
     }
     setTogglingPublic(false);
-  }, [selfPlayer, isPublic, togglingPublic, showAlert, t]);
+    setShowPublicPreview(false);
+  }, [selfPlayer, isPublic, togglingPublic, previewShowContacts, showAlert, t, updatePlayer]);
+
+  const handleOpenSharePreview = React.useCallback(() => {
+    if (!selfPlayer) return;
+    Haptics.selectionAsync();
+    setPreviewShowContacts(selfPlayer.showContactPublic ?? false);
+    setShowSharePreview(true);
+  }, [selfPlayer]);
+
+  const handleConfirmShare = React.useCallback(async () => {
+    if (!selfPlayer) return;
+    await updatePlayer(selfPlayer.id, { showContactPublic: previewShowContacts });
+    setShowSharePreview(false);
+    setShowShareModal(true);
+  }, [selfPlayer, previewShowContacts, updatePlayer]);
 
   const profileTerrainEntity = selfPlayer?.terrainId ? getTerrainById(selfPlayer.terrainId) : null;
   const profileTerrainName = profileTerrainEntity?.name || selfPlayer?.terrainName || null;
@@ -277,7 +305,7 @@ export default function MyPlayerCardScreen() {
         </Pressable>
         <Text style={s.headerTitle}>{t('player', 'myPlayerCard')}</Text>
         <View style={s.headerActions}>
-          <Pressable style={s.headerIconBtn} onPress={() => setShowShareModal(true)}>
+          <Pressable style={s.headerIconBtn} onPress={handleOpenSharePreview}>
             <MaterialIcons name="share" size={20} color={theme.success} />
           </Pressable>
           <Pressable style={[s.headerIconBtn, { backgroundColor: theme.primary + '15' }]} onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/profile', params: { edit: 'true' } } as any); }}>
@@ -662,9 +690,9 @@ export default function MyPlayerCardScreen() {
             <View style={s.privacyNote}>
               <MaterialIcons name="shield" size={14} color={theme.warning} />
               <Text style={s.privacyNoteText}>
-                {language === 'fr'
-                  ? 'Vos contacts ne sont jamais transmis via la carte publique.'
-                  : 'Your contacts are never shared via the public map.'}
+                {selfPlayer.showContactPublic
+                  ? (language === 'fr' ? 'Vos contacts sont actuellement visibles sur la carte publique.' : 'Your contacts are currently visible on the public map.')
+                  : (language === 'fr' ? 'Vos contacts sont masques sur la carte publique.' : 'Your contacts are hidden on the public map.')}
               </Text>
             </View>
           ) : null}
@@ -678,6 +706,339 @@ export default function MyPlayerCardScreen() {
           </Pressable>
         </Animated.View>
       </ScrollView>
+
+      {/* ===== PUBLIC PREVIEW MODAL ===== */}
+      <Modal visible={showPublicPreview} animationType="slide" transparent>
+        <View style={s.pvOverlay}>
+          <View style={s.pvModal}>
+            <View style={s.pvHeader}>
+              <View style={[s.pvHeaderIcon, { backgroundColor: theme.success + '15' }]}>
+                <MaterialIcons name="public" size={22} color={theme.success} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.pvHeaderTitle}>{language === 'fr' ? 'Apercu carte publique' : 'Public Card Preview'}</Text>
+                <Text style={s.pvHeaderSub}>{language === 'fr' ? 'Voici comment votre fiche apparaitra sur la Carte' : 'This is how your card will appear on the Map'}</Text>
+              </View>
+              <Pressable style={s.pvCloseBtn} onPress={() => setShowPublicPreview(false)} hitSlop={8}>
+                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+
+            <ScrollView style={s.pvScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
+              {/* Preview Card */}
+              <View style={s.pvCard}>
+                <View style={s.pvAvatarRow}>
+                  <View style={s.pvAvatar}>
+                    {selfPlayer.avatar ? (
+                      <Image source={{ uri: selfPlayer.avatar }} style={s.pvAvatarImg} contentFit="cover" transition={200} />
+                    ) : (
+                      <Text style={s.pvAvatarText}>{selfPlayer.name?.charAt(0).toUpperCase() || '?'}</Text>
+                    )}
+                    <View style={[s.pvRoleBadge, { backgroundColor: getRoleColor(selfPlayer.role) }]}>
+                      <MaterialIcons name={getRoleIcon(selfPlayer.role)} size={10} color="#FFF" />
+                    </View>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.pvName}>{selfPlayer.name}</Text>
+                    {selfPlayer.nickname ? <Text style={s.pvNickname}>"{selfPlayer.nickname}"</Text> : null}
+                  </View>
+                </View>
+
+                <View style={s.pvBadgesRow}>
+                  <View style={[s.pvBadge, { backgroundColor: getRoleColor(selfPlayer.role) + '15' }]}>
+                    <Text style={[s.pvBadgeText, { color: getRoleColor(selfPlayer.role) }]}>{t('roles', selfPlayer.role)}</Text>
+                  </View>
+                  <View style={[s.pvBadge, { backgroundColor: theme.accent + '15' }]}>
+                    <Text style={[s.pvBadgeText, { color: theme.accent }]}>{t('levels', selfPlayer.level)}</Text>
+                  </View>
+                  {selfPlayer.handedness ? (
+                    <View style={[s.pvBadge, { backgroundColor: '#6366F1' + '15' }]}>
+                      <Text style={[s.pvBadgeText, { color: '#6366F1' }]}>
+                        {selfPlayer.handedness === 'right' ? t('player', 'rightHanded') : selfPlayer.handedness === 'left' ? t('player', 'leftHanded') : t('player', 'ambidextrous')}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                {(selfPlayer.club || profileTerrainName) ? (
+                  <View style={s.pvInfoRow}>
+                    {selfPlayer.club ? (
+                      <View style={s.pvInfoPill}>
+                        <MaterialIcons name="location-city" size={12} color={theme.carreauColor} />
+                        <Text style={[s.pvInfoText, { color: theme.carreauColor }]}>{selfPlayer.club}</Text>
+                      </View>
+                    ) : null}
+                    {profileTerrainName ? (
+                      <View style={s.pvInfoPill}>
+                        <MaterialIcons name="sports-soccer" size={12} color={theme.success} />
+                        <Text style={[s.pvInfoText, { color: theme.success }]}>{profileTerrainName}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                {(selfPlayer.location?.city || selfPlayer.country) ? (
+                  <View style={s.pvLocationRow}>
+                    <MaterialIcons name="place" size={14} color={theme.textSecondary} />
+                    <Text style={s.pvLocationText}>{[selfPlayer.location?.city, selfPlayer.country].filter(Boolean).join(', ')}</Text>
+                  </View>
+                ) : null}
+
+                {previewShowContacts && (selfPlayer.phone || selfPlayer.email) ? (
+                  <View style={s.pvContactRow}>
+                    {selfPlayer.phone ? (
+                      <View style={s.pvContactPill}>
+                        <MaterialIcons name="phone" size={12} color={theme.primary} />
+                        <Text style={s.pvContactText}>{selfPlayer.phone}</Text>
+                      </View>
+                    ) : null}
+                    {selfPlayer.email ? (
+                      <View style={s.pvContactPill}>
+                        <MaterialIcons name="email" size={12} color={theme.primary} />
+                        <Text style={s.pvContactText}>{selfPlayer.email}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                <View style={s.pvStatsRow}>
+                  <View style={s.pvStatItem}>
+                    <Text style={s.pvStatValue}>{totalMatches}</Text>
+                    <Text style={s.pvStatLabel}>{t('player', 'matchesUpper')}</Text>
+                  </View>
+                  <View style={s.pvStatDivider} />
+                  <View style={s.pvStatItem}>
+                    <Text style={[s.pvStatValue, { color: theme.success }]}>{userStats.wins}</Text>
+                    <Text style={s.pvStatLabel}>{t('player', 'victories')}</Text>
+                  </View>
+                  <View style={s.pvStatDivider} />
+                  <View style={s.pvStatItem}>
+                    <Text style={[s.pvStatValue, { color: theme.accent }]}>{userStats.winRate}%</Text>
+                    <Text style={s.pvStatLabel}>{t('player', 'winsLabel')}</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Contact Toggle */}
+              {(selfPlayer.phone || selfPlayer.email) ? (
+                <View style={s.pvToggleCard}>
+                  <View style={s.pvToggleRow}>
+                    <View style={[s.pvToggleIcon, { backgroundColor: (previewShowContacts ? theme.success : theme.textMuted) + '15' }]}>
+                      <MaterialIcons name={previewShowContacts ? 'contact-phone' : 'phone-disabled'} size={18} color={previewShowContacts ? theme.success : theme.textMuted} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.pvToggleTitle}>{language === 'fr' ? 'Afficher les contacts' : 'Show contacts'}</Text>
+                      <Text style={s.pvToggleDesc}>{previewShowContacts
+                        ? (language === 'fr' ? 'Votre telephone et email seront visibles' : 'Your phone and email will be visible')
+                        : (language === 'fr' ? 'Vos contacts resteront masques' : 'Your contacts will remain hidden')
+                      }</Text>
+                    </View>
+                    <Switch
+                      value={previewShowContacts}
+                      onValueChange={setPreviewShowContacts}
+                      trackColor={{ false: theme.border, true: theme.success + '60' }}
+                      thumbColor={previewShowContacts ? theme.success : theme.textMuted}
+                    />
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Geolocation note */}
+              <View style={s.pvNote}>
+                <MaterialIcons name="map" size={16} color={theme.primary} />
+                <Text style={s.pvNoteText}>{language === 'fr'
+                  ? 'Votre fiche sera geolocalisee et visible sur la Carte pour tous les utilisateurs.'
+                  : 'Your card will be geolocated and visible on the Map to all users.'
+                }</Text>
+              </View>
+            </ScrollView>
+
+            <View style={s.pvActions}>
+              <Pressable style={s.pvCancelBtn} onPress={() => setShowPublicPreview(false)}>
+                <Text style={s.pvCancelText}>{t('common', 'cancel')}</Text>
+              </Pressable>
+              <Pressable style={[s.pvConfirmBtn, { backgroundColor: isPublic ? theme.error : theme.success }]} onPress={handleConfirmPublic} disabled={togglingPublic}>
+                {togglingPublic ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <MaterialIcons name={isPublic ? 'lock' : 'public'} size={18} color="#FFF" />
+                    <Text style={s.pvConfirmText}>{isPublic
+                      ? (language === 'fr' ? 'Rendre privee' : 'Make Private')
+                      : (language === 'fr' ? 'Rendre publique' : 'Make Public')
+                    }</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ===== SHARE PREVIEW MODAL ===== */}
+      <Modal visible={showSharePreview} animationType="slide" transparent>
+        <View style={s.pvOverlay}>
+          <View style={s.pvModal}>
+            <View style={s.pvHeader}>
+              <View style={[s.pvHeaderIcon, { backgroundColor: theme.primary + '15' }]}>
+                <MaterialIcons name="share" size={22} color={theme.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.pvHeaderTitle}>{language === 'fr' ? 'Apercu du partage' : 'Share Preview'}</Text>
+                <Text style={s.pvHeaderSub}>{language === 'fr' ? 'Voici ce que le destinataire verra' : 'This is what the recipient will see'}</Text>
+              </View>
+              <Pressable style={s.pvCloseBtn} onPress={() => setShowSharePreview(false)} hitSlop={8}>
+                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+
+            <ScrollView style={s.pvScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
+              {/* Read-only badge */}
+              <View style={s.pvReadOnlyBadge}>
+                <MaterialIcons name="lock" size={14} color={theme.warning} />
+                <Text style={s.pvReadOnlyText}>{language === 'fr' ? 'Lecture seule - Le destinataire ne pourra pas modifier votre fiche' : 'Read-only - The recipient cannot edit your card'}</Text>
+              </View>
+
+              {/* Preview Card (same layout) */}
+              <View style={s.pvCard}>
+                <View style={s.pvAvatarRow}>
+                  <View style={s.pvAvatar}>
+                    {selfPlayer.avatar ? (
+                      <Image source={{ uri: selfPlayer.avatar }} style={s.pvAvatarImg} contentFit="cover" transition={200} />
+                    ) : (
+                      <Text style={s.pvAvatarText}>{selfPlayer.name?.charAt(0).toUpperCase() || '?'}</Text>
+                    )}
+                    <View style={[s.pvRoleBadge, { backgroundColor: getRoleColor(selfPlayer.role) }]}>
+                      <MaterialIcons name={getRoleIcon(selfPlayer.role)} size={10} color="#FFF" />
+                    </View>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.pvName}>{selfPlayer.name}</Text>
+                    {selfPlayer.nickname ? <Text style={s.pvNickname}>"{selfPlayer.nickname}"</Text> : null}
+                  </View>
+                </View>
+
+                <View style={s.pvBadgesRow}>
+                  <View style={[s.pvBadge, { backgroundColor: getRoleColor(selfPlayer.role) + '15' }]}>
+                    <Text style={[s.pvBadgeText, { color: getRoleColor(selfPlayer.role) }]}>{t('roles', selfPlayer.role)}</Text>
+                  </View>
+                  <View style={[s.pvBadge, { backgroundColor: theme.accent + '15' }]}>
+                    <Text style={[s.pvBadgeText, { color: theme.accent }]}>{t('levels', selfPlayer.level)}</Text>
+                  </View>
+                  {selfPlayer.handedness ? (
+                    <View style={[s.pvBadge, { backgroundColor: '#6366F1' + '15' }]}>
+                      <Text style={[s.pvBadgeText, { color: '#6366F1' }]}>
+                        {selfPlayer.handedness === 'right' ? t('player', 'rightHanded') : selfPlayer.handedness === 'left' ? t('player', 'leftHanded') : t('player', 'ambidextrous')}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                {(selfPlayer.club || profileTerrainName) ? (
+                  <View style={s.pvInfoRow}>
+                    {selfPlayer.club ? (
+                      <View style={s.pvInfoPill}>
+                        <MaterialIcons name="location-city" size={12} color={theme.carreauColor} />
+                        <Text style={[s.pvInfoText, { color: theme.carreauColor }]}>{selfPlayer.club}</Text>
+                      </View>
+                    ) : null}
+                    {profileTerrainName ? (
+                      <View style={s.pvInfoPill}>
+                        <MaterialIcons name="sports-soccer" size={12} color={theme.success} />
+                        <Text style={[s.pvInfoText, { color: theme.success }]}>{profileTerrainName}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                {(selfPlayer.location?.city || selfPlayer.country) ? (
+                  <View style={s.pvLocationRow}>
+                    <MaterialIcons name="place" size={14} color={theme.textSecondary} />
+                    <Text style={s.pvLocationText}>{[selfPlayer.location?.city, selfPlayer.country].filter(Boolean).join(', ')}</Text>
+                  </View>
+                ) : null}
+
+                {previewShowContacts && (selfPlayer.phone || selfPlayer.email) ? (
+                  <View style={s.pvContactRow}>
+                    {selfPlayer.phone ? (
+                      <View style={s.pvContactPill}>
+                        <MaterialIcons name="phone" size={12} color={theme.primary} />
+                        <Text style={s.pvContactText}>{selfPlayer.phone}</Text>
+                      </View>
+                    ) : null}
+                    {selfPlayer.email ? (
+                      <View style={s.pvContactPill}>
+                        <MaterialIcons name="email" size={12} color={theme.primary} />
+                        <Text style={s.pvContactText}>{selfPlayer.email}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                <View style={s.pvStatsRow}>
+                  <View style={s.pvStatItem}>
+                    <Text style={s.pvStatValue}>{totalMatches}</Text>
+                    <Text style={s.pvStatLabel}>{t('player', 'matchesUpper')}</Text>
+                  </View>
+                  <View style={s.pvStatDivider} />
+                  <View style={s.pvStatItem}>
+                    <Text style={[s.pvStatValue, { color: theme.success }]}>{userStats.wins}</Text>
+                    <Text style={s.pvStatLabel}>{t('player', 'victories')}</Text>
+                  </View>
+                  <View style={s.pvStatDivider} />
+                  <View style={s.pvStatItem}>
+                    <Text style={[s.pvStatValue, { color: theme.accent }]}>{userStats.winRate}%</Text>
+                    <Text style={s.pvStatLabel}>{t('player', 'winsLabel')}</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Contact Toggle */}
+              {(selfPlayer.phone || selfPlayer.email) ? (
+                <View style={s.pvToggleCard}>
+                  <View style={s.pvToggleRow}>
+                    <View style={[s.pvToggleIcon, { backgroundColor: (previewShowContacts ? theme.success : theme.textMuted) + '15' }]}>
+                      <MaterialIcons name={previewShowContacts ? 'contact-phone' : 'phone-disabled'} size={18} color={previewShowContacts ? theme.success : theme.textMuted} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.pvToggleTitle}>{language === 'fr' ? 'Afficher les contacts' : 'Show contacts'}</Text>
+                      <Text style={s.pvToggleDesc}>{previewShowContacts
+                        ? (language === 'fr' ? 'Votre telephone et email seront visibles' : 'Your phone and email will be visible')
+                        : (language === 'fr' ? 'Vos contacts resteront masques' : 'Your contacts will remain hidden')
+                      }</Text>
+                    </View>
+                    <Switch
+                      value={previewShowContacts}
+                      onValueChange={setPreviewShowContacts}
+                      trackColor={{ false: theme.border, true: theme.success + '60' }}
+                      thumbColor={previewShowContacts ? theme.success : theme.textMuted}
+                    />
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Share note */}
+              <View style={s.pvNote}>
+                <MaterialIcons name="visibility" size={16} color={theme.primary} />
+                <Text style={s.pvNoteText}>{language === 'fr'
+                  ? 'Le destinataire aura un acces en lecture seule a votre fiche joueur.'
+                  : 'The recipient will have read-only access to your player card.'
+                }</Text>
+              </View>
+            </ScrollView>
+
+            <View style={s.pvActions}>
+              <Pressable style={s.pvCancelBtn} onPress={() => setShowSharePreview(false)}>
+                <Text style={s.pvCancelText}>{t('common', 'cancel')}</Text>
+              </Pressable>
+              <Pressable style={[s.pvConfirmBtn, { backgroundColor: theme.primary }]} onPress={handleConfirmShare}>
+                <MaterialIcons name="share" size={18} color="#FFF" />
+                <Text style={s.pvConfirmText}>{language === 'fr' ? 'Partager' : 'Share'}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {selfPlayer ? (
         <ShareModal visible={showShareModal} onClose={() => setShowShareModal(false)} itemType="player" itemId={selfPlayer.id} itemName={selfPlayer.name} forceReadOnly />
@@ -832,4 +1193,52 @@ const s = StyleSheet.create({
   // Edit button
   editProfileBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.primary, paddingVertical: 18, borderRadius: theme.borderRadius.md, marginTop: 4, ...theme.shadows.card },
   editProfileBtnText: { fontSize: 17, fontWeight: '600', color: '#FFF' },
+
+  // ===== Preview Modal =====
+  pvOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  pvModal: { backgroundColor: theme.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%', paddingBottom: 0 },
+  pvHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
+  pvHeaderIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  pvHeaderTitle: { fontSize: 17, fontWeight: '700', color: theme.textPrimary },
+  pvHeaderSub: { fontSize: 13, color: theme.textSecondary, marginTop: 2, lineHeight: 18 },
+  pvCloseBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: theme.backgroundSecondary },
+  pvScroll: { paddingHorizontal: 20, paddingTop: 16 },
+  pvCard: { backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 12 },
+  pvAvatarRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 12 },
+  pvAvatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative' },
+  pvAvatarImg: { width: 56, height: 56, borderRadius: 28 },
+  pvAvatarText: { fontSize: 22, fontWeight: '700', color: '#FFF' },
+  pvRoleBadge: { position: 'absolute', bottom: -2, right: -2, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: theme.backgroundSecondary },
+  pvName: { fontSize: 18, fontWeight: '700', color: theme.textPrimary },
+  pvNickname: { fontSize: 13, fontStyle: 'italic', color: theme.textSecondary, marginTop: 2 },
+  pvBadgesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
+  pvBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14 },
+  pvBadgeText: { fontSize: 12, fontWeight: '600' },
+  pvInfoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
+  pvInfoPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: theme.surface, borderRadius: 12 },
+  pvInfoText: { fontSize: 12, fontWeight: '600' },
+  pvLocationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },
+  pvLocationText: { fontSize: 12, color: theme.textSecondary },
+  pvContactRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
+  pvContactPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: theme.primary + '10', borderRadius: 14 },
+  pvContactText: { fontSize: 12, fontWeight: '500', color: theme.primary },
+  pvStatsRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, paddingVertical: 10, paddingHorizontal: 12 },
+  pvStatItem: { alignItems: 'center', flex: 1 },
+  pvStatValue: { fontSize: 16, fontWeight: '700', color: theme.textPrimary },
+  pvStatLabel: { fontSize: 9, color: theme.textSecondary, marginTop: 1, textTransform: 'uppercase' },
+  pvStatDivider: { width: 1, height: 24, backgroundColor: theme.border, marginHorizontal: 6 },
+  pvToggleCard: { backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.lg, padding: 14, marginBottom: 12 },
+  pvToggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  pvToggleIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  pvToggleTitle: { fontSize: 14, fontWeight: '600', color: theme.textPrimary },
+  pvToggleDesc: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  pvNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: theme.primary + '08', borderRadius: theme.borderRadius.md, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: theme.primary + '15' },
+  pvNoteText: { flex: 1, fontSize: 12, color: theme.textSecondary, lineHeight: 17 },
+  pvReadOnlyBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.warning + '10', borderRadius: theme.borderRadius.md, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: theme.warning + '20' },
+  pvReadOnlyText: { flex: 1, fontSize: 12, fontWeight: '600', color: theme.warning, lineHeight: 17 },
+  pvActions: { flexDirection: 'row', gap: 10, paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: theme.border },
+  pvCancelBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: theme.borderRadius.md, backgroundColor: theme.backgroundSecondary },
+  pvCancelText: { fontSize: 15, fontWeight: '600', color: theme.textSecondary },
+  pvConfirmBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: theme.borderRadius.md },
+  pvConfirmText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
 });
