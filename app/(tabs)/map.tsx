@@ -29,6 +29,7 @@ import {
   fetchPublicPlayers, fetchPublicClubs, fetchPublicTerrains, fetchPublicTournaments,
   toggleItemPublic, importPublicItemToDirectory, getMyPublicableItems,
 } from '@/services/publicItemsService';
+import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup as MeetupType } from '@/services/meetupService';
 import AdBanner from '@/components/ui/AdBanner';
 import { useToast } from '@/components/ui/Toast';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
@@ -269,6 +270,43 @@ export default function MapScreen() {
   const [loadingPublic, setLoadingPublic] = useState(false);
   const [loadingManage, setLoadingManage] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
+
+  // Meetup invitation state
+  const [showMeetupPicker, setShowMeetupPicker] = useState(false);
+  const [meetupPickerUserId, setMeetupPickerUserId] = useState<string | null>(null);
+  const [meetupPickerUserName, setMeetupPickerUserName] = useState('');
+  const [activeMeetups, setActiveMeetups] = useState<MeetupType[]>([]);
+  const [loadingMeetups, setLoadingMeetups] = useState(false);
+  const [invitingToMeetup, setInvitingToMeetup] = useState<string | null>(null);
+
+  const handleInviteToMeetupMap = useCallback(async (targetUserId: string, targetName: string) => {
+    if (!targetUserId || targetUserId === user?.id) return;
+    Haptics.selectionAsync();
+    setMeetupPickerUserId(targetUserId);
+    setMeetupPickerUserName(targetName);
+    setLoadingMeetups(true);
+    setShowMeetupPicker(true);
+    const { meetups: mts } = await getMyActiveMeetups();
+    setActiveMeetups(mts);
+    setLoadingMeetups(false);
+  }, [user?.id]);
+
+  const handleConfirmInviteMap = useCallback(async (meetupId: string) => {
+    if (!meetupPickerUserId) return;
+    setInvitingToMeetup(meetupId);
+    const { error } = await inviteSingleUserToMeetup(meetupId, meetupPickerUserId);
+    setInvitingToMeetup(null);
+    if (error === 'already_participant') {
+      showAlert(t('meetup', 'alreadyParticipant'));
+    } else if (error) {
+      showAlert(t('common', 'error'), error);
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast({ message: t('meetup', 'inviteSentSuccess'), icon: 'check-circle', iconColor: theme.success });
+      setShowMeetupPicker(false);
+      setSelected(null);
+    }
+  }, [meetupPickerUserId, showAlert, showToast, t]);
 
   const MARKER_CONFIG = useMemo(() => ({
     terrains: { label: t('map', 'terrains'), singular: t('map', 'terrainSingular'), icon: 'sports-soccer', color: theme.success },
@@ -892,15 +930,22 @@ export default function MapScreen() {
                 ) : null}
               </View>
             </View>
-            {selected._isPublic ? (
-              <Pressable style={styles.importBtn} onPress={() => handleImportPublicItem(selected)}>
-                <MaterialIcons name="add-circle" size={24} color={theme.primary} />
-              </Pressable>
-            ) : (
-              <View style={styles.selectedArrow}>
-                <MaterialIcons name="arrow-forward" size={18} color={theme.primary} />
-              </View>
-            )}
+            <View style={{ alignItems: 'center', gap: 6 }}>
+              {selected._isPublic ? (
+                <Pressable style={styles.importBtn} onPress={() => handleImportPublicItem(selected)}>
+                  <MaterialIcons name="add-circle" size={24} color={theme.primary} />
+                </Pressable>
+              ) : (
+                <View style={styles.selectedArrow}>
+                  <MaterialIcons name="arrow-forward" size={18} color={theme.primary} />
+                </View>
+              )}
+              {selected._isPublic && selected.itemType === 'players' && selected.userId && selected.userId !== user?.id ? (
+                <Pressable style={styles.selectedInviteBtn} onPress={() => handleInviteToMeetupMap(selected.userId, selected.name)}>
+                  <MaterialIcons name="event" size={14} color={theme.primary} />
+                </Pressable>
+              ) : null}
+            </View>
           </Pressable>
           <Pressable style={styles.selectedClose} onPress={() => setSelected(null)}>
             <MaterialIcons name="close" size={16} color={theme.textMuted} />
@@ -1042,6 +1087,58 @@ export default function MapScreen() {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      {/* Meetup Invitation Picker Modal (Map) */}
+      <Modal visible={showMeetupPicker} animationType="slide" transparent onRequestClose={() => setShowMeetupPicker(false)}>
+        <View style={styles.meetupOverlay}>
+          <View style={styles.meetupPickerContent}>
+            <View style={styles.meetupPickerHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.meetupPickerTitle}>{t('meetup', 'inviteToMeetup')}</Text>
+                <Text style={styles.meetupPickerSubtitle}>{meetupPickerUserName}</Text>
+              </View>
+              <Pressable style={styles.meetupPickerClose} onPress={() => setShowMeetupPicker(false)}>
+                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+            <Text style={styles.meetupPickerDesc}>{t('meetup', 'chooseMeetup')}</Text>
+            {loadingMeetups ? (
+              <View style={{ paddingVertical: 40, alignItems: 'center' }}><ActivityIndicator size="large" color={theme.primary} /></View>
+            ) : activeMeetups.length > 0 ? (
+              <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+                {activeMeetups.map((m) => {
+                  const mDate = new Date(m.date);
+                  return (
+                    <Pressable key={m.id} style={[styles.meetupPickerItem, invitingToMeetup === m.id && { opacity: 0.6 }]} onPress={() => handleConfirmInviteMap(m.id)} disabled={!!invitingToMeetup}>
+                      <View style={styles.meetupPickerItemDate}>
+                        <Text style={styles.meetupPickerItemDay}>{mDate.getDate()}</Text>
+                        <Text style={styles.meetupPickerItemMonth}>{mDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.meetupPickerItemTitle} numberOfLines={1}>{m.title}</Text>
+                        <Text style={styles.meetupPickerItemTime}>{mDate.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}</Text>
+                      </View>
+                      {invitingToMeetup === m.id ? <ActivityIndicator size="small" color={theme.primary} /> : (
+                        <View style={styles.meetupPickerItemArrow}><MaterialIcons name="send" size={16} color={theme.primary} /></View>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            ) : (
+              <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+                <MaterialIcons name="event-busy" size={40} color={theme.textMuted} />
+                <Text style={styles.meetupPickerEmptyText}>{t('meetup', 'noActiveMeetups')}</Text>
+                <Text style={styles.meetupPickerEmptyDesc}>{t('meetup', 'noActiveMeetupsDesc')}</Text>
+                <Pressable style={styles.meetupPickerCreateBtn} onPress={() => { setShowMeetupPicker(false); router.push('/meetup/new' as any); }}>
+                  <MaterialIcons name="add" size={18} color="#FFF" />
+                  <Text style={styles.meetupPickerCreateBtnText}>{t('meetup', 'createMeetupFirst')}</Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1159,6 +1256,26 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   importBtnSmall: { padding: 4 },
+  selectedInviteBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.primary + '10', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.primary + '25' },
+  // Meetup Picker (Map)
+  meetupOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 24 },
+  meetupPickerContent: { backgroundColor: theme.surface, borderRadius: 24, padding: 24 },
+  meetupPickerHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  meetupPickerTitle: { fontSize: 18, fontWeight: '700', color: theme.textPrimary },
+  meetupPickerSubtitle: { fontSize: 13, color: theme.primary, fontWeight: '600', marginTop: 2 },
+  meetupPickerClose: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
+  meetupPickerDesc: { fontSize: 13, color: theme.textSecondary, marginBottom: 16 },
+  meetupPickerItem: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: theme.backgroundSecondary, borderRadius: 14, padding: 14, marginBottom: 10 },
+  meetupPickerItemDate: { width: 46, height: 46, borderRadius: 12, backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center' },
+  meetupPickerItemDay: { fontSize: 18, fontWeight: '900', color: theme.primary, lineHeight: 20 },
+  meetupPickerItemMonth: { fontSize: 9, fontWeight: '700', color: theme.primary, letterSpacing: 0.5 },
+  meetupPickerItemTitle: { fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginBottom: 2 },
+  meetupPickerItemTime: { fontSize: 12, color: theme.textMuted },
+  meetupPickerItemArrow: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center' },
+  meetupPickerEmptyText: { fontSize: 15, fontWeight: '600', color: theme.textPrimary, marginTop: 12 },
+  meetupPickerEmptyDesc: { fontSize: 13, color: theme.textSecondary, textAlign: 'center', marginTop: 4, marginBottom: 16, paddingHorizontal: 16 },
+  meetupPickerCreateBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
+  meetupPickerCreateBtnText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
   // Manage Modal
   modalContainer: { flex: 1, backgroundColor: theme.backgroundSecondary },
   modalHeader: {

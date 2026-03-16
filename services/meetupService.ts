@@ -613,3 +613,40 @@ export interface InvitableUser {
   avatar: string;
   source: 'public' | 'shared';
 }
+
+/**
+ * Get active meetups created by the current user (for invitation picker)
+ */
+export async function getMyActiveMeetups(): Promise<{ meetups: Meetup[]; error: string | null }> {
+  try {
+    const supabase = getSupabaseClient();
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData?.user?.id) return { meetups: [], error: null };
+
+    const { data, error } = await supabase
+      .from('terrain_meetups')
+      .select('*')
+      .eq('creator_id', userData.user.id)
+      .eq('status', 'active')
+      .gte('date', new Date().toISOString())
+      .order('date', { ascending: true });
+
+    if (error) return { meetups: [], error: error.message };
+    return { meetups: data || [], error: null };
+  } catch (e: any) {
+    return { meetups: [], error: e.message };
+  }
+}
+
+/**
+ * Invite a single user to a meetup (convenience wrapper)
+ */
+export async function inviteSingleUserToMeetup(
+  meetupId: string,
+  userId: string
+): Promise<{ error: string | null }> {
+  const { invited, error } = await inviteUsersToMeetup(meetupId, [userId]);
+  if (error) return { error };
+  if (invited === 0) return { error: 'already_participant' };
+  return { error: null };
+}

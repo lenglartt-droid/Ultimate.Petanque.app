@@ -28,6 +28,8 @@ import { SharedOverlayBadge } from '@/components/ui/SharedBadge';
 import AdBanner from '@/components/ui/AdBanner';
 import MergePickerModal from '@/components/ui/MergePickerModal';
 import { saveMergeLog, getMergeLogs, undoMerge, isUndoable, getUndoTimeRemaining, deleteMergeLog, MergeLog, ReassignedRelation } from '@/services/mergeHistoryService';
+import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services/meetupService';
+import { useAuth, useAlert } from '@/template';
 
 type DirectoryTab = 'players' | 'clubs' | 'terrains' | 'tournaments';
 type TournamentStatus = 'all' | 'À venir' | 'En cours' | 'Terminé';
@@ -36,6 +38,44 @@ export default function DirectoryScreen() {
   const insets = useSafeAreaInsets();
   const { players, clubs, tournaments, terrains, selfPlayer, favoriteTerrainIds, favoriteClubIds, getSharedPermission, refreshData, updatePlayer, updateClub, updateTerrain, updateTournament, deletePlayer, deleteClub, deleteTerrain, deleteTournament } = useApp();
   const { t, language } = useLanguage();
+  const { user } = useAuth();
+  const { showAlert } = useAlert();
+
+  // Meetup invitation state
+  const [showMeetupPicker, setShowMeetupPicker] = useState(false);
+  const [meetupPickerUserId, setMeetupPickerUserId] = useState<string | null>(null);
+  const [meetupPickerUserName, setMeetupPickerUserName] = useState('');
+  const [activeMeetups, setActiveMeetups] = useState<Meetup[]>([]);
+  const [loadingMeetups, setLoadingMeetups] = useState(false);
+  const [invitingToMeetup, setInvitingToMeetup] = useState<string | null>(null);
+
+  const handleInviteToMeetup = useCallback(async (targetUserId: string, targetName: string) => {
+    if (!targetUserId || targetUserId === user?.id) return;
+    Haptics.selectionAsync();
+    setMeetupPickerUserId(targetUserId);
+    setMeetupPickerUserName(targetName);
+    setLoadingMeetups(true);
+    setShowMeetupPicker(true);
+    const { meetups: mts } = await getMyActiveMeetups();
+    setActiveMeetups(mts);
+    setLoadingMeetups(false);
+  }, [user?.id]);
+
+  const handleConfirmInvite = useCallback(async (meetupId: string) => {
+    if (!meetupPickerUserId) return;
+    setInvitingToMeetup(meetupId);
+    const { error } = await inviteSingleUserToMeetup(meetupId, meetupPickerUserId);
+    setInvitingToMeetup(null);
+    if (error === 'already_participant') {
+      showAlert(t('meetup', 'alreadyParticipant'));
+    } else if (error) {
+      showAlert(t('common', 'error'), error);
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showAlert(t('meetup', 'inviteSentSuccess'), t('meetup', 'inviteSentSuccessDesc'));
+      setShowMeetupPicker(false);
+    }
+  }, [meetupPickerUserId, showAlert, t]);
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
   const [activeTab, setActiveTab] = useState<DirectoryTab>('players');
 
@@ -346,6 +386,8 @@ export default function DirectoryScreen() {
     const isSelf = selfPlayer && item.id === selfPlayer.id;
     const sharedPerm = getSharedPermission(item.id);
     const isPublicItem = (item as any).isPublic;
+    // A public player is a real registered user (their user_id is an actual app user)
+    const isRealUser = isPublicItem && (item as any).userId && (item as any).userId !== user?.id;
     return (
       <Pressable
         style={[styles.itemCard, isSelf && styles.selfCard]}
@@ -368,6 +410,10 @@ export default function DirectoryScreen() {
             <View style={styles.selfBadge}>
               <MaterialIcons name="star" size={10} color="#FFF" />
             </View>
+          ) : isRealUser ? (
+            <View style={styles.verifiedBadge}>
+              <MaterialIcons name="verified" size={11} color="#FFF" />
+            </View>
           ) : isPublicItem ? (
             <View style={styles.publicOverlay}>
               <MaterialIcons name="public" size={10} color={theme.success} />
@@ -381,11 +427,16 @@ export default function DirectoryScreen() {
             <Text style={[styles.itemTitle, isSelf && { color: theme.primary }]} numberOfLines={1}>
               {item.name}
             </Text>
-            {isSelf && (
+            {isSelf ? (
               <View style={styles.moiBadge}>
                 <Text style={styles.moiBadgeText}>{t('directory', 'me')}</Text>
               </View>
-            )}
+            ) : isRealUser ? (
+              <View style={styles.realUserBadge}>
+                <MaterialIcons name="verified" size={10} color={theme.primary} />
+                <Text style={styles.realUserBadgeText}>{t('meetup', 'registeredUser')}</Text>
+              </View>
+            ) : null}
           </View>
           <View style={styles.itemMeta}>
             {item.club && (
@@ -412,6 +463,20 @@ export default function DirectoryScreen() {
               <Text style={[styles.tagText, { color: theme.textSecondary }]}>{t('levels', item.level)}</Text>
             </View>
           </View>
+          {/* Invite to meetup button for real registered users */}
+          {isRealUser ? (
+            <Pressable
+              style={styles.inviteMeetupBtn}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                handleInviteToMeetup((item as any).userId, item.name);
+              }}
+              hitSlop={4}
+            >
+              <MaterialIcons name="event" size={13} color={theme.primary} />
+              <Text style={styles.inviteMeetupBtnText}>{t('meetup', 'inviteToMeetup')}</Text>
+            </Pressable>
+          ) : null}
         </View>
         <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
       </Pressable>
@@ -1405,6 +1470,79 @@ export default function DirectoryScreen() {
         />
       ) : null}
 
+      {/* Meetup Invitation Picker Modal */}
+      <Modal
+        visible={showMeetupPicker}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowMeetupPicker(false)}
+      >
+        <View style={styles.meetupOverlay}>
+          <View style={styles.meetupPickerContent}>
+            <View style={styles.meetupPickerHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.meetupPickerTitle}>{t('meetup', 'inviteToMeetup')}</Text>
+                <Text style={styles.meetupPickerSubtitle}>{meetupPickerUserName}</Text>
+              </View>
+              <Pressable style={styles.meetupPickerClose} onPress={() => setShowMeetupPicker(false)}>
+                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+            <Text style={styles.meetupPickerDesc}>{t('meetup', 'chooseMeetup')}</Text>
+            {loadingMeetups ? (
+              <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                <ActivityIndicator size="large" color={theme.primary} />
+              </View>
+            ) : activeMeetups.length > 0 ? (
+              <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+                {activeMeetups.map((m) => {
+                  const mDate = new Date(m.date);
+                  return (
+                    <Pressable
+                      key={m.id}
+                      style={[styles.meetupPickerItem, invitingToMeetup === m.id && { opacity: 0.6 }]}
+                      onPress={() => handleConfirmInvite(m.id)}
+                      disabled={!!invitingToMeetup}
+                    >
+                      <View style={styles.meetupPickerItemDate}>
+                        <Text style={styles.meetupPickerItemDay}>{mDate.getDate()}</Text>
+                        <Text style={styles.meetupPickerItemMonth}>{mDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.meetupPickerItemTitle} numberOfLines={1}>{m.title}</Text>
+                        <Text style={styles.meetupPickerItemTime}>
+                          {mDate.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                      </View>
+                      {invitingToMeetup === m.id ? (
+                        <ActivityIndicator size="small" color={theme.primary} />
+                      ) : (
+                        <View style={styles.meetupPickerItemArrow}>
+                          <MaterialIcons name="send" size={16} color={theme.primary} />
+                        </View>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            ) : (
+              <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+                <MaterialIcons name="event-busy" size={40} color={theme.textMuted} />
+                <Text style={styles.meetupPickerEmptyText}>{t('meetup', 'noActiveMeetups')}</Text>
+                <Text style={styles.meetupPickerEmptyDesc}>{t('meetup', 'noActiveMeetupsDesc')}</Text>
+                <Pressable
+                  style={styles.meetupPickerCreateBtn}
+                  onPress={() => { setShowMeetupPicker(false); router.push('/meetup/new' as any); }}
+                >
+                  <MaterialIcons name="add" size={18} color="#FFF" />
+                  <Text style={styles.meetupPickerCreateBtnText}>{t('meetup', 'createMeetupFirst')}</Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       {/* Filter Modal */}
       <Modal
         visible={showFilters}
@@ -1798,6 +1936,51 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: theme.surface,
   },
+  verifiedBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: theme.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: theme.surface,
+  },
+  realUserBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: theme.primary + '12',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: theme.borderRadius.sm,
+  },
+  realUserBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: theme.primary,
+  },
+  inviteMeetupBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: theme.primary + '10',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: theme.borderRadius.sm,
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: theme.primary + '25',
+  },
+  inviteMeetupBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.primary,
+  },
   itemContent: {
     flex: 1,
   },
@@ -2179,5 +2362,121 @@ const styles = StyleSheet.create({
   mergeHistoryExpiredText: {
     fontSize: 12,
     color: theme.textMuted,
+  },
+  // Meetup Invitation Picker
+  meetupOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  meetupPickerContent: {
+    backgroundColor: theme.surface,
+    borderRadius: 24,
+    padding: 24,
+  },
+  meetupPickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  meetupPickerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  meetupPickerSubtitle: {
+    fontSize: 13,
+    color: theme.primary,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  meetupPickerClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  meetupPickerDesc: {
+    fontSize: 13,
+    color: theme.textSecondary,
+    marginBottom: 16,
+  },
+  meetupPickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+  },
+  meetupPickerItemDate: {
+    width: 46,
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: theme.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  meetupPickerItemDay: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: theme.primary,
+    lineHeight: 20,
+  },
+  meetupPickerItemMonth: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: theme.primary,
+    letterSpacing: 0.5,
+  },
+  meetupPickerItemTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textPrimary,
+    marginBottom: 2,
+  },
+  meetupPickerItemTime: {
+    fontSize: 12,
+    color: theme.textMuted,
+  },
+  meetupPickerItemArrow: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: theme.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  meetupPickerEmptyText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.textPrimary,
+    marginTop: 12,
+  },
+  meetupPickerEmptyDesc: {
+    fontSize: 13,
+    color: theme.textSecondary,
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+  },
+  meetupPickerCreateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: theme.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  meetupPickerCreateBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFF',
   },
 });

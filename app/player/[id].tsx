@@ -26,8 +26,9 @@ import MergePickerModal from '@/components/ui/MergePickerModal';
 import { Image } from 'expo-image';
 import { useAlert } from '@/template';
 import { toggleItemPublic } from '@/services/publicItemsService';
+import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup as MeetupType } from '@/services/meetupService';
 import Svg, { Polygon, Line, Circle as SvgCircle, Text as SvgText, G } from 'react-native-svg';
-import { Modal, Switch } from 'react-native';
+import { Modal, Switch, ActivityIndicator } from 'react-native';
 import * as Linking from 'expo-linking';
 
 // ============================================
@@ -126,6 +127,14 @@ export default function PlayerDetailScreen() {
 
   const [showShareModal, setShowShareModal] = React.useState(false);
   const [showMergePicker, setShowMergePicker] = React.useState(false);
+  // Meetup invitation state
+  const [showMeetupPicker, setShowMeetupPicker] = React.useState(false);
+  const [activeMeetups, setActiveMeetups] = React.useState<MeetupType[]>([]);
+  const [loadingMeetups, setLoadingMeetups] = React.useState(false);
+  const [invitingToMeetup, setInvitingToMeetup] = React.useState<string | null>(null);
+  const isPublicItem = (player as any)?.isPublic === true;
+  const playerUserId = (player as any)?.userId;
+  const isRealUser = isPublicItem && playerUserId && playerUserId !== user?.id;
   const [showSharePreview, setShowSharePreview] = React.useState(false);
   const [showPublicPreview, setShowPublicPreview] = React.useState(false);
   const [previewShowContacts, setPreviewShowContacts] = React.useState(false);
@@ -359,6 +368,21 @@ export default function PlayerDetailScreen() {
           {canEdit ? (
             <Pressable style={s.headerIconBtn} onPress={() => setShowMergePicker(true)}>
               <MaterialIcons name="compare-arrows" size={20} color={theme.accent} />
+            </Pressable>
+          ) : null}
+          {isRealUser ? (
+            <Pressable
+              style={[s.headerIconBtn, { backgroundColor: theme.accent + '15' }]}
+              onPress={async () => {
+                Haptics.selectionAsync();
+                setLoadingMeetups(true);
+                setShowMeetupPicker(true);
+                const { meetups: mts } = await getMyActiveMeetups();
+                setActiveMeetups(mts);
+                setLoadingMeetups(false);
+              }}
+            >
+              <MaterialIcons name="event" size={20} color={theme.accent} />
             </Pressable>
           ) : null}
           {canEdit ? (
@@ -1100,6 +1124,77 @@ export default function PlayerDetailScreen() {
       ) : null}
 
       <MergePickerModal visible={showMergePicker} onClose={() => setShowMergePicker(false)} itemType="player" currentItemId={id!} />
+
+      {/* Meetup Invitation Picker */}
+      <Modal visible={showMeetupPicker} animationType="slide" transparent onRequestClose={() => setShowMeetupPicker(false)}>
+        <View style={s.mipOverlay}>
+          <View style={s.mipContent}>
+            <View style={s.mipHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.mipTitle}>{t('meetup', 'inviteToMeetup')}</Text>
+                <Text style={s.mipSubtitle}>{player?.name}</Text>
+              </View>
+              <Pressable style={s.mipClose} onPress={() => setShowMeetupPicker(false)}>
+                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+            <Text style={s.mipDesc}>{t('meetup', 'chooseMeetup')}</Text>
+            {loadingMeetups ? (
+              <View style={{ paddingVertical: 40, alignItems: 'center' }}><ActivityIndicator size="large" color={theme.primary} /></View>
+            ) : activeMeetups.length > 0 ? (
+              <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+                {activeMeetups.map((m) => {
+                  const mDate = new Date(m.date);
+                  return (
+                    <Pressable
+                      key={m.id}
+                      style={[s.mipItem, invitingToMeetup === m.id && { opacity: 0.6 }]}
+                      disabled={!!invitingToMeetup}
+                      onPress={async () => {
+                        if (!playerUserId) return;
+                        setInvitingToMeetup(m.id);
+                        const { error } = await inviteSingleUserToMeetup(m.id, playerUserId);
+                        setInvitingToMeetup(null);
+                        if (error === 'already_participant') {
+                          showAlert(t('meetup', 'alreadyParticipant'));
+                        } else if (error) {
+                          showAlert(t('common', 'error'), error);
+                        } else {
+                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                          showAlert(t('meetup', 'inviteSentSuccess'), t('meetup', 'inviteSentSuccessDesc'));
+                          setShowMeetupPicker(false);
+                        }
+                      }}
+                    >
+                      <View style={s.mipItemDate}>
+                        <Text style={s.mipItemDay}>{mDate.getDate()}</Text>
+                        <Text style={s.mipItemMonth}>{mDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.mipItemTitle} numberOfLines={1}>{m.title}</Text>
+                        <Text style={s.mipItemTime}>{mDate.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}</Text>
+                      </View>
+                      {invitingToMeetup === m.id ? <ActivityIndicator size="small" color={theme.primary} /> : (
+                        <View style={s.mipArrow}><MaterialIcons name="send" size={16} color={theme.primary} /></View>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            ) : (
+              <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+                <MaterialIcons name="event-busy" size={40} color={theme.textMuted} />
+                <Text style={{ fontSize: 15, fontWeight: '600', color: theme.textPrimary, marginTop: 12 }}>{t('meetup', 'noActiveMeetups')}</Text>
+                <Text style={{ fontSize: 13, color: theme.textSecondary, textAlign: 'center', marginTop: 4, marginBottom: 16 }}>{t('meetup', 'noActiveMeetupsDesc')}</Text>
+                <Pressable style={s.mipCreateBtn} onPress={() => { setShowMeetupPicker(false); router.push('/meetup/new' as any); }}>
+                  <MaterialIcons name="add" size={18} color="#FFF" />
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFF' }}>{t('meetup', 'createMeetupFirst')}</Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1277,4 +1372,21 @@ const s = StyleSheet.create({
   pvCancelText: { fontSize: 15, fontWeight: '600' as const, color: theme.textSecondary },
   pvConfirmBtn: { flex: 2, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, paddingVertical: 14, borderRadius: theme.borderRadius.md },
   pvConfirmText: { fontSize: 15, fontWeight: '700' as const, color: '#FFF' },
+
+  // Meetup invitation picker (player detail)
+  mipOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center' as const, paddingHorizontal: 24 },
+  mipContent: { backgroundColor: theme.surface, borderRadius: 24, padding: 24 },
+  mipHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, marginBottom: 8 },
+  mipTitle: { fontSize: 18, fontWeight: '700' as const, color: theme.textPrimary },
+  mipSubtitle: { fontSize: 13, color: theme.primary, fontWeight: '600' as const, marginTop: 2 },
+  mipClose: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.backgroundSecondary, alignItems: 'center' as const, justifyContent: 'center' as const },
+  mipDesc: { fontSize: 13, color: theme.textSecondary, marginBottom: 16 },
+  mipItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 14, backgroundColor: theme.backgroundSecondary, borderRadius: 14, padding: 14, marginBottom: 10 },
+  mipItemDate: { width: 46, height: 46, borderRadius: 12, backgroundColor: theme.primary + '15', alignItems: 'center' as const, justifyContent: 'center' as const },
+  mipItemDay: { fontSize: 18, fontWeight: '900' as const, color: theme.primary, lineHeight: 20 },
+  mipItemMonth: { fontSize: 9, fontWeight: '700' as const, color: theme.primary, letterSpacing: 0.5 },
+  mipItemTitle: { fontSize: 14, fontWeight: '600' as const, color: theme.textPrimary, marginBottom: 2 },
+  mipItemTime: { fontSize: 12, color: theme.textMuted },
+  mipArrow: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.primary + '15', alignItems: 'center' as const, justifyContent: 'center' as const },
+  mipCreateBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, backgroundColor: theme.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
 });

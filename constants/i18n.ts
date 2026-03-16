@@ -2395,6 +2395,15 @@ export const translations = {
     invitedBy: { fr: 'Invité par', en: 'Invited by' },
     noInvitations: { fr: 'Aucune invitation', en: 'No invitations' },
     noInvitationsDesc: { fr: 'Vous n\'avez aucune invitation en attente pour le moment. Les invitations apparaîtront ici lorsque quelqu\'un vous invitera à un rendez-vous.', en: 'You have no pending invitations at the moment. Invitations will appear here when someone invites you to a meetup.' },
+    registeredUser: { fr: 'Utilisateur réel', en: 'Registered user' },
+    inviteToMeetup: { fr: 'Inviter à un RDV', en: 'Invite to meetup' },
+    chooseMeetup: { fr: 'Choisir un rendez-vous', en: 'Choose a meetup' },
+    noActiveMeetups: { fr: 'Aucun RDV actif', en: 'No active meetups' },
+    noActiveMeetupsDesc: { fr: 'Créez un rendez-vous pour pouvoir y inviter des joueurs', en: 'Create a meetup to invite players to it' },
+    inviteSentSuccess: { fr: 'Invitation envoyée', en: 'Invitation sent' },
+    inviteSentSuccessDesc: { fr: 'Le joueur recevra votre invitation dans son application', en: 'The player will receive your invitation in their app' },
+    alreadyParticipant: { fr: 'Déjà participant à ce RDV', en: 'Already a participant' },
+    createMeetupFirst: { fr: 'Créer un RDV', en: 'Create a meetup' },
   },
 
   // ============================================
