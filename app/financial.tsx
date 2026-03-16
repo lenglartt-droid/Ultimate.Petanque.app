@@ -277,7 +277,7 @@ export default function FinancialScreen() {
                 <Text style={styles.sectionTitle}>{language === 'fr' ? 'Equipement (Boules)' : 'Equipment (Boules)'}</Text>
                 <Text style={styles.sectionSubtitle}>{financialData.setsWithPrice.length} set(s)</Text>
               </View>
-              <Text style={[styles.sectionTotal, { color: theme.error }]}>-{financialData.totalEquipmentCost.toFixed(0)} \u20AC</Text>
+              <Text style={[styles.sectionTotal, { color: theme.error }]}>-{financialData.totalEquipmentCost.toFixed(0)} €</Text>
             </View>
             <View style={styles.detailList}>
               {financialData.setsWithPrice.map(bs => (
@@ -288,7 +288,7 @@ export default function FinancialScreen() {
                       {[bs.brand, bs.diameter ? `${bs.diameter}mm` : '', bs.weight ? `${bs.weight}g` : ''].filter(Boolean).join(' \u2022 ')}
                     </Text>
                   </View>
-                  <Text style={[styles.detailAmount, { color: theme.error }]}>-{bs.purchasePrice} \u20AC</Text>
+                  <Text style={[styles.detailAmount, { color: theme.error }]}>-{bs.purchasePrice} €</Text>
                   <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
                 </Pressable>
               ))}
@@ -329,7 +329,7 @@ export default function FinancialScreen() {
               <MaterialIcons name="arrow-downward" size={16} color={theme.error} />
               <Text style={styles.summaryRowLabel}>{t('financial', 'totalExpenses')}</Text>
             </View>
-            <Text style={[styles.summaryRowValue, { color: theme.error }]}>-{financialData.totalCosts.toFixed(0)} \u20AC</Text>
+            <Text style={[styles.summaryRowValue, { color: theme.error }]}>-{financialData.totalCosts.toFixed(0)} €</Text>
           </View>
 
           {financialData.totalEquipmentCost > 0 && (
@@ -338,7 +338,7 @@ export default function FinancialScreen() {
                 <MaterialIcons name="sports-baseball" size={14} color={'#D97706'} />
                 <Text style={[styles.summaryRowLabel, { fontSize: 13 }]}>{language === 'fr' ? 'dont Equipement' : 'incl. Equipment'}</Text>
               </View>
-              <Text style={[styles.summaryRowValue, { color: '#D97706', fontSize: 14 }]}>-{financialData.totalEquipmentCost.toFixed(0)} \u20AC</Text>
+              <Text style={[styles.summaryRowValue, { color: '#D97706', fontSize: 14 }]}>-{financialData.totalEquipmentCost.toFixed(0)} €</Text>
             </View>
           )}
 

@@ -544,13 +544,13 @@ export default function EquipmentScreen() {
                       {set.serialNumber ? (
                         <View style={styles.serialItem}>
                           <MaterialIcons name="tag" size={14} color={theme.textMuted} />
-                          <Text style={styles.serialText}>N\u00B0{set.serialNumber}</Text>
+                          <Text style={styles.serialText}>N°{set.serialNumber}</Text>
                         </View>
                       ) : null}
                       {set.purchasePrice ? (
                         <View style={styles.serialItem}>
                           <MaterialIcons name="sell" size={14} color={theme.textMuted} />
-                          <Text style={styles.serialText}>{set.purchasePrice} \u20AC</Text>
+                          <Text style={styles.serialText}>{set.purchasePrice} €</Text>
                         </View>
                       ) : null}
                     </View>
