@@ -274,7 +274,7 @@ export default function FinancialScreen() {
                 <MaterialIcons name="sports-baseball" size={20} color={'#D97706'} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.sectionTitle}>{language === 'fr' ? 'Equipement (Boules)' : 'Equipment (Boules)'}</Text>
+                <Text style={styles.sectionTitle}>{t('financial', 'equipmentBoules')}</Text>
                 <Text style={styles.sectionSubtitle}>{financialData.setsWithPrice.length} set(s)</Text>
               </View>
               <Text style={[styles.sectionTotal, { color: theme.error }]}>-{financialData.totalEquipmentCost.toFixed(0)} €</Text>
@@ -336,7 +336,7 @@ export default function FinancialScreen() {
             <View style={[styles.summaryRow, { paddingLeft: 24 }]}>
               <View style={styles.summaryRowLeft}>
                 <MaterialIcons name="sports-baseball" size={14} color={'#D97706'} />
-                <Text style={[styles.summaryRowLabel, { fontSize: 13 }]}>{language === 'fr' ? 'dont Equipement' : 'incl. Equipment'}</Text>
+                <Text style={[styles.summaryRowLabel, { fontSize: 13 }]}>{t('financial', 'inclEquipment')}</Text>
               </View>
               <Text style={[styles.summaryRowValue, { color: '#D97706', fontSize: 14 }]}>-{financialData.totalEquipmentCost.toFixed(0)} €</Text>
             </View>

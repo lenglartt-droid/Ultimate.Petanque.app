@@ -1140,7 +1140,7 @@ export default function ProfileScreen() {
                     onPress={() => router.push('/equipment')}
                   >
                     <MaterialIcons name="add-circle-outline" size={20} color={theme.accent} />
-                    <Text style={styles.boulesSetPickerAddText}>{language === 'fr' ? 'Gerer les sets' : 'Manage sets'}</Text>
+                    <Text style={styles.boulesSetPickerAddText}>{t('equipment', 'manageSets')}</Text>
                     <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
                   </Pressable>
                 </View>
@@ -1151,7 +1151,7 @@ export default function ProfileScreen() {
                 >
                   <MaterialIcons name="add-circle-outline" size={22} color={theme.accent} />
                   <Text style={[styles.selectClubButtonText, { color: theme.accent }]}>
-                    {language === 'fr' ? 'Ajouter un set de boules' : 'Add a boules set'}
+                    {t('equipment', 'addBoulesSetFull')}
                   </Text>
                 </Pressable>
               )}
@@ -1382,8 +1382,8 @@ export default function ProfileScreen() {
                 <MaterialIcons name="sports-baseball" size={24} color={theme.accent} />
               </View>
               <View style={styles.playerCardLinkInfo}>
-                <Text style={styles.playerCardLinkTitle}>{language === 'fr' ? 'Équipement' : 'Equipment'}</Text>
-                <Text style={styles.playerCardLinkSubtitle}>{language === 'fr' ? 'Gérer vos sets de boules' : 'Manage your boules sets'}</Text>
+                <Text style={styles.playerCardLinkTitle}>{t('equipment', 'title')}</Text>
+                <Text style={styles.playerCardLinkSubtitle}>{t('equipment', 'manageBoulesSets')}</Text>
               </View>
               <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
             </Pressable>
@@ -1563,10 +1563,10 @@ export default function ProfileScreen() {
               </View>
               <View style={styles.menuItemContent}>
                 <Text style={styles.menuItemText}>
-                  {language === 'fr' ? 'Synchronisation' : 'Sync History'}
+                  {t('syncHistory', 'title')}
                 </Text>
                 <Text style={styles.menuItemSubtext}>
-                  {language === 'fr' ? 'Historique et file hors-ligne' : 'History and offline queue'}
+                  {t('syncHistory', 'titleSubtitle')}
                 </Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />

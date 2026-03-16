@@ -233,11 +233,11 @@ export default function EquipmentScreen() {
 
   const handlePickPhoto = useCallback(async () => {
     Alert.alert(
-      language === 'fr' ? 'Photo du set' : 'Set photo',
-      language === 'fr' ? 'Choisissez une option' : 'Choose an option',
+      t('equipment', 'setPhoto'),
+      t('equipment', 'chooseOption'),
       [
         {
-          text: language === 'fr' ? 'Prendre une photo' : 'Take a photo',
+          text: t('equipment', 'takePhoto'),
           onPress: async () => {
             const { status } = await ImagePicker.requestCameraPermissionsAsync();
             if (status !== 'granted') { Alert.alert(t('profile', 'permissionRequired'), t('profile', 'cameraPermission')); return; }
@@ -246,7 +246,7 @@ export default function EquipmentScreen() {
           },
         },
         {
-          text: language === 'fr' ? 'Choisir dans la galerie' : 'Choose from gallery',
+          text: t('equipment', 'chooseFromGallery'),
           onPress: async () => {
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (status !== 'granted') { Alert.alert(t('profile', 'permissionRequired'), t('profile', 'galleryPermission')); return; }
@@ -254,7 +254,7 @@ export default function EquipmentScreen() {
             if (!result.canceled && result.assets[0]) await uploadPhoto(result.assets[0].uri);
           },
         },
-        ...(formPhoto ? [{ text: language === 'fr' ? 'Supprimer la photo' : 'Remove photo', style: 'destructive' as const, onPress: () => { setFormPhoto(null); Haptics.selectionAsync(); } }] : []),
+        ...(formPhoto ? [{ text: t('equipment', 'removePhoto'), style: 'destructive' as const, onPress: () => { setFormPhoto(null); Haptics.selectionAsync(); } }] : []),
         { text: t('common', 'cancel'), style: 'cancel' as const },
       ]
     );
@@ -266,15 +266,15 @@ export default function EquipmentScreen() {
     try {
       const publicUrl = await uploadBoulesSetPhoto(user.id, uri);
       if (publicUrl) { setFormPhoto(publicUrl); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }
-      else Alert.alert(t('common', 'error'), language === 'fr' ? 'Impossible de charger la photo' : 'Unable to upload photo');
+      else Alert.alert(t('common', 'error'), t('equipment', 'uploadError'));
     } catch (e) {
       console.log('Error uploading boules photo:', e);
-      Alert.alert(t('common', 'error'), language === 'fr' ? 'Erreur lors du chargement' : 'Upload error');
+      Alert.alert(t('common', 'error'), t('equipment', 'uploadErrorGeneric'));
     } finally { setUploadingPhoto(false); }
   }, [user?.id, t, language]);
 
   const handleSave = useCallback(async () => {
-    if (!formName.trim()) { Alert.alert(t('common', 'error'), language === 'fr' ? 'Le nom est obligatoire' : 'Name is required'); return; }
+    if (!formName.trim()) { Alert.alert(t('common', 'error'), t('equipment', 'nameRequired')); return; }
     const setData: Omit<BoulesSet, 'id'> = {
       name: formName.trim(),
       brand: formBrand.trim() || undefined,
@@ -299,7 +299,7 @@ export default function EquipmentScreen() {
   }, [formName, formBrand, formDiameter, formWeight, formSerialNumber, formHardness, formNotes, formIsPrimary, formPhoto, formPurchasePrice, editingSet, addBoulesSet, updateBoulesSet, setPrimaryBoulesSet, resetForm, t, language]);
 
   const handleDelete = useCallback((set: BoulesSet) => {
-    Alert.alert(t('common', 'delete'), language === 'fr' ? `Supprimer "${set.name}" ?` : `Delete "${set.name}"?`, [
+    Alert.alert(t('common', 'delete'), `${t('equipment', 'deleteConfirm')} "${set.name}" ?`, [
       { text: t('common', 'cancel'), style: 'cancel' },
       { text: t('common', 'delete'), style: 'destructive', onPress: async () => { await deleteBoulesSet(set.id); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } },
     ]);
@@ -341,7 +341,7 @@ export default function EquipmentScreen() {
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>{language === 'fr' ? 'Equipement' : 'Equipment'}</Text>
+        <Text style={styles.headerTitle}>{t('equipment', 'title')}</Text>
         <View style={styles.headerRight}>
           {setsWithMatches.length >= 2 ? (
             <Pressable
@@ -371,14 +371,14 @@ export default function EquipmentScreen() {
           <View style={styles.heroIconBg}>
             <MaterialIcons name="sports-baseball" size={36} color={theme.accent} />
           </View>
-          <Text style={styles.heroTitle}>{language === 'fr' ? 'Mes Sets de Boules' : 'My Boules Sets'}</Text>
+          <Text style={styles.heroTitle}>{t('equipment', 'myBoulesSets')}</Text>
           <Text style={styles.heroSubtitle}>
-            {boulesSets.length} {language === 'fr' ? 'set(s) enregistre(s)' : 'set(s) registered'}
+            {boulesSets.length} {t('equipment', 'setsRegistered')}
           </Text>
           {primarySet ? (
             <View style={styles.heroPrimaryBadge}>
               <MaterialIcons name="star" size={14} color={theme.carreauColor} />
-              <Text style={styles.heroPrimaryText}>{language === 'fr' ? 'Principal' : 'Primary'}: {primarySet.name}</Text>
+              <Text style={styles.heroPrimaryText}>{t('equipment', 'primary')}: {primarySet.name}</Text>
             </View>
           ) : null}
         </Animated.View>
@@ -388,9 +388,7 @@ export default function EquipmentScreen() {
           <Animated.View entering={FadeIn.duration(300)} style={styles.compareBanner}>
             <MaterialIcons name="compare" size={18} color={theme.primary} />
             <Text style={styles.compareBannerText}>
-              {language === 'fr'
-                ? `Selectionnez 2 sets (${[compareSetA, compareSetB].filter(Boolean).length}/2)`
-                : `Select 2 sets (${[compareSetA, compareSetB].filter(Boolean).length}/2)`}
+              {`${t('equipment', 'selectSets')} (${[compareSetA, compareSetB].filter(Boolean).length}/2)`}
             </Text>
             {compareSetA && compareSetB ? (
               <View style={styles.compareBannerBadge}>
@@ -405,14 +403,14 @@ export default function EquipmentScreen() {
           <Animated.View entering={FadeInDown.duration(400)} style={styles.compareCard}>
             <View style={styles.compareHeader}>
               <MaterialIcons name="radar" size={18} color={theme.primary} />
-              <Text style={styles.compareTitle}>{language === 'fr' ? 'Comparaison' : 'Comparison'}</Text>
+              <Text style={styles.compareTitle}>{t('equipment', 'comparison')}</Text>
             </View>
 
             <View style={styles.radarContainer}>
               <RadarChart
                 setA={[comparisonData.a.winRate, comparisonData.a.tirRate, comparisonData.a.pointRate, comparisonData.a.carreauRate]}
                 setB={[comparisonData.b.winRate, comparisonData.b.tirRate, comparisonData.b.pointRate, comparisonData.b.carreauRate]}
-                labels={[language === 'fr' ? 'Victoires' : 'Wins', language === 'fr' ? 'Tirs' : 'Shots', 'Points', language === 'fr' ? 'Carreaux' : 'Carreaux']}
+                labels={[t('equipment', 'winsLabel'), t('equipment', 'shotsLabel'), 'Points', 'Carreaux']}
                 size={Math.min(Dimensions.get('window').width - 64, 280)}
                 colorA="#D97706"
                 colorB="#3B82F6"
@@ -439,11 +437,11 @@ export default function EquipmentScreen() {
                 <Text style={[styles.compareTableCell, { color: '#3B82F6', fontWeight: '700' }]} numberOfLines={1}>{comparisonData.nameB.substring(0, 10)}</Text>
               </View>
               {[
-                { label: language === 'fr' ? 'Matchs' : 'Matches', va: comparisonData.a.matches, vb: comparisonData.b.matches, suffix: '' },
-                { label: language === 'fr' ? 'Victoires' : 'Wins', va: comparisonData.a.winRate, vb: comparisonData.b.winRate, suffix: '%' },
-                { label: language === 'fr' ? 'Tirs' : 'Shots', va: comparisonData.a.tirRate, vb: comparisonData.b.tirRate, suffix: '%' },
+                { label: t('equipment', 'matchesLabel'), va: comparisonData.a.matches, vb: comparisonData.b.matches, suffix: '' },
+                { label: t('equipment', 'winsLabel'), va: comparisonData.a.winRate, vb: comparisonData.b.winRate, suffix: '%' },
+                { label: t('equipment', 'shotsLabel'), va: comparisonData.a.tirRate, vb: comparisonData.b.tirRate, suffix: '%' },
                 { label: 'Points', va: comparisonData.a.pointRate, vb: comparisonData.b.pointRate, suffix: '%' },
-                { label: language === 'fr' ? 'Carreaux' : 'Carreaux', va: comparisonData.a.carreauRate, vb: comparisonData.b.carreauRate, suffix: '%' },
+                { label: 'Carreaux', va: comparisonData.a.carreauRate, vb: comparisonData.b.carreauRate, suffix: '%' },
               ].map((row, idx) => {
                 const aWins = row.va > row.vb;
                 const bWins = row.vb > row.va;
@@ -465,13 +463,13 @@ export default function EquipmentScreen() {
             <View style={styles.emptyIconBg}>
               <MaterialIcons name="sports-baseball" size={48} color={theme.textMuted} />
             </View>
-            <Text style={styles.emptyTitle}>{language === 'fr' ? 'Aucun set enregistre' : 'No sets registered'}</Text>
+            <Text style={styles.emptyTitle}>{t('equipment', 'noSets')}</Text>
             <Text style={styles.emptyDesc}>
-              {language === 'fr' ? 'Ajoutez vos sets de boules pour suivre vos performances par equipement' : 'Add your boules sets to track performance by equipment'}
+              {t('equipment', 'noSetsDesc')}
             </Text>
             <Pressable style={styles.emptyBtn} onPress={openNewForm}>
               <MaterialIcons name="add" size={20} color="#FFF" />
-              <Text style={styles.emptyBtnText}>{language === 'fr' ? 'Ajouter un set' : 'Add a set'}</Text>
+              <Text style={styles.emptyBtnText}>{t('equipment', 'addBoulesSet')}</Text>
             </Pressable>
           </Animated.View>
         ) : (
@@ -503,7 +501,7 @@ export default function EquipmentScreen() {
                   {set.isPrimary && !compareMode ? (
                     <View style={styles.primaryBadge}>
                       <MaterialIcons name="star" size={12} color="#FFF" />
-                      <Text style={styles.primaryBadgeText}>{language === 'fr' ? 'Principal' : 'Primary'}</Text>
+                      <Text style={styles.primaryBadgeText}>{t('equipment', 'primary')}</Text>
                     </View>
                   ) : null}
 
@@ -562,7 +560,7 @@ export default function EquipmentScreen() {
                       {set.diameter ? (
                         <View style={styles.specBar}>
                           <View style={styles.specHeader}>
-                            <Text style={styles.specLabel}>{language === 'fr' ? 'Diametre' : 'Diameter'}</Text>
+                            <Text style={styles.specLabel}>{t('equipment', 'diameter')}</Text>
                             <Text style={styles.specValue}>{set.diameter} mm</Text>
                           </View>
                           <View style={styles.specTrack}>
@@ -577,7 +575,7 @@ export default function EquipmentScreen() {
                       {set.weight ? (
                         <View style={styles.specBar}>
                           <View style={styles.specHeader}>
-                            <Text style={styles.specLabel}>{language === 'fr' ? 'Poids' : 'Weight'}</Text>
+                            <Text style={styles.specLabel}>{t('equipment', 'weight')}</Text>
                             <Text style={styles.specValue}>{set.weight} g</Text>
                           </View>
                           <View style={styles.specTrack}>
@@ -597,13 +595,13 @@ export default function EquipmentScreen() {
                     <View style={styles.perfSection}>
                       <View style={styles.perfHeader}>
                         <MaterialIcons name="analytics" size={14} color={theme.textSecondary} />
-                        <Text style={styles.perfTitle}>{language === 'fr' ? 'Performances' : 'Performance'}</Text>
-                        <Text style={styles.perfMatchCount}>{stats.matches} {language === 'fr' ? 'matchs' : 'matches'}{stats.challenges > 0 ? ` \u2022 ${stats.challenges} ${language === 'fr' ? 'defis' : 'challenges'}` : ''}</Text>
+                        <Text style={styles.perfTitle}>{t('equipment', 'performance')}</Text>
+                        <Text style={styles.perfMatchCount}>{stats.matches} {t('equipment', 'matchesLabel')}{stats.challenges > 0 ? ` \u2022 ${stats.challenges} ${t('equipment', 'challengesLabel')}` : ''}</Text>
                       </View>
                       <View style={styles.perfBars}>
                         {[
-                          { icon: 'emoji-events', label: language === 'fr' ? 'Victoires' : 'Wins', rate: stats.winRate, color: theme.success },
-                          stats.totalTirs > 0 ? { icon: 'gps-fixed', label: language === 'fr' ? 'Tirs' : 'Shots', rate: stats.tirRate, color: theme.accent } : null,
+                          { icon: 'emoji-events', label: t('equipment', 'winsLabel'), rate: stats.winRate, color: theme.success },
+                          stats.totalTirs > 0 ? { icon: 'gps-fixed', label: t('equipment', 'shotsLabel'), rate: stats.tirRate, color: theme.accent } : null,
                           stats.totalPoints > 0 ? { icon: 'adjust', label: 'Points', rate: stats.pointRate, color: theme.primary } : null,
                           stats.tirsSuccess > 0 ? { icon: 'stars', label: 'Carreaux', rate: stats.carreauRate, color: theme.carreauColor } : null,
                         ].filter(Boolean).map((bar: any, i) => (
@@ -619,7 +617,7 @@ export default function EquipmentScreen() {
                       </View>
                       {stats.evolution.length >= 2 ? (
                         <View style={styles.perfChartSection}>
-                          <Text style={styles.perfChartTitle}>{language === 'fr' ? 'Evolution du taux de victoire' : 'Win rate evolution'}</Text>
+                          <Text style={styles.perfChartTitle}>{t('equipment', 'winRateEvolution')}</Text>
                           <View style={styles.perfChartContainer}>
                             <View style={{ flex: 1 }}>
                               <MiniWinChart data={stats.evolution} chartWidth={chartWidth} />
@@ -635,12 +633,12 @@ export default function EquipmentScreen() {
                       <View style={styles.perfCounters}>
                         <View style={styles.perfCounter}>
                           <Text style={styles.perfCounterValue}>{stats.wins}/{stats.matches}</Text>
-                          <Text style={styles.perfCounterLabel}>{language === 'fr' ? 'V/M' : 'W/M'}</Text>
+                          <Text style={styles.perfCounterLabel}>{t('equipment', 'winsOverMatches')}</Text>
                         </View>
                         {stats.totalTirs > 0 ? (
                           <View style={styles.perfCounter}>
                             <Text style={styles.perfCounterValue}>{stats.tirsSuccess}/{stats.totalTirs}</Text>
-                            <Text style={styles.perfCounterLabel}>{language === 'fr' ? 'Tirs' : 'Shots'}</Text>
+                            <Text style={styles.perfCounterLabel}>{t('equipment', 'shotsLabel')}</Text>
                           </View>
                         ) : null}
                         {stats.totalPoints > 0 ? (
@@ -662,7 +660,7 @@ export default function EquipmentScreen() {
                       <View style={styles.statItem}>
                         <MaterialIcons name="flag" size={14} color={theme.accent} />
                         <Text style={styles.statValue}>{stats.challenges}</Text>
-                        <Text style={styles.statLabel}>{language === 'fr' ? 'defis' : 'challenges'}</Text>
+                        <Text style={styles.statLabel}>{t('equipment', 'challengesLabel')}</Text>
                       </View>
                     </View>
                   ) : null}
@@ -684,7 +682,7 @@ export default function EquipmentScreen() {
         {boulesSets.length > 0 && !compareMode ? (
           <Pressable style={styles.addSetBtn} onPress={openNewForm}>
             <MaterialIcons name="add-circle-outline" size={22} color={theme.primary} />
-            <Text style={styles.addSetBtnText}>{language === 'fr' ? 'Ajouter un set de boules' : 'Add a boules set'}</Text>
+            <Text style={styles.addSetBtnText}>{t('equipment', 'addBoulesSetFull')}</Text>
           </Pressable>
         ) : null}
       </ScrollView>
@@ -697,7 +695,7 @@ export default function EquipmentScreen() {
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>
             <Text style={styles.modalTitle}>
-              {editingSet ? (language === 'fr' ? 'Modifier le set' : 'Edit set') : (language === 'fr' ? 'Nouveau set' : 'New set')}
+              {editingSet ? t('equipment', 'editBoulesSet') : t('equipment', 'newSet')}
             </Text>
             <Pressable style={styles.modalSaveBtn} onPress={handleSave}>
               <Text style={styles.modalSaveBtnText}>{t('common', 'save')}</Text>
@@ -711,7 +709,7 @@ export default function EquipmentScreen() {
                 {uploadingPhoto ? (
                   <View style={styles.photoPickerLoading}>
                     <ActivityIndicator size="large" color={theme.primary} />
-                    <Text style={styles.photoPickerLoadingText}>{language === 'fr' ? 'Envoi...' : 'Uploading...'}</Text>
+                    <Text style={styles.photoPickerLoadingText}>{t('equipment', 'uploading')}</Text>
                   </View>
                 ) : formPhoto ? (
                   <View style={styles.photoPickerFilled}>
@@ -719,7 +717,7 @@ export default function EquipmentScreen() {
                     <View style={styles.photoPickerOverlay}>
                       <View style={styles.photoPickerOverlayBadge}>
                         <MaterialIcons name="camera-alt" size={16} color="#FFF" />
-                        <Text style={styles.photoPickerOverlayText}>{language === 'fr' ? 'Modifier' : 'Change'}</Text>
+                        <Text style={styles.photoPickerOverlayText}>{t('equipment', 'change')}</Text>
                       </View>
                     </View>
                   </View>
@@ -728,51 +726,51 @@ export default function EquipmentScreen() {
                     <View style={styles.photoPickerEmptyIcon}>
                       <MaterialIcons name="add-a-photo" size={28} color={theme.primary} />
                     </View>
-                    <Text style={styles.photoPickerEmptyTitle}>{language === 'fr' ? 'Ajouter une photo' : 'Add a photo'}</Text>
-                    <Text style={styles.photoPickerEmptyDesc}>{language === 'fr' ? 'Photo de vos boules' : 'Photo of your boules'}</Text>
+                    <Text style={styles.photoPickerEmptyTitle}>{t('equipment', 'addPhoto')}</Text>
+                    <Text style={styles.photoPickerEmptyDesc}>{t('equipment', 'photoOfBoules')}</Text>
                   </View>
                 )}
               </Pressable>
 
               {/* Name */}
               <View style={styles.formField}>
-                <Text style={styles.formLabel}>{language === 'fr' ? 'NOM DU SET *' : 'SET NAME *'}</Text>
-                <TextInput style={styles.formInput} value={formName} onChangeText={setFormName} placeholder={language === 'fr' ? 'Ex: Obut ATX Competition' : 'Ex: Obut ATX Competition'} placeholderTextColor={theme.textMuted} autoFocus={!editingSet} />
+                <Text style={styles.formLabel}>{t('equipment', 'setNameRequired')}</Text>
+                <TextInput style={styles.formInput} value={formName} onChangeText={setFormName} placeholder={t('equipment', 'setNamePlaceholder')} placeholderTextColor={theme.textMuted} autoFocus={!editingSet} />
               </View>
 
               {/* Brand */}
               <View style={styles.formField}>
-                <Text style={styles.formLabel}>{language === 'fr' ? 'MARQUE' : 'BRAND'}</Text>
-                <TextInput style={styles.formInput} value={formBrand} onChangeText={setFormBrand} placeholder={language === 'fr' ? 'Ex: Obut, MS Petanque...' : 'Ex: Obut, MS Petanque...'} placeholderTextColor={theme.textMuted} />
+                <Text style={styles.formLabel}>{t('equipment', 'brandLabel')}</Text>
+                <TextInput style={styles.formInput} value={formBrand} onChangeText={setFormBrand} placeholder={t('equipment', 'brandPlaceholder')} placeholderTextColor={theme.textMuted} />
               </View>
 
               {/* Diameter & Weight */}
               <View style={styles.formRow}>
                 <View style={styles.formRowField}>
-                  <Text style={styles.formLabel}>{language === 'fr' ? 'DIAMETRE (mm)' : 'DIAMETER (mm)'}</Text>
+                  <Text style={styles.formLabel}>{t('equipment', 'diameterLabel')}</Text>
                   <TextInput style={styles.formInput} value={formDiameter} onChangeText={setFormDiameter} placeholder="70.5 - 80.0" placeholderTextColor={theme.textMuted} keyboardType="decimal-pad" />
                 </View>
                 <View style={styles.formRowField}>
-                  <Text style={styles.formLabel}>{language === 'fr' ? 'POIDS (g)' : 'WEIGHT (g)'}</Text>
+                  <Text style={styles.formLabel}>{t('equipment', 'weightLabel')}</Text>
                   <TextInput style={styles.formInput} value={formWeight} onChangeText={setFormWeight} placeholder="650 - 800" placeholderTextColor={theme.textMuted} keyboardType="number-pad" />
                 </View>
               </View>
 
               {/* Serial Number */}
               <View style={styles.formField}>
-                <Text style={styles.formLabel}>{language === 'fr' ? 'NUMERO DE SERIE' : 'SERIAL NUMBER'}</Text>
-                <TextInput style={styles.formInput} value={formSerialNumber} onChangeText={setFormSerialNumber} placeholder={language === 'fr' ? 'Optionnel' : 'Optional'} placeholderTextColor={theme.textMuted} />
+                <Text style={styles.formLabel}>{t('equipment', 'serialNumberLabel')}</Text>
+                <TextInput style={styles.formInput} value={formSerialNumber} onChangeText={setFormSerialNumber} placeholder={t('equipment', 'optional')} placeholderTextColor={theme.textMuted} />
               </View>
 
               {/* Purchase Price */}
               <View style={styles.formField}>
-                <Text style={styles.formLabel}>{language === 'fr' ? "PRIX D'ACHAT (\u20AC)" : 'PURCHASE PRICE (\u20AC)'}</Text>
-                <TextInput style={styles.formInput} value={formPurchasePrice} onChangeText={setFormPurchasePrice} placeholder={language === 'fr' ? 'Ex: 350' : 'Ex: 350'} placeholderTextColor={theme.textMuted} keyboardType="decimal-pad" />
+                <Text style={styles.formLabel}>{t('equipment', 'purchasePriceLabel')}</Text>
+                <TextInput style={styles.formInput} value={formPurchasePrice} onChangeText={setFormPurchasePrice} placeholder={t('equipment', 'purchasePricePlaceholder')} placeholderTextColor={theme.textMuted} keyboardType="decimal-pad" />
               </View>
 
               {/* Hardness */}
               <View style={styles.formField}>
-                <Text style={styles.formLabel}>{language === 'fr' ? 'DURETE' : 'HARDNESS'}</Text>
+                <Text style={styles.formLabel}>{t('equipment', 'hardnessLabel')}</Text>
                 <View style={styles.hardnessRow}>
                   {HARDNESS_OPTIONS.map(h => (
                     <Pressable key={h} style={[styles.hardnessChip, formHardness === h && styles.hardnessChipActive]} onPress={() => { Haptics.selectionAsync(); setFormHardness(formHardness === h ? '' : h); }}>
@@ -786,8 +784,8 @@ export default function EquipmentScreen() {
               <Pressable style={[styles.primaryToggle, formIsPrimary && styles.primaryToggleActive]} onPress={() => { Haptics.selectionAsync(); setFormIsPrimary(!formIsPrimary); }}>
                 <MaterialIcons name={formIsPrimary ? 'star' : 'star-outline'} size={22} color={formIsPrimary ? theme.carreauColor : theme.textMuted} />
                 <View style={styles.primaryToggleContent}>
-                  <Text style={[styles.primaryToggleTitle, formIsPrimary && { color: theme.carreauColor }]}>{language === 'fr' ? 'Set principal' : 'Primary set'}</Text>
-                  <Text style={styles.primaryToggleDesc}>{language === 'fr' ? 'Synchronise avec votre profil joueur' : 'Synced with your player profile'}</Text>
+                  <Text style={[styles.primaryToggleTitle, formIsPrimary && { color: theme.carreauColor }]}>{t('equipment', 'primarySet')}</Text>
+                  <Text style={styles.primaryToggleDesc}>{t('equipment', 'primarySyncDesc')}</Text>
                 </View>
                 <View style={[styles.toggleIndicator, formIsPrimary && styles.toggleIndicatorActive]}>
                   <View style={[styles.toggleDot, formIsPrimary && styles.toggleDotActive]} />
@@ -797,7 +795,7 @@ export default function EquipmentScreen() {
               {/* Notes */}
               <View style={styles.formField}>
                 <Text style={styles.formLabel}>NOTES</Text>
-                <TextInput style={[styles.formInput, styles.formTextArea]} value={formNotes} onChangeText={setFormNotes} placeholder={language === 'fr' ? 'Remarques, sensations, preferences...' : 'Remarks, feelings, preferences...'} placeholderTextColor={theme.textMuted} multiline numberOfLines={3} textAlignVertical="top" />
+                <TextInput style={[styles.formInput, styles.formTextArea]} value={formNotes} onChangeText={setFormNotes} placeholder={t('equipment', 'notesPlaceholder')} placeholderTextColor={theme.textMuted} multiline numberOfLines={3} textAlignVertical="top" />
               </View>
             </ScrollView>
           </KeyboardAvoidingView>
