@@ -672,8 +672,8 @@ export default function ClubDetailScreen() {
                 <MaterialIcons name="public" size={22} color={theme.success} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.pvHeaderTitle}>{language === 'fr' ? 'Apercu club public' : 'Public Club Preview'}</Text>
-                <Text style={styles.pvHeaderSub}>{language === 'fr' ? 'Voici comment votre club apparaitra sur la Carte' : 'This is how your club will appear on the Map'}</Text>
+                <Text style={styles.pvHeaderTitle}>{t('preview', 'publicClubTitle')}</Text>
+                <Text style={styles.pvHeaderSub}>{t('preview', 'publicClubDesc')}</Text>
               </View>
               <Pressable style={styles.pvCloseBtn} onPress={() => setShowPublicPreview(false)} hitSlop={8}>
                 <MaterialIcons name="close" size={22} color={theme.textSecondary} />
@@ -688,7 +688,7 @@ export default function ClubDetailScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.pvName}>{club.name}</Text>
-                    {club.foundedYear ? <Text style={styles.pvNickname}>{language === 'fr' ? 'Fonde en' : 'Founded in'} {club.foundedYear}</Text> : null}
+                    {club.foundedYear ? <Text style={styles.pvNickname}>{t('preview', 'foundedIn')} {club.foundedYear}</Text> : null}
                   </View>
                 </View>
 
@@ -751,10 +751,10 @@ export default function ClubDetailScreen() {
                       <MaterialIcons name={previewShowContacts ? 'contact-phone' : 'phone-disabled'} size={18} color={previewShowContacts ? theme.success : theme.textMuted} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.pvToggleTitle}>{language === 'fr' ? 'Afficher les contacts' : 'Show contacts'}</Text>
+                      <Text style={styles.pvToggleTitle}>{t('preview', 'showContacts')}</Text>
                       <Text style={styles.pvToggleDesc}>{previewShowContacts
-                        ? (language === 'fr' ? 'Le telephone et email du club seront visibles' : 'Club phone and email will be visible')
-                        : (language === 'fr' ? 'Les contacts du club resteront masques' : 'Club contacts will remain hidden')
+                        ? t('preview', 'contactsVisibleClub')
+                        : t('preview', 'contactsHiddenClub')
                       }</Text>
                     </View>
                     <Switch
@@ -772,10 +772,7 @@ export default function ClubDetailScreen() {
 
               <View style={styles.pvNote}>
                 <MaterialIcons name="map" size={16} color={theme.primary} />
-                <Text style={styles.pvNoteText}>{language === 'fr'
-                  ? 'Votre club sera geolocalisee et visible sur la Carte pour tous les utilisateurs.'
-                  : 'Your club will be geolocated and visible on the Map to all users.'
-                }</Text>
+                <Text style={styles.pvNoteText}>{t('preview', 'geoNoteClub')}</Text>
               </View>
             </ScrollView>
 
@@ -790,8 +787,8 @@ export default function ClubDetailScreen() {
                   <>
                     <MaterialIcons name={isPublicState ? 'lock' : 'public'} size={18} color="#FFF" />
                     <Text style={styles.pvConfirmText}>{isPublicState
-                      ? (language === 'fr' ? 'Rendre prive' : 'Make Private')
-                      : (language === 'fr' ? 'Rendre public' : 'Make Public')
+                      ? t('preview', 'makePrivate')
+                      : t('preview', 'makePublic')
                     }</Text>
                   </>
                 )}
@@ -810,8 +807,8 @@ export default function ClubDetailScreen() {
                 <MaterialIcons name="share" size={22} color={theme.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.pvHeaderTitle}>{language === 'fr' ? 'Apercu du partage' : 'Share Preview'}</Text>
-                <Text style={styles.pvHeaderSub}>{language === 'fr' ? 'Voici ce que le destinataire verra' : 'This is what the recipient will see'}</Text>
+                <Text style={styles.pvHeaderTitle}>{t('preview', 'shareTitle')}</Text>
+                <Text style={styles.pvHeaderSub}>{t('preview', 'shareDesc')}</Text>
               </View>
               <Pressable style={styles.pvCloseBtn} onPress={() => setShowSharePreview(false)} hitSlop={8}>
                 <MaterialIcons name="close" size={22} color={theme.textSecondary} />
@@ -821,7 +818,7 @@ export default function ClubDetailScreen() {
             <ScrollView style={styles.pvScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
               <View style={styles.pvReadOnlyBadge}>
                 <MaterialIcons name="lock" size={14} color={theme.warning} />
-                <Text style={styles.pvReadOnlyText}>{language === 'fr' ? 'Lecture seule - Le destinataire ne pourra pas modifier votre club' : 'Read-only - The recipient cannot edit your club'}</Text>
+                <Text style={styles.pvReadOnlyText}>{t('preview', 'readOnlyClub')}</Text>
               </View>
 
               <View style={styles.pvCard}>
@@ -831,7 +828,7 @@ export default function ClubDetailScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.pvName}>{club.name}</Text>
-                    {club.foundedYear ? <Text style={styles.pvNickname}>{language === 'fr' ? 'Fonde en' : 'Founded in'} {club.foundedYear}</Text> : null}
+                    {club.foundedYear ? <Text style={styles.pvNickname}>{t('preview', 'foundedIn')} {club.foundedYear}</Text> : null}
                   </View>
                 </View>
 
@@ -894,10 +891,10 @@ export default function ClubDetailScreen() {
                       <MaterialIcons name={previewShowContacts ? 'contact-phone' : 'phone-disabled'} size={18} color={previewShowContacts ? theme.success : theme.textMuted} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.pvToggleTitle}>{language === 'fr' ? 'Afficher les contacts' : 'Show contacts'}</Text>
+                      <Text style={styles.pvToggleTitle}>{t('preview', 'showContacts')}</Text>
                       <Text style={styles.pvToggleDesc}>{previewShowContacts
-                        ? (language === 'fr' ? 'Le telephone et email du club seront visibles' : 'Club phone and email will be visible')
-                        : (language === 'fr' ? 'Les contacts du club resteront masques' : 'Club contacts will remain hidden')
+                        ? t('preview', 'contactsVisibleClub')
+                        : t('preview', 'contactsHiddenClub')
                       }</Text>
                     </View>
                     <Switch
@@ -915,10 +912,7 @@ export default function ClubDetailScreen() {
 
               <View style={styles.pvNote}>
                 <MaterialIcons name="visibility" size={16} color={theme.primary} />
-                <Text style={styles.pvNoteText}>{language === 'fr'
-                  ? 'Le destinataire aura un acces en lecture seule a votre fiche club.'
-                  : 'The recipient will have read-only access to your club card.'
-                }</Text>
+                <Text style={styles.pvNoteText}>{t('preview', 'shareNoteClub')}</Text>
               </View>
             </ScrollView>
 
@@ -928,7 +922,7 @@ export default function ClubDetailScreen() {
               </Pressable>
               <Pressable style={[styles.pvConfirmBtn, { backgroundColor: theme.primary }]} onPress={handleConfirmShare}>
                 <MaterialIcons name="share" size={18} color="#FFF" />
-                <Text style={styles.pvConfirmText}>{language === 'fr' ? 'Partager' : 'Share'}</Text>
+                <Text style={styles.pvConfirmText}>{t('preview', 'shareBtn')}</Text>
               </Pressable>
             </View>
           </View>
