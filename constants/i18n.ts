@@ -38,7 +38,6 @@ export const translations = {
     apply: { fr: 'Appliquer', en: 'Apply' },
     create: { fr: 'Créer', en: 'Create' },
     add: { fr: 'Ajouter', en: 'Add' },
-    today: { fr: "Auj.", en: 'Today' },
     version: { fr: 'Ultimate Petanque v1.0.0', en: 'Ultimate Petanque v1.0.0' },
   },
 
@@ -674,8 +673,6 @@ export const translations = {
     since: { fr: 'Depuis', en: 'Since' },
     terrainCount: { fr: 'terrain', en: 'court' },
     terrainCountPlural: { fr: 'terrains', en: 'courts' },
-    publicBadge: { fr: 'Public', en: 'Public' },
-    privateBadge: { fr: 'Privé', en: 'Private' },
     resultCount: { fr: 'résultat', en: 'result' },
     resultCountPlural: { fr: 'résultats', en: 'results' },
     level: { fr: 'Niveau', en: 'Level' },
@@ -2001,14 +1998,6 @@ export const translations = {
     confirmPassword: { fr: 'Confirmer le mot de passe', en: 'Confirm password' },
     retypePassword: { fr: 'Retapez le mot de passe', en: 'Retype password' },
     changeBtn: { fr: 'Changer le mot de passe', en: 'Change password' },
-  },
-
-  // ============================================
-  // VISIBILITY / MAP
-  // ============================================
-  visibility: {
-    title: { fr: 'Visibilité', en: 'Visibility' },
-    visibilityToggle: { fr: 'Visibilité publique', en: 'Public visibility' },
   },
 
   // ============================================
