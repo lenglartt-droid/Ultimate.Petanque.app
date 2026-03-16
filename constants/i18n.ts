@@ -768,6 +768,7 @@ export const translations = {
     importing: { fr: 'Import en cours...', en: 'Importing...' },
     importSuccess: { fr: 'Fiche importée dans votre annuaire', en: 'Card imported into your directory' },
     visibility: { fr: 'Visibilité', en: 'Visibility' },
+    visibilityToggle: { fr: 'Visibilité publique', en: 'Public visibility' },
     // Duplicate detection keys for creation/edit pages
     checkingDuplicates: { fr: 'Vérification des doublons...', en: 'Checking for duplicates...' },
     nameMatch: { fr: 'Nom similaire', en: 'Similar name' },
@@ -881,6 +882,7 @@ export const translations = {
     fromFiles: { fr: 'Fichiers', en: 'Files' },
     removeFederationCard: { fr: 'Supprimer la carte de fédération ?', en: 'Remove federation card?' },
     federationCardRemoved: { fr: 'Carte de fédération supprimée', en: 'Federation card removed' },
+    addFederationCard: { fr: 'Ajouter la carte de fédération', en: 'Add federation card' },
   },
 
   // ============================================

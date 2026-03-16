@@ -1674,7 +1674,7 @@ export default function ProfileScreen() {
               </View>
               <View style={styles.menuItemContent}>
                 <Text style={styles.menuItemText}>{t('terms', 'title')}</Text>
-                <Text style={styles.menuItemSubtext}>{t('terms', 'termsSubtext')}</Text>
+                <Text style={styles.menuItemSubtext}>{t('profile', 'termsSubtext')}</Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </Pressable>
