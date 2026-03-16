@@ -397,7 +397,7 @@ export default function StatsScreen() {
     }
     if (itemFilterType === 'partner' && selectedPartnerId) {
       const partner = players.find(p => p.id === selectedPartnerId);
-      if (partner) return `${language === 'fr' ? 'avec' : 'with'} ${partner.name}`;
+      if (partner) return `${t('statsExtra', 'withPartner')} ${partner.name}`;
     }
     if (itemFilterType === 'terrain' && selectedTerrainId) {
       const terr = terrains.find(te => te.id === selectedTerrainId);
@@ -1956,7 +1956,7 @@ export default function StatsScreen() {
                       <View style={styles.crossTableHeader}>
                         <View style={styles.crossTableHeaderLabel}><Text style={styles.crossTableHeaderText}>{t('stats', 'boulesSetColumn')}</Text></View>
                         <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: theme.primary }]}>{t('stats', 'winRateColumn')}</Text></View>
-                        <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: theme.tirColor }]}>{language === 'fr' ? 'Tir' : 'Shot'}</Text></View>
+                        <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: theme.tirColor }]}>{t('statsExtra', 'shotLabel')}</Text></View>
                         <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: theme.pointColor }]}>Pt</Text></View>
                         <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: theme.carreauColor }]}>C</Text></View>
                       </View>
@@ -1997,16 +1997,16 @@ export default function StatsScreen() {
                         if (setsWithMatches.length < 2) return null;
                         const setColors = ['#D97706', '#3B82F6', '#10B981', '#8B5CF6', '#EC4899', '#F97316'];
                         const metrics = [
-                          { key: 'win', label: language === 'fr' ? 'Victoires' : 'Wins', color: theme.success, getValue: (d: typeof boulesSetStats.bySet[string]) => d.matches > 0 ? Math.round((d.wins / d.matches) * 100) : 0 },
-                          { key: 'tir', label: language === 'fr' ? 'Tir' : 'Shot', color: theme.tirColor, getValue: (d: typeof boulesSetStats.bySet[string]) => d.tirs > 0 ? Math.round((d.tirsSuccess / d.tirs) * 100) : 0 },
+                          { key: 'win', label: t('statsExtra', 'winsLabel'), color: theme.success, getValue: (d: typeof boulesSetStats.bySet[string]) => d.matches > 0 ? Math.round((d.wins / d.matches) * 100) : 0 },
+                          { key: 'tir', label: t('statsExtra', 'shotLabel'), color: theme.tirColor, getValue: (d: typeof boulesSetStats.bySet[string]) => d.tirs > 0 ? Math.round((d.tirsSuccess / d.tirs) * 100) : 0 },
                           { key: 'pt', label: 'Point', color: theme.pointColor, getValue: (d: typeof boulesSetStats.bySet[string]) => d.points > 0 ? Math.round((d.pointsSuccess / d.points) * 100) : 0 },
-                          { key: 'car', label: language === 'fr' ? 'Carreau' : 'Carreau', color: theme.carreauColor, getValue: (d: typeof boulesSetStats.bySet[string]) => d.tirs > 0 ? Math.round((d.carreaux / d.tirs) * 100) : 0 },
+                          { key: 'car', label: t('statsExtra', 'carreauLabel'), color: theme.carreauColor, getValue: (d: typeof boulesSetStats.bySet[string]) => d.tirs > 0 ? Math.round((d.carreaux / d.tirs) * 100) : 0 },
                         ];
                         return (
                           <View style={styles.boulesCompChart}>
                             <View style={styles.boulesCompChartHeader}>
                               <MaterialIcons name="bar-chart" size={16} color={'#D97706'} />
-                              <Text style={styles.boulesCompChartTitle}>{language === 'fr' ? 'Comparaison des sets' : 'Sets Comparison'}</Text>
+                              <Text style={styles.boulesCompChartTitle}>{t('statsExtra', 'setsComparison')}</Text>
                             </View>
                             {metrics.map(metric => (
                               <View key={metric.key} style={styles.boulesCompMetricRow}>
@@ -2054,10 +2054,10 @@ export default function StatsScreen() {
                           <View style={styles.insightBox}>
                             <MaterialIcons name="lightbulb" size={16} color={'#D97706'} />
                             <Text style={styles.insightText}>
-                              {language === 'fr' ? 'Meilleur taux de victoire avec' : 'Best win rate with'}{' '}
+                              {t('statsExtra', 'bestWinRateWith')}{' '}
                               <Text style={{ fontWeight: '700', color: theme.success }}>{best.name}</Text> ({Math.round(best.rate)}%).{' '}
                               <Text style={{ fontWeight: '700', color: theme.error }}>{worst.name}</Text>{' '}
-                              {language === 'fr' ? 'est moins performant' : 'is less effective'} ({Math.round(worst.rate)}%).
+                              {t('statsExtra', 'lessEffective')} ({Math.round(worst.rate)}%).
                             </Text>
                           </View>
                         );
@@ -3311,7 +3311,7 @@ export default function StatsScreen() {
                   </View>
                   <View style={styles.summaryTable}>
                     <View style={styles.summaryHeader}>
-                      <Text style={[styles.summaryCell, styles.summaryCellHeader, { flex: 1.2 }]}>{progressionData.useMonthly ? (language === 'fr' ? 'Mois' : 'Month') : t('stats', 'weekShort')}</Text>
+                      <Text style={[styles.summaryCell, styles.summaryCellHeader, { flex: 1.2 }]}>{progressionData.useMonthly ? t('statsExtra', 'monthLabel') : t('stats', 'weekShort')}</Text>
                       <Text style={[styles.summaryCell, styles.summaryCellHeader, { flex: 1 }]}>{t('stats', 'gamesShort')}</Text>
                       <Text style={[styles.summaryCell, styles.summaryCellHeader, { flex: 1 }]}>{t('stats', 'winsShort')}</Text>
                       <Text style={[styles.summaryCell, styles.summaryCellHeader, { flex: 1 }]}>{t('stats', 'shotShort')}</Text>
