@@ -1228,8 +1228,8 @@ export default function TournamentDetailScreen() {
                 <MaterialIcons name="public" size={22} color={theme.success} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.pvHeaderTitle}>{language === 'fr' ? 'Apercu tournoi public' : 'Public Tournament Preview'}</Text>
-                <Text style={styles.pvHeaderSub}>{language === 'fr' ? 'Voici comment votre tournoi apparaitra publiquement' : 'This is how your tournament will appear publicly'}</Text>
+                <Text style={styles.pvHeaderTitle}>{t('preview', 'publicTournamentTitle')}</Text>
+                <Text style={styles.pvHeaderSub}>{t('preview', 'publicTournamentDesc')}</Text>
               </View>
               <Pressable style={styles.pvCloseBtn} onPress={() => setShowPublicPreview(false)} hitSlop={8}>
                 <MaterialIcons name="close" size={22} color={theme.textSecondary} />
@@ -1308,17 +1308,14 @@ export default function TournamentDetailScreen() {
                     <Text style={[styles.pvStatValue, { color: tournament.status === 'A venir' ? theme.primary : tournament.status === 'Termine' ? theme.success : theme.warning }]}>
                       {t('tournamentStatus', tournament.status)}
                     </Text>
-                    <Text style={styles.pvStatLabel}>{language === 'fr' ? 'Statut' : 'Status'}</Text>
+                    <Text style={styles.pvStatLabel}>{t('preview', 'statusLabel')}</Text>
                   </View>
                 </View>
               </View>
 
               <View style={styles.pvNote}>
                 <MaterialIcons name="visibility" size={16} color={theme.primary} />
-                <Text style={styles.pvNoteText}>{language === 'fr'
-                  ? 'Votre tournoi sera visible publiquement par tous les utilisateurs.'
-                  : 'Your tournament will be publicly visible to all users.'
-                }</Text>
+                <Text style={styles.pvNoteText}>{t('preview', 'publicNoteTournament')}</Text>
               </View>
             </ScrollView>
 
@@ -1333,8 +1330,8 @@ export default function TournamentDetailScreen() {
                   <>
                     <MaterialIcons name={isPublicState ? 'lock' : 'public'} size={18} color="#FFF" />
                     <Text style={styles.pvConfirmText}>{isPublicState
-                      ? (language === 'fr' ? 'Rendre prive' : 'Make Private')
-                      : (language === 'fr' ? 'Rendre public' : 'Make Public')
+                      ? t('preview', 'makePrivate')
+                      : t('preview', 'makePublic')
                     }</Text>
                   </>
                 )}
@@ -1353,8 +1350,8 @@ export default function TournamentDetailScreen() {
                 <MaterialIcons name="share" size={22} color={theme.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.pvHeaderTitle}>{language === 'fr' ? 'Apercu du partage' : 'Share Preview'}</Text>
-                <Text style={styles.pvHeaderSub}>{language === 'fr' ? 'Voici ce que le destinataire verra' : 'This is what the recipient will see'}</Text>
+                <Text style={styles.pvHeaderTitle}>{t('preview', 'shareTitle')}</Text>
+                <Text style={styles.pvHeaderSub}>{t('preview', 'shareDesc')}</Text>
               </View>
               <Pressable style={styles.pvCloseBtn} onPress={() => setShowSharePreview(false)} hitSlop={8}>
                 <MaterialIcons name="close" size={22} color={theme.textSecondary} />
@@ -1364,7 +1361,7 @@ export default function TournamentDetailScreen() {
             <ScrollView style={styles.pvScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
               <View style={styles.pvReadOnlyBadge}>
                 <MaterialIcons name="lock" size={14} color={theme.warning} />
-                <Text style={styles.pvReadOnlyText}>{language === 'fr' ? 'Lecture seule - Le destinataire ne pourra pas modifier votre tournoi' : 'Read-only - The recipient cannot edit your tournament'}</Text>
+                <Text style={styles.pvReadOnlyText}>{t('preview', 'readOnlyTournament')}</Text>
               </View>
 
               <View style={styles.pvCard}>
@@ -1438,17 +1435,14 @@ export default function TournamentDetailScreen() {
                     <Text style={[styles.pvStatValue, { color: tournament.status === 'A venir' ? theme.primary : tournament.status === 'Termine' ? theme.success : theme.warning }]}>
                       {t('tournamentStatus', tournament.status)}
                     </Text>
-                    <Text style={styles.pvStatLabel}>{language === 'fr' ? 'Statut' : 'Status'}</Text>
+                    <Text style={styles.pvStatLabel}>{t('preview', 'statusLabel')}</Text>
                   </View>
                 </View>
               </View>
 
               <View style={styles.pvNote}>
                 <MaterialIcons name="visibility" size={16} color={theme.primary} />
-                <Text style={styles.pvNoteText}>{language === 'fr'
-                  ? 'Le destinataire aura un acces en lecture seule a votre fiche tournoi.'
-                  : 'The recipient will have read-only access to your tournament card.'
-                }</Text>
+                <Text style={styles.pvNoteText}>{t('preview', 'shareNoteTournament')}</Text>
               </View>
             </ScrollView>
 
@@ -1458,7 +1452,7 @@ export default function TournamentDetailScreen() {
               </Pressable>
               <Pressable style={[styles.pvConfirmBtn, { backgroundColor: theme.primary }]} onPress={handleConfirmShare}>
                 <MaterialIcons name="share" size={18} color="#FFF" />
-                <Text style={styles.pvConfirmText}>{language === 'fr' ? 'Partager' : 'Share'}</Text>
+                <Text style={styles.pvConfirmText}>{t('preview', 'shareBtn')}</Text>
               </Pressable>
             </View>
           </View>
