@@ -1337,7 +1337,7 @@ export default function NewChallengeScreen() {
           </View>
         )}
 
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.gameContent} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={[styles.gameContent, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
           <View style={styles.atelierInfoCard}>
             <View style={[styles.atelierInfoIcon, { backgroundColor: theme.primary + '15' }]}>
               <MaterialIcons name={displayAtelier.icon as any} size={24} color={theme.primary} />
@@ -1404,33 +1404,38 @@ export default function NewChallengeScreen() {
               </View>
             </View>
           )}
-        </ScrollView>
 
-        <View style={[styles.scoringButtons, { paddingBottom: insets.bottom + 16 }]}>
-          <Text style={styles.scoringButtonsTitle}>{t('challenge', 'shotResult')}</Text>
-          <View style={styles.scoringButtonsGrid}>
+          {/* Scoring Options */}
+          <View style={styles.scoringSection}>
+            <Text style={styles.scoringSectionTitle}>{t('challenge', 'shotResult')}</Text>
             {displayAtelier.scoringOptions.map((option, index) => {
               const colors: Record<number, string> = { 0: theme.error, 1: theme.warning, 3: theme.success, 5: theme.carreauColor };
               const icons: Record<number, string> = { 0: 'close', 1: 'radio-button-checked', 3: 'check-circle', 5: 'stars' };
-              const isOddCount = displayAtelier.scoringOptions.length % 2 !== 0;
-              const isLastItem = index === displayAtelier.scoringOptions.length - 1;
-              const isFullWidth = isOddCount && isLastItem;
               return (
                 <Pressable 
                   key={index}
-                  style={[styles.scoringBtn, { backgroundColor: colors[option.points] }, isFullWidth && styles.scoringBtnFullWidth]}
+                  style={({ pressed }) => [styles.scoringOptionCard, { borderLeftColor: colors[option.points] }, pressed && styles.scoringOptionCardPressed]}
                   onPress={() => recordPrecisionShot(option.points, isOpponentTurn)}
                 >
-                  <View style={styles.scoringBtnIconRow}>
-                    <MaterialIcons name={icons[option.points] as any} size={22} color="rgba(255,255,255,0.9)" />
-                    <Text style={styles.scoringBtnPoints}>{option.points} pts</Text>
+                  <View style={[styles.scoringOptionBadge, { backgroundColor: colors[option.points] }]}>
+                    <Text style={styles.scoringOptionPts}>{option.points}</Text>
+                    <Text style={styles.scoringOptionPtsUnit}>pts</Text>
                   </View>
-                  <Text style={styles.scoringBtnLabel}>{option.label}</Text>
+                  <View style={styles.scoringOptionContent}>
+                    <View style={styles.scoringOptionHeader}>
+                      <MaterialIcons name={icons[option.points] as any} size={16} color={colors[option.points]} />
+                      <Text style={[styles.scoringOptionLabel, { color: colors[option.points] }]}>{option.label}</Text>
+                    </View>
+                    <Text style={styles.scoringOptionDesc}>{option.description}</Text>
+                  </View>
+                  <View style={[styles.scoringOptionTap, { backgroundColor: colors[option.points] + '12' }]}>
+                    <MaterialIcons name="touch-app" size={20} color={colors[option.points]} />
+                  </View>
                 </Pressable>
               );
             })}
           </View>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -1765,14 +1770,19 @@ const styles = StyleSheet.create({
   scoreCardRing: { width: 100, height: 100, borderRadius: 50, borderWidth: 4, borderColor: theme.primary + '30', alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
   scoreCardValue: { fontSize: 42, fontWeight: '900', color: theme.primary, letterSpacing: -1 },
   scoreCardMax: { fontSize: 13, color: theme.textMuted, marginTop: 4, fontWeight: '600' },
-  scoringButtons: { paddingHorizontal: 16, paddingTop: 14, backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border, maxWidth: 600, alignSelf: 'center' as const, width: '100%' },
-  scoringButtonsTitle: { fontSize: 12, fontWeight: '700', color: theme.textSecondary, textAlign: 'center', marginBottom: 12, letterSpacing: 0.5 },
-  scoringButtonsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  scoringBtn: { flex: 1, minWidth: '45%', alignItems: 'center', justifyContent: 'center', paddingVertical: 18, paddingHorizontal: 10, borderRadius: 20, minHeight: 90, ...theme.shadows.cardElevated },
-  scoringBtnIconRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  scoringBtnPoints: { fontSize: 22, fontWeight: '900', color: '#FFF' },
-  scoringBtnLabel: { fontSize: 15, fontWeight: '700', color: '#FFF', marginTop: 2 },
-  scoringBtnFullWidth: { flex: 0, width: '100%' },
+  // Precision scoring - vertical cards
+  scoringSection: { marginTop: 24, marginBottom: 8 },
+  scoringSectionTitle: { fontSize: 13, fontWeight: '700', color: theme.textSecondary, textAlign: 'center', marginBottom: 14, letterSpacing: 0.5, textTransform: 'uppercase' as const },
+  scoringOptionCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: 18, padding: 14, marginBottom: 10, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border, borderLeftWidth: 5, gap: 12 },
+  scoringOptionCardPressed: { opacity: 0.8, transform: [{ scale: 0.98 }] },
+  scoringOptionBadge: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  scoringOptionPts: { fontSize: 22, fontWeight: '900', color: '#FFF', lineHeight: 24 },
+  scoringOptionPtsUnit: { fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.8)', letterSpacing: 0.5, marginTop: -2 },
+  scoringOptionContent: { flex: 1 },
+  scoringOptionHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  scoringOptionLabel: { fontSize: 15, fontWeight: '700' },
+  scoringOptionDesc: { fontSize: 12, color: theme.textSecondary, lineHeight: 17 },
+  scoringOptionTap: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   // Atelier step indicators
   atelierStepsRow: { flexDirection: 'row', justifyContent: 'center', gap: 10, paddingHorizontal: 16, marginBottom: 14 },
   atelierStep: { width: 32, height: 32, borderRadius: 16, backgroundColor: theme.border + '80', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'transparent' },
