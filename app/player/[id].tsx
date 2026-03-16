@@ -171,7 +171,9 @@ export default function PlayerDetailScreen() {
     } else {
       setIsPublicState(newVal);
       setItemPublic('players', player.id, newVal);
-      await updatePlayerFn(player.id, { showContactPublic: previewShowContacts });
+      if (isSelf) {
+        await updatePlayerFn(player.id, { showContactPublic: previewShowContacts });
+      }
     }
     setTogglingPublic(false);
     setShowPublicPreview(false);
@@ -186,10 +188,12 @@ export default function PlayerDetailScreen() {
 
   const handleConfirmShare = React.useCallback(async () => {
     if (!player) return;
-    await updatePlayerFn(player.id, { showContactPublic: previewShowContacts });
+    if (isSelf) {
+      await updatePlayerFn(player.id, { showContactPublic: previewShowContacts });
+    }
     setShowSharePreview(false);
     setShowShareModal(true);
-  }, [player, previewShowContacts, updatePlayerFn]);
+  }, [player, previewShowContacts, updatePlayerFn, isSelf]);
 
   // Role analysis
   const roleAnalysis = React.useMemo(() => {
@@ -870,7 +874,7 @@ export default function PlayerDetailScreen() {
                     <Text style={s.pvLocationText}>{[player.location?.city, player.country].filter(Boolean).join(', ')}</Text>
                   </View>
                 ) : null}
-                {previewShowContacts && (player.phone || player.email) ? (
+                {isSelf && previewShowContacts && (player.phone || player.email) ? (
                   <View style={s.pvContactRow}>
                     {player.phone ? (
                       <View style={s.pvContactPill}>
@@ -903,7 +907,7 @@ export default function PlayerDetailScreen() {
                   </View>
                 </View>
               </View>
-              {(player.phone || player.email) ? (
+              {isSelf && (player.phone || player.email) ? (
                 <View style={s.pvToggleCard}>
                   <View style={s.pvToggleRow}>
                     <View style={[s.pvToggleIcon, { backgroundColor: (previewShowContacts ? theme.success : theme.textMuted) + '15' }]}>
@@ -918,6 +922,12 @@ export default function PlayerDetailScreen() {
                     </View>
                     <Switch value={previewShowContacts} onValueChange={setPreviewShowContacts} trackColor={{ false: theme.border, true: theme.success + '60' }} thumbColor={previewShowContacts ? theme.success : theme.textMuted} />
                   </View>
+                </View>
+              ) : null}
+              {!isSelf && (player.phone || player.email) ? (
+                <View style={s.pvNote}>
+                  <MaterialIcons name="phone-disabled" size={16} color={theme.warning} />
+                  <Text style={s.pvNoteText}>{language === 'fr' ? 'Les informations de contact de ce joueur ne seront pas incluses dans le partage.' : 'This player\'s contact information will not be included in the share.'}</Text>
                 </View>
               ) : null}
               <View style={s.pvNote}>
@@ -1002,7 +1012,7 @@ export default function PlayerDetailScreen() {
                     <Text style={s.pvLocationText}>{[player.location?.city, player.country].filter(Boolean).join(', ')}</Text>
                   </View>
                 ) : null}
-                {previewShowContacts && (player.phone || player.email) ? (
+                {isSelf && previewShowContacts && (player.phone || player.email) ? (
                   <View style={s.pvContactRow}>
                     {player.phone ? (
                       <View style={s.pvContactPill}>
@@ -1035,7 +1045,7 @@ export default function PlayerDetailScreen() {
                   </View>
                 </View>
               </View>
-              {(player.phone || player.email) ? (
+              {isSelf && (player.phone || player.email) ? (
                 <View style={s.pvToggleCard}>
                   <View style={s.pvToggleRow}>
                     <View style={[s.pvToggleIcon, { backgroundColor: (previewShowContacts ? theme.success : theme.textMuted) + '15' }]}>
@@ -1050,6 +1060,12 @@ export default function PlayerDetailScreen() {
                     </View>
                     <Switch value={previewShowContacts} onValueChange={setPreviewShowContacts} trackColor={{ false: theme.border, true: theme.success + '60' }} thumbColor={previewShowContacts ? theme.success : theme.textMuted} />
                   </View>
+                </View>
+              ) : null}
+              {!isSelf && (player.phone || player.email) ? (
+                <View style={s.pvNote}>
+                  <MaterialIcons name="phone-disabled" size={16} color={theme.warning} />
+                  <Text style={s.pvNoteText}>{language === 'fr' ? 'Les informations de contact de ce joueur ne seront pas visibles publiquement.' : 'This player\'s contact information will not be publicly visible.'}</Text>
                 </View>
               ) : null}
               <View style={s.pvNote}>
