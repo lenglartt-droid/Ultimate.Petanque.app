@@ -298,7 +298,7 @@ export default function DirectoryScreen() {
       const matchesCountry = filters.playerCountry === 'all' || (p.country || 'France') === filters.playerCountry;
       const matchesLevel = filters.playerLevel === 'all' || p.level === filters.playerLevel;
       const matchesRole = filters.playerRole === 'all' || p.role === filters.playerRole;
-      const matchesRealUser = !showRealUsersOnly || ((p as any).isPublic === true && (p as any).userId && (p as any).userId !== user?.id);
+      const matchesRealUser = !showRealUsersOnly || (selfPlayer && p.id === selfPlayer.id) || ((p as any).isPublic === true && (p as any).userId && (p as any).userId !== user?.id);
       return matchesSearch && matchesClub && matchesCity && matchesCountry && matchesLevel && matchesRole && matchesRealUser;
     });
     
