@@ -10,6 +10,8 @@ import {
   Dimensions,
   RefreshControl,
   Platform,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -18,11 +20,11 @@ import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
-import { useAuth } from '@/template';
+import { useAuth, useAlert } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import AdBanner from '@/components/ui/AdBanner';
 import { preloadInterstitial } from '@/services/adService';
-import { getMyMeetups, getInvitedMeetups, getMeetupResponses, getPendingInvitationsCount, Meetup, MeetupResponse } from '@/services/meetupService';
+import { getMyMeetups, getInvitedMeetups, getMeetupResponses, getPendingInvitationsCount, findMeetupByCode, Meetup, MeetupResponse } from '@/services/meetupService';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -37,6 +39,10 @@ export default function HomeScreen() {
   const [meetups, setMeetups] = useState<(Meetup & { _source: 'created' | 'invited'; _acceptedCount?: number; _maxParticipants?: number })[]>([]);
   const [meetupsLoading, setMeetupsLoading] = useState(true);
   const [pendingInviteCount, setPendingInviteCount] = useState(0);
+  const [showJoinMeetupModal, setShowJoinMeetupModal] = useState(false);
+  const [joinCode, setJoinCode] = useState('');
+  const [joinLoading, setJoinLoading] = useState(false);
+  const { showAlert } = useAlert();
 
   // Responsive dimensions for tablet
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
@@ -299,20 +305,57 @@ export default function HomeScreen() {
           </Animated.View>
         )}
 
-        {/* Upcoming Meetups */}
-        {meetups.length > 0 ? (
-          <Animated.View entering={FadeInDown.duration(400).delay(220)} style={[styles.meetupSection, isTablet && styles.meetupSectionTablet]}>
-            <View style={styles.meetupSectionHeader}>
-              <View style={styles.meetupSectionTitleRow}>
-                <MaterialIcons name="event" size={18} color={theme.primary} />
-                <Text style={styles.meetupSectionTitle}>{t('meetup', 'upcomingMeetups')}</Text>
-              </View>
-              <Pressable style={styles.meetupNewBtn} onPress={() => router.push('/meetup/new' as any)}>
-                <MaterialIcons name="add" size={16} color={theme.primary} />
-                <Text style={styles.meetupNewBtnText}>{t('common', 'create')}</Text>
-              </Pressable>
+        {/* Meetups Section - Always visible */}
+        <Animated.View entering={FadeInDown.duration(400).delay(220)} style={[styles.meetupSection, isTablet && styles.meetupSectionTablet]}>
+          <View style={styles.meetupSectionHeader}>
+            <View style={styles.meetupSectionTitleRow}>
+              <MaterialIcons name="event" size={18} color={theme.primary} />
+              <Text style={styles.meetupSectionTitle}>{t('meetup', 'upcomingMeetups')}</Text>
             </View>
-            {meetups.map((m) => {
+            <Pressable style={styles.meetupNewBtn} onPress={() => router.push('/meetup/new' as any)}>
+              <MaterialIcons name="add" size={16} color={theme.primary} />
+              <Text style={styles.meetupNewBtnText}>{t('common', 'create')}</Text>
+            </Pressable>
+          </View>
+
+          {/* Quick Actions Row */}
+          <View style={styles.meetupQuickActions}>
+            <Pressable
+              style={({ pressed }) => [styles.meetupQuickBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
+              onPress={() => router.push('/meetup/new' as any)}
+            >
+              <View style={[styles.meetupQuickIcon, { backgroundColor: theme.primary + '15' }]}>
+                <MaterialIcons name="add-circle" size={22} color={theme.primary} />
+              </View>
+              <Text style={styles.meetupQuickText}>{t('meetup', 'createMeetupShort')}</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.meetupQuickBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
+              onPress={() => setShowJoinMeetupModal(true)}
+            >
+              <View style={[styles.meetupQuickIcon, { backgroundColor: theme.accent + '15' }]}>
+                <MaterialIcons name="qr-code" size={22} color={theme.accent} />
+              </View>
+              <Text style={styles.meetupQuickText}>{t('meetup', 'joinMeetup')}</Text>
+            </Pressable>
+            {pendingInviteCount > 0 ? (
+              <Pressable
+                style={({ pressed }) => [styles.meetupQuickBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
+                onPress={() => router.push('/meetup/invitations' as any)}
+              >
+                <View style={[styles.meetupQuickIcon, { backgroundColor: theme.error + '15' }]}>
+                  <MaterialIcons name="mail" size={22} color={theme.error} />
+                  <View style={styles.meetupQuickBadge}>
+                    <Text style={styles.meetupQuickBadgeText}>{pendingInviteCount > 9 ? '9+' : pendingInviteCount}</Text>
+                  </View>
+                </View>
+                <Text style={styles.meetupQuickText}>{t('meetup', 'pendingInvitations')}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          {meetups.length > 0 ? (
+            meetups.map((m) => {
               const mDate = new Date(m.date);
               const isCreator = m._source === 'created';
               const daysUntil = Math.max(0, Math.ceil((mDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
@@ -360,9 +403,14 @@ export default function HomeScreen() {
                   <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
                 </Pressable>
               );
-            })}
-          </Animated.View>
-        ) : !meetupsLoading ? null : null}
+            })
+          ) : !meetupsLoading ? (
+            <View style={styles.meetupEmptyState}>
+              <MaterialIcons name="event-available" size={36} color={theme.textMuted} />
+              <Text style={styles.meetupEmptyText}>{t('meetup', 'noMeetups')}</Text>
+            </View>
+          ) : null}
+        </Animated.View>
 
         {/* Ad Banner */}
         <AdBanner position="inline" />
@@ -379,6 +427,60 @@ export default function HomeScreen() {
           </Pressable>
         </Animated.View>
       </ScrollView>
+
+      {/* Join Meetup Modal */}
+      <Modal
+        visible={showJoinMeetupModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowJoinMeetupModal(false)}
+      >
+        <View style={styles.joinModalOverlay}>
+          <View style={styles.joinModalContent}>
+            <View style={styles.joinModalHeader}>
+              <Text style={styles.joinModalTitle}>{t('meetup', 'joinMeetup')}</Text>
+              <Pressable style={styles.joinModalClose} onPress={() => setShowJoinMeetupModal(false)}>
+                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+            <Text style={styles.joinModalDesc}>{t('meetup', 'enterMeetupCode')}</Text>
+            <TextInput
+              style={styles.joinModalInput}
+              value={joinCode}
+              onChangeText={setJoinCode}
+              placeholder={t('meetup', 'enterCodePlaceholder')}
+              placeholderTextColor={theme.textMuted}
+              autoCapitalize="characters"
+              autoFocus
+            />
+            <Pressable
+              style={[styles.joinModalBtn, (!joinCode.trim() || joinLoading) && { opacity: 0.5 }]}
+              disabled={!joinCode.trim() || joinLoading}
+              onPress={async () => {
+                setJoinLoading(true);
+                const { meetup: found } = await findMeetupByCode(joinCode.trim());
+                setJoinLoading(false);
+                if (found) {
+                  setShowJoinMeetupModal(false);
+                  setJoinCode('');
+                  router.push(`/meetup/${found.id}` as any);
+                } else {
+                  showAlert(t('common', 'error'), t('meetup', 'invalidCode'));
+                }
+              }}
+            >
+              {joinLoading ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <>
+                  <MaterialIcons name="search" size={20} color="#FFF" />
+                  <Text style={styles.joinModalBtnText}>{t('meetup', 'joinMeetup')}</Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       {/* Tournament Picker Modal */}
       <Modal
@@ -1263,5 +1365,128 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700' as const,
     color: theme.accent,
+  },
+  // Meetup quick actions
+  meetupQuickActions: {
+    flexDirection: 'row' as const,
+    gap: 10,
+    marginBottom: 14,
+  },
+  meetupQuickBtn: {
+    flex: 1,
+    alignItems: 'center' as const,
+    backgroundColor: theme.surface,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  meetupQuickIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    marginBottom: 8,
+    position: 'relative' as const,
+  },
+  meetupQuickText: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+    color: theme.textPrimary,
+    textAlign: 'center' as const,
+  },
+  meetupQuickBadge: {
+    position: 'absolute' as const,
+    top: -4,
+    right: -4,
+    backgroundColor: theme.error,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    paddingHorizontal: 4,
+  },
+  meetupQuickBadgeText: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: '#FFF',
+  },
+  meetupEmptyState: {
+    alignItems: 'center' as const,
+    paddingVertical: 24,
+    gap: 8,
+  },
+  meetupEmptyText: {
+    fontSize: 13,
+    color: theme.textMuted,
+    fontWeight: '500' as const,
+  },
+  // Join meetup modal
+  joinModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center' as const,
+    paddingHorizontal: 24,
+  },
+  joinModalContent: {
+    backgroundColor: theme.surface,
+    borderRadius: 24,
+    padding: 24,
+  },
+  joinModalHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    marginBottom: 12,
+  },
+  joinModalTitle: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: theme.textPrimary,
+  },
+  joinModalClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  joinModalDesc: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  joinModalInput: {
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: theme.textPrimary,
+    textAlign: 'center' as const,
+    letterSpacing: 2,
+    borderWidth: 1,
+    borderColor: theme.border,
+    marginBottom: 16,
+  },
+  joinModalBtn: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 10,
+    backgroundColor: theme.primary,
+    paddingVertical: 16,
+    borderRadius: 16,
+  },
+  joinModalBtnText: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: '#FFF',
   },
 });
