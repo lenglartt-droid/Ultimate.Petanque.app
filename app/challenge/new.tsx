@@ -133,16 +133,18 @@ function CountdownTimer({ seconds, isRunning, onStart, onTimeUp, startLabel }: C
 
   return (
     <View style={styles.countdownContainer}>
-      <Animated.View style={[styles.countdownCircle, animatedStyle, { borderColor: color }]}>
-        <Text style={[styles.countdownText, { color }]}>{timeLeft}</Text>
-        <Text style={styles.countdownLabel}>sec</Text>
-      </Animated.View>
+      <View style={[styles.countdownOuter, { borderColor: color + '20' }]}>
+        <Animated.View style={[styles.countdownCircle, animatedStyle, { borderColor: color }]}>
+          <Text style={[styles.countdownText, { color }]}>{timeLeft}</Text>
+          <Text style={styles.countdownLabel}>sec</Text>
+        </Animated.View>
+      </View>
       <View style={styles.countdownBar}>
         <Animated.View style={[styles.countdownBarFill, progressStyle, { backgroundColor: color }]} />
       </View>
       {!isRunning && (
         <Pressable style={styles.startTimerButton} onPress={onStart}>
-          <MaterialIcons name="play-arrow" size={24} color="#FFF" />
+          <MaterialIcons name="play-arrow" size={28} color="#FFF" />
           <Text style={styles.startTimerButtonText}>{startLabel}</Text>
         </Pressable>
       )}
@@ -1266,6 +1268,23 @@ export default function NewChallengeScreen() {
             </View>
           </View>
 
+          {/* Atelier Step Indicators */}
+          <View style={styles.atelierStepsRow}>
+            {TRANSLATED_ATELIERS.map((at, idx) => {
+              const isCurrent = isOpponentTurn ? idx === opponentAtelierIndex : idx === currentAtelierIndex;
+              const isDone = isOpponentTurn ? idx < opponentAtelierIndex : idx < currentAtelierIndex;
+              return (
+                <View key={at.id} style={[styles.atelierStep, isCurrent && styles.atelierStepCurrent, isDone && styles.atelierStepDone]}>
+                  {isDone ? (
+                    <MaterialIcons name="check" size={14} color="#FFF" />
+                  ) : (
+                    <Text style={[styles.atelierStepText, isCurrent && styles.atelierStepTextCurrent, isDone && styles.atelierStepTextDone]}>{idx + 1}</Text>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+
           <View style={styles.progressInfo}>
             <Text style={styles.progressInfoText}>{t('challenge', 'shots').charAt(0).toUpperCase() + t('challenge', 'shots').slice(1)} {displayShotNumber} / 20</Text>
             <View style={styles.progressBar}>
@@ -1279,7 +1298,9 @@ export default function NewChallengeScreen() {
             <Text style={styles.scoreCardLabel}>
               {challengeMode === '1v1' ? (isOpponentTurn ? `${t('challenge', 'scoreOf')} ${selectedOpponent?.name}` : t('challenge', 'yourScore')) : t('match', 'score')}
             </Text>
-            <Text style={styles.scoreCardValue}>{displayTotalPoints}</Text>
+            <View style={styles.scoreCardRing}>
+              <Text style={styles.scoreCardValue}>{displayTotalPoints}</Text>
+            </View>
             <Text style={styles.scoreCardMax}>/ 100 pts</Text>
           </View>
 
@@ -1307,6 +1328,7 @@ export default function NewChallengeScreen() {
           <View style={styles.scoringButtonsGrid}>
             {displayAtelier.scoringOptions.map((option, index) => {
               const colors: Record<number, string> = { 0: theme.error, 1: theme.warning, 3: theme.success, 5: theme.carreauColor };
+              const icons: Record<number, string> = { 0: 'close', 1: 'radio-button-checked', 3: 'check-circle', 5: 'stars' };
               const isOddCount = displayAtelier.scoringOptions.length % 2 !== 0;
               const isLastItem = index === displayAtelier.scoringOptions.length - 1;
               const isFullWidth = isOddCount && isLastItem;
@@ -1316,9 +1338,11 @@ export default function NewChallengeScreen() {
                   style={[styles.scoringBtn, { backgroundColor: colors[option.points] }, isFullWidth && styles.scoringBtnFullWidth]}
                   onPress={() => recordPrecisionShot(option.points, isOpponentTurn)}
                 >
-                  <Text style={styles.scoringBtnPoints}>{option.points}</Text>
+                  <View style={styles.scoringBtnIconRow}>
+                    <MaterialIcons name={icons[option.points] as any} size={22} color="rgba(255,255,255,0.9)" />
+                    <Text style={styles.scoringBtnPoints}>{option.points} pts</Text>
+                  </View>
                   <Text style={styles.scoringBtnLabel}>{option.label}</Text>
-                  <Text style={styles.scoringBtnDesc} numberOfLines={2}>{option.description}</Text>
                 </Pressable>
               );
             })}
@@ -1369,17 +1393,18 @@ export default function NewChallengeScreen() {
       <View style={styles.shotsIndicator}>
         {Array.from({ length: config?.totalShots || 10 }).map((_, index) => {
           const shot = displayShots[index];
+          const isCurrent = index === displayCurrentShot - 1 && displayShots.length < (config?.totalShots || 10);
           return (
             <View
               key={index}
               style={[
                 styles.shotDot,
-                shot?.success && { backgroundColor: shot.carreau ? theme.carreauColor : theme.success },
-                shot && !shot.success && { backgroundColor: theme.error },
-                index === displayCurrentShot - 1 && displayShots.length < (config?.totalShots || 10) && { backgroundColor: config?.color, transform: [{ scale: 1.2 }] },
+                shot?.success && { backgroundColor: shot.carreau ? theme.carreauColor : theme.success, borderColor: shot.carreau ? theme.carreauColor : theme.success },
+                shot && !shot.success && { backgroundColor: theme.error, borderColor: theme.error },
+                isCurrent && { backgroundColor: config?.color + '25', borderColor: config?.color, borderWidth: 2.5 },
               ]}
             >
-              {shot?.carreau && <MaterialIcons name="star" size={8} color="#FFF" />}
+              {shot?.carreau ? <MaterialIcons name="star" size={12} color="#FFF" /> : shot?.success ? <MaterialIcons name="check" size={12} color="#FFF" /> : shot && !shot.success ? <MaterialIcons name="close" size={12} color="#FFF" /> : isCurrent ? <Text style={[styles.shotDotNum, { color: config?.color }]}>{index + 1}</Text> : <Text style={styles.shotDotNum}>{index + 1}</Text>}
             </View>
           );
         })}
@@ -1387,16 +1412,25 @@ export default function NewChallengeScreen() {
 
       <View style={styles.statsRow}>
         <View style={styles.statItem}>
+          <View style={[styles.statIconCircle, { backgroundColor: theme.success + '18' }]}>
+            <MaterialIcons name="check-circle" size={20} color={theme.success} />
+          </View>
           <Text style={[styles.statValue, { color: theme.success }]}>{displayStats.successCount}</Text>
           <Text style={styles.statLabel}>{t('challenge', 'succeeded')}</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
+          <View style={[styles.statIconCircle, { backgroundColor: theme.error + '18' }]}>
+            <MaterialIcons name="cancel" size={20} color={theme.error} />
+          </View>
           <Text style={[styles.statValue, { color: theme.error }]}>{displayShots.length - displayStats.successCount}</Text>
           <Text style={styles.statLabel}>{t('challenge', 'missed')}</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
+          <View style={[styles.statIconCircle, { backgroundColor: theme.carreauColor + '18' }]}>
+            <MaterialIcons name="stars" size={20} color={theme.carreauColor} />
+          </View>
           <Text style={[styles.statValue, { color: theme.carreauColor }]}>{displayStats.carreauCount}</Text>
           <Text style={styles.statLabel}>{t('history', 'carreaux')}</Text>
         </View>
@@ -1425,24 +1459,22 @@ export default function NewChallengeScreen() {
           {challengeMode === '1v1' ? (isOpponentTurn ? `${t('challenge', 'turnOf')} ${selectedOpponent?.name}` : t('challenge', 'yourTurn')) : t('challenge', 'shotResult')}
         </Text>
         
-        <Pressable style={styles.mainShotBtn} onPress={() => openNotationModal(isOpponentTurn)}>
-          <MaterialIcons name="gps-fixed" size={40} color="#FFF" />
-          <Text style={styles.mainShotBtnText}>TIR</Text>
-          <Text style={styles.mainShotBtnSub}>{t('challenge', 'detailedNotation')}</Text>
-        </Pressable>
-
-        <View style={styles.quickBtns}>
-          <Pressable style={[styles.quickBtn, { backgroundColor: theme.error }]} onPress={() => recordShot(false, false, isOpponentTurn)}>
-            <MaterialIcons name="close" size={22} color="#FFF" />
-            <Text style={styles.quickBtnText}>{t('challenge', 'missedBtn')}</Text>
+        <View style={styles.quickBtnsGrid}>
+          <Pressable style={[styles.quickBtnLarge, { backgroundColor: theme.error }]} onPress={() => recordShot(false, false, isOpponentTurn)}>
+            <MaterialIcons name="close" size={32} color="#FFF" />
+            <Text style={styles.quickBtnLargeText}>{t('challenge', 'missedBtn')}</Text>
           </Pressable>
-          <Pressable style={[styles.quickBtn, { backgroundColor: theme.success }]} onPress={() => recordShot(true, false, isOpponentTurn)}>
-            <MaterialIcons name="check" size={22} color="#FFF" />
-            <Text style={styles.quickBtnText}>{t('challenge', 'succeededBtn')}</Text>
+          <Pressable style={[styles.quickBtnLarge, { backgroundColor: theme.success }]} onPress={() => recordShot(true, false, isOpponentTurn)}>
+            <MaterialIcons name="check" size={32} color="#FFF" />
+            <Text style={styles.quickBtnLargeText}>{t('challenge', 'succeededBtn')}</Text>
           </Pressable>
-          <Pressable style={[styles.quickBtn, { backgroundColor: theme.carreauColor }]} onPress={() => recordShot(true, true, isOpponentTurn)}>
-            <MaterialIcons name="stars" size={22} color="#FFF" />
-            <Text style={styles.quickBtnText}>{t('challenge', 'carreauBtn')}</Text>
+          <Pressable style={[styles.quickBtnLarge, styles.quickBtnCarreau]} onPress={() => recordShot(true, true, isOpponentTurn)}>
+            <MaterialIcons name="stars" size={32} color="#FFF" />
+            <Text style={styles.quickBtnLargeText}>{t('challenge', 'carreauBtn')}</Text>
+          </Pressable>
+          <Pressable style={[styles.quickBtnLarge, styles.quickBtnNotation]} onPress={() => openNotationModal(isOpponentTurn)}>
+            <MaterialIcons name="gps-fixed" size={32} color={theme.tirColor} />
+            <Text style={[styles.quickBtnLargeText, { color: theme.tirColor }]}>{t('challenge', 'detailedNotation')}</Text>
           </Pressable>
         </View>
       </View>
@@ -1576,11 +1608,11 @@ const styles = StyleSheet.create({
   resultHeaderText: { fontSize: 16, fontWeight: '700', color: theme.primary },
   resultBadge: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 24, marginBottom: 16 },
   resultBadgeText: { fontSize: 13, fontWeight: '700', color: '#FFF', letterSpacing: 0.5 },
-  resultScore: { fontSize: 64, fontWeight: '900', color: theme.textPrimary, letterSpacing: -2 },
+  resultScore: { fontSize: 72, fontWeight: '900', color: theme.textPrimary, letterSpacing: -3 },
   resultLabel: { fontSize: 14, color: theme.textMuted, marginBottom: 24 },
   resultGrid: { flexDirection: 'row', flexWrap: 'wrap', width: '100%' },
   resultGridItem: { width: '50%', alignItems: 'center', paddingVertical: 14 },
-  resultGridValue: { fontSize: 24, fontWeight: '800', color: theme.textPrimary, marginTop: 8 },
+  resultGridValue: { fontSize: 28, fontWeight: '900', color: theme.textPrimary, marginTop: 8 },
   resultGridLabel: { fontSize: 12, color: theme.textSecondary, marginTop: 3 },
   resultActions: { flexDirection: 'row', gap: 12, marginTop: 20 },
   retryBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.surface, paddingVertical: 16, borderRadius: 16, borderWidth: 2, borderColor: theme.primary },
@@ -1595,60 +1627,71 @@ const styles = StyleSheet.create({
   turnIndicatorOpponent: { backgroundColor: theme.accent },
   turnIndicatorText: { fontSize: 14, fontWeight: '700', color: '#FFF', letterSpacing: 0.3 },
   progressSection: { paddingHorizontal: 16, paddingVertical: 16 },
-  progressBar: { height: 6, backgroundColor: theme.border, borderRadius: 3, overflow: 'hidden', marginBottom: 10 },
-  progressBarFill: { height: '100%', backgroundColor: theme.primary, borderRadius: 3 },
+  progressBar: { height: 8, backgroundColor: theme.border, borderRadius: 4, overflow: 'hidden', marginBottom: 10 },
+  progressBarFill: { height: '100%', backgroundColor: theme.primary, borderRadius: 4 },
   progressText: { fontSize: 13, fontWeight: '700', color: theme.textSecondary, textAlign: 'center' },
-  shotsIndicator: { flexDirection: 'row', justifyContent: 'center', gap: 8, paddingHorizontal: 16, marginBottom: 20 },
-  shotDot: { width: 24, height: 24, borderRadius: 12, backgroundColor: theme.border, alignItems: 'center', justifyContent: 'center' },
-  statsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', backgroundColor: theme.surface, marginHorizontal: 16, paddingVertical: 20, borderRadius: 20, ...theme.shadows.cardElevated, borderWidth: 1, borderColor: theme.border },
+  shotsIndicator: { flexDirection: 'row', justifyContent: 'center', gap: 6, paddingHorizontal: 12, marginBottom: 20 },
+  shotDot: { width: 30, height: 30, borderRadius: 15, backgroundColor: theme.border + '60', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: 'transparent' },
+  shotDotNum: { fontSize: 10, fontWeight: '700', color: theme.textMuted },
+  statsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', backgroundColor: theme.surface, marginHorizontal: 16, paddingVertical: 18, borderRadius: 22, ...theme.shadows.cardElevated, borderWidth: 1, borderColor: theme.border },
   statItem: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: 28, fontWeight: '800' },
-  statLabel: { fontSize: 11, color: theme.textSecondary, marginTop: 4, fontWeight: '500' },
-  statDivider: { width: 1, height: 40, backgroundColor: theme.border },
+  statIconCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  statValue: { fontSize: 30, fontWeight: '900' },
+  statLabel: { fontSize: 10, color: theme.textSecondary, marginTop: 3, fontWeight: '600', letterSpacing: 0.3 },
+  statDivider: { width: 1, height: 56, backgroundColor: theme.border },
   scoresCompare: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surface, marginHorizontal: 16, marginTop: 14, paddingVertical: 16, borderRadius: 18, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border },
   scoreCompareSide: { flex: 1, alignItems: 'center' },
   scoreCompareName: { fontSize: 11, color: theme.textSecondary, marginBottom: 4, fontWeight: '600' },
   scoreCompareValue: { fontSize: 22, fontWeight: '800', color: theme.textMuted },
   scoreCompareValueActive: { color: theme.primary },
   scoreCompareSep: { fontSize: 14, fontWeight: '800', color: theme.textMuted, paddingHorizontal: 10 },
-  shotButtonsContainer: { flex: 1, paddingHorizontal: 16, paddingTop: 24, alignItems: 'center' },
-  shotButtonsTitle: { fontSize: 16, fontWeight: '700', color: theme.textPrimary, marginBottom: 18 },
-  mainShotBtn: { width: SCREEN_WIDTH - 64, aspectRatio: 2.2, backgroundColor: theme.tirColor, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 18, ...theme.shadows.cardElevated },
-  mainShotBtnText: { fontSize: 22, fontWeight: '800', color: '#FFF', marginTop: 8, letterSpacing: 2 },
-  mainShotBtnSub: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
-  quickBtns: { flexDirection: 'row', gap: 10 },
-  quickBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 16, borderRadius: 14 },
-  quickBtnText: { fontSize: 13, fontWeight: '700', color: '#FFF' },
+  shotButtonsContainer: { flex: 1, paddingHorizontal: 16, paddingTop: 20, alignItems: 'center' },
+  shotButtonsTitle: { fontSize: 15, fontWeight: '700', color: theme.textPrimary, marginBottom: 16 },
+  quickBtnsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, width: '100%' },
+  quickBtnLarge: { width: (SCREEN_WIDTH - 42) / 2, alignItems: 'center', justifyContent: 'center', paddingVertical: 22, borderRadius: 20, ...theme.shadows.cardElevated },
+  quickBtnCarreau: { backgroundColor: theme.carreauColor },
+  quickBtnNotation: { backgroundColor: theme.surface, borderWidth: 2, borderColor: theme.tirColor + '40' },
+  quickBtnLargeText: { fontSize: 14, fontWeight: '800', color: '#FFF', marginTop: 6, letterSpacing: 0.3 },
   
   // Precision In Progress
   gameContent: { paddingHorizontal: 16, paddingTop: 16 },
-  atelierInfoCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: 20, padding: 16, marginBottom: 16, ...theme.shadows.cardElevated, borderWidth: 1, borderColor: theme.border },
-  atelierInfoIcon: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  atelierInfoCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: 22, padding: 18, marginBottom: 16, ...theme.shadows.cardElevated, borderWidth: 1.5, borderColor: theme.primary + '20' },
+  atelierInfoIcon: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
   atelierInfoContent: { flex: 1 },
-  atelierInfoName: { fontSize: 17, fontWeight: '800', color: theme.textPrimary },
-  atelierInfoDesc: { fontSize: 12, color: theme.textSecondary, marginTop: 3 },
-  distanceBadge: { backgroundColor: theme.primary, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14 },
-  distanceBadgeText: { fontSize: 16, fontWeight: '800', color: '#FFF' },
+  atelierInfoName: { fontSize: 18, fontWeight: '800', color: theme.textPrimary, letterSpacing: -0.3 },
+  atelierInfoDesc: { fontSize: 12, color: theme.textSecondary, marginTop: 4, lineHeight: 16 },
+  distanceBadge: { backgroundColor: theme.primary, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 16 },
+  distanceBadgeText: { fontSize: 18, fontWeight: '900', color: '#FFF' },
   progressInfo: { marginBottom: 16 },
   progressInfoText: { fontSize: 13, fontWeight: '700', color: theme.textSecondary, textAlign: 'center', marginBottom: 10 },
   countdownContainer: { alignItems: 'center', marginBottom: 20 },
-  countdownCircle: { width: 96, height: 96, borderRadius: 48, borderWidth: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surface, marginBottom: 12, ...theme.shadows.card },
-  countdownText: { fontSize: 36, fontWeight: '800' },
-  countdownLabel: { fontSize: 11, color: theme.textMuted, marginTop: -4 },
+  countdownOuter: { width: 116, height: 116, borderRadius: 58, borderWidth: 3, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  countdownCircle: { width: 96, height: 96, borderRadius: 48, borderWidth: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surface, ...theme.shadows.card },
+  countdownText: { fontSize: 40, fontWeight: '900' },
+  countdownLabel: { fontSize: 10, color: theme.textMuted, marginTop: -2, fontWeight: '600', letterSpacing: 1 },
   countdownBar: { width: '100%', height: 5, backgroundColor: theme.border, borderRadius: 2.5, overflow: 'hidden' },
   countdownBarFill: { height: '100%', borderRadius: 2.5 },
-  startTimerButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.success, paddingVertical: 14, paddingHorizontal: 24, borderRadius: 14, marginTop: 14 },
-  startTimerButtonText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
-  scoreCard: { backgroundColor: theme.surface, borderRadius: 20, padding: 20, alignItems: 'center', marginBottom: 16, ...theme.shadows.cardElevated, borderWidth: 1, borderColor: theme.border },
-  scoreCardLabel: { fontSize: 11, color: theme.textSecondary, marginBottom: 6, fontWeight: '600', letterSpacing: 0.5 },
-  scoreCardValue: { fontSize: 48, fontWeight: '900', color: theme.primary, letterSpacing: -1 },
-  scoreCardMax: { fontSize: 14, color: theme.textMuted, marginTop: 2 },
+  startTimerButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.success, paddingVertical: 16, paddingHorizontal: 32, borderRadius: 20, marginTop: 14, ...theme.shadows.cardElevated },
+  startTimerButtonText: { fontSize: 17, fontWeight: '800', color: '#FFF' },
+  scoreCard: { backgroundColor: theme.surface, borderRadius: 24, padding: 24, alignItems: 'center', marginBottom: 16, ...theme.shadows.cardElevated, borderWidth: 1, borderColor: theme.border },
+  scoreCardLabel: { fontSize: 11, color: theme.textSecondary, marginBottom: 10, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase' },
+  scoreCardRing: { width: 100, height: 100, borderRadius: 50, borderWidth: 4, borderColor: theme.primary + '30', alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  scoreCardValue: { fontSize: 42, fontWeight: '900', color: theme.primary, letterSpacing: -1 },
+  scoreCardMax: { fontSize: 13, color: theme.textMuted, marginTop: 4, fontWeight: '600' },
   scoringButtons: { paddingHorizontal: 16, paddingTop: 14, backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border },
-  scoringButtonsTitle: { fontSize: 13, fontWeight: '700', color: theme.textSecondary, textAlign: 'center', marginBottom: 12 },
+  scoringButtonsTitle: { fontSize: 12, fontWeight: '700', color: theme.textSecondary, textAlign: 'center', marginBottom: 12, letterSpacing: 0.5 },
   scoringButtonsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  scoringBtn: { width: (SCREEN_WIDTH - 42) / 2, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, paddingHorizontal: 10, borderRadius: 18, minHeight: 110, ...theme.shadows.cardElevated },
-  scoringBtnPoints: { fontSize: 32, fontWeight: '900', color: '#FFF' },
-  scoringBtnLabel: { fontSize: 14, fontWeight: '700', color: '#FFF', marginTop: 6 },
-  scoringBtnDesc: { fontSize: 10, fontWeight: '500', color: 'rgba(255,255,255,0.85)', marginTop: 4, textAlign: 'center', lineHeight: 14, paddingHorizontal: 6 },
+  scoringBtn: { width: (SCREEN_WIDTH - 42) / 2, alignItems: 'center', justifyContent: 'center', paddingVertical: 18, paddingHorizontal: 10, borderRadius: 20, minHeight: 90, ...theme.shadows.cardElevated },
+  scoringBtnIconRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  scoringBtnPoints: { fontSize: 22, fontWeight: '900', color: '#FFF' },
+  scoringBtnLabel: { fontSize: 15, fontWeight: '700', color: '#FFF', marginTop: 2 },
   scoringBtnFullWidth: { width: SCREEN_WIDTH - 32 },
+  // Atelier step indicators
+  atelierStepsRow: { flexDirection: 'row', justifyContent: 'center', gap: 10, paddingHorizontal: 16, marginBottom: 14 },
+  atelierStep: { width: 32, height: 32, borderRadius: 16, backgroundColor: theme.border + '80', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'transparent' },
+  atelierStepCurrent: { backgroundColor: theme.primary + '20', borderColor: theme.primary },
+  atelierStepDone: { backgroundColor: theme.success, borderColor: theme.success },
+  atelierStepText: { fontSize: 12, fontWeight: '700', color: theme.textMuted },
+  atelierStepTextCurrent: { color: theme.primary },
+  atelierStepTextDone: { color: '#FFF' },
 });
