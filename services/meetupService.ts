@@ -479,6 +479,28 @@ export async function getInvitableUsers(): Promise<{ users: InvitableUser[]; err
   }
 }
 
+/**
+ * Get count of pending meetup invitations for current user
+ */
+export async function getPendingInvitationsCount(): Promise<number> {
+  try {
+    const supabase = getSupabaseClient();
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData?.user?.id) return 0;
+
+    const { count, error } = await supabase
+      .from('terrain_meetup_responses')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userData.user.id)
+      .eq('status', 'pending');
+
+    if (error) return 0;
+    return count || 0;
+  } catch {
+    return 0;
+  }
+}
+
 export interface InvitableUser {
   userId: string;
   name: string;

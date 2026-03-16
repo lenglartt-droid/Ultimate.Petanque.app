@@ -22,7 +22,7 @@ import { useAuth } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import AdBanner from '@/components/ui/AdBanner';
 import { preloadInterstitial } from '@/services/adService';
-import { getMyMeetups, getInvitedMeetups, getMeetupResponses, Meetup, MeetupResponse } from '@/services/meetupService';
+import { getMyMeetups, getInvitedMeetups, getMeetupResponses, getPendingInvitationsCount, Meetup, MeetupResponse } from '@/services/meetupService';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -36,6 +36,7 @@ export default function HomeScreen() {
   // Meetups state
   const [meetups, setMeetups] = useState<(Meetup & { _source: 'created' | 'invited'; _acceptedCount?: number; _maxParticipants?: number })[]>([]);
   const [meetupsLoading, setMeetupsLoading] = useState(true);
+  const [pendingInviteCount, setPendingInviteCount] = useState(0);
 
   // Responsive dimensions for tablet
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
@@ -82,6 +83,14 @@ export default function HomeScreen() {
   useEffect(() => {
     loadMeetups();
   }, [loadMeetups]);
+
+  // Poll pending invitations every 30s
+  useEffect(() => {
+    const loadPending = () => { getPendingInvitationsCount().then(setPendingInviteCount); };
+    loadPending();
+    const interval = setInterval(loadPending, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -168,6 +177,11 @@ export default function HomeScreen() {
             <View style={styles.profileArrowContainer}>
               <MaterialIcons name="person" size={18} color={theme.primary} />
               <MaterialIcons name="chevron-right" size={18} color={theme.primary} />
+              {pendingInviteCount > 0 ? (
+                <View style={styles.pendingBadge}>
+                  <Text style={styles.pendingBadgeText}>{pendingInviteCount > 9 ? '9+' : pendingInviteCount}</Text>
+                </View>
+              ) : null}
             </View>
           </Pressable>
         </Animated.View>
@@ -625,6 +639,26 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: theme.borderRadius.md,
     gap: 2,
+    position: 'relative' as const,
+  },
+  pendingBadge: {
+    position: 'absolute' as const,
+    top: -8,
+    right: -8,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: theme.error,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    paddingHorizontal: 5,
+    borderWidth: 2,
+    borderColor: theme.surface,
+  },
+  pendingBadgeText: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: '#FFF',
   },
 
   // Hero Section
