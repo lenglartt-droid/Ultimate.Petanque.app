@@ -177,6 +177,13 @@ function LayoutInner() {
                 }} 
               />
               <Stack.Screen 
+                name="meetup/invitations" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="history" 
                 options={{ 
                   presentation: 'card',

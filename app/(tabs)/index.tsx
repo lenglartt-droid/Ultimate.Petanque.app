@@ -177,12 +177,19 @@ export default function HomeScreen() {
             <View style={styles.profileArrowContainer}>
               <MaterialIcons name="person" size={18} color={theme.primary} />
               <MaterialIcons name="chevron-right" size={18} color={theme.primary} />
-              {pendingInviteCount > 0 ? (
+            </View>
+            {pendingInviteCount > 0 ? (
+              <Pressable
+                style={styles.pendingBadgeTouchable}
+                onPress={(e) => { e.stopPropagation?.(); router.push('/meetup/invitations' as any); }}
+                hitSlop={8}
+              >
                 <View style={styles.pendingBadge}>
+                  <MaterialIcons name="mail" size={12} color="#FFF" />
                   <Text style={styles.pendingBadgeText}>{pendingInviteCount > 9 ? '9+' : pendingInviteCount}</Text>
                 </View>
-              ) : null}
-            </View>
+              </Pressable>
+            ) : null}
           </Pressable>
         </Animated.View>
 
@@ -641,22 +648,20 @@ const styles = StyleSheet.create({
     gap: 2,
     position: 'relative' as const,
   },
+  pendingBadgeTouchable: {
+    marginLeft: 8,
+  },
   pendingBadge: {
-    position: 'absolute' as const,
-    top: -8,
-    right: -8,
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: theme.error,
+    flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    paddingHorizontal: 5,
-    borderWidth: 2,
-    borderColor: theme.surface,
+    gap: 4,
+    backgroundColor: theme.error,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
   },
   pendingBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800' as const,
     color: '#FFF',
   },

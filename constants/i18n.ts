@@ -2389,6 +2389,12 @@ export const translations = {
     alreadyInvited: { fr: 'Déjà invité', en: 'Already invited' },
     inviteNote: { fr: 'Les joueurs invités verront le RDV dans leur application. Le code de partage reste disponible pour les autres.', en: 'Invited players will see the meetup in their app. The share code remains available for others.' },
     selectedCount: { fr: 'sélectionné(s)', en: 'selected' },
+    pendingInvitations: { fr: 'Invitations en attente', en: 'Pending Invitations' },
+    pendingInvitationSingular: { fr: 'invitation en attente', en: 'pending invitation' },
+    pendingInvitationPlural: { fr: 'invitations en attente', en: 'pending invitations' },
+    invitedBy: { fr: 'Invité par', en: 'Invited by' },
+    noInvitations: { fr: 'Aucune invitation', en: 'No invitations' },
+    noInvitationsDesc: { fr: 'Vous n\'avez aucune invitation en attente pour le moment. Les invitations apparaîtront ici lorsque quelqu\'un vous invitera à un rendez-vous.', en: 'You have no pending invitations at the moment. Invitations will appear here when someone invites you to a meetup.' },
   },
 
   // ============================================

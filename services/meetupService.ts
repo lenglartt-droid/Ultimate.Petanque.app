@@ -501,6 +501,110 @@ export async function getPendingInvitationsCount(): Promise<number> {
   }
 }
 
+/**
+ * Get all pending invitations for the current user with full meetup details
+ */
+export async function getPendingInvitations(): Promise<{ invitations: PendingInvitation[]; error: string | null }> {
+  try {
+    const supabase = getSupabaseClient();
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData?.user?.id) return { invitations: [], error: null };
+
+    const { data: responses, error: respError } = await supabase
+      .from('terrain_meetup_responses')
+      .select('*')
+      .eq('user_id', userData.user.id)
+      .eq('status', 'pending');
+
+    if (respError) return { invitations: [], error: respError.message };
+    if (!responses || responses.length === 0) return { invitations: [], error: null };
+
+    const meetupIds = responses.map(r => r.meetup_id);
+
+    const { data: meetups, error: meetupError } = await supabase
+      .from('terrain_meetups')
+      .select('*')
+      .in('id', meetupIds)
+      .eq('status', 'active')
+      .order('date', { ascending: true });
+
+    if (meetupError) return { invitations: [], error: meetupError.message };
+
+    // Get creator profiles
+    const creatorIds = [...new Set((meetups || []).map((m: any) => m.creator_id))];
+    let creatorsMap: Record<string, { username: string; email: string }> = {};
+    if (creatorIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from('user_profiles')
+        .select('id, username, email')
+        .in('id', creatorIds);
+      (profiles || []).forEach((p: any) => {
+        creatorsMap[p.id] = { username: p.username || '', email: p.email || '' };
+      });
+    }
+
+    // Get terrain names
+    const terrainIds = [...new Set((meetups || []).map((m: any) => m.terrain_id))];
+    let terrainsMap: Record<string, { name: string; city: string }> = {};
+    if (terrainIds.length > 0) {
+      const { data: terrains } = await supabase
+        .from('terrains')
+        .select('id, name, city')
+        .in('id', terrainIds);
+      (terrains || []).forEach((t: any) => {
+        terrainsMap[t.id] = { name: t.name, city: t.city };
+      });
+    }
+
+    // Get response counts per meetup
+    const invitations: PendingInvitation[] = [];
+    for (const m of (meetups || [])) {
+      const resp = responses.find(r => r.meetup_id === m.id);
+      if (!resp) continue;
+      const { count } = await supabase
+        .from('terrain_meetup_responses')
+        .select('id', { count: 'exact', head: true })
+        .eq('meetup_id', m.id)
+        .eq('status', 'accepted');
+
+      const creator = creatorsMap[m.creator_id];
+      const terrain = terrainsMap[m.terrain_id];
+
+      invitations.push({
+        responseId: resp.id,
+        meetupId: m.id,
+        title: m.title,
+        date: m.date,
+        maxParticipants: m.max_participants,
+        acceptedCount: count || 0,
+        shareCode: m.share_code,
+        notes: m.notes,
+        creatorName: creator?.username || creator?.email || '',
+        terrainName: terrain?.name || '',
+        terrainCity: terrain?.city || '',
+      });
+    }
+
+    return { invitations, error: null };
+  } catch (e: any) {
+    return { invitations: [], error: e.message };
+  }
+}
+
+export interface PendingInvitation {
+  responseId: string;
+  meetupId: string;
+  title: string;
+  date: string;
+  maxParticipants: number;
+  acceptedCount: number;
+  shareCode: string;
+  notes?: string;
+  creatorName: string;
+  terrainName: string;
+  terrainCity: string;
+}
+
 export interface InvitableUser {
   userId: string;
   name: string;

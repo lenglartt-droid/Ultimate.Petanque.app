@@ -1,0 +1,386 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  Pressable,
+  StyleSheet,
+  ActivityIndicator,
+  RefreshControl,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import theme from '@/constants/theme';
+import { useLanguage } from '@/hooks/useLanguage';
+import { useAlert } from '@/template';
+import {
+  getPendingInvitations,
+  respondToMeetup,
+  scheduleMeetupReminder,
+  cancelMeetupReminder,
+  PendingInvitation,
+} from '@/services/meetupService';
+
+export default function InvitationsScreen() {
+  const insets = useSafeAreaInsets();
+  const { t, language } = useLanguage();
+  const { showAlert } = useAlert();
+
+  const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+
+  const loadInvitations = useCallback(async () => {
+    const { invitations: data } = await getPendingInvitations();
+    setInvitations(data);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    loadInvitations();
+  }, [loadInvitations]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadInvitations();
+    setRefreshing(false);
+  }, [loadInvitations]);
+
+  const handleRespond = useCallback(async (inv: PendingInvitation, status: 'accepted' | 'declined') => {
+    setRespondingId(inv.meetupId);
+    const { error } = await respondToMeetup(inv.meetupId, status);
+    setRespondingId(null);
+
+    if (error) {
+      showAlert(t('common', 'error'), error);
+      return;
+    }
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    if (status === 'accepted' && inv.terrainName) {
+      await scheduleMeetupReminder(
+        { id: inv.meetupId, date: inv.date, title: inv.title } as any,
+        inv.terrainName
+      );
+    } else {
+      await cancelMeetupReminder(inv.meetupId);
+    }
+
+    // Remove from list
+    setInvitations(prev => prev.filter(i => i.meetupId !== inv.meetupId));
+  }, [t, showAlert]);
+
+  if (loading) {
+    return (
+      <SafeAreaView edges={['top']} style={styles.container}>
+        <View style={styles.header}>
+          <Pressable style={styles.headerBtn} onPress={() => router.back()}>
+            <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
+          </Pressable>
+          <Text style={styles.headerTitle}>{t('meetup', 'pendingInvitations')}</Text>
+          <View style={styles.headerBtn} />
+        </View>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={theme.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView edges={['top']} style={styles.container}>
+      <View style={styles.header}>
+        <Pressable style={styles.headerBtn} onPress={() => router.back()}>
+          <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
+        </Pressable>
+        <Text style={styles.headerTitle}>{t('meetup', 'pendingInvitations')}</Text>
+        <View style={styles.headerBtn} />
+      </View>
+
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} colors={[theme.primary]} />
+        }
+      >
+        {invitations.length > 0 ? (
+          <>
+            <View style={styles.countRow}>
+              <View style={styles.countBadge}>
+                <Text style={styles.countText}>{invitations.length}</Text>
+              </View>
+              <Text style={styles.countLabel}>
+                {invitations.length === 1 ? t('meetup', 'pendingInvitationSingular') : t('meetup', 'pendingInvitationPlural')}
+              </Text>
+            </View>
+
+            {invitations.map((inv, index) => {
+              const mDate = new Date(inv.date);
+              const isPast = mDate < new Date();
+              const daysUntil = Math.max(0, Math.ceil((mDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+              const isResponding = respondingId === inv.meetupId;
+
+              return (
+                <Animated.View
+                  key={inv.meetupId}
+                  entering={FadeInDown.duration(350).delay(index * 60)}
+                  style={styles.card}
+                >
+                  <Pressable
+                    style={styles.cardTop}
+                    onPress={() => router.push(`/meetup/${inv.meetupId}` as any)}
+                  >
+                    <View style={styles.dateCol}>
+                      <Text style={styles.dateDay}>{mDate.getDate()}</Text>
+                      <Text style={styles.dateMonth}>
+                        {mDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.infoCol}>
+                      <Text style={styles.cardTitle} numberOfLines={1}>{inv.title}</Text>
+                      <View style={styles.metaRow}>
+                        <MaterialIcons name="schedule" size={13} color={theme.textMuted} />
+                        <Text style={styles.metaText}>
+                          {mDate.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                        {daysUntil <= 1 && !isPast ? (
+                          <View style={styles.soonBadge}>
+                            <Text style={styles.soonText}>
+                              {daysUntil === 0 ? t('notifications', 'todayLabel') : t('notifications', 'tomorrowLabel')}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      {inv.terrainName ? (
+                        <View style={styles.metaRow}>
+                          <MaterialIcons name="place" size={13} color={theme.primary} />
+                          <Text style={styles.terrainText} numberOfLines={1}>
+                            {inv.terrainName}{inv.terrainCity ? ` \u2022 ${inv.terrainCity}` : ''}
+                          </Text>
+                        </View>
+                      ) : null}
+                      <View style={styles.metaRow}>
+                        <MaterialIcons name="person" size={13} color={theme.accent} />
+                        <Text style={styles.creatorText}>
+                          {t('meetup', 'invitedBy')} {inv.creatorName || t('meetup', 'unknownUser')}
+                        </Text>
+                      </View>
+                      <View style={styles.confirmRow}>
+                        <MaterialIcons name="group" size={12} color={theme.success} />
+                        <Text style={styles.confirmText}>
+                          {inv.acceptedCount}/{inv.maxParticipants} {t('meetup', 'confirmedCount')}
+                        </Text>
+                      </View>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                  </Pressable>
+
+                  {!isPast ? (
+                    <View style={styles.cardActions}>
+                      <Pressable
+                        style={[styles.actionBtn, styles.declineBtn, isResponding && styles.actionDisabled]}
+                        onPress={() => handleRespond(inv, 'declined')}
+                        disabled={isResponding}
+                      >
+                        <MaterialIcons name="close" size={18} color={theme.error} />
+                        <Text style={[styles.actionBtnText, { color: theme.error }]}>{t('meetup', 'decline')}</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.actionBtn, styles.acceptBtn, isResponding && styles.actionDisabled]}
+                        onPress={() => handleRespond(inv, 'accepted')}
+                        disabled={isResponding}
+                      >
+                        {isResponding ? (
+                          <ActivityIndicator size="small" color={theme.success} />
+                        ) : (
+                          <>
+                            <MaterialIcons name="check" size={18} color={theme.success} />
+                            <Text style={[styles.actionBtnText, { color: theme.success }]}>{t('meetup', 'accept')}</Text>
+                          </>
+                        )}
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View style={styles.cardPast}>
+                      <MaterialIcons name="history" size={14} color={theme.textMuted} />
+                      <Text style={styles.cardPastText}>{t('meetup', 'meetupPassed')}</Text>
+                    </View>
+                  )}
+                </Animated.View>
+              );
+            })}
+          </>
+        ) : (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIcon}>
+              <MaterialIcons name="mail-outline" size={56} color={theme.primary} />
+            </View>
+            <Text style={styles.emptyTitle}>{t('meetup', 'noInvitations')}</Text>
+            <Text style={styles.emptyText}>{t('meetup', 'noInvitationsDesc')}</Text>
+            <Pressable style={styles.emptyBtn} onPress={() => router.back()}>
+              <MaterialIcons name="arrow-back" size={18} color="#FFF" />
+              <Text style={styles.emptyBtnText}>{t('common', 'back')}</Text>
+            </Pressable>
+          </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.backgroundSecondary },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: theme.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  headerBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  content: { paddingHorizontal: 16, paddingTop: 20 },
+  // Count row
+  countRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 20,
+  },
+  countBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  countText: { fontSize: 15, fontWeight: '800', color: '#FFF' },
+  countLabel: { fontSize: 16, fontWeight: '700', color: theme.textPrimary },
+  // Card
+  card: {
+    backgroundColor: theme.surface,
+    borderRadius: 18,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: theme.border,
+    overflow: 'hidden',
+    ...theme.shadows.card,
+  },
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 14,
+  },
+  dateCol: {
+    width: 54,
+    height: 54,
+    borderRadius: 16,
+    backgroundColor: theme.primary + '12',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateDay: { fontSize: 22, fontWeight: '900', color: theme.primary, lineHeight: 24 },
+  dateMonth: { fontSize: 10, fontWeight: '700', color: theme.primary, letterSpacing: 0.5 },
+  infoCol: { flex: 1 },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: theme.textPrimary, marginBottom: 6 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 },
+  metaText: { fontSize: 13, color: theme.textMuted },
+  terrainText: { fontSize: 13, fontWeight: '600', color: theme.primary },
+  creatorText: { fontSize: 12, color: theme.accent, fontWeight: '600' },
+  confirmRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+    backgroundColor: theme.success + '10',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  confirmText: { fontSize: 11, fontWeight: '600', color: theme.success },
+  soonBadge: {
+    backgroundColor: theme.warning + '18',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginLeft: 6,
+  },
+  soonText: { fontSize: 10, fontWeight: '700', color: theme.warning },
+  // Actions
+  cardActions: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    paddingTop: 4,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+  },
+  declineBtn: {
+    borderColor: theme.error + '30',
+    backgroundColor: theme.error + '06',
+  },
+  acceptBtn: {
+    borderColor: theme.success + '30',
+    backgroundColor: theme.success + '06',
+  },
+  actionDisabled: { opacity: 0.5 },
+  actionBtnText: { fontSize: 14, fontWeight: '700' },
+  // Past
+  cardPast: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    backgroundColor: theme.textMuted + '08',
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  cardPastText: { fontSize: 12, fontWeight: '600', color: theme.textMuted },
+  // Empty
+  emptyState: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 24 },
+  emptyIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: theme.primary + '12',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  emptyTitle: { fontSize: 20, fontWeight: '700', color: theme.textPrimary, marginBottom: 8 },
+  emptyText: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  emptyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: theme.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 14,
+  },
+  emptyBtnText: { fontSize: 15, fontWeight: '600', color: '#FFF' },
+});
