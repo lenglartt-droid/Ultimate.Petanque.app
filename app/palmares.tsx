@@ -7,14 +7,12 @@ import {
   StyleSheet,
   FlatList,
   Dimensions,
-  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn, FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import Svg, { Circle, Line, G, Text as SvgText, Rect } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
@@ -247,40 +245,9 @@ const FormatStatsBar = React.memo(({ formatStats, t }: { formatStats: Record<str
   );
 });
 
-// ============================================
-// SEASON COMPARISON
-// ============================================
-interface SeasonSummary {
-  year: string;
-  total: number;
-  wins: number;
-  matches: number;
-  podiums: number;
-  titles: number;
-  winRate: number;
-  avgDiff: number;
-}
-
-const COMPARE_COLORS = ['#2563EB', '#F59E0B', '#10B981'];
-
-const ComparisonBarRow = React.memo(({ label, values, maxValue, colors }: { label: string; values: number[]; maxValue: number; colors: string[] }) => (
-  <View style={styles.compBarRow}>
-    <Text style={styles.compBarLabel}>{label}</Text>
-    <View style={styles.compBarContent}>
-      {values.map((v, i) => (
-        <View key={i} style={styles.compBarLine}>
-          <View style={[styles.compBarFill, { width: `${maxValue > 0 ? (v / maxValue) * 100 : 0}%`, backgroundColor: colors[i] }]} />
-          <Text style={[styles.compBarValue, { color: colors[i] }]}>{typeof v === 'number' && v % 1 !== 0 ? v.toFixed(1) : v}{label.includes('%') ? '' : ''}</Text>
-        </View>
-      ))}
-    </View>
-  </View>
-));
-
 type YearFilter = 'all' | string;
 type FormatFilter = 'all' | 'Tête-à-tête' | 'Doublette' | 'Triplette';
 type ResultFilter = 'all' | 'podium';
-type GroupMode = 'rank' | 'season';
 
 // ============================================
 // MAIN COMPONENT
@@ -291,28 +258,19 @@ export default function PalmaresScreen() {
   const { t, language } = useLanguage();
   const locale = language === 'en' ? 'en-US' : 'fr-FR';
 
-  const FORMAT_FILTERS: { id: FormatFilter; label: string }[] = [
-    { id: 'all', label: t('palmares', 'allFormats') },
-    { id: 'Tête-à-tête', label: t('formats', 'TàT') },
-    { id: 'Doublette', label: t('formats', 'Doublette') },
-    { id: 'Triplette', label: t('formats', 'Triplette') },
+  const FORMAT_FILTERS: { id: FormatFilter; label: string; icon: string }[] = [
+    { id: 'all', label: t('palmares', 'allFormats'), icon: 'groups' },
+    { id: 'Tête-à-tête', label: t('formats', 'TàT'), icon: 'person' },
+    { id: 'Doublette', label: t('formats', 'Doublette'), icon: 'group' },
+    { id: 'Triplette', label: t('formats', 'Triplette'), icon: 'groups' },
   ];
 
   const [yearFilter, setYearFilter] = useState<YearFilter>('all');
   const [formatFilter, setFormatFilter] = useState<FormatFilter>('all');
   const [resultFilter, setResultFilter] = useState<ResultFilter>('all');
-  const [showChart, setShowChart] = useState(false);
-  const [selectedChartIndex, setSelectedChartIndex] = useState<number | null>(null);
-  const [groupMode, setGroupMode] = useState<GroupMode>('rank');
   const [showBadges, setShowBadges] = useState(true);
   const [showFormatStats, setShowFormatStats] = useState(false);
   const [showTournamentDetails, setShowTournamentDetails] = useState(false);
-
-  // Season comparison state
-  const [showCompareModal, setShowCompareModal] = useState(false);
-  const [selectedSeasons, setSelectedSeasons] = useState<string[]>([]);
-
-  React.useEffect(() => { setSelectedChartIndex(null); }, [yearFilter, formatFilter, resultFilter]);
 
   // Build palmares data
   const allPalmaresData = useMemo(() => {
@@ -367,63 +325,15 @@ export default function PalmaresScreen() {
       return true;
     });
 
-    if (groupMode === 'rank') {
-      filtered.sort((a, b) => {
-        const rankA = RESULT_CONFIG[a.tournament.finalResult || '']?.rank || 99;
-        const rankB = RESULT_CONFIG[b.tournament.finalResult || '']?.rank || 99;
-        if (rankA !== rankB) return rankA - rankB;
-        return new Date(b.tournament.date).getTime() - new Date(a.tournament.date).getTime();
-      });
-    } else {
-      filtered.sort((a, b) => new Date(b.tournament.date).getTime() - new Date(a.tournament.date).getTime());
-    }
+    // Always sort by rank
+    filtered.sort((a, b) => {
+      const rankA = RESULT_CONFIG[a.tournament.finalResult || '']?.rank || 99;
+      const rankB = RESULT_CONFIG[b.tournament.finalResult || '']?.rank || 99;
+      if (rankA !== rankB) return rankA - rankB;
+      return new Date(b.tournament.date).getTime() - new Date(a.tournament.date).getTime();
+    });
     return filtered;
-  }, [allPalmaresData, yearFilter, formatFilter, resultFilter, groupMode]);
-
-  // Season grouping
-  const seasonGroups = useMemo(() => {
-    const groups: Record<string, { year: string; items: TournamentPalmaresItem[]; summary: SeasonSummary }> = {};
-    palmaresData.forEach(item => {
-      const year = new Date(item.tournament.date).getFullYear().toString();
-      if (!groups[year]) groups[year] = { year, items: [], summary: { year, total: 0, wins: 0, matches: 0, podiums: 0, titles: 0, winRate: 0, avgDiff: 0 } };
-      groups[year].items.push(item);
-      groups[year].summary.total++;
-      groups[year].summary.wins += item.stats.wins;
-      groups[year].summary.matches += item.stats.played;
-      if (['1er', '2ème', '3ème'].includes(item.tournament.finalResult || '')) groups[year].summary.podiums++;
-      if (item.tournament.finalResult === '1er') groups[year].summary.titles++;
-    });
-    Object.values(groups).forEach(g => {
-      g.summary.winRate = g.summary.matches > 0 ? Math.round((g.summary.wins / g.summary.matches) * 100) : 0;
-      const totalDiff = g.items.reduce((s, i) => s + i.stats.pointDiff, 0);
-      g.summary.avgDiff = g.summary.matches > 0 ? Math.round((totalDiff / g.summary.matches) * 10) / 10 : 0;
-    });
-    return Object.values(groups).sort((a, b) => parseInt(b.year) - parseInt(a.year));
-  }, [palmaresData]);
-
-  // Season comparison data
-  const comparisonData = useMemo(() => {
-    if (selectedSeasons.length < 2) return null;
-    // Build from ALL palmares data (unfiltered) for fair comparison
-    const allGroups: Record<string, SeasonSummary> = {};
-    allPalmaresData.forEach(item => {
-      const year = new Date(item.tournament.date).getFullYear().toString();
-      if (!selectedSeasons.includes(year)) return;
-      if (!allGroups[year]) allGroups[year] = { year, total: 0, wins: 0, matches: 0, podiums: 0, titles: 0, winRate: 0, avgDiff: 0 };
-      allGroups[year].total++;
-      allGroups[year].wins += item.stats.wins;
-      allGroups[year].matches += item.stats.played;
-      if (['1er', '2ème', '3ème'].includes(item.tournament.finalResult || '')) allGroups[year].podiums++;
-      if (item.tournament.finalResult === '1er') allGroups[year].titles++;
-    });
-    Object.values(allGroups).forEach(g => {
-      g.winRate = g.matches > 0 ? Math.round((g.wins / g.matches) * 100) : 0;
-      const items = allPalmaresData.filter(i => new Date(i.tournament.date).getFullYear().toString() === g.year);
-      const totalDiff = items.reduce((s, i) => s + i.stats.pointDiff, 0);
-      g.avgDiff = g.matches > 0 ? Math.round((totalDiff / g.matches) * 10) / 10 : 0;
-    });
-    return selectedSeasons.map(y => allGroups[y] || { year: y, total: 0, wins: 0, matches: 0, podiums: 0, titles: 0, winRate: 0, avgDiff: 0 });
-  }, [selectedSeasons, allPalmaresData]);
+  }, [allPalmaresData, yearFilter, formatFilter, resultFilter]);
 
   // Summary
   const summary = useMemo(() => {
@@ -493,40 +403,7 @@ export default function PalmaresScreen() {
   const earnedBadges = badges.filter(b => b.earned);
   const lockedBadges = badges.filter(b => !b.earned);
 
-  // Chart data
-  const chartData = useMemo(() => {
-    const sorted = [...palmaresData].sort((a, b) => new Date(a.tournament.date).getTime() - new Date(b.tournament.date).getTime());
-    return sorted.map((item, index) => {
-      const cumulativeWins = sorted.slice(0, index + 1).reduce((sum, i) => sum + i.stats.wins, 0);
-      const cumulativeMatches = sorted.slice(0, index + 1).reduce((sum, i) => sum + i.stats.played, 0);
-      return {
-        label: new Date(item.tournament.date).toLocaleDateString(locale, { month: 'short', year: '2-digit' }),
-        winRate: cumulativeMatches > 0 ? Math.round((cumulativeWins / cumulativeMatches) * 100) : 0,
-        tournamentWinRate: item.stats.winRate,
-        pointDiff: item.stats.pointDiff,
-        tournamentName: item.tournament.name,
-        tournamentDate: new Date(item.tournament.date).toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' }),
-        tournamentCity: item.tournament.location?.city || '',
-        tournamentFormat: item.tournament.format,
-        tournamentResult: item.tournament.finalResult,
-        tournamentId: item.tournament.id,
-        statsPlayed: item.stats.played,
-        statsWins: item.stats.wins,
-        statsLosses: item.stats.losses,
-      };
-    });
-  }, [palmaresData, locale]);
-
-  const flatListData = useMemo(() => (groupMode === 'rank' && showTournamentDetails) ? palmaresData : [], [palmaresData, groupMode, showTournamentDetails]);
-
-  const handleToggleSeason = useCallback((year: string) => {
-    Haptics.selectionAsync();
-    setSelectedSeasons(prev => {
-      if (prev.includes(year)) return prev.filter(y => y !== year);
-      if (prev.length >= 3) return prev;
-      return [...prev, year].sort((a, b) => parseInt(a) - parseInt(b));
-    });
-  }, []);
+  const flatListData = useMemo(() => showTournamentDetails ? palmaresData : [], [palmaresData, showTournamentDetails]);
 
   const activeFiltersCount = useMemo(() => {
     let c = 0;
@@ -543,7 +420,9 @@ export default function PalmaresScreen() {
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>{t('palmares', 'title')}</Text>
-        <View style={{ width: 40 }} />
+        <Pressable style={styles.progressionBtn} onPress={() => { Haptics.selectionAsync(); router.push('/(tabs)/stats'); }}>
+          <MaterialIcons name="show-chart" size={20} color={theme.primary} />
+        </Pressable>
       </View>
 
       <FlatList
@@ -602,7 +481,7 @@ export default function PalmaresScreen() {
 
                 <Text style={styles.heroTitle}>{summary.totalTournaments} {t('palmares', 'tournois')}</Text>
                 <Text style={styles.heroSubtitle}>
-                  {summary.totalMatches} {t('palmares', 'matchs')} • {summary.totalWins} {t('palmares', 'victoires')} • {summary.avgWinRate}% {t('palmares', 'taux')}
+                  {summary.totalMatches} {t('palmares', 'matchs')} \u2022 {summary.totalWins} {t('palmares', 'victoires')} \u2022 {summary.avgWinRate}% {t('palmares', 'taux')}
                 </Text>
 
                 <View style={styles.heroStatsRow}>
@@ -636,7 +515,7 @@ export default function PalmaresScreen() {
                   <View style={styles.advStatItem}>
                     <MaterialIcons name="local-fire-department" size={18} color="#FF6B35" />
                     <Text style={styles.advStatValue}>{summary.maxStreak}</Text>
-                    <Text style={styles.advStatLabel}>{language === 'en' ? 'Best streak' : 'Meilleure série'}</Text>
+                    <Text style={styles.advStatLabel}>{language === 'en' ? 'Best streak' : 'Meilleure serie'}</Text>
                   </View>
                   <View style={styles.advStatDivider} />
                   <View style={styles.advStatItem}>
@@ -648,7 +527,7 @@ export default function PalmaresScreen() {
                   <View style={styles.advStatItem}>
                     <MaterialIcons name="shield" size={18} color={theme.error} />
                     <Text style={styles.advStatValue}>{summary.avgConcededPerMatch}</Text>
-                    <Text style={styles.advStatLabel}>{language === 'en' ? 'Avg. conceded' : 'Encaissé moy.'}</Text>
+                    <Text style={styles.advStatLabel}>{language === 'en' ? 'Avg. conceded' : 'Encaisse moy.'}</Text>
                   </View>
                   <View style={styles.advStatDivider} />
                   <View style={styles.advStatItem}>
@@ -690,235 +569,107 @@ export default function PalmaresScreen() {
               ) : null}
             </Animated.View>
 
-            {/* ============ FILTERS ============ */}
-            <View style={styles.filtersSection}>
+            {/* ============ FILTERS — Modern Redesign ============ */}
+            <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.filtersCard}>
+              {/* Filter Header */}
               <View style={styles.filterHeaderRow}>
-                <Text style={styles.filterSectionLabel}>{language === 'en' ? 'Filters' : 'Filtres'}</Text>
+                <View style={styles.filterHeaderLeft}>
+                  <MaterialIcons name="tune" size={18} color={theme.primary} />
+                  <Text style={styles.filterHeaderTitle}>{language === 'en' ? 'Filters' : 'Filtres'}</Text>
+                  {activeFiltersCount > 0 ? (
+                    <View style={styles.filterCountBadge}>
+                      <Text style={styles.filterCountText}>{activeFiltersCount}</Text>
+                    </View>
+                  ) : null}
+                </View>
                 {activeFiltersCount > 0 ? (
                   <Pressable style={styles.clearFiltersBtn} onPress={() => { Haptics.selectionAsync(); setYearFilter('all'); setFormatFilter('all'); setResultFilter('all'); }}>
-                    <MaterialIcons name="close" size={12} color={theme.error} />
+                    <MaterialIcons name="close" size={14} color={theme.error} />
                     <Text style={styles.clearFiltersBtnText}>{t('common', 'reset')}</Text>
                   </Pressable>
                 ) : null}
               </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-                <Pressable style={[styles.filterChip, yearFilter === 'all' && styles.filterChipActive]} onPress={() => { Haptics.selectionAsync(); setYearFilter('all'); }}>
-                  <Text style={[styles.filterChipText, yearFilter === 'all' && styles.filterChipTextActive]}>{t('palmares', 'allYears')}</Text>
-                </Pressable>
-                {availableYears.map(year => (
-                  <Pressable key={year} style={[styles.filterChip, yearFilter === year && styles.filterChipActive]} onPress={() => { Haptics.selectionAsync(); setYearFilter(yearFilter === year ? 'all' : year); }}>
-                    <Text style={[styles.filterChipText, yearFilter === year && styles.filterChipTextActive]}>{year}</Text>
+
+              {/* DATE filter — Horizontal scroll with calendar icon */}
+              <View style={styles.filterGroup}>
+                <View style={styles.filterGroupHeader}>
+                  <View style={[styles.filterGroupIcon, { backgroundColor: theme.primary + '12' }]}>
+                    <MaterialIcons name="date-range" size={16} color={theme.primary} />
+                  </View>
+                  <Text style={styles.filterGroupLabel}>{language === 'en' ? 'Period' : 'Periode'}</Text>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipsScroll}>
+                  <Pressable style={[styles.filterPill, yearFilter === 'all' && styles.filterPillActive]} onPress={() => { Haptics.selectionAsync(); setYearFilter('all'); }}>
+                    <Text style={[styles.filterPillText, yearFilter === 'all' && styles.filterPillTextActive]}>{t('palmares', 'allYears')}</Text>
                   </Pressable>
-                ))}
-              </ScrollView>
-              <View style={styles.filterRowWrap}>
-                {FORMAT_FILTERS.map(f => (
-                  <Pressable key={f.id} style={[styles.filterChipSmall, formatFilter === f.id && styles.filterChipSmallActive]} onPress={() => { Haptics.selectionAsync(); setFormatFilter(f.id); }}>
-                    <Text style={[styles.filterChipSmallText, formatFilter === f.id && styles.filterChipSmallTextActive]}>{f.label}</Text>
-                  </Pressable>
-                ))}
-                <View style={styles.filterSeparator} />
-                <Pressable style={[styles.filterChipSmall, resultFilter === 'podium' && styles.filterChipPodiumActive]} onPress={() => { Haptics.selectionAsync(); setResultFilter(resultFilter === 'podium' ? 'all' : 'podium'); }}>
-                  <MaterialIcons name="emoji-events" size={14} color={resultFilter === 'podium' ? theme.carreauColor : theme.textMuted} />
-                  <Text style={[styles.filterChipSmallText, resultFilter === 'podium' && { color: theme.carreauColor }]}>{t('palmares', 'podiumsOnly')}</Text>
+                  {availableYears.map(year => (
+                    <Pressable key={year} style={[styles.filterPill, yearFilter === year && styles.filterPillActive]} onPress={() => { Haptics.selectionAsync(); setYearFilter(yearFilter === year ? 'all' : year); }}>
+                      <Text style={[styles.filterPillText, yearFilter === year && styles.filterPillTextActive]}>{year}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* FORMAT filter — Card-style options with icons */}
+              <View style={styles.filterGroup}>
+                <View style={styles.filterGroupHeader}>
+                  <View style={[styles.filterGroupIcon, { backgroundColor: theme.accent + '12' }]}>
+                    <MaterialIcons name="groups" size={16} color={theme.accent} />
+                  </View>
+                  <Text style={styles.filterGroupLabel}>Format</Text>
+                </View>
+                <View style={styles.formatFilterRow}>
+                  {FORMAT_FILTERS.map(f => {
+                    const isActive = formatFilter === f.id;
+                    return (
+                      <Pressable
+                        key={f.id}
+                        style={[styles.formatFilterCard, isActive && styles.formatFilterCardActive]}
+                        onPress={() => { Haptics.selectionAsync(); setFormatFilter(f.id); }}
+                      >
+                        <MaterialIcons name={f.icon as any} size={18} color={isActive ? theme.primary : theme.textMuted} />
+                        <Text style={[styles.formatFilterText, isActive && styles.formatFilterTextActive]}>{f.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* PODIUM filter — Toggle card */}
+              <View style={styles.filterGroup}>
+                <Pressable
+                  style={[styles.podiumFilterCard, resultFilter === 'podium' && styles.podiumFilterCardActive]}
+                  onPress={() => { Haptics.selectionAsync(); setResultFilter(resultFilter === 'podium' ? 'all' : 'podium'); }}
+                >
+                  <View style={[styles.podiumFilterIcon, { backgroundColor: resultFilter === 'podium' ? theme.carreauColor + '20' : theme.backgroundSecondary }]}>
+                    <MaterialIcons name="emoji-events" size={22} color={resultFilter === 'podium' ? theme.carreauColor : theme.textMuted} />
+                  </View>
+                  <View style={styles.podiumFilterInfo}>
+                    <Text style={[styles.podiumFilterTitle, resultFilter === 'podium' && { color: theme.carreauColor }]}>{t('palmares', 'podiumsOnly')}</Text>
+                    <Text style={styles.podiumFilterDesc}>{language === 'en' ? 'Show only 1st, 2nd & 3rd places' : 'Afficher uniquement les 1er, 2eme et 3eme'}</Text>
+                  </View>
+                  <View style={[styles.podiumFilterCheck, resultFilter === 'podium' && styles.podiumFilterCheckActive]}>
+                    {resultFilter === 'podium' ? <MaterialIcons name="check" size={16} color="#FFF" /> : null}
+                  </View>
                 </Pressable>
               </View>
-            </View>
+            </Animated.View>
 
             {/* Ad Banner */}
             <AdBanner position="inline" />
 
-            {/* ============ GROUP MODE ============ */}
-            <View style={styles.groupToggleContainer}>
-              <Pressable style={[styles.groupToggleBtn, groupMode === 'rank' && styles.groupToggleBtnActive]} onPress={() => { Haptics.selectionAsync(); setGroupMode('rank'); }}>
-                <MaterialIcons name="emoji-events" size={15} color={groupMode === 'rank' ? '#FFF' : theme.textSecondary} />
-                <Text style={[styles.groupToggleText, groupMode === 'rank' && styles.groupToggleTextActive]}>{t('palmares', 'byRank')}</Text>
-              </Pressable>
-              <Pressable style={[styles.groupToggleBtn, groupMode === 'season' && styles.groupToggleBtnActive]} onPress={() => { Haptics.selectionAsync(); setGroupMode('season'); }}>
-                <MaterialIcons name="date-range" size={15} color={groupMode === 'season' ? '#FFF' : theme.textSecondary} />
-                <Text style={[styles.groupToggleText, groupMode === 'season' && styles.groupToggleTextActive]}>{t('palmares', 'bySeason')}</Text>
-              </Pressable>
-            </View>
-
-            {/* ============ COMPARE SEASONS ============ */}
-            {availableYears.length >= 2 && groupMode === 'season' ? (
-              <Pressable style={styles.compareSeasonsBtn} onPress={() => { Haptics.selectionAsync(); setSelectedSeasons(availableYears.slice(0, 2)); setShowCompareModal(true); }}>
-                <MaterialIcons name="compare-arrows" size={18} color={theme.primary} />
-                <Text style={styles.compareSeasonsBtnText}>{t('palmares', 'compareSeasonsTitle')}</Text>
-                <MaterialIcons name="chevron-right" size={18} color={theme.primary} />
+            {/* ============ TOURNAMENT LIST TOGGLE ============ */}
+            {palmaresData.length > 0 ? (
+              <Pressable style={styles.toggleDetailsBtn} onPress={() => { Haptics.selectionAsync(); setShowTournamentDetails(!showTournamentDetails); }}>
+                <MaterialIcons name={showTournamentDetails ? 'expand-less' : 'expand-more'} size={16} color={theme.textSecondary} />
+                <Text style={styles.toggleDetailsBtnText}>
+                  {showTournamentDetails ? t('palmares', 'hideTournaments') : t('palmares', 'showTournaments')} ({palmaresData.length})
+                </Text>
               </Pressable>
             ) : null}
-
-            {/* ============ CHART ============ */}
-            {palmaresData.length >= 2 ? (
-              <Pressable style={styles.chartToggle} onPress={() => { Haptics.selectionAsync(); setShowChart(!showChart); }}>
-                <MaterialIcons name="show-chart" size={18} color={theme.primary} />
-                <Text style={styles.chartToggleText}>{showChart ? t('palmares', 'hideChart') : t('palmares', 'showProgression')}</Text>
-                <MaterialIcons name={showChart ? 'expand-less' : 'expand-more'} size={20} color={theme.primary} />
-              </Pressable>
-            ) : null}
-
-            {showChart && chartData.length >= 2 ? (
-              <Animated.View entering={FadeIn.duration(400)} style={styles.chartCard}>
-                <View style={styles.chartHeader}>
-                  <MaterialIcons name="trending-up" size={18} color={theme.primary} />
-                  <Text style={styles.chartTitle}>{t('palmares', 'tournamentEvolution')}</Text>
-                </View>
-                <Text style={styles.chartSubtitle}>{t('palmares', 'winRateByTournament')}</Text>
-                <View style={styles.chartContainer}>
-                  <Svg width={screenWidth - 80} height={180}>
-                    {[0, 25, 50, 75, 100].map((v, i) => (
-                      <G key={i}>
-                        <Line x1="35" y1={160 - (v / 100) * 130} x2={screenWidth - 80} y2={160 - (v / 100) * 130} stroke={theme.border} strokeWidth="1" strokeDasharray="4,4" />
-                        <SvgText x="30" y={165 - (v / 100) * 130} fontSize="9" fill={theme.textMuted} textAnchor="end">{v}%</SvgText>
-                      </G>
-                    ))}
-                    {chartData.map((data, i) => {
-                      const chartWidth = screenWidth - 115;
-                      const x = 45 + (i * (chartWidth / Math.max(chartData.length - 1, 1)));
-                      const y = 160 - (data.tournamentWinRate / 100) * 130;
-                      const prevData = chartData[i - 1];
-                      const prevX = prevData ? 45 + ((i - 1) * (chartWidth / Math.max(chartData.length - 1, 1))) : x;
-                      const prevY = prevData ? 160 - (prevData.tournamentWinRate / 100) * 130 : y;
-                      const isSelected = selectedChartIndex === i;
-                      return (
-                        <G key={i}>
-                          {i > 0 ? <Line x1={prevX} y1={prevY} x2={x} y2={y} stroke={theme.primary} strokeWidth="2.5" /> : null}
-                          <Circle cx={x} cy={y} r="18" fill="transparent" onPress={() => { Haptics.selectionAsync(); setSelectedChartIndex(isSelected ? null : i); }} />
-                          <Circle cx={x} cy={y} r={isSelected ? 8 : 5} fill={data.tournamentWinRate >= 50 ? theme.success : theme.error} stroke={isSelected ? theme.primary : 'transparent'} strokeWidth={isSelected ? 3 : 0} onPress={() => { Haptics.selectionAsync(); setSelectedChartIndex(isSelected ? null : i); }} />
-                          <SvgText x={x} y={y - 12} fontSize="9" fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{data.tournamentWinRate}%</SvgText>
-                        </G>
-                      );
-                    })}
-                  </Svg>
-                </View>
-
-                {selectedChartIndex !== null && chartData[selectedChartIndex] ? (
-                  <Animated.View entering={FadeIn.duration(250)} style={styles.tooltipCard}>
-                    <Pressable style={styles.tooltipClose} onPress={() => setSelectedChartIndex(null)}><MaterialIcons name="close" size={16} color={theme.textMuted} /></Pressable>
-                    <View style={styles.tooltipHeader}>
-                      {(() => {
-                        const d = chartData[selectedChartIndex];
-                        const rCfg = RESULT_CONFIG[d.tournamentResult || ''] || { icon: 'sports', color: theme.textMuted };
-                        return (<>
-                          <View style={[styles.tooltipResultIcon, { backgroundColor: rCfg.color + '20' }]}>
-                            <MaterialIcons name={rCfg.icon as any} size={20} color={rCfg.color} />
-                          </View>
-                          <View style={styles.tooltipHeaderInfo}>
-                            <Text style={styles.tooltipName} numberOfLines={2}>{d.tournamentName}</Text>
-                            <Text style={styles.tooltipDate}>{d.tournamentDate} — {d.tournamentCity}</Text>
-                          </View>
-                        </>);
-                      })()}
-                    </View>
-                    <View style={styles.tooltipStatsRow}>
-                      <View style={styles.tooltipStatItem}><Text style={styles.tooltipStatLabel}>Format</Text><Text style={styles.tooltipStatValue}>{t('formats', chartData[selectedChartIndex].tournamentFormat)}</Text></View>
-                      <View style={styles.tooltipStatDivider} />
-                      <View style={styles.tooltipStatItem}><Text style={styles.tooltipStatLabel}>{t('palmares', 'resultLabel')}</Text><Text style={[styles.tooltipStatValue, { color: RESULT_CONFIG[chartData[selectedChartIndex].tournamentResult || '']?.color || theme.textPrimary }]}>{chartData[selectedChartIndex].tournamentResult ? t('palmaresResults', chartData[selectedChartIndex].tournamentResult) : '-'}</Text></View>
-                      <View style={styles.tooltipStatDivider} />
-                      <View style={styles.tooltipStatItem}><Text style={styles.tooltipStatLabel}>{t('palmares', 'matchs')}</Text><Text style={styles.tooltipStatValue}>{chartData[selectedChartIndex].statsWins}V-{chartData[selectedChartIndex].statsLosses}{language === 'en' ? 'L' : 'D'}</Text></View>
-                    </View>
-                    <Pressable style={styles.tooltipDetailBtn} onPress={() => { const tid = chartData[selectedChartIndex!]?.tournamentId; setSelectedChartIndex(null); if (tid) router.push(`/tournament/${tid}`); }}>
-                      <Text style={styles.tooltipDetailBtnText}>{t('palmares', 'seeJourney')}</Text>
-                      <MaterialIcons name="chevron-right" size={16} color={theme.primary} />
-                    </Pressable>
-                  </Animated.View>
-                ) : null}
-
-                <View style={styles.chartDivider} />
-                <Text style={styles.chartSubtitle}>{t('palmares', 'pointDiffByTournament')}</Text>
-                <View style={styles.chartContainer}>
-                  <Svg width={screenWidth - 80} height={120}>
-                    {chartData.map((data, i) => {
-                      const barWidth = Math.max((screenWidth - 120) / chartData.length - 8, 12);
-                      const x = 40 + (i * ((screenWidth - 100) / chartData.length));
-                      const maxDiff = Math.max(...chartData.map(d => Math.abs(d.pointDiff)), 1);
-                      const barHeight = Math.abs(data.pointDiff) / maxDiff * 35;
-                      const isPositive = data.pointDiff >= 0;
-                      const barY = isPositive ? 55 - barHeight : 55;
-                      const isSelected = selectedChartIndex === i;
-                      return (
-                        <G key={i}>
-                          <Rect x={x} y={barY} width={barWidth} height={Math.max(barHeight, 2)} fill={isPositive ? theme.success : theme.error} rx="3" opacity={isSelected ? 1 : 0.8} stroke={isSelected ? theme.primary : 'transparent'} strokeWidth={isSelected ? 2 : 0} onPress={() => { Haptics.selectionAsync(); setSelectedChartIndex(isSelected ? null : i); }} />
-                          <Rect x={x - 4} y={0} width={barWidth + 8} height={120} fill="transparent" onPress={() => { Haptics.selectionAsync(); setSelectedChartIndex(isSelected ? null : i); }} />
-                          <SvgText x={x + barWidth / 2} y={isPositive ? barY - 6 : barY + barHeight + 12} fontSize="9" fill={isPositive ? theme.success : theme.error} textAnchor="middle" fontWeight="600">{isPositive ? '+' : ''}{data.pointDiff}</SvgText>
-                          <SvgText x={x + barWidth / 2} y={105} fontSize="7" fill={isSelected ? theme.primary : theme.textMuted} textAnchor="middle" fontWeight={isSelected ? '700' : '400'}>{data.label}</SvgText>
-                        </G>
-                      );
-                    })}
-                    <Line x1="35" y1="55" x2={screenWidth - 80} y2="55" stroke={theme.border} strokeWidth="1" />
-                  </Svg>
-                </View>
-              </Animated.View>
-            ) : null}
-
-            {/* ============ SEASON GROUPS ============ */}
-            {groupMode === 'season' ? (
-              <>
-                {seasonGroups.map((group, gi) => (
-                  <Animated.View key={group.year} entering={FadeInDown.duration(300).delay(gi * 60)}>
-                    <View style={styles.seasonHeaderCard}>
-                      <View style={styles.seasonHeaderLeft}>
-                        <MaterialIcons name="date-range" size={20} color={theme.primary} />
-                        <Text style={styles.seasonYear}>{t('palmares', 'season')} {group.year}</Text>
-                      </View>
-                      <View style={styles.seasonBadgeRow}>
-                        {group.summary.titles > 0 ? (
-                          <View style={[styles.seasonMini, { backgroundColor: '#FFD700' + '18' }]}>
-                            <MaterialIcons name="emoji-events" size={12} color="#FFD700" />
-                            <Text style={[styles.seasonMiniText, { color: '#DAA520' }]}>{group.summary.titles}</Text>
-                          </View>
-                        ) : null}
-                        {group.summary.podiums > group.summary.titles ? (
-                          <View style={[styles.seasonMini, { backgroundColor: '#C0C0C0' + '18' }]}>
-                            <MaterialIcons name="workspace-premium" size={12} color="#C0C0C0" />
-                            <Text style={[styles.seasonMiniText, { color: '#A0A0A0' }]}>{group.summary.podiums - group.summary.titles}</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                    </View>
-                    <View style={styles.seasonStatsBar}>
-                      <View style={styles.seasonStatCell}><Text style={styles.seasonStatVal}>{group.summary.total}</Text><Text style={styles.seasonStatLbl}>{t('palmares', 'tournois')}</Text></View>
-                      <View style={styles.seasonStatDiv} />
-                      <View style={styles.seasonStatCell}><Text style={[styles.seasonStatVal, { color: theme.success }]}>{group.summary.wins}</Text><Text style={styles.seasonStatLbl}>{t('palmares', 'victoires')}</Text></View>
-                      <View style={styles.seasonStatDiv} />
-                      <View style={styles.seasonStatCell}><Text style={styles.seasonStatVal}>{group.summary.matches}</Text><Text style={styles.seasonStatLbl}>{t('palmares', 'matchs')}</Text></View>
-                      <View style={styles.seasonStatDiv} />
-                      <View style={styles.seasonStatCell}><Text style={[styles.seasonStatVal, { color: theme.primary }]}>{group.summary.winRate}%</Text><Text style={styles.seasonStatLbl}>{language === 'en' ? 'Win' : 'Vict.'}</Text></View>
-                      <View style={styles.seasonStatDiv} />
-                      <View style={styles.seasonStatCell}><Text style={[styles.seasonStatVal, { color: theme.accent }]}>{group.summary.podiums}</Text><Text style={styles.seasonStatLbl}>{t('palmares', 'podiums')}</Text></View>
-                    </View>
-                    {/* Collapsible tournament list for season */}
-                    <Pressable style={styles.toggleDetailsBtn} onPress={() => { Haptics.selectionAsync(); setShowTournamentDetails(!showTournamentDetails); }}>
-                      <MaterialIcons name={showTournamentDetails ? 'expand-less' : 'expand-more'} size={16} color={theme.textSecondary} />
-                      <Text style={styles.toggleDetailsBtnText}>
-                        {showTournamentDetails ? t('palmares', 'hideTournaments') : t('palmares', 'showTournaments')} ({group.items.length})
-                      </Text>
-                    </Pressable>
-                    {showTournamentDetails ? group.items.map((item, idx) => <TournamentCard key={item.tournament.id} item={item} index={idx} t={t} language={language} />) : null}
-                    {gi < seasonGroups.length - 1 ? <View style={styles.seasonDivider} /> : null}
-                  </Animated.View>
-                ))}
-              </>
-            ) : (
-              palmaresData.length > 0 ? (
-                <>
-                  <Pressable style={styles.toggleDetailsBtn} onPress={() => { Haptics.selectionAsync(); setShowTournamentDetails(!showTournamentDetails); }}>
-                    <MaterialIcons name={showTournamentDetails ? 'expand-less' : 'expand-more'} size={16} color={theme.textSecondary} />
-                    <Text style={styles.toggleDetailsBtnText}>
-                      {showTournamentDetails ? t('palmares', 'hideTournaments') : t('palmares', 'showTournaments')} ({palmaresData.length})
-                    </Text>
-                  </Pressable>
-                </>
-              ) : null
-            )}
           </>
         )}
-        ListEmptyComponent={() => (
-          groupMode === 'rank' && !showTournamentDetails ? null : (
-            groupMode === 'rank' ? null : null
-          )
-        )}
+        ListEmptyComponent={() => null}
       />
 
       {/* Empty state when no tournaments at all */}
@@ -933,122 +684,6 @@ export default function PalmaresScreen() {
           </Pressable>
         </View>
       ) : null}
-
-      {/* ============ COMPARE MODAL ============ */}
-      <Modal visible={showCompareModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCompareModal(false)}>
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{t('palmares', 'seasonComparison')}</Text>
-            <Pressable style={styles.modalClose} onPress={() => setShowCompareModal(false)}>
-              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
-            </Pressable>
-          </View>
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }} showsVerticalScrollIndicator={false}>
-            <Text style={styles.compSelectLabel}>{t('palmares', 'selectSeasonsToCompare')}</Text>
-            <View style={styles.compSeasonPicker}>
-              {availableYears.map(year => {
-                const isSelected = selectedSeasons.includes(year);
-                const colorIdx = selectedSeasons.indexOf(year);
-                return (
-                  <Pressable key={year} style={[styles.compSeasonChip, isSelected && { backgroundColor: COMPARE_COLORS[colorIdx] || theme.primary, borderColor: COMPARE_COLORS[colorIdx] || theme.primary }]} onPress={() => handleToggleSeason(year)}>
-                    <Text style={[styles.compSeasonChipText, isSelected && { color: '#FFF' }]}>{year}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            {comparisonData && comparisonData.length >= 2 ? (
-              <Animated.View entering={FadeIn.duration(300)}>
-                {/* Legend */}
-                <View style={styles.compLegend}>
-                  {comparisonData.map((s, i) => (
-                    <View key={s.year} style={styles.compLegendItem}>
-                      <View style={[styles.compLegendDot, { backgroundColor: COMPARE_COLORS[i] }]} />
-                      <Text style={[styles.compLegendLabel, { color: COMPARE_COLORS[i] }]}>{t('palmares', 'season')} {s.year}</Text>
-                    </View>
-                  ))}
-                </View>
-
-                {/* Comparison bars */}
-                <View style={styles.compCard}>
-                  <ComparisonBarRow
-                    label={t('palmares', 'tournamentsLabel')}
-                    values={comparisonData.map(s => s.total)}
-                    maxValue={Math.max(...comparisonData.map(s => s.total), 1)}
-                    colors={COMPARE_COLORS.slice(0, comparisonData.length)}
-                  />
-                  <ComparisonBarRow
-                    label={t('palmares', 'matchsLabel')}
-                    values={comparisonData.map(s => s.matches)}
-                    maxValue={Math.max(...comparisonData.map(s => s.matches), 1)}
-                    colors={COMPARE_COLORS.slice(0, comparisonData.length)}
-                  />
-                  <ComparisonBarRow
-                    label={t('palmares', 'winRateLabel') + ' %'}
-                    values={comparisonData.map(s => s.winRate)}
-                    maxValue={100}
-                    colors={COMPARE_COLORS.slice(0, comparisonData.length)}
-                  />
-                  <ComparisonBarRow
-                    label={t('palmares', 'podiumsLabel')}
-                    values={comparisonData.map(s => s.podiums)}
-                    maxValue={Math.max(...comparisonData.map(s => s.podiums), 1)}
-                    colors={COMPARE_COLORS.slice(0, comparisonData.length)}
-                  />
-                  <ComparisonBarRow
-                    label={t('palmares', 'titresLabel')}
-                    values={comparisonData.map(s => s.titles)}
-                    maxValue={Math.max(...comparisonData.map(s => s.titles), 1)}
-                    colors={COMPARE_COLORS.slice(0, comparisonData.length)}
-                  />
-                  <ComparisonBarRow
-                    label={t('palmares', 'avgDiffLabel')}
-                    values={comparisonData.map(s => s.avgDiff)}
-                    maxValue={Math.max(...comparisonData.map(s => Math.abs(s.avgDiff)), 1)}
-                    colors={COMPARE_COLORS.slice(0, comparisonData.length)}
-                  />
-                </View>
-
-                {/* Summary table */}
-                <View style={styles.compTable}>
-                  <View style={styles.compTableRow}>
-                    <View style={[styles.compTableCell, { flex: 1.4 }]} />
-                    {comparisonData.map((s, i) => (
-                      <View key={s.year} style={[styles.compTableCell, styles.compTableHeaderCell, { backgroundColor: COMPARE_COLORS[i] + '12' }]}>
-                        <Text style={[styles.compTableHeaderText, { color: COMPARE_COLORS[i] }]}>{s.year}</Text>
-                      </View>
-                    ))}
-                  </View>
-                  {[
-                    { key: 'tournamentsLabel', getter: (s: SeasonSummary) => String(s.total) },
-                    { key: 'matchsLabel', getter: (s: SeasonSummary) => String(s.matches) },
-                    { key: 'winRateLabel', getter: (s: SeasonSummary) => `${s.winRate}%` },
-                    { key: 'podiumsLabel', getter: (s: SeasonSummary) => String(s.podiums) },
-                    { key: 'titresLabel', getter: (s: SeasonSummary) => String(s.titles) },
-                    { key: 'avgDiffLabel', getter: (s: SeasonSummary) => (s.avgDiff >= 0 ? '+' : '') + s.avgDiff.toFixed(1) },
-                  ].map((row, ri) => (
-                    <View key={row.key} style={[styles.compTableRow, ri % 2 === 0 && { backgroundColor: theme.backgroundSecondary }]}>
-                      <View style={[styles.compTableCell, { flex: 1.4 }]}>
-                        <Text style={styles.compTableLabel}>{t('palmares', row.key)}</Text>
-                      </View>
-                      {comparisonData.map((s, i) => (
-                        <View key={s.year} style={styles.compTableCell}>
-                          <Text style={[styles.compTableValue, { color: COMPARE_COLORS[i] }]}>{row.getter(s)}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  ))}
-                </View>
-              </Animated.View>
-            ) : (
-              <View style={styles.compEmptyState}>
-                <MaterialIcons name="compare-arrows" size={48} color={theme.textMuted} />
-                <Text style={styles.compEmptyText}>{t('palmares', 'selectSeasonsToCompare')}</Text>
-              </View>
-            )}
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -1065,6 +700,7 @@ const styles = StyleSheet.create({
   },
   backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
+  progressionBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.primary + '12', borderRadius: 20 },
   listContent: { paddingHorizontal: 16, paddingTop: 16 },
   listContentTablet: { maxWidth: 960, alignSelf: 'center' as const, width: '100%', paddingHorizontal: 24 },
 
@@ -1139,40 +775,184 @@ const styles = StyleSheet.create({
   badgeProgressBar: { width: '85%', height: 4, backgroundColor: theme.border, borderRadius: 2, overflow: 'hidden', marginBottom: 4 },
   badgeProgressFill: { height: '100%', borderRadius: 2 },
 
-  // Filters - modern pills
-  filtersSection: { marginBottom: 12, backgroundColor: theme.surface, borderRadius: theme.borderRadius.xl, padding: 16, ...theme.shadows.card },
-  filterHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  filterSectionLabel: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
-  clearFiltersBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.error + '08', borderRadius: theme.borderRadius.full, borderWidth: 1, borderColor: theme.error + '20' },
-  clearFiltersBtnText: { fontSize: 11, fontWeight: '600', color: theme.error },
-  filterRow: { gap: 8, paddingBottom: 12 },
-  filterRowWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
-  filterChip: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: theme.borderRadius.full, backgroundColor: theme.backgroundSecondary, borderWidth: 1.5, borderColor: 'transparent' },
-  filterChipActive: { backgroundColor: theme.primary, borderColor: theme.primary },
-  filterChipText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
-  filterChipTextActive: { color: '#FFF' },
-  filterChipSmall: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: theme.borderRadius.full, backgroundColor: theme.backgroundSecondary, borderWidth: 1.5, borderColor: 'transparent' },
-  filterChipSmallActive: { borderColor: theme.primary, backgroundColor: theme.primary + '08' },
-  filterChipPodiumActive: { borderColor: theme.carreauColor, backgroundColor: theme.carreauColor + '08' },
-  filterChipSmallText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
-  filterChipSmallTextActive: { color: theme.primary },
-  filterSeparator: { width: 1, height: 22, backgroundColor: theme.border + '80', marginHorizontal: 6 },
-
-  // Group Toggle
-  groupToggleContainer: { flexDirection: 'row', backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 4, marginBottom: 12, ...theme.shadows.card },
-  groupToggleBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 11, borderRadius: theme.borderRadius.md },
-  groupToggleBtnActive: { backgroundColor: theme.primary },
-  groupToggleText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
-  groupToggleTextActive: { color: '#FFF' },
-
-  // Compare seasons button
-  compareSeasonsBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: theme.primary + '08', paddingVertical: 12,
-    borderRadius: theme.borderRadius.md, marginBottom: 12,
-    borderWidth: 1, borderColor: theme.primary + '20',
+  // ============ NEW FILTER DESIGN ============
+  filtersCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.xl,
+    padding: 18,
+    marginBottom: 14,
+    ...theme.shadows.card,
   },
-  compareSeasonsBtnText: { fontSize: 13, fontWeight: '600', color: theme.primary },
+  filterHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  filterHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  filterHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  filterCountBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: theme.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterCountText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  clearFiltersBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: theme.error + '08',
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: theme.error + '20',
+  },
+  clearFiltersBtnText: { fontSize: 12, fontWeight: '600', color: theme.error },
+
+  // Filter Group
+  filterGroup: {
+    marginBottom: 14,
+  },
+  filterGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  filterGroupIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterGroupLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textSecondary,
+    letterSpacing: 0.3,
+  },
+
+  // Date pills
+  filterChipsScroll: {
+    gap: 8,
+    paddingRight: 4,
+  },
+  filterPill: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.backgroundSecondary,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  filterPillActive: {
+    backgroundColor: theme.primary,
+    borderColor: theme.primary,
+  },
+  filterPillText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  filterPillTextActive: {
+    color: '#FFF',
+  },
+
+  // Format filter cards
+  formatFilterRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  formatFilterCard: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.backgroundSecondary,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  formatFilterCardActive: {
+    backgroundColor: theme.primary + '08',
+    borderColor: theme.primary,
+  },
+  formatFilterText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textMuted,
+    textAlign: 'center',
+  },
+  formatFilterTextActive: {
+    color: theme.primary,
+  },
+
+  // Podium toggle card
+  podiumFilterCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    padding: 14,
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.backgroundSecondary,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  podiumFilterCardActive: {
+    backgroundColor: theme.carreauColor + '06',
+    borderColor: theme.carreauColor + '40',
+  },
+  podiumFilterIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  podiumFilterInfo: {
+    flex: 1,
+  },
+  podiumFilterTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  podiumFilterDesc: {
+    fontSize: 11,
+    color: theme.textMuted,
+    marginTop: 2,
+  },
+  podiumFilterCheck: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 2,
+    borderColor: theme.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  podiumFilterCheckActive: {
+    backgroundColor: theme.carreauColor,
+    borderColor: theme.carreauColor,
+  },
 
   // Toggle tournament details
   toggleDetailsBtn: {
@@ -1226,79 +1006,10 @@ const styles = StyleSheet.create({
   carreauBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.carreauColor + '12', paddingHorizontal: 8, paddingVertical: 4, borderRadius: theme.borderRadius.sm },
   carreauText: { fontSize: 11, color: theme.carreauColor, fontWeight: '700' },
 
-  // Chart
-  chartToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.primary + '08', paddingVertical: 12, borderRadius: theme.borderRadius.md, marginBottom: 16, borderWidth: 1, borderColor: theme.primary + '15' },
-  chartToggleText: { fontSize: 13, fontWeight: '600', color: theme.primary },
-  chartCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 20, ...theme.shadows.card },
-  chartHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  chartTitle: { fontSize: 15, fontWeight: '700', color: theme.textPrimary },
-  chartSubtitle: { fontSize: 11, color: theme.textMuted, marginBottom: 12 },
-  chartContainer: { alignItems: 'center', marginBottom: 8 },
-  chartDivider: { height: 1, backgroundColor: theme.border, marginVertical: 14 },
-
-  tooltipCard: { backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.lg, padding: 14, marginTop: 8, marginBottom: 4, borderWidth: 1, borderColor: theme.primary + '30' },
-  tooltipClose: { position: 'absolute', top: 8, right: 8, zIndex: 1, width: 28, height: 28, borderRadius: 14, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center' },
-  tooltipHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingRight: 28 },
-  tooltipResultIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  tooltipHeaderInfo: { flex: 1 },
-  tooltipName: { fontSize: 14, fontWeight: '700', color: theme.textPrimary, marginBottom: 2 },
-  tooltipDate: { fontSize: 11, color: theme.textSecondary },
-  tooltipStatsRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, paddingVertical: 10, paddingHorizontal: 4, marginBottom: 10 },
-  tooltipStatItem: { flex: 1, alignItems: 'center' },
-  tooltipStatLabel: { fontSize: 9, color: theme.textMuted, marginBottom: 2 },
-  tooltipStatValue: { fontSize: 13, fontWeight: '700', color: theme.textPrimary },
-  tooltipStatDivider: { width: 1, height: 24, backgroundColor: theme.border },
-  tooltipDetailBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 10, backgroundColor: theme.primary + '10', borderRadius: theme.borderRadius.md },
-  tooltipDetailBtnText: { fontSize: 13, fontWeight: '600', color: theme.primary },
-
-  // Season
-  seasonHeaderCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 8, ...theme.shadows.card, borderLeftWidth: 4, borderLeftColor: theme.primary },
-  seasonHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  seasonYear: { fontSize: 17, fontWeight: '700', color: theme.textPrimary },
-  seasonBadgeRow: { flexDirection: 'row', gap: 6 },
-  seasonMini: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: theme.borderRadius.full },
-  seasonMiniText: { fontSize: 12, fontWeight: '700' },
-  seasonStatsBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, paddingVertical: 12, paddingHorizontal: 4, marginBottom: 8, ...theme.shadows.card },
-  seasonStatCell: { flex: 1, alignItems: 'center' },
-  seasonStatVal: { fontSize: 16, fontWeight: '700', color: theme.textPrimary },
-  seasonStatLbl: { fontSize: 10, color: theme.textMuted, marginTop: 2 },
-  seasonStatDiv: { width: 1, height: 24, backgroundColor: theme.border },
-  seasonDivider: { height: 2, backgroundColor: theme.border, marginVertical: 16, borderRadius: 1 },
-
   // Empty
   emptyState: { alignItems: 'center', paddingVertical: 48, paddingHorizontal: 24 },
   emptyTitle: { fontSize: 18, fontWeight: '600', color: theme.textPrimary, marginTop: 16 },
   emptyText: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginTop: 8, maxWidth: 260, marginBottom: 24 },
   emptyButton: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.primary, paddingHorizontal: 24, paddingVertical: 14, borderRadius: theme.borderRadius.md },
   emptyButtonText: { fontSize: 15, fontWeight: '600', color: '#FFF' },
-
-  // Compare Modal
-  modalContainer: { flex: 1, backgroundColor: theme.backgroundSecondary },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
-  modalTitle: { fontSize: 17, fontWeight: '700', color: theme.textPrimary },
-  modalClose: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  compSelectLabel: { fontSize: 13, color: theme.textSecondary, marginBottom: 12, textAlign: 'center' },
-  compSeasonPicker: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10, marginBottom: 20 },
-  compSeasonChip: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: theme.borderRadius.full, backgroundColor: theme.surface, borderWidth: 2, borderColor: theme.border, minWidth: 72, alignItems: 'center' },
-  compSeasonChipText: { fontSize: 15, fontWeight: '700', color: theme.textSecondary },
-  compLegend: { flexDirection: 'row', justifyContent: 'center', gap: 20, marginBottom: 16 },
-  compLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  compLegendDot: { width: 10, height: 10, borderRadius: 5 },
-  compLegendLabel: { fontSize: 13, fontWeight: '600' },
-  compCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 16, ...theme.shadows.card, gap: 14 },
-  compBarRow: { gap: 6 },
-  compBarLabel: { fontSize: 12, fontWeight: '600', color: theme.textPrimary, marginBottom: 4 },
-  compBarContent: { gap: 5 },
-  compBarLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  compBarFill: { height: 10, borderRadius: 5, minWidth: 4 },
-  compBarValue: { fontSize: 12, fontWeight: '700', minWidth: 36 },
-  compTable: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, overflow: 'hidden', ...theme.shadows.card },
-  compTableRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 8 },
-  compTableCell: { flex: 1, alignItems: 'center' },
-  compTableHeaderCell: { paddingVertical: 8, borderRadius: theme.borderRadius.sm, marginHorizontal: 2 },
-  compTableHeaderText: { fontSize: 14, fontWeight: '800' },
-  compTableLabel: { fontSize: 11, fontWeight: '600', color: theme.textSecondary, textAlign: 'left' },
-  compTableValue: { fontSize: 14, fontWeight: '700' },
-  compEmptyState: { alignItems: 'center', paddingVertical: 40 },
-  compEmptyText: { fontSize: 14, color: theme.textMuted, marginTop: 12, textAlign: 'center' },
 });
