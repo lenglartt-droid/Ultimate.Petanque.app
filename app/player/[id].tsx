@@ -25,7 +25,6 @@ import ShareModal from '@/components/ui/ShareModal';
 import MergePickerModal from '@/components/ui/MergePickerModal';
 import { Image } from 'expo-image';
 import { useAlert } from '@/template';
-import { toggleItemPublic } from '@/services/publicItemsService';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup as MeetupType } from '@/services/meetupService';
 import Svg, { Polygon, Line, Circle as SvgCircle, Text as SvgText, G } from 'react-native-svg';
 import { Modal, Switch } from 'react-native';
@@ -136,12 +135,9 @@ export default function PlayerDetailScreen() {
   const playerUserId = (player as any)?.userId;
   const isRealUser = isPublicItem && playerUserId && playerUserId !== user?.id;
   const [showSharePreview, setShowSharePreview] = React.useState(false);
-  const [showPublicPreview, setShowPublicPreview] = React.useState(false);
   const [previewShowContacts, setPreviewShowContacts] = React.useState(false);
-  const [isPublicState, setIsPublicState] = React.useState(player?.isPublic ?? false);
-  const [togglingPublic, setTogglingPublic] = React.useState(false);
   const { showAlert } = useAlert();
-  const { updatePlayer: updatePlayerFn, setItemPublic } = useApp();
+  const { updatePlayer: updatePlayerFn } = useApp();
   const [refreshing, setRefreshing] = React.useState(false);
   const [screenDims, setScreenDims] = React.useState(() => Dimensions.get('window'));
   React.useEffect(() => {
@@ -157,36 +153,6 @@ export default function PlayerDetailScreen() {
     await refreshData();
     setRefreshing(false);
   }, [refreshData]);
-
-  React.useEffect(() => {
-    if (player) setIsPublicState(player.isPublic ?? false);
-  }, [player?.isPublic]);
-
-  const handleOpenPublicPreview = React.useCallback(() => {
-    if (!player || togglingPublic || isSharedItem) return;
-    Haptics.selectionAsync();
-    setPreviewShowContacts(player.showContactPublic ?? false);
-    setShowPublicPreview(true);
-  }, [player, togglingPublic, isSharedItem]);
-
-  const handleConfirmPublic = React.useCallback(async () => {
-    if (!player) return;
-    setTogglingPublic(true);
-    Haptics.selectionAsync();
-    const newVal = !isPublicState;
-    const { error } = await toggleItemPublic('players', player.id, newVal);
-    if (error) {
-      showAlert(t('common', 'error'), error);
-    } else {
-      setIsPublicState(newVal);
-      setItemPublic('players', player.id, newVal);
-      if (isSelf) {
-        await updatePlayerFn(player.id, { showContactPublic: previewShowContacts });
-      }
-    }
-    setTogglingPublic(false);
-    setShowPublicPreview(false);
-  }, [player, isPublicState, togglingPublic, previewShowContacts, showAlert, t, updatePlayerFn]);
 
   const handleOpenSharePreview = React.useCallback(() => {
     if (!player) return;
@@ -767,27 +733,6 @@ export default function PlayerDetailScreen() {
           </View>
         </Animated.View>
 
-        {/* Visibility Section */}
-        {canEdit && !isSharedItem ? (
-          <Animated.View entering={FadeInDown.duration(400).delay(250)} style={s.sectionCard}>
-            <View style={s.sectionHeader}>
-              <View style={[s.sectionIconBox, { backgroundColor: (isPublicState ? theme.success : theme.textMuted) + '15' }]}>
-                <MaterialIcons name={isPublicState ? 'public' : 'lock'} size={18} color={isPublicState ? theme.success : theme.textMuted} />
-              </View>
-              <Text style={s.sectionTitle}>{t('map', 'visibility').toUpperCase()}</Text>
-            </View>
-            <Pressable style={s.visibilityRow} onPress={handleOpenPublicPreview} disabled={togglingPublic}>
-              <View style={s.visibilityInfo}>
-                <Text style={s.visibilityTitle}>{t('map', 'visibilityToggle')}</Text>
-                <Text style={s.visibilityDesc}>{isPublicState ? t('map', 'publicItemsDesc') : t('map', 'makePublic')}</Text>
-              </View>
-              <View style={[s.visibilityBadge, { backgroundColor: isPublicState ? theme.success + '20' : theme.textMuted + '15' }]}>
-                <Text style={[s.visibilityBadgeText, { color: isPublicState ? theme.success : theme.textMuted }]}>{isPublicState ? t('map', 'publicLabel') : t('map', 'privateLabel')}</Text>
-              </View>
-            </Pressable>
-          </Animated.View>
-        ) : null}
-
         {/* ===== RECENT MATCHES ===== */}
         {recentMatches.length > 0 ? (
           <Animated.View entering={FadeInDown.duration(400).delay(300)} style={s.sectionCard}>
@@ -966,153 +911,6 @@ export default function PlayerDetailScreen() {
               <Pressable style={[s.pvConfirmBtn, { backgroundColor: theme.primary }]} onPress={handleConfirmShare}>
                 <MaterialIcons name="share" size={18} color="#FFF" />
                 <Text style={s.pvConfirmText}>{t('preview', 'shareBtn')}</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ===== PUBLIC PREVIEW MODAL ===== */}
-      <Modal visible={showPublicPreview} animationType="slide" transparent>
-        <View style={s.pvOverlay}>
-          <View style={s.pvModal}>
-            <View style={s.pvHeader}>
-              <View style={[s.pvHeaderIcon, { backgroundColor: theme.success + '15' }]}>
-                <MaterialIcons name="public" size={22} color={theme.success} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.pvHeaderTitle}>{t('preview', 'publicOtherPlayerTitle')}</Text>
-                <Text style={s.pvHeaderSub}>{t('preview', 'publicOtherPlayerDesc')}</Text>
-              </View>
-              <Pressable style={s.pvCloseBtn} onPress={() => setShowPublicPreview(false)} hitSlop={8}>
-                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
-              </Pressable>
-            </View>
-            <ScrollView style={s.pvScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
-              <View style={s.pvCard}>
-                <View style={s.pvAvatarRow}>
-                  <View style={s.pvAvatar}>
-                    {player.avatar ? (
-                      <Image source={{ uri: player.avatar }} style={s.pvAvatarImg} contentFit="cover" transition={200} />
-                    ) : (
-                      <Text style={s.pvAvatarText}>{player.name?.split(' ').map(n => n[0]).join('')}</Text>
-                    )}
-                    <View style={[s.pvRoleBadge, { backgroundColor: getRoleColor(player.role) }]}>
-                      <MaterialIcons name={getRoleIcon(player.role)} size={10} color="#FFF" />
-                    </View>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.pvName}>{player.name}</Text>
-                    {player.nickname ? <Text style={s.pvNickname}>"{player.nickname}"</Text> : null}
-                  </View>
-                </View>
-                <View style={s.pvBadgesRow}>
-                  <View style={[s.pvBadge, { backgroundColor: getRoleColor(player.role) + '15' }]}>
-                    <Text style={[s.pvBadgeText, { color: getRoleColor(player.role) }]}>{t('roles', player.role)}</Text>
-                  </View>
-                  <View style={[s.pvBadge, { backgroundColor: theme.accent + '15' }]}>
-                    <Text style={[s.pvBadgeText, { color: theme.accent }]}>{t('levels', player.level)}</Text>
-                  </View>
-                </View>
-                {(clubDisplayName || terrainDisplayName) ? (
-                  <View style={s.pvInfoRow}>
-                    {clubDisplayName ? (
-                      <View style={s.pvInfoPill}>
-                        <MaterialIcons name="location-city" size={12} color={theme.carreauColor} />
-                        <Text style={[s.pvInfoText, { color: theme.carreauColor }]}>{clubDisplayName}</Text>
-                      </View>
-                    ) : null}
-                    {terrainDisplayName ? (
-                      <View style={s.pvInfoPill}>
-                        <MaterialIcons name="sports-soccer" size={12} color={theme.success} />
-                        <Text style={[s.pvInfoText, { color: theme.success }]}>{terrainDisplayName}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                ) : null}
-                {(player.location?.city || player.country) ? (
-                  <View style={s.pvLocationRow}>
-                    <MaterialIcons name="place" size={14} color={theme.textSecondary} />
-                    <Text style={s.pvLocationText}>{[player.location?.city, player.country].filter(Boolean).join(', ')}</Text>
-                  </View>
-                ) : null}
-                {isSelf && previewShowContacts && (player.phone || player.email) ? (
-                  <View style={s.pvContactRow}>
-                    {player.phone ? (
-                      <View style={s.pvContactPill}>
-                        <MaterialIcons name="phone" size={12} color={theme.primary} />
-                        <Text style={s.pvContactText}>{player.phone}</Text>
-                      </View>
-                    ) : null}
-                    {player.email ? (
-                      <View style={s.pvContactPill}>
-                        <MaterialIcons name="email" size={12} color={theme.primary} />
-                        <Text style={s.pvContactText}>{player.email}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                ) : null}
-                <View style={s.pvStatsRow}>
-                  <View style={s.pvStatItem}>
-                    <Text style={s.pvStatValue}>{player.stats.matchesPlayed}</Text>
-                    <Text style={s.pvStatLabel}>{t('player', 'matchesUpper')}</Text>
-                  </View>
-                  <View style={s.pvStatDivider} />
-                  <View style={s.pvStatItem}>
-                    <Text style={[s.pvStatValue, { color: theme.success }]}>{player.stats.wins}</Text>
-                    <Text style={s.pvStatLabel}>{t('player', 'victories')}</Text>
-                  </View>
-                  <View style={s.pvStatDivider} />
-                  <View style={s.pvStatItem}>
-                    <Text style={[s.pvStatValue, { color: theme.accent }]}>{player.stats.winRate}%</Text>
-                    <Text style={s.pvStatLabel}>{t('player', 'winsLabel')}</Text>
-                  </View>
-                </View>
-              </View>
-              {isSelf && (player.phone || player.email) ? (
-                <View style={s.pvToggleCard}>
-                  <View style={s.pvToggleRow}>
-                    <View style={[s.pvToggleIcon, { backgroundColor: (previewShowContacts ? theme.success : theme.textMuted) + '15' }]}>
-                      <MaterialIcons name={previewShowContacts ? 'contact-phone' : 'phone-disabled'} size={18} color={previewShowContacts ? theme.success : theme.textMuted} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.pvToggleTitle}>{t('preview', 'showContacts')}</Text>
-                      <Text style={s.pvToggleDesc}>{previewShowContacts
-                        ? t('preview', 'contactsVisibleOther')
-                        : t('preview', 'contactsHiddenOther')
-                      }</Text>
-                    </View>
-                    <Switch value={previewShowContacts} onValueChange={setPreviewShowContacts} trackColor={{ false: theme.border, true: theme.success + '60' }} thumbColor={previewShowContacts ? theme.success : theme.textMuted} />
-                  </View>
-                </View>
-              ) : null}
-              {!isSelf && (player.phone || player.email) ? (
-                <View style={s.pvNote}>
-                  <MaterialIcons name="phone-disabled" size={16} color={theme.warning} />
-                  <Text style={s.pvNoteText}>{t('preview', 'contactsNotPublic')}</Text>
-                </View>
-              ) : null}
-              <View style={s.pvNote}>
-                <MaterialIcons name="map" size={16} color={theme.primary} />
-                <Text style={s.pvNoteText}>{t('preview', 'geoNoteOtherPlayer')}</Text>
-              </View>
-            </ScrollView>
-            <View style={s.pvActions}>
-              <Pressable style={s.pvCancelBtn} onPress={() => setShowPublicPreview(false)}>
-                <Text style={s.pvCancelText}>{t('common', 'cancel')}</Text>
-              </Pressable>
-              <Pressable style={[s.pvConfirmBtn, { backgroundColor: isPublicState ? theme.error : theme.success }]} onPress={handleConfirmPublic} disabled={togglingPublic}>
-                {togglingPublic ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <>
-                    <MaterialIcons name={isPublicState ? 'lock' : 'public'} size={18} color="#FFF" />
-                    <Text style={s.pvConfirmText}>{isPublicState
-                      ? t('preview', 'makePrivate')
-                      : t('preview', 'makePublic')
-                    }</Text>
-                  </>
-                )}
               </Pressable>
             </View>
           </View>

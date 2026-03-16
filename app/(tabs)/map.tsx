@@ -1070,7 +1070,6 @@ export default function MapScreen() {
               <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 40 }} />
             ) : (
               <>
-                {renderManageSection('players', myItems.players.filter((p: any) => p.id === user?.id), 'person', theme.primary, t('map', 'players'))}
                 {renderManageSection('clubs', myItems.clubs, 'home', theme.accent, t('map', 'clubs'))}
                 {renderManageSection('terrains', myItems.terrains, 'sports-soccer', theme.success, t('map', 'terrains'))}
                 {renderManageSection('tournaments', myItems.tournaments, 'emoji-events', theme.carreauColor, t('map', 'tournaments'))}

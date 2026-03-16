@@ -670,6 +670,7 @@ export const translations = {
     mergeRelationsCount: { fr: 'relation(s) réassignée(s)', en: 'relation(s) reassigned' },
     duplicatePair: { fr: 'Paire', en: 'Pair' },
     me: { fr: 'MOI', en: 'ME' },
+    realUsersOnly: { fr: 'Utilisateurs réels', en: 'Real users' },
     since: { fr: 'Depuis', en: 'Since' },
     terrainCount: { fr: 'terrain', en: 'court' },
     terrainCountPlural: { fr: 'terrains', en: 'courts' },

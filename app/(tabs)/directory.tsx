@@ -90,6 +90,7 @@ export default function DirectoryScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [showRealUsersOnly, setShowRealUsersOnly] = useState(false);
   const [showDuplicateBanner, setShowDuplicateBanner] = useState(true);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [mergeTarget, setMergeTarget] = useState<{ type: 'player' | 'club' | 'terrain' | 'tournament'; id: string } | null>(null);
@@ -297,7 +298,8 @@ export default function DirectoryScreen() {
       const matchesCountry = filters.playerCountry === 'all' || (p.country || 'France') === filters.playerCountry;
       const matchesLevel = filters.playerLevel === 'all' || p.level === filters.playerLevel;
       const matchesRole = filters.playerRole === 'all' || p.role === filters.playerRole;
-      return matchesSearch && matchesClub && matchesCity && matchesCountry && matchesLevel && matchesRole;
+      const matchesRealUser = !showRealUsersOnly || ((p as any).isPublic === true && (p as any).userId && (p as any).userId !== user?.id);
+      return matchesSearch && matchesClub && matchesCity && matchesCountry && matchesLevel && matchesRole && matchesRealUser;
     });
     
     // Put selfPlayer at top
@@ -309,7 +311,7 @@ export default function DirectoryScreen() {
       }
     }
     return result;
-  }, [players, searchQuery, filters, selfPlayer]);
+  }, [players, searchQuery, filters, selfPlayer, showRealUsersOnly, user?.id]);
 
   const filteredClubs = useMemo(() => {
     return clubs.filter(c => {
@@ -1025,6 +1027,21 @@ export default function DirectoryScreen() {
           </ScrollView>
         </Animated.View>
       )}
+
+      {/* Real Users Quick Filter - Players tab only */}
+      {activeTab === 'players' ? (
+        <View style={styles.realUserFilterRow}>
+          <Pressable
+            style={[styles.realUserFilterChip, showRealUsersOnly && styles.realUserFilterChipActive]}
+            onPress={() => { Haptics.selectionAsync(); setShowRealUsersOnly(!showRealUsersOnly); }}
+          >
+            <MaterialIcons name="verified" size={14} color={showRealUsersOnly ? '#FFF' : theme.primary} />
+            <Text style={[styles.realUserFilterText, showRealUsersOnly && styles.realUserFilterTextActive]}>
+              {t('directory', 'realUsersOnly')}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {/* Results Count */}
       <View style={styles.resultsHeader}>
@@ -2477,6 +2494,36 @@ const styles = StyleSheet.create({
   meetupPickerCreateBtnText: {
     fontSize: 14,
     fontWeight: '700',
+    color: '#FFF',
+  },
+  // Real Users Filter
+  realUserFilterRow: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  realUserFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: theme.primary + '10',
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1.5,
+    borderColor: theme.primary + '30',
+  },
+  realUserFilterChipActive: {
+    backgroundColor: theme.primary,
+    borderColor: theme.primary,
+  },
+  realUserFilterText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.primary,
+  },
+  realUserFilterTextActive: {
     color: '#FFF',
   },
 });
