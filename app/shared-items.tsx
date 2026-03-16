@@ -528,7 +528,7 @@ export default function SharedItemsScreen() {
             </Text>
             <Text style={styles.emptyDesc}>
               {activeFilter !== 'all'
-                ? `${t('share', TYPE_FILTER_KEY[activeFilter])} — ${language === 'fr' ? 'aucun élément trouvé' : 'no items found'}`
+                ? `${t('share', TYPE_FILTER_KEY[activeFilter])} — ${t('statsExtra', 'noItemsFound')}`
                 : activeTab === 'shared_by_me'
                   ? t('share', 'noActiveSharesDesc')
                   : t('share', 'noReceivedCardsDesc')}

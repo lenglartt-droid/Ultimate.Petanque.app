@@ -1027,10 +1027,10 @@ export default function DirectoryScreen() {
                 <Text style={styles.emptyTitle}>{t('directory', 'noResultsFound')}</Text>
                 <Text style={styles.emptyText}>
                   {searchQuery 
-                    ? `${language === 'fr' ? 'Aucun' : 'No'} ${getTabSingular(activeTab)} ${t('directory', 'noMatchSearch')} "${searchQuery}"`
+                    ? `${t('directoryExtra', 'noPrefix')} ${getTabSingular(activeTab)} ${t('directory', 'noMatchSearch')} "${searchQuery}"`
                     : currentFilterCount > 0 
                       ? t('directory', 'tryModifyFilters')
-                      : `${language === 'fr' ? 'Aucun' : 'No'} ${getTabSingular(activeTab)} ${t('directory', 'noRegistered')}`
+                      : `${t('directoryExtra', 'noPrefix')} ${getTabSingular(activeTab)} ${t('directory', 'noRegistered')}`
                   }
                 </Text>
               </View>
@@ -1060,10 +1060,10 @@ export default function DirectoryScreen() {
                 <Text style={styles.emptyTitle}>{t('directory', 'noResultsFound')}</Text>
                 <Text style={styles.emptyText}>
                   {searchQuery 
-                    ? `${language === 'fr' ? 'Aucun' : 'No'} ${getTabSingular(activeTab)} ${t('directory', 'noMatchSearch')} "${searchQuery}"`
+                    ? `${t('directoryExtra', 'noPrefix')} ${getTabSingular(activeTab)} ${t('directory', 'noMatchSearch')} "${searchQuery}"`
                     : currentFilterCount > 0 
                       ? t('directory', 'tryModifyFilters')
-                      : `${language === 'fr' ? 'Aucun' : 'No'} ${getTabSingular(activeTab)} ${t('directory', 'noRegistered')}`
+                      : `${t('directoryExtra', 'noPrefix')} ${getTabSingular(activeTab)} ${t('directory', 'noRegistered')}`
                   }
                 </Text>
               </View>
