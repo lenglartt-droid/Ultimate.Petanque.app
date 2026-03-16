@@ -409,9 +409,14 @@ export default function DirectoryScreen() {
             </Text>
           )}
           {isSelf ? (
-            <View style={styles.selfBadge}>
-              <MaterialIcons name="star" size={10} color="#FFF" />
-            </View>
+            <>
+              <View style={styles.selfBadge}>
+                <MaterialIcons name="star" size={10} color="#FFF" />
+              </View>
+              <View style={styles.selfVerifiedBadge}>
+                <MaterialIcons name="verified" size={11} color="#FFF" />
+              </View>
+            </>
           ) : isRealUser ? (
             <View style={styles.verifiedBadge}>
               <MaterialIcons name="verified" size={11} color="#FFF" />
@@ -430,9 +435,15 @@ export default function DirectoryScreen() {
               {item.name}
             </Text>
             {isSelf ? (
-              <View style={styles.moiBadge}>
-                <Text style={styles.moiBadgeText}>{t('directory', 'me')}</Text>
-              </View>
+              <>
+                <View style={styles.moiBadge}>
+                  <Text style={styles.moiBadgeText}>{t('directory', 'me')}</Text>
+                </View>
+                <View style={styles.realUserBadge}>
+                  <MaterialIcons name="verified" size={10} color={theme.primary} />
+                  <Text style={styles.realUserBadgeText}>{t('meetup', 'registeredUser')}</Text>
+                </View>
+              </>
             ) : isRealUser ? (
               <View style={styles.realUserBadge}>
                 <MaterialIcons name="verified" size={10} color={theme.primary} />
@@ -1922,6 +1933,19 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
     backgroundColor: theme.carreauColor,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: theme.surface,
+  },
+  selfVerifiedBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: theme.primary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,

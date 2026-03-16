@@ -269,12 +269,18 @@ export default function HomeScreen() {
 
         {/* ========== BRAND BANNER ========== */}
         <Animated.View entering={FadeInDown.duration(400).delay(40)} style={[styles.bannerSection, isTablet && styles.sectionTablet]}>
-          <Image
-            source={require('@/assets/images/banner-home.png')}
-            style={styles.bannerImage}
-            contentFit="cover"
-            transition={200}
-          />
+          <View style={styles.bannerCard}>
+            <Image
+              source={require('@/assets/images/banner-home.png')}
+              style={styles.bannerImage}
+              contentFit="cover"
+              transition={200}
+            />
+            <LinearGradient
+              colors={['transparent', 'rgba(15,23,42,0.55)']}
+              style={styles.bannerOverlay}
+            />
+          </View>
         </Animated.View>
 
         {/* ========== QUICK ACTIONS ========== */}
@@ -469,6 +475,9 @@ export default function HomeScreen() {
             </View>
           ) : null}
         </Animated.View>
+
+        {/* Section divider */}
+        {recentResults.length > 0 ? <View style={styles.sectionDivider} /> : null}
 
         {/* ========== LAST 3 RESULTS TIMELINE ========== */}
         {recentResults.length > 0 ? (
@@ -815,8 +824,11 @@ const styles = StyleSheet.create({
   meetupEmptyText: { fontSize: 13, color: theme.textMuted, fontWeight: '500' },
 
   // ========== BRAND BANNER ==========
-  bannerSection: { paddingHorizontal: 16, marginBottom: 20 },
-  bannerImage: { width: '100%', height: 100, borderRadius: 16 },
+  bannerSection: { paddingHorizontal: 16, marginBottom: 24 },
+  bannerCard: { borderRadius: 20, overflow: 'hidden' as const, ...theme.shadows.cardElevated, position: 'relative' as const },
+  bannerImage: { width: '100%', height: 110, borderRadius: 20 },
+  bannerOverlay: { position: 'absolute' as const, bottom: 0, left: 0, right: 0, height: 50, borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
+  sectionDivider: { height: 1, backgroundColor: theme.border, marginHorizontal: 40, marginBottom: 8, opacity: 0.6 },
 
   // ========== JOIN MODAL ==========
   joinOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 24 },
