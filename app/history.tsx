@@ -679,7 +679,7 @@ export default function HistoryScreen() {
     if (!editingChallenge) return;
     Alert.alert(
       t('common', 'delete'),
-      language === 'fr' ? 'Supprimer ce defi ?' : 'Delete this challenge?',
+      t('historyExtra', 'deleteChallenge'),
       [
         { text: t('common', 'cancel'), style: 'cancel' },
         {
@@ -1221,7 +1221,7 @@ export default function HistoryScreen() {
                   {/* 1v1 Score Comparison */}
                   <View style={styles.detail1v1Header}>
                     <MaterialIcons name="people" size={16} color={theme.accent} />
-                    <Text style={styles.detail1v1Title}>{language === 'fr' ? 'Confrontation' : 'Matchup'}</Text>
+                    <Text style={styles.detail1v1Title}>{t('historyExtra', 'confrontation')}</Text>
                   </View>
                   <View style={styles.detail1v1ScoreRow}>
                     <View style={styles.detail1v1Player}>
@@ -1360,7 +1360,7 @@ export default function HistoryScreen() {
                     </View>
                     {isEditingChallengeFields ? (
                       <Text style={styles.cdShotsEditHint}>
-                        {language === 'fr' ? 'Modifier atelier, distance, score' : 'Edit workshop, distance, score'}
+                        {t('historyExtra', 'editWorkshopDistScore')}
                       </Text>
                     ) : null}
                   </View>
@@ -1503,7 +1503,7 @@ export default function HistoryScreen() {
                     </View>
                     {isEditingChallengeFields ? (
                       <Text style={styles.cdShotsEditHint}>
-                        {language === 'fr' ? 'Appuyer = basculer, Maintenir = carreau' : 'Tap = toggle, Long press = carreau'}
+                        {t('historyExtra', 'tapToggleLongCarreau')}
                       </Text>
                     ) : null}
                   </View>
@@ -1529,11 +1529,11 @@ export default function HistoryScreen() {
                   <View style={styles.cdShotLegend}>
                     <View style={styles.cdShotLegendItem}>
                       <View style={[styles.cdShotLegendDot, { backgroundColor: theme.success }]} />
-                      <Text style={styles.cdShotLegendText}>{language === 'fr' ? 'Reussi' : 'Success'}</Text>
+                      <Text style={styles.cdShotLegendText}>{t('historyExtra', 'successLabel')}</Text>
                     </View>
                     <View style={styles.cdShotLegendItem}>
                       <View style={[styles.cdShotLegendDot, { backgroundColor: theme.error }]} />
-                      <Text style={styles.cdShotLegendText}>{language === 'fr' ? 'Rate' : 'Miss'}</Text>
+                      <Text style={styles.cdShotLegendText}>{t('historyExtra', 'missLabel')}</Text>
                     </View>
                     <View style={styles.cdShotLegendItem}>
                       <View style={[styles.cdShotLegendDot, { backgroundColor: theme.carreauColor }]} />
@@ -1544,7 +1544,7 @@ export default function HistoryScreen() {
                     <View style={styles.cdShotEditHintRow}>
                       <MaterialIcons name="info-outline" size={14} color={theme.textMuted} />
                       <Text style={styles.cdShotsEditHint}>
-                        {language === 'fr' ? 'Appuyer = basculer, Maintenir = carreau' : 'Tap = toggle, Long press = carreau'}
+                        {t('historyExtra', 'tapToggleLongCarreau')}
                       </Text>
                     </View>
                   ) : null}
@@ -1562,7 +1562,7 @@ export default function HistoryScreen() {
                     style={styles.cdNotesInput}
                     value={editNotes}
                     onChangeText={setEditNotes}
-                    placeholder={language === 'fr' ? 'Ajouter des notes...' : 'Add notes...'}
+                    placeholder={t('historyExtra', 'addNotes')}
                     placeholderTextColor={theme.textMuted}
                     multiline
                     numberOfLines={3}
@@ -1570,7 +1570,7 @@ export default function HistoryScreen() {
                   />
                 ) : (
                   <Text style={styles.cdNotesText}>
-                    {editingChallenge.notes || (language === 'fr' ? 'Aucune note' : 'No notes')}
+                    {editingChallenge.notes || t('historyExtra', 'noNotes')}
                   </Text>
                 )}
               </View>
@@ -1610,7 +1610,7 @@ export default function HistoryScreen() {
                       setIsEditingChallengeFields(true);
                     }}>
                       <MaterialIcons name="edit" size={18} color="#FFF" />
-                      <Text style={styles.closeBtnText}>{t('match', 'editMatch') || (language === 'fr' ? 'Modifier' : 'Edit')}</Text>
+                      <Text style={styles.closeBtnText}>{t('match', 'editMatch')}</Text>
                     </Pressable>
                   </View>
                 </>
@@ -1779,7 +1779,7 @@ export default function HistoryScreen() {
                           >
                             <View style={[styles.mdSeriesDot, { backgroundColor: sWin ? theme.success : theme.error }]} />
                             <Text style={styles.mdSeriesMatchLabel}>
-                              {sm.seriesInfo?.isFinale ? (language === 'fr' ? 'Finale' : 'Final') : `M${idx + 1}`}
+                              {sm.seriesInfo?.isFinale ? t('historyExtra', 'finale') : `M${idx + 1}`}
                             </Text>
                             <Text style={[styles.mdSeriesMatchScore, sWin && { color: theme.success }, !sWin && { color: theme.error }]}>
                               {sm.teamA.score}-{sm.teamB.score}
@@ -1906,7 +1906,7 @@ export default function HistoryScreen() {
                     router.push(`/match/${m.id}`);
                   }}>
                     <MaterialIcons name="edit" size={18} color="#FFF" />
-                    <Text style={styles.closeBtnText}>{t('match', 'editMatch') || (language === 'fr' ? 'Modifier' : 'Edit')}</Text>
+                    <Text style={styles.closeBtnText}>{t('match', 'editMatch')}</Text>
                   </Pressable>
                 </View>
               </ScrollView>
