@@ -33,9 +33,7 @@ import AdBanner from '@/components/ui/AdBanner';
 
 const defaultScreenWidth = Dimensions.get('window').width;
 
-// ============================================
 // TYPES & CONSTANTS
-// ============================================
 type TimeFilter = 'today' | 'week' | 'month' | '3months' | '6months' | 'year' | 'all';
 type ProgressionFilter = '4weeks' | '8weeks' | '3months' | '6months' | 'year' | '2years' | '5years' | '10years' | '25years';
 type StatsCategory = 'performance' | 'tir' | 'point' | 'errors';
@@ -69,9 +67,7 @@ const CATEGORY_TAB_KEYS: { id: StatsCategory; key: string; icon: string; color: 
   { id: 'errors', key: 'errors', icon: 'error-outline', color: theme.error },
 ];
 
-// ============================================
 // HELPER FUNCTIONS
-// ============================================
 function filterByTime<T extends { date: string }>(items: T[], filter: TimeFilter): T[] {
   if (filter === 'all') return items;
   
@@ -110,9 +106,7 @@ function filterByTime<T extends { date: string }>(items: T[], filter: TimeFilter
   return items.filter(item => new Date(item.date) >= startDate);
 }
 
-// ============================================
 // COMPONENTS
-// ============================================
 
 // Progress Ring Component
 function ProgressRing({ 
@@ -285,9 +279,7 @@ function NAPlaceholder({ message }: { message: string }) {
   );
 }
 
-// ============================================
 // MAIN COMPONENT
-// ============================================
 type ItemFilterType = 'all' | 'match' | 'challenge' | 'tournament' | 'opponent' | 'partner' | 'terrain' | 'boules';
 
 export default function StatsScreen() {
@@ -517,9 +509,7 @@ export default function StatsScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
-  // ============================================
   // PERFORMANCE STATS CALCULATION
-  // ============================================
   const performanceStats = useMemo(() => {
     const total = filteredMatches.length;
     const trainingMatches = filteredMatches.filter(m => m.mode === 'Entraînement');
@@ -651,9 +641,7 @@ export default function StatsScreen() {
     };
   }, [filteredMatches]);
 
-  // ============================================
   // TIR STATS
-  // ============================================
   const tirStats = useMemo(() => {
     let totalTirs = 0, tirsSuccess = 0, carreaux = 0;
     
@@ -823,9 +811,7 @@ export default function StatsScreen() {
     };
   }, [filteredMatches, filteredChallenges, performanceStats.totalMenes]);
 
-  // ============================================
   // POINT STATS
-  // ============================================
   const pointStats = useMemo(() => {
     let totalPoints = 0, pointsSuccess = 0;
     
@@ -914,9 +900,7 @@ export default function StatsScreen() {
     };
   }, [filteredMatches, performanceStats.totalMenes]);
 
-  // ============================================
   // ERROR ANALYSIS STATS
-  // ============================================
   const errorStats = useMemo(() => {
     // Total errors
     const totalTirErrors = tirStats.totalTirs - tirStats.tirsSuccess;
@@ -1064,9 +1048,7 @@ export default function StatsScreen() {
   // ============================================
   // TERRAIN TYPE STATS
   // ============================================
-  // ============================================
   // BOULES SET STATS
-  // ============================================
   const boulesSetStats = useMemo(() => {
     const bySet: Record<string, {
       name: string; brand?: string; diameter?: number; weight?: number;
@@ -1153,9 +1135,7 @@ export default function StatsScreen() {
     return { byTerrain, types, hasData: types.length > 0, totalTerrainMatches };
   }, [filteredMatches, tournaments]);
 
-  // ============================================
   // PRECISION WORKSHOP STATS
-  // ============================================
   const precisionWorkshopStats = useMemo(() => {
     const precisionChallenges = filteredChallenges.filter(c => c.type === 'precision' && c.precisionShots && c.precisionShots.length > 0);
     if (precisionChallenges.length === 0) return null;
@@ -1210,9 +1190,7 @@ export default function StatsScreen() {
     };
   }, [filteredChallenges]);
 
-  // ============================================
   // PROGRESSION DATA
-  // ============================================
   const progressionData = useMemo(() => {
     const selectedFilter = PROGRESSION_FILTERS.find(f => f.id === progressionFilter) || PROGRESSION_FILTERS[1];
     const weeksToShow = selectedFilter.weeks;
@@ -1373,66 +1351,43 @@ export default function StatsScreen() {
     };
   }, [progressionData]);
 
-  // ============================================
   // CHALLENGE PROGRESSION DATA
-  // ============================================
   const challengeProgressionData = useMemo(() => {
-    const selectedFilter = PROGRESSION_FILTERS.find(f => f.id === progressionFilter) || PROGRESSION_FILTERS[1];
-    const weeksToShow = selectedFilter.weeks;
-
-    const sortedChallenges = [...challenges].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    if (sortedChallenges.length === 0) return { weeklyData: [], hasData: false };
-
-    const now = new Date();
-    const startDate = new Date(now);
-    startDate.setDate(startDate.getDate() - (weeksToShow * 7));
-    startDate.setDate(startDate.getDate() - startDate.getDay());
-
+    const sel = PROGRESSION_FILTERS.find(f => f.id === progressionFilter) || PROGRESSION_FILTERS[1];
+    const weeksToShow = sel.weeks;
+    const sorted = [...challenges].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    if (sorted.length === 0) return { weeklyData: [], hasData: false };
+    const now = new Date(); const start = new Date(now); start.setDate(start.getDate() - (weeksToShow * 7)); start.setDate(start.getDate() - start.getDay());
     const TYPES = ['10_tirs', '10_tirs_sautee', 'precision'] as const;
-    const currentDate = new Date(startDate);
-    const weeklyData: {
-      week: string;
-      byType: Record<string, { count: number; avgRate: number }>;
-    }[] = [];
-
-    while (currentDate <= now) {
-      const weekStart = new Date(currentDate);
-      const weekEnd = new Date(currentDate);
-      weekEnd.setDate(weekEnd.getDate() + 6);
-
-      const weekChallenges = sortedChallenges.filter(c => {
-        const d = new Date(c.date);
-        return d >= weekStart && d <= weekEnd;
-      });
-
+    const cur = new Date(start); const weeklyData: { week: string; byType: Record<string, { count: number; avgRate: number }> }[] = [];
+    while (cur <= now) {
+      const ws = new Date(cur); const we = new Date(cur); we.setDate(we.getDate() + 6);
+      const wc = sorted.filter(c => { const d = new Date(c.date); return d >= ws && d <= we; });
       const byType: Record<string, { count: number; avgRate: number }> = {};
-      TYPES.forEach(type => {
-        const tc = weekChallenges.filter(c => c.type === type);
-        let totalRate = 0;
-        tc.forEach(c => {
-          if (type === 'precision') {
-            totalRate += (c.maxPoints && c.maxPoints > 0) ? ((c.totalPoints || 0) / c.maxPoints) * 100 : 0;
-          } else {
-            totalRate += c.successRate || 0;
-          }
-        });
-        byType[type] = {
-          count: tc.length,
-          avgRate: tc.length > 0 ? Math.round(totalRate / tc.length) : 0,
-        };
-      });
-
-      weeklyData.push({
-        week: `${weekStart.getDate()}/${weekStart.getMonth() + 1}`,
-        byType,
-      });
-
-      currentDate.setDate(currentDate.getDate() + 7);
+      TYPES.forEach(type => { const tc = wc.filter(c => c.type === type); let tr = 0; tc.forEach(c => { if (type === 'precision') { tr += (c.maxPoints && c.maxPoints > 0) ? ((c.totalPoints || 0) / c.maxPoints) * 100 : 0; } else { tr += c.successRate || 0; } }); byType[type] = { count: tc.length, avgRate: tc.length > 0 ? Math.round(tr / tc.length) : 0 }; });
+      weeklyData.push({ week: `${ws.getDate()}/${ws.getMonth() + 1}`, byType }); cur.setDate(cur.getDate() + 7);
     }
-
-    const hasData = weeklyData.some(w => Object.values(w.byType).some(t => t.count > 0));
-    return { weeklyData, hasData };
+    return { weeklyData, hasData: weeklyData.some(w => Object.values(w.byType).some(t => t.count > 0)) };
   }, [challenges, progressionFilter]);
+
+  // ============================================
+  // TOURNAMENT PROGRESSION DATA (for Progression modal)
+  // ============================================
+  const tournamentProgressionData = useMemo(() => {
+    const finishedTournaments = tournaments.filter(t => t.status === 'Terminé');
+    if (finishedTournaments.length === 0) return { items: [], hasData: false };
+    const RESULT_RANKS: Record<string, number> = { '1er': 100, '2ème': 85, '3ème': 70, 'Demi-finale': 55, 'Quart de finale': 40, '1/8 finale': 25, 'Poules': 10, 'Autre': 5 };
+    const RESULT_COLORS: Record<string, string> = { '1er': '#FFD700', '2ème': '#A8B4C0', '3ème': '#CD7F32', 'Demi-finale': '#4A90D9', 'Quart de finale': '#F5A623', '1/8 finale': '#7B8794', 'Poules': '#7B8794', 'Autre': theme.textMuted };
+    const items = finishedTournaments.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(tour => {
+      const tourMatches = matches.filter(m => m.tournamentId === tour.id);
+      const wins = tourMatches.filter(m => m.winner === 'A').length;
+      const totalM = tourMatches.length;
+      const ptsFor = tourMatches.reduce((s, m) => s + (m.teamA?.score || 0), 0);
+      const ptsAgainst = tourMatches.reduce((s, m) => s + (m.teamB?.score || 0), 0);
+      return { id: tour.id, name: tour.name, date: tour.date, result: tour.finalResult || 'Autre', resultRank: RESULT_RANKS[tour.finalResult || ''] || 5, resultColor: RESULT_COLORS[tour.finalResult || ''] || theme.textMuted, winRate: totalM > 0 ? Math.round((wins / totalM) * 100) : 0, matches: totalM, wins, pointDiff: ptsFor - ptsAgainst, format: tour.format };
+    });
+    return { items, hasData: items.length > 0 };
+  }, [tournaments, matches]);
 
   const hasData = performanceStats.total > 0 || filteredChallenges.length > 0;
 
@@ -3345,6 +3300,7 @@ export default function StatsScreen() {
                   </View>
                 )}
 
+                {tournamentProgressionData.hasData?<View style={styles.progressionSection}><View style={styles.progressionSectionHeader}><View style={[styles.progressionSectionIcon,{backgroundColor:theme.carreauColor+'15'}]}><MaterialIcons name="emoji-events" size={20} color={theme.carreauColor}/></View><View><Text style={[styles.progressionSectionTitle,isTablet&&styles.progressionSectionTitleTablet]}>{t('stats','tournamentProgressionTitle')}</Text><Text style={[styles.progressionSectionSubtitle,isTablet&&styles.progressionSectionSubtitleTablet]}>{tournamentProgressionData.items.length} {t('palmares','tournois')}</Text></View></View><View style={styles.chartContainer}><Svg width={modalChartWidth} height={modalChartHeight+30}>{[0,50,100].map((v,i)=>(<G key={i}><Line x1="35" y1={(modalChartHeight-20)-(v/100)*(modalChartHeight-40)} x2={modalChartWidth} y2={(modalChartHeight-20)-(v/100)*(modalChartHeight-40)} stroke={theme.border} strokeWidth="1" strokeDasharray="4,4"/><SvgText x="30" y={(modalChartHeight-15)-(v/100)*(modalChartHeight-40)} fontSize={isTablet?'12':'10'} fill={theme.textMuted} textAnchor="end">{v}%</SvgText></G>))}{tournamentProgressionData.items.map((it,i)=>{const x=45+(i*((modalChartWidth-45)/Math.max(tournamentProgressionData.items.length-1,1)));const y=(modalChartHeight-20)-(it.winRate/100)*(modalChartHeight-40);const p=tournamentProgressionData.items[i-1];const px=p?45+((i-1)*((modalChartWidth-45)/Math.max(tournamentProgressionData.items.length-1,1))):x;const py=p?(modalChartHeight-20)-(p.winRate/100)*(modalChartHeight-40):y;return(<G key={i}>{i>0?<Line x1={px} y1={py} x2={x} y2={y} stroke={theme.carreauColor} strokeWidth="2.5"/>:null}<Circle cx={x} cy={y} r={6} fill={it.resultColor} stroke="#FFF" strokeWidth={2}/>{it.matches>0?<SvgText x={x} y={y-12} fontSize="9" fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{it.winRate}%</SvgText>:null}</G>);})}</Svg></View><View style={{gap:4,marginTop:8}}>{tournamentProgressionData.items.map(it=>(<Pressable key={it.id} style={{flexDirection:'row',alignItems:'center',gap:8,paddingVertical:7,borderBottomWidth:1,borderBottomColor:theme.border+'40'}} onPress={()=>router.push(`/tournament/${it.id}`)}><View style={{width:10,height:10,borderRadius:5,backgroundColor:it.resultColor}}/><View style={{flex:1}}><Text style={{fontSize:12,fontWeight:'600',color:theme.textPrimary}} numberOfLines={1}>{it.name}</Text><Text style={{fontSize:10,color:theme.textMuted}}>{new Date(it.date).toLocaleDateString(language==='fr'?'fr-FR':'en-US',{month:'short',year:'numeric'})} \u2022 {it.wins}V-{it.matches-it.wins}D</Text></View><View style={{paddingHorizontal:8,paddingVertical:3,borderRadius:10,backgroundColor:it.resultColor+'18'}}><Text style={{fontSize:10,fontWeight:'700',color:it.resultColor}}>{t('palmaresResults',it.result)}</Text></View></Pressable>))}</View></View>:null}
                 {/* Summary Table */}
                 <View style={styles.progressionSection}>
                   <View style={styles.progressionSectionHeader}>
@@ -3794,9 +3750,7 @@ export default function StatsScreen() {
   );
 }
 
-// ============================================
 // STYLES
-// ============================================
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.backgroundSecondary },
   header: { backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border, paddingBottom: 12 },

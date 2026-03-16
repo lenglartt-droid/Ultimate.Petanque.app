@@ -589,6 +589,12 @@ export const translations = {
     // Challenge progression chart
     challengeProgressionTitle: { fr: 'Progression des defis', en: 'Challenge Progression' },
     challengeProgressionSubtitle: { fr: 'Taux de reussite par type', en: 'Success rate by type' },
+    tournamentProgressionTitle: { fr: 'Progression en tournoi', en: 'Tournament Progression' },
+    tournamentProgressionSubtitle: { fr: 'Resultats et evolution par tournoi', en: 'Results and evolution by tournament' },
+    tournamentWinRate: { fr: 'Taux victoire', en: 'Win rate' },
+    tournamentPointDiff: { fr: 'Diff. points', en: 'Point diff.' },
+    tournamentResult: { fr: 'Resultat', en: 'Result' },
+    noTournamentData: { fr: 'Aucun tournoi termine', en: 'No completed tournaments' },
     exportStats: { fr: 'Exporter', en: 'Export' },
     exportStatsTitle: { fr: 'Mes Statistiques', en: 'My Statistics' },
     exportGenerating: { fr: 'Generation en cours...', en: 'Generating...' },
@@ -1239,8 +1245,10 @@ export const translations = {
     mp5Q: { fr: 'Mes coordonnees de contact sont-elles visibles sur la carte ?', en: 'Is my contact info visible on the map?' },
     mp5A: { fr: 'Non. Les informations de contact ne sont jamais incluses dans les fiches publiques. Pour partager vos coordonnees, utilisez le partage par code.', en: 'No. Contact information is never included in public items. To share your contact details, use code sharing.' },
     a1A: { fr: 'Profil → Paramètres → Mot de passe. Saisissez votre ancien mot de passe, puis le nouveau (minimum 6 caractères) et confirmez.', en: 'Profile → Settings → Password. Enter your old password, then the new one (minimum 6 characters) and confirm.' },
-    a2Q: { fr: 'Où trouver mon palmarès et bilan financier ?', en: 'Where to find my achievements and financial summary?' },
+    a2Q: { fr: 'Ou trouver mon palmares et bilan financier ?', en: 'Where to find my achievements and financial summary?' },
     a2A: { fr: 'Depuis votre Profil :\n\n\ud83c\udfc6 Mon Palmarès — Tous vos résultats de tournois, badges de performance, classement par saison\n\ud83d\udcb0 Bilan financier — Résumé des gains, inscriptions, cotisations club, balance nette\n\nCes pages se mettent à jour automatiquement.', en: 'From your Profile:\n\n\ud83c\udfc6 My Achievements — All your tournament results, performance badges, season rankings\n\ud83d\udcb0 Financial summary — Summary of winnings, registrations, club fees, net balance\n\nThese pages update automatically.' },
+    a4Q: { fr: 'Comment fonctionne le mode hors ligne ?', en: 'How does offline mode work?' },
+    a4A: { fr: 'L\'app fonctionne sans connexion internet. Vos matchs, joueurs et tournois sont mis en cache localement. Les modifications sont stockees dans une file d\'attente et synchronisees automatiquement au retour du reseau. En cas de conflit, un modal vous permet de choisir la version a conserver.', en: 'The app works without internet. Your matches, players and tournaments are cached locally. Modifications are queued and synced automatically when the network returns. In case of conflict, a modal lets you choose which version to keep.' },
     a3Q: { fr: 'Comment configurer les notifications ?', en: 'How to configure notifications?' },
     a3A: { fr: 'Profil → Paramètres → Notifications :\n\n\u2022 Notifications de partage — Alertes quand quelqu\'un accède à vos fiches\n\u2022 Notifications de tournois — Rappels programmés avant vos tournois\n\nLes notifications push locales fonctionnent sans connexion internet.', en: 'Profile → Settings → Notifications:\n\n\u2022 Sharing notifications — Alerts when someone accesses your cards\n\u2022 Tournament notifications — Scheduled reminders before your tournaments\n\nLocal push notifications work without internet connection.' },
     // Quick action steps
@@ -1258,6 +1266,24 @@ export const translations = {
      tip5: { fr: 'Rendez vos terrains publics pour aider la communaute a trouver des lieux de jeu', en: 'Make your courts public to help the community find playing spots' },
      tip6: { fr: 'Lors de la creation d\'un terrain ou club, verifiez les doublons pour eviter les fiches en double', en: 'When creating a court or club, check for duplicates to avoid duplicate entries' },
      tip7: { fr: 'Vos coordonnees de contact ne sont jamais partagees via la carte publique — utilisez le partage par code pour transmettre vos infos', en: 'Your contact details are never shared via the public map — use code sharing to transmit your info' },
+    // Equipment FAQ
+    equipmentCat: { fr: 'Equipement', en: 'Equipment' },
+    eq1Q: { fr: 'Comment gerer mes sets de boules ?', en: 'How to manage my boules sets?' },
+    eq1A: { fr: 'Depuis votre Profil, appuyez sur Equipement. Vous pouvez :\n\n- Ajouter plusieurs sets de boules avec marque, diametre, poids, numero de serie et photo\n- Definir un set comme principal (pre-selectionne dans les matchs)\n- Suivre le prix d\'achat\n- L\'app analyse automatiquement vos performances par set et suggere les "Boules preferees" selon votre role', en: 'From your Profile, tap Equipment. You can:\n\n- Add multiple boules sets with brand, diameter, weight, serial number and photo\n- Set one as primary (pre-selected in matches)\n- Track purchase price\n- The app automatically analyzes your performance per set and suggests "Preferred Boules" based on your role' },
+    eq2Q: { fr: 'Comment voir mes performances par set de boules ?', en: 'How to see my performance per boules set?' },
+    eq2A: { fr: 'Dans l\'onglet Stats, utilisez le filtre "Par boules" pour isoler les statistiques d\'un set specifique. Le tableau comparatif montre automatiquement les taux de victoire, tir et carreaux pour chaque set utilise.', en: 'In the Stats tab, use the "By boules" filter to isolate statistics for a specific set. The comparison table automatically shows win rate, shot rate and carreaux rate for each set used.' },
+    eq3Q: { fr: 'Qu\'est-ce que la carte federation ?', en: 'What is the federation card?' },
+    eq3A: { fr: 'Vous pouvez scanner ou photographier votre licence federale depuis votre fiche joueur (Ma Fiche Joueur). Elle est stockee de maniere securisee et accessible hors ligne. Vous pouvez egalement ajouter une carte de club depuis la fiche de votre club.', en: 'You can scan or photograph your federation license from your player card (My Player Card). It is stored securely and accessible offline. You can also add a club card from your club page.' },
+    // Financial FAQ
+    financialCat: { fr: 'Finances', en: 'Finances' },
+    fin1Q: { fr: 'Comment fonctionne le bilan financier ?', en: 'How does the financial summary work?' },
+    fin1A: { fr: 'Le bilan financier (Profil > Bilan financier) calcule automatiquement :\n\n- Gains en tournois (dotations remportees)\n- Inscriptions tournois (couts d\'inscription)\n- Cotisations clubs (carte membre)\n- Evolution mensuelle avec graphique\n- Balance nette (gains - depenses)\n\nToutes les donnees proviennent des tournois et clubs que vous avez enregistres.', en: 'The financial summary (Profile > Financial summary) automatically calculates:\n\n- Tournament winnings (prizes won)\n- Tournament registrations (entry fees)\n- Club memberships (membership costs)\n- Monthly evolution chart\n- Net balance (winnings - expenses)\n\nAll data comes from tournaments and clubs you have registered.' },
+    // Preview & Visibility FAQ
+    previewCat: { fr: 'Apercu et visibilite', en: 'Preview & visibility' },
+    pv1Q: { fr: 'Qu\'est-ce que l\'apercu de fiche ?', en: 'What is the card preview?' },
+    pv1A: { fr: 'Avant de rendre une fiche publique ou de la partager, un apercu vous montre exactement ce que les autres verront. Vous pouvez choisir d\'afficher ou masquer vos coordonnees (telephone, email) via un toggle dedie.', en: 'Before making a card public or sharing it, a preview shows you exactly what others will see. You can choose to show or hide your contact details (phone, email) via a dedicated toggle.' },
+    pv2Q: { fr: 'Quelle difference entre public et partage ?', en: 'What is the difference between public and sharing?' },
+    pv2A: { fr: 'Public : votre fiche est visible par TOUS les utilisateurs sur la carte interactive. Lecture seule.\nPartage : vous generez un code unique pour donner l\'acces a une personne specifique. Vous choisissez lecture seule ou modification.\n\nDans les deux cas, un apercu vous montre ce que le destinataire verra avant de confirmer.', en: 'Public: your card is visible to ALL users on the interactive map. Read-only.\nSharing: you generate a unique code to give access to a specific person. You choose read-only or edit.\n\nIn both cases, a preview shows you what the recipient will see before confirming.' },
   },
 
   // ============================================
