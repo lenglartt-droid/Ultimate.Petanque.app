@@ -476,12 +476,16 @@ export default function HomeScreen() {
           ) : null}
         </Animated.View>
 
-        {/* Section divider */}
-        {recentResults.length > 0 ? <View style={styles.sectionDivider} /> : null}
+        {/* ========== SECTION DIVIDER ========== */}
+        {recentResults.length > 0 ? (
+          <View style={styles.sectionDividerBlock}>
+            <View style={styles.sectionDividerLine} />
+          </View>
+        ) : null}
 
         {/* ========== LAST 3 RESULTS TIMELINE ========== */}
         {recentResults.length > 0 ? (
-          <Animated.View entering={FadeInDown.duration(400).delay(380)} style={[styles.section, isTablet && styles.sectionTablet, { marginTop: 16 }]}>
+          <Animated.View entering={FadeInDown.duration(400).delay(380)} style={[styles.section, isTablet && styles.sectionTablet]}>
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionTitle}>{t('history', 'history')}</Text>
               <Pressable onPress={() => router.push('/history')}>
@@ -828,7 +832,8 @@ const styles = StyleSheet.create({
   bannerCard: { borderRadius: 20, overflow: 'hidden' as const, ...theme.shadows.cardElevated, position: 'relative' as const },
   bannerImage: { width: '100%', height: 110, borderRadius: 20 },
   bannerOverlay: { position: 'absolute' as const, bottom: 0, left: 0, right: 0, height: 50, borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
-  sectionDivider: { height: 1, backgroundColor: theme.border, marginHorizontal: 40, marginBottom: 8, opacity: 0.6 },
+  sectionDividerBlock: { paddingHorizontal: 16, marginTop: 8, marginBottom: 24 },
+  sectionDividerLine: { height: 2, backgroundColor: theme.border, borderRadius: 1, opacity: 0.5 },
 
   // ========== JOIN MODAL ==========
   joinOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 24 },

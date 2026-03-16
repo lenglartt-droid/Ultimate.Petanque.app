@@ -414,7 +414,7 @@ export default function DirectoryScreen() {
                 <MaterialIcons name="star" size={10} color="#FFF" />
               </View>
               <View style={styles.selfVerifiedBadge}>
-                <MaterialIcons name="verified" size={11} color="#FFF" />
+                <MaterialIcons name="verified" size={12} color="#FFF" />
               </View>
             </>
           ) : isRealUser ? (
@@ -1940,16 +1940,17 @@ const styles = StyleSheet.create({
   },
   selfVerifiedBadge: {
     position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    top: -3,
+    left: -3,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: theme.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
+    borderWidth: 2.5,
     borderColor: theme.surface,
+    zIndex: 2,
   },
   favoriteBadge: {
     position: 'absolute',
