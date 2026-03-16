@@ -257,6 +257,7 @@ export const translations = {
     reviewDocuments: { fr: 'Documents acceptés', en: 'Accepted documents' },
     termsOfUse: { fr: "Conditions Générales d'Utilisation", en: 'Terms of Use' },
     privacyPolicy: { fr: 'Politique de confidentialité', en: 'Privacy Policy' },
+    termsSubtext: { fr: 'Conditions Générales d\'Utilisation', en: 'Terms of Use' },
   },
 
   // ============================================
@@ -755,6 +756,7 @@ export const translations = {
     continueCreation: { fr: 'Créer quand même', en: 'Create anyway' },
     importing: { fr: 'Import en cours...', en: 'Importing...' },
     importSuccess: { fr: 'Fiche importée dans votre annuaire', en: 'Card imported into your directory' },
+    visibility: { fr: 'Visibilité', en: 'Visibility' },
   },
 
   // ============================================
@@ -907,6 +909,10 @@ export const translations = {
     entre_2_boules: { fr: 'Entre 2 boules', en: 'Between 2 balls' },
     sautee: { fr: 'Sautée', en: 'Lob' },
     tir_but: { fr: 'Tir au but', en: 'Shot at jack' },
+    rate: { fr: 'Rat\u00e9', en: 'Missed' },
+    touche: { fr: 'Touch\u00e9', en: 'Touched' },
+    sorti: { fr: 'Sorti', en: 'Out' },
+    carreau: { fr: 'Carreau', en: 'Carreau' },
   },
   palmaresResults: {
     '1er': { fr: '1er', en: '1st' },
@@ -1043,6 +1049,12 @@ export const translations = {
     training: { fr: 'Entraînement', en: 'Training' },
     createMatch: { fr: 'Créer le match', en: 'Create match' },
     share: { fr: 'Partager', en: 'Share' },
+    menesCount: { fr: 'Mènes', en: 'Ends' },
+    playerActions: { fr: 'Actions des joueurs', en: 'Player actions' },
+    deleteMatchConfirm: { fr: 'Supprimer ce match définitivement ?', en: 'Delete this match permanently?' },
+    matchNumber: { fr: 'Match', en: 'Match' },
+    tournamentMatch: { fr: 'Match de tournoi', en: 'Tournament match' },
+    end: { fr: 'Manche', en: 'Round' },
   },
 
   // ============================================
@@ -1068,6 +1080,7 @@ export const translations = {
   // ============================================
   history: {
     title: { fr: 'Historique', en: 'History' },
+    history: { fr: 'Historique', en: 'History' },
     matches: { fr: 'Matchs', en: 'Matches' },
     challenges: { fr: 'Défis', en: 'Challenges' },
     series: { fr: 'Séries', en: 'Series' },
@@ -1080,6 +1093,50 @@ export const translations = {
     deleteLabel: { fr: 'Supprimer', en: 'Delete' },
     deleteConfirm: { fr: 'Supprimer définitivement ?', en: 'Delete permanently?' },
     deleteConfirmDesc: { fr: 'Cette action est irréversible.', en: 'This action is irreversible.' },
+    // Filter keys
+    all: { fr: 'Tout', en: 'All' },
+    trainings: { fr: 'Entraînement', en: 'Training' },
+    tournaments: { fr: 'Tournois', en: 'Tournaments' },
+    // Period keys
+    allTime: { fr: 'Tout', en: 'All time' },
+    sevenDays: { fr: '7 jours', en: '7 days' },
+    twoWeeks: { fr: '2 semaines', en: '2 weeks' },
+    oneMonth: { fr: '1 mois', en: '1 month' },
+    threeMonths: { fr: '3 mois', en: '3 months' },
+    sixMonths: { fr: '6 mois', en: '6 months' },
+    oneYear: { fr: '1 an', en: '1 year' },
+    period: { fr: 'Période', en: 'Period' },
+    // Match/series/challenge detail keys
+    me: { fr: 'MOI', en: 'ME' },
+    opp: { fr: 'ADV', en: 'OPP' },
+    finale: { fr: 'Finale', en: 'Final' },
+    matchN: { fr: 'Match', en: 'Match' },
+    inProgress: { fr: 'En cours', en: 'In progress' },
+    seriesWon: { fr: 'Série gagnée', en: 'Series won' },
+    seriesLost: { fr: 'Série perdue', en: 'Series lost' },
+    collapse: { fr: 'Masquer', en: 'Collapse' },
+    seeMatches: { fr: 'Voir les matchs', en: 'See matches' },
+    success: { fr: 'réussite', en: 'success' },
+    carreauxPlural: { fr: 'carreaux', en: 'carreaux' },
+    carreauSingular: { fr: 'carreau', en: 'carreau' },
+    challengeSummary: { fr: 'Résumé des défis', en: 'Challenge summary' },
+    avg: { fr: 'moy.', en: 'avg.' },
+    noResults: { fr: 'Aucun résultat', en: 'No results' },
+    noActivity: { fr: 'Aucune activité pour cette période', en: 'No activity for this period' },
+    resetFilters: { fr: 'Réinitialiser les filtres', en: 'Reset filters' },
+    challengeDetails: { fr: 'Détails du défi', en: 'Challenge details' },
+    matchDetails: { fr: 'Détails du match', en: 'Match details' },
+    successfulShots: { fr: 'tirs réussis', en: 'successful shots' },
+    carreaux: { fr: 'Carreaux', en: 'Carreaux' },
+    duration: { fr: 'Durée', en: 'Duration' },
+    radarSuccessRate: { fr: 'Réussite', en: 'Success' },
+    radarCarreaux: { fr: 'Carreaux', en: 'Carreaux' },
+    radarConsistency: { fr: 'Régularité', en: 'Consistency' },
+    radarComparison: { fr: 'Comparaison radar', en: 'Radar comparison' },
+    editPrecisionShots: { fr: 'Tirs de précision', en: 'Precision shots' },
+    distance: { fr: 'Distance', en: 'Distance' },
+    points: { fr: 'Points', en: 'Points' },
+    shotDetail: { fr: 'Détail des tirs', en: 'Shot detail' },
   },
 
   // ============================================
@@ -1317,6 +1374,43 @@ export const translations = {
   },
 
   // ============================================
+  // MATCH EDIT
+  // ============================================
+  matchEdit: {
+    shareWithParticipants: { fr: 'Partager avec les participants', en: 'Share with participants' },
+    savingMatch: { fr: 'Enregistrement...', en: 'Saving...' },
+    seriesShareIntro: { fr: 'R\u00e9sultat de la s\u00e9rie', en: 'Series result' },
+    seriesShareSuffix: { fr: 'Via Ultimate Petanque', en: 'Via Ultimate Petanque' },
+    sharingSeriesProgress: { fr: 'Partage de la s\u00e9rie...', en: 'Sharing series...' },
+    shareEntireSeries: { fr: 'Partager la s\u00e9rie compl\u00e8te', en: 'Share entire series' },
+    deleteShot: { fr: 'Supprimer le tir', en: 'Delete shot' },
+    detailedShotsList: { fr: 'Liste des tirs d\u00e9taill\u00e9s', en: 'Detailed shots list' },
+    actionsDesc: { fr: 'Actions des joueurs pendant le match', en: 'Player actions during the match' },
+    selectTournament: { fr: 'S\u00e9lectionner un tournoi', en: 'Select a tournament' },
+  },
+
+  // ============================================
+  // TOURNAMENT PHASES
+  // ============================================
+  tournamentPhases: {
+    poules: { fr: 'Poules', en: 'Group stage' },
+    poulesShort: { fr: 'Poules', en: 'Groups' },
+    '16eme': { fr: '16\u00e8me de finale', en: 'Round of 32' },
+    '16emeShort': { fr: '1/16', en: '1/16' },
+    '8eme': { fr: '8\u00e8me de finale', en: 'Round of 16' },
+    '8emeShort': { fr: '1/8', en: '1/8' },
+    quart: { fr: 'Quart de finale', en: 'Quarter-final' },
+    quartShort: { fr: '1/4', en: 'QF' },
+    demi: { fr: 'Demi-finale', en: 'Semi-final' },
+    demiShort: { fr: '1/2', en: 'SF' },
+    finale: { fr: 'Finale', en: 'Final' },
+    finaleShort: { fr: 'Finale', en: 'Final' },
+    complementaire: { fr: 'Compl\u00e9mentaire', en: 'Complementary' },
+    complementaireShort: { fr: 'Compl.', en: 'Comp.' },
+    Match: { fr: 'Match', en: 'Match' },
+  },
+
+  // ============================================
   // MODIFICATION LOGS
   // ============================================
   modificationLogs: {
@@ -1503,6 +1597,52 @@ export const translations = {
     tip5: { fr: 'Rendez vos terrains publics pour aider la communauté à trouver des lieux de jeu.', en: 'Make your courts public to help the community find playing venues.' },
     tip6: { fr: 'Utilisez les séries pour suivre vos performances sur plusieurs matchs consécutifs.', en: 'Use series to track your performance over consecutive matches.' },
     tip7: { fr: 'Le toggle contacts dans l\'aperçu ne concerne que vos propres fiches. Les contacts d\'autres joueurs restent toujours protégés.', en: 'The contact toggle in previews only applies to your own cards. Other players\' contacts always remain protected.' },
+  },
+
+  // ============================================
+  // TOURNAMENT SCOPES
+  // ============================================
+  tournamentScopes: {
+    'Championnat d\u00e9partemental': { fr: 'Championnat d\u00e9partemental', en: 'Departmental championship' },
+    'Championnat r\u00e9gional': { fr: 'Championnat r\u00e9gional', en: 'Regional championship' },
+    'Championnat national': { fr: 'Championnat national', en: 'National championship' },
+    'Championnat international': { fr: 'Championnat international', en: 'International championship' },
+    'Tournoi de club': { fr: 'Tournoi de club', en: 'Club tournament' },
+    'Concours \u00e0 la mont\u00e9e': { fr: 'Concours \u00e0 la mont\u00e9e', en: 'Knockout competition' },
+  },
+
+  // ============================================
+  // TOURNAMENT LEVELS
+  // ============================================
+  tournamentLevels: {
+    'Loisir / Amical': { fr: 'Loisir / Amical', en: 'Recreational / Friendly' },
+    'Promotion': { fr: 'Promotion', en: 'Promotion' },
+    'Honneur': { fr: 'Honneur', en: 'Honor' },
+    '\u00c9lite': { fr: '\u00c9lite', en: 'Elite' },
+    'V\u00e9t\u00e9rans': { fr: 'V\u00e9t\u00e9rans', en: 'Veterans' },
+    'Jeunes (Minimes)': { fr: 'Jeunes (Minimes)', en: 'Youth (Under-13)' },
+    'Jeunes (Cadets)': { fr: 'Jeunes (Cadets)', en: 'Youth (Under-15)' },
+    'Jeunes (Juniors)': { fr: 'Jeunes (Juniors)', en: 'Youth (Under-18)' },
+  },
+
+  // ============================================
+  // TOURNAMENT CATEGORIES
+  // ============================================
+  tournamentCategories: {
+    'Officiel / FFPJP': { fr: 'Officiel / FFPJP', en: 'Official / FFPJP' },
+    'Concours officiel': { fr: 'Concours officiel', en: 'Official competition' },
+    'Concours amical': { fr: 'Concours amical', en: 'Friendly competition' },
+    'Concours \u00e0 la m\u00eal\u00e9e': { fr: 'Concours \u00e0 la m\u00eal\u00e9e', en: 'Random draw competition' },
+  },
+
+  // ============================================
+  // REGISTRATION TYPES
+  // ============================================
+  registrationTypes: {
+    'Inscription libre': { fr: 'Inscription libre', en: 'Open registration' },
+    'Sur invitation': { fr: 'Sur invitation', en: 'By invitation' },
+    'R\u00e9serv\u00e9 aux licenci\u00e9s': { fr: 'R\u00e9serv\u00e9 aux licenci\u00e9s', en: 'Licensed players only' },
+    'Ouvert': { fr: 'Ouvert', en: 'Open' },
   },
 
   // ============================================
