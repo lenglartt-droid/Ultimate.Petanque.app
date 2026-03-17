@@ -474,7 +474,7 @@ export default function HomeScreen() {
               <View style={styles.colMeetupHeader}>
                 <View style={styles.colMeetupTitleLeft}>
                   <MaterialIcons name="event" size={14} color={theme.accent} />
-                  <Text style={styles.colMeetupTitle}>RDV</Text>
+                  <Text style={styles.colMeetupTitle}>{t('history', 'meetups')}</Text>
                 </View>
                 <View style={styles.colMeetupActions}>
                   {pendingInviteCount > 0 ? (
