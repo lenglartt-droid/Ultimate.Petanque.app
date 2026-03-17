@@ -18,6 +18,7 @@ import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import theme from '@/constants/theme';
 import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
@@ -902,53 +903,60 @@ export default function DirectoryScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
-      {/* Header */}
+      {/* Header - Gradient Hero */}
       <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <Text style={styles.title}>{t('directory', 'directory')}</Text>
-          <View style={styles.headerStats}>
-            <Text style={styles.headerStatsText}>
-              {counts.players + counts.clubs + counts.terrains + counts.tournaments} {t('directory', 'items')}
-            </Text>
+        <LinearGradient
+          colors={['#0F172A', '#1E3A5F', '#2563EB']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerGradient}
+        >
+          <View style={styles.headerTop}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.title}>{t('directory', 'directory')}</Text>
+              <Text style={styles.headerSubtitleText}>
+                {counts.players + counts.clubs + counts.terrains + counts.tournaments} {t('directory', 'items')}
+              </Text>
+            </View>
           </View>
-        </View>
 
-        {/* Search Bar */}
-        <View style={styles.searchRow}>
-          <View style={styles.searchBar}>
-            <MaterialIcons name="search" size={20} color={theme.textMuted} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder={getSearchPlaceholder()}
-              placeholderTextColor={theme.textMuted}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-            {searchQuery.length > 0 && (
-              <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
-                <MaterialIcons name="close" size={18} color={theme.textMuted} />
-              </Pressable>
-            )}
+          {/* Search Bar */}
+          <View style={styles.searchRow}>
+            <View style={styles.searchBar}>
+              <MaterialIcons name="search" size={20} color="rgba(255,255,255,0.5)" />
+              <TextInput
+                style={styles.searchInput}
+                placeholder={getSearchPlaceholder()}
+                placeholderTextColor="rgba(255,255,255,0.4)"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {searchQuery.length > 0 ? (
+                <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
+                  <MaterialIcons name="close" size={18} color="rgba(255,255,255,0.5)" />
+                </Pressable>
+              ) : null}
+            </View>
+            <Pressable
+              style={[styles.filterButton, currentFilterCount > 0 && styles.filterButtonActive]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setShowFilters(true);
+              }}
+            >
+              <MaterialIcons 
+                name="tune" 
+                size={20} 
+                color={currentFilterCount > 0 ? '#FFF' : 'rgba(255,255,255,0.6)'} 
+              />
+              {currentFilterCount > 0 ? (
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{currentFilterCount}</Text>
+                </View>
+              ) : null}
+            </Pressable>
           </View>
-          <Pressable
-            style={[styles.filterButton, currentFilterCount > 0 && styles.filterButtonActive]}
-            onPress={() => {
-              Haptics.selectionAsync();
-              setShowFilters(true);
-            }}
-          >
-            <MaterialIcons 
-              name="tune" 
-              size={20} 
-              color={currentFilterCount > 0 ? '#FFF' : theme.textSecondary} 
-            />
-            {currentFilterCount > 0 && (
-              <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>{currentFilterCount}</Text>
-              </View>
-            )}
-          </Pressable>
-        </View>
+        </LinearGradient>
 
         {/* Tabs */}
         <View style={styles.tabsWrapper}>
@@ -962,7 +970,7 @@ export default function DirectoryScreen() {
               return (
                 <Pressable
                   key={tab.id}
-                  style={[styles.tab, isActive && { backgroundColor: tab.color }]}
+                  style={[styles.tab, isActive && { backgroundColor: tab.color, ...theme.shadows.card }]}
                   onPress={() => {
                     Haptics.selectionAsync();
                     setActiveTab(tab.id);
@@ -1703,18 +1711,29 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: theme.border,
   },
+  headerGradient: {
+    paddingTop: 12,
+    paddingBottom: 20,
+    paddingHorizontal: 16,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
+    marginBottom: 14,
   },
   title: {
     fontSize: 28,
-    fontWeight: '700',
-    color: theme.textPrimary,
+    fontWeight: '800',
+    color: '#FFF',
+  },
+  headerSubtitleText: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.6)',
+    marginTop: 2,
+    fontWeight: '500',
   },
   headerTablet: {
     maxWidth: 960,
@@ -1734,54 +1753,55 @@ const styles = StyleSheet.create({
   },
   searchRow: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
     gap: 10,
-    marginBottom: 12,
   },
   searchBar: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.md,
-    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: 14,
     height: 44,
     gap: 8,
   },
   searchInput: {
     flex: 1,
     fontSize: 15,
-    color: theme.textPrimary,
+    color: '#FFF',
   },
   filterButton: {
     width: 44,
     height: 44,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.backgroundSecondary,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   filterButtonActive: {
-    backgroundColor: theme.primary,
+    backgroundColor: 'rgba(255,255,255,0.3)',
   },
   filterBadge: {
     position: 'absolute',
-    top: 4,
-    right: 4,
-    backgroundColor: '#FFF',
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    top: 2,
+    right: 2,
+    backgroundColor: theme.error,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#2563EB',
   },
   filterBadgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: theme.primary,
+    color: '#FFF',
   },
   tabsWrapper: {
     paddingLeft: 16,
+    marginTop: 14,
   },
   tabsContainer: {
     gap: 8,
@@ -1791,10 +1811,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
     borderRadius: theme.borderRadius.full,
     backgroundColor: theme.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: theme.border,
   },
   tabLabel: {
     fontSize: 13,

@@ -14,6 +14,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialIcons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import Svg, { Circle, Line, G, Text as SvgText, Rect, Polygon } from 'react-native-svg';
@@ -30,8 +31,6 @@ try {
 import { router } from 'expo-router';
 import { useLanguage } from '@/hooks/useLanguage';
 import AdBanner from '@/components/ui/AdBanner';
-
-const defaultScreenWidth = Dimensions.get('window').width;
 
 // TYPES & CONSTANTS
 type TimeFilter = 'today' | 'week' | 'month' | '3months' | '6months' | 'year' | 'all';
@@ -162,7 +161,7 @@ function ProgressRing({
 }
 
 // Stat Row Component
-function StatRow({ 
+function StatRow({
   label, 
   value, 
   subValue, 
@@ -196,7 +195,7 @@ function StatRow({
 }
 
 // Section Header
-function SectionHeader({ title, subtitle, icon, color }: { 
+function SectionHeader({title, subtitle, icon, color }: { 
   title: string; 
   subtitle?: string;
   icon?: string;
@@ -233,7 +232,7 @@ function ProgressBar({ value, color, showValue = true }: { value: number; color:
 }
 
 // Breakdown Bar
-function BreakdownBar({ items }: { items: { label: string; value: number; color: string }[] }) {
+function BreakdownBar({items }: { items: { label: string; value: number; color: string }[] }) {
   const total = items.reduce((sum, item) => sum + item.value, 0);
   
   return (
@@ -270,7 +269,7 @@ function BreakdownBar({ items }: { items: { label: string; value: number; color:
 }
 
 // NA Placeholder
-function NAPlaceholder({ message }: { message: string }) {
+function NAPlaceholder({message }: { message: string }) {
   return (
     <View style={styles.naPlaceholder}>
       <MaterialIcons name="hourglass-empty" size={20} color={theme.textMuted} />
@@ -280,11 +279,10 @@ function NAPlaceholder({ message }: { message: string }) {
 }
 
 // MAIN COMPONENT
-type ItemFilterType = 'all' | 'match' | 'challenge' | 'tournament' | 'opponent' | 'partner' | 'terrain' | 'boules';
-
 export default function StatsScreen() {
   const insets = useSafeAreaInsets();
   const { matches, challenges, tournaments, players, terrains, boulesSets, getMatchesByTournament, selfPlayer } = useApp();
+  type ItemFilterType = 'all' | 'match' | 'challenge' | 'tournament' | 'opponent' | 'partner' | 'terrain' | 'boules';
   const { t, language } = useLanguage();
 
   // Translated filter/tab arrays
@@ -509,7 +507,7 @@ export default function StatsScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
-  // PERFORMANCE STATS CALCULATION
+// PERFORMANCE STATS CALCULATION
   const performanceStats = useMemo(() => {
     const total = filteredMatches.length;
     const trainingMatches = filteredMatches.filter(m => m.mode === 'Entraînement');
@@ -641,7 +639,7 @@ export default function StatsScreen() {
     };
   }, [filteredMatches]);
 
-  // TIR STATS
+// TIR STATS
   const tirStats = useMemo(() => {
     let totalTirs = 0, tirsSuccess = 0, carreaux = 0;
     
@@ -811,7 +809,7 @@ export default function StatsScreen() {
     };
   }, [filteredMatches, filteredChallenges, performanceStats.totalMenes]);
 
-  // POINT STATS
+// POINT STATS
   const pointStats = useMemo(() => {
     let totalPoints = 0, pointsSuccess = 0;
     
@@ -900,7 +898,7 @@ export default function StatsScreen() {
     };
   }, [filteredMatches, performanceStats.totalMenes]);
 
-  // ERROR ANALYSIS STATS
+// ERROR ANALYSIS STATS
   const errorStats = useMemo(() => {
     // Total errors
     const totalTirErrors = tirStats.totalTirs - tirStats.tirsSuccess;
@@ -1045,11 +1043,9 @@ export default function StatsScreen() {
     };
   }, [filteredMatches, tirStats, pointStats, language]);
 
-  // ============================================
+// ============================================
   // TERRAIN TYPE STATS
-  // ============================================
-  // BOULES SET STATS
-  const boulesSetStats = useMemo(() => {
+  // ============================================  const boulesSetStats = useMemo(() => {
     const bySet: Record<string, {
       name: string; brand?: string; diameter?: number; weight?: number;
       matches: number; wins: number;
@@ -1095,7 +1091,6 @@ export default function StatsScreen() {
     const totalWithBoules = sets.reduce((sum, id) => sum + bySet[id].matches, 0);
     return { bySet, sets, hasData: sets.length > 0, totalWithBoules };
   }, [filteredMatches, filteredChallenges, boulesSets]);
-
   const terrainTypeStats = useMemo(() => {
     const getTerrainType = (match: typeof filteredMatches[0]): string | null => {
       if ((match as any).terrainType) return (match as any).terrainType;
@@ -1135,8 +1130,7 @@ export default function StatsScreen() {
     return { byTerrain, types, hasData: types.length > 0, totalTerrainMatches };
   }, [filteredMatches, tournaments]);
 
-  // PRECISION WORKSHOP STATS
-  const precisionWorkshopStats = useMemo(() => {
+  // PRECISION WORKSHOP STATS  const precisionWorkshopStats = useMemo(() => {
     const precisionChallenges = filteredChallenges.filter(c => c.type === 'precision' && c.precisionShots && c.precisionShots.length > 0);
     if (precisionChallenges.length === 0) return null;
 
@@ -1190,7 +1184,6 @@ export default function StatsScreen() {
     };
   }, [filteredChallenges]);
 
-  // PROGRESSION DATA
   const progressionData = useMemo(() => {
     const selectedFilter = PROGRESSION_FILTERS.find(f => f.id === progressionFilter) || PROGRESSION_FILTERS[1];
     const weeksToShow = selectedFilter.weeks;
@@ -1351,7 +1344,6 @@ export default function StatsScreen() {
     };
   }, [progressionData]);
 
-  // CHALLENGE PROGRESSION DATA
   const challengeProgressionData = useMemo(() => {
     const sel = PROGRESSION_FILTERS.find(f => f.id === progressionFilter) || PROGRESSION_FILTERS[1];
     const weeksToShow = sel.weeks;
@@ -1371,7 +1363,7 @@ export default function StatsScreen() {
   }, [challenges, progressionFilter]);
 
   // ============================================
-  // TOURNAMENT PROGRESSION DATA (for Progression modal)
+  // TOURNAMENT PROGRESSION DATA
   // ============================================
   const tournamentProgressionData = useMemo(() => {
     const finishedTournaments = tournaments.filter(t => t.status === 'Terminé');
@@ -1400,53 +1392,31 @@ export default function StatsScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
-      {/* Header */}
+      {/* Header - Gradient Hero */}
       <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.headerTitle}>{t('stats', 'statistics')}</Text>
-            <Text style={styles.headerSubtitle}>
-              {performanceStats.total} {t('stats', 'matches')} • {performanceStats.winRate}% {t('stats', 'victories')}
-            </Text>
+        <LinearGradient colors={['#1E3A8A', '#2563EB', '#3B82F6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerGradient}>
+          <View style={styles.headerTop}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.headerTitle}>{t('stats', 'statistics')}</Text>
+              <Text style={styles.headerSubtitle}>{performanceStats.total} {t('stats', 'matches')} • {performanceStats.winRate}% {t('stats', 'victories')}</Text>
+            </View>
+            <View style={styles.headerButtons}>
+              <Pressable style={styles.exportButton} onPress={async () => { if (exporting) return; Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setExporting(true); try { if (statsExportRef.current && captureRefFn) { const uri = await captureRefFn(statsExportRef.current, { format: 'png', quality: 1, result: 'tmpfile' }); const canShare = await Sharing.isAvailableAsync(); if (canShare) { await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: t('stats', 'exportStatsTitle') }); } } } catch (e) { console.log('Export error:', e); } finally { setExporting(false); } }} disabled={exporting}>
+                <MaterialIcons name={exporting ? 'hourglass-empty' : 'ios-share'} size={16} color="#FFF" />
+              </Pressable>
+              <Pressable style={styles.progressionButton} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowProgressionModal(true); }}>
+                <MaterialIcons name="trending-up" size={18} color="#FFF" />
+                <Text style={styles.progressionButtonText}>{t('stats', 'progression')}</Text>
+              </Pressable>
+              <Pressable style={styles.historyButton} onPress={() => router.push('/history')}>
+                <MaterialIcons name="history" size={22} color="rgba(255,255,255,0.7)" />
+              </Pressable>
+            </View>
           </View>
-          <View style={styles.headerButtons}>
-            <Pressable
-              style={styles.exportButton}
-              onPress={async () => {
-                if (exporting) return;
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setExporting(true);
-                try {
-                  if (statsExportRef.current && captureRefFn) {
-                    const uri = await captureRefFn(statsExportRef.current, { format: 'png', quality: 1, result: 'tmpfile' });
-                    const canShare = await Sharing.isAvailableAsync();
-                    if (canShare) {
-                      await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: t('stats', 'exportStatsTitle') });
-                    }
-                  }
-                } catch (e) {
-                  console.log('Export error:', e);
-                } finally {
-                  setExporting(false);
-                }
-              }}
-              disabled={exporting}
-            >
-              <MaterialIcons name={exporting ? 'hourglass-empty' : 'ios-share'} size={16} color={theme.accent} />
-              <Text style={styles.exportButtonText}>{exporting ? '...' : t('stats', 'exportStats')}</Text>
-            </Pressable>
-            <Pressable 
-              style={styles.progressionButton}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowProgressionModal(true); }}
-            >
-              <MaterialIcons name="trending-up" size={18} color={theme.primary} />
-              <Text style={styles.progressionButtonText}>{t('stats', 'progression')}</Text>
-            </Pressable>
-            <Pressable style={styles.historyButton} onPress={() => router.push('/history')}>
-              <MaterialIcons name="history" size={22} color={theme.textSecondary} />
-            </Pressable>
+          <View style={styles.headerStatsRow}>
+            {[{ val: `${performanceStats.winRate}%`, lbl: t('stats', 'victoriesLabel') }, { val: `${tirStats.successRate}%`, lbl: t('stats', 'shotShort') }, { val: `${pointStats.successRate}%`, lbl: t('stats', 'pointShort') }, { val: `${tirStats.carreauRate}%`, lbl: t('stats', 'carreauxLabel') }].map((s, i) => (<React.Fragment key={i}>{i > 0 ? <View style={styles.headerStatDivider} /> : null}<View style={styles.headerStatItem}><Text style={styles.headerStatValue}>{s.val}</Text><Text style={styles.headerStatLabel}>{s.lbl}</Text></View></React.Fragment>))}
           </View>
-        </View>
+        </LinearGradient>
 
         {/* Time Filter */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterBar}>
@@ -3070,7 +3040,6 @@ export default function StatsScreen() {
                       const ty = (modalChartHeight - 20) - (d.winRate / 100) * (modalChartHeight - 40);
                       return (
                         <Pressable style={[styles.chartTooltip, { left: Math.max(4, Math.min(tx - 68, modalChartWidth - 140)), top: Math.max(0, ty - 68) }]} onPress={() => setChartTooltip(null)}>
-                          <View style={styles.chartTooltipArrow} />
                           <Text style={styles.chartTooltipTitle}>{d.week}</Text>
                           <Text style={styles.chartTooltipRow}>{d.matches} {t('stats', 'gamesUnit')} \u2022 {d.wins}V-{d.matches - d.wins}D</Text>
                           <Text style={[styles.chartTooltipValue, { color: theme.primary }]}>{d.winRate}%</Text>
@@ -3752,18 +3721,24 @@ export default function StatsScreen() {
 
 // STYLES
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.backgroundSecondary },
-  header: { backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border, paddingBottom: 12 },
-  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 16, paddingTop: 12, marginBottom: 12 },
-  headerTitle: { fontSize: 26, fontWeight: '700', color: theme.textPrimary },
-  headerSubtitle: { fontSize: 13, color: theme.textSecondary, marginTop: 2 },
-  headerButtons: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  exportButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: theme.accent + '15', borderRadius: theme.borderRadius.md },
-  exportButtonText: { fontSize: 12, fontWeight: '600', color: theme.accent },
-  progressionButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: theme.primary + '15', borderRadius: theme.borderRadius.md },
-  progressionButtonText: { fontSize: 12, fontWeight: '600', color: theme.primary },
-  historyButton: { padding: 8, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md },
-  filterBar: { paddingHorizontal: 16, gap: 8, marginBottom: 8 },
+  container:{flex:1,backgroundColor:theme.backgroundSecondary},
+  header:{backgroundColor:theme.surface,borderBottomWidth:1,borderBottomColor:theme.border,paddingBottom:12},
+  headerGradient:{paddingTop:16,paddingBottom:20,paddingHorizontal:16,borderBottomLeftRadius:24,borderBottomRightRadius:24},
+  headerTop:{flexDirection:'row',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16},
+  headerTitle:{fontSize:26,fontWeight:'800',color:'#FFF'},
+  headerSubtitle:{fontSize:13,color:'rgba(255,255,255,0.7)',marginTop:2},
+  headerButtons:{flexDirection:'row',alignItems:'center',gap:6},
+  exportButton:{width:40,height:40,borderRadius:20,backgroundColor:'rgba(255,255,255,0.15)',alignItems:'center' as const,justifyContent:'center' as const},
+  exportButtonText:{display:'none' as any},
+  progressionButton:{flexDirection:'row',alignItems:'center',gap:6,paddingHorizontal:14,paddingVertical:10,backgroundColor:'rgba(255,255,255,0.15)',borderRadius:9999},
+  progressionButtonText:{fontSize:12,fontWeight:'600',color:'#FFF'},
+  historyButton:{width:40,height:40,borderRadius:20,backgroundColor:'rgba(255,255,255,0.1)',alignItems:'center' as const,justifyContent:'center' as const},
+  headerStatsRow:{flexDirection:'row',alignItems:'center',backgroundColor:'rgba(255,255,255,0.12)',borderRadius:14,paddingVertical:12,paddingHorizontal:8},
+  headerStatItem:{flex:1,alignItems:'center' as const},
+  headerStatValue:{fontSize:18,fontWeight:'800',color:'#FFF'},
+  headerStatLabel:{fontSize:9,fontWeight:'600',color:'rgba(255,255,255,0.65)',marginTop:2,textTransform:'uppercase' as const},
+  headerStatDivider:{width:1,height:24,backgroundColor:'rgba(255,255,255,0.15)'},
+  filterBar:{paddingHorizontal:16,gap:8,marginTop:12,marginBottom:8},
   // Item filter bar
   itemFilterBar: { marginBottom: 8 },
   itemFilterScroll: { paddingHorizontal: 16, gap: 6 },
@@ -3801,11 +3776,11 @@ const styles = StyleSheet.create({
   filterPillActive: { backgroundColor: theme.primary },
   filterPillText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
   filterPillTextActive: { color: '#FFF' },
-  categoryTabs: { flexDirection: 'row', paddingHorizontal: 12, gap: 6 },
-  categoryTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 10, borderRadius: theme.borderRadius.md, backgroundColor: theme.backgroundSecondary },
-  categoryTabActive: { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border },
-  categoryTabText: { fontSize: 11, fontWeight: '600', color: theme.textMuted },
-  categoryTabTextActive: { fontWeight: '700' },
+  categoryTabs:{flexDirection:'row',paddingHorizontal:12,gap:6,marginTop:4},
+  categoryTab:{flex:1,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:5,paddingVertical:11,borderRadius:9999,backgroundColor:theme.backgroundSecondary},
+  categoryTabActive:{backgroundColor:theme.surface,borderWidth:1.5,borderColor:theme.border,...theme.shadows.card},
+  categoryTabText:{fontSize:11,fontWeight:'600',color:theme.textMuted},
+  categoryTabTextActive:{fontWeight:'700'},
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 20 },
   scrollContentTablet: { maxWidth: 960, alignSelf: 'center' as const, width: '100%', paddingHorizontal: 24 },
