@@ -246,7 +246,7 @@ const ListItem = React.memo(({ item, onPress, singularLabel, terrainTypeLabel, i
 // ============================================
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
-  const { clubs, tournaments, terrains, players, refreshData, updatePlayer, updateClub, updateTerrain, updateTournament } = useApp();
+  const { clubs, tournaments, terrains, players, refreshData, updatePlayer, updateClub, updateTerrain, updateTournament, setItemPublic } = useApp();
   const { user } = useAuth();
   const { showAlert } = useAlert();
   const { showToast } = useToast();
@@ -598,6 +598,8 @@ export default function MapScreen() {
         ...prev,
         [table]: prev[table].map((it: any) => it.id === id ? { ...it, isPublic: !current } : it),
       }));
+      // Sync with AppContext so player card and other pages reflect the change
+      setItemPublic(table, id, !current);
       const refreshers: Record<string, () => Promise<any>> = {
         players: fetchPublicPlayers, clubs: fetchPublicClubs,
         terrains: fetchPublicTerrains, tournaments: fetchPublicTournaments,
