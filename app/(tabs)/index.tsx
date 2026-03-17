@@ -366,75 +366,101 @@ export default function HomeScreen() {
         ) : null}
 
         {/* ========== MEETUPS SECTION ========== */}
-        <Animated.View entering={FadeIn.duration(400).delay(260)} style={[styles.meetupSection, isTablet && styles.sectionTablet]}>
-          <View style={styles.meetupSectionHeader}>
-            <View style={styles.meetupSectionHeaderLeft}>
-              <View style={styles.meetupSectionIcon}>
-                <MaterialIcons name="event" size={18} color={theme.accent} />
-              </View>
-              <Text style={styles.meetupSectionTitle}>{t('meetup', 'upcomingMeetups')}</Text>
+        <Animated.View entering={FadeIn.duration(400).delay(260)} style={[styles.section, isTablet && styles.sectionTablet]}>
+          <View style={styles.meetupTitleRow}>
+            <View style={styles.meetupTitleLeft}>
+              <MaterialIcons name="event" size={20} color={theme.accent} />
+              <Text style={styles.sectionTitle}>{t('meetup', 'upcomingMeetups')}</Text>
             </View>
-            <View style={styles.meetupHeaderBtns}>
+            <View style={styles.meetupTitleBtns}>
               {pendingInviteCount > 0 ? (
-                <Pressable style={styles.meetupInviteBtnSmall} onPress={() => router.push('/meetup/invitations' as any)}>
+                <Pressable style={styles.mBtnInvite} onPress={() => router.push('/meetup/invitations' as any)}>
                   <MaterialIcons name="mail" size={14} color={theme.error} />
-                  <Text style={styles.meetupInviteBtnSmallText}>{pendingInviteCount}</Text>
+                  <Text style={styles.mBtnInviteText}>{pendingInviteCount}</Text>
                 </Pressable>
               ) : null}
-              <Pressable style={styles.meetupJoinBtn} onPress={() => setShowJoinMeetupModal(true)}>
+              <Pressable style={styles.mBtnJoin} onPress={() => setShowJoinMeetupModal(true)}>
                 <MaterialIcons name="qr-code" size={14} color={theme.accent} />
-                <Text style={styles.meetupJoinBtnText}>{t('meetup', 'joinMeetup')}</Text>
               </Pressable>
-              <Pressable style={styles.meetupNewBtn} onPress={() => router.push('/meetup/new' as any)}>
-                <MaterialIcons name="add" size={16} color={theme.primary} />
-                <Text style={styles.meetupNewBtnText}>{t('common', 'create')}</Text>
+              <Pressable style={styles.mBtnCreate} onPress={() => router.push('/meetup/new' as any)}>
+                <MaterialIcons name="add" size={16} color="#FFF" />
               </Pressable>
             </View>
           </View>
 
-          {/* Meetup Summary Row */}
           {meetups.length > 0 ? (
-            <Pressable
-              style={({ pressed }) => [styles.meetupSummaryRow, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
-              onPress={() => setShowMeetupListModal(true)}
-            >
-              <View style={styles.meetupSummaryLeft}>
-                {(() => {
-                  const nextMeetup = meetups[0];
-                  const nextDate = new Date(nextMeetup.date);
-                  return (
-                    <View style={styles.meetupSummaryDateCol}>
-                      <Text style={styles.meetupSummaryDateDay}>{nextDate.getDate()}</Text>
-                      <Text style={styles.meetupSummaryDateMonth}>{nextDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}</Text>
-                    </View>
-                  );
-                })()}
-                <View style={styles.meetupSummaryInfo}>
-                  <Text style={styles.meetupSummaryTitle} numberOfLines={1}>{meetups[0].title}</Text>
-                  <View style={styles.meetupSummaryMeta}>
-                    <MaterialIcons name="schedule" size={12} color={theme.textMuted} />
-                    <Text style={styles.meetupSummaryTime}>
-                      {new Date(meetups[0].date).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
-                    <View style={styles.meetupSummaryCountBadge}>
-                      <MaterialIcons name="group" size={11} color={theme.success} />
-                      <Text style={styles.meetupSummaryCountText}>{meetups[0]._acceptedCount || 0}/{meetups[0]._maxParticipants || 8}</Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-              <View style={styles.meetupSummaryRight}>
-                {meetups.length > 1 ? (
-                  <View style={styles.meetupSummaryMoreBadge}>
-                    <Text style={styles.meetupSummaryMoreText}>+{meetups.length - 1}</Text>
-                  </View>
-                ) : null}
-                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-              </View>
-            </Pressable>
+            <View style={styles.meetupCards}>
+              {/* Next meetup - prominent card */}
+              {(() => {
+                const m = meetups[0];
+                const mDate = new Date(m.date);
+                const daysUntil = Math.max(0, Math.ceil((mDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+                return (
+                  <Pressable
+                    style={({ pressed }) => [styles.meetupNextCard, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
+                    onPress={() => router.push(`/meetup/${m.id}` as any)}
+                  >
+                    <LinearGradient colors={['#E0F2FE', '#BAE6FD']} style={styles.meetupNextGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+                      <View style={styles.meetupNextTop}>
+                        <View style={styles.meetupNextDateBox}>
+                          <Text style={styles.meetupNextDateDay}>{mDate.getDate()}</Text>
+                          <Text style={styles.meetupNextDateMonth}>{mDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}</Text>
+                        </View>
+                        <View style={styles.meetupNextInfo}>
+                          <Text style={styles.meetupNextTitle} numberOfLines={1}>{m.title}</Text>
+                          <View style={styles.meetupNextMeta}>
+                            <MaterialIcons name="schedule" size={13} color="#0369A1" />
+                            <Text style={styles.meetupNextTime}>
+                              {mDate.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                            </Text>
+                            {daysUntil <= 1 ? (
+                              <View style={styles.meetupNextSoonBadge}>
+                                <Text style={styles.meetupNextSoonText}>{daysUntil === 0 ? t('notifications', 'todayLabel') : t('notifications', 'tomorrowLabel')}</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        </View>
+                        <MaterialIcons name="chevron-right" size={22} color="#0369A1" />
+                      </View>
+                      <View style={styles.meetupNextBottom}>
+                        <View style={styles.meetupNextParticipants}>
+                          <MaterialIcons name="group" size={14} color="#0369A1" />
+                          <Text style={styles.meetupNextParticipantsText}>{m._acceptedCount || 0}/{m._maxParticipants || 8} {t('meetup', 'confirmedCount')}</Text>
+                        </View>
+                        {m._source === 'created' ? (
+                          <View style={styles.meetupNextCreatorTag}>
+                            <MaterialIcons name="person" size={11} color={theme.primary} />
+                            <Text style={styles.meetupNextCreatorText}>{t('meetup', 'yourMeetup')}</Text>
+                          </View>
+                        ) : (
+                          <View style={styles.meetupNextInvitedTag}>
+                            <MaterialIcons name="mail" size={11} color={theme.accent} />
+                            <Text style={styles.meetupNextInvitedText}>{t('meetup', 'invited')}</Text>
+                          </View>
+                        )}
+                      </View>
+                    </LinearGradient>
+                  </Pressable>
+                );
+              })()}
+
+              {/* Additional meetups link */}
+              {meetups.length > 1 ? (
+                <Pressable
+                  style={({ pressed }) => [styles.meetupMoreLink, pressed && { opacity: 0.7 }]}
+                  onPress={() => setShowMeetupListModal(true)}
+                >
+                  <MaterialIcons name="date-range" size={16} color={theme.accent} />
+                  <Text style={styles.meetupMoreText}>
+                    +{meetups.length - 1} {language === 'fr' ? 'autre(s) RDV' : 'more meetup(s)'}
+                  </Text>
+                  <MaterialIcons name="chevron-right" size={18} color={theme.accent} />
+                </Pressable>
+              ) : null}
+            </View>
           ) : !meetupsLoading ? (
-            <View style={styles.meetupEmpty}>
-              <MaterialIcons name="event-available" size={32} color={theme.textMuted} />
+            <View style={styles.meetupEmptyBlock}>
+              <MaterialIcons name="event-available" size={28} color={theme.textMuted} />
               <Text style={styles.meetupEmptyText}>{t('meetup', 'noMeetups')}</Text>
             </View>
           ) : null}
@@ -847,26 +873,38 @@ const styles = StyleSheet.create({
   quickLabel: { fontSize: 11, fontWeight: '600', color: theme.textPrimary, textAlign: 'center' },
 
   // ========== MEETUP SECTION ==========
-  meetupSection: { marginHorizontal: 16, marginTop: 8, marginBottom: 28, backgroundColor: theme.surface, borderRadius: 20, paddingTop: 16, paddingBottom: 16, paddingHorizontal: 16, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border, zIndex: 2, overflow: 'hidden' as const },
-  meetupSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: theme.border },
-  meetupSectionHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  meetupSectionIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: theme.accent + '12', alignItems: 'center', justifyContent: 'center' },
-  meetupSectionTitle: { fontSize: 16, fontWeight: '700', color: theme.textPrimary },
-  meetupHeaderBtns: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  meetupJoinBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.accent + '12', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
-  meetupJoinBtnText: { fontSize: 11, fontWeight: '700', color: theme.accent },
-  meetupInviteBtnSmall: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.error + '12', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 10 },
-  meetupInviteBtnSmallText: { fontSize: 11, fontWeight: '800', color: theme.error },
-  meetupNewBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.primary + '12', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
-  meetupNewBtnText: { fontSize: 11, fontWeight: '700', color: theme.primary },
-  meetupQuickActions: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  meetupQuickBtn: { flex: 1, alignItems: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 8 },
-  meetupQuickIconBg: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 8, position: 'relative' as const },
-  meetupQuickText: { fontSize: 11, fontWeight: '600', color: theme.textPrimary, textAlign: 'center' },
-  meetupQuickBadge: { position: 'absolute' as const, top: -4, right: -4, backgroundColor: theme.error, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
-  meetupQuickBadgeText: { fontSize: 9, fontWeight: '800', color: '#FFF' },
-  meetupItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: 14, padding: 12, marginBottom: 8, gap: 12 },
-  meetupItemPressed: { opacity: 0.8 },
+  meetupTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  meetupTitleLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  meetupTitleBtns: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  mBtnInvite: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.error + '12', width: 36, height: 32, borderRadius: 10, justifyContent: 'center' },
+  mBtnInviteText: { fontSize: 11, fontWeight: '800', color: theme.error },
+  mBtnJoin: { width: 32, height: 32, borderRadius: 10, backgroundColor: theme.accent + '12', alignItems: 'center', justifyContent: 'center' },
+  mBtnCreate: { width: 32, height: 32, borderRadius: 10, backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center' },
+  meetupCards: { gap: 10 },
+  meetupNextCard: { borderRadius: 18, overflow: 'hidden' as const, ...theme.shadows.cardElevated },
+  meetupNextGradient: { padding: 16 },
+  meetupNextTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  meetupNextDateBox: { width: 54, height: 54, borderRadius: 16, backgroundColor: 'rgba(3,105,161,0.12)', alignItems: 'center', justifyContent: 'center' },
+  meetupNextDateDay: { fontSize: 22, fontWeight: '900', color: '#0369A1', lineHeight: 24 },
+  meetupNextDateMonth: { fontSize: 9, fontWeight: '700', color: '#0369A1', letterSpacing: 0.5 },
+  meetupNextInfo: { flex: 1 },
+  meetupNextTitle: { fontSize: 16, fontWeight: '800', color: '#0C4A6E', marginBottom: 4 },
+  meetupNextMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  meetupNextTime: { fontSize: 13, fontWeight: '600', color: '#0369A1' },
+  meetupNextSoonBadge: { backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  meetupNextSoonText: { fontSize: 10, fontWeight: '700', color: '#B45309' },
+  meetupNextBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(3,105,161,0.12)' },
+  meetupNextParticipants: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  meetupNextParticipantsText: { fontSize: 12, fontWeight: '600', color: '#0369A1' },
+  meetupNextCreatorTag: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.primary + '15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  meetupNextCreatorText: { fontSize: 10, fontWeight: '700', color: theme.primary },
+  meetupNextInvitedTag: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.accent + '15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  meetupNextInvitedText: { fontSize: 10, fontWeight: '700', color: theme.accent },
+  meetupMoreLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: theme.accent + '08', borderRadius: 12, paddingVertical: 10, borderWidth: 1, borderColor: theme.accent + '18' },
+  meetupMoreText: { fontSize: 13, fontWeight: '600', color: theme.accent },
+  meetupEmptyBlock: { alignItems: 'center', backgroundColor: theme.surface, borderRadius: 16, paddingVertical: 24, gap: 8, borderWidth: 1, borderColor: theme.border },
+  meetupEmptyText: { fontSize: 13, color: theme.textMuted, fontWeight: '500' },
+
   meetupDateCol: { width: 50, height: 50, borderRadius: 14, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center' },
   meetupDateDay: { fontSize: 20, fontWeight: '900', color: theme.primary, lineHeight: 22 },
   meetupDateMonth: { fontSize: 9, fontWeight: '700', color: theme.primary, letterSpacing: 0.5 },
@@ -883,26 +921,6 @@ const styles = StyleSheet.create({
   meetupCreatorText: { fontSize: 10, fontWeight: '700', color: theme.primary },
   meetupInvitedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.accent + '12', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
   meetupInvitedText: { fontSize: 10, fontWeight: '700', color: theme.accent },
-  meetupEmpty: { alignItems: 'center', paddingVertical: 12, gap: 6 },
-  meetupEmptyIcon: { },
-  
-  meetupEmptyText: { fontSize: 13, color: theme.textMuted, fontWeight: '500' },
-
-  // ========== MEETUP SUMMARY ROW ==========
-  meetupSummaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.accent + '08', borderRadius: 12, padding: 10, borderWidth: 1, borderColor: theme.accent + '20' },
-  meetupSummaryLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 },
-  meetupSummaryDateCol: { width: 40, height: 40, borderRadius: 10, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center' },
-  meetupSummaryDateDay: { fontSize: 16, fontWeight: '900', color: theme.primary, lineHeight: 18 },
-  meetupSummaryDateMonth: { fontSize: 8, fontWeight: '700', color: theme.primary, letterSpacing: 0.5 },
-  meetupSummaryInfo: { flex: 1 },
-  meetupSummaryTitle: { fontSize: 13, fontWeight: '700', color: theme.textPrimary, marginBottom: 3 },
-  meetupSummaryMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  meetupSummaryTime: { fontSize: 12, color: theme.textMuted },
-  meetupSummaryCountBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.success + '12', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  meetupSummaryCountText: { fontSize: 10, fontWeight: '700', color: theme.success },
-  meetupSummaryRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  meetupSummaryMoreBadge: { backgroundColor: theme.accent, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
-  meetupSummaryMoreText: { fontSize: 11, fontWeight: '800', color: '#FFF' },
 
   // ========== MEETUP LIST MODAL ==========
   meetupModalContainer: { flex: 1, backgroundColor: theme.backgroundSecondary },
