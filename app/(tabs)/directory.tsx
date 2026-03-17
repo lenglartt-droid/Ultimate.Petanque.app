@@ -131,11 +131,6 @@ export default function DirectoryScreen() {
     setRefreshing(false);
   }, [refreshData]);
 
-  // Reset pagination when tab or filters change
-  useEffect(() => {
-    setVisibleCount(PAGE_SIZE);
-  }, [activeTab, searchQuery, filters, showRealUsersOnly]);
-
   // Tab configuration (uses t() for labels)
   const TABS: { id: DirectoryTab; label: string; icon: string; color: string }[] = useMemo(() => [
     { id: 'players', label: t('directory', 'players'), icon: 'person', color: theme.primary },
@@ -145,7 +140,12 @@ export default function DirectoryScreen() {
   ], [language]);
   
   // All filters state
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState<{
+    playerClub: string; playerCity: string; playerCountry: string; playerLevel: string; playerRole: string;
+    clubCity: string; clubCountry: string;
+    terrainType: string; terrainCity: string; terrainLighting: string; terrainCovered: string; terrainEnvironment: string; terrainAccess: string;
+    tournamentStatus: string; tournamentFormat: string; tournamentLevel: string; tournamentCategory: string; tournamentRegistration: string; tournamentScope: string; tournamentCity: string;
+  }>({
     // Player filters
     playerClub: 'all',
     playerCity: 'all',
@@ -171,6 +171,11 @@ export default function DirectoryScreen() {
     tournamentScope: 'all',
     tournamentCity: 'all',
   });
+
+  // Reset pagination when tab or filters change
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [activeTab, searchQuery, filters, showRealUsersOnly]);
 
   // Levenshtein-based duplicate detection
   const duplicates = useMemo(() => {

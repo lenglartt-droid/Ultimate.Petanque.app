@@ -24,7 +24,6 @@ import theme, { blurhash } from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth, useAlert } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
-import AdBanner from '@/components/ui/AdBanner';
 import { preloadInterstitial } from '@/services/adService';
 import CommunityLeaderboard from '@/components/ui/CommunityLeaderboard';
 import { getMyMeetups, getInvitedMeetups, getMeetupResponses, getPendingInvitationsCount, findMeetupByCode, Meetup, MeetupResponse } from '@/services/meetupService';
