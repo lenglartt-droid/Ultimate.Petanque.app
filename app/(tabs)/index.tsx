@@ -385,11 +385,13 @@ export default function HomeScreen() {
         </Animated.View>
 
         {/* ========== MEETUPS SECTION ========== */}
-        <Animated.View entering={FadeInDown.duration(400).delay(320)} style={[styles.section, isTablet && styles.sectionTablet]}>
-          <View style={styles.sectionHeaderRow}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <MaterialIcons name="event" size={18} color={theme.primary} />
-              <Text style={styles.sectionTitle}>{t('meetup', 'upcomingMeetups')}</Text>
+        <Animated.View entering={FadeInDown.duration(400).delay(320)} style={[styles.meetupSection, isTablet && styles.sectionTablet]}>
+          <View style={styles.meetupSectionHeader}>
+            <View style={styles.meetupSectionHeaderLeft}>
+              <View style={styles.meetupSectionIcon}>
+                <MaterialIcons name="event" size={18} color={theme.accent} />
+              </View>
+              <Text style={styles.meetupSectionTitle}>{t('meetup', 'upcomingMeetups')}</Text>
             </View>
             <Pressable style={styles.meetupNewBtn} onPress={() => router.push('/meetup/new' as any)}>
               <MaterialIcons name="add" size={16} color={theme.primary} />
@@ -797,6 +799,11 @@ const styles = StyleSheet.create({
   quickLabel: { fontSize: 11, fontWeight: '600', color: theme.textPrimary, textAlign: 'center' },
 
   // ========== MEETUP SECTION ==========
+  meetupSection: { marginHorizontal: 16, marginTop: 8, marginBottom: 24, backgroundColor: theme.surface, borderRadius: 20, padding: 16, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border },
+  meetupSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
+  meetupSectionHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  meetupSectionIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: theme.accent + '12', alignItems: 'center', justifyContent: 'center' },
+  meetupSectionTitle: { fontSize: 16, fontWeight: '700', color: theme.textPrimary },
   meetupNewBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.primary + '12', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
   meetupNewBtnText: { fontSize: 12, fontWeight: '700', color: theme.primary },
   meetupQuickActions: { flexDirection: 'row', gap: 10, marginBottom: 14 },
