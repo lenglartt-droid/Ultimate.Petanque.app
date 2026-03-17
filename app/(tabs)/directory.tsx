@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { FlashList } from '@shopify/flash-list';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
@@ -1172,10 +1171,10 @@ export default function DirectoryScreen() {
             }
           />
         ) : (
-          <FlashList
-            data={paginatedData}
+          <FlatList
+            data={paginatedData as any[]}
             renderItem={getCurrentRenderItem() as any}
-            estimatedItemSize={110}
+            keyExtractor={(item: any) => item.id}
             contentContainerStyle={{ 
               paddingHorizontal: 16,
               paddingBottom: insets.bottom + 100,
