@@ -1089,6 +1089,7 @@ export default function MapScreen() {
               <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 40 }} />
             ) : (
               <>
+                {renderManageSection('players', myItems.players, 'person', theme.primary, t('map', 'players'))}
                 {renderManageSection('clubs', myItems.clubs, 'home', theme.accent, t('map', 'clubs'))}
                 {renderManageSection('terrains', myItems.terrains, 'sports-soccer', theme.success, t('map', 'terrains'))}
                 {renderManageSection('tournaments', myItems.tournaments, 'emoji-events', theme.carreauColor, t('map', 'tournaments'))}
@@ -1298,36 +1299,36 @@ const styles = StyleSheet.create({
   modalClose: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   modalContent: { padding: 16 },
   manageInfo: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: theme.primary + '08',
-    padding: 14, borderRadius: theme.borderRadius.md, marginBottom: 20,
-    borderWidth: 1, borderColor: theme.primary + '20',
+    flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: theme.primary + '06',
+    padding: 16, borderRadius: 16, marginBottom: 20,
+    borderWidth: 1.5, borderColor: theme.primary + '15',
   },
-  manageInfoText: { flex: 1, fontSize: 13, color: theme.textSecondary, lineHeight: 18 },
-  manageSection: { marginBottom: 20 },
-  manageSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  manageSectionIcon: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  manageSectionTitle: { flex: 1, fontSize: 14, fontWeight: '600', color: theme.textPrimary },
-  manageSectionCount: { fontSize: 12, fontWeight: '600', color: theme.textMuted },
+  manageInfoText: { flex: 1, fontSize: 13, color: theme.textSecondary, lineHeight: 19 },
+  manageSection: { marginBottom: 24 },
+  manageSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: theme.border },
+  manageSectionIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  manageSectionTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: theme.textPrimary },
+  manageSectionCount: { fontSize: 13, fontWeight: '700', color: theme.textMuted, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
   manageItem: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: theme.surface, padding: 14, borderRadius: theme.borderRadius.md,
-    marginBottom: 8, ...theme.shadows.card,
+    backgroundColor: theme.surface, padding: 16, borderRadius: 14,
+    marginBottom: 10, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border,
   },
-  manageItemName: { flex: 1, fontSize: 14, fontWeight: '500', color: theme.textPrimary, marginRight: 10 },
-  manageItemRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  manageItemName: { flex: 1, fontSize: 15, fontWeight: '600', color: theme.textPrimary, marginRight: 12 },
+  manageItemRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   publicBadgeManage: {
-    flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.success + '15',
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: theme.borderRadius.full,
+    flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: theme.success + '12',
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: theme.success + '25',
   },
-  publicBadgeManageText: { fontSize: 10, fontWeight: '600', color: theme.success },
+  publicBadgeManageText: { fontSize: 11, fontWeight: '700', color: theme.success },
   privateBadgeManage: {
-    flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.backgroundSecondary,
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: theme.borderRadius.full,
+    flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: theme.backgroundSecondary,
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: theme.border,
   },
-  privateBadgeManageText: { fontSize: 10, fontWeight: '600', color: theme.textMuted },
-  manageEmpty: { alignItems: 'center', paddingVertical: 40 },
-  manageEmptyText: { fontSize: 16, fontWeight: '600', color: theme.textPrimary, marginTop: 12 },
-  manageEmptyDesc: { fontSize: 13, color: theme.textSecondary, textAlign: 'center', marginTop: 6, maxWidth: 280 },
+  privateBadgeManageText: { fontSize: 11, fontWeight: '600', color: theme.textMuted },
+  manageEmpty: { alignItems: 'center', paddingVertical: 48 },
+  manageEmptyText: { fontSize: 17, fontWeight: '700', color: theme.textPrimary, marginTop: 16 },
+  manageEmptyDesc: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginTop: 8, maxWidth: 300, lineHeight: 20 },
   // Legend
   legendContainer: { position: 'absolute', left: 12, zIndex: 10 },
   legendToggle: {

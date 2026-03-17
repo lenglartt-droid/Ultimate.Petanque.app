@@ -472,8 +472,7 @@ export default function HomeScreen() {
           </View>
         </Animated.View>
 
-        {/* ========== SPACER BEFORE HISTORY ========== */}
-        <View style={{ height: 400 }} />
+
 
         {/* ========== COMPACT HISTORY ========== */}
         {recentResults.length > 0 ? (
