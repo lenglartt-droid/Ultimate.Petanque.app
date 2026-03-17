@@ -2284,6 +2284,32 @@ export const translations = {
   // ============================================
   // STATS EXTRA (hardcoded strings)
   // ============================================
+  leaderboard: {
+    title: { fr: 'Classement Communautaire', en: 'Community Leaderboard' },
+    subtitle: { fr: 'Joueurs publics classés par performance', en: 'Public players ranked by performance' },
+    noPlayers: { fr: 'Aucun joueur public', en: 'No public players' },
+    noPlayersDesc: { fr: 'Les joueurs publics avec au moins 1 match apparaîtront ici', en: 'Public players with at least 1 match will appear here' },
+    rank: { fr: '#', en: '#' },
+    player: { fr: 'Joueur', en: 'Player' },
+    matches: { fr: 'Matchs', en: 'Games' },
+    winRate: { fr: 'Victoires', en: 'Win Rate' },
+    shotRate: { fr: 'Tir', en: 'Shot' },
+    carreauRate: { fr: 'Carreau', en: 'Carreau' },
+    sortByWinRate: { fr: 'Victoires', en: 'Win Rate' },
+    sortByMatches: { fr: 'Matchs', en: 'Games' },
+    sortByTirRate: { fr: 'Tir', en: 'Shot Rate' },
+    sortByCarreauRate: { fr: 'Carreau', en: 'Carreau' },
+    you: { fr: 'Vous', en: 'You' },
+    topPlayers: { fr: 'Top joueurs', en: 'Top players' },
+    publicPlayersCount: { fr: 'joueur(s) public(s)', en: 'public player(s)' },
+    seeFullLeaderboard: { fr: 'Voir le classement complet', en: 'See full leaderboard' },
+    loading: { fr: 'Chargement du classement...', en: 'Loading leaderboard...' },
+    errorLoading: { fr: 'Erreur lors du chargement', en: 'Error loading' },
+    retry: { fr: 'Réessayer', en: 'Retry' },
+    makePublicToAppear: { fr: 'Rendez votre profil public pour apparaître dans le classement', en: 'Make your profile public to appear in the leaderboard' },
+    minMatchesNote: { fr: 'Minimum 1 match joué requis', en: 'Minimum 1 match played required' },
+  },
+
   statsExtra: {
     withPartner: { fr: 'avec', en: 'with' },
     shotLabel: { fr: 'Tir', en: 'Shot' },
