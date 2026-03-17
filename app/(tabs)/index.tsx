@@ -306,9 +306,15 @@ export default function HomeScreen() {
           </View>
         </Animated.View>
 
-        {/* ========== NEXT TOURNAMENT COUNTDOWN ========== */}
-        {nextTournament ? (
-          <Animated.View entering={FadeInDown.duration(400).delay(140)} style={[styles.section, isTablet && styles.sectionTablet]}>
+        {/* ========== À VENIR (TOURNOI + RDV) ========== */}
+        <Animated.View entering={FadeInDown.duration(400).delay(140)} style={[styles.section, isTablet && styles.sectionTablet]}>
+          <View style={styles.upcomingHeaderRow}>
+            <MaterialIcons name="event-note" size={20} color={theme.primary} />
+            <Text style={styles.sectionTitle}>{t('home', 'upcoming')}</Text>
+          </View>
+
+          {/* Tournament Countdown */}
+          {nextTournament ? (
             <Pressable
               style={({ pressed }) => [styles.tournamentCountdownCard, pressed && { opacity: 0.92, transform: [{ scale: 0.985 }] }]}
               onPress={() => router.push(`/tournament/${nextTournament.id}`)}
@@ -364,8 +370,107 @@ export default function HomeScreen() {
                 ) : null}
               </LinearGradient>
             </Pressable>
-          </Animated.View>
-        ) : null}
+          ) : null}
+
+          {/* Meetups */}
+          <View style={styles.meetupSubSection}>
+            <View style={styles.meetupTitleRow}>
+              <View style={styles.meetupTitleLeft}>
+                <MaterialIcons name="event" size={18} color={theme.accent} />
+                <Text style={styles.meetupSubTitle}>{t('meetup', 'upcomingMeetups')}</Text>
+              </View>
+              <View style={styles.meetupTitleBtns}>
+                {pendingInviteCount > 0 ? (
+                  <Pressable style={styles.mBtnInvite} onPress={() => router.push('/meetup/invitations' as any)}>
+                    <MaterialIcons name="mail" size={14} color={theme.error} />
+                    <Text style={styles.mBtnInviteText}>{pendingInviteCount}</Text>
+                  </Pressable>
+                ) : null}
+                <Pressable style={styles.mBtnJoin} onPress={() => setShowJoinMeetupModal(true)}>
+                  <MaterialIcons name="qr-code" size={14} color={theme.accent} />
+                </Pressable>
+                <Pressable style={styles.mBtnCreate} onPress={() => router.push('/meetup/new' as any)}>
+                  <MaterialIcons name="add" size={16} color="#FFF" />
+                </Pressable>
+              </View>
+            </View>
+
+            {meetups.length > 0 ? (
+              <View style={styles.meetupCards}>
+                {(() => {
+                  const m = meetups[0];
+                  const mDate = new Date(m.date);
+                  const daysUntil = Math.max(0, Math.ceil((mDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+                  return (
+                    <Pressable
+                      style={({ pressed }) => [styles.meetupNextCard, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
+                      onPress={() => router.push(`/meetup/${m.id}` as any)}
+                    >
+                      <LinearGradient colors={['#E0F2FE', '#BAE6FD']} style={styles.meetupNextGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+                        <View style={styles.meetupNextTop}>
+                          <View style={styles.meetupNextDateBox}>
+                            <Text style={styles.meetupNextDateDay}>{mDate.getDate()}</Text>
+                            <Text style={styles.meetupNextDateMonth}>{mDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}</Text>
+                          </View>
+                          <View style={styles.meetupNextInfo}>
+                            <Text style={styles.meetupNextTitle} numberOfLines={1}>{m.title}</Text>
+                            <View style={styles.meetupNextMeta}>
+                              <MaterialIcons name="schedule" size={13} color="#0369A1" />
+                              <Text style={styles.meetupNextTime}>
+                                {mDate.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                              </Text>
+                              {daysUntil <= 1 ? (
+                                <View style={styles.meetupNextSoonBadge}>
+                                  <Text style={styles.meetupNextSoonText}>{daysUntil === 0 ? t('notifications', 'todayLabel') : t('notifications', 'tomorrowLabel')}</Text>
+                                </View>
+                              ) : null}
+                            </View>
+                          </View>
+                          <MaterialIcons name="chevron-right" size={22} color="#0369A1" />
+                        </View>
+                        <View style={styles.meetupNextBottom}>
+                          <View style={styles.meetupNextParticipants}>
+                            <MaterialIcons name="group" size={14} color="#0369A1" />
+                            <Text style={styles.meetupNextParticipantsText}>{m._acceptedCount || 0}/{m._maxParticipants || 8} {t('meetup', 'confirmedCount')}</Text>
+                          </View>
+                          {m._source === 'created' ? (
+                            <View style={styles.meetupNextCreatorTag}>
+                              <MaterialIcons name="person" size={11} color={theme.primary} />
+                              <Text style={styles.meetupNextCreatorText}>{t('meetup', 'yourMeetup')}</Text>
+                            </View>
+                          ) : (
+                            <View style={styles.meetupNextInvitedTag}>
+                              <MaterialIcons name="mail" size={11} color={theme.accent} />
+                              <Text style={styles.meetupNextInvitedText}>{t('meetup', 'invited')}</Text>
+                            </View>
+                          )}
+                        </View>
+                      </LinearGradient>
+                    </Pressable>
+                  );
+                })()}
+
+                {meetups.length > 1 ? (
+                  <Pressable
+                    style={({ pressed }) => [styles.meetupMoreLink, pressed && { opacity: 0.7 }]}
+                    onPress={() => setShowMeetupListModal(true)}
+                  >
+                    <MaterialIcons name="date-range" size={16} color={theme.accent} />
+                    <Text style={styles.meetupMoreText}>
+                      +{meetups.length - 1} {language === 'fr' ? 'autre(s) RDV' : 'more meetup(s)'}
+                    </Text>
+                    <MaterialIcons name="chevron-right" size={18} color={theme.accent} />
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : !meetupsLoading ? (
+              <View style={styles.meetupEmptyBlock}>
+                <MaterialIcons name="event-available" size={28} color={theme.textMuted} />
+                <Text style={styles.meetupEmptyText}>{t('meetup', 'noMeetups')}</Text>
+              </View>
+            ) : null}
+          </View>
+        </Animated.View>
 
         {/* ========== QUICK ACCESS GRID ========== */}
         <Animated.View entering={FadeInDown.duration(400).delay(200)} style={[styles.section, isTablet && styles.sectionTablet]}>
@@ -438,105 +543,6 @@ export default function HomeScreen() {
             </Pressable>
           </Animated.View>
         ) : null}
-
-        {/* ========== MEETUPS SECTION ========== */}
-        <Animated.View entering={FadeIn.duration(400).delay(320)} style={[styles.section, isTablet && styles.sectionTablet]}>
-          <View style={styles.meetupTitleRow}>
-            <View style={styles.meetupTitleLeft}>
-              <MaterialIcons name="event" size={20} color={theme.accent} />
-              <Text style={styles.sectionTitle}>{t('meetup', 'upcomingMeetups')}</Text>
-            </View>
-            <View style={styles.meetupTitleBtns}>
-              {pendingInviteCount > 0 ? (
-                <Pressable style={styles.mBtnInvite} onPress={() => router.push('/meetup/invitations' as any)}>
-                  <MaterialIcons name="mail" size={14} color={theme.error} />
-                  <Text style={styles.mBtnInviteText}>{pendingInviteCount}</Text>
-                </Pressable>
-              ) : null}
-              <Pressable style={styles.mBtnJoin} onPress={() => setShowJoinMeetupModal(true)}>
-                <MaterialIcons name="qr-code" size={14} color={theme.accent} />
-              </Pressable>
-              <Pressable style={styles.mBtnCreate} onPress={() => router.push('/meetup/new' as any)}>
-                <MaterialIcons name="add" size={16} color="#FFF" />
-              </Pressable>
-            </View>
-          </View>
-
-          {meetups.length > 0 ? (
-            <View style={styles.meetupCards}>
-              {(() => {
-                const m = meetups[0];
-                const mDate = new Date(m.date);
-                const daysUntil = Math.max(0, Math.ceil((mDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-                return (
-                  <Pressable
-                    style={({ pressed }) => [styles.meetupNextCard, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
-                    onPress={() => router.push(`/meetup/${m.id}` as any)}
-                  >
-                    <LinearGradient colors={['#E0F2FE', '#BAE6FD']} style={styles.meetupNextGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-                      <View style={styles.meetupNextTop}>
-                        <View style={styles.meetupNextDateBox}>
-                          <Text style={styles.meetupNextDateDay}>{mDate.getDate()}</Text>
-                          <Text style={styles.meetupNextDateMonth}>{mDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}</Text>
-                        </View>
-                        <View style={styles.meetupNextInfo}>
-                          <Text style={styles.meetupNextTitle} numberOfLines={1}>{m.title}</Text>
-                          <View style={styles.meetupNextMeta}>
-                            <MaterialIcons name="schedule" size={13} color="#0369A1" />
-                            <Text style={styles.meetupNextTime}>
-                              {mDate.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
-                            </Text>
-                            {daysUntil <= 1 ? (
-                              <View style={styles.meetupNextSoonBadge}>
-                                <Text style={styles.meetupNextSoonText}>{daysUntil === 0 ? t('notifications', 'todayLabel') : t('notifications', 'tomorrowLabel')}</Text>
-                              </View>
-                            ) : null}
-                          </View>
-                        </View>
-                        <MaterialIcons name="chevron-right" size={22} color="#0369A1" />
-                      </View>
-                      <View style={styles.meetupNextBottom}>
-                        <View style={styles.meetupNextParticipants}>
-                          <MaterialIcons name="group" size={14} color="#0369A1" />
-                          <Text style={styles.meetupNextParticipantsText}>{m._acceptedCount || 0}/{m._maxParticipants || 8} {t('meetup', 'confirmedCount')}</Text>
-                        </View>
-                        {m._source === 'created' ? (
-                          <View style={styles.meetupNextCreatorTag}>
-                            <MaterialIcons name="person" size={11} color={theme.primary} />
-                            <Text style={styles.meetupNextCreatorText}>{t('meetup', 'yourMeetup')}</Text>
-                          </View>
-                        ) : (
-                          <View style={styles.meetupNextInvitedTag}>
-                            <MaterialIcons name="mail" size={11} color={theme.accent} />
-                            <Text style={styles.meetupNextInvitedText}>{t('meetup', 'invited')}</Text>
-                          </View>
-                        )}
-                      </View>
-                    </LinearGradient>
-                  </Pressable>
-                );
-              })()}
-
-              {meetups.length > 1 ? (
-                <Pressable
-                  style={({ pressed }) => [styles.meetupMoreLink, pressed && { opacity: 0.7 }]}
-                  onPress={() => setShowMeetupListModal(true)}
-                >
-                  <MaterialIcons name="date-range" size={16} color={theme.accent} />
-                  <Text style={styles.meetupMoreText}>
-                    +{meetups.length - 1} {language === 'fr' ? 'autre(s) RDV' : 'more meetup(s)'}
-                  </Text>
-                  <MaterialIcons name="chevron-right" size={18} color={theme.accent} />
-                </Pressable>
-              ) : null}
-            </View>
-          ) : !meetupsLoading ? (
-            <View style={styles.meetupEmptyBlock}>
-              <MaterialIcons name="event-available" size={28} color={theme.textMuted} />
-              <Text style={styles.meetupEmptyText}>{t('meetup', 'noMeetups')}</Text>
-            </View>
-          ) : null}
-        </Animated.View>
 
         {/* Ad Banner */}
         <AdBanner position="inline" />
@@ -851,6 +857,9 @@ const styles = StyleSheet.create({
   quickLabel: { fontSize: 11, fontWeight: '600', color: theme.textPrimary, textAlign: 'center' },
 
   // ========== MEETUP SECTION ==========
+  upcomingHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
+  meetupSubSection: { marginTop: 16 },
+  meetupSubTitle: { fontSize: 14, fontWeight: '600', color: theme.textSecondary },
   meetupTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   meetupTitleLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   meetupTitleBtns: { flexDirection: 'row', alignItems: 'center', gap: 6 },

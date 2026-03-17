@@ -81,6 +81,7 @@ export const translations = {
     },
     createTournament: { fr: 'Créer un tournoi', en: 'Create a tournament' },
     noTournamentFilter: { fr: 'Aucun tournoi', en: 'No tournaments' },
+    upcoming: { fr: 'À Venir', en: 'Upcoming' },
   },
 
   // ============================================
@@ -2004,7 +2005,7 @@ export const translations = {
     tournamentCount: { fr: 'tournoi(s)', en: 'tournament(s)' },
     enabled: { fr: 'Activées', en: 'Enabled' },
     disabled: { fr: 'Désactivées', en: 'Disabled' },
-    scheduledReminders: { fr: 'rappels programmés', en: 'scheduled reminders' },
+    scheduledReminders: { fr: 'rappel(s) programmé(s)', en: 'scheduled reminder(s)' },
     enableToReceive: { fr: 'Activez pour recevoir des rappels', en: 'Enable to receive reminders' },
     sendTest: { fr: 'Envoyer un test', en: 'Send test' },
     activeReminders: { fr: 'Rappels actifs', en: 'Active reminders' },
@@ -2016,7 +2017,7 @@ export const translations = {
     enableFromTournament: { fr: 'Activez les rappels depuis la fiche tournoi', en: 'Enable reminders from the tournament card' },
     upcomingTournaments: { fr: 'Tournois à venir', en: 'Upcoming tournaments' },
     viewAll: { fr: 'Voir tout', en: 'View all' },
-    infoText: { fr: 'Les rappels sont envoyés la veille du tournoi. Vous pouvez les configurer depuis la fiche de chaque tournoi.', en: 'Reminders are sent the day before the tournament. You can configure them from each tournament card.' },
+    infoText: { fr: 'Les rappels de tournois (1 semaine, 3 jours, la veille) se configurent depuis chaque fiche tournoi. Les rappels de RDV (la veille, 3h, 1h avant) se configurent depuis chaque fiche RDV.', en: 'Tournament reminders (1 week, 3 days, day before) are configured from each tournament card. Meetup reminders (day before, 3h, 1h before) are configured from each meetup card.' },
   },
 
   // ============================================
