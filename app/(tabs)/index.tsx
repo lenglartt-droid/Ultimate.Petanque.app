@@ -472,29 +472,9 @@ export default function HomeScreen() {
           </View>
         </Animated.View>
 
-        {/* ========== QUICK ACCESS GRID ========== */}
-        <Animated.View entering={FadeInDown.duration(400).delay(200)} style={[styles.section, isTablet && styles.sectionTablet]}>
-          <Text style={styles.sectionTitle}>{t('home', 'quickAccess')}</Text>
-          <View style={styles.quickGrid}>
-            {[
-              { label: t('home', 'player'), icon: 'person-add' as keyof typeof MaterialIcons.glyphMap, bg: theme.primary, route: '/player/new' },
-              { label: t('home', 'tournament'), icon: 'add-circle' as keyof typeof MaterialIcons.glyphMap, bg: theme.carreauColor, route: '/tournament/new' },
-              { label: t('home', 'terrain'), icon: 'sports-soccer' as keyof typeof MaterialIcons.glyphMap, bg: theme.accent, route: '/terrain/new' },
-              { label: t('home', 'club'), icon: 'add-home' as keyof typeof MaterialIcons.glyphMap, bg: theme.success, route: '/club/new' },
-            ].map((q, i) => (
-              <Pressable key={i} style={({ pressed }) => [styles.quickItem, pressed && styles.quickItemPressed]} onPress={() => router.push(q.route as any)}>
-                <View style={[styles.quickIcon, { backgroundColor: q.bg }]}>
-                  <MaterialIcons name={q.icon} size={22} color="#FFF" />
-                </View>
-                <Text style={styles.quickLabel}>{q.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </Animated.View>
-
         {/* ========== COMPACT HISTORY ========== */}
         {recentResults.length > 0 ? (
-          <Animated.View entering={FadeIn.duration(400).delay(260)} style={[styles.section, isTablet && styles.sectionTablet]}>
+          <Animated.View entering={FadeIn.duration(400).delay(200)} style={[styles.section, isTablet && styles.sectionTablet]}>
             <View style={styles.historyHeaderRow}>
               <View style={styles.historyHeaderLeft}>
                 <MaterialIcons name="history" size={20} color={theme.primary} />
@@ -531,7 +511,7 @@ export default function HomeScreen() {
             </View>
           </Animated.View>
         ) : (matches.length === 0 && challenges.length === 0) ? (
-          <Animated.View entering={FadeIn.duration(500).delay(260)} style={[styles.emptyCard, isTablet && styles.emptyCardTablet]}>
+          <Animated.View entering={FadeIn.duration(500).delay(200)} style={[styles.emptyCard, isTablet && styles.emptyCardTablet]}>
             <View style={styles.emptyIconBg}>
               <MaterialIcons name="sports" size={44} color={theme.primary} />
             </View>
@@ -543,6 +523,26 @@ export default function HomeScreen() {
             </Pressable>
           </Animated.View>
         ) : null}
+
+        {/* ========== QUICK ACCESS GRID ========== */}
+        <Animated.View entering={FadeInDown.duration(400).delay(260)} style={[styles.section, isTablet && styles.sectionTablet]}>
+          <Text style={styles.sectionTitle}>{t('home', 'quickAccess')}</Text>
+          <View style={styles.quickGrid}>
+            {[
+              { label: t('home', 'player'), icon: 'person-add' as keyof typeof MaterialIcons.glyphMap, bg: theme.primary, route: '/player/new' },
+              { label: t('home', 'tournament'), icon: 'add-circle' as keyof typeof MaterialIcons.glyphMap, bg: theme.carreauColor, route: '/tournament/new' },
+              { label: t('home', 'terrain'), icon: 'sports-soccer' as keyof typeof MaterialIcons.glyphMap, bg: theme.accent, route: '/terrain/new' },
+              { label: t('home', 'club'), icon: 'add-home' as keyof typeof MaterialIcons.glyphMap, bg: theme.success, route: '/club/new' },
+            ].map((q, i) => (
+              <Pressable key={i} style={({ pressed }) => [styles.quickItem, pressed && styles.quickItemPressed]} onPress={() => router.push(q.route as any)}>
+                <View style={[styles.quickIcon, { backgroundColor: q.bg }]}>
+                  <MaterialIcons name={q.icon} size={22} color="#FFF" />
+                </View>
+                <Text style={styles.quickLabel}>{q.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </Animated.View>
 
         {/* Ad Banner */}
         <AdBanner position="inline" />
