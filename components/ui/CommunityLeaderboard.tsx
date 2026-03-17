@@ -20,6 +20,9 @@ export default function CommunityLeaderboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<LeaderboardSort>('winRate');
+  const [filterCity, setFilterCity] = useState<string>('all');
+  const [filterCountry, setFilterCountry] = useState<string>('all');
+  const [showFilters, setShowFilters] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -31,13 +34,39 @@ export default function CommunityLeaderboard() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const sorted = useMemo(() => sortLeaderboard(players, sortBy), [players, sortBy]);
+  // Extract unique cities and countries for filters
+  const uniqueCities = useMemo(() => {
+    const cities = players.map(p => p.city).filter(Boolean) as string[];
+    return [...new Set(cities)].sort();
+  }, [players]);
+
+  const uniqueCountries = useMemo(() => {
+    const countries = players.map(p => p.country).filter(Boolean) as string[];
+    return [...new Set(countries)].sort();
+  }, [players]);
+
+  const activeFilterCount = useMemo(() => {
+    return [filterCity, filterCountry].filter(f => f !== 'all').length;
+  }, [filterCity, filterCountry]);
+
+  // Apply filters then sort
+  const filteredSorted = useMemo(() => {
+    let result = players;
+    if (filterCity !== 'all') result = result.filter(p => p.city === filterCity);
+    if (filterCountry !== 'all') result = result.filter(p => p.country === filterCountry);
+    return sortLeaderboard(result, sortBy);
+  }, [players, sortBy, filterCity, filterCountry]);
 
   const myRank = useMemo(() => {
     if (!selfPlayer || !user) return null;
-    const idx = sorted.findIndex(p => p.userId === user.id || p.id === selfPlayer.id);
+    const idx = filteredSorted.findIndex(p => p.userId === user.id || p.id === selfPlayer.id);
     return idx >= 0 ? idx + 1 : null;
-  }, [sorted, selfPlayer, user]);
+  }, [filteredSorted, selfPlayer, user]);
+
+  const clearFilters = () => {
+    setFilterCity('all');
+    setFilterCountry('all');
+  };
 
   return (
     <Animated.View entering={FadeInDown.duration(400).delay(100)} style={s.section}>
@@ -47,8 +76,20 @@ export default function CommunityLeaderboard() {
         </View>
         <View style={s.sectionHeaderText}>
           <Text style={s.sectionTitle}>{t('leaderboard', 'title')}</Text>
-          {players.length > 0 ? <Text style={s.sectionSubtitle}>{players.length} {t('leaderboard', 'publicPlayersCount')}</Text> : null}
+          {filteredSorted.length > 0 ? <Text style={s.sectionSubtitle}>{filteredSorted.length} {t('leaderboard', 'publicPlayersCount')}</Text> : null}
         </View>
+        {/* Filter toggle */}
+        <Pressable
+          style={[s.filterToggle, activeFilterCount > 0 && s.filterToggleActive]}
+          onPress={() => { Haptics.selectionAsync(); setShowFilters(!showFilters); }}
+        >
+          <MaterialIcons name="tune" size={16} color={activeFilterCount > 0 ? '#D97706' : theme.textMuted} />
+          {activeFilterCount > 0 ? (
+            <View style={s.filterBadge}>
+              <Text style={s.filterBadgeText}>{activeFilterCount}</Text>
+            </View>
+          ) : null}
+        </Pressable>
       </View>
 
       {/* Sort chips */}
@@ -69,6 +110,87 @@ export default function CommunityLeaderboard() {
         ))}
       </ScrollView>
 
+      {/* Expandable Filters (City + Country) */}
+      {showFilters ? (
+        <Animated.View entering={FadeInDown.duration(200)} style={s.filtersPanel}>
+          {/* Country filter */}
+          {uniqueCountries.length > 0 ? (
+            <View style={s.filterGroup}>
+              <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByCountry')}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
+                <Pressable
+                  style={[s.filterChip, filterCountry === 'all' && s.filterChipActive]}
+                  onPress={() => { Haptics.selectionAsync(); setFilterCountry('all'); }}
+                >
+                  <Text style={[s.filterChipText, filterCountry === 'all' && s.filterChipTextActive]}>{t('leaderboard', 'allCountries')}</Text>
+                </Pressable>
+                {uniqueCountries.map(country => (
+                  <Pressable
+                    key={country}
+                    style={[s.filterChip, filterCountry === country && s.filterChipActive]}
+                    onPress={() => { Haptics.selectionAsync(); setFilterCountry(country); }}
+                  >
+                    <Text style={[s.filterChipText, filterCountry === country && s.filterChipTextActive]}>{country}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+
+          {/* City filter */}
+          {uniqueCities.length > 0 ? (
+            <View style={s.filterGroup}>
+              <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByCity')}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
+                <Pressable
+                  style={[s.filterChip, filterCity === 'all' && s.filterChipActive]}
+                  onPress={() => { Haptics.selectionAsync(); setFilterCity('all'); }}
+                >
+                  <Text style={[s.filterChipText, filterCity === 'all' && s.filterChipTextActive]}>{t('leaderboard', 'allCities')}</Text>
+                </Pressable>
+                {uniqueCities.map(city => (
+                  <Pressable
+                    key={city}
+                    style={[s.filterChip, filterCity === city && s.filterChipActive]}
+                    onPress={() => { Haptics.selectionAsync(); setFilterCity(city); }}
+                  >
+                    <Text style={[s.filterChipText, filterCity === city && s.filterChipTextActive]}>{city}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+
+          {/* Clear filters */}
+          {activeFilterCount > 0 ? (
+            <Pressable style={s.clearFiltersBtn} onPress={clearFilters}>
+              <MaterialIcons name="clear-all" size={14} color={theme.error} />
+              <Text style={s.clearFiltersBtnText}>{t('directory', 'clearAll')}</Text>
+            </Pressable>
+          ) : null}
+        </Animated.View>
+      ) : null}
+
+      {/* Active filter pills (when panel is closed) */}
+      {activeFilterCount > 0 && !showFilters ? (
+        <View style={s.activeFiltersRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.activeFiltersScroll}>
+            {filterCountry !== 'all' ? (
+              <Pressable style={s.activeFilterPill} onPress={() => setFilterCountry('all')}>
+                <Text style={s.activeFilterPillText}>{filterCountry}</Text>
+                <MaterialIcons name="close" size={12} color="#D97706" />
+              </Pressable>
+            ) : null}
+            {filterCity !== 'all' ? (
+              <Pressable style={s.activeFilterPill} onPress={() => setFilterCity('all')}>
+                <Text style={s.activeFilterPillText}>{filterCity}</Text>
+                <MaterialIcons name="close" size={12} color="#D97706" />
+              </Pressable>
+            ) : null}
+          </ScrollView>
+        </View>
+      ) : null}
+
       <View style={s.card}>
         {loading ? (
           <View style={s.center}>
@@ -85,11 +207,21 @@ export default function CommunityLeaderboard() {
               <Text style={s.retryBtnText}>{t('leaderboard', 'retry')}</Text>
             </Pressable>
           </View>
-        ) : sorted.length === 0 ? (
+        ) : filteredSorted.length === 0 ? (
           <View style={s.center}>
             <MaterialIcons name="people-outline" size={40} color={theme.textMuted} />
             <Text style={s.emptyTitle}>{t('leaderboard', 'noPlayers')}</Text>
-            <Text style={s.emptyDesc}>{t('leaderboard', 'noPlayersDesc')}</Text>
+            <Text style={s.emptyDesc}>
+              {activeFilterCount > 0
+                ? t('leaderboard', 'noPlayersMatchingFilters')
+                : t('leaderboard', 'noPlayersDesc')}
+            </Text>
+            {activeFilterCount > 0 ? (
+              <Pressable style={s.resetBtn} onPress={clearFilters}>
+                <MaterialIcons name="refresh" size={14} color="#D97706" />
+                <Text style={s.resetBtnText}>{t('common', 'reset')}</Text>
+              </Pressable>
+            ) : null}
           </View>
         ) : (
           <>
@@ -104,7 +236,7 @@ export default function CommunityLeaderboard() {
             </View>
 
             {/* Rows */}
-            {sorted.slice(0, 10).map((p, idx) => {
+            {filteredSorted.slice(0, 10).map((p, idx) => {
               const rank = idx + 1;
               const isMe = user && (p.userId === user.id || (selfPlayer && p.id === selfPlayer.id));
               const medalColors: Record<number, string> = { 1: '#FFD700', 2: '#A8B4C0', 3: '#CD7F32' };
@@ -152,7 +284,7 @@ export default function CommunityLeaderboard() {
 
             {/* My rank if not in top 10 */}
             {myRank && myRank > 10 ? (() => {
-              const myP = sorted[myRank - 1];
+              const myP = filteredSorted[myRank - 1];
               if (!myP) return null;
               return (
                 <>
@@ -214,12 +346,41 @@ export default function CommunityLeaderboard() {
 }
 
 const s = StyleSheet.create({
-  section: { marginBottom: 16 },
+  section: { marginBottom: 4 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 10 },
   sectionIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   sectionHeaderText: { flex: 1 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: theme.textPrimary },
   sectionSubtitle: { fontSize: 11, color: theme.textMuted, marginTop: 1 },
+
+  // Filter toggle button
+  filterToggle: { width: 34, height: 34, borderRadius: 10, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.border },
+  filterToggleActive: { backgroundColor: '#D97706' + '12', borderColor: '#D97706' + '30' },
+  filterBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#D97706', minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  filterBadgeText: { fontSize: 9, fontWeight: '800', color: '#FFF' },
+
+  // Filters panel
+  filtersPanel: { marginBottom: 10, backgroundColor: theme.surface, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: theme.border },
+  filterGroup: { marginBottom: 10 },
+  filterGroupTitle: { fontSize: 10, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
+  filterChipsRow: { gap: 6 },
+  filterChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
+  filterChipActive: { backgroundColor: '#D97706' + '15', borderColor: '#D97706' },
+  filterChipText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  filterChipTextActive: { color: '#D97706' },
+  clearFiltersBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 6 },
+  clearFiltersBtnText: { fontSize: 12, fontWeight: '600', color: theme.error },
+
+  // Active filter pills
+  activeFiltersRow: { marginBottom: 8 },
+  activeFiltersScroll: { gap: 6 },
+  activeFilterPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: '#D97706' + '10', borderRadius: 14, borderWidth: 1, borderColor: '#D97706' + '25' },
+  activeFilterPillText: { fontSize: 11, fontWeight: '600', color: '#D97706' },
+
+  // Reset button in empty state
+  resetBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: '#D97706' + '12', borderRadius: 8 },
+  resetBtnText: { fontSize: 12, fontWeight: '600', color: '#D97706' },
+
   sortRow: { gap: 6, marginBottom: 12 },
   sortChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
   sortChipActive: { backgroundColor: '#D97706', borderColor: '#D97706' },

@@ -161,6 +161,7 @@ export default function LeaderboardScreen() {
   const [filterRole, setFilterRole] = useState<string>('all');
   const [filterLevel, setFilterLevel] = useState<string>('all');
   const [filterCity, setFilterCity] = useState<string>('all');
+  const [filterCountry, setFilterCountry] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
@@ -188,10 +189,15 @@ export default function LeaderboardScreen() {
     return [...new Set(cities)].sort();
   }, [allPlayers]);
 
+  const uniqueCountries = useMemo(() => {
+    const countries = allPlayers.map(p => p.country).filter(Boolean) as string[];
+    return [...new Set(countries)].sort();
+  }, [allPlayers]);
+
   // Active filter count
   const activeFilterCount = useMemo(() => {
-    return [filterRole, filterLevel, filterCity].filter(f => f !== 'all').length;
-  }, [filterRole, filterLevel, filterCity]);
+    return [filterRole, filterLevel, filterCity, filterCountry].filter(f => f !== 'all').length;
+  }, [filterRole, filterLevel, filterCity, filterCountry]);
 
   // Filtered, sorted, paginated data
   const filteredSorted = useMemo(() => {
@@ -212,15 +218,16 @@ export default function LeaderboardScreen() {
     if (filterRole !== 'all') result = result.filter(p => p.role === filterRole);
     if (filterLevel !== 'all') result = result.filter(p => p.level === filterLevel);
     if (filterCity !== 'all') result = result.filter(p => p.city === filterCity);
+    if (filterCountry !== 'all') result = result.filter(p => p.country === filterCountry);
 
     return sortLeaderboard(result, sortBy);
-  }, [allPlayers, search, filterRole, filterLevel, filterCity, sortBy]);
+  }, [allPlayers, search, filterRole, filterLevel, filterCity, filterCountry, sortBy]);
 
   const paginatedData = useMemo(() => filteredSorted.slice(0, visibleCount), [filteredSorted, visibleCount]);
   const hasMore = filteredSorted.length > visibleCount;
 
   // Reset pagination on filter/search change
-  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [search, filterRole, filterLevel, filterCity, sortBy]);
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [search, filterRole, filterLevel, filterCity, filterCountry, sortBy]);
 
   const handleLoadMore = useCallback(() => {
     if (hasMore) setVisibleCount(prev => prev + PAGE_SIZE);
@@ -237,6 +244,7 @@ export default function LeaderboardScreen() {
     setFilterRole('all');
     setFilterLevel('all');
     setFilterCity('all');
+    setFilterCountry('all');
     setSearch('');
   };
 
@@ -397,9 +405,35 @@ export default function LeaderboardScreen() {
             </View>
 
             {/* City filter */}
+            {/* Country filter */}
+            {uniqueCountries.length > 0 ? (
+              <View style={s.filterGroup}>
+                <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByCountry')}</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
+                  <Pressable
+                    style={[s.filterChip, filterCountry === 'all' && s.filterChipActive]}
+                    onPress={() => { Haptics.selectionAsync(); setFilterCountry('all'); }}
+                  >
+                    <Text style={[s.filterChipText, filterCountry === 'all' && s.filterChipTextActive]}>
+                      {t('leaderboard', 'allCountries')}
+                    </Text>
+                  </Pressable>
+                  {uniqueCountries.map(country => (
+                    <Pressable
+                      key={country}
+                      style={[s.filterChip, filterCountry === country && s.filterChipActive]}
+                      onPress={() => { Haptics.selectionAsync(); setFilterCountry(country); }}
+                    >
+                      <Text style={[s.filterChipText, filterCountry === country && s.filterChipTextActive]}>{country}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
+
             {uniqueCities.length > 0 ? (
               <View style={s.filterGroup}>
-                <Text style={s.filterGroupTitle}>{t('directory', 'city')}</Text>
+                <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByCity')}</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
                   <Pressable
                     style={[s.filterChip, filterCity === 'all' && s.filterChipActive]}
@@ -445,6 +479,12 @@ export default function LeaderboardScreen() {
               {filterLevel !== 'all' ? (
                 <Pressable style={s.activeFilterPill} onPress={() => setFilterLevel('all')}>
                   <Text style={s.activeFilterPillText}>{t('levels', filterLevel)}</Text>
+                  <MaterialIcons name="close" size={14} color="#D97706" />
+                </Pressable>
+              ) : null}
+              {filterCountry !== 'all' ? (
+                <Pressable style={s.activeFilterPill} onPress={() => setFilterCountry('all')}>
+                  <Text style={s.activeFilterPillText}>{filterCountry}</Text>
                   <MaterialIcons name="close" size={14} color="#D97706" />
                 </Pressable>
               ) : null}

@@ -2310,6 +2310,10 @@ export const translations = {
     minMatchesNote: { fr: 'Minimum 1 match joué requis', en: 'Minimum 1 match played required' },
     searchPlaceholder: { fr: 'Rechercher un joueur...', en: 'Search a player...' },
     noPlayersMatchingFilters: { fr: 'Aucun joueur ne correspond aux filtres', en: 'No players match the current filters' },
+    filterByCity: { fr: 'Ville', en: 'City' },
+    filterByCountry: { fr: 'Pays', en: 'Country' },
+    allCities: { fr: 'Toutes les villes', en: 'All cities' },
+    allCountries: { fr: 'Tous les pays', en: 'All countries' },
   },
 
   statsExtra: {

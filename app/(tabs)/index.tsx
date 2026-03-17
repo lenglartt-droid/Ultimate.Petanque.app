@@ -26,6 +26,7 @@ import { useAuth, useAlert } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import AdBanner from '@/components/ui/AdBanner';
 import { preloadInterstitial } from '@/services/adService';
+import CommunityLeaderboard from '@/components/ui/CommunityLeaderboard';
 import { getMyMeetups, getInvitedMeetups, getMeetupResponses, getPendingInvitationsCount, findMeetupByCode, Meetup, MeetupResponse } from '@/services/meetupService';
 
 export default function HomeScreen() {
@@ -563,6 +564,11 @@ export default function HomeScreen() {
         </Animated.View>
 
 
+
+        {/* ========== COMMUNITY LEADERBOARD ========== */}
+        <Animated.View entering={FadeIn.duration(400).delay(170)} style={[styles.section, isTablet && styles.sectionTablet]}>
+          <CommunityLeaderboard />
+        </Animated.View>
 
         {/* ========== QUICK ACCESS GRID ========== */}
         <Animated.View entering={FadeIn.duration(400).delay(200)} style={[styles.section, isTablet && styles.sectionTablet]}>

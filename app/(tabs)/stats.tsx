@@ -21,7 +21,7 @@ import Svg, { Circle, Line, G, Text as SvgText, Rect, Polygon } from 'react-nati
 import { router } from 'expo-router';
 import { useLanguage } from '@/hooks/useLanguage';
 import AdBanner from '@/components/ui/AdBanner';
-import CommunityLeaderboard from '@/components/ui/CommunityLeaderboard';
+
 
 // TYPES & CONSTANTS
 type TimeFilter = 'today' | 'week' | 'month' | '3months' | '6months' | 'year' | 'all';
@@ -2877,8 +2877,7 @@ export default function StatsScreen() {
             )}
           </>
         )}
-        {/* Community Leaderboard */}
-        <CommunityLeaderboard />
+
       </ScrollView>
 
       {/* Enhanced Progression Modal */}
