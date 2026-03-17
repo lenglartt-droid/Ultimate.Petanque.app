@@ -2877,8 +2877,6 @@ export default function StatsScreen() {
             )}
           </>
         )}
-      </ScrollView>
-
         {/* Community Leaderboard */}
         <CommunityLeaderboard />
       </ScrollView>
