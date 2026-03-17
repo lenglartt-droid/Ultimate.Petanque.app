@@ -1005,6 +1005,28 @@ export default function DirectoryScreen() {
         </View>
       </View>
 
+      {/* Duplicate Detection Banner */}
+      {duplicates.length > 0 && showDuplicateBanner ? (
+        <Animated.View entering={FadeIn.duration(200)} style={styles.duplicateBanner}>
+          <View style={styles.duplicateBannerIcon}>
+            <MaterialIcons name="content-copy" size={18} color={theme.warning} />
+          </View>
+          <View style={styles.duplicateBannerContent}>
+            <Text style={styles.duplicateBannerTitle}>{t('directory', 'duplicateBannerTitle')}</Text>
+            <Text style={styles.duplicateBannerDesc}>{duplicates.length} {t('directory', 'duplicateBannerDesc')}</Text>
+          </View>
+          <Pressable
+            style={styles.duplicateBannerBtn}
+            onPress={() => { Haptics.selectionAsync(); setShowDuplicateModal(true); }}
+          >
+            <Text style={styles.duplicateBannerBtnText}>{t('directory', 'duplicateBannerAction')}</Text>
+          </Pressable>
+          <Pressable style={styles.duplicateBannerClose} onPress={() => setShowDuplicateBanner(false)} hitSlop={8}>
+            <MaterialIcons name="close" size={14} color={theme.textMuted} />
+          </Pressable>
+        </Animated.View>
+      ) : null}
+
       {/* Active Filters Display */}
       {currentFilterCount > 0 && (
         <Animated.View entering={FadeIn.duration(200)} style={styles.activeFiltersContainer}>
@@ -1065,28 +1087,6 @@ export default function DirectoryScreen() {
           </Text>
           <Text style={styles.searchingFor}>{t('directory', 'forSearch')} "{searchQuery}"</Text>
         </View>
-      ) : null}
-
-      {/* Duplicate Detection Banner */}
-      {duplicates.length > 0 && showDuplicateBanner ? (
-        <Animated.View entering={FadeIn.duration(200)} style={styles.duplicateBanner}>
-          <View style={styles.duplicateBannerIcon}>
-            <MaterialIcons name="content-copy" size={18} color={theme.warning} />
-          </View>
-          <View style={styles.duplicateBannerContent}>
-            <Text style={styles.duplicateBannerTitle}>{t('directory', 'duplicateBannerTitle')}</Text>
-            <Text style={styles.duplicateBannerDesc}>{duplicates.length} {t('directory', 'duplicateBannerDesc')}</Text>
-          </View>
-          <Pressable
-            style={styles.duplicateBannerBtn}
-            onPress={() => { Haptics.selectionAsync(); setShowDuplicateModal(true); }}
-          >
-            <Text style={styles.duplicateBannerBtnText}>{t('directory', 'duplicateBannerAction')}</Text>
-          </Pressable>
-          <Pressable style={styles.duplicateBannerClose} onPress={() => setShowDuplicateBanner(false)} hitSlop={8}>
-            <MaterialIcons name="close" size={14} color={theme.textMuted} />
-          </Pressable>
-        </Animated.View>
       ) : null}
 
       {/* Ad Banner */}
@@ -2270,6 +2270,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 16,
+    marginTop: 10,
     marginBottom: 8,
     backgroundColor: theme.warning + '08',
     borderRadius: theme.borderRadius.md,
