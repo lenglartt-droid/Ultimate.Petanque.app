@@ -395,19 +395,21 @@ export default function DirectoryScreen() {
         style={[styles.itemCard, isSelf && styles.selfCard]}
         onPress={() => isSelf ? router.push('/player/me') : router.push(`/player/${item.id}`)}
       >
-        <View style={[styles.itemAvatar, isSelf && styles.selfAvatar]}>
-          {item.avatar ? (
-            <Image
-              source={{ uri: item.avatar }}
-              style={styles.avatarImage}
-              contentFit="cover"
-              transition={200}
-            />
-          ) : (
-            <Text style={styles.avatarText}>
-              {item.name.split(' ').map(n => n[0]).join('')}
-            </Text>
-          )}
+        <View style={[styles.itemAvatarOuter, isSelf && styles.selfAvatarOuter]}>
+          <View style={[styles.itemAvatar, isSelf && styles.selfAvatar]}>
+            {item.avatar ? (
+              <Image
+                source={{ uri: item.avatar }}
+                style={styles.avatarImage}
+                contentFit="cover"
+                transition={200}
+              />
+            ) : (
+              <Text style={styles.avatarText}>
+                {item.name.split(' ').map(n => n[0]).join('')}
+              </Text>
+            )}
+          </View>
           {isSelf ? (
             <>
               <View style={styles.selfBadge}>
@@ -1903,6 +1905,17 @@ const styles = StyleSheet.create({
     borderColor: theme.error + '50',
     backgroundColor: theme.error + '03',
   },
+  itemAvatarOuter: {
+    position: 'relative' as const,
+    width: 52,
+    height: 52,
+    marginRight: 12,
+  },
+  selfAvatarOuter: {
+    width: 58,
+    height: 58,
+    marginRight: 10,
+  },
   itemAvatar: {
     width: 52,
     height: 52,
@@ -1910,7 +1923,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    overflow: 'hidden' as const,
   },
   selfAvatar: {
     backgroundColor: theme.primary,
@@ -1926,31 +1939,32 @@ const styles = StyleSheet.create({
     color: '#FFF',
   },
   selfBadge: {
-    position: 'absolute',
+    position: 'absolute' as const,
     bottom: -2,
     right: -2,
     width: 18,
     height: 18,
     borderRadius: 9,
     backgroundColor: theme.carreauColor,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
     borderWidth: 2,
     borderColor: theme.surface,
+    zIndex: 3,
   },
   selfVerifiedBadge: {
-    position: 'absolute',
+    position: 'absolute' as const,
     top: -3,
     left: -3,
     width: 22,
     height: 22,
     borderRadius: 11,
     backgroundColor: theme.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
     borderWidth: 2.5,
     borderColor: theme.surface,
-    zIndex: 2,
+    zIndex: 4,
   },
   favoriteBadge: {
     position: 'absolute',
@@ -1966,30 +1980,32 @@ const styles = StyleSheet.create({
     borderColor: theme.surface,
   },
   publicOverlay: {
-    position: 'absolute',
+    position: 'absolute' as const,
     bottom: -2,
     right: -2,
     width: 18,
     height: 18,
     borderRadius: 9,
     backgroundColor: '#FFF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
     borderWidth: 2,
     borderColor: theme.surface,
+    zIndex: 3,
   },
   verifiedBadge: {
-    position: 'absolute',
+    position: 'absolute' as const,
     bottom: -2,
     right: -2,
     width: 20,
     height: 20,
     borderRadius: 10,
     backgroundColor: theme.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
     borderWidth: 2,
     borderColor: theme.surface,
+    zIndex: 3,
   },
   realUserBadge: {
     flexDirection: 'row',

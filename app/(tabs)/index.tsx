@@ -476,20 +476,19 @@ export default function HomeScreen() {
           ) : null}
         </Animated.View>
 
-        {/* ========== SECTION DIVIDER ========== */}
-        {recentResults.length > 0 ? (
-          <View style={styles.sectionDividerBlock}>
-            <View style={styles.sectionDividerLine} />
-          </View>
-        ) : null}
-
         {/* ========== LAST 3 RESULTS TIMELINE ========== */}
         {recentResults.length > 0 ? (
-          <Animated.View entering={FadeInDown.duration(400).delay(380)} style={[styles.section, isTablet && styles.sectionTablet]}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>{t('history', 'history')}</Text>
-              <Pressable onPress={() => router.push('/history')}>
+          <Animated.View entering={FadeInDown.duration(400).delay(380)} style={[styles.historySection, isTablet && styles.sectionTablet]}>
+            <View style={styles.historySectionHeader}>
+              <View style={styles.historySectionHeaderLeft}>
+                <View style={styles.historySectionIcon}>
+                  <MaterialIcons name="history" size={18} color={theme.primary} />
+                </View>
+                <Text style={styles.historySectionTitle}>{t('history', 'history')}</Text>
+              </View>
+              <Pressable onPress={() => router.push('/history')} style={styles.historySeeAllBtn}>
                 <Text style={styles.seeAllBtn}>{t('common', 'seeAll')}</Text>
+                <MaterialIcons name="chevron-right" size={16} color={theme.primary} />
               </Pressable>
             </View>
             <View style={styles.timeline}>
@@ -832,8 +831,13 @@ const styles = StyleSheet.create({
   bannerCard: { borderRadius: 20, overflow: 'hidden' as const, ...theme.shadows.cardElevated, position: 'relative' as const },
   bannerImage: { width: '100%', height: 110, borderRadius: 20 },
   bannerOverlay: { position: 'absolute' as const, bottom: 0, left: 0, right: 0, height: 50, borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
-  sectionDividerBlock: { paddingHorizontal: 16, marginTop: 8, marginBottom: 24 },
-  sectionDividerLine: { height: 2, backgroundColor: theme.border, borderRadius: 1, opacity: 0.5 },
+  // ========== HISTORY SECTION ==========
+  historySection: { paddingHorizontal: 16, marginTop: 16, marginBottom: 24, backgroundColor: theme.surface, marginHorizontal: 16, borderRadius: 20, padding: 16, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border },
+  historySectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
+  historySectionHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  historySectionIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center' },
+  historySectionTitle: { fontSize: 16, fontWeight: '700', color: theme.textPrimary },
+  historySeeAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 2 },
 
   // ========== JOIN MODAL ==========
   joinOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 24 },
