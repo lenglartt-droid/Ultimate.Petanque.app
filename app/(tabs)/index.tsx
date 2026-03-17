@@ -307,7 +307,7 @@ export default function HomeScreen() {
         </Animated.View>
 
         {/* ========== À VENIR (TOURNOI + RDV) ========== */}
-        <Animated.View entering={FadeInDown.duration(400).delay(140)} style={[styles.section, isTablet && styles.sectionTablet]}>
+        <Animated.View entering={FadeIn.duration(400).delay(140)} style={[styles.section, isTablet && styles.sectionTablet, { zIndex: 1 }]}>
           <View style={styles.upcomingHeaderRow}>
             <MaterialIcons name="event-note" size={20} color={theme.primary} />
             <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>{t('home', 'upcoming')}</Text>
@@ -474,7 +474,7 @@ export default function HomeScreen() {
 
         {/* ========== COMPACT HISTORY ========== */}
         {recentResults.length > 0 ? (
-          <Animated.View entering={FadeIn.duration(400).delay(200)} style={[styles.section, isTablet && styles.sectionTablet]}>
+          <Animated.View entering={FadeIn.duration(400).delay(200)} style={[styles.section, isTablet && styles.sectionTablet, { zIndex: 0 }]}>
             <View style={styles.historyHeaderRow}>
               <View style={styles.historyHeaderLeft}>
                 <MaterialIcons name="history" size={20} color={theme.primary} />
@@ -525,7 +525,7 @@ export default function HomeScreen() {
         ) : null}
 
         {/* ========== QUICK ACCESS GRID ========== */}
-        <Animated.View entering={FadeInDown.duration(400).delay(260)} style={[styles.section, isTablet && styles.sectionTablet]}>
+        <Animated.View entering={FadeIn.duration(400).delay(260)} style={[styles.section, isTablet && styles.sectionTablet]}>
           <Text style={styles.sectionTitle}>{t('home', 'quickAccess')}</Text>
           <View style={styles.quickGrid}>
             {[
@@ -787,9 +787,9 @@ const styles = StyleSheet.create({
   heroBellBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center', position: 'relative' as const },
   heroBellBadge: { position: 'absolute' as const, top: -2, right: -2, backgroundColor: theme.error, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: '#2563EB' },
   heroBellBadgeText: { fontSize: 10, fontWeight: '800', color: '#FFF' },
-  heroProfileBtn: { width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.45)' },
-  heroAvatarImg: { width: 56, height: 56, borderRadius: 28 },
-  heroAvatarLetter: { fontSize: 22, fontWeight: '700', color: '#FFF' },
+  heroProfileBtn: { width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderWidth: 3, borderColor: 'rgba(255,255,255,0.5)' },
+  heroAvatarImg: { width: 72, height: 72, borderRadius: 36 },
+  heroAvatarLetter: { fontSize: 28, fontWeight: '700', color: '#FFF' },
   heroStatsRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 8 },
   heroStatItem: { flex: 1, alignItems: 'center' },
   heroStatValue: { fontSize: 20, fontWeight: '800', color: '#FFF' },
