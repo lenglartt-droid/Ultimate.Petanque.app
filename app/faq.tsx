@@ -28,6 +28,7 @@ function getQuickActions(t: (s: string, k: string) => string) {
     { id: 'tournament', title: t('faq', 'trackTournament'), icon: 'emoji-events', color: theme.success, steps: t('faq', 'qaTournamentSteps').split('|'), route: '/tournament/new' },
     { id: 'share', title: t('faq', 'shareCard'), icon: 'share', color: theme.accent, steps: t('faq', 'qaShareSteps').split('|') },
     { id: 'publish', title: t('faq', 'publishOnMap'), icon: 'public', color: '#8B5CF6', steps: t('faq', 'qaPublishSteps').split('|') },
+    { id: 'meetup', title: t('faq', 'organizeMeetup'), icon: 'event', color: theme.warning, steps: t('faq', 'qaMeetupSteps').split('|'), route: '/meetup/new' },
   ];
 }
 
@@ -87,6 +88,13 @@ function getFaqData(t: (s: string, k: string) => string) {
       { id: 'mp3', q: t('faq', 'mp3Q'), a: t('faq', 'mp3A') },
       { id: 'mp4', q: t('faq', 'mp4Q'), a: t('faq', 'mp4A') },
       { id: 'mp5', q: t('faq', 'mp5Q'), a: t('faq', 'mp5A') },
+    ]},
+    { id: 'meetups', category: t('faq', 'meetupsCat'), icon: 'event', color: theme.warning, questions: [
+      { id: 'mu1', q: t('faq', 'mu1Q'), a: t('faq', 'mu1A') },
+      { id: 'mu2', q: t('faq', 'mu2Q'), a: t('faq', 'mu2A') },
+      { id: 'mu3', q: t('faq', 'mu3Q'), a: t('faq', 'mu3A') },
+      { id: 'mu4', q: t('faq', 'mu4Q'), a: t('faq', 'mu4A') },
+      { id: 'mu5', q: t('faq', 'mu5Q'), a: t('faq', 'mu5A') },
     ]},
     { id: 'financial', category: t('faq', 'financialCat'), icon: 'savings', color: '#10B981', questions: [
       { id: 'fin1', q: t('faq', 'fin1Q'), a: t('faq', 'fin1A') },

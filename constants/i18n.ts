@@ -2636,6 +2636,8 @@ export const translations = {
     qaTournamentSteps: { fr: 'Annuaire > Tournois > +|Remplissez les informations|Ajoutez les matchs|Suivez votre progression', en: 'Directory > Tournaments > +|Fill in information|Add matches|Track your progress' },
     qaShareSteps: { fr: 'Ouvrez une fiche joueur, club ou terrain|Cliquez sur Partager|Un aperçu s\'affiche|Confirmez et partagez le code', en: 'Open a player, club or court card|Click Share|A preview appears|Confirm and share the code' },
     qaPublishSteps: { fr: 'Ouvrez une fiche|Section Visibilité|Un aperçu s\'affiche|Confirmez la publication', en: 'Open a card|Visibility section|A preview appears|Confirm publishing' },
+    organizeMeetup: { fr: 'Organiser un RDV terrain', en: 'Organize a terrain meeting' },
+    qaMeetupSteps: { fr: 'Accueil > section RDV > +|Choisissez un terrain et une date/heure|Invitez des joueurs directement|Activez les rappels (veille, 3h, 1h)|Partagez le code aux autres joueurs', en: 'Home > Meetings section > +|Choose a court and date/time|Invite players directly|Enable reminders (day before, 3h, 1h)|Share the code with other players' },
     // Category names
     gettingStarted: { fr: 'Premiers pas', en: 'Getting Started' },
     matchesScoring: { fr: 'Matchs et scores', en: 'Matches & Scoring' },
@@ -2646,6 +2648,7 @@ export const translations = {
     directorySharing: { fr: 'Annuaire et partage', en: 'Directory & Sharing' },
     previewCat: { fr: 'Aperçu et visibilité', en: 'Preview & Visibility' },
     mapPublicItems: { fr: 'Carte et fiches publiques', en: 'Map & Public Items' },
+    meetupsCat: { fr: 'Rendez-vous terrain', en: 'Terrain Meetings' },
     financialCat: { fr: 'Finances', en: 'Finances' },
     accountProfile: { fr: 'Compte et profil', en: 'Account & Profile' },
     // Getting Started
@@ -2728,6 +2731,17 @@ export const translations = {
     // Financial
     fin1Q: { fr: 'Comment suivre mes finances ?', en: 'How do I track my finances?' },
     fin1A: { fr: 'Depuis Profil > Bilan financier. Le calcul inclut les inscriptions aux tournois, prix d\'achat de l\'équipement, cotisations clubs et gains en tournoi.', en: 'From Profile > Financial summary. The calculation includes tournament registration, equipment purchase prices, club memberships and tournament winnings.' },
+    // Meetups FAQ
+    mu1Q: { fr: 'Comment organiser une rencontre avec d\'autres joueurs ?', en: 'How do I organize a game with other players?' },
+    mu1A: { fr: 'Depuis l\'accueil, section RDV, appuyez sur + pour creer un nouveau rendez-vous. Selectionnez un terrain de votre annuaire, choisissez la date et l\'heure exactes, definissez le nombre maximum de participants et ajoutez des notes si besoin. Le RDV apparaitra immediatement sur votre accueil avec un compte a rebours.', en: 'From the home screen, Meetings section, tap + to create a new meeting. Select a court from your directory, choose the exact date and time, set the maximum number of participants and add notes if needed. The meeting will immediately appear on your home screen with a countdown.' },
+    mu2Q: { fr: 'Comment inviter des joueurs a venir jouer ?', en: 'How do I invite players to come play?' },
+    mu2A: { fr: 'Deux methodes : (1) Invitation directe : depuis la fiche du RDV ou depuis l\'annuaire via le bouton "Inviter a un RDV" visible sur les fiches de joueurs publics inscrits dans l\'application. Le joueur recevra une notification dans son application. (2) Code de partage : partagez le code unique du RDV (ex: RDV-ABC123) pour que d\'autres joueurs puissent le rejoindre manuellement.', en: 'Two methods: (1) Direct invitation: from the meeting page or from the directory via the "Invite to meeting" button visible on public registered player cards. The player will receive a notification in their app. (2) Share code: share the unique meeting code (e.g. RDV-ABC123) so other players can join manually.' },
+    mu3Q: { fr: 'Comment etre rappele avant un rendez-vous ?', en: 'How do I get reminded before a meeting?' },
+    mu3A: { fr: 'Depuis la fiche du RDV, section Rappels, activez jusqu\'a 3 rappels independants : la veille a 9h du matin, 3 heures avant le rendez-vous et 1 heure avant. Les rappels sont des notifications locales qui fonctionnent meme hors-ligne. Vous pouvez aussi configurer les rappels en tant qu\'invite depuis la page d\'invitations.', en: 'From the meeting page, Reminders section, enable up to 3 independent reminders: day before at 9am, 3 hours before and 1 hour before. Reminders are local notifications that work even offline. You can also configure reminders as an invitee from the invitations page.' },
+    mu4Q: { fr: 'Comment rejoindre un rendez-vous organise par un autre joueur ?', en: 'How do I join a meeting organized by another player?' },
+    mu4A: { fr: 'Si vous etes invite directement, le RDV apparait dans vos Invitations (icone courrier sur l\'accueil). Acceptez ou declinez en un clic. Sinon, saisissez le code RDV depuis l\'accueil (icone QR code) ou depuis Profil > Code de partage. Vous verrez les details du RDV et pourrez confirmer votre presence.', en: 'If directly invited, the meeting appears in your Invitations (mail icon on home screen). Accept or decline in one click. Otherwise, enter the meeting code from Home (QR code icon) or from Profile > Share code. You will see the meeting details and can confirm your attendance.' },
+    mu5Q: { fr: 'Comment suivre les confirmations de presence ?', en: 'How do I track attendance confirmations?' },
+    mu5A: { fr: 'La fiche du RDV affiche en temps reel la liste des participants avec leur statut : confirme, decline ou en attente. Le compteur de participants (ex: 3/8 confirmes) est visible directement sur l\'accueil et dans la liste des RDV. Un polling automatique met a jour les reponses toutes les 15 secondes.', en: 'The meeting page displays the participant list in real time with their status: confirmed, declined or pending. The participant counter (e.g. 3/8 confirmed) is visible directly on the home screen and in the meetings list. Automatic polling updates responses every 15 seconds.' },
     // Account
     a1Q: { fr: 'Comment modifier mon profil ?', en: 'How do I edit my profile?' },
     a1A: { fr: 'Depuis l\'onglet Profil, modifiez nom, rôle, niveau, club, terrain, photo et localisation.', en: 'From the Profile tab, edit name, role, level, club, court, photo and location.' },
@@ -2894,7 +2908,9 @@ export const translations = {
     featureStats: { fr: 'Statistiques avancees et analyse des erreurs', en: 'Advanced statistics and error analysis' },
     featureDirectory: { fr: 'Annuaire joueurs, clubs, terrains et tournois', en: 'Player, club, terrain and tournament directory' },
     featureMap: { fr: 'Carte interactive avec items publics', en: 'Interactive map with public items' },
-    featureMeetups: { fr: 'Organisation de RDV et invitations directes', en: 'Meetup organization and direct invitations' },
+    featureMeetups: { fr: 'Rendez-vous terrain : invitations, rappels et suivi en temps reel', en: 'Terrain meetings: invitations, reminders and real-time tracking' },
+    meetupHighlightTitle: { fr: 'Organisez vos parties', en: 'Organize your games' },
+    meetupHighlightContent: { fr: 'Fini les messages de groupe qui se perdent ! Planifiez des sessions de jeu sur un terrain precis, a une date et heure precise. Invitez directement des joueurs depuis l\'annuaire ou partagez un code unique. Suivez les confirmations de presence en temps reel et activez des rappels automatiques (la veille a 9h, 3h avant, 1h avant) pour ne jamais manquer une partie. Vos prochains RDV apparaissent sur l\'accueil avec un compteur de participants et un compte a rebours.', en: 'No more lost group messages! Schedule playing sessions at a specific court, on a specific date and time. Invite players directly from the directory or share a unique code. Track attendance confirmations in real time and enable automatic reminders (day before at 9am, 3h before, 1h before) to never miss a game. Your upcoming meetings appear on the home screen with a participant counter and countdown.' },
     featureSharing: { fr: 'Partage de fiches par code et permissions', en: 'Card sharing by code with permissions' },
     contactTitle: { fr: 'Votre avis compte', en: 'Your opinion matters' },
     contactContent: { fr: 'Une idee, une suggestion, un probleme ? Ecrivez-nous, nous lisons chaque message avec attention.', en: 'An idea, a suggestion, a problem? Write to us, we read every message carefully.' },

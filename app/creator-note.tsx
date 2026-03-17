@@ -1,3 +1,4 @@
+
 import React from 'react';
 import {
   View,
@@ -93,6 +94,33 @@ export default function CreatorNoteScreen() {
           <Text style={styles.cardText}>{t('creatorNote', 'thanksContent')}</Text>
         </Animated.View>
 
+        {/* Meetup Highlight Card */}
+        <Animated.View entering={FadeInDown.duration(400).delay(275)} style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={[styles.cardIcon, { backgroundColor: theme.warning + '15' }]}>
+              <MaterialIcons name="groups" size={22} color={theme.warning} />
+            </View>
+            <Text style={styles.cardTitle}>{t('creatorNote', 'meetupHighlightTitle')}</Text>
+          </View>
+          <Text style={styles.cardText}>{t('creatorNote', 'meetupHighlightContent')}</Text>
+          <View style={styles.meetupFeatures}>
+            {[
+              { icon: 'place', label: language === 'fr' ? 'Terrain et heure precis' : 'Specific court and time' },
+              { icon: 'person-add', label: language === 'fr' ? 'Invitation directe de joueurs' : 'Direct player invitations' },
+              { icon: 'notifications-active', label: language === 'fr' ? 'Rappels automatiques (veille, 3h, 1h)' : 'Auto reminders (day before, 3h, 1h)' },
+              { icon: 'group', label: language === 'fr' ? 'Suivi des confirmations en temps reel' : 'Real-time attendance tracking' },
+              { icon: 'qr-code', label: language === 'fr' ? 'Code de partage unique' : 'Unique share code' },
+            ].map((item, i) => (
+              <View key={i} style={styles.meetupFeatureRow}>
+                <View style={[styles.meetupFeatureIcon, { backgroundColor: theme.warning + '12' }]}>
+                  <MaterialIcons name={item.icon as any} size={16} color={theme.warning} />
+                </View>
+                <Text style={styles.meetupFeatureText}>{item.label}</Text>
+              </View>
+            ))}
+          </View>
+        </Animated.View>
+
         {/* Features Highlight */}
         <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.featuresCard}>
           <Text style={styles.featuresTitle}>{t('creatorNote', 'featuresTitle')}</Text>
@@ -177,5 +205,10 @@ const styles = StyleSheet.create({
   // Signature
   signature: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 16 },
   signatureText: { fontSize: 14, fontWeight: '600', color: theme.textSecondary, fontStyle: 'italic' },
+  // Meetup highlight features
+  meetupFeatures: { marginTop: 16, gap: 8 },
+  meetupFeatureRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  meetupFeatureIcon: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  meetupFeatureText: { flex: 1, fontSize: 13, color: theme.textSecondary, fontWeight: '500' },
   versionText: { fontSize: 12, color: theme.textMuted, textAlign: 'center', marginTop: 8 },
 });
