@@ -430,6 +430,7 @@ export default function DirectoryScreen() {
                 contentFit="cover"
                 transition={200}
                 placeholder={{ blurhash: blurhash.avatar }}
+                cachePolicy="memory-disk"
                 recyclingKey={item.id}
               />
             ) : (
@@ -596,6 +597,7 @@ export default function DirectoryScreen() {
               contentFit="cover"
               transition={200}
               placeholder={{ blurhash: blurhash.terrain }}
+              cachePolicy="memory-disk"
               recyclingKey={item.id}
             />
           ) : (

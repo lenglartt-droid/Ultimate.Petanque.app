@@ -326,7 +326,7 @@ export default function HomeScreen() {
                 ) : null}
                 <Pressable style={styles.heroProfileBtn} onPress={() => router.push('/profile')}>
                   {selfPlayer?.avatar ? (
-                    <Image source={{ uri: selfPlayer.avatar }} style={styles.heroAvatarImg} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} />
+                    <Image source={{ uri: selfPlayer.avatar }} style={styles.heroAvatarImg} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                   ) : (
                     <Text style={styles.heroAvatarLetter}>{displayName.charAt(0).toUpperCase()}</Text>
                   )}
@@ -368,6 +368,7 @@ export default function HomeScreen() {
               contentFit="cover"
               transition={200}
               placeholder={{ blurhash: blurhash.banner }}
+              cachePolicy="memory-disk"
             />
             <LinearGradient
               colors={['transparent', 'rgba(15,23,42,0.55)']}

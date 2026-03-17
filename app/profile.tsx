@@ -847,6 +847,7 @@ export default function ProfileScreen() {
                 style={styles.avatarImage}
                 contentFit="cover"
                 transition={200}
+                cachePolicy="memory-disk"
               />
             ) : (
               <View style={styles.avatarPlaceholder}>
@@ -1310,6 +1311,7 @@ export default function ProfileScreen() {
                       style={styles.fedCardImage}
                       contentFit="cover"
                       transition={200}
+                      cachePolicy="memory-disk"
                     />
                   ) : (
                     <View style={styles.fedPdfPreview}>

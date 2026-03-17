@@ -509,7 +509,7 @@ export default function EquipmentScreen() {
                   <View style={styles.setHeader}>
                     {set.photo ? (
                       <View style={styles.setPhotoBg}>
-                        <Image source={{ uri: set.photo }} style={styles.setPhoto} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.default }} />
+                        <Image source={{ uri: set.photo }} style={styles.setPhoto} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.default }} cachePolicy="memory-disk" />
                       </View>
                     ) : (
                       <View style={[styles.setIconBg, set.isPrimary && { backgroundColor: theme.accent + '20' }]}>
@@ -713,7 +713,7 @@ export default function EquipmentScreen() {
                   </View>
                 ) : formPhoto ? (
                   <View style={styles.photoPickerFilled}>
-                    <Image source={{ uri: formPhoto }} style={styles.photoPickerImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.default }} />
+                    <Image source={{ uri: formPhoto }} style={styles.photoPickerImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.default }} cachePolicy="memory-disk" />
                     <View style={styles.photoPickerOverlay}>
                       <View style={styles.photoPickerOverlayBadge}>
                         <MaterialIcons name="camera-alt" size={16} color="#FFF" />

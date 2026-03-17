@@ -21,6 +21,7 @@ import {
   ConflictResolver,
 } from '@/services/offlineQueueService';
 import { addSyncHistoryEntry } from '@/services/syncHistoryService';
+import { prefetchImages, startPeriodicCacheCleanup, stopPeriodicCacheCleanup, clearAllImageCache } from '@/services/imageCacheService';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import {
   mockPlayers,
@@ -632,6 +633,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       secondaryLoadDone.current = true;
       console.log('Secondary data loaded successfully');
 
+      // Prefetch boules set photos after secondary load
+      if (boulesSetsRes.data) {
+        const dbSetsForPrefetch = boulesSetsRes.data.filter((s: any) => s.photo).map((s: any) => ({ photo: s.photo }));
+        if (dbSetsForPrefetch.length > 0) {
+          prefetchImages({ boulesSets: dbSetsForPrefetch });
+        }
+      }
+
       // Cleanup soft_deletes older than 30 days (non-blocking)
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -757,6 +766,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Phase 2: Schedule secondary data loading (shared items, boules sets)
       // This runs after the UI has rendered with core data
       scheduleSecondaryLoad();
+
+      // Phase 2b: Prefetch critical images (avatars, terrain photos) in background
+      setTimeout(() => {
+        prefetchImages({
+          players: dbPlayers,
+          terrains: terrainsRes.data ? terrainsRes.data.map(mapTerrainFromDb) : [],
+        });
+      }, 1200);
 
     } catch (error) {
       console.log('Error loading data from cloud:', error);
@@ -969,7 +986,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         clearTimeout(secondaryLoadTimerRef.current);
         secondaryLoadTimerRef.current = null;
       }
+      stopPeriodicCacheCleanup();
+      clearAllImageCache();
     }
+  }, [user?.id]);
+
+  // Start periodic image memory cache cleanup
+  useEffect(() => {
+    if (!user?.id) return;
+    startPeriodicCacheCleanup();
+    return () => stopPeriodicCacheCleanup();
   }, [user?.id]);
 
   // Auto-refresh every 30 seconds: delta sync normally, full sync every Nth cycle

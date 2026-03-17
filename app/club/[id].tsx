@@ -415,7 +415,7 @@ export default function ClubDetailScreen() {
             <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, overflow: 'hidden', ...theme.shadows.card }}>
               <Pressable style={{ position: 'relative', minHeight: 180 }} onPress={() => clubCardType === 'pdf' ? Linking.openURL(clubCardUrl) : setShowCardFullscreen(true)}>
                 {clubCardType === 'image' ? (
-                  <Image source={{ uri: clubCardUrl }} style={{ width: '100%', height: 200 }} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.default }} />
+                  <Image source={{ uri: clubCardUrl }} style={{ width: '100%', height: 200 }} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.default }} cachePolicy="memory-disk" />
                 ) : (
                   <View style={{ width: '100%', height: 160, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.backgroundSecondary, gap: 8 }}>
                     <MaterialIcons name="picture-as-pdf" size={48} color={theme.error} />

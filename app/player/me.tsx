@@ -324,7 +324,7 @@ export default function MyPlayerCardScreen() {
               <View style={s.avatarContainer}>
                 <View style={s.avatar}>
                   {selfPlayer.avatar ? (
-                    <Image source={{ uri: selfPlayer.avatar }} style={s.avatarImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} />
+                    <Image source={{ uri: selfPlayer.avatar }} style={s.avatarImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                   ) : (
                     <Text style={s.avatarText}>{selfPlayer.name?.charAt(0).toUpperCase() || '?'}</Text>
                   )}

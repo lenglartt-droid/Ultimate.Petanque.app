@@ -296,6 +296,7 @@ export default function TerrainDetailScreen() {
               style={styles.mainPhoto}
               contentFit="cover"
               transition={200}
+              cachePolicy="memory-disk"
             />
             {terrain.photos!.length > 1 && (
               <View style={styles.photoIndicators}>

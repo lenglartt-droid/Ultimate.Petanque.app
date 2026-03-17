@@ -384,7 +384,7 @@ export default function PlayerDetailScreen() {
               <View style={s.avatarContainer}>
                 <View style={s.avatar}>
                   {player.avatar ? (
-                    <Image source={{ uri: player.avatar }} style={s.avatarImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} />
+                    <Image source={{ uri: player.avatar }} style={s.avatarImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                   ) : (
                     <Text style={s.avatarText}>{player.name.split(' ').map(n => n[0]).join('')}</Text>
                   )}
@@ -793,7 +793,7 @@ export default function PlayerDetailScreen() {
                 <View style={s.pvAvatarRow}>
                   <View style={s.pvAvatar}>
                     {player.avatar ? (
-                      <Image source={{ uri: player.avatar }} style={s.pvAvatarImg} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} />
+                      <Image source={{ uri: player.avatar }} style={s.pvAvatarImg} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                     ) : (
                       <Text style={s.pvAvatarText}>{player.name?.split(' ').map(n => n[0]).join('')}</Text>
                     )}
