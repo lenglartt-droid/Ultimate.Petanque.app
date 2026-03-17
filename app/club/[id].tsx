@@ -26,7 +26,7 @@ import * as FileSystem from 'expo-file-system';
 import * as Linking2 from 'expo-linking';
 import { decode } from 'base64-arraybuffer';
 import { getSupabaseClient } from '@/template';
-import theme from '@/constants/theme';
+import theme, { blurhash } from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import ShareModal from '@/components/ui/ShareModal';
@@ -415,7 +415,7 @@ export default function ClubDetailScreen() {
             <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, overflow: 'hidden', ...theme.shadows.card }}>
               <Pressable style={{ position: 'relative', minHeight: 180 }} onPress={() => clubCardType === 'pdf' ? Linking.openURL(clubCardUrl) : setShowCardFullscreen(true)}>
                 {clubCardType === 'image' ? (
-                  <Image source={{ uri: clubCardUrl }} style={{ width: '100%', height: 200 }} contentFit="cover" transition={200} />
+                  <Image source={{ uri: clubCardUrl }} style={{ width: '100%', height: 200 }} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.default }} />
                 ) : (
                   <View style={{ width: '100%', height: 160, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.backgroundSecondary, gap: 8 }}>
                     <MaterialIcons name="picture-as-pdf" size={48} color={theme.error} />

@@ -67,12 +67,17 @@ interface Cluster {
   isCluster: boolean;
 }
 
-function clusterMarkers(items: ClusterItem[], region: { latitudeDelta: number; longitudeDelta: number } | null): Cluster[] {
-  if (!region || items.length === 0) return items.filter(item => {
+const MAX_VISIBLE_MARKERS = 200;
+
+function clusterMarkers(items: ClusterItem[], region: { latitudeDelta: number; longitudeDelta: number; latitude?: number; longitude?: number } | null): Cluster[] {
+  // Filter items with valid locations first
+  const validItems = items.filter(item => {
     const lat = item.location?.latitude;
     const lng = item.location?.longitude;
     return (lat !== undefined && lat !== null && lat !== 0) || (lng !== undefined && lng !== null && lng !== 0);
-  }).map(item => ({
+  });
+
+  if (!region || validItems.length === 0) return validItems.slice(0, MAX_VISIBLE_MARKERS).map(item => ({
     id: `single-${item.itemType}-${item.id}`,
     latitude: item.location?.latitude || 0,
     longitude: item.location?.longitude || 0,
@@ -80,17 +85,32 @@ function clusterMarkers(items: ClusterItem[], region: { latitudeDelta: number; l
     isCluster: false,
   }));
 
+  // Viewport filtering: only process items within the visible region (with padding)
+  const latPad = region.latitudeDelta * 0.3;
+  const lngPad = region.longitudeDelta * 0.3;
+  const regionLat = region.latitude ?? 46.6;
+  const regionLng = region.longitude ?? 2.3;
+  const minLat = regionLat - region.latitudeDelta / 2 - latPad;
+  const maxLat = regionLat + region.latitudeDelta / 2 + latPad;
+  const minLng = regionLng - region.longitudeDelta / 2 - lngPad;
+  const maxLng = regionLng + region.longitudeDelta / 2 + lngPad;
+
+  const viewportItems = validItems.filter(item => {
+    const lat = item.location?.latitude || 0;
+    const lng = item.location?.longitude || 0;
+    return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
+  });
+
+  // Cap at MAX_VISIBLE_MARKERS to prevent memory issues
+  const cappedItems = viewportItems.length > MAX_VISIBLE_MARKERS ? viewportItems.slice(0, MAX_VISIBLE_MARKERS) : viewportItems;
+
   // Grid cell size based on zoom level
   const cellLat = region.latitudeDelta * 0.08;
   const cellLng = region.longitudeDelta * 0.08;
 
   // If zoomed in enough, don't cluster
   if (region.latitudeDelta < 0.05) {
-    return items.filter(item => {
-      const lat = item.location?.latitude;
-      const lng = item.location?.longitude;
-      return (lat !== undefined && lat !== null && lat !== 0) || (lng !== undefined && lng !== null && lng !== 0);
-    }).map(item => ({
+    return cappedItems.map(item => ({
       id: `single-${item.itemType}-${item.id}`,
       latitude: item.location?.latitude || 0,
       longitude: item.location?.longitude || 0,
@@ -101,7 +121,7 @@ function clusterMarkers(items: ClusterItem[], region: { latitudeDelta: number; l
 
   const grid: Record<string, ClusterItem[]> = {};
 
-  items.forEach(item => {
+  cappedItems.forEach(item => {
     const lat = item.location?.latitude;
     const lng = item.location?.longitude;
     if (lat === undefined || lat === null || lng === undefined || lng === null) return;
@@ -570,8 +590,13 @@ export default function MapScreen() {
   const handleRegionChange = useCallback((region: any) => {
     if (regionDebounceRef.current) clearTimeout(regionDebounceRef.current);
     regionDebounceRef.current = setTimeout(() => {
-      setCurrentRegion(region);
-    }, 500);
+      setCurrentRegion({
+        latitude: region.latitude,
+        longitude: region.longitude,
+        latitudeDelta: region.latitudeDelta,
+        longitudeDelta: region.longitudeDelta,
+      });
+    }, 400);
   }, []);
 
   // Cleanup debounce on unmount
@@ -705,7 +730,11 @@ export default function MapScreen() {
         keyExtractor={keyExtractor}
         contentContainerStyle={[styles.listScroll, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
-        initialNumToRender={15} maxToRenderPerBatch={10}
+        initialNumToRender={15}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={true}
+        getItemLayout={(_data, index) => ({ length: 64, offset: 64 * index, index })}
       />
     </View>
   );

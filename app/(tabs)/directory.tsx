@@ -20,7 +20,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import theme from '@/constants/theme';
+import theme, { blurhash } from '@/constants/theme';
 import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { Terrain, Player, Club, Tournament } from '@/services/mockData';
@@ -93,6 +93,9 @@ export default function DirectoryScreen() {
   const [showFilters, setShowFilters] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showRealUsersOnly, setShowRealUsersOnly] = useState(false);
+  // Pagination state
+  const PAGE_SIZE = 30;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [showDuplicateBanner, setShowDuplicateBanner] = useState(true);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [mergeTarget, setMergeTarget] = useState<{ type: 'player' | 'club' | 'terrain' | 'tournament'; id: string } | null>(null);
@@ -128,6 +131,11 @@ export default function DirectoryScreen() {
     await refreshData();
     setRefreshing(false);
   }, [refreshData]);
+
+  // Reset pagination when tab or filters change
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [activeTab, searchQuery, filters, showRealUsersOnly]);
 
   // Tab configuration (uses t() for labels)
   const TABS: { id: DirectoryTab; label: string; icon: string; color: string }[] = useMemo(() => [
@@ -256,6 +264,22 @@ export default function DirectoryScreen() {
   }), [filters]);
 
   const currentFilterCount = activeFilterCounts[activeTab];
+
+  // Paginated data
+  const paginatedData = useMemo(() => {
+    const data = getCurrentData();
+    return data.slice(0, visibleCount);
+  }, [visibleCount, filteredPlayers, filteredClubs, filteredTerrains, filteredTournaments, activeTab]);
+
+  const hasMore = useMemo(() => {
+    return getCurrentData().length > visibleCount;
+  }, [visibleCount, filteredPlayers, filteredClubs, filteredTerrains, filteredTournaments, activeTab]);
+
+  const handleLoadMore = useCallback(() => {
+    if (hasMore) {
+      setVisibleCount(prev => prev + PAGE_SIZE);
+    }
+  }, [hasMore]);
 
   // Singular label for current tab
   const getTabSingular = (tab: DirectoryTab) => {
@@ -405,6 +429,8 @@ export default function DirectoryScreen() {
                 style={styles.avatarImage}
                 contentFit="cover"
                 transition={200}
+                placeholder={{ blurhash: blurhash.avatar }}
+                recyclingKey={item.id}
               />
             ) : (
               <Text style={styles.avatarText}>
@@ -569,6 +595,8 @@ export default function DirectoryScreen() {
               style={styles.avatarImage}
               contentFit="cover"
               transition={200}
+              placeholder={{ blurhash: blurhash.terrain }}
+              recyclingKey={item.id}
             />
           ) : (
             <MaterialIcons name={typeConfig.icon as any} size={24} color="#FFF" />
@@ -686,14 +714,14 @@ export default function DirectoryScreen() {
   };
 
   // Get current filtered data
-  const getCurrentData = () => {
+  const getCurrentData = useCallback(() => {
     switch (activeTab) {
       case 'players': return filteredPlayers;
       case 'clubs': return filteredClubs;
       case 'terrains': return filteredTerrains;
       case 'tournaments': return filteredTournaments;
     }
-  };
+  }, [activeTab, filteredPlayers, filteredClubs, filteredTerrains, filteredTournaments]);
 
   const getCurrentRenderItem = () => {
     switch (activeTab) {
@@ -1097,7 +1125,7 @@ export default function DirectoryScreen() {
         {isTablet ? (
           <FlatList
             key={`tablet-${activeTab}-${numColumns}`}
-            data={currentData as any[]}
+            data={paginatedData as any[]}
             renderItem={getCurrentRenderItem() as any}
             numColumns={2}
             columnWrapperStyle={styles.tabletRow}
@@ -1109,6 +1137,8 @@ export default function DirectoryScreen() {
               width: '100%',
             }}
             showsVerticalScrollIndicator={false}
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.4}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -1116,6 +1146,13 @@ export default function DirectoryScreen() {
                 tintColor={theme.primary}
                 colors={[theme.primary]}
               />
+            }
+            ListFooterComponent={
+              hasMore ? (
+                <View style={styles.loadMoreFooter}>
+                  <ActivityIndicator size="small" color={theme.primary} />
+                </View>
+              ) : null
             }
             ListEmptyComponent={
               <View style={styles.emptyState}>
@@ -1134,7 +1171,7 @@ export default function DirectoryScreen() {
           />
         ) : (
           <FlashList
-            data={currentData}
+            data={paginatedData}
             renderItem={getCurrentRenderItem() as any}
             estimatedItemSize={110}
             contentContainerStyle={{ 
@@ -1142,6 +1179,8 @@ export default function DirectoryScreen() {
               paddingBottom: insets.bottom + 100,
             }}
             showsVerticalScrollIndicator={false}
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.4}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -1149,6 +1188,13 @@ export default function DirectoryScreen() {
                 tintColor={theme.primary}
                 colors={[theme.primary]}
               />
+            }
+            ListFooterComponent={
+              hasMore ? (
+                <View style={styles.loadMoreFooter}>
+                  <ActivityIndicator size="small" color={theme.primary} />
+                </View>
+              ) : null
             }
             ListEmptyComponent={
               <View style={styles.emptyState}>
@@ -2461,6 +2507,10 @@ const styles = StyleSheet.create({
   mergeHistoryExpiredText: {
     fontSize: 12,
     color: theme.textMuted,
+  },
+  loadMoreFooter: {
+    paddingVertical: 20,
+    alignItems: 'center' as const,
   },
   // Meetup Invitation Picker
   meetupOverlay: {

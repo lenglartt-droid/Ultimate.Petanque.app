@@ -117,4 +117,12 @@ export const theme = {
   },
 };
 
+// Blurhash placeholders for expo-image
+export const blurhash = {
+  avatar: 'L6Pj0^jE.mfQ_3j[t7j[?bWB%gof',
+  terrain: 'L5H2EC=PM+yV0g-mq.wG9c010J}I',
+  banner: 'L4SPbN~q00xu_3WCRjWB00ay?bWB',
+  default: 'L6PZfSi_.AyE_3j[t7j[?bWBxvof',
+};
+
 export default theme;

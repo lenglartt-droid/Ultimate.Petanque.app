@@ -21,7 +21,7 @@ import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import theme from '@/constants/theme';
+import theme, { blurhash } from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
@@ -509,7 +509,7 @@ export default function EquipmentScreen() {
                   <View style={styles.setHeader}>
                     {set.photo ? (
                       <View style={styles.setPhotoBg}>
-                        <Image source={{ uri: set.photo }} style={styles.setPhoto} contentFit="cover" transition={200} />
+                        <Image source={{ uri: set.photo }} style={styles.setPhoto} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.default }} />
                       </View>
                     ) : (
                       <View style={[styles.setIconBg, set.isPrimary && { backgroundColor: theme.accent + '20' }]}>
@@ -713,7 +713,7 @@ export default function EquipmentScreen() {
                   </View>
                 ) : formPhoto ? (
                   <View style={styles.photoPickerFilled}>
-                    <Image source={{ uri: formPhoto }} style={styles.photoPickerImage} contentFit="cover" transition={200} />
+                    <Image source={{ uri: formPhoto }} style={styles.photoPickerImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.default }} />
                     <View style={styles.photoPickerOverlay}>
                       <View style={styles.photoPickerOverlayBadge}>
                         <MaterialIcons name="camera-alt" size={16} color="#FFF" />

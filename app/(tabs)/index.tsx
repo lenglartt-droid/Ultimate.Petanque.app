@@ -20,7 +20,7 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
-import theme from '@/constants/theme';
+import theme, { blurhash } from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth, useAlert } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -326,7 +326,7 @@ export default function HomeScreen() {
                 ) : null}
                 <Pressable style={styles.heroProfileBtn} onPress={() => router.push('/profile')}>
                   {selfPlayer?.avatar ? (
-                    <Image source={{ uri: selfPlayer.avatar }} style={styles.heroAvatarImg} contentFit="cover" transition={200} />
+                    <Image source={{ uri: selfPlayer.avatar }} style={styles.heroAvatarImg} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} />
                   ) : (
                     <Text style={styles.heroAvatarLetter}>{displayName.charAt(0).toUpperCase()}</Text>
                   )}
@@ -367,6 +367,7 @@ export default function HomeScreen() {
               style={styles.bannerImage}
               contentFit="cover"
               transition={200}
+              placeholder={{ blurhash: blurhash.banner }}
             />
             <LinearGradient
               colors={['transparent', 'rgba(15,23,42,0.55)']}

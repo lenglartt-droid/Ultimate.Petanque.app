@@ -18,7 +18,7 @@ import * as Haptics from 'expo-haptics';
 import * as Linking from 'expo-linking';
 import { Image } from 'expo-image';
 import Svg, { Polygon, Line, Circle as SvgCircle, Text as SvgText, G } from 'react-native-svg';
-import theme from '@/constants/theme';
+import theme, { blurhash } from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth, useAlert } from '@/template';
@@ -324,7 +324,7 @@ export default function MyPlayerCardScreen() {
               <View style={s.avatarContainer}>
                 <View style={s.avatar}>
                   {selfPlayer.avatar ? (
-                    <Image source={{ uri: selfPlayer.avatar }} style={s.avatarImage} contentFit="cover" transition={200} />
+                    <Image source={{ uri: selfPlayer.avatar }} style={s.avatarImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} />
                   ) : (
                     <Text style={s.avatarText}>{selfPlayer.name?.charAt(0).toUpperCase() || '?'}</Text>
                   )}

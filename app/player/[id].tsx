@@ -15,7 +15,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import theme from '@/constants/theme';
+import theme, { blurhash } from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
@@ -384,7 +384,7 @@ export default function PlayerDetailScreen() {
               <View style={s.avatarContainer}>
                 <View style={s.avatar}>
                   {player.avatar ? (
-                    <Image source={{ uri: player.avatar }} style={s.avatarImage} contentFit="cover" transition={200} />
+                    <Image source={{ uri: player.avatar }} style={s.avatarImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} />
                   ) : (
                     <Text style={s.avatarText}>{player.name.split(' ').map(n => n[0]).join('')}</Text>
                   )}
@@ -793,7 +793,7 @@ export default function PlayerDetailScreen() {
                 <View style={s.pvAvatarRow}>
                   <View style={s.pvAvatar}>
                     {player.avatar ? (
-                      <Image source={{ uri: player.avatar }} style={s.pvAvatarImg} contentFit="cover" transition={200} />
+                      <Image source={{ uri: player.avatar }} style={s.pvAvatarImg} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} />
                     ) : (
                       <Text style={s.pvAvatarText}>{player.name?.split(' ').map(n => n[0]).join('')}</Text>
                     )}
