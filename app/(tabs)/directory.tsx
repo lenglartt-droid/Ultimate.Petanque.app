@@ -937,6 +937,14 @@ export default function DirectoryScreen() {
                 </Pressable>
               ) : null}
             </View>
+            {activeTab === 'players' ? (
+              <Pressable
+                style={[styles.headerRealUserBtn, showRealUsersOnly && styles.headerRealUserBtnActive]}
+                onPress={() => { Haptics.selectionAsync(); setShowRealUsersOnly(!showRealUsersOnly); }}
+              >
+                <MaterialIcons name="verified" size={16} color={showRealUsersOnly ? '#FFF' : 'rgba(255,255,255,0.7)'} />
+              </Pressable>
+            ) : null}
             <Pressable
               style={[styles.filterButton, currentFilterCount > 0 && styles.filterButtonActive]}
               onPress={() => {
@@ -1048,21 +1056,6 @@ export default function DirectoryScreen() {
           </ScrollView>
         </Animated.View>
       )}
-
-      {/* Real Users Quick Filter - Players tab only */}
-      {activeTab === 'players' ? (
-        <View style={styles.realUserFilterRow}>
-          <Pressable
-            style={[styles.realUserFilterChip, showRealUsersOnly && styles.realUserFilterChipActive]}
-            onPress={() => { Haptics.selectionAsync(); setShowRealUsersOnly(!showRealUsersOnly); }}
-          >
-            <MaterialIcons name="verified" size={14} color={showRealUsersOnly ? '#FFF' : theme.primary} />
-            <Text style={[styles.realUserFilterText, showRealUsersOnly && styles.realUserFilterTextActive]}>
-              {t('directory', 'realUsersOnly')}
-            </Text>
-          </Pressable>
-        </View>
-      ) : null}
 
       {/* Results Count */}
       <View style={styles.resultsHeader}>
@@ -1780,6 +1773,19 @@ const styles = StyleSheet.create({
   },
   filterButtonActive: {
     backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  headerRealUserBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerRealUserBtnActive: {
+    backgroundColor: theme.primary,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.4)',
   },
   filterBadge: {
     position: 'absolute',
