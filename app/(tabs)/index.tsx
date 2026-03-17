@@ -847,8 +847,8 @@ const styles = StyleSheet.create({
   quickLabel: { fontSize: 11, fontWeight: '600', color: theme.textPrimary, textAlign: 'center' },
 
   // ========== MEETUP SECTION ==========
-  meetupSection: { marginHorizontal: 16, marginTop: 8, marginBottom: 28, backgroundColor: theme.surface, borderRadius: 20, paddingTop: 18, paddingBottom: 22, paddingHorizontal: 20, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border, zIndex: 2 },
-  meetupSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: theme.border },
+  meetupSection: { marginHorizontal: 16, marginTop: 8, marginBottom: 28, backgroundColor: theme.surface, borderRadius: 20, paddingTop: 16, paddingBottom: 16, paddingHorizontal: 16, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border, zIndex: 2, overflow: 'hidden' as const },
+  meetupSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: theme.border },
   meetupSectionHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   meetupSectionIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: theme.accent + '12', alignItems: 'center', justifyContent: 'center' },
   meetupSectionTitle: { fontSize: 16, fontWeight: '700', color: theme.textPrimary },
@@ -883,17 +883,19 @@ const styles = StyleSheet.create({
   meetupCreatorText: { fontSize: 10, fontWeight: '700', color: theme.primary },
   meetupInvitedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.accent + '12', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
   meetupInvitedText: { fontSize: 10, fontWeight: '700', color: theme.accent },
-  meetupEmpty: { alignItems: 'center', paddingVertical: 16, gap: 8, marginBottom: 4 },
+  meetupEmpty: { alignItems: 'center', paddingVertical: 12, gap: 6 },
+  meetupEmptyIcon: { },
+  
   meetupEmptyText: { fontSize: 13, color: theme.textMuted, fontWeight: '500' },
 
   // ========== MEETUP SUMMARY ROW ==========
-  meetupSummaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.accent + '08', borderRadius: 14, padding: 14, marginBottom: 6, borderWidth: 1, borderColor: theme.accent + '20' },
+  meetupSummaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.accent + '08', borderRadius: 12, padding: 10, borderWidth: 1, borderColor: theme.accent + '20' },
   meetupSummaryLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 },
-  meetupSummaryDateCol: { width: 50, height: 50, borderRadius: 14, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center' },
-  meetupSummaryDateDay: { fontSize: 20, fontWeight: '900', color: theme.primary, lineHeight: 22 },
-  meetupSummaryDateMonth: { fontSize: 9, fontWeight: '700', color: theme.primary, letterSpacing: 0.5 },
+  meetupSummaryDateCol: { width: 40, height: 40, borderRadius: 10, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center' },
+  meetupSummaryDateDay: { fontSize: 16, fontWeight: '900', color: theme.primary, lineHeight: 18 },
+  meetupSummaryDateMonth: { fontSize: 8, fontWeight: '700', color: theme.primary, letterSpacing: 0.5 },
   meetupSummaryInfo: { flex: 1 },
-  meetupSummaryTitle: { fontSize: 15, fontWeight: '700', color: theme.textPrimary, marginBottom: 5 },
+  meetupSummaryTitle: { fontSize: 13, fontWeight: '700', color: theme.textPrimary, marginBottom: 3 },
   meetupSummaryMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   meetupSummaryTime: { fontSize: 12, color: theme.textMuted },
   meetupSummaryCountBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.success + '12', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
