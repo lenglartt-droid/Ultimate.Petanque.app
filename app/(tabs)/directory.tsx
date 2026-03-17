@@ -1403,7 +1403,7 @@ export default function DirectoryScreen() {
         </SafeAreaView>
       </Modal>
 
-      {/* Merge History Modal */
+      {/* Merge History Modal */}
       <Modal
         visible={showMergeHistory}
         animationType="slide"
