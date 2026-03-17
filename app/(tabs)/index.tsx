@@ -386,7 +386,7 @@ export default function HomeScreen() {
         </Animated.View>
 
         {/* ========== MEETUPS SECTION ========== */}
-        <Animated.View entering={FadeInDown.duration(400).delay(320)} style={[styles.meetupSection, isTablet && styles.sectionTablet]}>
+        <Animated.View entering={FadeIn.duration(400).delay(320)} style={[styles.meetupSection, isTablet && styles.sectionTablet]}>
           <View style={styles.meetupSectionHeader}>
             <View style={styles.meetupSectionHeaderLeft}>
               <View style={styles.meetupSectionIcon}>
@@ -464,7 +464,7 @@ export default function HomeScreen() {
 
         {/* ========== LAST 3 RESULTS TIMELINE ========== */}
         {recentResults.length > 0 ? (
-          <Animated.View entering={FadeInDown.duration(400).delay(380)} style={[styles.historySection, isTablet && styles.sectionTablet]}>
+          <Animated.View entering={FadeIn.duration(400).delay(380)} style={[styles.historySection, isTablet && styles.sectionTablet]}>
             <View style={styles.historySectionHeader}>
               <View style={styles.historySectionHeaderLeft}>
                 <View style={styles.historySectionIcon}>
@@ -849,8 +849,8 @@ const styles = StyleSheet.create({
   quickLabel: { fontSize: 11, fontWeight: '600', color: theme.textPrimary, textAlign: 'center' },
 
   // ========== MEETUP SECTION ==========
-  meetupSection: { marginHorizontal: 16, marginTop: 8, marginBottom: 24, backgroundColor: theme.surface, borderRadius: 20, padding: 16, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border },
-  meetupSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
+  meetupSection: { marginHorizontal: 16, marginTop: 8, marginBottom: 28, backgroundColor: theme.surface, borderRadius: 20, padding: 16, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' as const, zIndex: 2 },
+  meetupSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, paddingBottom: 12, borderBottomWidth: 0, borderBottomColor: theme.border },
   meetupSectionHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   meetupSectionIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: theme.accent + '12', alignItems: 'center', justifyContent: 'center' },
   meetupSectionTitle: { fontSize: 16, fontWeight: '700', color: theme.textPrimary },
@@ -885,11 +885,11 @@ const styles = StyleSheet.create({
   meetupCreatorText: { fontSize: 10, fontWeight: '700', color: theme.primary },
   meetupInvitedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.accent + '12', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
   meetupInvitedText: { fontSize: 10, fontWeight: '700', color: theme.accent },
-  meetupEmpty: { alignItems: 'center', paddingVertical: 12, gap: 8, marginBottom: 8 },
+  meetupEmpty: { alignItems: 'center', paddingVertical: 12, gap: 8, marginBottom: 0 },
   meetupEmptyText: { fontSize: 13, color: theme.textMuted, fontWeight: '500' },
 
   // ========== MEETUP SUMMARY ROW ==========
-  meetupSummaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.accent + '08', borderRadius: 14, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: theme.accent + '20' },
+  meetupSummaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.accent + '08', borderRadius: 14, padding: 12, marginBottom: 0, borderWidth: 1, borderColor: theme.accent + '20' },
   meetupSummaryLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 },
   meetupSummaryDateCol: { width: 46, height: 46, borderRadius: 12, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center' },
   meetupSummaryDateDay: { fontSize: 18, fontWeight: '900', color: theme.primary, lineHeight: 20 },
@@ -921,7 +921,7 @@ const styles = StyleSheet.create({
   bannerImage: { width: '100%', height: 110, borderRadius: 20 },
   bannerOverlay: { position: 'absolute' as const, bottom: 0, left: 0, right: 0, height: 50, borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
   // ========== HISTORY SECTION ==========
-  historySection: { marginTop: 8, marginBottom: 24, backgroundColor: theme.surface, marginHorizontal: 16, borderRadius: 20, padding: 16, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border },
+  historySection: { marginTop: 0, marginBottom: 24, backgroundColor: theme.surface, marginHorizontal: 16, borderRadius: 20, padding: 16, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border, zIndex: 1 },
   historySectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
   historySectionHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   historySectionIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center' },
