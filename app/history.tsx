@@ -694,10 +694,19 @@ export default function HistoryScreen() {
     const groupedSeries = groupMatchesBySeries(seriesTraining);
     const seriesGroups = groupedSeries.filter(item => 'seriesId' in item) as SeriesGroup[];
 
-    let items: { type: 'match' | 'series' | 'challenge'; data: Match | SeriesGroup | Challenge; date: string }[] = [];
+    // Period-filter meetups
+    const periodFilteredMeetups = periodDays > 0
+      ? allMeetups.filter(m => {
+          const cutoff = new Date();
+          cutoff.setDate(cutoff.getDate() - periodDays);
+          return new Date(m.date) >= cutoff;
+        })
+      : allMeetups;
+
+    let items: { type: 'match' | 'series' | 'challenge' | 'meetup'; data: Match | SeriesGroup | Challenge | (Meetup & { _source: 'created' | 'invited'; _acceptedCount?: number }); date: string }[] = [];
     
     if (contentFilter === 'all') {
-      // Show everything
+      // Show everything including meetups
       const groupedTraining = groupMatchesBySeries(trainingMatches);
       groupedTraining.forEach(item => {
         if ('seriesId' in item) {
@@ -711,6 +720,9 @@ export default function HistoryScreen() {
       });
       filteredChallengesData.forEach(c => {
         items.push({ type: 'challenge', data: c, date: c.date });
+      });
+      periodFilteredMeetups.forEach(m => {
+        items.push({ type: 'meetup', data: m, date: m.date });
       });
     } else if (contentFilter === 'training') {
       // Apply training sub-filter
@@ -752,6 +764,7 @@ export default function HistoryScreen() {
     items = items.filter(item => {
       const id = item.type === 'series' ? `series-${(item.data as SeriesGroup).seriesId}` :
                  item.type === 'match' ? `match-${(item.data as Match).id}` :
+                 item.type === 'meetup' ? `meetup-${(item.data as any).id}` :
                  `challenge-${(item.data as Challenge).id}`;
       if (uniqueIds.has(id)) return false;
       uniqueIds.add(id);
@@ -782,8 +795,8 @@ export default function HistoryScreen() {
       stats: {
         trainingCount: trainingMatches.length + filteredChallengesData.length,
         tournamentCount: tournamentMatches.length,
-        meetupCount: allMeetups.length,
-        total: trainingMatches.length + tournamentMatches.length + filteredChallengesData.length
+        meetupCount: periodFilteredMeetups.length,
+        total: trainingMatches.length + tournamentMatches.length + filteredChallengesData.length + periodFilteredMeetups.length
       },
       filteredChallenges: filteredChallengesData,
       trainingStats: {
@@ -1050,28 +1063,30 @@ export default function HistoryScreen() {
       </View>
 
       {/* Filter Chips */}
-      <View style={styles.filtersRow}>
-        {CONTENT_FILTERS.map((filter) => {
-          const isActive = contentFilter === filter.id;
-          const count = filter.id === 'all' ? stats.total
-            : filter.id === 'training' ? stats.trainingCount
-            : filter.id === 'tournament' ? stats.tournamentCount
-            : stats.meetupCount;
+      <View style={styles.filtersContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersRow}>
+          {CONTENT_FILTERS.map((filter) => {
+            const isActive = contentFilter === filter.id;
+            const count = filter.id === 'all' ? stats.total
+              : filter.id === 'training' ? stats.trainingCount
+              : filter.id === 'tournament' ? stats.tournamentCount
+              : stats.meetupCount;
 
-          return (
-            <Pressable
-              key={filter.id}
-              style={[styles.filterChip, isActive && styles.filterChipActive]}
-              onPress={() => handleFilterPress(filter.id)}
-            >
-              <MaterialIcons name={filter.icon} size={14} color={isActive ? '#FFF' : theme.textSecondary} />
-              <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>{t('history', filter.labelKey)}</Text>
-              <View style={[styles.filterCount, isActive && styles.filterCountActive]}>
-                <Text style={[styles.filterCountText, isActive && styles.filterCountTextActive]}>{count}</Text>
-              </View>
-            </Pressable>
-          );
-        })}
+            return (
+              <Pressable
+                key={filter.id}
+                style={[styles.filterChip, isActive && styles.filterChipActive]}
+                onPress={() => handleFilterPress(filter.id)}
+              >
+                <MaterialIcons name={filter.icon} size={14} color={isActive ? '#FFF' : theme.textSecondary} />
+                <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>{t('history', filter.labelKey)}</Text>
+                <View style={[styles.filterCount, isActive && styles.filterCountActive]}>
+                  <Text style={[styles.filterCountText, isActive && styles.filterCountTextActive]}>{count}</Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* Training Sub-Filters */}
@@ -2149,14 +2164,16 @@ const styles = StyleSheet.create({
   periodBtnText: { fontSize: 13, fontWeight: '600', color: theme.primary },
   
   // Filters
+  filtersContainer: {
+    backgroundColor: theme.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
   filtersRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 8,
-    backgroundColor: theme.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
   },
   filterChip: {
     flexDirection: 'row',
