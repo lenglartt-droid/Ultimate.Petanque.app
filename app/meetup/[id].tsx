@@ -46,6 +46,26 @@ import {
   areNotificationsEnabled,
 } from '@/services/notificationService';
 
+const ResponseItem = React.memo(({ response: r, t }: { response: MeetupResponse; t: (s: string, k: string) => string }) => (
+  <View style={styles.responseItem}>
+    <View style={[styles.responseAvatar, {
+      backgroundColor: r.status === 'accepted' ? theme.success + '15' : r.status === 'declined' ? theme.error + '15' : theme.warning + '15',
+    }]}>
+      <MaterialIcons
+        name={r.status === 'accepted' ? 'check' : r.status === 'declined' ? 'close' : 'schedule'}
+        size={16}
+        color={r.status === 'accepted' ? theme.success : r.status === 'declined' ? theme.error : theme.warning}
+      />
+    </View>
+    <Text style={styles.responseName}>{r.user_name || t('meetup', 'unknownUser')}</Text>
+    <Text style={[styles.responseStatus, {
+      color: r.status === 'accepted' ? theme.success : r.status === 'declined' ? theme.error : theme.warning,
+    }]}>
+      {r.status === 'accepted' ? t('meetup', 'accepted') : r.status === 'declined' ? t('meetup', 'declined') : t('meetup', 'pending')}
+    </Text>
+  </View>
+));
+
 export default function MeetupDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string; code?: string }>();
   const params = useLocalSearchParams<{ id: string; code?: string }>();
@@ -517,23 +537,7 @@ export default function MeetupDetailScreen() {
           {responses.length > 0 ? (
             <View style={styles.responsesList}>
               {responses.map(r => (
-                <View key={r.id} style={styles.responseItem}>
-                  <View style={[styles.responseAvatar, {
-                    backgroundColor: r.status === 'accepted' ? theme.success + '15' : r.status === 'declined' ? theme.error + '15' : theme.warning + '15',
-                  }]}>
-                    <MaterialIcons
-                      name={r.status === 'accepted' ? 'check' : r.status === 'declined' ? 'close' : 'schedule'}
-                      size={16}
-                      color={r.status === 'accepted' ? theme.success : r.status === 'declined' ? theme.error : theme.warning}
-                    />
-                  </View>
-                  <Text style={styles.responseName}>{r.user_name || t('meetup', 'unknownUser')}</Text>
-                  <Text style={[styles.responseStatus, {
-                    color: r.status === 'accepted' ? theme.success : r.status === 'declined' ? theme.error : theme.warning,
-                  }]}>
-                    {r.status === 'accepted' ? t('meetup', 'accepted') : r.status === 'declined' ? t('meetup', 'declined') : t('meetup', 'pending')}
-                  </Text>
-                </View>
+                <ResponseItem key={r.id} response={r} t={t} />
               ))}
             </View>
           ) : (

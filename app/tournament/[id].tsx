@@ -98,6 +98,68 @@ const PHASE_IDS = {
   } as Record<TournamentType, { id: string; labelKey: string; shortKey: string }[]>,
 } as const;
 
+const TimelineMatchCard = React.memo(({ match, t, language }: { match: any; t: (s: string, k: string) => string; language: string }) => {
+  const isWin = match.winner === 'A';
+  const dotColor = isWin ? theme.success : theme.error;
+
+  return (
+    <Pressable
+      style={styles.timelineItem}
+      onPress={() => router.push(`/match/${match.id}`)}
+    >
+      <View style={styles.timelineDotCol}>
+        <View style={[styles.timelineDot, { backgroundColor: dotColor, borderColor: dotColor + '40' }]}>
+          <MaterialIcons name={isWin ? 'check' : 'close'} size={12} color="#FFF" />
+        </View>
+      </View>
+      <View style={[styles.timelineCard, { borderLeftColor: dotColor }]}>
+        <View style={styles.tlCardHeader}>
+          <View style={[styles.tlPhaseBadge, { backgroundColor: dotColor + '15' }]}>
+            <Text style={[styles.tlPhaseBadgeText, { color: dotColor }]}>
+              {match.tournamentPhase ? t('tournamentPhases', match.tournamentPhase) : t('tournamentPhases', 'Match')}
+            </Text>
+          </View>
+          {match.tournamentBracket ? (
+            <View style={styles.tlBracketTag}>
+              <Text style={styles.tlBracketTagText}>{match.tournamentBracket}</Text>
+            </View>
+          ) : null}
+          <View style={{ flex: 1 }} />
+          <Text style={styles.tlDate}>
+            {new Date(match.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
+          </Text>
+        </View>
+        <View style={styles.tlScoreRow}>
+          <View style={styles.tlTeam}>
+            <Text style={styles.tlTeamLabel}>{t('tournament', 'meLabel')}</Text>
+            <Text style={styles.tlTeamNames} numberOfLines={1}>{match.teamA.playerNames.slice(0, 2).join(' \u2022 ')}</Text>
+          </View>
+          <View style={styles.tlScoreBox}>
+            <Text style={[styles.tlScoreNum, isWin && { color: theme.success }]}>{match.teamA.score}</Text>
+            <Text style={styles.tlScoreSep}>-</Text>
+            <Text style={[styles.tlScoreNum, !isWin && { color: theme.error }]}>{match.teamB.score}</Text>
+          </View>
+          <View style={[styles.tlTeam, { alignItems: 'flex-end' }]}>
+            <Text style={styles.tlTeamLabel}>{t('tournament', 'opponentLabel')}</Text>
+            <Text style={styles.tlTeamNames} numberOfLines={1}>{match.teamB.playerNames.slice(0, 2).join(' \u2022 ')}</Text>
+          </View>
+        </View>
+        <View style={styles.tlCardFooter}>
+          <View style={[styles.tlResultBadge, { backgroundColor: dotColor + '12' }]}>
+            <MaterialIcons name={isWin ? 'check-circle' : 'cancel'} size={13} color={dotColor} />
+            <Text style={[styles.tlResultText, { color: dotColor }]}>{isWin ? t('tournament', 'victory') : t('tournament', 'defeat')}</Text>
+          </View>
+          {match.duration > 0 ? (
+            <Text style={styles.tlDuration}>{Math.floor(match.duration / 60)}:{(match.duration % 60).toString().padStart(2, '0')}</Text>
+          ) : null}
+          <View style={{ flex: 1 }} />
+          <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
+        </View>
+      </View>
+    </Pressable>
+  );
+});
+
 export default function TournamentDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -851,90 +913,9 @@ export default function TournamentDetailScreen() {
               {/* Vertical timeline line */}
               <View style={styles.timelineLine} />
 
-              {myMatches.map((match, idx) => {
-                const isWin = match.winner === 'A';
-                const dotColor = isWin ? theme.success : theme.error;
-                const isFirst = idx === 0;
-                const isLast = idx === myMatches.length - 1;
-
-                return (
-                  <Pressable
-                    key={match.id}
-                    style={styles.timelineItem}
-                    onPress={() => router.push(`/match/${match.id}`)}
-                  >
-                    {/* Timeline dot */}
-                    <View style={styles.timelineDotCol}>
-                      <View style={[styles.timelineDot, { backgroundColor: dotColor, borderColor: dotColor + '40' }]}>
-                        <MaterialIcons
-                          name={isWin ? 'check' : 'close'}
-                          size={12}
-                          color="#FFF"
-                        />
-                      </View>
-                    </View>
-
-                    {/* Match card */}
-                    <View style={[styles.timelineCard, { borderLeftColor: dotColor }]}>
-                      {/* Card header */}
-                      <View style={styles.tlCardHeader}>
-                        <View style={[styles.tlPhaseBadge, { backgroundColor: dotColor + '15' }]}>
-                          <Text style={[styles.tlPhaseBadgeText, { color: dotColor }]}>
-                            {match.tournamentPhase ? t('tournamentPhases', match.tournamentPhase) : t('tournamentPhases', 'Match')}
-                          </Text>
-                        </View>
-                        {match.tournamentBracket ? (
-                          <View style={styles.tlBracketTag}>
-                            <Text style={styles.tlBracketTagText}>{match.tournamentBracket}</Text>
-                          </View>
-                        ) : null}
-                        <View style={{ flex: 1 }} />
-                        <Text style={styles.tlDate}>
-                          {new Date(match.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
-                        </Text>
-                      </View>
-
-                      {/* Score row */}
-                      <View style={styles.tlScoreRow}>
-                        <View style={styles.tlTeam}>
-                          <Text style={styles.tlTeamLabel}>{t('tournament', 'meLabel')}</Text>
-                          <Text style={styles.tlTeamNames} numberOfLines={1}>
-                            {match.teamA.playerNames.slice(0, 2).join(' • ')}
-                          </Text>
-                        </View>
-                        <View style={styles.tlScoreBox}>
-                          <Text style={[styles.tlScoreNum, isWin && { color: theme.success }]}>{match.teamA.score}</Text>
-                          <Text style={styles.tlScoreSep}>-</Text>
-                          <Text style={[styles.tlScoreNum, !isWin && { color: theme.error }]}>{match.teamB.score}</Text>
-                        </View>
-                        <View style={[styles.tlTeam, { alignItems: 'flex-end' }]}>
-                          <Text style={styles.tlTeamLabel}>{t('tournament', 'opponentLabel')}</Text>
-                          <Text style={styles.tlTeamNames} numberOfLines={1}>
-                            {match.teamB.playerNames.slice(0, 2).join(' • ')}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Card footer */}
-                      <View style={styles.tlCardFooter}>
-                        <View style={[styles.tlResultBadge, { backgroundColor: dotColor + '12' }]}>
-                          <MaterialIcons name={isWin ? 'check-circle' : 'cancel'} size={13} color={dotColor} />
-                          <Text style={[styles.tlResultText, { color: dotColor }]}>
-                            {isWin ? t('tournament', 'victory') : t('tournament', 'defeat')}
-                          </Text>
-                        </View>
-                        {match.duration > 0 ? (
-                          <Text style={styles.tlDuration}>
-                            {Math.floor(match.duration / 60)}:{(match.duration % 60).toString().padStart(2, '0')}
-                          </Text>
-                        ) : null}
-                        <View style={{ flex: 1 }} />
-                        <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
-                      </View>
-                    </View>
-                  </Pressable>
-                );
-              })}
+              {myMatches.map((match, idx) => (
+                <TimelineMatchCard key={match.id} match={match} t={t} language={language} />
+              ))}
             </View>
           ) : (
             <View style={styles.emptyMatches}>

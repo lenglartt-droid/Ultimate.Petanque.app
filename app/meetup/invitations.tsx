@@ -3,6 +3,7 @@ import {
   View,
   Text,
   ScrollView,
+  FlatList,
   Pressable,
   StyleSheet,
   ActivityIndicator,
@@ -31,6 +32,108 @@ import {
   requestNotificationPermissions,
   areNotificationsEnabled,
 } from '@/services/notificationService';
+
+const InvitationCard = React.memo(({ invitation: inv, index, respondingId, onRespond, t, language }: {
+  invitation: PendingInvitation;
+  index: number;
+  respondingId: string | null;
+  onRespond: (inv: PendingInvitation, status: 'accepted' | 'declined') => void;
+  t: (s: string, k: string) => string;
+  language: string;
+}) => {
+  const mDate = new Date(inv.date);
+  const isPast = mDate < new Date();
+  const daysUntil = Math.max(0, Math.ceil((mDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+  const isResponding = respondingId === inv.meetupId;
+
+  return (
+    <Animated.View
+      entering={FadeInDown.duration(350).delay(Math.min(index * 60, 300))}
+      style={styles.card}
+    >
+      <Pressable
+        style={styles.cardTop}
+        onPress={() => router.push(`/meetup/${inv.meetupId}` as any)}
+      >
+        <View style={styles.dateCol}>
+          <Text style={styles.dateDay}>{mDate.getDate()}</Text>
+          <Text style={styles.dateMonth}>
+            {mDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}
+          </Text>
+        </View>
+        <View style={styles.infoCol}>
+          <Text style={styles.cardTitle} numberOfLines={1}>{inv.title}</Text>
+          <View style={styles.metaRow}>
+            <MaterialIcons name="schedule" size={13} color={theme.textMuted} />
+            <Text style={styles.metaText}>
+              {mDate.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+            {daysUntil <= 1 && !isPast ? (
+              <View style={styles.soonBadge}>
+                <Text style={styles.soonText}>
+                  {daysUntil === 0 ? t('notifications', 'todayLabel') : t('notifications', 'tomorrowLabel')}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+          {inv.terrainName ? (
+            <View style={styles.metaRow}>
+              <MaterialIcons name="place" size={13} color={theme.primary} />
+              <Text style={styles.terrainText} numberOfLines={1}>
+                {inv.terrainName}{inv.terrainCity ? ` \u2022 ${inv.terrainCity}` : ''}
+              </Text>
+            </View>
+          ) : null}
+          <View style={styles.metaRow}>
+            <MaterialIcons name="person" size={13} color={theme.accent} />
+            <Text style={styles.creatorText}>
+              {t('meetup', 'invitedBy')} {inv.creatorName || t('meetup', 'unknownUser')}
+            </Text>
+          </View>
+          <View style={styles.confirmRow}>
+            <MaterialIcons name="group" size={12} color={theme.success} />
+            <Text style={styles.confirmText}>
+              {inv.acceptedCount}/{inv.maxParticipants} {t('meetup', 'confirmedCount')}
+            </Text>
+          </View>
+        </View>
+        <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+      </Pressable>
+
+      {!isPast ? (
+        <View style={styles.cardActions}>
+          <Pressable
+            style={[styles.actionBtn, styles.declineBtn, isResponding && styles.actionDisabled]}
+            onPress={() => onRespond(inv, 'declined')}
+            disabled={isResponding}
+          >
+            <MaterialIcons name="close" size={18} color={theme.error} />
+            <Text style={[styles.actionBtnText, { color: theme.error }]}>{t('meetup', 'decline')}</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.actionBtn, styles.acceptBtn, isResponding && styles.actionDisabled]}
+            onPress={() => onRespond(inv, 'accepted')}
+            disabled={isResponding}
+          >
+            {isResponding ? (
+              <ActivityIndicator size="small" color={theme.success} />
+            ) : (
+              <>
+                <MaterialIcons name="check" size={18} color={theme.success} />
+                <Text style={[styles.actionBtnText, { color: theme.success }]}>{t('meetup', 'accept')}</Text>
+              </>
+            )}
+          </Pressable>
+        </View>
+      ) : (
+        <View style={styles.cardPast}>
+          <MaterialIcons name="history" size={14} color={theme.textMuted} />
+          <Text style={styles.cardPastText}>{t('meetup', 'meetupPassed')}</Text>
+        </View>
+      )}
+    </Animated.View>
+  );
+});
 
 export default function InvitationsScreen() {
   const insets = useSafeAreaInsets();
@@ -165,122 +268,36 @@ export default function InvitationsScreen() {
         <View style={styles.headerBtn} />
       </View>
 
-      <ScrollView
+      <FlatList
+        data={invitations}
+        keyExtractor={(item) => item.meetupId}
         style={{ flex: 1 }}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} colors={[theme.primary]} />
         }
-      >
-        {invitations.length > 0 ? (
-          <>
-            <View style={styles.countRow}>
-              <View style={styles.countBadge}>
-                <Text style={styles.countText}>{invitations.length}</Text>
-              </View>
-              <Text style={styles.countLabel}>
-                {invitations.length === 1 ? t('meetup', 'pendingInvitationSingular') : t('meetup', 'pendingInvitationPlural')}
-              </Text>
+        ListHeaderComponent={invitations.length > 0 ? (
+          <View style={styles.countRow}>
+            <View style={styles.countBadge}>
+              <Text style={styles.countText}>{invitations.length}</Text>
             </View>
-
-            {invitations.map((inv, index) => {
-              const mDate = new Date(inv.date);
-              const isPast = mDate < new Date();
-              const daysUntil = Math.max(0, Math.ceil((mDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-              const isResponding = respondingId === inv.meetupId;
-
-              return (
-                <Animated.View
-                  key={inv.meetupId}
-                  entering={FadeInDown.duration(350).delay(index * 60)}
-                  style={styles.card}
-                >
-                  <Pressable
-                    style={styles.cardTop}
-                    onPress={() => router.push(`/meetup/${inv.meetupId}` as any)}
-                  >
-                    <View style={styles.dateCol}>
-                      <Text style={styles.dateDay}>{mDate.getDate()}</Text>
-                      <Text style={styles.dateMonth}>
-                        {mDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}
-                      </Text>
-                    </View>
-                    <View style={styles.infoCol}>
-                      <Text style={styles.cardTitle} numberOfLines={1}>{inv.title}</Text>
-                      <View style={styles.metaRow}>
-                        <MaterialIcons name="schedule" size={13} color={theme.textMuted} />
-                        <Text style={styles.metaText}>
-                          {mDate.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
-                        </Text>
-                        {daysUntil <= 1 && !isPast ? (
-                          <View style={styles.soonBadge}>
-                            <Text style={styles.soonText}>
-                              {daysUntil === 0 ? t('notifications', 'todayLabel') : t('notifications', 'tomorrowLabel')}
-                            </Text>
-                          </View>
-                        ) : null}
-                      </View>
-                      {inv.terrainName ? (
-                        <View style={styles.metaRow}>
-                          <MaterialIcons name="place" size={13} color={theme.primary} />
-                          <Text style={styles.terrainText} numberOfLines={1}>
-                            {inv.terrainName}{inv.terrainCity ? ` \u2022 ${inv.terrainCity}` : ''}
-                          </Text>
-                        </View>
-                      ) : null}
-                      <View style={styles.metaRow}>
-                        <MaterialIcons name="person" size={13} color={theme.accent} />
-                        <Text style={styles.creatorText}>
-                          {t('meetup', 'invitedBy')} {inv.creatorName || t('meetup', 'unknownUser')}
-                        </Text>
-                      </View>
-                      <View style={styles.confirmRow}>
-                        <MaterialIcons name="group" size={12} color={theme.success} />
-                        <Text style={styles.confirmText}>
-                          {inv.acceptedCount}/{inv.maxParticipants} {t('meetup', 'confirmedCount')}
-                        </Text>
-                      </View>
-                    </View>
-                    <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-                  </Pressable>
-
-                  {!isPast ? (
-                    <View style={styles.cardActions}>
-                      <Pressable
-                        style={[styles.actionBtn, styles.declineBtn, isResponding && styles.actionDisabled]}
-                        onPress={() => handleRespond(inv, 'declined')}
-                        disabled={isResponding}
-                      >
-                        <MaterialIcons name="close" size={18} color={theme.error} />
-                        <Text style={[styles.actionBtnText, { color: theme.error }]}>{t('meetup', 'decline')}</Text>
-                      </Pressable>
-                      <Pressable
-                        style={[styles.actionBtn, styles.acceptBtn, isResponding && styles.actionDisabled]}
-                        onPress={() => handleRespond(inv, 'accepted')}
-                        disabled={isResponding}
-                      >
-                        {isResponding ? (
-                          <ActivityIndicator size="small" color={theme.success} />
-                        ) : (
-                          <>
-                            <MaterialIcons name="check" size={18} color={theme.success} />
-                            <Text style={[styles.actionBtnText, { color: theme.success }]}>{t('meetup', 'accept')}</Text>
-                          </>
-                        )}
-                      </Pressable>
-                    </View>
-                  ) : (
-                    <View style={styles.cardPast}>
-                      <MaterialIcons name="history" size={14} color={theme.textMuted} />
-                      <Text style={styles.cardPastText}>{t('meetup', 'meetupPassed')}</Text>
-                    </View>
-                  )}
-                </Animated.View>
-              );
-            })}
-          </>
-        ) : (
+            <Text style={styles.countLabel}>
+              {invitations.length === 1 ? t('meetup', 'pendingInvitationSingular') : t('meetup', 'pendingInvitationPlural')}
+            </Text>
+          </View>
+        ) : null}
+        renderItem={({ item: inv, index }) => (
+          <InvitationCard
+            invitation={inv}
+            index={index}
+            respondingId={respondingId}
+            onRespond={handleRespond}
+            t={t}
+            language={language}
+          />
+        )}
+        ListEmptyComponent={
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
               <MaterialIcons name="mail-outline" size={56} color={theme.primary} />
@@ -292,8 +309,8 @@ export default function InvitationsScreen() {
               <Text style={styles.emptyBtnText}>{t('common', 'back')}</Text>
             </Pressable>
           </View>
-        )}
-      </ScrollView>
+        }
+      />
 
       {/* Reminder Configuration Modal */}
       <Modal
