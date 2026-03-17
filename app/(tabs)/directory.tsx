@@ -300,7 +300,7 @@ export default function DirectoryScreen() {
       const matchesCountry = filters.playerCountry === 'all' || (p.country || 'France') === filters.playerCountry;
       const matchesLevel = filters.playerLevel === 'all' || p.level === filters.playerLevel;
       const matchesRole = filters.playerRole === 'all' || p.role === filters.playerRole;
-      const matchesRealUser = !showRealUsersOnly || (selfPlayer && p.id === selfPlayer.id) || ((p as any).isPublic === true && (p as any).userId && (p as any).userId !== user?.id);
+      const matchesRealUser = !showRealUsersOnly || (selfPlayer && p.id === selfPlayer.id) || (p.isPublic === true);
       return matchesSearch && matchesClub && matchesCity && matchesCountry && matchesLevel && matchesRole && matchesRealUser;
     });
     
@@ -391,7 +391,7 @@ export default function DirectoryScreen() {
     const sharedPerm = getSharedPermission(item.id);
     const isPublicItem = (item as any).isPublic;
     // A public player is a real registered user (their user_id is an actual app user)
-    const isRealUser = isPublicItem && (item as any).userId && (item as any).userId !== user?.id;
+    const isRealUser = item.isPublic === true && (!selfPlayer || item.id !== selfPlayer.id);
     return (
       <Pressable
         style={[styles.itemCard, isSelf && styles.selfCard]}
@@ -486,7 +486,7 @@ export default function DirectoryScreen() {
               style={styles.inviteMeetupBtn}
               onPress={(e) => {
                 e.stopPropagation?.();
-                handleInviteToMeetup((item as any).userId, item.name);
+                handleInviteToMeetup(item.id, item.name);
               }}
               hitSlop={4}
             >
