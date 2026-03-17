@@ -400,33 +400,7 @@ export default function HomeScreen() {
             </Pressable>
           </View>
 
-          {/* Meetup Quick Actions */}
-          <View style={styles.meetupQuickActions}>
-            <Pressable style={({ pressed }) => [styles.meetupQuickBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]} onPress={() => router.push('/meetup/new' as any)}>
-              <View style={[styles.meetupQuickIconBg, { backgroundColor: theme.primary + '12' }]}>
-                <MaterialIcons name="add-circle" size={20} color={theme.primary} />
-              </View>
-              <Text style={styles.meetupQuickText}>{t('meetup', 'createMeetupShort')}</Text>
-            </Pressable>
-            <Pressable style={({ pressed }) => [styles.meetupQuickBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]} onPress={() => setShowJoinMeetupModal(true)}>
-              <View style={[styles.meetupQuickIconBg, { backgroundColor: theme.accent + '12' }]}>
-                <MaterialIcons name="qr-code" size={20} color={theme.accent} />
-              </View>
-              <Text style={styles.meetupQuickText}>{t('meetup', 'joinMeetup')}</Text>
-            </Pressable>
-            {pendingInviteCount > 0 ? (
-              <Pressable style={({ pressed }) => [styles.meetupQuickBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]} onPress={() => router.push('/meetup/invitations' as any)}>
-                <View style={[styles.meetupQuickIconBg, { backgroundColor: theme.error + '12' }]}>
-                  <MaterialIcons name="mail" size={20} color={theme.error} />
-                  <View style={styles.meetupQuickBadge}>
-                    <Text style={styles.meetupQuickBadgeText}>{pendingInviteCount > 9 ? '9+' : pendingInviteCount}</Text>
-                  </View>
-                </View>
-                <Text style={styles.meetupQuickText}>{t('meetup', 'pendingInvitations')}</Text>
-              </Pressable>
-            ) : null}
-          </View>
-
+          {/* Meetup Summary Row - above quick actions */}
           {meetups.length > 0 ? (
             <Pressable
               style={({ pressed }) => [styles.meetupSummaryRow, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
@@ -472,6 +446,33 @@ export default function HomeScreen() {
               <Text style={styles.meetupEmptyText}>{t('meetup', 'noMeetups')}</Text>
             </View>
           ) : null}
+
+          {/* Meetup Quick Actions - below summary */}
+          <View style={styles.meetupQuickActions}>
+            <Pressable style={({ pressed }) => [styles.meetupQuickBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]} onPress={() => router.push('/meetup/new' as any)}>
+              <View style={[styles.meetupQuickIconBg, { backgroundColor: theme.primary + '12' }]}>
+                <MaterialIcons name="add-circle" size={20} color={theme.primary} />
+              </View>
+              <Text style={styles.meetupQuickText}>{t('meetup', 'createMeetupShort')}</Text>
+            </Pressable>
+            <Pressable style={({ pressed }) => [styles.meetupQuickBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]} onPress={() => setShowJoinMeetupModal(true)}>
+              <View style={[styles.meetupQuickIconBg, { backgroundColor: theme.accent + '12' }]}>
+                <MaterialIcons name="qr-code" size={20} color={theme.accent} />
+              </View>
+              <Text style={styles.meetupQuickText}>{t('meetup', 'joinMeetup')}</Text>
+            </Pressable>
+            {pendingInviteCount > 0 ? (
+              <Pressable style={({ pressed }) => [styles.meetupQuickBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]} onPress={() => router.push('/meetup/invitations' as any)}>
+                <View style={[styles.meetupQuickIconBg, { backgroundColor: theme.error + '12' }]}>
+                  <MaterialIcons name="mail" size={20} color={theme.error} />
+                  <View style={styles.meetupQuickBadge}>
+                    <Text style={styles.meetupQuickBadgeText}>{pendingInviteCount > 9 ? '9+' : pendingInviteCount}</Text>
+                  </View>
+                </View>
+                <Text style={styles.meetupQuickText}>{t('meetup', 'pendingInvitations')}</Text>
+              </Pressable>
+            ) : null}
+          </View>
         </Animated.View>
 
         {/* ========== LAST 3 RESULTS TIMELINE ========== */}
@@ -868,7 +869,7 @@ const styles = StyleSheet.create({
   meetupSectionTitle: { fontSize: 16, fontWeight: '700', color: theme.textPrimary },
   meetupNewBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.primary + '12', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
   meetupNewBtnText: { fontSize: 12, fontWeight: '700', color: theme.primary },
-  meetupQuickActions: { flexDirection: 'row', gap: 10, marginBottom: 14 },
+  meetupQuickActions: { flexDirection: 'row', gap: 10 },
   meetupQuickBtn: { flex: 1, alignItems: 'center', backgroundColor: theme.surface, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 8, borderWidth: 1, borderColor: theme.border },
   meetupQuickIconBg: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 8, position: 'relative' as const },
   meetupQuickText: { fontSize: 11, fontWeight: '600', color: theme.textPrimary, textAlign: 'center' },
@@ -892,11 +893,11 @@ const styles = StyleSheet.create({
   meetupCreatorText: { fontSize: 10, fontWeight: '700', color: theme.primary },
   meetupInvitedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.accent + '12', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
   meetupInvitedText: { fontSize: 10, fontWeight: '700', color: theme.accent },
-  meetupEmpty: { alignItems: 'center', paddingVertical: 20, gap: 8 },
+  meetupEmpty: { alignItems: 'center', paddingVertical: 16, gap: 8, marginBottom: 14 },
   meetupEmptyText: { fontSize: 13, color: theme.textMuted, fontWeight: '500' },
 
   // ========== MEETUP SUMMARY ROW ==========
-  meetupSummaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.accent + '08', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: theme.accent + '20' },
+  meetupSummaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.accent + '08', borderRadius: 14, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: theme.accent + '20' },
   meetupSummaryLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 },
   meetupSummaryDateCol: { width: 46, height: 46, borderRadius: 12, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center' },
   meetupSummaryDateDay: { fontSize: 18, fontWeight: '900', color: theme.primary, lineHeight: 20 },
@@ -928,7 +929,7 @@ const styles = StyleSheet.create({
   bannerImage: { width: '100%', height: 110, borderRadius: 20 },
   bannerOverlay: { position: 'absolute' as const, bottom: 0, left: 0, right: 0, height: 50, borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
   // ========== HISTORY SECTION ==========
-  historySection: { paddingHorizontal: 16, marginTop: 16, marginBottom: 24, backgroundColor: theme.surface, marginHorizontal: 16, borderRadius: 20, padding: 16, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border },
+  historySection: { paddingHorizontal: 16, marginTop: 8, marginBottom: 24, backgroundColor: theme.surface, marginHorizontal: 16, borderRadius: 20, padding: 16, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border },
   historySectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
   historySectionHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   historySectionIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center' },
