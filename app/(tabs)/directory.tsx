@@ -264,15 +264,25 @@ export default function DirectoryScreen() {
 
   const currentFilterCount = activeFilterCounts[activeTab];
 
+  // Get current filtered data (must be before paginatedData)
+  const getCurrentData = useCallback(() => {
+    switch (activeTab) {
+      case 'players': return filteredPlayers;
+      case 'clubs': return filteredClubs;
+      case 'terrains': return filteredTerrains;
+      case 'tournaments': return filteredTournaments;
+    }
+  }, [activeTab, filteredPlayers, filteredClubs, filteredTerrains, filteredTournaments]);
+
   // Paginated data
   const paginatedData = useMemo(() => {
     const data = getCurrentData();
     return data.slice(0, visibleCount);
-  }, [visibleCount, filteredPlayers, filteredClubs, filteredTerrains, filteredTournaments, activeTab]);
+  }, [visibleCount, getCurrentData]);
 
   const hasMore = useMemo(() => {
     return getCurrentData().length > visibleCount;
-  }, [visibleCount, filteredPlayers, filteredClubs, filteredTerrains, filteredTournaments, activeTab]);
+  }, [visibleCount, getCurrentData]);
 
   const handleLoadMore = useCallback(() => {
     if (hasMore) {
@@ -713,16 +723,6 @@ export default function DirectoryScreen() {
       </Pressable>
     );
   };
-
-  // Get current filtered data
-  const getCurrentData = useCallback(() => {
-    switch (activeTab) {
-      case 'players': return filteredPlayers;
-      case 'clubs': return filteredClubs;
-      case 'terrains': return filteredTerrains;
-      case 'tournaments': return filteredTournaments;
-    }
-  }, [activeTab, filteredPlayers, filteredClubs, filteredTerrains, filteredTournaments]);
 
   const getCurrentRenderItem = () => {
     switch (activeTab) {
