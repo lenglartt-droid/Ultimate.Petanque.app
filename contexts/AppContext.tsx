@@ -707,6 +707,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setIsOfflineMode(false);
       await setLastSyncTimestamp(new Date().toISOString());
 
+      // Cleanup soft_deletes older than 30 days (non-blocking)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      supabase.from('soft_deletes').delete().lt('deleted_at', thirtyDaysAgo.toISOString()).then(() => {
+        console.log('Cleaned up old soft_deletes entries');
+      }).catch(() => { /* silent */ });
+
     } catch (error) {
       console.log('Error loading data from cloud:', error);
       // If we have cached data, keep using it instead of mock data
@@ -748,14 +755,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const syncTimestamp = new Date().toISOString();
 
     try {
-      // Fetch only records updated since last sync (6 lightweight queries)
-      const [playersRes, clubsRes, tournamentsRes, matchesRes, challengesRes, terrainsRes] = await Promise.all([
+      // Fetch updated records AND soft_deletes since last sync in parallel
+      const [playersRes, clubsRes, tournamentsRes, matchesRes, challengesRes, terrainsRes, softDeletesRes] = await Promise.all([
         supabase.from('players').select('*').gt('updated_at', lastSync),
         supabase.from('clubs').select('*').gt('updated_at', lastSync),
         supabase.from('tournaments').select('*').gt('updated_at', lastSync),
         supabase.from('matches').select('*').gt('updated_at', lastSync),
         supabase.from('challenges').select('*').gt('updated_at', lastSync),
         supabase.from('terrains').select('*').gt('updated_at', lastSync),
+        supabase.from('soft_deletes').select('table_name, item_id').gt('deleted_at', lastSync),
       ]);
 
       const totalChanges =
@@ -765,16 +773,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
         (matchesRes.data?.length || 0) +
         (challengesRes.data?.length || 0) +
         (terrainsRes.data?.length || 0);
+      const totalDeletions = softDeletesRes.data?.length || 0;
 
-      if (totalChanges === 0) {
+      if (totalChanges === 0 && totalDeletions === 0) {
         // No changes since last sync
         await setLastSyncTimestamp(syncTimestamp);
         return;
       }
 
-      console.log(`Delta sync: ${totalChanges} records changed since last sync`);
+      console.log(`Delta sync: ${totalChanges} records changed, ${totalDeletions} deletions since last sync`);
 
-      // Merge delta records into existing state
+      // Process deletions first: group by table, then remove from local state
+      if (softDeletesRes.data && softDeletesRes.data.length > 0) {
+        const deletedByTable: Record<string, Set<string>> = {};
+        softDeletesRes.data.forEach((sd: any) => {
+          if (!deletedByTable[sd.table_name]) deletedByTable[sd.table_name] = new Set();
+          deletedByTable[sd.table_name].add(sd.item_id);
+        });
+        if (deletedByTable['players']) setPlayers(prev => prev.filter(p => !deletedByTable['players']!.has(p.id)));
+        if (deletedByTable['clubs']) setClubs(prev => prev.filter(c => !deletedByTable['clubs']!.has(c.id)));
+        if (deletedByTable['terrains']) setTerrains(prev => prev.filter(t => !deletedByTable['terrains']!.has(t.id)));
+        if (deletedByTable['tournaments']) setTournaments(prev => prev.filter(t => !deletedByTable['tournaments']!.has(t.id)));
+        if (deletedByTable['matches']) setMatches(prev => prev.filter(m => !deletedByTable['matches']!.has(m.id)));
+        if (deletedByTable['challenges']) setChallenges(prev => prev.filter(c => !deletedByTable['challenges']!.has(c.id)));
+        if (deletedByTable['boules_sets']) setBoulesSets(prev => prev.filter(b => !deletedByTable['boules_sets']!.has(b.id)));
+      }
+
+      // Merge updated records into existing state
       if (playersRes.data && playersRes.data.length > 0) {
         const deltaPlayers = playersRes.data.map(mapPlayerFromDb);
         setPlayers(prev => mergeRecords(prev, deltaPlayers));
