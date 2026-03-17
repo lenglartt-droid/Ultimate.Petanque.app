@@ -365,8 +365,80 @@ export default function HomeScreen() {
           </Animated.View>
         ) : null}
 
+        {/* ========== QUICK ACCESS GRID ========== */}
+        <Animated.View entering={FadeInDown.duration(400).delay(200)} style={[styles.section, isTablet && styles.sectionTablet]}>
+          <Text style={styles.sectionTitle}>{t('home', 'quickAccess')}</Text>
+          <View style={styles.quickGrid}>
+            {[
+              { label: t('home', 'player'), icon: 'person-add' as keyof typeof MaterialIcons.glyphMap, bg: theme.primary, route: '/player/new' },
+              { label: t('home', 'tournament'), icon: 'add-circle' as keyof typeof MaterialIcons.glyphMap, bg: theme.carreauColor, route: '/tournament/new' },
+              { label: t('home', 'terrain'), icon: 'sports-soccer' as keyof typeof MaterialIcons.glyphMap, bg: theme.accent, route: '/terrain/new' },
+              { label: t('home', 'club'), icon: 'add-home' as keyof typeof MaterialIcons.glyphMap, bg: theme.success, route: '/club/new' },
+            ].map((q, i) => (
+              <Pressable key={i} style={({ pressed }) => [styles.quickItem, pressed && styles.quickItemPressed]} onPress={() => router.push(q.route as any)}>
+                <View style={[styles.quickIcon, { backgroundColor: q.bg }]}>
+                  <MaterialIcons name={q.icon} size={22} color="#FFF" />
+                </View>
+                <Text style={styles.quickLabel}>{q.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </Animated.View>
+
+        {/* ========== COMPACT HISTORY ========== */}
+        {recentResults.length > 0 ? (
+          <Animated.View entering={FadeIn.duration(400).delay(260)} style={[styles.section, isTablet && styles.sectionTablet]}>
+            <View style={styles.historyHeaderRow}>
+              <View style={styles.historyHeaderLeft}>
+                <MaterialIcons name="history" size={20} color={theme.primary} />
+                <Text style={styles.sectionTitle}>{t('history', 'history')}</Text>
+              </View>
+              <Pressable onPress={() => router.push('/history')} style={styles.historySeeAllBtn}>
+                <Text style={styles.seeAllBtn}>{t('common', 'seeAll')}</Text>
+                <MaterialIcons name="chevron-right" size={16} color={theme.primary} />
+              </Pressable>
+            </View>
+            <View style={styles.historyCompactList}>
+              {recentResults.map((item, idx) => {
+                const d = new Date(item.date);
+                const isLast = idx === recentResults.length - 1;
+                return (
+                  <Pressable
+                    key={item.id}
+                    style={({ pressed }) => [styles.hcRow, !isLast && styles.hcRowBorder, pressed && { opacity: 0.75, backgroundColor: theme.backgroundSecondary }]}
+                    onPress={() => item.type === 'match' ? router.push(`/match/${item.id}`) : router.push('/history')}
+                  >
+                    <View style={[styles.hcDot, { backgroundColor: resultColor(item.result) }]} />
+                    <View style={[styles.hcTypeIcon, { backgroundColor: (item.type === 'match' ? theme.primary : theme.accent) + '12' }]}>
+                      <MaterialIcons name={item.icon} size={14} color={item.type === 'match' ? theme.primary : theme.accent} />
+                    </View>
+                    <View style={styles.hcInfo}>
+                      <Text style={styles.hcTitle} numberOfLines={1}>{item.title}</Text>
+                      <Text style={styles.hcSub} numberOfLines={1}>{item.subtitle} {' \u2022 '} {d.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
+                    </View>
+                    <Text style={[styles.hcScore, { color: resultColor(item.result) }]}>{item.score}</Text>
+                    <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Animated.View>
+        ) : (matches.length === 0 && challenges.length === 0) ? (
+          <Animated.View entering={FadeIn.duration(500).delay(260)} style={[styles.emptyCard, isTablet && styles.emptyCardTablet]}>
+            <View style={styles.emptyIconBg}>
+              <MaterialIcons name="sports" size={44} color={theme.primary} />
+            </View>
+            <Text style={styles.emptyTitle}>{t('home', 'welcomeTitle')}</Text>
+            <Text style={styles.emptyText}>{t('home', 'welcomeText')}</Text>
+            <Pressable style={styles.emptyCta} onPress={() => router.push('/match/new')}>
+              <MaterialIcons name="play-arrow" size={20} color="#FFF" />
+              <Text style={styles.emptyCtaText}>{t('home', 'firstMatch')}</Text>
+            </Pressable>
+          </Animated.View>
+        ) : null}
+
         {/* ========== MEETUPS SECTION ========== */}
-        <Animated.View entering={FadeIn.duration(400).delay(260)} style={[styles.section, isTablet && styles.sectionTablet]}>
+        <Animated.View entering={FadeIn.duration(400).delay(320)} style={[styles.section, isTablet && styles.sectionTablet]}>
           <View style={styles.meetupTitleRow}>
             <View style={styles.meetupTitleLeft}>
               <MaterialIcons name="event" size={20} color={theme.accent} />
@@ -390,7 +462,6 @@ export default function HomeScreen() {
 
           {meetups.length > 0 ? (
             <View style={styles.meetupCards}>
-              {/* Next meetup - prominent card */}
               {(() => {
                 const m = meetups[0];
                 const mDate = new Date(m.date);
@@ -444,7 +515,6 @@ export default function HomeScreen() {
                 );
               })()}
 
-              {/* Additional meetups link */}
               {meetups.length > 1 ? (
                 <Pressable
                   style={({ pressed }) => [styles.meetupMoreLink, pressed && { opacity: 0.7 }]}
@@ -465,98 +535,6 @@ export default function HomeScreen() {
             </View>
           ) : null}
         </Animated.View>
-
-        {/* ========== QUICK ACCESS GRID ========== */}
-        <Animated.View entering={FadeInDown.duration(400).delay(320)} style={[styles.section, isTablet && styles.sectionTablet]}>
-          <Text style={styles.sectionTitle}>{t('home', 'quickAccess')}</Text>
-          <View style={styles.quickGrid}>
-            {[
-              { label: t('home', 'player'), icon: 'person-add' as keyof typeof MaterialIcons.glyphMap, bg: theme.primary, route: '/player/new' },
-              { label: t('home', 'tournament'), icon: 'add-circle' as keyof typeof MaterialIcons.glyphMap, bg: theme.carreauColor, route: '/tournament/new' },
-              { label: t('home', 'terrain'), icon: 'sports-soccer' as keyof typeof MaterialIcons.glyphMap, bg: theme.accent, route: '/terrain/new' },
-              { label: t('home', 'club'), icon: 'add-home' as keyof typeof MaterialIcons.glyphMap, bg: theme.success, route: '/club/new' },
-            ].map((q, i) => (
-              <Pressable key={i} style={({ pressed }) => [styles.quickItem, pressed && styles.quickItemPressed]} onPress={() => router.push(q.route as any)}>
-                <View style={[styles.quickIcon, { backgroundColor: q.bg }]}>
-                  <MaterialIcons name={q.icon} size={22} color="#FFF" />
-                </View>
-                <Text style={styles.quickLabel}>{q.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </Animated.View>
-
-        {/* ========== LAST 3 RESULTS TIMELINE ========== */}
-        {recentResults.length > 0 ? (
-          <Animated.View entering={FadeIn.duration(400).delay(380)} style={[styles.historySection, isTablet && styles.sectionTablet]}>
-            <View style={styles.historySectionHeader}>
-              <View style={styles.historySectionHeaderLeft}>
-                <View style={styles.historySectionIcon}>
-                  <MaterialIcons name="history" size={18} color={theme.primary} />
-                </View>
-                <Text style={styles.historySectionTitle}>{t('history', 'history')}</Text>
-              </View>
-              <Pressable onPress={() => router.push('/history')} style={styles.historySeeAllBtn}>
-                <Text style={styles.seeAllBtn}>{t('common', 'seeAll')}</Text>
-                <MaterialIcons name="chevron-right" size={16} color={theme.primary} />
-              </Pressable>
-            </View>
-            <View style={styles.timeline}>
-              {recentResults.map((item, idx) => {
-                const d = new Date(item.date);
-                const isLast = idx === recentResults.length - 1;
-                return (
-                  <Pressable
-                    key={item.id}
-                    style={({ pressed }) => [styles.timelineItem, pressed && { opacity: 0.85 }]}
-                    onPress={() => item.type === 'match' ? router.push(`/match/${item.id}`) : router.push('/history')}
-                  >
-                    <View style={styles.timelineLine}>
-                      <View style={[styles.timelineDot, { backgroundColor: resultColor(item.result) }]}>
-                        <MaterialIcons
-                          name={item.result === 'win' ? 'check' : item.result === 'loss' ? 'close' : 'remove'}
-                          size={12}
-                          color="#FFF"
-                        />
-                      </View>
-                      {!isLast ? <View style={styles.timelineConnector} /> : null}
-                    </View>
-                    <View style={styles.timelineContent}>
-                      <View style={styles.timelineContentTop}>
-                        <View style={[styles.timelineTypeIcon, { backgroundColor: (item.type === 'match' ? theme.primary : theme.accent) + '12' }]}>
-                          <MaterialIcons name={item.icon} size={16} color={item.type === 'match' ? theme.primary : theme.accent} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.timelineTitle} numberOfLines={1}>{item.title}</Text>
-                          <Text style={styles.timelineSub} numberOfLines={1}>{item.subtitle}</Text>
-                        </View>
-                        <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={[styles.timelineScore, { color: resultColor(item.result) }]}>{item.score}</Text>
-                          <Text style={[styles.timelineResult, { color: resultColor(item.result) }]}>{resultLabel(item.result)}</Text>
-                        </View>
-                      </View>
-                      <Text style={styles.timelineDate}>
-                        {d.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </Animated.View>
-        ) : (matches.length === 0 && challenges.length === 0) ? (
-          <Animated.View entering={FadeIn.duration(500).delay(380)} style={[styles.emptyCard, isTablet && styles.emptyCardTablet]}>
-            <View style={styles.emptyIconBg}>
-              <MaterialIcons name="sports" size={44} color={theme.primary} />
-            </View>
-            <Text style={styles.emptyTitle}>{t('home', 'welcomeTitle')}</Text>
-            <Text style={styles.emptyText}>{t('home', 'welcomeText')}</Text>
-            <Pressable style={styles.emptyCta} onPress={() => router.push('/match/new')}>
-              <MaterialIcons name="play-arrow" size={20} color="#FFF" />
-              <Text style={styles.emptyCtaText}>{t('home', 'firstMatch')}</Text>
-            </Pressable>
-          </Animated.View>
-        ) : null}
 
         {/* Ad Banner */}
         <AdBanner position="inline" />
@@ -841,20 +819,18 @@ const styles = StyleSheet.create({
   countdownBadgeToday: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(180,83,9,0.15)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12 },
   countdownBadgeTodayText: { fontSize: 15, fontWeight: '800', color: '#78350F' },
 
-  // ========== TIMELINE ==========
-  timeline: { gap: 0 },
-  timelineItem: { flexDirection: 'row', gap: 14 },
-  timelineLine: { width: 28, alignItems: 'center' },
-  timelineDot: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', zIndex: 1 },
-  timelineConnector: { width: 2, flex: 1, backgroundColor: theme.border, marginVertical: 4 },
-  timelineContent: { flex: 1, backgroundColor: theme.surface, borderRadius: 16, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: theme.border, ...theme.shadows.card },
-  timelineContentTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  timelineTypeIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  timelineTitle: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
-  timelineSub: { fontSize: 12, color: theme.textSecondary, marginTop: 1 },
-  timelineScore: { fontSize: 16, fontWeight: '900' },
-  timelineResult: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
-  timelineDate: { fontSize: 11, color: theme.textMuted, marginTop: 8 },
+  // ========== COMPACT HISTORY ==========
+  historyHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  historyHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  historyCompactList: { backgroundColor: theme.surface, borderRadius: 14, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' as const },
+  hcRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14, gap: 10 },
+  hcRowBorder: { borderBottomWidth: 1, borderBottomColor: theme.border },
+  hcDot: { width: 8, height: 8, borderRadius: 4 },
+  hcTypeIcon: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  hcInfo: { flex: 1, marginRight: 4 },
+  hcTitle: { fontSize: 13, fontWeight: '700', color: theme.textPrimary },
+  hcSub: { fontSize: 11, color: theme.textSecondary, marginTop: 1 },
+  hcScore: { fontSize: 15, fontWeight: '900', minWidth: 40, textAlign: 'right' as const },
 
   // ========== EMPTY STATE ==========
   emptyCard: { backgroundColor: theme.surface, borderRadius: 20, padding: 32, alignItems: 'center', marginHorizontal: 16, marginBottom: 24, ...theme.shadows.card },
@@ -938,12 +914,7 @@ const styles = StyleSheet.create({
   bannerCard: { borderRadius: 20, overflow: 'hidden' as const, ...theme.shadows.cardElevated, position: 'relative' as const },
   bannerImage: { width: '100%', height: 110, borderRadius: 20 },
   bannerOverlay: { position: 'absolute' as const, bottom: 0, left: 0, right: 0, height: 50, borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
-  // ========== HISTORY SECTION ==========
-  historySection: { marginTop: 0, marginBottom: 24, backgroundColor: theme.surface, marginHorizontal: 16, borderRadius: 20, padding: 16, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border, zIndex: 1 },
-  historySectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
-  historySectionHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  historySectionIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center' },
-  historySectionTitle: { fontSize: 16, fontWeight: '700', color: theme.textPrimary },
+  // ========== HISTORY SEE ALL ==========
   historySeeAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 2 },
 
   // ========== JOIN MODAL ==========
