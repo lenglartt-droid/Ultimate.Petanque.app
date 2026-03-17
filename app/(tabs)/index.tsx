@@ -310,7 +310,7 @@ export default function HomeScreen() {
         <Animated.View entering={FadeInDown.duration(400).delay(140)} style={[styles.section, isTablet && styles.sectionTablet]}>
           <View style={styles.upcomingHeaderRow}>
             <MaterialIcons name="event-note" size={20} color={theme.primary} />
-            <Text style={styles.sectionTitle}>{t('home', 'upcoming')}</Text>
+            <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>{t('home', 'upcoming')}</Text>
           </View>
 
           {/* Tournament Countdown */}
@@ -478,7 +478,7 @@ export default function HomeScreen() {
             <View style={styles.historyHeaderRow}>
               <View style={styles.historyHeaderLeft}>
                 <MaterialIcons name="history" size={20} color={theme.primary} />
-                <Text style={styles.sectionTitle}>{t('history', 'history')}</Text>
+                <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>{t('history', 'history')}</Text>
               </View>
               <Pressable onPress={() => router.push('/history')} style={styles.historySeeAllBtn}>
                 <Text style={styles.seeAllBtn}>{t('common', 'seeAll')}</Text>
