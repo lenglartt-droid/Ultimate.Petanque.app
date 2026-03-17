@@ -305,8 +305,14 @@ export async function getMyResponseStatus(meetupId: string): Promise<'accepted' 
   }
 }
 
+export interface MeetupReminderSettings {
+  oneDayBefore: boolean;
+  threeHoursBefore: boolean;
+  oneHourBefore: boolean;
+}
+
 /**
- * Schedule a local reminder notification for a meetup
+ * Schedule a local reminder notification for a meetup (legacy - single 1h reminder)
  */
 export async function scheduleMeetupReminder(meetup: Meetup, terrainName: string): Promise<string | null> {
   try {
@@ -320,8 +326,8 @@ export async function scheduleMeetupReminder(meetup: Meetup, terrainName: string
 
     const id = await Notifications.scheduleNotificationAsync({
       content: {
-        title: `🎯 RDV Pétanque dans 1h !`,
-        body: `${meetup.title} à ${terrainName} - ${formattedTime}`,
+        title: `\u{1F3AF} RDV Petanque dans 1h !`,
+        body: `${meetup.title} a ${terrainName} - ${formattedTime}`,
         data: { meetupId: meetup.id, type: 'meetup_reminder' },
         sound: 'default',
         ...(Platform.OS === 'android' && { channelId: 'tournament-reminders' }),
@@ -341,13 +347,102 @@ export async function scheduleMeetupReminder(meetup: Meetup, terrainName: string
 }
 
 /**
- * Cancel meetup reminder
+ * Cancel meetup reminder (legacy single reminder)
  */
 export async function cancelMeetupReminder(meetupId: string): Promise<void> {
   try {
     await Notifications.cancelScheduledNotificationAsync(`meetup_${meetupId}_reminder`);
   } catch {
     // Ignore if not found
+  }
+}
+
+/**
+ * Schedule configurable meetup reminder notifications
+ */
+export async function scheduleMeetupNotifications(
+  meetup: Meetup,
+  terrainName: string,
+  settings: MeetupReminderSettings
+): Promise<string[]> {
+  // Cancel all existing reminders for this meetup first
+  await cancelAllMeetupReminders(meetup.id);
+
+  const notificationIds: string[] = [];
+  const now = new Date();
+  const meetupDate = new Date(meetup.date);
+  const formattedTime = meetupDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const formattedDate = meetupDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  const scheduleOne = async (triggerDate: Date, title: string, body: string, identifier: string): Promise<string | null> => {
+    if (triggerDate <= now) return null;
+    try {
+      const id = await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          data: { meetupId: meetup.id, type: 'meetup_reminder' },
+          sound: 'default',
+          badge: 1,
+          ...(Platform.OS === 'android' && { channelId: 'tournament-reminders' }),
+        },
+        trigger: {
+          date: triggerDate,
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+        },
+        identifier,
+      });
+      return id;
+    } catch (e) {
+      console.log(`Error scheduling meetup notification ${identifier}:`, e);
+      return null;
+    }
+  };
+
+  // 1 day before at 9:00
+  if (settings.oneDayBefore) {
+    const d = new Date(meetupDate);
+    d.setDate(d.getDate() - 1);
+    d.setHours(9, 0, 0, 0);
+    const id = await scheduleOne(d, '\u{1F3AF} RDV Petanque demain !', `${meetup.title} a ${terrainName} - ${formattedDate} a ${formattedTime}`, `meetup_${meetup.id}_1day`);
+    if (id) notificationIds.push(id);
+  }
+
+  // 3 hours before
+  if (settings.threeHoursBefore) {
+    const d = new Date(meetupDate);
+    d.setHours(d.getHours() - 3);
+    const id = await scheduleOne(d, '\u{1F3AF} RDV Petanque dans 3h !', `${meetup.title} a ${terrainName} - ${formattedTime}`, `meetup_${meetup.id}_3hours`);
+    if (id) notificationIds.push(id);
+  }
+
+  // 1 hour before
+  if (settings.oneHourBefore) {
+    const d = new Date(meetupDate);
+    d.setHours(d.getHours() - 1);
+    const id = await scheduleOne(d, '\u26A1 RDV Petanque dans 1h !', `${meetup.title} a ${terrainName} - ${formattedTime}. Preparez-vous !`, `meetup_${meetup.id}_1hour`);
+    if (id) notificationIds.push(id);
+  }
+
+  return notificationIds;
+}
+
+/**
+ * Cancel all meetup reminders (all variants)
+ */
+export async function cancelAllMeetupReminders(meetupId: string): Promise<void> {
+  const identifiers = [
+    `meetup_${meetupId}_reminder`,
+    `meetup_${meetupId}_1day`,
+    `meetup_${meetupId}_3hours`,
+    `meetup_${meetupId}_1hour`,
+  ];
+  for (const id of identifiers) {
+    try {
+      await Notifications.cancelScheduledNotificationAsync(id);
+    } catch {
+      // Ignore if not found
+    }
   }
 }
 

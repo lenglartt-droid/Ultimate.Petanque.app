@@ -10,6 +10,7 @@ import {
   Alert,
   Modal,
   FlatList,
+  Switch,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -26,6 +27,7 @@ import {
   Meetup,
   MeetupResponse,
   InvitableUser,
+  MeetupReminderSettings,
   findMeetupByCode,
   getMeetupResponses,
   respondToMeetup,
@@ -34,9 +36,15 @@ import {
   getMyResponseStatus,
   scheduleMeetupReminder,
   cancelMeetupReminder,
+  scheduleMeetupNotifications,
+  cancelAllMeetupReminders,
   getInvitableUsers,
   inviteUsersToMeetup,
 } from '@/services/meetupService';
+import {
+  requestNotificationPermissions,
+  areNotificationsEnabled,
+} from '@/services/notificationService';
 
 export default function MeetupDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string; code?: string }>();
@@ -59,6 +67,13 @@ export default function MeetupDetailScreen() {
   const [loadingInvitees, setLoadingInvitees] = useState(false);
   const [inviteSending, setInviteSending] = useState(false);
   const [inviteSearch, setInviteSearch] = useState('');
+
+  // Reminder state
+  const [reminderOneDayBefore, setReminderOneDayBefore] = useState(false);
+  const [reminderThreeHoursBefore, setReminderThreeHoursBefore] = useState(false);
+  const [reminderOneHourBefore, setReminderOneHourBefore] = useState(true);
+  const [notifPermission, setNotifPermission] = useState<boolean | null>(null);
+  const [reminderSaving, setReminderSaving] = useState(false);
 
   const isCreator = meetup && user && meetup.creator_id === user.id;
   const terrain = meetup ? terrains.find(tr => tr.id === meetup.terrain_id) : null;
@@ -105,6 +120,7 @@ export default function MeetupDetailScreen() {
 
   useEffect(() => {
     loadMeetup();
+    areNotificationsEnabled().then(setNotifPermission);
   }, [loadMeetup]);
 
   // Polling for new responses (every 15 seconds)
@@ -176,6 +192,43 @@ export default function MeetupDetailScreen() {
       },
     ]);
   }, [meetup, t]);
+
+  const handleSaveReminders = useCallback(async () => {
+    if (!meetup || !terrain) return;
+    setReminderSaving(true);
+    try {
+      // Check/request permission
+      let hasPermission = notifPermission;
+      if (!hasPermission) {
+        hasPermission = await requestNotificationPermissions();
+        setNotifPermission(hasPermission);
+      }
+      if (!hasPermission) {
+        showAlert(t('meetup', 'enableNotifications'));
+        setReminderSaving(false);
+        return;
+      }
+      const settings: MeetupReminderSettings = {
+        oneDayBefore: reminderOneDayBefore,
+        threeHoursBefore: reminderThreeHoursBefore,
+        oneHourBefore: reminderOneHourBefore,
+      };
+      const anyEnabled = settings.oneDayBefore || settings.threeHoursBefore || settings.oneHourBefore;
+      if (anyEnabled) {
+        const ids = await scheduleMeetupNotifications(meetup, terrain.name, settings);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        showAlert(t('meetup', 'remindersScheduled'), `${ids.length} ${t('meetup', 'remindersScheduledCount')}`);
+      } else {
+        await cancelAllMeetupReminders(meetup.id);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        showAlert(t('common', 'success'), t('meetup', 'remindersDisabled'));
+      }
+    } catch {
+      showAlert(t('common', 'error'), t('meetup', 'reminderErrorScheduling'));
+    } finally {
+      setReminderSaving(false);
+    }
+  }, [meetup, terrain, reminderOneDayBefore, reminderThreeHoursBefore, reminderOneHourBefore, notifPermission, t, showAlert]);
 
   const handleCopyCode = useCallback(async () => {
     if (meetup) {
@@ -352,6 +405,94 @@ export default function MeetupDetailScreen() {
             </View>
           </Pressable>
         </Animated.View>
+
+        {/* Reminders Section */}
+        {!isPast && meetup.status === 'active' ? (
+          <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.remindersCard}>
+            <View style={styles.remindersHeader}>
+              <View style={styles.remindersHeaderLeft}>
+                <MaterialIcons name="notifications-active" size={20} color={theme.primary} />
+                <Text style={styles.sectionTitle}>{t('meetup', 'reminders')}</Text>
+              </View>
+              {notifPermission === false ? (
+                <Pressable
+                  style={styles.enableNotifBtn}
+                  onPress={async () => {
+                    const granted = await requestNotificationPermissions();
+                    setNotifPermission(granted);
+                  }}
+                >
+                  <Text style={styles.enableNotifBtnText}>{t('notifications', 'enable')}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+
+            <View style={styles.reminderToggles}>
+              <View style={styles.reminderRow}>
+                <View style={styles.reminderInfo}>
+                  <MaterialIcons name="today" size={18} color={theme.textSecondary} />
+                  <Text style={styles.reminderLabel}>{t('meetup', 'reminderOneDayBefore')}</Text>
+                </View>
+                <Switch
+                  value={reminderOneDayBefore}
+                  onValueChange={(v) => { setReminderOneDayBefore(v); Haptics.selectionAsync(); }}
+                  trackColor={{ false: theme.border, true: theme.primary + '60' }}
+                  thumbColor={reminderOneDayBefore ? theme.primary : theme.textMuted}
+                />
+              </View>
+              <View style={styles.reminderRowBorder} />
+              <View style={styles.reminderRow}>
+                <View style={styles.reminderInfo}>
+                  <MaterialIcons name="schedule" size={18} color={theme.textSecondary} />
+                  <Text style={styles.reminderLabel}>{t('meetup', 'reminderThreeHoursBefore')}</Text>
+                </View>
+                <Switch
+                  value={reminderThreeHoursBefore}
+                  onValueChange={(v) => { setReminderThreeHoursBefore(v); Haptics.selectionAsync(); }}
+                  trackColor={{ false: theme.border, true: theme.primary + '60' }}
+                  thumbColor={reminderThreeHoursBefore ? theme.primary : theme.textMuted}
+                />
+              </View>
+              <View style={styles.reminderRowBorder} />
+              <View style={styles.reminderRow}>
+                <View style={styles.reminderInfo}>
+                  <MaterialIcons name="alarm" size={18} color={theme.textSecondary} />
+                  <Text style={styles.reminderLabel}>{t('meetup', 'reminderOneHourBefore')}</Text>
+                </View>
+                <Switch
+                  value={reminderOneHourBefore}
+                  onValueChange={(v) => { setReminderOneHourBefore(v); Haptics.selectionAsync(); }}
+                  trackColor={{ false: theme.border, true: theme.primary + '60' }}
+                  thumbColor={reminderOneHourBefore ? theme.primary : theme.textMuted}
+                />
+              </View>
+            </View>
+
+            <Pressable
+              style={[styles.saveRemindersBtn, reminderSaving && { opacity: 0.6 }]}
+              onPress={handleSaveReminders}
+              disabled={reminderSaving}
+            >
+              {reminderSaving ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <>
+                  <MaterialIcons name="notifications" size={18} color="#FFF" />
+                  <Text style={styles.saveRemindersBtnText}>
+                    {(reminderOneDayBefore || reminderThreeHoursBefore || reminderOneHourBefore)
+                      ? t('meetup', 'remindersScheduled')
+                      : t('meetup', 'remindersDisabled')}
+                  </Text>
+                </>
+              )}
+            </Pressable>
+          </Animated.View>
+        ) : isPast ? (
+          <View style={styles.remindersPastInfo}>
+            <MaterialIcons name="notifications-off" size={16} color={theme.textMuted} />
+            <Text style={styles.remindersPastText}>{t('meetup', 'meetupPastNoReminder')}</Text>
+          </View>
+        ) : null}
 
         {/* Participants Summary */}
         <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.participantsCard}>
@@ -610,4 +751,19 @@ const styles = StyleSheet.create({
   inviteActions: { paddingHorizontal: 16, paddingVertical: 14, borderTopWidth: 1, borderTopColor: theme.border },
   inviteSendBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 10, backgroundColor: theme.primary, paddingVertical: 16, borderRadius: 16 },
   inviteSendText: { fontSize: 16, fontWeight: '700' as const, color: '#FFF' },
+  // Reminders
+  remindersCard: { backgroundColor: theme.surface, borderRadius: 20, padding: 20, marginBottom: 16, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border },
+  remindersHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, marginBottom: 14 },
+  remindersHeaderLeft: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  enableNotifBtn: { backgroundColor: theme.warning, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
+  enableNotifBtnText: { fontSize: 12, fontWeight: '600' as const, color: '#FFF' },
+  reminderToggles: { backgroundColor: theme.backgroundSecondary, borderRadius: 14, overflow: 'hidden' as const, marginBottom: 14 },
+  reminderRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 14, paddingVertical: 12 },
+  reminderRowBorder: { height: 1, backgroundColor: theme.border, marginHorizontal: 14 },
+  reminderInfo: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, flex: 1 },
+  reminderLabel: { fontSize: 14, fontWeight: '500' as const, color: theme.textPrimary },
+  saveRemindersBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: theme.primary, paddingVertical: 14, borderRadius: 14 },
+  saveRemindersBtnText: { fontSize: 15, fontWeight: '700' as const, color: '#FFF' },
+  remindersPastInfo: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: theme.backgroundSecondary, borderRadius: 12, paddingVertical: 12, marginBottom: 16 },
+  remindersPastText: { fontSize: 12, color: theme.textMuted, fontWeight: '500' as const },
 });

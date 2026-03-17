@@ -2405,6 +2405,17 @@ export const translations = {
     inviteSentSuccessDesc: { fr: 'Le joueur recevra votre invitation dans son application', en: 'The player will receive your invitation in their app' },
     alreadyParticipant: { fr: 'Déjà participant à ce RDV', en: 'Already a participant' },
     createMeetupFirst: { fr: 'Créer un RDV', en: 'Create a meetup' },
+    reminders: { fr: 'Rappels', en: 'Reminders' },
+    reminderOneDayBefore: { fr: 'La veille (9h)', en: 'Day before (9am)' },
+    reminderThreeHoursBefore: { fr: '3 heures avant', en: '3 hours before' },
+    reminderOneHourBefore: { fr: '1 heure avant', en: '1 hour before' },
+    remindersScheduled: { fr: 'Rappels programmés', en: 'Reminders scheduled' },
+    remindersScheduledCount: { fr: 'rappel(s) programmé(s)', en: 'reminder(s) scheduled' },
+    noRemindersScheduled: { fr: 'Aucun rappel programmé', en: 'No reminders scheduled' },
+    remindersDisabled: { fr: 'Rappels désactivés', en: 'Reminders disabled' },
+    reminderErrorScheduling: { fr: 'Erreur lors de la programmation des rappels', en: 'Error scheduling reminders' },
+    meetupPastNoReminder: { fr: 'Les rappels ne sont disponibles que pour les RDV à venir', en: 'Reminders are only available for upcoming meetups' },
+    enableNotifications: { fr: 'Activez les notifications dans les réglages', en: 'Enable notifications in settings' },
   },
 
   // ============================================
