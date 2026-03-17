@@ -7,6 +7,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  Modal,
+  Switch,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -19,10 +21,16 @@ import { useAlert } from '@/template';
 import {
   getPendingInvitations,
   respondToMeetup,
-  scheduleMeetupReminder,
+  scheduleMeetupNotifications,
   cancelMeetupReminder,
+  cancelAllMeetupReminders,
   PendingInvitation,
+  MeetupReminderSettings,
 } from '@/services/meetupService';
+import {
+  requestNotificationPermissions,
+  areNotificationsEnabled,
+} from '@/services/notificationService';
 
 export default function InvitationsScreen() {
   const insets = useSafeAreaInsets();
@@ -33,6 +41,14 @@ export default function InvitationsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [respondingId, setRespondingId] = useState<string | null>(null);
+
+  // Reminder modal state
+  const [showReminderModal, setShowReminderModal] = useState(false);
+  const [reminderInvitation, setReminderInvitation] = useState<PendingInvitation | null>(null);
+  const [reminderOneDayBefore, setReminderOneDayBefore] = useState(false);
+  const [reminderThreeHoursBefore, setReminderThreeHoursBefore] = useState(false);
+  const [reminderOneHourBefore, setReminderOneHourBefore] = useState(true);
+  const [reminderSaving, setReminderSaving] = useState(false);
 
   const loadInvitations = useCallback(async () => {
     const { invitations: data } = await getPendingInvitations();
@@ -62,18 +78,65 @@ export default function InvitationsScreen() {
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    if (status === 'accepted' && inv.terrainName) {
-      await scheduleMeetupReminder(
-        { id: inv.meetupId, date: inv.date, title: inv.title } as any,
-        inv.terrainName
-      );
+    if (status === 'accepted') {
+      // Show reminder configuration modal
+      setReminderInvitation(inv);
+      setReminderOneDayBefore(false);
+      setReminderThreeHoursBefore(false);
+      setReminderOneHourBefore(true);
+      setShowReminderModal(true);
+      // Remove from list immediately
+      setInvitations(prev => prev.filter(i => i.meetupId !== inv.meetupId));
     } else {
-      await cancelMeetupReminder(inv.meetupId);
+      await cancelAllMeetupReminders(inv.meetupId);
+      setInvitations(prev => prev.filter(i => i.meetupId !== inv.meetupId));
     }
-
-    // Remove from list
-    setInvitations(prev => prev.filter(i => i.meetupId !== inv.meetupId));
   }, [t, showAlert]);
+
+  const handleSaveReminders = useCallback(async () => {
+    if (!reminderInvitation) return;
+    setReminderSaving(true);
+    try {
+      let hasPermission = await areNotificationsEnabled();
+      if (!hasPermission) {
+        hasPermission = await requestNotificationPermissions();
+      }
+      if (!hasPermission) {
+        showAlert(t('meetup', 'enableNotifications'));
+        setReminderSaving(false);
+        return;
+      }
+      const settings: MeetupReminderSettings = {
+        oneDayBefore: reminderOneDayBefore,
+        threeHoursBefore: reminderThreeHoursBefore,
+        oneHourBefore: reminderOneHourBefore,
+      };
+      const anyEnabled = settings.oneDayBefore || settings.threeHoursBefore || settings.oneHourBefore;
+      if (anyEnabled) {
+        const ids = await scheduleMeetupNotifications(
+          { id: reminderInvitation.meetupId, date: reminderInvitation.date, title: reminderInvitation.title } as any,
+          reminderInvitation.terrainName || '',
+          settings
+        );
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        showAlert(t('meetup', 'remindersScheduled'), `${ids.length} ${t('meetup', 'remindersScheduledCount')}`);
+      } else {
+        await cancelAllMeetupReminders(reminderInvitation.meetupId);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch {
+      showAlert(t('common', 'error'), t('meetup', 'reminderErrorScheduling'));
+    } finally {
+      setReminderSaving(false);
+      setShowReminderModal(false);
+      setReminderInvitation(null);
+    }
+  }, [reminderInvitation, reminderOneDayBefore, reminderThreeHoursBefore, reminderOneHourBefore, t, showAlert]);
+
+  const handleSkipReminders = useCallback(() => {
+    setShowReminderModal(false);
+    setReminderInvitation(null);
+  }, []);
 
   if (loading) {
     return (
@@ -231,6 +294,89 @@ export default function InvitationsScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Reminder Configuration Modal */}
+      <Modal
+        visible={showReminderModal}
+        animationType="slide"
+        transparent
+        onRequestClose={handleSkipReminders}
+      >
+        <View style={styles.reminderOverlay}>
+          <Animated.View entering={FadeInDown.duration(300)} style={styles.reminderModal}>
+            <View style={styles.reminderHeader}>
+              <View style={styles.reminderHeaderIcon}>
+                <MaterialIcons name="notifications-active" size={24} color={theme.primary} />
+              </View>
+              <Text style={styles.reminderTitle}>{t('meetup', 'reminders')}</Text>
+              <Text style={styles.reminderSubtitle}>
+                {reminderInvitation?.title || ''}
+              </Text>
+            </View>
+
+            <View style={styles.reminderToggles}>
+              <View style={styles.reminderRow}>
+                <View style={styles.reminderInfo}>
+                  <MaterialIcons name="today" size={18} color={theme.textSecondary} />
+                  <Text style={styles.reminderLabel}>{t('meetup', 'reminderOneDayBefore')}</Text>
+                </View>
+                <Switch
+                  value={reminderOneDayBefore}
+                  onValueChange={(v) => { setReminderOneDayBefore(v); Haptics.selectionAsync(); }}
+                  trackColor={{ false: theme.border, true: theme.primary + '60' }}
+                  thumbColor={reminderOneDayBefore ? theme.primary : theme.textMuted}
+                />
+              </View>
+              <View style={styles.reminderRowBorder} />
+              <View style={styles.reminderRow}>
+                <View style={styles.reminderInfo}>
+                  <MaterialIcons name="schedule" size={18} color={theme.textSecondary} />
+                  <Text style={styles.reminderLabel}>{t('meetup', 'reminderThreeHoursBefore')}</Text>
+                </View>
+                <Switch
+                  value={reminderThreeHoursBefore}
+                  onValueChange={(v) => { setReminderThreeHoursBefore(v); Haptics.selectionAsync(); }}
+                  trackColor={{ false: theme.border, true: theme.primary + '60' }}
+                  thumbColor={reminderThreeHoursBefore ? theme.primary : theme.textMuted}
+                />
+              </View>
+              <View style={styles.reminderRowBorder} />
+              <View style={styles.reminderRow}>
+                <View style={styles.reminderInfo}>
+                  <MaterialIcons name="alarm" size={18} color={theme.textSecondary} />
+                  <Text style={styles.reminderLabel}>{t('meetup', 'reminderOneHourBefore')}</Text>
+                </View>
+                <Switch
+                  value={reminderOneHourBefore}
+                  onValueChange={(v) => { setReminderOneHourBefore(v); Haptics.selectionAsync(); }}
+                  trackColor={{ false: theme.border, true: theme.primary + '60' }}
+                  thumbColor={reminderOneHourBefore ? theme.primary : theme.textMuted}
+                />
+              </View>
+            </View>
+
+            <View style={styles.reminderActions}>
+              <Pressable style={styles.reminderSkipBtn} onPress={handleSkipReminders}>
+                <Text style={styles.reminderSkipText}>{t('common', 'close')}</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.reminderSaveBtn, reminderSaving && { opacity: 0.6 }]}
+                onPress={handleSaveReminders}
+                disabled={reminderSaving}
+              >
+                {reminderSaving ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <MaterialIcons name="notifications" size={18} color="#FFF" />
+                    <Text style={styles.reminderSaveText}>{t('common', 'save')}</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          </Animated.View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -383,4 +529,21 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   emptyBtnText: { fontSize: 15, fontWeight: '600', color: '#FFF' },
+  // Reminder modal
+  reminderOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 20 },
+  reminderModal: { backgroundColor: theme.surface, borderRadius: 24, padding: 24, ...theme.shadows.cardElevated },
+  reminderHeader: { alignItems: 'center', marginBottom: 20 },
+  reminderHeaderIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  reminderTitle: { fontSize: 18, fontWeight: '700', color: theme.textPrimary, marginBottom: 4 },
+  reminderSubtitle: { fontSize: 14, color: theme.textSecondary, textAlign: 'center' },
+  reminderToggles: { backgroundColor: theme.backgroundSecondary, borderRadius: 14, overflow: 'hidden' as const, marginBottom: 20 },
+  reminderRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 14, paddingVertical: 12 },
+  reminderRowBorder: { height: 1, backgroundColor: theme.border, marginHorizontal: 14 },
+  reminderInfo: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, flex: 1 },
+  reminderLabel: { fontSize: 14, fontWeight: '500' as const, color: theme.textPrimary },
+  reminderActions: { flexDirection: 'row' as const, gap: 12 },
+  reminderSkipBtn: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, paddingVertical: 14, borderRadius: 14, backgroundColor: theme.backgroundSecondary },
+  reminderSkipText: { fontSize: 15, fontWeight: '600' as const, color: theme.textSecondary },
+  reminderSaveBtn: { flex: 2, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, paddingVertical: 14, borderRadius: 14, backgroundColor: theme.primary },
+  reminderSaveText: { fontSize: 15, fontWeight: '700' as const, color: '#FFF' },
 });
