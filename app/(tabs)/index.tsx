@@ -128,14 +128,16 @@ export default function HomeScreen() {
     matches.slice().sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 3).forEach((m: any) => {
       const isWin = m.winner === 'A';
       const isDraw = m.winner === 'draw';
-      const scoreA = m.team_a?.score ?? 0;
-      const scoreB = m.team_b?.score ?? 0;
+      const scoreA = m.teamA?.score ?? 0;
+      const scoreB = m.teamB?.score ?? 0;
+      const teamANames = m.teamA?.playerNames?.join(', ') || t('match', 'teamA');
+      const teamBNames = m.teamB?.playerNames?.join(', ') || t('match', 'teamB');
       items.push({
         type: 'match',
         id: m.id,
         date: m.date,
-        title: `${m.team_a?.players?.map((p: any) => p.name).join(', ') || t('match', 'teamA')}`,
-        subtitle: `vs ${m.team_b?.players?.map((p: any) => p.name).join(', ') || t('match', 'teamB')}`,
+        title: teamANames,
+        subtitle: `vs ${teamBNames}`,
         result: isDraw ? 'draw' : isWin ? 'win' : 'loss',
         score: `${scoreA} - ${scoreB}`,
         icon: 'sports',
@@ -406,7 +408,7 @@ export default function HomeScreen() {
                   <Pressable
                     key={item.id}
                     style={({ pressed }) => [styles.hcRow, !isLast && styles.hcRowBorder, pressed && { opacity: 0.75, backgroundColor: theme.backgroundSecondary }]}
-                    onPress={() => item.type === 'match' ? router.push(`/match/${item.id}`) : router.push('/history')}
+                    onPress={() => item.type === 'match' ? router.push(`/match/${item.id}`) : router.push({ pathname: '/history', params: { openChallengeId: item.id } })}
                   >
                     <View style={[styles.hcDot, { backgroundColor: resultColor(item.result) }]} />
                     <View style={[styles.hcTypeIcon, { backgroundColor: (item.type === 'match' ? theme.primary : theme.accent) + '12' }]}>

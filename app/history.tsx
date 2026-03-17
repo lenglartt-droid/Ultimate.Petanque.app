@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeInDown, FadeIn, useAnimatedStyle, withTiming, useSharedValue } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
@@ -467,6 +467,7 @@ export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
   const { matches, challenges, deleteChallenge, updateChallenge, deleteMatch, refreshData, boulesSets, terrains } = useApp();
   const { t, language } = useLanguage();
+  const params = useLocalSearchParams<{ openChallengeId?: string }>();
   
   const [contentFilter, setContentFilter] = useState<ContentFilter>('all');
   const [trainingSubFilter, setTrainingSubFilter] = useState<TrainingSubFilter>('all');
@@ -484,6 +485,7 @@ export default function HistoryScreen() {
   const [savingChallenge, setSavingChallenge] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showMatchShare, setShowMatchShare] = useState(false);
+  const [initialOpenHandled, setInitialOpenHandled] = useState(false);
 
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
   useEffect(() => {
@@ -491,6 +493,23 @@ export default function HistoryScreen() {
     return () => sub?.remove();
   }, []);
   const isTablet = screenWidth >= 600;
+
+  // Auto-open challenge from deep link / home page navigation
+  useEffect(() => {
+    if (params.openChallengeId && !initialOpenHandled && challenges.length > 0) {
+      const challenge = challenges.find(c => c.id === params.openChallengeId);
+      if (challenge) {
+        setEditingChallenge(challenge);
+        setIsEditingChallengeFields(false);
+        setEditNotes(challenge.notes || '');
+        setEditDuration(challenge.duration ? String(challenge.duration) : '');
+        setEditSuccessCount(challenge.successCount !== undefined ? String(challenge.successCount) : '');
+        setEditCarreauCount(challenge.carreauCount !== undefined ? String(challenge.carreauCount) : '');
+        setEditTotalPoints(challenge.totalPoints !== undefined ? String(challenge.totalPoints) : '');
+      }
+      setInitialOpenHandled(true);
+    }
+  }, [params.openChallengeId, challenges, initialOpenHandled]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
