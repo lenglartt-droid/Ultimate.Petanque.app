@@ -19,6 +19,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import theme from '@/constants/theme';
 import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
@@ -616,6 +617,14 @@ export default function MapScreen() {
     return MARKER_CONFIG[itemType as keyof typeof MARKER_CONFIG]?.singular || itemType;
   }, [MARKER_CONFIG]);
 
+  // Responsive
+  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
+  useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }) => setScreenWidth(window.width));
+    return () => sub?.remove();
+  }, []);
+  const isTablet = screenWidth >= 600;
+
   const renderItem = useCallback(({ item }: { item: any }) => (
     <ListItem
       item={item}
@@ -745,9 +754,61 @@ export default function MapScreen() {
     <View style={styles.container}>
       {Platform.OS === 'web' ? renderList() : renderMap()}
 
+      {/* ========== GRADIENT HERO HEADER ========== */}
+      <View style={[styles.heroHeader, { paddingTop: insets.top }]}>
+        <LinearGradient
+          colors={['#1E3A8A', '#2563EB', '#3B82F6']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.heroGradient}
+        >
+          <View style={styles.heroTop}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.heroTitle}>{t('map', 'map')}</Text>
+              <Text style={styles.heroSubtitle}>
+                {counts.total} {t('map', 'results')} {counts.publicTotal > 0 ? `\u2022 ${counts.publicTotal} ${t('map', 'publicLabel')}` : ''}
+              </Text>
+            </View>
+            <View style={styles.heroActions}>
+              <Pressable
+                style={styles.heroActionBtn}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  loadManageData();
+                  setShowManageModal(true);
+                }}
+              >
+                <MaterialIcons name="public" size={18} color="#FFF" />
+              </Pressable>
+              <Pressable
+                style={[styles.heroActionBtn, showSearch && styles.heroActionBtnActive]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setShowSearch(!showSearch);
+                  if (showSearch) setSearch('');
+                }}
+              >
+                <MaterialIcons name={showSearch ? 'close' : 'search'} size={20} color="#FFF" />
+              </Pressable>
+            </View>
+          </View>
+          <View style={styles.heroStatsRow}>
+            {(Object.keys(MARKER_CONFIG) as (keyof typeof MARKER_CONFIG)[]).map((k, i) => (
+              <React.Fragment key={k}>
+                {i > 0 ? <View style={styles.heroStatDivider} /> : null}
+                <Pressable style={styles.heroStatItem} onPress={() => handleFilterPress(k)}>
+                  <Text style={styles.heroStatValue}>{counts[k]}</Text>
+                  <Text style={styles.heroStatLabel}>{MARKER_CONFIG[k].label}</Text>
+                </Pressable>
+              </React.Fragment>
+            ))}
+          </View>
+        </LinearGradient>
+      </View>
+
       {/* Legend */}
       {Platform.OS !== 'web' ? (
-        <View style={[styles.legendContainer, { top: insets.top + 12 }]}>
+        <View style={[styles.legendContainer, { top: insets.top + 130 }]}>
           <Pressable
             style={styles.legendToggle}
             onPress={() => { Haptics.selectionAsync(); setShowLegend(!showLegend); }}
@@ -826,7 +887,7 @@ export default function MapScreen() {
           </Animated.View>
         ) : null}
 
-        {/* Category filters + access checkboxes */}
+        {/* Category filters */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
           <Pressable style={[styles.chip, filter === 'all' && styles.chipActive]} onPress={() => handleFilterPress('all')}>
             <MaterialIcons name="layers" size={14} color={filter === 'all' ? '#FFF' : theme.textSecondary} />
@@ -838,49 +899,7 @@ export default function MapScreen() {
               <Text style={[styles.chipText, filter === k && styles.chipTextActive]}>{MARKER_CONFIG[k].label}</Text>
             </Pressable>
           ))}
-
         </ScrollView>
-
-        {/* Action bar with inline stats */}
-        <View style={styles.actionBar}>
-          <Text style={styles.cardTitle}>{t('map', 'map')}</Text>
-          <View style={styles.inlineStats}>
-            {(Object.keys(MARKER_CONFIG) as (keyof typeof MARKER_CONFIG)[]).map(k => (
-              <Pressable key={k} style={styles.miniStat} onPress={() => handleFilterPress(k)}>
-                <MaterialIcons name={MARKER_CONFIG[k].icon as any} size={12} color={MARKER_CONFIG[k].color} />
-                <Text style={[styles.miniStatValue, { color: MARKER_CONFIG[k].color }]}>{counts[k]}/{totalCounts[k]}</Text>
-              </Pressable>
-            ))}
-            {counts.publicTotal > 0 ? (
-              <View style={styles.miniStat}>
-                <MaterialIcons name="public" size={12} color={theme.success} />
-                <Text style={[styles.miniStatValue, { color: theme.success }]}>{counts.publicTotal}</Text>
-              </View>
-            ) : null}
-          </View>
-          <View style={styles.cardActions}>
-            <Pressable
-              style={styles.manageBtn}
-              onPress={() => {
-                Haptics.selectionAsync();
-                loadManageData();
-                setShowManageModal(true);
-              }}
-            >
-              <MaterialIcons name="public" size={18} color={theme.success} />
-            </Pressable>
-            <Pressable
-              style={[styles.searchBtn, showSearch && styles.searchBtnActive]}
-              onPress={() => {
-                Haptics.selectionAsync();
-                setShowSearch(!showSearch);
-                if (showSearch) setSearch('');
-              }}
-            >
-              <MaterialIcons name={showSearch ? 'close' : 'search'} size={20} color={showSearch ? '#FFF' : theme.textSecondary} />
-            </Pressable>
-          </View>
-        </View>
       </View>
 
       {/* Selected Card */}
@@ -1144,34 +1163,27 @@ export default function MapScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.backgroundSecondary },
+  // ========== GRADIENT HERO HEADER ==========
+  heroHeader: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 },
+  heroGradient: { paddingTop: 16, paddingBottom: 24, paddingHorizontal: 20, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
+  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  heroTitle: { fontSize: 24, fontWeight: '800', color: '#FFF' },
+  heroSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
+  heroActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  heroActionBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center' as const, justifyContent: 'center' as const },
+  heroActionBtnActive: { backgroundColor: 'rgba(255,255,255,0.35)' },
+  heroStatsRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 8 },
+  heroStatItem: { flex: 1, alignItems: 'center' as const },
+  heroStatValue: { fontSize: 18, fontWeight: '800', color: '#FFF' },
+  heroStatLabel: { fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.65)', marginTop: 2, textTransform: 'uppercase' as const },
+  heroStatDivider: { width: 1, height: 24, backgroundColor: 'rgba(255,255,255,0.15)' },
   bottomPanel: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     backgroundColor: 'rgba(255,255,255,0.97)',
     borderTopLeftRadius: 20, borderTopRightRadius: 20,
     paddingBottom: Platform.select({ ios: 8, default: 8 }), ...theme.shadows.cardElevated,
   },
-  actionBar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 10,
-  },
-  cardTitle: { fontSize: 20, fontWeight: '800', color: theme.textPrimary },
-  inlineStats: { flexDirection: 'row', gap: 4, flex: 1, justifyContent: 'center', marginHorizontal: 6, flexWrap: 'wrap' },
-  miniStat: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-    backgroundColor: theme.backgroundSecondary, paddingHorizontal: 6, paddingVertical: 3,
-    borderRadius: theme.borderRadius.full,
-  },
-  miniStatValue: { fontSize: 11, fontWeight: '700' },
-  cardActions: { flexDirection: 'row', gap: 6 },
-  manageBtn: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: theme.backgroundSecondary,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  searchBtn: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: theme.backgroundSecondary,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  searchBtnActive: { backgroundColor: theme.primary },
+
   searchRowOuter: {
     paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4,
   },

@@ -472,6 +472,9 @@ export default function HomeScreen() {
           </View>
         </Animated.View>
 
+        {/* ========== SPACER BEFORE HISTORY ========== */}
+        <View style={{ height: 400 }} />
+
         {/* ========== COMPACT HISTORY ========== */}
         {recentResults.length > 0 ? (
           <Animated.View entering={FadeIn.duration(400).delay(200)} style={[styles.section, isTablet && styles.sectionTablet, { zIndex: 0 }]}>
@@ -778,8 +781,8 @@ const styles = StyleSheet.create({
   seeAllBtn: { fontSize: 13, fontWeight: '600', color: theme.primary },
 
   // ========== HERO GRADIENT ==========
-  heroGradient: { paddingTop: 20, paddingBottom: 28, paddingHorizontal: 20, borderBottomLeftRadius: 28, borderBottomRightRadius: 28, marginBottom: 24 },
-  heroGradientTablet: { paddingTop: 32, paddingBottom: 36, paddingHorizontal: 28 },
+  heroGradient: { paddingTop: 16, paddingBottom: 24, paddingHorizontal: 20, borderBottomLeftRadius: 28, borderBottomRightRadius: 28, marginBottom: 24 },
+  heroGradientTablet: { paddingTop: 24, paddingBottom: 30, paddingHorizontal: 28 },
   heroTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
   heroGreeting: { fontSize: 14, fontWeight: '500', color: 'rgba(255,255,255,0.75)' },
   heroName: { fontSize: 24, fontWeight: '800', color: '#FFF', marginTop: 2 },
