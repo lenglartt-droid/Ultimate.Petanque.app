@@ -2308,6 +2308,8 @@ export const translations = {
     retry: { fr: 'Réessayer', en: 'Retry' },
     makePublicToAppear: { fr: 'Rendez votre profil public pour apparaître dans le classement', en: 'Make your profile public to appear in the leaderboard' },
     minMatchesNote: { fr: 'Minimum 1 match joué requis', en: 'Minimum 1 match played required' },
+    searchPlaceholder: { fr: 'Rechercher un joueur...', en: 'Search a player...' },
+    noPlayersMatchingFilters: { fr: 'Aucun joueur ne correspond aux filtres', en: 'No players match the current filters' },
   },
 
   statsExtra: {

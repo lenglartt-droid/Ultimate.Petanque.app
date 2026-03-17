@@ -197,6 +197,15 @@ export default function CommunityLeaderboard() {
                 <Text style={s.noteText}>{t('leaderboard', 'makePublicToAppear')}</Text>
               </View>
             ) : null}
+
+            {/* See full leaderboard link */}
+            <Pressable
+              style={s.seeFullBtn}
+              onPress={() => { Haptics.selectionAsync(); router.push('/leaderboard' as any); }}
+            >
+              <Text style={s.seeFullBtnText}>{t('leaderboard', 'seeFullLeaderboard')}</Text>
+              <MaterialIcons name="arrow-forward" size={16} color="#D97706" />
+            </Pressable>
           </>
         )}
       </View>
@@ -245,4 +254,6 @@ const s = StyleSheet.create({
   separatorDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: theme.textMuted },
   note: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border },
   noteText: { flex: 1, fontSize: 11, color: theme.textMuted, lineHeight: 16 },
+  seeFullBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: theme.border },
+  seeFullBtnText: { fontSize: 14, fontWeight: '700', color: '#D97706' },
 });
