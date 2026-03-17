@@ -136,11 +136,6 @@ interface AppContextType {
   // Retry failed operations
   retryFailedOps: (opIds?: string[]) => Promise<void>;
   
-  // Boules Sets CRUD
-  addBoulesSet: (set: Omit<BoulesSet, 'id'>) => Promise<void>;
-  updateBoulesSet: (id: string, updates: Partial<BoulesSet>) => Promise<void>;
-  setPrimaryBoulesSet: (id: string) => Promise<void>;
-
   // Refresh
   refreshData: () => Promise<void>;
 }
@@ -2178,10 +2173,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         retryFailedOps,
         refreshData,
         selfPlayer,
-        addBoulesSet,
-        updateBoulesSet,
-        deleteBoulesSet,
-        setPrimaryBoulesSet,
         setItemPublic,
         isReplayingQueue,
         replayProgress,
