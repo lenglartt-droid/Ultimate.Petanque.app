@@ -467,7 +467,7 @@ export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
   const { matches, challenges, deleteChallenge, updateChallenge, deleteMatch, refreshData, boulesSets, terrains } = useApp();
   const { t, language } = useLanguage();
-  const params = useLocalSearchParams<{ openChallengeId?: string }>();
+  const params = useLocalSearchParams<{ openChallengeId?: string; openMatchId?: string }>();
   
   const [contentFilter, setContentFilter] = useState<ContentFilter>('all');
   const [trainingSubFilter, setTrainingSubFilter] = useState<TrainingSubFilter>('all');
@@ -494,9 +494,10 @@ export default function HistoryScreen() {
   }, []);
   const isTablet = screenWidth >= 600;
 
-  // Auto-open challenge from deep link / home page navigation
+  // Auto-open challenge or match from deep link / home page navigation
   useEffect(() => {
-    if (params.openChallengeId && !initialOpenHandled && challenges.length > 0) {
+    if (initialOpenHandled) return;
+    if (params.openChallengeId && challenges.length > 0) {
       const challenge = challenges.find(c => c.id === params.openChallengeId);
       if (challenge) {
         setEditingChallenge(challenge);
@@ -508,8 +509,14 @@ export default function HistoryScreen() {
         setEditTotalPoints(challenge.totalPoints !== undefined ? String(challenge.totalPoints) : '');
       }
       setInitialOpenHandled(true);
+    } else if (params.openMatchId && matches.length > 0) {
+      const match = matches.find(m => m.id === params.openMatchId);
+      if (match) {
+        setViewingMatch(match);
+      }
+      setInitialOpenHandled(true);
     }
-  }, [params.openChallengeId, challenges, initialOpenHandled]);
+  }, [params.openChallengeId, params.openMatchId, challenges, matches, initialOpenHandled]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);

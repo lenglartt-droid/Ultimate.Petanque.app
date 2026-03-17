@@ -145,7 +145,7 @@ export default function HomeScreen() {
     });
 
     challenges.slice().sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 3).forEach((c: any) => {
-      const rate = c.total_shots > 0 ? Math.round((c.success_count / c.total_shots) * 100) : 0;
+      const rate = c.totalShots > 0 ? Math.round((c.successCount / c.totalShots) * 100) : 0;
       const challengeName = c.type === '10_tirs' ? t('challengeNames', '10_tirs') : c.type === '10_tirs_sautee' ? t('challengeNames', '10_tirs_sautee') : t('challengeNames', 'precision');
       items.push({
         type: 'challenge',
@@ -408,7 +408,7 @@ export default function HomeScreen() {
                   <Pressable
                     key={item.id}
                     style={({ pressed }) => [styles.hcRow, !isLast && styles.hcRowBorder, pressed && { opacity: 0.75, backgroundColor: theme.backgroundSecondary }]}
-                    onPress={() => item.type === 'match' ? router.push(`/match/${item.id}`) : router.push({ pathname: '/history', params: { openChallengeId: item.id } })}
+                    onPress={() => item.type === 'match' ? router.push({ pathname: '/history', params: { openMatchId: item.id } }) : router.push({ pathname: '/history', params: { openChallengeId: item.id } })}
                   >
                     <View style={[styles.hcDot, { backgroundColor: resultColor(item.result) }]} />
                     <View style={[styles.hcTypeIcon, { backgroundColor: (item.type === 'match' ? theme.primary : theme.accent) + '12' }]}>

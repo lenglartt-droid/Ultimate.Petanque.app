@@ -479,9 +479,7 @@ export default function MeetupDetailScreen() {
                 <>
                   <MaterialIcons name="notifications" size={18} color="#FFF" />
                   <Text style={styles.saveRemindersBtnText}>
-                    {(reminderOneDayBefore || reminderThreeHoursBefore || reminderOneHourBefore)
-                      ? t('meetup', 'remindersScheduled')
-                      : t('meetup', 'remindersDisabled')}
+                    {t('common', 'save')}
                   </Text>
                 </>
               )}
