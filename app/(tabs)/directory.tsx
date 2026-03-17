@@ -915,7 +915,7 @@ export default function DirectoryScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.title}>{t('directory', 'directory')}</Text>
               <Text style={styles.headerSubtitleText}>
-                {counts.players + counts.clubs + counts.terrains + counts.tournaments} {t('directory', 'items')}
+                {t('directory', 'directory')}
               </Text>
             </View>
           </View>
@@ -1057,15 +1057,15 @@ export default function DirectoryScreen() {
         </Animated.View>
       )}
 
-      {/* Results Count */}
-      <View style={styles.resultsHeader}>
-        <Text style={styles.resultsCount}>
-          {dataCount} {dataCount !== 1 ? getTabPlural(activeTab) : getTabSingular(activeTab)}
-        </Text>
-        {searchQuery ? (
+      {/* Results Count - only when searching */}
+      {searchQuery ? (
+        <View style={styles.resultsHeader}>
+          <Text style={styles.resultsCount}>
+            {dataCount} {dataCount !== 1 ? getTabPlural(activeTab) : getTabSingular(activeTab)}
+          </Text>
           <Text style={styles.searchingFor}>{t('directory', 'forSearch')} "{searchQuery}"</Text>
-        ) : null}
-      </View>
+        </View>
+      ) : null}
 
       {/* Duplicate Detection Banner */}
       {duplicates.length > 0 && showDuplicateBanner ? (
