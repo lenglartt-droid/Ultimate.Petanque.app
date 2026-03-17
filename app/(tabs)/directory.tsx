@@ -1504,7 +1504,7 @@ export default function DirectoryScreen() {
         </SafeAreaView>
       </Modal>
 
-      {/* Merge Picker Modal */
+      {/* Merge Picker Modal */}
       {mergeTarget ? (
         <MergePickerModal
           visible={!!mergeTarget}
