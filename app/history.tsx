@@ -550,6 +550,9 @@ export default function HistoryScreen() {
   
   const [contentFilter, setContentFilter] = useState<ContentFilter>('all');
   const [trainingSubFilter, setTrainingSubFilter] = useState<TrainingSubFilter>('all');
+  const [meetupStatusFilter, setMeetupStatusFilter] = useState<'all' | 'active' | 'past'>('all');
+  const [meetupRoleFilter, setMeetupRoleFilter] = useState<'all' | 'creator' | 'invited'>('all');
+  const [meetupTerrainFilter, setMeetupTerrainFilter] = useState<string>('all');
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodOption>('all');
   const [showPeriodModal, setShowPeriodModal] = useState(false);
   const [viewingMatch, setViewingMatch] = useState<Match | null>(null);
@@ -807,17 +810,58 @@ export default function HistoryScreen() {
     };
   }, [matches, challenges, contentFilter, trainingSubFilter, selectedPeriod, groupMatchesBySeries, language, allMeetups]);
 
-  // Meetup list data (separate because meetups come from API, not local state)
-  const meetupListData = useMemo((): HistoryItem[] => {
-    if (contentFilter !== 'meetups') return [];
+  // Meetup sub-filter stats
+  const meetupSubStats = useMemo(() => {
     const periodDays = PERIOD_DAYS[selectedPeriod] || 0;
-    const filtered = periodDays > 0
+    const periodFiltered = periodDays > 0
       ? allMeetups.filter(m => {
           const cutoff = new Date();
           cutoff.setDate(cutoff.getDate() - periodDays);
           return new Date(m.date) >= cutoff;
         })
       : allMeetups;
+    const now = new Date();
+    return {
+      all: periodFiltered.length,
+      activeCount: periodFiltered.filter(m => new Date(m.date) >= now).length,
+      pastCount: periodFiltered.filter(m => new Date(m.date) < now).length,
+      creatorCount: periodFiltered.filter(m => m._source === 'created').length,
+      invitedCount: periodFiltered.filter(m => m._source === 'invited').length,
+      terrains: [...new Set(periodFiltered.map(m => m.terrain_name).filter(Boolean))] as string[],
+    };
+  }, [allMeetups, selectedPeriod]);
+
+  // Meetup list data (separate because meetups come from API, not local state)
+  const meetupListData = useMemo((): HistoryItem[] => {
+    if (contentFilter !== 'meetups') return [];
+    const periodDays = PERIOD_DAYS[selectedPeriod] || 0;
+    let filtered = periodDays > 0
+      ? allMeetups.filter(m => {
+          const cutoff = new Date();
+          cutoff.setDate(cutoff.getDate() - periodDays);
+          return new Date(m.date) >= cutoff;
+        })
+      : [...allMeetups];
+
+    // Apply status filter
+    const now = new Date();
+    if (meetupStatusFilter === 'active') {
+      filtered = filtered.filter(m => new Date(m.date) >= now);
+    } else if (meetupStatusFilter === 'past') {
+      filtered = filtered.filter(m => new Date(m.date) < now);
+    }
+
+    // Apply role filter
+    if (meetupRoleFilter === 'creator') {
+      filtered = filtered.filter(m => m._source === 'created');
+    } else if (meetupRoleFilter === 'invited') {
+      filtered = filtered.filter(m => m._source === 'invited');
+    }
+
+    // Apply terrain filter
+    if (meetupTerrainFilter !== 'all') {
+      filtered = filtered.filter(m => m.terrain_name === meetupTerrainFilter);
+    }
 
     const result: HistoryItem[] = [];
     let currentDateKey = '';
@@ -830,7 +874,7 @@ export default function HistoryScreen() {
       result.push({ type: 'meetup', data: m, date: m.date });
     });
     return result;
-  }, [contentFilter, allMeetups, selectedPeriod, language]);
+  }, [contentFilter, allMeetups, selectedPeriod, language, meetupStatusFilter, meetupRoleFilter, meetupTerrainFilter]);
 
   // Final combined list
   const finalListData = contentFilter === 'meetups' ? meetupListData : listData;
@@ -953,6 +997,11 @@ export default function HistoryScreen() {
     setContentFilter(filter);
     if (filter !== 'training') {
       setTrainingSubFilter('all');
+    }
+    if (filter !== 'meetups') {
+      setMeetupStatusFilter('all');
+      setMeetupRoleFilter('all');
+      setMeetupTerrainFilter('all');
     }
   }, []);
 
@@ -1111,6 +1160,80 @@ export default function HistoryScreen() {
               </Pressable>
             );
           })}
+        </Animated.View>
+      )}
+
+      {/* Meetup Sub-Filters */}
+      {contentFilter === 'meetups' && (
+        <Animated.View entering={FadeInDown.duration(200)} style={styles.meetupSubFiltersContainer}>
+          {/* Status row */}
+          <View style={styles.meetupSubFilterRow}>
+            <Text style={styles.meetupSubFilterLabel}>{t('history', 'meetupFilterStatus')}</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.meetupSubFilterChips}>
+              {([{ id: 'all', labelKey: 'all', icon: 'layers' as const, count: meetupSubStats.all }, { id: 'active', labelKey: 'meetupActive', icon: 'event-available' as const, count: meetupSubStats.activeCount }, { id: 'past', labelKey: 'meetupPast', icon: 'history' as const, count: meetupSubStats.pastCount }] as const).map((f) => {
+                const isActive = meetupStatusFilter === f.id;
+                return (
+                  <Pressable
+                    key={f.id}
+                    style={[styles.subFilterChip, isActive && styles.meetupSubFilterChipActive]}
+                    onPress={() => { Haptics.selectionAsync(); setMeetupStatusFilter(f.id); }}
+                  >
+                    <MaterialIcons name={f.icon} size={12} color={isActive ? theme.accent : theme.textMuted} />
+                    <Text style={[styles.subFilterChipText, isActive && styles.meetupSubFilterChipTextActive]}>{t('history', f.labelKey)}</Text>
+                    <Text style={[styles.subFilterCount, isActive && styles.meetupSubFilterCountActive]}>{f.count}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+          {/* Role row */}
+          <View style={styles.meetupSubFilterRow}>
+            <Text style={styles.meetupSubFilterLabel}>{t('history', 'meetupFilterRole')}</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.meetupSubFilterChips}>
+              {([{ id: 'all', labelKey: 'all', icon: 'layers' as const, count: meetupSubStats.all }, { id: 'creator', labelKey: 'meetupCreator', icon: 'person' as const, count: meetupSubStats.creatorCount }, { id: 'invited', labelKey: 'meetupInvited', icon: 'mail' as const, count: meetupSubStats.invitedCount }] as const).map((f) => {
+                const isActive = meetupRoleFilter === f.id;
+                return (
+                  <Pressable
+                    key={f.id}
+                    style={[styles.subFilterChip, isActive && styles.meetupSubFilterChipActive]}
+                    onPress={() => { Haptics.selectionAsync(); setMeetupRoleFilter(f.id); }}
+                  >
+                    <MaterialIcons name={f.icon} size={12} color={isActive ? theme.accent : theme.textMuted} />
+                    <Text style={[styles.subFilterChipText, isActive && styles.meetupSubFilterChipTextActive]}>{t('history', f.labelKey)}</Text>
+                    <Text style={[styles.subFilterCount, isActive && styles.meetupSubFilterCountActive]}>{f.count}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+          {/* Terrain row */}
+          {meetupSubStats.terrains.length > 0 && (
+            <View style={styles.meetupSubFilterRow}>
+              <Text style={styles.meetupSubFilterLabel}>{t('history', 'meetupFilterTerrain')}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.meetupSubFilterChips}>
+                <Pressable
+                  style={[styles.subFilterChip, meetupTerrainFilter === 'all' && styles.meetupSubFilterChipActive]}
+                  onPress={() => { Haptics.selectionAsync(); setMeetupTerrainFilter('all'); }}
+                >
+                  <MaterialIcons name="place" size={12} color={meetupTerrainFilter === 'all' ? theme.accent : theme.textMuted} />
+                  <Text style={[styles.subFilterChipText, meetupTerrainFilter === 'all' && styles.meetupSubFilterChipTextActive]}>{t('history', 'all')}</Text>
+                </Pressable>
+                {meetupSubStats.terrains.map((terrain) => {
+                  const isActive = meetupTerrainFilter === terrain;
+                  return (
+                    <Pressable
+                      key={terrain}
+                      style={[styles.subFilterChip, isActive && styles.meetupSubFilterChipActive]}
+                      onPress={() => { Haptics.selectionAsync(); setMeetupTerrainFilter(terrain); }}
+                    >
+                      <MaterialIcons name="place" size={12} color={isActive ? theme.accent : theme.textMuted} />
+                      <Text style={[styles.subFilterChipText, isActive && styles.meetupSubFilterChipTextActive]} numberOfLines={1}>{terrain}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
         </Animated.View>
       )}
 
@@ -2426,6 +2549,44 @@ const styles = StyleSheet.create({
   resetBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 20, backgroundColor: theme.primary, borderRadius: theme.borderRadius.full },
   resetBtnText: { fontSize: 13, fontWeight: '600', color: '#FFF' },
   
+  // Meetup Sub-Filters
+  meetupSubFiltersContainer: {
+    backgroundColor: theme.backgroundSecondary,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  meetupSubFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  meetupSubFilterLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: theme.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    width: 48,
+  },
+  meetupSubFilterChips: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingRight: 16,
+  },
+  meetupSubFilterChipActive: {
+    backgroundColor: theme.accent + '15',
+    borderColor: theme.accent,
+  },
+  meetupSubFilterChipTextActive: {
+    color: theme.accent,
+    fontWeight: '600',
+  },
+  meetupSubFilterCountActive: {
+    color: theme.accent,
+  },
   // Sub-filters
   subFiltersRow: {
     flexDirection: 'row',
