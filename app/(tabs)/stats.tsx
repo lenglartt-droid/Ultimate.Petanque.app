@@ -18,16 +18,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import Svg, { Circle, Line, G, Text as SvgText, Rect, Polygon } from 'react-native-svg';
-import * as Sharing from 'expo-sharing';
-
-// Lazy-load react-native-view-shot to avoid crash when native module is unavailable
-let captureRefFn: any = null;
-try {
-  const viewShot = require('react-native-view-shot');
-  captureRefFn = viewShot.captureRef;
-} catch (e) {
-  // react-native-view-shot not available in this environment
-}
 import { router } from 'expo-router';
 import { useLanguage } from '@/hooks/useLanguage';
 import AdBanner from '@/components/ui/AdBanner';
@@ -319,8 +309,7 @@ export default function StatsScreen() {
   const [showItemPickerModal, setShowItemPickerModal] = useState(false);
   const [itemPickerType, setItemPickerType] = useState<'match' | 'challenge' | 'tournament' | 'opponent' | 'partner' | 'terrain' | 'boules'>('match');
   const [itemPickerSearch, setItemPickerSearch] = useState('');
-  const [exporting, setExporting] = useState(false);
-  const statsExportRef = React.useRef<any>(null);
+
 
   // Time-filtered base data
   const timeFilteredMatches = filterByTime(matches, timeFilter);
@@ -1400,9 +1389,6 @@ export default function StatsScreen() {
               <Text style={styles.headerSubtitle}>{performanceStats.total} {t('stats', 'matches')} • {performanceStats.winRate}% {t('stats', 'victories')}</Text>
             </View>
             <View style={styles.headerButtons}>
-              <Pressable style={styles.exportButton} onPress={async () => { if (exporting) return; Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setExporting(true); try { if (statsExportRef.current && captureRefFn) { const uri = await captureRefFn(statsExportRef.current, { format: 'png', quality: 1, result: 'tmpfile' }); const canShare = await Sharing.isAvailableAsync(); if (canShare) { await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: t('stats', 'exportStatsTitle') }); } } } catch (e) { console.log('Export error:', e); } finally { setExporting(false); } }} disabled={exporting}>
-                <MaterialIcons name={exporting ? 'hourglass-empty' : 'ios-share'} size={16} color="#FFF" />
-              </Pressable>
               <Pressable style={styles.progressionButton} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowProgressionModal(true); }}>
                 <MaterialIcons name="trending-up" size={18} color="#FFF" />
                 <Text style={styles.progressionButtonText}>{t('stats', 'progression')}</Text>
@@ -1539,49 +1525,6 @@ export default function StatsScreen() {
               </Text>
             </Pressable>
           ))}
-        </View>
-      </View>
-
-      {/* Hidden export view */}
-      <View style={{ position: 'absolute', left: -9999, top: -9999 }} pointerEvents="none">
-        <View ref={statsExportRef} collapsable={false} style={{ width: 390, backgroundColor: theme.backgroundSecondary, padding: 20 }}>
-          <View style={{ backgroundColor: theme.surface, borderRadius: 16, padding: 20, marginBottom: 16 }}>
-            <Text style={{ fontSize: 22, fontWeight: '700', color: theme.textPrimary, textAlign: 'center', marginBottom: 4 }}>{t('stats', 'exportStatsTitle')}</Text>
-            <Text style={{ fontSize: 12, color: theme.textSecondary, textAlign: 'center', marginBottom: 16 }}>Ultimate Petanque</Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16 }}>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{ fontSize: 32, fontWeight: '800', color: theme.primary }}>{performanceStats.winRate}%</Text>
-                <Text style={{ fontSize: 11, color: theme.textMuted }}>{t('stats', 'victoriesLabel')}</Text>
-              </View>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{ fontSize: 32, fontWeight: '800', color: theme.tirColor }}>{tirStats.successRate}%</Text>
-                <Text style={{ fontSize: 11, color: theme.textMuted }}>{t('stats', 'shotShort')}</Text>
-              </View>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{ fontSize: 32, fontWeight: '800', color: theme.pointColor }}>{pointStats.successRate}%</Text>
-                <Text style={{ fontSize: 11, color: theme.textMuted }}>{t('stats', 'pointShort')}</Text>
-              </View>
-            </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{ fontSize: 20, fontWeight: '700', color: theme.carreauColor }}>{tirStats.carreauRate}%</Text>
-                <Text style={{ fontSize: 10, color: theme.textMuted }}>{t('stats', 'carreauxLabel')}</Text>
-              </View>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{ fontSize: 20, fontWeight: '700', color: theme.success }}>{performanceStats.wins}</Text>
-                <Text style={{ fontSize: 10, color: theme.textMuted }}>{t('stats', 'wonLabel')}</Text>
-              </View>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{ fontSize: 20, fontWeight: '700', color: theme.error }}>{performanceStats.losses}</Text>
-                <Text style={{ fontSize: 10, color: theme.textMuted }}>{t('stats', 'lostLabel')}</Text>
-              </View>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{ fontSize: 20, fontWeight: '700', color: theme.textPrimary }}>{performanceStats.total}</Text>
-                <Text style={{ fontSize: 10, color: theme.textMuted }}>{t('stats', 'totalLabel')}</Text>
-              </View>
-            </View>
-          </View>
-          <Text style={{ fontSize: 9, color: theme.textMuted, textAlign: 'center' }}>ultimate-petanque.app</Text>
         </View>
       </View>
 
@@ -3268,7 +3211,7 @@ export default function StatsScreen() {
                   </View>
                 )}
 
-                {tournamentProgressionData.hasData?<View style={styles.progressionSection}><View style={styles.progressionSectionHeader}><View style={[styles.progressionSectionIcon,{backgroundColor:theme.carreauColor+'15'}]}><MaterialIcons name="emoji-events" size={20} color={theme.carreauColor}/></View><View><Text style={[styles.progressionSectionTitle,isTablet&&styles.progressionSectionTitleTablet]}>{t('stats','tournamentProgressionTitle')}</Text><Text style={[styles.progressionSectionSubtitle,isTablet&&styles.progressionSectionSubtitleTablet]}>{tournamentProgressionData.items.length} {t('palmares','tournois')}</Text></View></View><View style={styles.chartContainer}><Svg width={modalChartWidth} height={modalChartHeight+30}>{[0,50,100].map((v,i)=>(<G key={i}><Line x1="35" y1={(modalChartHeight-20)-(v/100)*(modalChartHeight-40)} x2={modalChartWidth} y2={(modalChartHeight-20)-(v/100)*(modalChartHeight-40)} stroke={theme.border} strokeWidth="1" strokeDasharray="4,4"/><SvgText x="30" y={(modalChartHeight-15)-(v/100)*(modalChartHeight-40)} fontSize={isTablet?'12':'10'} fill={theme.textMuted} textAnchor="end">{v}%</SvgText></G>))}{tournamentProgressionData.items.map((it,i)=>{const x=45+(i*((modalChartWidth-45)/Math.max(tournamentProgressionData.items.length-1,1)));const y=(modalChartHeight-20)-(it.winRate/100)*(modalChartHeight-40);const p=tournamentProgressionData.items[i-1];const px=p?45+((i-1)*((modalChartWidth-45)/Math.max(tournamentProgressionData.items.length-1,1))):x;const py=p?(modalChartHeight-20)-(p.winRate/100)*(modalChartHeight-40):y;return(<G key={i}>{i>0?<Line x1={px} y1={py} x2={x} y2={y} stroke={theme.carreauColor} strokeWidth="2.5"/>:null}<Circle cx={x} cy={y} r={6} fill={it.resultColor} stroke="#FFF" strokeWidth={2}/>{it.matches>0?<SvgText x={x} y={y-12} fontSize="9" fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{it.winRate}%</SvgText>:null}</G>);})}</Svg></View><View style={{gap:4,marginTop:8}}>{tournamentProgressionData.items.map(it=>(<Pressable key={it.id} style={{flexDirection:'row',alignItems:'center',gap:8,paddingVertical:7,borderBottomWidth:1,borderBottomColor:theme.border+'40'}} onPress={()=>router.push(`/tournament/${it.id}`)}><View style={{width:10,height:10,borderRadius:5,backgroundColor:it.resultColor}}/><View style={{flex:1}}><Text style={{fontSize:12,fontWeight:'600',color:theme.textPrimary}} numberOfLines={1}>{it.name}</Text><Text style={{fontSize:10,color:theme.textMuted}}>{new Date(it.date).toLocaleDateString(language==='fr'?'fr-FR':'en-US',{month:'short',year:'numeric'})} • {it.wins}V-{it.matches-it.wins}D</Text></View><View style={{paddingHorizontal:8,paddingVertical:3,borderRadius:10,backgroundColor:it.resultColor+'18'}}><Text style={{fontSize:10,fontWeight:'700',color:it.resultColor}}>{t('palmaresResults',it.result)}</Text></View></Pressable>))}</View></View>:null}
+                {tournamentProgressionData.hasData?<View style={styles.progressionSection}><View style={styles.progressionSectionHeader}><View style={[styles.progressionSectionIcon,{backgroundColor:theme.carreauColor+'15'}]}><MaterialIcons name="emoji-events" size={20} color={theme.carreauColor}/></View><View><Text style={[styles.progressionSectionTitle,isTablet&&styles.progressionSectionTitleTablet]}>{t('stats','tournamentProgressionTitle')}</Text><Text style={[styles.progressionSectionSubtitle,isTablet&&styles.progressionSectionSubtitleTablet]}>{tournamentProgressionData.items.length} {t('palmares','tournois')}</Text></View></View><View style={styles.chartContainer}><Svg width={modalChartWidth} height={modalChartHeight+30}>{[0,50,100].map((v,i)=>(<G key={i}><Line x1="35" y1={(modalChartHeight-20)-(v/100)*(modalChartHeight-40)} x2={modalChartWidth} y2={(modalChartHeight-20)-(v/100)*(modalChartHeight-40)} stroke={theme.border} strokeWidth="1" strokeDasharray="4,4"/><SvgText x="30" y={(modalChartHeight-15)-(v/100)*(modalChartHeight-40)} fontSize={isTablet?'12':'10'} fill={theme.textMuted} textAnchor="end">{v}%</SvgText></G>))}{tournamentProgressionData.items.map((it,i)=>{const x=45+(i*((modalChartWidth-45)/Math.max(tournamentProgressionData.items.length-1,1)));const y=(modalChartHeight-20)-(it.winRate/100)*(modalChartHeight-40);const p=tournamentProgressionData.items[i-1];const px=p?45+((i-1)*((modalChartWidth-45)/Math.max(tournamentProgressionData.items.length-1,1))):x;const py=p?(modalChartHeight-20)-(p.winRate/100)*(modalChartHeight-40):y;return(<G key={i}>{i>0?<Line x1={px} y1={py} x2={x} y2={y} stroke={theme.carreauColor} strokeWidth="2.5"/>:null}<Circle cx={x} cy={y} r={6} fill={it.resultColor} stroke="#FFF" strokeWidth={2}/>{it.matches>0?<SvgText x={x} y={y-12} fontSize="9" fill={theme.textPrimary} textAnchor="middle" fontWeight="600">{it.winRate}%</SvgText>:null}</G>);})}</Svg></View></View>:null}
                 {/* Summary Table */}
                 <View style={styles.progressionSection}>
                   <View style={styles.progressionSectionHeader}>
@@ -3727,8 +3670,7 @@ const styles = StyleSheet.create({
   headerTitle:{fontSize:24,fontWeight:'800',color:'#FFF'},
   headerSubtitle:{fontSize:13,color:'rgba(255,255,255,0.7)',marginTop:2},
   headerButtons:{flexDirection:'row',alignItems:'center',gap:6},
-  exportButton:{width:40,height:40,borderRadius:20,backgroundColor:'rgba(255,255,255,0.15)',alignItems:'center' as const,justifyContent:'center' as const},
-  exportButtonText:{display:'none' as any},
+
   progressionButton:{flexDirection:'row',alignItems:'center',gap:6,paddingHorizontal:14,paddingVertical:10,backgroundColor:'rgba(255,255,255,0.15)',borderRadius:9999},
   progressionButtonText:{fontSize:12,fontWeight:'600',color:'#FFF'},
   historyButton:{width:40,height:40,borderRadius:20,backgroundColor:'rgba(255,255,255,0.1)',alignItems:'center' as const,justifyContent:'center' as const},
