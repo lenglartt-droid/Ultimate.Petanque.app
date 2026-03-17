@@ -394,10 +394,22 @@ export default function HomeScreen() {
               </View>
               <Text style={styles.meetupSectionTitle}>{t('meetup', 'upcomingMeetups')}</Text>
             </View>
-            <Pressable style={styles.meetupNewBtn} onPress={() => router.push('/meetup/new' as any)}>
-              <MaterialIcons name="add" size={16} color={theme.primary} />
-              <Text style={styles.meetupNewBtnText}>{t('common', 'create')}</Text>
-            </Pressable>
+            <View style={styles.meetupHeaderBtns}>
+              {pendingInviteCount > 0 ? (
+                <Pressable style={styles.meetupInviteBtnSmall} onPress={() => router.push('/meetup/invitations' as any)}>
+                  <MaterialIcons name="mail" size={14} color={theme.error} />
+                  <Text style={styles.meetupInviteBtnSmallText}>{pendingInviteCount}</Text>
+                </Pressable>
+              ) : null}
+              <Pressable style={styles.meetupJoinBtn} onPress={() => setShowJoinMeetupModal(true)}>
+                <MaterialIcons name="qr-code" size={14} color={theme.accent} />
+                <Text style={styles.meetupJoinBtnText}>{t('meetup', 'joinMeetup')}</Text>
+              </Pressable>
+              <Pressable style={styles.meetupNewBtn} onPress={() => router.push('/meetup/new' as any)}>
+                <MaterialIcons name="add" size={16} color={theme.primary} />
+                <Text style={styles.meetupNewBtnText}>{t('common', 'create')}</Text>
+              </Pressable>
+            </View>
           </View>
 
           {/* Meetup Summary Row - above quick actions */}
@@ -447,32 +459,7 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
-          {/* Meetup Quick Actions - below summary */}
-          <View style={styles.meetupQuickActions}>
-            <Pressable style={({ pressed }) => [styles.meetupQuickBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]} onPress={() => router.push('/meetup/new' as any)}>
-              <View style={[styles.meetupQuickIconBg, { backgroundColor: theme.primary + '12' }]}>
-                <MaterialIcons name="add-circle" size={20} color={theme.primary} />
-              </View>
-              <Text style={styles.meetupQuickText}>{t('meetup', 'createMeetupShort')}</Text>
-            </Pressable>
-            <Pressable style={({ pressed }) => [styles.meetupQuickBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]} onPress={() => setShowJoinMeetupModal(true)}>
-              <View style={[styles.meetupQuickIconBg, { backgroundColor: theme.accent + '12' }]}>
-                <MaterialIcons name="qr-code" size={20} color={theme.accent} />
-              </View>
-              <Text style={styles.meetupQuickText}>{t('meetup', 'joinMeetup')}</Text>
-            </Pressable>
-            {pendingInviteCount > 0 ? (
-              <Pressable style={({ pressed }) => [styles.meetupQuickBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]} onPress={() => router.push('/meetup/invitations' as any)}>
-                <View style={[styles.meetupQuickIconBg, { backgroundColor: theme.error + '12' }]}>
-                  <MaterialIcons name="mail" size={20} color={theme.error} />
-                  <View style={styles.meetupQuickBadge}>
-                    <Text style={styles.meetupQuickBadgeText}>{pendingInviteCount > 9 ? '9+' : pendingInviteCount}</Text>
-                  </View>
-                </View>
-                <Text style={styles.meetupQuickText}>{t('meetup', 'pendingInvitations')}</Text>
-              </Pressable>
-            ) : null}
-          </View>
+
         </Animated.View>
 
         {/* ========== LAST 3 RESULTS TIMELINE ========== */}
@@ -867,8 +854,13 @@ const styles = StyleSheet.create({
   meetupSectionHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   meetupSectionIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: theme.accent + '12', alignItems: 'center', justifyContent: 'center' },
   meetupSectionTitle: { fontSize: 16, fontWeight: '700', color: theme.textPrimary },
-  meetupNewBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.primary + '12', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
-  meetupNewBtnText: { fontSize: 12, fontWeight: '700', color: theme.primary },
+  meetupHeaderBtns: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  meetupJoinBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.accent + '12', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  meetupJoinBtnText: { fontSize: 11, fontWeight: '700', color: theme.accent },
+  meetupInviteBtnSmall: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.error + '12', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 10 },
+  meetupInviteBtnSmallText: { fontSize: 11, fontWeight: '800', color: theme.error },
+  meetupNewBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.primary + '12', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  meetupNewBtnText: { fontSize: 11, fontWeight: '700', color: theme.primary },
   meetupQuickActions: { flexDirection: 'row', gap: 10, marginTop: 4 },
   meetupQuickBtn: { flex: 1, alignItems: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 8 },
   meetupQuickIconBg: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 8, position: 'relative' as const },
