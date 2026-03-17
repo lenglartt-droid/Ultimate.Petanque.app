@@ -906,7 +906,7 @@ export default function DirectoryScreen() {
       {/* Header - Gradient Hero */}
       <View style={styles.header}>
         <LinearGradient
-          colors={['#0F172A', '#1E3A5F', '#2563EB']}
+          colors={['#1E3A8A', '#2563EB', '#3B82F6']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerGradient}
@@ -1712,11 +1712,11 @@ const styles = StyleSheet.create({
     borderBottomColor: theme.border,
   },
   headerGradient: {
-    paddingTop: 12,
-    paddingBottom: 20,
-    paddingHorizontal: 16,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    paddingTop: 16,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
   },
   headerTop: {
     flexDirection: 'row',
@@ -1725,7 +1725,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '800',
     color: '#FFF',
   },
@@ -1792,7 +1792,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#2563EB',
+    borderColor: '#3B82F6',
   },
   filterBadgeText: {
     fontSize: 10,

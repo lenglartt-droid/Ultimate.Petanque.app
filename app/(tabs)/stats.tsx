@@ -3722,9 +3722,9 @@ export default function StatsScreen() {
 const styles = StyleSheet.create({
   container:{flex:1,backgroundColor:theme.backgroundSecondary},
   header:{backgroundColor:theme.surface,borderBottomWidth:1,borderBottomColor:theme.border,paddingBottom:12},
-  headerGradient:{paddingTop:16,paddingBottom:20,paddingHorizontal:16,borderBottomLeftRadius:24,borderBottomRightRadius:24},
+  headerGradient:{paddingTop:16,paddingBottom:24,paddingHorizontal:20,borderBottomLeftRadius:28,borderBottomRightRadius:28},
   headerTop:{flexDirection:'row',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16},
-  headerTitle:{fontSize:26,fontWeight:'800',color:'#FFF'},
+  headerTitle:{fontSize:24,fontWeight:'800',color:'#FFF'},
   headerSubtitle:{fontSize:13,color:'rgba(255,255,255,0.7)',marginTop:2},
   headerButtons:{flexDirection:'row',alignItems:'center',gap:6},
   exportButton:{width:40,height:40,borderRadius:20,backgroundColor:'rgba(255,255,255,0.15)',alignItems:'center' as const,justifyContent:'center' as const},
