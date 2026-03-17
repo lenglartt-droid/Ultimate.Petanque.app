@@ -2953,6 +2953,31 @@ export const translations = {
   // ============================================
   // PRIVACY (meetups addition)
   // ============================================
+  // ============================================
+  // LOCATION PICKER
+  // ============================================
+  locationPicker: {
+    searchAddress: { fr: 'Rechercher une adresse...', en: 'Search an address...' },
+    location: { fr: 'Localisation', en: 'Location' },
+    permissionRequired: { fr: 'Permission requise', en: 'Permission required' },
+    permissionMessage: { fr: 'Autorisez la localisation pour utiliser votre position', en: 'Allow location access to use your position' },
+    errorAddress: { fr: 'Adresse introuvable', en: 'Address not found' },
+    errorPosition: { fr: 'Impossible d\'obtenir la position', en: 'Unable to get position' },
+    gpsPositionSaved: { fr: 'Position GPS enregistrée', en: 'GPS position saved' },
+    searchPlace: { fr: 'Rechercher un lieu', en: 'Search a place' },
+    locating: { fr: 'Localisation...', en: 'Locating...' },
+    useCurrentPosition: { fr: 'Utiliser ma position', en: 'Use my location' },
+    enterAddress: { fr: 'Entrez une adresse...', en: 'Enter an address...' },
+    searching: { fr: 'Recherche...', en: 'Searching...' },
+    noResultFound: { fr: 'Aucun résultat', en: 'No results' },
+    tryDifferentAddress: { fr: 'Essayez une adresse différente', en: 'Try a different address' },
+    recentSearches: { fr: 'Recherches récentes', en: 'Recent searches' },
+    searchTips: { fr: 'Conseils de recherche', en: 'Search tips' },
+    tipMinChars: { fr: 'Saisissez au moins 3 caractères', en: 'Enter at least 3 characters' },
+    tipIncludeCity: { fr: 'Incluez la ville pour plus de précision', en: 'Include the city for better accuracy' },
+    tipExample: { fr: 'Ex: 12 rue de la Paix, Paris', en: 'Ex: 12 Main Street, London' },
+  },
+
   privacyExtra: {
     meetupsTitle: { fr: 'Rendez-vous terrain', en: 'Terrain Meetups' },
     meetupsContent: { fr: 'Les rendez-vous permettent de planifier des sessions de jeu. Les donnees des RDV (titre, date, terrain, participants) sont stockees de maniere securisee. Seuls le createur et les participants invites ont acces aux details du RDV. Les codes de partage sont generes aleatoirement.', en: 'Meetups allow scheduling playing sessions. Meetup data (title, date, terrain, participants) is stored securely. Only the creator and invited participants have access to meetup details. Share codes are randomly generated.' },
