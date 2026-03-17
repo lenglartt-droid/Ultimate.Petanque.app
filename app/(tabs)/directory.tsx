@@ -264,32 +264,6 @@ export default function DirectoryScreen() {
 
   const currentFilterCount = activeFilterCounts[activeTab];
 
-  // Get current filtered data (must be before paginatedData)
-  const getCurrentData = useCallback(() => {
-    switch (activeTab) {
-      case 'players': return filteredPlayers;
-      case 'clubs': return filteredClubs;
-      case 'terrains': return filteredTerrains;
-      case 'tournaments': return filteredTournaments;
-    }
-  }, [activeTab, filteredPlayers, filteredClubs, filteredTerrains, filteredTournaments]);
-
-  // Paginated data
-  const paginatedData = useMemo(() => {
-    const data = getCurrentData();
-    return data.slice(0, visibleCount);
-  }, [visibleCount, getCurrentData]);
-
-  const hasMore = useMemo(() => {
-    return getCurrentData().length > visibleCount;
-  }, [visibleCount, getCurrentData]);
-
-  const handleLoadMore = useCallback(() => {
-    if (hasMore) {
-      setVisibleCount(prev => prev + PAGE_SIZE);
-    }
-  }, [hasMore]);
-
   // Singular label for current tab
   const getTabSingular = (tab: DirectoryTab) => {
     const map: Record<DirectoryTab, string> = {
@@ -391,6 +365,33 @@ export default function DirectoryScreen() {
       return matchesSearch && matchesStatus && matchesFormat && matchesLevel && matchesCategory && matchesRegistration && matchesScope && matchesCity;
     }).sort((a, b) => (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3));
   }, [tournaments, searchQuery, filters]);
+
+  // Get current filtered data (after all filtered arrays are defined)
+  const getCurrentData = useCallback(() => {
+    switch (activeTab) {
+      case 'players': return filteredPlayers;
+      case 'clubs': return filteredClubs;
+      case 'terrains': return filteredTerrains;
+      case 'tournaments': return filteredTournaments;
+      default: return filteredPlayers;
+    }
+  }, [activeTab, filteredPlayers, filteredClubs, filteredTerrains, filteredTournaments]);
+
+  // Paginated data
+  const paginatedData = useMemo(() => {
+    const data = getCurrentData();
+    return data.slice(0, visibleCount);
+  }, [visibleCount, getCurrentData]);
+
+  const hasMore = useMemo(() => {
+    return getCurrentData().length > visibleCount;
+  }, [visibleCount, getCurrentData]);
+
+  const handleLoadMore = useCallback(() => {
+    if (hasMore) {
+      setVisibleCount(prev => prev + PAGE_SIZE);
+    }
+  }, [hasMore]);
 
   const clearFilters = useCallback(() => {
     if (activeTab === 'players') {
