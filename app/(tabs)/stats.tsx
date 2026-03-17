@@ -1043,9 +1043,7 @@ export default function StatsScreen() {
     };
   }, [filteredMatches, tirStats, pointStats, language]);
 
-// ============================================
-  // TERRAIN TYPE STATS
-  // ============================================  const boulesSetStats = useMemo(() => {
+  const boulesSetStats = useMemo(() => {
     const bySet: Record<string, {
       name: string; brand?: string; diameter?: number; weight?: number;
       matches: number; wins: number;
@@ -1091,6 +1089,7 @@ export default function StatsScreen() {
     const totalWithBoules = sets.reduce((sum, id) => sum + bySet[id].matches, 0);
     return { bySet, sets, hasData: sets.length > 0, totalWithBoules };
   }, [filteredMatches, filteredChallenges, boulesSets]);
+
   const terrainTypeStats = useMemo(() => {
     const getTerrainType = (match: typeof filteredMatches[0]): string | null => {
       if ((match as any).terrainType) return (match as any).terrainType;
@@ -1130,7 +1129,7 @@ export default function StatsScreen() {
     return { byTerrain, types, hasData: types.length > 0, totalTerrainMatches };
   }, [filteredMatches, tournaments]);
 
-  // PRECISION WORKSHOP STATS  const precisionWorkshopStats = useMemo(() => {
+  const precisionWorkshopStats = useMemo(() => {
     const precisionChallenges = filteredChallenges.filter(c => c.type === 'precision' && c.precisionShots && c.precisionShots.length > 0);
     if (precisionChallenges.length === 0) return null;
 
