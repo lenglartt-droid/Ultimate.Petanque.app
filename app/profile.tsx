@@ -1756,6 +1756,24 @@ export default function ProfileScreen() {
                 <Text style={styles.langBadgeText}>{language.toUpperCase()}</Text>
               </View>
             </Pressable>
+
+            {/* Creator Note */}
+            <Pressable 
+              style={styles.menuItem}
+              onPress={() => {
+                Haptics.selectionAsync();
+                router.push('/creator-note');
+              }}
+            >
+              <View style={[styles.menuIcon, { backgroundColor: theme.error + '15' }]}>
+                <MaterialIcons name="favorite" size={20} color={theme.error} />
+              </View>
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuItemText}>{t('creatorNote', 'title')}</Text>
+                <Text style={styles.menuItemSubtext}>{t('creatorNote', 'signature')}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+            </Pressable>
           </Animated.View>
         )}
 

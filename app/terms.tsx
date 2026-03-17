@@ -15,7 +15,7 @@ import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 
 const CONTACT_EMAIL = 'ultimate.petanque.app@gmail.com';
-const EFFECTIVE_DATE = '2026-03-01';
+const EFFECTIVE_DATE = '2026-03-17';
 
 export default function TermsScreen() {
   const insets = useSafeAreaInsets();
@@ -105,6 +105,18 @@ export default function TermsScreen() {
       color: theme.success,
       title: t('terms', 'publicItemsRulesTitle'),
       content: t('terms', 'publicItemsRulesContent'),
+    },
+    {
+      icon: 'event',
+      color: theme.warning,
+      title: t('terms', 'meetupsRulesTitle'),
+      content: t('terms', 'meetupsRulesContent'),
+    },
+    {
+      icon: 'sports-baseball',
+      color: '#D97706',
+      title: t('terms', 'equipmentRulesTitle'),
+      content: t('terms', 'equipmentRulesContent'),
     },
     {
       icon: 'email',

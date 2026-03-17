@@ -634,8 +634,6 @@ export default function HomeScreen() {
           </Animated.View>
         ) : null}
 
-        {/* Ad Banner */}
-        <AdBanner position="inline" />
       </ScrollView>
 
       {/* ========== MEETUP LIST MODAL ========== */}

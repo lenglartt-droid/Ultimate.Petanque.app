@@ -1090,8 +1090,7 @@ export default function DirectoryScreen() {
         </View>
       ) : null}
 
-      {/* Ad Banner */}
-      <AdBanner position="inline" />
+
 
       {/* List */}
       <View style={styles.listContainer}>

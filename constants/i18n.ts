@@ -2864,8 +2864,50 @@ export const translations = {
     publicItemsRulesContent: { fr: 'Vous êtes responsable du contenu publié. Les fiches publiques sont visibles par tous, en lecture seule. Vous pouvez retirer la visibilité à tout moment.', en: 'You are responsible for published content. Public items are visible to all, read-only. You can remove visibility at any time.' },
     contactTitle: { fr: 'Contact', en: 'Contact' },
     contactContent: { fr: 'Pour toute question : ultimate.petanque.app@gmail.com', en: 'For any questions: ultimate.petanque.app@gmail.com' },
+    meetupsRulesTitle: { fr: 'Rendez-vous terrain', en: 'Terrain Meetups' },
+    meetupsRulesContent: { fr: 'Les rendez-vous permettent aux utilisateurs de planifier des sessions de jeu sur un terrain. Les invitations sont envoyees directement aux joueurs publics ou partages. L organisateur peut annuler le RDV a tout moment. Les participants peuvent accepter ou decliner.', en: 'Meetups allow users to schedule playing sessions at a court. Invitations are sent directly to public or shared players. The organizer can cancel the meetup at any time. Participants can accept or decline.' },
+    equipmentRulesTitle: { fr: 'Equipement', en: 'Equipment' },
+    equipmentRulesContent: { fr: 'Vous pouvez enregistrer vos sets de boules avec leurs caracteristiques (marque, diametre, poids, durete, prix). Les performances par set sont suivies automatiquement a travers les matchs et les defis.', en: 'You can register your boules sets with their characteristics (brand, diameter, weight, hardness, price). Performance per set is automatically tracked through matches and challenges.' },
     questionsLabel: { fr: 'Des questions ?', en: 'Questions?' },
     contactUs: { fr: 'Nous contacter', en: 'Contact us' },
+  },
+
+  // ============================================
+  // CREATOR NOTE
+  // ============================================
+  creatorNote: {
+    title: { fr: 'Note du createur', en: 'Creator Note' },
+    heroTitle: { fr: 'Un mot du createur', en: 'A word from the creator' },
+    heroSubtitle: { fr: 'Ultimate Petanque', en: 'Ultimate Petanque' },
+    whyTitle: { fr: 'Pourquoi cette application ?', en: 'Why this app?' },
+    whyContent: { fr: 'Ultimate Petanque est nee d\'une passion pour la petanque et d\'un constat simple : il n\'existait pas d\'outil complet pour suivre ses matchs, ses defis, ses tournois et sa progression au quotidien. J\'ai voulu creer l\'application que j\'aurais aime avoir en tant que joueur.', en: 'Ultimate Petanque was born from a passion for petanque and a simple observation: there was no comprehensive tool to track your matches, challenges, tournaments and daily progress. I wanted to create the app I would have loved to have as a player.' },
+    forWhomTitle: { fr: 'Pour qui ?', en: 'For whom?' },
+    forWhomContent: { fr: 'Que vous soyez debutant ou expert, joueur de club ou de loisir, tireur ou pointeur, cette application est faite pour vous. Elle vous accompagne dans votre progression, vous aide a analyser vos forces et faiblesses, et vous connecte avec la communaute petanque.', en: 'Whether you are a beginner or expert, club or recreational player, shooter or pointer, this app is made for you. It supports your progression, helps you analyze your strengths and weaknesses, and connects you with the petanque community.' },
+    visionTitle: { fr: 'Notre vision', en: 'Our vision' },
+    visionContent: { fr: 'Faire de Ultimate Petanque la reference pour tous les joueurs de petanque. Chaque fonctionnalite a ete pensee pour repondre aux besoins reels des joueurs : notation detaillee, statistiques avancees, carte interactive des terrains, gestion des rencontres, partage de fiches et bien plus encore.', en: 'To make Ultimate Petanque the reference for all petanque players. Every feature was designed to meet the real needs of players: detailed notation, advanced statistics, interactive terrain map, meetup management, card sharing and much more.' },
+    thanksTitle: { fr: 'Merci', en: 'Thank you' },
+    thanksContent: { fr: 'Merci d\'utiliser Ultimate Petanque. Chaque retour, chaque suggestion nous aide a ameliorer l\'application. N\'hesitez pas a nous ecrire pour partager vos idees ou signaler un probleme. Ensemble, faisons grandir la communaute petanque !', en: 'Thank you for using Ultimate Petanque. Every feedback, every suggestion helps us improve the app. Do not hesitate to write to us to share your ideas or report a problem. Together, let us grow the petanque community!' },
+    featuresTitle: { fr: 'Fonctionnalites principales', en: 'Key features' },
+    featureMatches: { fr: 'Matchs et series avec notation detaillee', en: 'Matches and series with detailed notation' },
+    featureTournaments: { fr: 'Suivi de tournois avec progression par phases', en: 'Tournament tracking with phase progression' },
+    featureChallenges: { fr: 'Defis de tir, precision et mode 1 contre 1', en: 'Shooting challenges, precision and 1v1 mode' },
+    featureStats: { fr: 'Statistiques avancees et analyse des erreurs', en: 'Advanced statistics and error analysis' },
+    featureDirectory: { fr: 'Annuaire joueurs, clubs, terrains et tournois', en: 'Player, club, terrain and tournament directory' },
+    featureMap: { fr: 'Carte interactive avec items publics', en: 'Interactive map with public items' },
+    featureMeetups: { fr: 'Organisation de RDV et invitations directes', en: 'Meetup organization and direct invitations' },
+    featureSharing: { fr: 'Partage de fiches par code et permissions', en: 'Card sharing by code with permissions' },
+    contactTitle: { fr: 'Votre avis compte', en: 'Your opinion matters' },
+    contactContent: { fr: 'Une idee, une suggestion, un probleme ? Ecrivez-nous, nous lisons chaque message avec attention.', en: 'An idea, a suggestion, a problem? Write to us, we read every message carefully.' },
+    writeToUs: { fr: 'Nous ecrire', en: 'Write to us' },
+    signature: { fr: 'Fait avec passion pour la petanque', en: 'Made with passion for petanque' },
+  },
+
+  // ============================================
+  // PRIVACY (meetups addition)
+  // ============================================
+  privacyExtra: {
+    meetupsTitle: { fr: 'Rendez-vous terrain', en: 'Terrain Meetups' },
+    meetupsContent: { fr: 'Les rendez-vous permettent de planifier des sessions de jeu. Les donnees des RDV (titre, date, terrain, participants) sont stockees de maniere securisee. Seuls le createur et les participants invites ont acces aux details du RDV. Les codes de partage sont generes aleatoirement.', en: 'Meetups allow scheduling playing sessions. Meetup data (title, date, terrain, participants) is stored securely. Only the creator and invited participants have access to meetup details. Share codes are randomly generated.' },
   },
 };
 
