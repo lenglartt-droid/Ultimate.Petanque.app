@@ -119,6 +119,18 @@ export default function TermsScreen() {
       content: t('terms', 'equipmentRulesContent'),
     },
     {
+      icon: 'leaderboard',
+      color: '#D97706',
+      title: t('terms', 'leaderboardRulesTitle'),
+      content: t('terms', 'leaderboardRulesContent'),
+    },
+    {
+      icon: 'link',
+      color: '#6366F1',
+      title: t('terms', 'deepLinkingRulesTitle'),
+      content: t('terms', 'deepLinkingRulesContent'),
+    },
+    {
       icon: 'email',
       color: theme.primary,
       title: t('terms', 'contactTitle'),

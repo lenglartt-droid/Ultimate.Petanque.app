@@ -132,6 +132,9 @@ export default function CreatorNoteScreen() {
             { icon: 'people', color: theme.success, label: t('creatorNote', 'featureDirectory') },
             { icon: 'map', color: '#8B5CF6', label: t('creatorNote', 'featureMap') },
             { icon: 'event', color: theme.warning, label: t('creatorNote', 'featureMeetups') },
+            { icon: 'leaderboard', color: '#D97706', label: t('creatorNote', 'featureLeaderboard') },
+            { icon: 'link', color: '#6366F1', label: t('creatorNote', 'featureDeepLinking') },
+            { icon: 'cached', color: theme.tirColor, label: t('creatorNote', 'featureCaching') },
             { icon: 'share', color: theme.primary, label: t('creatorNote', 'featureSharing') },
           ].map((f, i) => (
             <View key={i} style={styles.featureRow}>

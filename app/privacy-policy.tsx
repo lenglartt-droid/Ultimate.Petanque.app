@@ -83,6 +83,12 @@ export default function PrivacyPolicyScreen() {
       content: t('privacyExtra', 'meetupsContent'),
     },
     {
+      icon: 'leaderboard',
+      color: '#D97706',
+      title: t('privacyExtra', 'leaderboardTitle'),
+      content: t('privacyExtra', 'leaderboardContent'),
+    },
+    {
       icon: 'child-care',
       color: theme.success,
       title: t('privacy', 'childrenTitle'),

@@ -29,6 +29,7 @@ function getQuickActions(t: (s: string, k: string) => string) {
     { id: 'share', title: t('faq', 'shareCard'), icon: 'share', color: theme.accent, steps: t('faq', 'qaShareSteps').split('|') },
     { id: 'publish', title: t('faq', 'publishOnMap'), icon: 'public', color: '#8B5CF6', steps: t('faq', 'qaPublishSteps').split('|') },
     { id: 'meetup', title: t('faq', 'organizeMeetup'), icon: 'event', color: theme.warning, steps: t('faq', 'qaMeetupSteps').split('|'), route: '/meetup/new' },
+    { id: 'leaderboard', title: t('faq', 'viewLeaderboard'), icon: 'leaderboard', color: '#D97706', steps: t('faq', 'qaLeaderboardSteps').split('|'), route: '/leaderboard' },
   ];
 }
 
@@ -99,6 +100,15 @@ function getFaqData(t: (s: string, k: string) => string) {
     { id: 'financial', category: t('faq', 'financialCat'), icon: 'savings', color: '#10B981', questions: [
       { id: 'fin1', q: t('faq', 'fin1Q'), a: t('faq', 'fin1A') },
     ]},
+    { id: 'leaderboard', category: t('faq', 'leaderboardCat'), icon: 'leaderboard', color: '#D97706', questions: [
+      { id: 'lb1', q: t('faq', 'lb1Q'), a: t('faq', 'lb1A') },
+      { id: 'lb2', q: t('faq', 'lb2Q'), a: t('faq', 'lb2A') },
+      { id: 'lb3', q: t('faq', 'lb3Q'), a: t('faq', 'lb3A') },
+      { id: 'lb4', q: t('faq', 'lb4Q'), a: t('faq', 'lb4A') },
+    ]},
+    { id: 'deeplink', category: t('faq', 'deepLinkingCat'), icon: 'link', color: '#6366F1', questions: [
+      { id: 'dl1', q: t('faq', 'dl1Q'), a: t('faq', 'dl1A') },
+    ]},
     { id: 'account', category: t('faq', 'accountProfile'), icon: 'person', color: '#8B5CF6', questions: [
       { id: 'a1', q: t('faq', 'a1Q'), a: t('faq', 'a1A') },
       { id: 'a2', q: t('faq', 'a2Q'), a: t('faq', 'a2A') },
@@ -117,6 +127,8 @@ function getTips(t: (s: string, k: string) => string) {
     { icon: 'public', text: t('faq', 'tip5'), color: theme.success },
     { icon: 'content-copy', text: t('faq', 'tip6'), color: theme.warning },
     { icon: 'phone-disabled', text: t('faq', 'tip7'), color: theme.error },
+    { icon: 'leaderboard', text: t('faq', 'tip8'), color: '#D97706' },
+    { icon: 'filter-list', text: t('faq', 'tip9'), color: theme.success },
   ];
 }
 
