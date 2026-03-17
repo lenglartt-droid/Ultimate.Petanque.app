@@ -26,6 +26,8 @@ import { useLanguage } from '@/hooks/useLanguage';
 import ShareModal from '@/components/ui/ShareModal';
 import AdBanner from '@/components/ui/AdBanner';
 import Svg, { Circle, Line, G, Polygon, Text as SvgText } from 'react-native-svg';
+import { getMyMeetups, getInvitedMeetups, getMeetupResponses, Meetup, MeetupResponse } from '@/services/meetupService';
+import { useAuth } from '@/template';
 
 // Constants
 const CHALLENGE_CONFIG = {
@@ -34,7 +36,7 @@ const CHALLENGE_CONFIG = {
   'precision': { nameKey: 'precision', icon: 'stars' as const, color: '#F59E0B' },
 } as const;
 
-type ContentFilter = 'all' | 'training' | 'tournament' | 'challenges';
+type ContentFilter = 'all' | 'training' | 'tournament' | 'meetups';
 type TrainingSubFilter = 'all' | 'matches' | 'challenges' | 'series';
 type PeriodOption = 'all' | 'week' | '2weeks' | 'month' | '3months' | '6months' | 'year';
 
@@ -65,7 +67,7 @@ const CONTENT_FILTERS: ContentFilterDef[] = [
   { id: 'all', labelKey: 'all', icon: 'layers' },
   { id: 'training', labelKey: 'trainings', icon: 'fitness-center' },
   { id: 'tournament', labelKey: 'tournaments', icon: 'emoji-events' },
-  { id: 'challenges', labelKey: 'challenges', icon: 'track-changes' },
+  { id: 'meetups', labelKey: 'meetups', icon: 'event' },
 ];
 
 type TrainingSubFilterDef = { id: TrainingSubFilter; labelKey: string; icon: keyof typeof MaterialIcons.glyphMap };
@@ -94,6 +96,7 @@ type HistoryItem =
   | { type: 'match'; data: Match; date: string }
   | { type: 'series'; data: SeriesGroup; date: string }
   | { type: 'challenge'; data: Challenge; date: string }
+  | { type: 'meetup'; data: Meetup & { _source: 'created' | 'invited'; _acceptedCount?: number }; date: string }
   | { type: 'header'; title: string; date: string }
   | { type: 'ad'; date: string; adIndex: number };
 
@@ -463,10 +466,86 @@ const ChallengeStatsSummary = React.memo(({ challenges, t }: { challenges: Chall
   );
 });
 
+// Meetup Card Component
+const MeetupCard = React.memo(({ meetup, onPress, t, language }: { meetup: Meetup & { _source: 'created' | 'invited'; _acceptedCount?: number }; onPress: () => void; t: (s: string, k: string) => string; language: 'fr' | 'en' }) => {
+  const mDate = new Date(meetup.date);
+  const isCreator = meetup._source === 'created';
+  const isPast = mDate < new Date();
+  const daysUntil = Math.max(0, Math.ceil((mDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+
+  return (
+    <Pressable style={styles.meetupCard} onPress={onPress}>
+      <View style={[styles.meetupCardIndicator, { backgroundColor: isPast ? theme.textMuted : theme.accent }]} />
+      <View style={styles.meetupCardContent}>
+        <View style={styles.meetupCardHeader}>
+          <View style={[styles.badge, { backgroundColor: isCreator ? theme.primary + '15' : theme.accent + '15' }]}>
+            <MaterialIcons
+              name={isCreator ? 'person' : 'mail'}
+              size={12}
+              color={isCreator ? theme.primary : theme.accent}
+            />
+            <Text style={[styles.badgeText, { color: isCreator ? theme.primary : theme.accent }]}>
+              {isCreator ? t('history', 'meetupCreator') : t('history', 'meetupInvited')}
+            </Text>
+          </View>
+          {!isPast && daysUntil <= 1 ? (
+            <View style={[styles.badge, { backgroundColor: theme.warning + '15' }]}>
+              <MaterialIcons name="local-fire-department" size={12} color={theme.warning} />
+              <Text style={[styles.badgeText, { color: theme.warning }]}>
+                {daysUntil === 0 ? t('notifications', 'todayLabel') : t('notifications', 'tomorrowLabel')}
+              </Text>
+            </View>
+          ) : isPast ? (
+            <View style={[styles.badge, { backgroundColor: theme.backgroundSecondary }]}>
+              <Text style={[styles.badgeText, { color: theme.textMuted }]}>{t('history', 'meetupPast')}</Text>
+            </View>
+          ) : null}
+          <Text style={styles.timeText}>
+            {mDate.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+        </View>
+
+        <Text style={styles.meetupCardTitle} numberOfLines={1}>{meetup.title}</Text>
+
+        <View style={styles.meetupCardMeta}>
+          {meetup.terrain_name ? (
+            <View style={styles.meetupMetaItem}>
+              <MaterialIcons name="place" size={12} color={theme.textMuted} />
+              <Text style={styles.meetupMetaText} numberOfLines={1}>{meetup.terrain_name}{meetup.terrain_city ? ` - ${meetup.terrain_city}` : ''}</Text>
+            </View>
+          ) : null}
+          <View style={styles.meetupMetaItem}>
+            <MaterialIcons name="event" size={12} color={theme.textMuted} />
+            <Text style={styles.meetupMetaText}>
+              {mDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.meetupCardFooter}>
+          <View style={[styles.meetupParticipantsBadge, { backgroundColor: theme.success + '12' }]}>
+            <MaterialIcons name="group" size={12} color={theme.success} />
+            <Text style={[styles.meetupParticipantsText, { color: theme.success }]}>
+              {meetup._acceptedCount || 0}/{meetup.max_participants} {t('history', 'meetupParticipants')}
+            </Text>
+          </View>
+          {meetup.share_code ? (
+            <View style={[styles.badge, { backgroundColor: theme.backgroundSecondary }]}>
+              <MaterialIcons name="qr-code" size={10} color={theme.textMuted} />
+              <Text style={[styles.badgeText, { color: theme.textMuted }]}>{meetup.share_code}</Text>
+            </View>
+          ) : null}
+        </View>
+      </View>
+    </Pressable>
+  );
+});
+
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
   const { matches, challenges, deleteChallenge, updateChallenge, deleteMatch, refreshData, boulesSets, terrains } = useApp();
   const { t, language } = useLanguage();
+  const { user } = useAuth();
   const params = useLocalSearchParams<{ openChallengeId?: string; openMatchId?: string }>();
   
   const [contentFilter, setContentFilter] = useState<ContentFilter>('all');
@@ -487,12 +566,45 @@ export default function HistoryScreen() {
   const [showMatchShare, setShowMatchShare] = useState(false);
   const [initialOpenHandled, setInitialOpenHandled] = useState(false);
 
+  // Meetup state
+  const [allMeetups, setAllMeetups] = useState<(Meetup & { _source: 'created' | 'invited'; _acceptedCount?: number })[]>([]);
+  const [meetupsLoading, setMeetupsLoading] = useState(true);
+
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
     return () => sub?.remove();
   }, []);
   const isTablet = screenWidth >= 600;
+
+  // Load meetups
+  const loadMeetups = useCallback(async () => {
+    try {
+      const [{ meetups: created }, { meetups: invited }] = await Promise.all([
+        getMyMeetups(),
+        getInvitedMeetups(),
+      ]);
+      const allMap = new Map<string, Meetup & { _source: 'created' | 'invited' }>();
+      created.forEach(m => allMap.set(m.id, { ...m, _source: 'created' }));
+      invited.forEach(m => {
+        if (!allMap.has(m.id)) allMap.set(m.id, { ...m, _source: 'invited' });
+      });
+      const sorted = Array.from(allMap.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      // Fetch participant counts
+      const withCounts = await Promise.all(
+        sorted.map(async (m) => {
+          const { responses } = await getMeetupResponses(m.id);
+          const acceptedCount = responses.filter((r: MeetupResponse) => r.status === 'accepted').length;
+          return { ...m, _acceptedCount: acceptedCount };
+        })
+      );
+      setAllMeetups(withCounts);
+    } catch { /* silent */ } finally {
+      setMeetupsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadMeetups(); }, [loadMeetups]);
 
   // Auto-open challenge or match from deep link / home page navigation
   useEffect(() => {
@@ -520,9 +632,9 @@ export default function HistoryScreen() {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refreshData();
+    await Promise.all([refreshData(), loadMeetups()]);
     setRefreshing(false);
-  }, [refreshData]);
+  }, [refreshData, loadMeetups]);
 
   // Group matches by series
   const groupMatchesBySeries = useCallback((matchList: Match[]): (Match | SeriesGroup)[] => {
@@ -629,10 +741,8 @@ export default function HistoryScreen() {
       tournamentMatches.forEach(m => {
         items.push({ type: 'match', data: m, date: m.date });
       });
-    } else if (contentFilter === 'challenges') {
-      filteredChallengesData.forEach(c => {
-        items.push({ type: 'challenge', data: c, date: c.date });
-      });
+    } else if (contentFilter === 'meetups') {
+      // Meetups are handled separately below
     }
 
     items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -670,9 +780,9 @@ export default function HistoryScreen() {
     return {
       listData,
       stats: {
-        trainingCount: trainingMatches.length,
+        trainingCount: trainingMatches.length + filteredChallengesData.length,
         tournamentCount: tournamentMatches.length,
-        challengeCount: filteredChallengesData.length,
+        meetupCount: allMeetups.length,
         total: trainingMatches.length + tournamentMatches.length + filteredChallengesData.length
       },
       filteredChallenges: filteredChallengesData,
@@ -682,7 +792,35 @@ export default function HistoryScreen() {
         challengesCount: filteredChallengesData.length,
       },
     };
-  }, [matches, challenges, contentFilter, trainingSubFilter, selectedPeriod, groupMatchesBySeries, language]);
+  }, [matches, challenges, contentFilter, trainingSubFilter, selectedPeriod, groupMatchesBySeries, language, allMeetups]);
+
+  // Meetup list data (separate because meetups come from API, not local state)
+  const meetupListData = useMemo((): HistoryItem[] => {
+    if (contentFilter !== 'meetups') return [];
+    const periodDays = PERIOD_DAYS[selectedPeriod] || 0;
+    const filtered = periodDays > 0
+      ? allMeetups.filter(m => {
+          const cutoff = new Date();
+          cutoff.setDate(cutoff.getDate() - periodDays);
+          return new Date(m.date) >= cutoff;
+        })
+      : allMeetups;
+
+    const result: HistoryItem[] = [];
+    let currentDateKey = '';
+    filtered.forEach(m => {
+      const dateKey = getDateKey(new Date(m.date), language);
+      if (dateKey !== currentDateKey) {
+        currentDateKey = dateKey;
+        result.push({ type: 'header', title: dateKey, date: m.date });
+      }
+      result.push({ type: 'meetup', data: m, date: m.date });
+    });
+    return result;
+  }, [contentFilter, allMeetups, selectedPeriod, language]);
+
+  // Final combined list
+  const finalListData = contentFilter === 'meetups' ? meetupListData : listData;
 
   // Handlers
   const handleMatchPress = useCallback((match: Match) => {
@@ -829,6 +967,22 @@ export default function HistoryScreen() {
     if (item.type === 'ad') {
       return <AdBanner position="inline" />;
     }
+
+    if (item.type === 'meetup') {
+      return (
+        <Animated.View entering={FadeIn.duration(200).delay(Math.min(index * 20, 100))}>
+          <MeetupCard
+            meetup={item.data as Meetup & { _source: 'created' | 'invited'; _acceptedCount?: number }}
+            onPress={() => {
+              Haptics.selectionAsync();
+              router.push(`/meetup/${(item.data as Meetup).id}` as any);
+            }}
+            t={t}
+            language={language}
+          />
+        </Animated.View>
+      );
+    }
     
     if (item.type === 'series') {
       return (
@@ -858,6 +1012,7 @@ export default function HistoryScreen() {
     if (item.type === 'ad') return `ad-${(item as any).adIndex}`;
     if (item.type === 'series') return `series-${(item.data as SeriesGroup).seriesId}`;
     if (item.type === 'match') return `match-${(item.data as Match).id}`;
+    if (item.type === 'meetup') return `meetup-${(item.data as Meetup).id}`;
     return `challenge-${(item.data as Challenge).id}`;
   }, []);
 
@@ -901,7 +1056,7 @@ export default function HistoryScreen() {
           const count = filter.id === 'all' ? stats.total
             : filter.id === 'training' ? stats.trainingCount
             : filter.id === 'tournament' ? stats.tournamentCount
-            : stats.challengeCount;
+            : stats.meetupCount;
 
           return (
             <Pressable
@@ -946,7 +1101,7 @@ export default function HistoryScreen() {
 
       {/* List */}
       <FlatList
-        data={listData}
+        data={finalListData}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         ListHeaderComponent={ListHeader}
@@ -2659,6 +2814,26 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.primary,
   },
+  // Meetup Card
+  meetupCard: {
+    flexDirection: 'row',
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: 10,
+    overflow: 'hidden',
+    ...theme.shadows.card,
+  },
+  meetupCardIndicator: { width: 4 },
+  meetupCardContent: { flex: 1, padding: 12 },
+  meetupCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, gap: 6, flexWrap: 'wrap' },
+  meetupCardTitle: { fontSize: 16, fontWeight: '700', color: theme.textPrimary, marginBottom: 6 },
+  meetupCardMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 8 },
+  meetupMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  meetupMetaText: { fontSize: 12, color: theme.textSecondary },
+  meetupCardFooter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  meetupParticipantsBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: theme.borderRadius.full },
+  meetupParticipantsText: { fontSize: 11, fontWeight: '600' },
+
   deleteBtn: {
     flex: 1,
     flexDirection: 'row',
