@@ -775,9 +775,9 @@ const styles = StyleSheet.create({
   heroBellBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center', position: 'relative' as const },
   heroBellBadge: { position: 'absolute' as const, top: -2, right: -2, backgroundColor: theme.error, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: '#2563EB' },
   heroBellBadgeText: { fontSize: 10, fontWeight: '800', color: '#FFF' },
-  heroProfileBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderWidth: 2, borderColor: 'rgba(255,255,255,0.35)' },
-  heroAvatarImg: { width: 44, height: 44, borderRadius: 22 },
-  heroAvatarLetter: { fontSize: 18, fontWeight: '700', color: '#FFF' },
+  heroProfileBtn: { width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.45)' },
+  heroAvatarImg: { width: 56, height: 56, borderRadius: 28 },
+  heroAvatarLetter: { fontSize: 22, fontWeight: '700', color: '#FFF' },
   heroStatsRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 8 },
   heroStatItem: { flex: 1, alignItems: 'center' },
   heroStatValue: { fontSize: 20, fontWeight: '800', color: '#FFF' },
@@ -847,7 +847,7 @@ const styles = StyleSheet.create({
   quickLabel: { fontSize: 11, fontWeight: '600', color: theme.textPrimary, textAlign: 'center' },
 
   // ========== MEETUP SECTION ==========
-  meetupSection: { marginHorizontal: 16, marginTop: 8, marginBottom: 28, backgroundColor: theme.surface, borderRadius: 20, padding: 20, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' as const, zIndex: 2 },
+  meetupSection: { marginHorizontal: 16, marginTop: 8, marginBottom: 28, backgroundColor: theme.surface, borderRadius: 20, paddingTop: 18, paddingBottom: 22, paddingHorizontal: 20, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border, zIndex: 2 },
   meetupSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: theme.border },
   meetupSectionHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   meetupSectionIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: theme.accent + '12', alignItems: 'center', justifyContent: 'center' },
@@ -887,7 +887,7 @@ const styles = StyleSheet.create({
   meetupEmptyText: { fontSize: 13, color: theme.textMuted, fontWeight: '500' },
 
   // ========== MEETUP SUMMARY ROW ==========
-  meetupSummaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.accent + '08', borderRadius: 14, padding: 14, marginBottom: 4, borderWidth: 1, borderColor: theme.accent + '20' },
+  meetupSummaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.accent + '08', borderRadius: 14, padding: 14, marginBottom: 6, borderWidth: 1, borderColor: theme.accent + '20' },
   meetupSummaryLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 },
   meetupSummaryDateCol: { width: 50, height: 50, borderRadius: 14, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center' },
   meetupSummaryDateDay: { fontSize: 20, fontWeight: '900', color: theme.primary, lineHeight: 22 },
