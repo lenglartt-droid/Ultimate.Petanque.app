@@ -1,17 +1,100 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { AuthRouter, useAuth } from '@/template';
 import { getSupabaseClient } from '@/template';
-import { Redirect } from 'expo-router';
+import { Redirect, router } from 'expo-router';
+import * as Linking from 'expo-linking';
 import theme from '@/constants/theme';
 
+// ============================================
+// Deep Link Parser
+// ============================================
+function parseDeepLink(url: string): { type: 'share' | 'meetup'; code: string } | null {
+  try {
+    // Handle custom scheme: ultimatepetanque://share/CODE or ultimatepetanque://meetup/CODE
+    // Handle https: https://ultimatepetanque.app/share/CODE or /meetup/CODE
+    const parsed = Linking.parse(url);
+    const path = parsed.path || '';
+    const segments = path.split('/').filter(Boolean);
+
+    if (segments.length >= 2 && segments[0] === 'share' && segments[1]) {
+      return { type: 'share', code: segments[1] };
+    }
+    if (segments.length >= 2 && segments[0] === 'meetup' && segments[1]) {
+      return { type: 'meetup', code: segments[1] };
+    }
+
+    // Also check queryParams as fallback (e.g. ?code=XXX)
+    if (segments.length >= 1 && segments[0] === 'share' && parsed.queryParams?.code) {
+      return { type: 'share', code: String(parsed.queryParams.code) };
+    }
+    if (segments.length >= 1 && segments[0] === 'meetup' && parsed.queryParams?.code) {
+      return { type: 'meetup', code: String(parsed.queryParams.code) };
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// ============================================
+// Profile Checker with Deep Link Handling
+// ============================================
 function ProfileChecker() {
   const { user } = useAuth();
   const [checking, setChecking] = useState(true);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const supabase = getSupabaseClient();
-
   const [needsConsent, setNeedsConsent] = useState(false);
+  const pendingDeepLinkRef = useRef<{ type: 'share' | 'meetup'; code: string } | null>(null);
+  const profileReadyRef = useRef(false);
+
+  // Handle deep link navigation after profile is ready
+  const handleDeepLinkNavigation = (link: { type: 'share' | 'meetup'; code: string }) => {
+    // Small delay to let the tabs mount before navigating
+    setTimeout(() => {
+      if (link.type === 'meetup') {
+        // Navigate to meetup lookup: first try finding by code, then redirect
+        router.replace('/(tabs)');
+        setTimeout(() => {
+          // Pass the code as a search param to share page which handles meetup codes too
+          router.push({ pathname: '/share', params: { deepLinkCode: link.code, deepLinkType: 'meetup' } });
+        }, 300);
+      } else {
+        // Share code: navigate to share page with pre-filled code
+        router.replace('/(tabs)');
+        setTimeout(() => {
+          router.push({ pathname: '/share', params: { deepLinkCode: link.code, deepLinkType: 'share' } });
+        }, 300);
+      }
+    }, 200);
+  };
+
+  // Listen for deep links (app already open)
+  useEffect(() => {
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      const link = parseDeepLink(url);
+      if (link && profileReadyRef.current) {
+        handleDeepLinkNavigation(link);
+      } else if (link) {
+        pendingDeepLinkRef.current = link;
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
+  // Check initial URL (app opened via deep link)
+  useEffect(() => {
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        const link = parseDeepLink(url);
+        if (link) {
+          pendingDeepLinkRef.current = link;
+        }
+      }
+    });
+  }, []);
 
   useEffect(() => {
     const checkProfile = async () => {
@@ -29,11 +112,20 @@ function ProfileChecker() {
 
         if (error) throw error;
 
-        // If no username set, redirect to onboarding
         if (!data?.username || data.username.trim() === '') {
           setNeedsOnboarding(true);
         } else if (!data?.consent_accepted) {
           setNeedsConsent(true);
+        } else {
+          // Profile is ready - handle pending deep link
+          profileReadyRef.current = true;
+          if (pendingDeepLinkRef.current) {
+            const link = pendingDeepLinkRef.current;
+            pendingDeepLinkRef.current = null;
+            handleDeepLinkNavigation(link);
+            setChecking(false);
+            return;
+          }
         }
       } catch (err) {
         console.log('Profile check error:', err);

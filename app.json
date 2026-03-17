@@ -5,18 +5,50 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/app-logo.png",
-    "scheme": "onspaceapp",
+    "scheme": "ultimatepetanque",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ultimatepetanque.app",
+      "associatedDomains": ["applinks:ultimatepetanque.app"]
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/app-logo.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.ultimatepetanque.app",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "ultimatepetanque",
+              "host": "*",
+              "pathPrefix": "/share"
+            },
+            {
+              "scheme": "ultimatepetanque",
+              "host": "*",
+              "pathPrefix": "/meetup"
+            },
+            {
+              "scheme": "https",
+              "host": "ultimatepetanque.app",
+              "pathPrefix": "/share"
+            },
+            {
+              "scheme": "https",
+              "host": "ultimatepetanque.app",
+              "pathPrefix": "/meetup"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "bundler": "metro",

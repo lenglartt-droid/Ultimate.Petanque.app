@@ -12,11 +12,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import theme from '@/constants/theme';
 import { redeemShareCode, ShareItemType } from '@/services/shareService';
+import { findMeetupByCode } from '@/services/meetupService';
 import { useAlert } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useApp } from '@/contexts/AppContext';
@@ -69,8 +70,39 @@ export default function RedeemShareScreen() {
   const { t } = useLanguage();
   const { refreshData } = useApp();
   const { showToast } = useToast();
+  const params = useLocalSearchParams<{ deepLinkCode?: string; deepLinkType?: string }>();
   const [code, setCode] = useState('');
   const [isRedeeming, setIsRedeeming] = useState(false);
+  const [deepLinkHandled, setDeepLinkHandled] = useState(false);
+
+  // Handle deep link params (auto-redeem)
+  React.useEffect(() => {
+    if (deepLinkHandled || !params.deepLinkCode) return;
+    setDeepLinkHandled(true);
+    const deepCode = params.deepLinkCode;
+    const deepType = params.deepLinkType;
+
+    if (deepType === 'meetup') {
+      // Meetup code: find and navigate directly
+      (async () => {
+        setCode(deepCode);
+        setIsRedeeming(true);
+        const { meetup } = await findMeetupByCode(deepCode);
+        setIsRedeeming(false);
+        if (meetup) {
+          router.replace(`/meetup/${meetup.id}` as any);
+        } else {
+          showAlert(t('common', 'error'), t('meetup', 'invalidCode'));
+        }
+      })();
+    } else {
+      // Share code: auto-fill and auto-redeem
+      setCode(deepCode);
+      setTimeout(() => {
+        handleRedeemCode(deepCode);
+      }, 300);
+    }
+  }, [params.deepLinkCode, params.deepLinkType, deepLinkHandled]);
   const [redeemResult, setRedeemResult] = useState<{
     itemType: ShareItemType;
     itemId: string;
@@ -78,15 +110,25 @@ export default function RedeemShareScreen() {
     autoSavedItems: AutoSavedItem[];
   } | null>(null);
 
-  const handleRedeem = async () => {
-    if (!code.trim()) {
+  const handleRedeemCode = async (codeValue: string) => {
+    if (!codeValue.trim()) {
       showAlert(t('common', 'error'), t('share', 'enterCode'));
       return;
     }
 
     setIsRedeeming(true);
     try {
-      const result = await redeemShareCode(code.trim());
+      // First check if it looks like a meetup code (RDV- prefix)
+      if (codeValue.trim().toUpperCase().startsWith('RDV-')) {
+        const { meetup } = await findMeetupByCode(codeValue.trim());
+        if (meetup) {
+          setIsRedeeming(false);
+          router.replace(`/meetup/${meetup.id}` as any);
+          return;
+        }
+      }
+
+      const result = await redeemShareCode(codeValue.trim());
       if (result.error) {
         showAlert(t('common', 'error'), result.error);
       } else {
@@ -127,6 +169,8 @@ export default function RedeemShareScreen() {
       setIsRedeeming(false);
     }
   };
+
+  const handleRedeem = () => handleRedeemCode(code);
 
   const handleNavigateToItem = (itemType: ShareItemType, itemId: string) => {
     const route = `${ROUTE_MAP[itemType]}${itemId}`;
