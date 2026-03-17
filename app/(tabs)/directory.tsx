@@ -26,7 +26,7 @@ import { Terrain, Player, Club, Tournament } from '@/services/mockData';
 import { TerrainType } from '@/constants/config';
 import { useLanguage } from '@/hooks/useLanguage';
 import { SharedOverlayBadge } from '@/components/ui/SharedBadge';
-import AdBanner from '@/components/ui/AdBanner';
+
 import MergePickerModal from '@/components/ui/MergePickerModal';
 import { saveMergeLog, getMergeLogs, undoMerge, isUndoable, getUndoTimeRemaining, deleteMergeLog, MergeLog, ReassignedRelation } from '@/services/mergeHistoryService';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services/meetupService';
@@ -1129,6 +1129,7 @@ export default function DirectoryScreen() {
             key={`tablet-${activeTab}-${numColumns}`}
             data={paginatedData as any[]}
             renderItem={getCurrentRenderItem() as any}
+            keyExtractor={(item: any) => item.id}
             numColumns={2}
             columnWrapperStyle={styles.tabletRow}
             contentContainerStyle={{
