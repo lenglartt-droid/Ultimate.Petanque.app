@@ -357,14 +357,14 @@ export async function getMyPublicableItems(): Promise<{
 
   const uid = userData.user.id;
   const [pRes, cRes, tRes, toRes] = await Promise.all([
-    supabase.from('players').select('id, name, is_public').eq('user_id', uid),
+    supabase.from('players').select('id, name, is_public, email').eq('user_id', uid),
     supabase.from('clubs').select('id, name, is_public').eq('user_id', uid),
     supabase.from('terrains').select('id, name, is_public').eq('user_id', uid),
     supabase.from('tournaments').select('id, name, is_public').eq('user_id', uid),
   ]);
 
   return {
-    players: (pRes.data || []).map((p: any) => ({ id: p.id, name: p.name, isPublic: p.is_public ?? false })),
+    players: (pRes.data || []).map((p: any) => ({ id: p.id, name: p.name, isPublic: p.is_public ?? false, email: p.email || null })),
     clubs: (cRes.data || []).map((c: any) => ({ id: c.id, name: c.name, isPublic: c.is_public ?? false })),
     terrains: (tRes.data || []).map((t: any) => ({ id: t.id, name: t.name, isPublic: t.is_public ?? false })),
     tournaments: (toRes.data || []).map((t: any) => ({ id: t.id, name: t.name, isPublic: t.is_public ?? false })),

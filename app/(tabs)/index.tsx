@@ -306,169 +306,168 @@ export default function HomeScreen() {
           </View>
         </Animated.View>
 
-        {/* ========== À VENIR (TOURNOI + RDV) ========== */}
+        {/* ========== À VENIR (TOURNOI + RDV) - 2 COLONNES ========== */}
         <Animated.View entering={FadeIn.duration(400).delay(140)} style={[styles.section, isTablet && styles.sectionTablet, { zIndex: 1 }]}>
           <View style={styles.upcomingHeaderRow}>
             <MaterialIcons name="event-note" size={20} color={theme.primary} />
             <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>{t('home', 'upcoming')}</Text>
           </View>
 
-          {/* Tournament Countdown */}
-          {nextTournament ? (
-            <Pressable
-              style={({ pressed }) => [styles.tournamentCountdownCard, pressed && { opacity: 0.92, transform: [{ scale: 0.985 }] }]}
-              onPress={() => router.push(`/tournament/${nextTournament.id}`)}
-            >
-              <LinearGradient colors={['#FEF3C7', '#FDE68A']} style={styles.tournamentCountdownGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-                <View style={styles.tournamentCountdownTop}>
-                  <View style={styles.tournamentCountdownIcon}>
-                    <MaterialIcons name="emoji-events" size={28} color="#B45309" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.tournamentCountdownLabel}>
-                      {nextTournament.status === 'En cours' ? t('tournamentStatus', 'inProgress') : t('tournamentStatus', 'upcoming')}
-                    </Text>
-                    <Text style={styles.tournamentCountdownName} numberOfLines={1}>{nextTournament.name}</Text>
-                    <View style={styles.tournamentCountdownMeta}>
-                      <MaterialIcons name="place" size={13} color="#92400E" />
-                      <Text style={styles.tournamentCountdownCity}>{nextTournament.location?.city || ''}</Text>
-                      <Text style={styles.tournamentCountdownDot}>{'\u2022'}</Text>
-                      <Text style={styles.tournamentCountdownDate}>
-                        {new Date(nextTournament.date).toLocaleDateString(language === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short' })}
+          <View style={styles.upcomingColumnsRow}>
+            {/* LEFT COLUMN: Tournament Countdown */}
+            <View style={styles.upcomingCol}>
+              {nextTournament ? (
+                <Pressable
+                  style={({ pressed }) => [styles.colTournamentCard, pressed && { opacity: 0.92, transform: [{ scale: 0.985 }] }]}
+                  onPress={() => router.push(`/tournament/${nextTournament.id}`)}
+                >
+                  <LinearGradient colors={['#FEF3C7', '#FDE68A']} style={styles.colTournamentGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+                    <View style={styles.colTournamentHeader}>
+                      <View style={styles.colTournamentIconBg}>
+                        <MaterialIcons name="emoji-events" size={20} color="#B45309" />
+                      </View>
+                      <Text style={styles.colTournamentLabel}>
+                        {nextTournament.status === 'En cours' ? t('tournamentStatus', 'inProgress') : t('tournamentStatus', 'upcoming')}
                       </Text>
                     </View>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={22} color="#92400E" />
-                </View>
-
-                {countdown ? (
-                  <View style={styles.countdownRow}>
-                    {countdown.label ? (
-                      <View style={styles.countdownBadgeToday}>
-                        <MaterialIcons name="local-fire-department" size={16} color="#B45309" />
-                        <Text style={styles.countdownBadgeTodayText}>{countdown.label}</Text>
+                    <Text style={styles.colTournamentName} numberOfLines={2}>{nextTournament.name}</Text>
+                    <View style={styles.colTournamentMeta}>
+                      <MaterialIcons name="place" size={12} color="#92400E" />
+                      <Text style={styles.colTournamentCity} numberOfLines={1}>{nextTournament.location?.city || ''}</Text>
+                    </View>
+                    <Text style={styles.colTournamentDate}>
+                      {new Date(nextTournament.date).toLocaleDateString(language === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short' })}
+                    </Text>
+                    {countdown ? (
+                      <View style={styles.colCountdownRow}>
+                        {countdown.label ? (
+                          <View style={styles.colCountdownBadge}>
+                            <MaterialIcons name="local-fire-department" size={14} color="#B45309" />
+                            <Text style={styles.colCountdownBadgeText}>{countdown.label}</Text>
+                          </View>
+                        ) : (
+                          <>
+                            <View style={styles.colCountdownUnit}>
+                              <Text style={styles.colCountdownValue}>{countdown.days}</Text>
+                              <Text style={styles.colCountdownUnitLabel}>{language === 'fr' ? 'j' : 'd'}</Text>
+                            </View>
+                            <Text style={styles.colCountdownSep}>:</Text>
+                            <View style={styles.colCountdownUnit}>
+                              <Text style={styles.colCountdownValue}>{countdown.hours}</Text>
+                              <Text style={styles.colCountdownUnitLabel}>h</Text>
+                            </View>
+                            <Text style={styles.colCountdownSep}>:</Text>
+                            <View style={styles.colCountdownUnit}>
+                              <Text style={styles.colCountdownValue}>{countdown.minutes}</Text>
+                              <Text style={styles.colCountdownUnitLabel}>min</Text>
+                            </View>
+                          </>
+                        )}
                       </View>
-                    ) : (
-                      <>
-                        <View style={styles.countdownUnit}>
-                          <Text style={styles.countdownValue}>{countdown.days}</Text>
-                          <Text style={styles.countdownUnitLabel}>{language === 'fr' ? 'j' : 'd'}</Text>
-                        </View>
-                        <Text style={styles.countdownSep}>:</Text>
-                        <View style={styles.countdownUnit}>
-                          <Text style={styles.countdownValue}>{countdown.hours}</Text>
-                          <Text style={styles.countdownUnitLabel}>h</Text>
-                        </View>
-                        <Text style={styles.countdownSep}>:</Text>
-                        <View style={styles.countdownUnit}>
-                          <Text style={styles.countdownValue}>{countdown.minutes}</Text>
-                          <Text style={styles.countdownUnitLabel}>min</Text>
-                        </View>
-                      </>
-                    )}
+                    ) : null}
+                  </LinearGradient>
+                </Pressable>
+              ) : (
+                <View style={styles.colEmptyCard}>
+                  <View style={styles.colEmptyIconBg}>
+                    <MaterialIcons name="emoji-events" size={28} color={theme.textMuted} />
                   </View>
-                ) : null}
-              </LinearGradient>
-            </Pressable>
-          ) : null}
-
-          {/* Meetups */}
-          <View style={styles.meetupSubSection}>
-            <View style={styles.meetupTitleRow}>
-              <View style={styles.meetupTitleLeft}>
-                <MaterialIcons name="event" size={18} color={theme.accent} />
-                <Text style={styles.meetupSubTitle}>{t('meetup', 'upcomingMeetups')}</Text>
-              </View>
-              <View style={styles.meetupTitleBtns}>
-                {pendingInviteCount > 0 ? (
-                  <Pressable style={styles.mBtnInvite} onPress={() => router.push('/meetup/invitations' as any)}>
-                    <MaterialIcons name="mail" size={14} color={theme.error} />
-                    <Text style={styles.mBtnInviteText}>{pendingInviteCount}</Text>
+                  <Text style={styles.colEmptyText}>{t('home', 'noTournament')}</Text>
+                  <Pressable style={styles.colEmptyBtn} onPress={() => router.push('/tournament/new')}>
+                    <MaterialIcons name="add" size={14} color="#FFF" />
                   </Pressable>
-                ) : null}
-                <Pressable style={styles.mBtnJoin} onPress={() => setShowJoinMeetupModal(true)}>
-                  <MaterialIcons name="qr-code" size={14} color={theme.accent} />
-                </Pressable>
-                <Pressable style={styles.mBtnCreate} onPress={() => router.push('/meetup/new' as any)}>
-                  <MaterialIcons name="add" size={16} color="#FFF" />
-                </Pressable>
-              </View>
+                </View>
+              )}
             </View>
 
-            {meetups.length > 0 ? (
-              <View style={styles.meetupCards}>
-                {(() => {
-                  const m = meetups[0];
-                  const mDate = new Date(m.date);
-                  const daysUntil = Math.max(0, Math.ceil((mDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-                  return (
-                    <Pressable
-                      style={({ pressed }) => [styles.meetupNextCard, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
-                      onPress={() => router.push(`/meetup/${m.id}` as any)}
-                    >
-                      <LinearGradient colors={['#E0F2FE', '#BAE6FD']} style={styles.meetupNextGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-                        <View style={styles.meetupNextTop}>
-                          <View style={styles.meetupNextDateBox}>
-                            <Text style={styles.meetupNextDateDay}>{mDate.getDate()}</Text>
-                            <Text style={styles.meetupNextDateMonth}>{mDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}</Text>
-                          </View>
-                          <View style={styles.meetupNextInfo}>
-                            <Text style={styles.meetupNextTitle} numberOfLines={1}>{m.title}</Text>
-                            <View style={styles.meetupNextMeta}>
-                              <MaterialIcons name="schedule" size={13} color="#0369A1" />
-                              <Text style={styles.meetupNextTime}>
-                                {mDate.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
-                              </Text>
-                              {daysUntil <= 1 ? (
-                                <View style={styles.meetupNextSoonBadge}>
-                                  <Text style={styles.meetupNextSoonText}>{daysUntil === 0 ? t('notifications', 'todayLabel') : t('notifications', 'tomorrowLabel')}</Text>
-                                </View>
-                              ) : null}
-                            </View>
-                          </View>
-                          <MaterialIcons name="chevron-right" size={22} color="#0369A1" />
-                        </View>
-                        <View style={styles.meetupNextBottom}>
-                          <View style={styles.meetupNextParticipants}>
-                            <MaterialIcons name="group" size={14} color="#0369A1" />
-                            <Text style={styles.meetupNextParticipantsText}>{m._acceptedCount || 0}/{m._maxParticipants || 8} {t('meetup', 'confirmedCount')}</Text>
-                          </View>
-                          {m._source === 'created' ? (
-                            <View style={styles.meetupNextCreatorTag}>
-                              <MaterialIcons name="person" size={11} color={theme.primary} />
-                              <Text style={styles.meetupNextCreatorText}>{t('meetup', 'yourMeetup')}</Text>
-                            </View>
-                          ) : (
-                            <View style={styles.meetupNextInvitedTag}>
-                              <MaterialIcons name="mail" size={11} color={theme.accent} />
-                              <Text style={styles.meetupNextInvitedText}>{t('meetup', 'invited')}</Text>
-                            </View>
-                          )}
-                        </View>
-                      </LinearGradient>
+            {/* RIGHT COLUMN: Meetups */}
+            <View style={styles.upcomingCol}>
+              <View style={styles.colMeetupHeader}>
+                <View style={styles.colMeetupTitleLeft}>
+                  <MaterialIcons name="event" size={14} color={theme.accent} />
+                  <Text style={styles.colMeetupTitle}>RDV</Text>
+                </View>
+                <View style={styles.colMeetupActions}>
+                  {pendingInviteCount > 0 ? (
+                    <Pressable style={styles.colMeetupActionBtn} onPress={() => router.push('/meetup/invitations' as any)}>
+                      <MaterialIcons name="mail" size={12} color={theme.error} />
+                      <View style={styles.colMeetupBadge}><Text style={styles.colMeetupBadgeText}>{pendingInviteCount > 9 ? '9+' : pendingInviteCount}</Text></View>
                     </Pressable>
-                  );
-                })()}
-
-                {meetups.length > 1 ? (
-                  <Pressable
-                    style={({ pressed }) => [styles.meetupMoreLink, pressed && { opacity: 0.7 }]}
-                    onPress={() => setShowMeetupListModal(true)}
-                  >
-                    <MaterialIcons name="date-range" size={16} color={theme.accent} />
-                    <Text style={styles.meetupMoreText}>
-                      +{meetups.length - 1} {language === 'fr' ? 'autre(s) RDV' : 'more meetup(s)'}
-                    </Text>
-                    <MaterialIcons name="chevron-right" size={18} color={theme.accent} />
+                  ) : null}
+                  <Pressable style={styles.colMeetupActionBtn} onPress={() => setShowJoinMeetupModal(true)}>
+                    <MaterialIcons name="qr-code" size={12} color={theme.accent} />
                   </Pressable>
-                ) : null}
+                  <Pressable style={[styles.colMeetupActionBtn, { backgroundColor: theme.primary }]} onPress={() => router.push('/meetup/new' as any)}>
+                    <MaterialIcons name="add" size={14} color="#FFF" />
+                  </Pressable>
+                </View>
               </View>
-            ) : !meetupsLoading ? (
-              <View style={styles.meetupEmptyBlock}>
-                <MaterialIcons name="event-available" size={28} color={theme.textMuted} />
-                <Text style={styles.meetupEmptyText}>{t('meetup', 'noMeetups')}</Text>
-              </View>
-            ) : null}
+
+              {meetups.length > 0 ? (
+                <View style={styles.colMeetupList}>
+                  {meetups.slice(0, 2).map((m) => {
+                    const mDate = new Date(m.date);
+                    const daysUntil = Math.max(0, Math.ceil((mDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+                    return (
+                      <Pressable
+                        key={m.id}
+                        style={({ pressed }) => [styles.colMeetupItem, pressed && { opacity: 0.85 }]}
+                        onPress={() => router.push(`/meetup/${m.id}` as any)}
+                      >
+                        <View style={styles.colMeetupDateBox}>
+                          <Text style={styles.colMeetupDateDay}>{mDate.getDate()}</Text>
+                          <Text style={styles.colMeetupDateMonth}>{mDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}</Text>
+                        </View>
+                        <View style={styles.colMeetupInfo}>
+                          <Text style={styles.colMeetupItemTitle} numberOfLines={1}>{m.title}</Text>
+                          <View style={styles.colMeetupItemMeta}>
+                            <Text style={styles.colMeetupItemTime}>
+                              {mDate.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                            </Text>
+                            {daysUntil <= 1 ? (
+                              <View style={styles.colMeetupSoonBadge}>
+                                <Text style={styles.colMeetupSoonText}>{daysUntil === 0 ? t('notifications', 'todayLabel') : t('notifications', 'tomorrowLabel')}</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                          <View style={styles.colMeetupItemBottom}>
+                            <MaterialIcons name="group" size={11} color="#0369A1" />
+                            <Text style={styles.colMeetupParticipants}>{m._acceptedCount || 0}/{m._maxParticipants || 8}</Text>
+                            {m._source === 'created' ? (
+                              <View style={styles.colMeetupCreatorDot}>
+                                <MaterialIcons name="person" size={8} color={theme.primary} />
+                              </View>
+                            ) : (
+                              <View style={styles.colMeetupInvitedDot}>
+                                <MaterialIcons name="mail" size={8} color={theme.accent} />
+                              </View>
+                            )}
+                          </View>
+                        </View>
+                        <MaterialIcons name="chevron-right" size={16} color="#0369A1" />
+                      </Pressable>
+                    );
+                  })}
+
+                  {meetups.length > 2 ? (
+                    <Pressable
+                      style={({ pressed }) => [styles.colMeetupMoreLink, pressed && { opacity: 0.7 }]}
+                      onPress={() => setShowMeetupListModal(true)}
+                    >
+                      <Text style={styles.colMeetupMoreText}>
+                        +{meetups.length - 2} {language === 'fr' ? 'autre(s)' : 'more'}
+                      </Text>
+                      <MaterialIcons name="chevron-right" size={14} color={theme.accent} />
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : !meetupsLoading ? (
+                <View style={styles.colMeetupEmpty}>
+                  <MaterialIcons name="event-available" size={24} color={theme.textMuted} />
+                  <Text style={styles.colMeetupEmptyText}>{t('meetup', 'noMeetups')}</Text>
+                </View>
+              ) : null}
+            </View>
           </View>
         </Animated.View>
 
@@ -810,24 +809,59 @@ const styles = StyleSheet.create({
   actionLabelTablet: { fontSize: 18 },
   actionSub: { fontSize: 11, color: theme.textSecondary },
 
-  // ========== TOURNAMENT COUNTDOWN ==========
-  tournamentCountdownCard: { borderRadius: 20, overflow: 'hidden', ...theme.shadows.cardElevated },
-  tournamentCountdownGradient: { padding: 18 },
-  tournamentCountdownTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  tournamentCountdownIcon: { width: 52, height: 52, borderRadius: 16, backgroundColor: 'rgba(180,83,9,0.12)', alignItems: 'center', justifyContent: 'center' },
-  tournamentCountdownLabel: { fontSize: 10, fontWeight: '700', color: '#92400E', textTransform: 'uppercase', letterSpacing: 0.5 },
-  tournamentCountdownName: { fontSize: 17, fontWeight: '800', color: '#78350F', marginTop: 2 },
-  tournamentCountdownMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  tournamentCountdownCity: { fontSize: 12, fontWeight: '600', color: '#92400E' },
-  tournamentCountdownDot: { fontSize: 12, color: '#92400E' },
-  tournamentCountdownDate: { fontSize: 12, fontWeight: '600', color: '#92400E' },
-  countdownRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 16, backgroundColor: 'rgba(180,83,9,0.08)', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 20 },
-  countdownUnit: { alignItems: 'center' },
-  countdownValue: { fontSize: 26, fontWeight: '900', color: '#78350F' },
-  countdownUnitLabel: { fontSize: 10, fontWeight: '700', color: '#92400E', textTransform: 'uppercase' },
-  countdownSep: { fontSize: 22, fontWeight: '700', color: '#92400E', marginHorizontal: 4 },
-  countdownBadgeToday: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(180,83,9,0.15)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12 },
-  countdownBadgeTodayText: { fontSize: 15, fontWeight: '800', color: '#78350F' },
+  // ========== 2-COLUMN À VENIR ==========
+  upcomingColumnsRow: { flexDirection: 'row', gap: 10 },
+  upcomingCol: { flex: 1 },
+
+  // Tournament column card
+  colTournamentCard: { borderRadius: 18, overflow: 'hidden', ...theme.shadows.cardElevated, flex: 1 },
+  colTournamentGradient: { padding: 14, flex: 1 },
+  colTournamentHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  colTournamentIconBg: { width: 36, height: 36, borderRadius: 11, backgroundColor: 'rgba(180,83,9,0.12)', alignItems: 'center', justifyContent: 'center' },
+  colTournamentLabel: { fontSize: 9, fontWeight: '700', color: '#92400E', textTransform: 'uppercase', letterSpacing: 0.5, flex: 1 },
+  colTournamentName: { fontSize: 14, fontWeight: '800', color: '#78350F', marginBottom: 6, lineHeight: 18 },
+  colTournamentMeta: { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 2 },
+  colTournamentCity: { fontSize: 11, fontWeight: '600', color: '#92400E', flex: 1 },
+  colTournamentDate: { fontSize: 11, fontWeight: '600', color: '#92400E', marginBottom: 8 },
+  colCountdownRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: 'rgba(180,83,9,0.08)', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 8 },
+  colCountdownUnit: { alignItems: 'center' },
+  colCountdownValue: { fontSize: 20, fontWeight: '900', color: '#78350F' },
+  colCountdownUnitLabel: { fontSize: 8, fontWeight: '700', color: '#92400E', textTransform: 'uppercase' },
+  colCountdownSep: { fontSize: 16, fontWeight: '700', color: '#92400E', marginHorizontal: 1 },
+  colCountdownBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(180,83,9,0.15)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  colCountdownBadgeText: { fontSize: 12, fontWeight: '800', color: '#78350F' },
+  colEmptyCard: { backgroundColor: theme.surface, borderRadius: 18, padding: 20, alignItems: 'center', justifyContent: 'center', flex: 1, borderWidth: 1, borderColor: theme.border, minHeight: 160 },
+  colEmptyIconBg: { width: 52, height: 52, borderRadius: 26, backgroundColor: theme.carreauColor + '12', alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  colEmptyText: { fontSize: 12, color: theme.textMuted, fontWeight: '500', textAlign: 'center', marginBottom: 10 },
+  colEmptyBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: theme.carreauColor, alignItems: 'center', justifyContent: 'center' },
+
+  // Meetup column
+  colMeetupHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  colMeetupTitleLeft: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  colMeetupTitle: { fontSize: 13, fontWeight: '700', color: theme.textSecondary },
+  colMeetupActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  colMeetupActionBtn: { width: 26, height: 26, borderRadius: 8, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
+  colMeetupBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: theme.error, minWidth: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
+  colMeetupBadgeText: { fontSize: 8, fontWeight: '800', color: '#FFF' },
+  colMeetupList: { gap: 6 },
+  colMeetupItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E0F2FE', borderRadius: 12, padding: 8, gap: 8 },
+  colMeetupDateBox: { width: 38, height: 38, borderRadius: 10, backgroundColor: 'rgba(3,105,161,0.12)', alignItems: 'center', justifyContent: 'center' },
+  colMeetupDateDay: { fontSize: 16, fontWeight: '900', color: '#0369A1', lineHeight: 18 },
+  colMeetupDateMonth: { fontSize: 7, fontWeight: '700', color: '#0369A1', letterSpacing: 0.3 },
+  colMeetupInfo: { flex: 1 },
+  colMeetupItemTitle: { fontSize: 12, fontWeight: '700', color: '#0C4A6E', marginBottom: 2 },
+  colMeetupItemMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 },
+  colMeetupItemTime: { fontSize: 10, fontWeight: '600', color: '#0369A1' },
+  colMeetupSoonBadge: { backgroundColor: '#FEF3C7', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
+  colMeetupSoonText: { fontSize: 8, fontWeight: '700', color: '#B45309' },
+  colMeetupItemBottom: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  colMeetupParticipants: { fontSize: 10, fontWeight: '600', color: '#0369A1' },
+  colMeetupCreatorDot: { width: 14, height: 14, borderRadius: 7, backgroundColor: theme.primary + '18', alignItems: 'center', justifyContent: 'center' },
+  colMeetupInvitedDot: { width: 14, height: 14, borderRadius: 7, backgroundColor: theme.accent + '18', alignItems: 'center', justifyContent: 'center' },
+  colMeetupMoreLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 6, backgroundColor: theme.accent + '08', borderRadius: 8, borderWidth: 1, borderColor: theme.accent + '18' },
+  colMeetupMoreText: { fontSize: 11, fontWeight: '600', color: theme.accent },
+  colMeetupEmpty: { alignItems: 'center', backgroundColor: theme.surface, borderRadius: 14, paddingVertical: 20, gap: 6, borderWidth: 1, borderColor: theme.border, flex: 1, justifyContent: 'center', minHeight: 120 },
+  colMeetupEmptyText: { fontSize: 11, color: theme.textMuted, fontWeight: '500', textAlign: 'center' },
 
   // ========== COMPACT HISTORY ==========
   historyHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
@@ -860,39 +894,6 @@ const styles = StyleSheet.create({
 
   // ========== MEETUP SECTION ==========
   upcomingHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
-  meetupSubSection: { marginTop: 16 },
-  meetupSubTitle: { fontSize: 14, fontWeight: '600', color: theme.textSecondary },
-  meetupTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
-  meetupTitleLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  meetupTitleBtns: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  mBtnInvite: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.error + '12', width: 36, height: 32, borderRadius: 10, justifyContent: 'center' },
-  mBtnInviteText: { fontSize: 11, fontWeight: '800', color: theme.error },
-  mBtnJoin: { width: 32, height: 32, borderRadius: 10, backgroundColor: theme.accent + '12', alignItems: 'center', justifyContent: 'center' },
-  mBtnCreate: { width: 32, height: 32, borderRadius: 10, backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center' },
-  meetupCards: { gap: 10 },
-  meetupNextCard: { borderRadius: 18, overflow: 'hidden' as const, ...theme.shadows.cardElevated },
-  meetupNextGradient: { padding: 16 },
-  meetupNextTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  meetupNextDateBox: { width: 54, height: 54, borderRadius: 16, backgroundColor: 'rgba(3,105,161,0.12)', alignItems: 'center', justifyContent: 'center' },
-  meetupNextDateDay: { fontSize: 22, fontWeight: '900', color: '#0369A1', lineHeight: 24 },
-  meetupNextDateMonth: { fontSize: 9, fontWeight: '700', color: '#0369A1', letterSpacing: 0.5 },
-  meetupNextInfo: { flex: 1 },
-  meetupNextTitle: { fontSize: 16, fontWeight: '800', color: '#0C4A6E', marginBottom: 4 },
-  meetupNextMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  meetupNextTime: { fontSize: 13, fontWeight: '600', color: '#0369A1' },
-  meetupNextSoonBadge: { backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
-  meetupNextSoonText: { fontSize: 10, fontWeight: '700', color: '#B45309' },
-  meetupNextBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(3,105,161,0.12)' },
-  meetupNextParticipants: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  meetupNextParticipantsText: { fontSize: 12, fontWeight: '600', color: '#0369A1' },
-  meetupNextCreatorTag: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.primary + '15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  meetupNextCreatorText: { fontSize: 10, fontWeight: '700', color: theme.primary },
-  meetupNextInvitedTag: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.accent + '15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  meetupNextInvitedText: { fontSize: 10, fontWeight: '700', color: theme.accent },
-  meetupMoreLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: theme.accent + '08', borderRadius: 12, paddingVertical: 10, borderWidth: 1, borderColor: theme.accent + '18' },
-  meetupMoreText: { fontSize: 13, fontWeight: '600', color: theme.accent },
-  meetupEmptyBlock: { alignItems: 'center', backgroundColor: theme.surface, borderRadius: 16, paddingVertical: 24, gap: 8, borderWidth: 1, borderColor: theme.border },
-  meetupEmptyText: { fontSize: 13, color: theme.textMuted, fontWeight: '500' },
 
   meetupDateCol: { width: 50, height: 50, borderRadius: 14, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center' },
   meetupDateDay: { fontSize: 20, fontWeight: '900', color: theme.primary, lineHeight: 22 },
