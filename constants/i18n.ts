@@ -265,6 +265,7 @@ export const translations = {
   // ============================================
   stats: {
     statistics: { fr: 'Statistiques', en: 'Statistics' },
+    today: { fr: "Aujourd'hui", en: 'Today' },
     matches: { fr: 'parties', en: 'games' },
     victories: { fr: 'victoires', en: 'wins' },
     progression: { fr: 'Progression', en: 'Progression' },
@@ -2590,6 +2591,18 @@ export const translations = {
     crocheteDesc: { fr: 'Point devie au lacher', en: 'Point deviated on release' },
     sorti: { fr: 'Sorti', en: 'Out' },
     sortiDesc: { fr: 'Sorti du terrain', en: 'Out of bounds' },
+  },
+
+  // ============================================
+  // TOAST
+  // ============================================
+  toast: {
+    addedToTab: { fr: 'Ajouté dans', en: 'Added to' },
+    viewTab: { fr: 'Voir', en: 'View' },
+    playersTab: { fr: 'Joueurs', en: 'Players' },
+    clubsTab: { fr: 'Clubs', en: 'Clubs' },
+    terrainsTab: { fr: 'Terrains', en: 'Courts' },
+    tournamentsTab: { fr: 'Tournois', en: 'Tournaments' },
   },
 
   // ============================================

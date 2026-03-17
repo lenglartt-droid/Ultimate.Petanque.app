@@ -499,6 +499,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [user?.id, cacheLoaded]);
 
   // Replay offline queue then delta sync when network returns
+  // Note: loadDeltaData is declared later but referenced here via loadDeltaDataRef
+  const loadDeltaDataRef = useRef<() => Promise<void>>(() => Promise.resolve());
+
   useEffect(() => {
     if (justReconnected && user?.id) {
       console.log('Network restored - replaying offline queue then syncing...');
@@ -532,11 +535,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           // After replay, do a full sync to reconcile temp IDs with real ones
           await loadData();
         } else {
-          await loadDeltaData();
+          await loadDeltaDataRef.current();
         }
       })();
     }
-  }, [justReconnected, user?.id, loadDeltaData, loadData, supabase, handleConflict]);
+  }, [justReconnected, user?.id, loadData, supabase, handleConflict]);
 
   // Load data from Supabase
   const loadData = useCallback(async () => {
@@ -732,6 +735,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [user?.id, supabase, mapPlayer]);
 
   // Delta sync: only fetch records changed since last sync timestamp
+  // Keep ref in sync for reconnection effect
   const loadDeltaData = useCallback(async () => {
     if (!user?.id || !isConnectedRef.current || !initialLoadDone.current) return;
 
@@ -802,6 +806,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return loadData();
     }
   }, [user?.id, supabase, loadData]);
+
+  // Keep delta ref in sync
+  useEffect(() => {
+    loadDeltaDataRef.current = loadDeltaData;
+  }, [loadDeltaData]);
 
   // Persist data to cache whenever critical state changes (debounced)
   useEffect(() => {
