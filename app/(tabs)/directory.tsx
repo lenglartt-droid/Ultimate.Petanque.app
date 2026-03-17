@@ -1196,8 +1196,19 @@ export default function DirectoryScreen() {
               </Pressable>
             </View>
           </View>
-          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-            {duplicates.map((dup, idx) => {
+          <FlatList
+            data={duplicates}
+            keyExtractor={(item) => item.pairKey}
+            style={styles.modalContent}
+            showsVerticalScrollIndicator={false}
+            initialNumToRender={10}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <MaterialIcons name="check-circle" size={48} color={theme.success} />
+                <Text style={[styles.emptyTitle, { color: theme.success }]}>{t('common', 'noResults')}</Text>
+              </View>
+            }
+            renderItem={({ item: dup }) => {
               const typeIcons: Record<string, { icon: string; color: string }> = {
                 player: { icon: 'person', color: theme.primary },
                 club: { icon: 'home', color: theme.accent },
@@ -1206,7 +1217,7 @@ export default function DirectoryScreen() {
               };
               const cfg = typeIcons[dup.type] || typeIcons.player;
               return (
-                <View key={dup.pairKey} style={styles.duplicateCard}>
+                <View style={styles.duplicateCard}>
                   <View style={styles.duplicateCardHeader}>
                     <View style={[styles.duplicateTypeIcon, { backgroundColor: cfg.color + '15' }]}>
                       <MaterialIcons name={cfg.icon as any} size={16} color={cfg.color} />
@@ -1387,18 +1398,12 @@ export default function DirectoryScreen() {
                   </View>
                 </View>
               );
-            })}
-            {duplicates.length === 0 ? (
-              <View style={styles.emptyState}>
-                <MaterialIcons name="check-circle" size={48} color={theme.success} />
-                <Text style={[styles.emptyTitle, { color: theme.success }]}>{t('common', 'noResults')}</Text>
-              </View>
-            ) : null}
-          </ScrollView>
+            }}
+          />
         </SafeAreaView>
       </Modal>
 
-      {/* Merge History Modal */}
+      {/* Merge History Modal */
       <Modal
         visible={showMergeHistory}
         animationType="slide"
@@ -1417,19 +1422,26 @@ export default function DirectoryScreen() {
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>
           </View>
-          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-            {loadingMergeLogs ? (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyTitle}>{t('common', 'loading')}</Text>
-              </View>
-            ) : mergeLogs.length === 0 ? (
-              <View style={styles.emptyState}>
-                <MaterialIcons name="check-circle" size={48} color={theme.success} />
-                <Text style={styles.emptyTitle}>{t('directory', 'mergeHistoryEmpty')}</Text>
-                <Text style={styles.emptyText}>{t('directory', 'mergeHistoryEmptyDesc')}</Text>
-              </View>
-            ) : (
-              mergeLogs.map(log => {
+          {loadingMergeLogs ? (
+            <View style={[styles.emptyState, { flex: 1 }]}>
+              <ActivityIndicator size="large" color={theme.primary} />
+              <Text style={styles.emptyTitle}>{t('common', 'loading')}</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={mergeLogs}
+              keyExtractor={(item) => item.id}
+              style={styles.modalContent}
+              showsVerticalScrollIndicator={false}
+              initialNumToRender={10}
+              ListEmptyComponent={
+                <View style={styles.emptyState}>
+                  <MaterialIcons name="check-circle" size={48} color={theme.success} />
+                  <Text style={styles.emptyTitle}>{t('directory', 'mergeHistoryEmpty')}</Text>
+                  <Text style={styles.emptyText}>{t('directory', 'mergeHistoryEmptyDesc')}</Text>
+                </View>
+              }
+              renderItem={({ item: log }) => {
                 const typeIcons: Record<string, { icon: string; color: string }> = {
                   player: { icon: 'person', color: theme.primary },
                   club: { icon: 'home', color: theme.accent },
@@ -1440,7 +1452,7 @@ export default function DirectoryScreen() {
                 const canUndo = isUndoable(log);
                 const timeLeft = getUndoTimeRemaining(log, language as 'fr' | 'en');
                 return (
-                  <View key={log.id} style={styles.mergeHistoryCard}>
+                  <View style={styles.mergeHistoryCard}>
                     <View style={styles.duplicateCardHeader}>
                       <View style={[styles.duplicateTypeIcon, { backgroundColor: cfg.color + '15' }]}>
                         <MaterialIcons name={cfg.icon as any} size={16} color={cfg.color} />
@@ -1486,13 +1498,13 @@ export default function DirectoryScreen() {
                     )}
                   </View>
                 );
-              })
-            )}
-          </ScrollView>
+              }}
+            />
+          )}
         </SafeAreaView>
       </Modal>
 
-      {/* Merge Picker Modal */}
+      {/* Merge Picker Modal */
       {mergeTarget ? (
         <MergePickerModal
           visible={!!mergeTarget}

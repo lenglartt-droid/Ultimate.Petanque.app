@@ -12,6 +12,7 @@ import {
   Platform,
   TextInput,
   ActivityIndicator,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -201,6 +202,94 @@ export default function HomeScreen() {
 
   const resultColor = (r: string) => r === 'win' ? theme.success : r === 'loss' ? theme.error : r === 'draw' ? theme.warning : theme.textMuted;
   const resultLabel = (r: string) => r === 'win' ? t('history', 'victory') : r === 'loss' ? t('history', 'defeat') : r === 'draw' ? t('history', 'draw') : '-';
+
+  // FlatList renderItem for tournament picker modal
+  const renderTournamentPickerItem = useCallback(({ item: tournament }: { item: any }) => {
+    const statusColors: Record<string, { bg: string; text: string }> = {
+      'À venir': { bg: theme.primary + '15', text: theme.primary },
+      'En cours': { bg: theme.warning + '15', text: theme.warning },
+      'Terminé': { bg: theme.success + '15', text: theme.success },
+    };
+    const colors = statusColors[tournament.status as keyof typeof statusColors] || statusColors['À venir'];
+    return (
+      <Pressable key={tournament.id} style={styles.tPickerItem} onPress={() => { setShowTournamentPicker(false); router.push(`/tournament/${tournament.id}`); }}>
+        <View style={styles.tPickerIcon}>
+          <MaterialIcons name="emoji-events" size={28} color={theme.carreauColor} />
+        </View>
+        <View style={styles.tPickerInfo}>
+          <Text style={styles.tPickerName} numberOfLines={1}>{tournament.name}</Text>
+          <View style={styles.tPickerMeta}>
+            <MaterialIcons name="event" size={12} color={theme.textMuted} />
+            <Text style={styles.tPickerDate}>{new Date(tournament.date).toLocaleDateString(language === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
+            <View style={styles.tPickerDot} />
+            <Text style={styles.tPickerCity}>{tournament.location.city}</Text>
+          </View>
+          <View style={styles.tPickerBadges}>
+            <View style={[styles.tPickerBadge, { backgroundColor: colors.bg }]}>
+              <Text style={[styles.tPickerBadgeText, { color: colors.text }]}>
+                {tournament.status === 'À venir' ? t('tournamentStatus', 'upcoming') : tournament.status === 'En cours' ? t('tournamentStatus', 'inProgress') : t('tournamentStatus', 'completed')}
+              </Text>
+            </View>
+            <View style={[styles.tPickerBadge, { backgroundColor: theme.backgroundSecondary }]}>
+              <Text style={[styles.tPickerBadgeText, { color: theme.textSecondary }]}>{t('formats', tournament.format)}</Text>
+            </View>
+          </View>
+        </View>
+        <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+      </Pressable>
+    );
+  }, [t, language]);
+
+  // FlatList renderItem for meetup list modal
+  const renderMeetupModalItem = useCallback(({ item: m }: { item: any }) => {
+    const mDate = new Date(m.date);
+    const isCreator = m._source === 'created';
+    const daysUntil = Math.max(0, Math.ceil((mDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+    return (
+      <Pressable
+        style={({ pressed }) => [styles.meetupModalItem, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
+        onPress={() => { setShowMeetupListModal(false); router.push(`/meetup/${m.id}` as any); }}
+      >
+        <View style={styles.meetupDateCol}>
+          <Text style={styles.meetupDateDay}>{mDate.getDate()}</Text>
+          <Text style={styles.meetupDateMonth}>{mDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}</Text>
+        </View>
+        <View style={styles.meetupInfoCol}>
+          <Text style={styles.meetupItemTitle} numberOfLines={1}>{m.title}</Text>
+          <View style={styles.meetupItemMeta}>
+            <MaterialIcons name="schedule" size={12} color={theme.textMuted} />
+            <Text style={styles.meetupItemTime}>{mDate.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}</Text>
+            {daysUntil <= 1 ? (
+              <View style={styles.meetupSoonBadge}>
+                <Text style={styles.meetupSoonText}>{daysUntil === 0 ? t('notifications', 'todayLabel') : t('notifications', 'tomorrowLabel')}</Text>
+              </View>
+            ) : null}
+          </View>
+          <View style={styles.meetupItemBottom}>
+            <View style={styles.meetupConfirmBadge}>
+              <MaterialIcons name="group" size={12} color={theme.success} />
+              <Text style={styles.meetupConfirmText}>{m._acceptedCount || 0}/{m._maxParticipants || 8} {t('meetup', 'confirmedCount')}</Text>
+            </View>
+            {isCreator ? (
+              <View style={styles.meetupCreatorBadge}>
+                <MaterialIcons name="person" size={10} color={theme.primary} />
+                <Text style={styles.meetupCreatorText}>{t('meetup', 'yourMeetup')}</Text>
+              </View>
+            ) : (
+              <View style={styles.meetupInvitedBadge}>
+                <MaterialIcons name="mail" size={10} color={theme.accent} />
+                <Text style={styles.meetupInvitedText}>{t('meetup', 'invited')}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+        <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+      </Pressable>
+    );
+  }, [t, language]);
+
+  const meetupKeyExtractor = useCallback((item: any) => item.id, []);
+  const tournamentKeyExtractor = useCallback((item: any) => item.id, []);
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
@@ -563,55 +652,15 @@ export default function HomeScreen() {
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>
           </View>
-          <ScrollView style={styles.meetupModalScroll} contentContainerStyle={styles.meetupModalScrollContent} showsVerticalScrollIndicator={false}>
-            {meetups.map((m) => {
-              const mDate = new Date(m.date);
-              const isCreator = m._source === 'created';
-              const daysUntil = Math.max(0, Math.ceil((mDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-              return (
-                <Pressable
-                  key={m.id}
-                  style={({ pressed }) => [styles.meetupModalItem, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
-                  onPress={() => { setShowMeetupListModal(false); router.push(`/meetup/${m.id}` as any); }}
-                >
-                  <View style={styles.meetupDateCol}>
-                    <Text style={styles.meetupDateDay}>{mDate.getDate()}</Text>
-                    <Text style={styles.meetupDateMonth}>{mDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}</Text>
-                  </View>
-                  <View style={styles.meetupInfoCol}>
-                    <Text style={styles.meetupItemTitle} numberOfLines={1}>{m.title}</Text>
-                    <View style={styles.meetupItemMeta}>
-                      <MaterialIcons name="schedule" size={12} color={theme.textMuted} />
-                      <Text style={styles.meetupItemTime}>{mDate.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}</Text>
-                      {daysUntil <= 1 ? (
-                        <View style={styles.meetupSoonBadge}>
-                          <Text style={styles.meetupSoonText}>{daysUntil === 0 ? t('notifications', 'todayLabel') : t('notifications', 'tomorrowLabel')}</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    <View style={styles.meetupItemBottom}>
-                      <View style={styles.meetupConfirmBadge}>
-                        <MaterialIcons name="group" size={12} color={theme.success} />
-                        <Text style={styles.meetupConfirmText}>{m._acceptedCount || 0}/{m._maxParticipants || 8} {t('meetup', 'confirmedCount')}</Text>
-                      </View>
-                      {isCreator ? (
-                        <View style={styles.meetupCreatorBadge}>
-                          <MaterialIcons name="person" size={10} color={theme.primary} />
-                          <Text style={styles.meetupCreatorText}>{t('meetup', 'yourMeetup')}</Text>
-                        </View>
-                      ) : (
-                        <View style={styles.meetupInvitedBadge}>
-                          <MaterialIcons name="mail" size={10} color={theme.accent} />
-                          <Text style={styles.meetupInvitedText}>{t('meetup', 'invited')}</Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-                </Pressable>
-              );
-            })}
-          </ScrollView>
+          <FlatList
+            data={meetups}
+            keyExtractor={meetupKeyExtractor}
+            renderItem={renderMeetupModalItem}
+            style={styles.meetupModalScroll}
+            contentContainerStyle={styles.meetupModalScrollContent}
+            showsVerticalScrollIndicator={false}
+            initialNumToRender={10}
+          />
         </SafeAreaView>
       </Modal>
 
@@ -676,9 +725,16 @@ export default function HomeScreen() {
               <MaterialIcons name="add" size={24} color={theme.primary} />
             </Pressable>
           </View>
-          <ScrollView style={styles.modalContent} contentContainerStyle={styles.modalScrollContent} showsVerticalScrollIndicator={false}>
-            {tournaments.length > 0 ? (
-              <>
+          {tournaments.length > 0 ? (
+            <FlatList
+              data={filteredTournaments}
+              keyExtractor={tournamentKeyExtractor}
+              renderItem={renderTournamentPickerItem}
+              style={styles.modalContent}
+              contentContainerStyle={styles.modalScrollContent}
+              showsVerticalScrollIndicator={false}
+              initialNumToRender={10}
+              ListHeaderComponent={
                 <View style={styles.statusFilterRow}>
                   {(['all', 'À venir', 'En cours', 'Terminé'] as const).map((status) => {
                     const isActive = statusFilter === status;
@@ -702,53 +758,19 @@ export default function HomeScreen() {
                     );
                   })}
                 </View>
-                {filteredTournaments.length > 0 ? (
-                  filteredTournaments.map((tournament) => {
-                    const statusColors: Record<string, { bg: string; text: string }> = {
-                      'À venir': { bg: theme.primary + '15', text: theme.primary },
-                      'En cours': { bg: theme.warning + '15', text: theme.warning },
-                      'Terminé': { bg: theme.success + '15', text: theme.success },
-                    };
-                    const colors = statusColors[tournament.status as keyof typeof statusColors] || statusColors['À venir'];
-                    return (
-                      <Pressable key={tournament.id} style={styles.tPickerItem} onPress={() => { setShowTournamentPicker(false); router.push(`/tournament/${tournament.id}`); }}>
-                        <View style={styles.tPickerIcon}>
-                          <MaterialIcons name="emoji-events" size={28} color={theme.carreauColor} />
-                        </View>
-                        <View style={styles.tPickerInfo}>
-                          <Text style={styles.tPickerName} numberOfLines={1}>{tournament.name}</Text>
-                          <View style={styles.tPickerMeta}>
-                            <MaterialIcons name="event" size={12} color={theme.textMuted} />
-                            <Text style={styles.tPickerDate}>{new Date(tournament.date).toLocaleDateString(language === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
-                            <View style={styles.tPickerDot} />
-                            <Text style={styles.tPickerCity}>{tournament.location.city}</Text>
-                          </View>
-                          <View style={styles.tPickerBadges}>
-                            <View style={[styles.tPickerBadge, { backgroundColor: colors.bg }]}>
-                              <Text style={[styles.tPickerBadgeText, { color: colors.text }]}>
-                                {tournament.status === 'À venir' ? t('tournamentStatus', 'upcoming') : tournament.status === 'En cours' ? t('tournamentStatus', 'inProgress') : t('tournamentStatus', 'completed')}
-                              </Text>
-                            </View>
-                            <View style={[styles.tPickerBadge, { backgroundColor: theme.backgroundSecondary }]}>
-                              <Text style={[styles.tPickerBadgeText, { color: theme.textSecondary }]}>{t('formats', tournament.format)}</Text>
-                            </View>
-                          </View>
-                        </View>
-                        <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-                      </Pressable>
-                    );
-                  })
-                ) : (
-                  <View style={styles.emptyFilter}>
-                    <MaterialIcons name="filter-list-off" size={40} color={theme.textMuted} />
-                    <Text style={styles.emptyFilterText}>{t('home', 'noTournamentFilter')}</Text>
-                    <Pressable style={styles.resetFilterBtn} onPress={() => setStatusFilter('all')}>
-                      <Text style={styles.resetFilterText}>{t('common', 'seeAll')}</Text>
-                    </Pressable>
-                  </View>
-                )}
-              </>
-            ) : (
+              }
+              ListEmptyComponent={
+                <View style={styles.emptyFilter}>
+                  <MaterialIcons name="filter-list-off" size={40} color={theme.textMuted} />
+                  <Text style={styles.emptyFilterText}>{t('home', 'noTournamentFilter')}</Text>
+                  <Pressable style={styles.resetFilterBtn} onPress={() => setStatusFilter('all')}>
+                    <Text style={styles.resetFilterText}>{t('common', 'seeAll')}</Text>
+                  </Pressable>
+                </View>
+              }
+            />
+          ) : (
+            <ScrollView style={styles.modalContent} contentContainerStyle={styles.modalScrollContent} showsVerticalScrollIndicator={false}>
               <View style={styles.emptyTournament}>
                 <View style={styles.emptyTournamentIcon}>
                   <MaterialIcons name="emoji-events" size={56} color={theme.carreauColor} />
@@ -760,8 +782,8 @@ export default function HomeScreen() {
                   <Text style={styles.createTournamentBtnText}>{t('home', 'createTournament')}</Text>
                 </Pressable>
               </View>
-            )}
-          </ScrollView>
+            </ScrollView>
+          )}
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -843,7 +865,7 @@ const styles = StyleSheet.create({
   colMeetupActionBtn: { width: 26, height: 26, borderRadius: 8, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
   colMeetupBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: theme.error, minWidth: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
   colMeetupBadgeText: { fontSize: 8, fontWeight: '800', color: '#FFF' },
-  colMeetupList: { gap: 6 },
+  colMeetupList: { flex: 1, gap: 6, backgroundColor: '#F0F9FF', borderRadius: 14, padding: 8 },
   colMeetupItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E0F2FE', borderRadius: 12, padding: 8, gap: 8 },
   colMeetupDateBox: { width: 38, height: 38, borderRadius: 10, backgroundColor: 'rgba(3,105,161,0.12)', alignItems: 'center', justifyContent: 'center' },
   colMeetupDateDay: { fontSize: 16, fontWeight: '900', color: '#0369A1', lineHeight: 18 },
