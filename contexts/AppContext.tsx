@@ -299,6 +299,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [cacheLoaded, setCacheLoaded] = useState(false);
   const initialLoadDone = useRef(false);
+  const secondaryLoadDone = useRef(false);
+  const secondaryLoadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const syncCountRef = useRef(0);
   const FULL_SYNC_INTERVAL = 5; // Full sync every 5th cycle, delta sync otherwise
   
@@ -541,7 +543,122 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [justReconnected, user?.id, loadData, supabase, handleConflict]);
 
-  // Load data from Supabase
+  // ===== SECONDARY DATA LOADER (shared items, boules sets, preferences) =====
+  // Deferred after primary load to reduce startup time
+  const loadSecondaryData = useCallback(async () => {
+    if (!user?.id || !isConnectedRef.current) return;
+    console.log('Loading secondary data (shared items, boules sets, preferences)...');
+    try {
+      const [sharedWithMeRes, boulesSetsRes] = await Promise.all([
+        supabase.from('shared_items').select('item_type, item_id, permission').eq('shared_with_id', user.id),
+        supabase.from('boules_sets').select('*').order('created_at', { ascending: false }),
+      ]);
+
+      // Build permissions map and group shared IDs
+      const sharedIds: Record<string, string[]> = { player: [], club: [], terrain: [], tournament: [] };
+      const permissionsMap: Record<string, 'read' | 'write'> = {};
+      if (sharedWithMeRes.data) {
+        sharedWithMeRes.data.forEach((si: any) => {
+          if (sharedIds[si.item_type]) {
+            sharedIds[si.item_type].push(si.item_id);
+          }
+          permissionsMap[si.item_id] = si.permission as 'read' | 'write';
+        });
+      }
+      setSharedItemPermissions(permissionsMap);
+
+      // Fetch shared records in parallel
+      const [sharedPlayersRes, sharedClubsRes, sharedTerrainsRes, sharedTournamentsRes] = await Promise.all([
+        sharedIds.player.length > 0
+          ? supabase.from('players').select('*').in('id', sharedIds.player)
+          : Promise.resolve({ data: [] as any[] }),
+        sharedIds.club.length > 0
+          ? supabase.from('clubs').select('*').in('id', sharedIds.club)
+          : Promise.resolve({ data: [] as any[] }),
+        sharedIds.terrain.length > 0
+          ? supabase.from('terrains').select('*').in('id', sharedIds.terrain)
+          : Promise.resolve({ data: [] as any[] }),
+        sharedIds.tournament.length > 0
+          ? supabase.from('tournaments').select('*').in('id', sharedIds.tournament)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+
+      // Merge shared players into existing state (append only new ones)
+      if (sharedPlayersRes.data && sharedPlayersRes.data.length > 0) {
+        const sharedPlayers = sharedPlayersRes.data.map(mapPlayerFromDb);
+        setPlayers(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const newShared = sharedPlayers.filter(p => !existingIds.has(p.id));
+          return newShared.length > 0 ? [...prev, ...newShared] : prev;
+        });
+      }
+      if (sharedClubsRes.data && sharedClubsRes.data.length > 0) {
+        const sharedClubs = sharedClubsRes.data.map(mapClubFromDb);
+        setClubs(prev => {
+          const existingIds = new Set(prev.map(c => c.id));
+          const newShared = sharedClubs.filter(c => !existingIds.has(c.id));
+          return newShared.length > 0 ? [...prev, ...newShared] : prev;
+        });
+      }
+      if (sharedTerrainsRes.data && sharedTerrainsRes.data.length > 0) {
+        const sharedTerrains = sharedTerrainsRes.data.map(mapTerrainFromDb);
+        setTerrains(prev => {
+          const existingIds = new Set(prev.map(t => t.id));
+          const newShared = sharedTerrains.filter(t => !existingIds.has(t.id));
+          return newShared.length > 0 ? [...prev, ...newShared] : prev;
+        });
+      }
+      if (sharedTournamentsRes.data && sharedTournamentsRes.data.length > 0) {
+        const sharedTournaments = sharedTournamentsRes.data.map(mapTournamentFromDb);
+        setTournaments(prev => {
+          const existingIds = new Set(prev.map(t => t.id));
+          const newShared = sharedTournaments.filter(t => !existingIds.has(t.id));
+          return newShared.length > 0 ? [...prev, ...newShared] : prev;
+        });
+      }
+
+      // Boules sets
+      if (boulesSetsRes.data) {
+        const dbSets: BoulesSet[] = boulesSetsRes.data.map((s: any) => ({
+          id: s.id, name: s.name, brand: s.brand,
+          diameter: s.diameter ? parseFloat(s.diameter) : undefined,
+          weight: s.weight || undefined, serialNumber: s.serial_number,
+          hardness: s.hardness, isPrimary: s.is_primary, notes: s.notes, photo: s.photo,
+          purchasePrice: s.purchase_price ? parseFloat(s.purchase_price) : undefined,
+        }));
+        setBoulesSets(dbSets);
+      }
+
+      secondaryLoadDone.current = true;
+      console.log('Secondary data loaded successfully');
+
+      // Cleanup soft_deletes older than 30 days (non-blocking)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      supabase.from('soft_deletes').delete().lt('deleted_at', thirtyDaysAgo.toISOString()).then(() => {
+        console.log('Cleaned up old soft_deletes entries');
+      }).catch(() => { /* silent */ });
+    } catch (error) {
+      console.log('Error loading secondary data:', error);
+    }
+  }, [user?.id, supabase]);
+
+  // Schedule secondary data loading after primary load completes
+  const scheduleSecondaryLoad = useCallback(() => {
+    if (secondaryLoadTimerRef.current) clearTimeout(secondaryLoadTimerRef.current);
+    secondaryLoadTimerRef.current = setTimeout(() => {
+      loadSecondaryData();
+    }, 600); // 600ms delay to let UI render first
+  }, [loadSecondaryData]);
+
+  // Cleanup secondary load timer on unmount
+  useEffect(() => {
+    return () => {
+      if (secondaryLoadTimerRef.current) clearTimeout(secondaryLoadTimerRef.current);
+    };
+  }, []);
+
+  // Load data from Supabase - Phase 1: Core data only (fast startup)
   const loadData = useCallback(async () => {
     if (!user?.id) {
       // Not logged in - use mock data for demo
@@ -564,8 +681,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     setLoading(true);
     try {
-      // Fetch all user data + shared items in parallel
-      const [playersRes, clubsRes, tournamentsRes, matchesRes, challengesRes, terrainsRes, profileRes, sharedWithMeRes, boulesSetsRes] = await Promise.all([
+      // Phase 1: Fetch only core user data (no shared items, no boules sets)
+      const [playersRes, clubsRes, tournamentsRes, matchesRes, challengesRes, terrainsRes, profileRes] = await Promise.all([
         supabase.from('players').select('*').order('created_at', { ascending: false }),
         supabase.from('clubs').select('*').order('created_at', { ascending: false }),
         supabase.from('tournaments').select('*').order('date', { ascending: false }),
@@ -573,37 +690,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         supabase.from('challenges').select('*').order('date', { ascending: false }),
         supabase.from('terrains').select('*').order('created_at', { ascending: false }),
         supabase.from('user_profiles').select('*').eq('id', user.id).single(),
-        supabase.from('shared_items').select('item_type, item_id, permission').eq('shared_with_id', user.id),
-        supabase.from('boules_sets').select('*').order('created_at', { ascending: false }),
-      ]);
-
-      // Group shared item IDs by type for batch fetching + build permissions map
-      const sharedIds: Record<string, string[]> = { player: [], club: [], terrain: [], tournament: [] };
-      const permissionsMap: Record<string, 'read' | 'write'> = {};
-      if (sharedWithMeRes.data) {
-        sharedWithMeRes.data.forEach((si: any) => {
-          if (sharedIds[si.item_type]) {
-            sharedIds[si.item_type].push(si.item_id);
-          }
-          permissionsMap[si.item_id] = si.permission as 'read' | 'write';
-        });
-      }
-      setSharedItemPermissions(permissionsMap);
-
-      // Fetch shared records in parallel (RLS shared_select policies allow this)
-      const [sharedPlayersRes, sharedClubsRes, sharedTerrainsRes, sharedTournamentsRes] = await Promise.all([
-        sharedIds.player.length > 0
-          ? supabase.from('players').select('*').in('id', sharedIds.player)
-          : Promise.resolve({ data: [] as any[] }),
-        sharedIds.club.length > 0
-          ? supabase.from('clubs').select('*').in('id', sharedIds.club)
-          : Promise.resolve({ data: [] as any[] }),
-        sharedIds.terrain.length > 0
-          ? supabase.from('terrains').select('*').in('id', sharedIds.terrain)
-          : Promise.resolve({ data: [] as any[] }),
-        sharedIds.tournament.length > 0
-          ? supabase.from('tournaments').select('*').in('id', sharedIds.tournament)
-          : Promise.resolve({ data: [] as any[] }),
       ]);
 
       let dbPlayers: Player[] = [];
@@ -636,47 +722,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Merge shared players (always fetch latest from owner)
-      const ownPlayerIds = new Set(dbPlayers.map(p => p.id));
-      if (sharedPlayersRes.data) {
-        sharedPlayersRes.data.forEach((p: any) => {
-          if (!ownPlayerIds.has(p.id)) {
-            dbPlayers.push(mapPlayer(p));
-          }
-        });
-      }
       setPlayers(dbPlayers.length > 0 ? dbPlayers : mockPlayers);
 
       if (clubsRes.data) {
         const dbClubs: Club[] = clubsRes.data.map(mapClubFromDb);
-        const ownClubIds = new Set(dbClubs.map(c => c.id));
-        if (sharedClubsRes.data) {
-          sharedClubsRes.data.forEach((c: any) => {
-            if (!ownClubIds.has(c.id)) dbClubs.push(mapClubFromDb(c));
-          });
-        }
         setClubs(dbClubs.length > 0 ? dbClubs : mockClubs);
       }
 
       if (terrainsRes.data) {
         const dbTerrains: Terrain[] = terrainsRes.data.map(mapTerrainFromDb);
-        const ownTerrainIds = new Set(dbTerrains.map(t => t.id));
-        if (sharedTerrainsRes.data) {
-          sharedTerrainsRes.data.forEach((t: any) => {
-            if (!ownTerrainIds.has(t.id)) dbTerrains.push(mapTerrainFromDb(t));
-          });
-        }
         setTerrains(dbTerrains.length > 0 ? dbTerrains : mockTerrains);
       }
 
       if (tournamentsRes.data) {
         const dbTournaments: Tournament[] = tournamentsRes.data.map(mapTournamentFromDb);
-        const ownTournamentIds = new Set(dbTournaments.map(t => t.id));
-        if (sharedTournamentsRes.data) {
-          sharedTournamentsRes.data.forEach((t: any) => {
-            if (!ownTournamentIds.has(t.id)) dbTournaments.push(mapTournamentFromDb(t));
-          });
-        }
         setTournaments(dbTournaments.length > 0 ? dbTournaments : mockTournaments);
       }
 
@@ -690,29 +749,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setChallenges(dbChallenges.length > 0 ? dbChallenges : mockChallenges);
       }
 
-      // Boules sets
-      if (boulesSetsRes.data) {
-        const dbSets: BoulesSet[] = boulesSetsRes.data.map((s: any) => ({
-          id: s.id, name: s.name, brand: s.brand,
-          diameter: s.diameter ? parseFloat(s.diameter) : undefined,
-          weight: s.weight || undefined, serialNumber: s.serial_number,
-          hardness: s.hardness, isPrimary: s.is_primary, notes: s.notes, photo: s.photo,
-          purchasePrice: s.purchase_price ? parseFloat(s.purchase_price) : undefined,
-        }));
-        setBoulesSets(dbSets);
-      }
-
-      // Mark network load as complete and save sync timestamp
+      // Mark primary load as complete and save sync timestamp
       initialLoadDone.current = true;
       setIsOfflineMode(false);
       await setLastSyncTimestamp(new Date().toISOString());
 
-      // Cleanup soft_deletes older than 30 days (non-blocking)
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      supabase.from('soft_deletes').delete().lt('deleted_at', thirtyDaysAgo.toISOString()).then(() => {
-        console.log('Cleaned up old soft_deletes entries');
-      }).catch(() => { /* silent */ });
+      // Phase 2: Schedule secondary data loading (shared items, boules sets)
+      // This runs after the UI has rendered with core data
+      scheduleSecondaryLoad();
 
     } catch (error) {
       console.log('Error loading data from cloud:', error);
@@ -739,7 +783,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, supabase, mapPlayer]);
+  }, [user?.id, supabase, mapPlayer, scheduleSecondaryLoad]);
 
   // Delta sync: only fetch records changed since last sync timestamp
   // Keep ref in sync for reconnection effect
@@ -896,10 +940,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.id, supabase]);
 
-  // Load preferences when user changes
+  // Defer preferences loading until after primary data is loaded
   useEffect(() => {
-    loadPreferences();
-  }, [loadPreferences]);
+    if (!user?.id) {
+      loadPreferences();
+      return;
+    }
+    // Delay preferences by 800ms so core UI renders first
+    const timer = setTimeout(() => {
+      loadPreferences();
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [loadPreferences, user?.id]);
 
   // Load data when user changes
   useEffect(() => {
@@ -910,8 +962,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user?.id) {
       initialLoadDone.current = false;
+      secondaryLoadDone.current = false;
       setCacheLoaded(false);
       setIsOfflineMode(false);
+      if (secondaryLoadTimerRef.current) {
+        clearTimeout(secondaryLoadTimerRef.current);
+        secondaryLoadTimerRef.current = null;
+      }
     }
   }, [user?.id]);
 
