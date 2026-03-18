@@ -22,6 +22,8 @@ export default function CommunityLeaderboard() {
   const [sortBy, setSortBy] = useState<LeaderboardSort>('winRate');
   const [filterCity, setFilterCity] = useState<string>('all');
   const [filterCountry, setFilterCountry] = useState<string>('all');
+  const [filterRole, setFilterRole] = useState<string>('all');
+  const [filterLevel, setFilterLevel] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -34,7 +36,7 @@ export default function CommunityLeaderboard() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // Extract unique cities and countries for filters
+  // Extract unique values for filters
   const uniqueCities = useMemo(() => {
     const cities = players.map(p => p.city).filter(Boolean) as string[];
     return [...new Set(cities)].sort();
@@ -46,16 +48,18 @@ export default function CommunityLeaderboard() {
   }, [players]);
 
   const activeFilterCount = useMemo(() => {
-    return [filterCity, filterCountry].filter(f => f !== 'all').length;
-  }, [filterCity, filterCountry]);
+    return [filterCity, filterCountry, filterRole, filterLevel].filter(f => f !== 'all').length;
+  }, [filterCity, filterCountry, filterRole, filterLevel]);
 
   // Apply filters then sort
   const filteredSorted = useMemo(() => {
     let result = players;
     if (filterCity !== 'all') result = result.filter(p => p.city === filterCity);
     if (filterCountry !== 'all') result = result.filter(p => p.country === filterCountry);
+    if (filterRole !== 'all') result = result.filter(p => p.role === filterRole);
+    if (filterLevel !== 'all') result = result.filter(p => p.level === filterLevel);
     return sortLeaderboard(result, sortBy);
-  }, [players, sortBy, filterCity, filterCountry]);
+  }, [players, sortBy, filterCity, filterCountry, filterRole, filterLevel]);
 
   const myRank = useMemo(() => {
     if (!selfPlayer || !user) return null;
@@ -66,10 +70,12 @@ export default function CommunityLeaderboard() {
   const clearFilters = () => {
     setFilterCity('all');
     setFilterCountry('all');
+    setFilterRole('all');
+    setFilterLevel('all');
   };
 
   return (
-    <Animated.View entering={FadeInDown.duration(400).delay(100)} style={s.section}>
+    <View style={s.section}>
       <View style={s.sectionHeader}>
         <View style={[s.sectionIcon, { backgroundColor: '#D97706' + '15' }]}>
           <MaterialIcons name="leaderboard" size={18} color="#D97706" />
@@ -110,9 +116,45 @@ export default function CommunityLeaderboard() {
         ))}
       </ScrollView>
 
-      {/* Expandable Filters (City + Country) */}
+      {/* Expandable Filters */}
       {showFilters ? (
-        <Animated.View entering={FadeInDown.duration(200)} style={s.filtersPanel}>
+        <View style={s.filtersPanel}>
+          {/* Role filter */}
+          <View style={s.filterGroup}>
+            <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByRole')}</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
+              {['all', 'Tireur', 'Pointeur', 'Milieu'].map(opt => (
+                <Pressable
+                  key={opt}
+                  style={[s.filterChip, filterRole === opt && s.filterChipActive]}
+                  onPress={() => { Haptics.selectionAsync(); setFilterRole(opt); }}
+                >
+                  <Text style={[s.filterChipText, filterRole === opt && s.filterChipTextActive]}>
+                    {opt === 'all' ? t('leaderboard', 'allRoles') : t('roles', opt)}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* Level filter */}
+          <View style={s.filterGroup}>
+            <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByLevel')}</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
+              {['all', 'Débutant', 'Intermédiaire', 'Confirmé', 'Expert'].map(opt => (
+                <Pressable
+                  key={opt}
+                  style={[s.filterChip, filterLevel === opt && s.filterChipActive]}
+                  onPress={() => { Haptics.selectionAsync(); setFilterLevel(opt); }}
+                >
+                  <Text style={[s.filterChipText, filterLevel === opt && s.filterChipTextActive]}>
+                    {opt === 'all' ? t('leaderboard', 'allLevels') : t('levels', opt)}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+
           {/* Country filter */}
           {uniqueCountries.length > 0 ? (
             <View style={s.filterGroup}>
@@ -168,13 +210,25 @@ export default function CommunityLeaderboard() {
               <Text style={s.clearFiltersBtnText}>{t('directory', 'clearAll')}</Text>
             </Pressable>
           ) : null}
-        </Animated.View>
+        </View>
       ) : null}
 
       {/* Active filter pills (when panel is closed) */}
       {activeFilterCount > 0 && !showFilters ? (
         <View style={s.activeFiltersRow}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.activeFiltersScroll}>
+            {filterRole !== 'all' ? (
+              <Pressable style={s.activeFilterPill} onPress={() => setFilterRole('all')}>
+                <Text style={s.activeFilterPillText}>{t('roles', filterRole)}</Text>
+                <MaterialIcons name="close" size={12} color="#D97706" />
+              </Pressable>
+            ) : null}
+            {filterLevel !== 'all' ? (
+              <Pressable style={s.activeFilterPill} onPress={() => setFilterLevel('all')}>
+                <Text style={s.activeFilterPillText}>{t('levels', filterLevel)}</Text>
+                <MaterialIcons name="close" size={12} color="#D97706" />
+              </Pressable>
+            ) : null}
             {filterCountry !== 'all' ? (
               <Pressable style={s.activeFilterPill} onPress={() => setFilterCountry('all')}>
                 <Text style={s.activeFilterPillText}>{filterCountry}</Text>
@@ -341,7 +395,7 @@ export default function CommunityLeaderboard() {
           </>
         )}
       </View>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -359,7 +413,7 @@ const s = StyleSheet.create({
   filterBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#D97706', minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
   filterBadgeText: { fontSize: 9, fontWeight: '800', color: '#FFF' },
 
-  // Filters panel
+  // Filters panel — normal flow, pushes content down
   filtersPanel: { marginBottom: 10, backgroundColor: theme.surface, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: theme.border },
   filterGroup: { marginBottom: 10 },
   filterGroupTitle: { fontSize: 10, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },

@@ -2311,6 +2311,10 @@ export const translations = {
     filterByCountry: { fr: 'Pays', en: 'Country' },
     allCities: { fr: 'Toutes les villes', en: 'All cities' },
     allCountries: { fr: 'Tous les pays', en: 'All countries' },
+    filterByRole: { fr: 'Rôle', en: 'Role' },
+    filterByLevel: { fr: 'Niveau', en: 'Level' },
+    allRoles: { fr: 'Tous les rôles', en: 'All roles' },
+    allLevels: { fr: 'Tous les niveaux', en: 'All levels' },
   },
 
   statsExtra: {
