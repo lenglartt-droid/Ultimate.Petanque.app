@@ -9,7 +9,6 @@ import {
   Modal,
   Dimensions,
   RefreshControl,
-  Platform,
   TextInput,
   ActivityIndicator,
   FlatList,
