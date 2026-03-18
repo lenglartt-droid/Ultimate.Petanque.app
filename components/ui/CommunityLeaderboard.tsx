@@ -11,7 +11,7 @@ import { useAuth } from '@/template';
 import { useApp } from '@/contexts/AppContext';
 import { fetchLeaderboard, sortLeaderboard, LeaderboardPlayer, LeaderboardSort } from '@/services/leaderboardService';
 
-export default function CommunityLeaderboard() {
+export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersToggled?: (open: boolean) => void }) {
   const { t } = useLanguage();
   const { user } = useAuth();
   const { selfPlayer } = useApp();
@@ -87,7 +87,7 @@ export default function CommunityLeaderboard() {
         {/* Filter toggle */}
         <Pressable
           style={[s.filterToggle, activeFilterCount > 0 && s.filterToggleActive]}
-          onPress={() => { Haptics.selectionAsync(); setShowFilters(!showFilters); }}
+          onPress={() => { Haptics.selectionAsync(); const next = !showFilters; setShowFilters(next); onFiltersToggled?.(next); }}
         >
           <MaterialIcons name="tune" size={16} color={activeFilterCount > 0 ? '#D97706' : theme.textMuted} />
           {activeFilterCount > 0 ? (

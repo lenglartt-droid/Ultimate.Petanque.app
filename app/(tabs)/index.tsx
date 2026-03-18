@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -290,9 +290,23 @@ export default function HomeScreen() {
   const meetupKeyExtractor = useCallback((item: any) => item.id, []);
   const tournamentKeyExtractor = useCallback((item: any) => item.id, []);
 
+  // Auto-scroll when leaderboard filters open
+  const scrollViewRef = useRef<ScrollView>(null);
+  const leaderboardYRef = useRef(0);
+
+  const handleLeaderboardFiltersToggled = useCallback((open: boolean) => {
+    if (open && scrollViewRef.current) {
+      // Small delay to let the filter panel render and measure
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({ y: leaderboardYRef.current, animated: true });
+      }, 80);
+    }
+  }, []);
+
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scrollView}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
@@ -564,8 +578,12 @@ export default function HomeScreen() {
 
 
         {/* ========== COMMUNITY LEADERBOARD ========== */}
-        <Animated.View entering={FadeIn.duration(400).delay(170)} style={[styles.section, isTablet && styles.sectionTablet]}>
-          <CommunityLeaderboard />
+        <Animated.View
+          entering={FadeIn.duration(400).delay(170)}
+          style={[styles.section, isTablet && styles.sectionTablet]}
+          onLayout={(e) => { leaderboardYRef.current = e.nativeEvent.layout.y; }}
+        >
+          <CommunityLeaderboard onFiltersToggled={handleLeaderboardFiltersToggled} />
         </Animated.View>
 
         {/* ========== QUICK ACCESS GRID ========== */}
