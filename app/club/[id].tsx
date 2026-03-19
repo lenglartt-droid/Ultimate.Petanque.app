@@ -535,7 +535,7 @@ export default function ClubDetailScreen() {
         </View>
 
         {/* Club Leaderboard - public players ranked */}
-        <Animated.View entering={FadeInDown.duration(400).delay(550)} style={styles.section}>
+        <Animated.View entering={FadeInDown.duration(400).delay(550)} style={[styles.section, { marginBottom: 8, zIndex: 1 }]}>
           <View style={styles.sectionHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: '#D97706' + '15', alignItems: 'center', justifyContent: 'center' }}>
@@ -551,9 +551,9 @@ export default function ClubDetailScreen() {
               <ActivityIndicator size="small" color="#D97706" />
             </View>
           ) : clubLeaderboard.length > 0 ? (
-            <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, overflow: 'hidden', ...theme.shadows.card }}>
+            <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, ...theme.shadows.card }}>
               {/* Header row */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border, gap: 4 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border, gap: 4, borderTopLeftRadius: theme.borderRadius.lg, borderTopRightRadius: theme.borderRadius.lg }}>
                 <Text style={{ width: 26, fontSize: 10, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', textAlign: 'center' }}>#</Text>
                 <Text style={{ flex: 1, fontSize: 10, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase' }}>{t('leaderboard', 'player')}</Text>
                 <Text style={{ width: 42, fontSize: 10, fontWeight: '700', color: '#D97706', textTransform: 'uppercase', textAlign: 'center' }}>%V</Text>
@@ -615,11 +615,12 @@ export default function ClubDetailScreen() {
               })}
               {/* Link to full leaderboard filtered by club */}
               <Pressable
-                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, borderTopWidth: 1, borderTopColor: theme.border }}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 16, borderTopWidth: 1, borderTopColor: theme.border, minHeight: 52, borderBottomLeftRadius: theme.borderRadius.lg, borderBottomRightRadius: theme.borderRadius.lg }}
                 onPress={() => { Haptics.selectionAsync(); router.push('/leaderboard' as any); }}
+                hitSlop={{ top: 4, bottom: 8, left: 16, right: 16 }}
               >
-                <Text style={{ fontSize: 13, fontWeight: '700', color: '#D97706' }}>{t('leaderboard', 'seeFullLeaderboard')}</Text>
-                <MaterialIcons name="arrow-forward" size={14} color="#D97706" />
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#D97706' }}>{t('leaderboard', 'seeFullLeaderboard')}</Text>
+                <MaterialIcons name="arrow-forward" size={16} color="#D97706" />
               </Pressable>
             </View>
           ) : (
