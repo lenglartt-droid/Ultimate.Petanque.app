@@ -1,0 +1,91 @@
+// ============================================
+// BOULES COMPETITION DATABASE
+// ============================================
+
+export interface BoulesModel {
+  brand: string;
+  model: string;
+  material: string;
+  hardness: string;
+  targetUsage: string;
+  particularities: string;
+}
+
+export const BOULES_BRANDS = [
+  'OBUT',
+  'MS PÉTANQUE',
+  'LA BOULE BLEUE',
+  'BOULENCIEL',
+  'KTK',
+  'ODDEKA',
+  'LA FRANC',
+  'MARATHON',
+  'GEOLOGIC',
+] as const;
+
+export const BOULES_DATABASE: BoulesModel[] = [
+  // OBUT
+  { brand: 'OBUT', model: 'ATX', material: 'Acier spécial', hardness: 'Demi-tendre (130kg)', targetUsage: 'Élite / Milieu', particularities: "L'icône du haut niveau" },
+  { brand: 'OBUT', model: 'RCC', material: 'Acier carbone', hardness: 'Amorti + (Tendre)', targetUsage: 'Tireur', particularities: 'Traitement anti-rebond' },
+  { brand: 'OBUT', model: 'RCX', material: 'Acier inox', hardness: 'Amorti + (Tendre)', targetUsage: 'Tireur / Milieu', particularities: 'Version inox de la RCC' },
+  { brand: 'OBUT', model: 'Nexius', material: 'Acier inox', hardness: 'Demi-tendre', targetUsage: 'Milieu', particularities: "Aimantable bien qu'en inox" },
+  { brand: 'OBUT', model: 'Match +', material: 'Acier carbone', hardness: 'Amorti + (Tendre)', targetUsage: 'Tireur', particularities: 'Finition noire mate' },
+  { brand: 'OBUT', model: 'Match IT', material: 'Acier inox', hardness: 'Demi-tendre (115kg)', targetUsage: 'Pointeur / Milieu', particularities: 'Polyvalente inox' },
+  { brand: 'OBUT', model: 'Match', material: 'Acier carbone', hardness: 'Demi-tendre (115kg)', targetUsage: 'Débutant / Milieu', particularities: 'Excellent rapport Q/P' },
+  { brand: 'OBUT', model: 'Soleil 110', material: 'Acier inox', hardness: 'Très tendre (110kg)', targetUsage: 'Tireur', particularities: 'Toucher souple' },
+  { brand: 'OBUT', model: "Ton'R 110", material: 'Acier carbone', hardness: 'Très tendre (110kg)', targetUsage: 'Tireur', particularities: 'Très mate en main' },
+
+  // MS PÉTANQUE
+  { brand: 'MS PÉTANQUE', model: 'MS 2110', material: 'Acier carbone', hardness: 'Anti-rebond (110kg)', targetUsage: 'Tireur', particularities: 'Structure interne nervurée' },
+  { brand: 'MS PÉTANQUE', model: 'MS IT', material: 'Acier inox', hardness: 'Anti-rebond (115kg)', targetUsage: 'Milieu', particularities: 'Polyvalente anti-rebond' },
+  { brand: 'MS PÉTANQUE', model: "L'Inox (LS)", material: 'Acier inox', hardness: 'Demi-tendre (120kg)', targetUsage: 'Pointeur', particularities: 'Très brillante' },
+  { brand: 'MS PÉTANQUE', model: 'MS 120', material: 'Acier carbone', hardness: 'Demi-tendre (120kg)', targetUsage: 'Milieu', particularities: 'Classique robuste' },
+  { brand: 'MS PÉTANQUE', model: 'MS Acier', material: 'Acier carbone', hardness: 'Dure (140kg)', targetUsage: 'Pointeur', particularities: 'Longévité maximale' },
+  { brand: 'MS PÉTANQUE', model: 'Impact', material: 'Acier carbone', hardness: 'Tendre (115kg)', targetUsage: 'Tireur', particularities: 'Gros diamètre possible' },
+  { brand: 'MS PÉTANQUE', model: 'Tortue', material: 'Acier carbone', hardness: 'Tendre (115kg)', targetUsage: 'Tireur / Milieu', particularities: 'Design "carapace"' },
+
+  // LA BOULE BLEUE
+  { brand: 'LA BOULE BLEUE', model: 'Prestige 110', material: 'Inox ou Carbone', hardness: 'Très tendre (110kg)', targetUsage: "Tireur d'élite", particularities: 'Amorti exceptionnel' },
+  { brand: 'LA BOULE BLEUE', model: '115 Tendre', material: 'Inox ou Carbone', hardness: 'Tendre (115kg)', targetUsage: 'Tireur', particularities: 'Très populaire en club' },
+  { brand: 'LA BOULE BLEUE', model: '120 D-Tendre', material: 'Inox ou Carbone', hardness: 'Demi-tendre (120kg)', targetUsage: 'Milieu', particularities: 'Équilibrage soigné' },
+  { brand: 'LA BOULE BLEUE', model: 'Super Inox', material: 'Acier inox', hardness: 'Demi-tendre (125kg)', targetUsage: 'Pointeur', particularities: 'Le "must" des pointeurs' },
+
+  // BOULENCIEL
+  { brand: 'BOULENCIEL', model: 'Iris', material: 'Acier inox', hardness: 'Demi-tendre (125kg)', targetUsage: 'Milieu', particularities: 'Alvéoles de couleur' },
+  { brand: 'BOULENCIEL', model: 'Venus', material: 'Inox ou Carbone', hardness: 'Tendre ou DT', targetUsage: 'Tireur (T) / Milieu (DT)', particularities: 'Entièrement lisse' },
+  { brand: 'BOULENCIEL', model: 'Mercure', material: 'Inox ou Carbone', hardness: 'Tendre ou DT', targetUsage: 'Pointeur', particularities: 'Grandes alvéoles larges' },
+  { brand: 'BOULENCIEL', model: 'Saturne', material: 'Inox ou Carbone', hardness: 'Tendre ou DT', targetUsage: 'Pointeur / Milieu', particularities: 'Petites alvéoles, grip fort' },
+  { brand: 'BOULENCIEL', model: 'Mars', material: 'Inox ou Carbone', hardness: 'Tendre ou DT', targetUsage: 'Tireur / Milieu', particularities: 'Design à picots' },
+  { brand: 'BOULENCIEL', model: 'RD (Rizzi)', material: 'Acier carbone', hardness: 'Très tendre (110kg)', targetUsage: "Tireur d'élite", particularities: 'Équilibrage chirurgical' },
+  { brand: 'BOULENCIEL', model: 'Continental', material: 'Acier carbone', hardness: 'Demi-tendre', targetUsage: 'Débutant', particularities: 'Entrée de gamme compét.' },
+  { brand: 'BOULENCIEL', model: 'Vartan 16', material: 'Acier inox', hardness: 'Demi-tendre', targetUsage: 'Pointeur', particularities: '16 stries profondes' },
+
+  // KTK
+  { brand: 'KTK', model: 'ORA', material: 'Acier inox', hardness: 'Tendre (115kg)', targetUsage: 'Tireur / Milieu', particularities: 'Design moderne' },
+  { brand: 'KTK', model: 'Adventure', material: 'Acier carbone', hardness: 'Demi-tendre (125kg)', targetUsage: 'Milieu', particularities: 'Très bon équilibrage' },
+  { brand: 'KTK', model: 'Victory', material: 'Acier inox', hardness: 'Demi-tendre (125kg)', targetUsage: 'Polyvalente', particularities: 'Résistante à la rouille' },
+  { brand: 'KTK', model: 'Dylan Rocher', material: 'Inox ou Carbone', hardness: 'Tendre (115kg)', targetUsage: 'Tireur', particularities: 'Modèle signature' },
+
+  // ODDEKA
+  { brand: 'ODDEKA', model: 'Zeus', material: 'Inox ou Carbone', hardness: 'Très tendre (110kg)', targetUsage: 'Tireur / Élite', particularities: 'Nouvelle référence' },
+
+  // LA FRANC
+  { brand: 'LA FRANC', model: 'SM / SB', material: 'Acier carbone', hardness: 'Dure / DT', targetUsage: 'Pointeur', particularities: 'Économique et robuste' },
+  { brand: 'LA FRANC', model: 'SS / ST', material: 'Inox / Carbone', hardness: 'DT / Tendre', targetUsage: 'Milieu / Tireur', particularities: 'Excellent rapport Q/P' },
+
+  // MARATHON
+  { brand: 'MARATHON', model: '600 / 700', material: 'Carbone / Inox', hardness: 'Demi-tendre', targetUsage: 'Milieu / Pointeur', particularities: 'Homologation FIPJP' },
+  { brand: 'MARATHON', model: '800', material: 'Acier carbone', hardness: 'Tendre (115kg)', targetUsage: 'Tireur', particularities: 'Boule de frappe' },
+
+  // GEOLOGIC
+  { brand: 'GEOLOGIC', model: 'Delta', material: 'Acier carbone', hardness: 'Dure', targetUsage: 'Débutant / Pointeur', particularities: 'Accessible' },
+  { brand: 'GEOLOGIC', model: 'Alpha', material: 'Acier carbone', hardness: 'Tendre', targetUsage: 'Tireur', particularities: 'Entrée de gamme tireur' },
+];
+
+export function getModelsByBrand(brand: string): BoulesModel[] {
+  return BOULES_DATABASE.filter(b => b.brand === brand);
+}
+
+export function findModel(brand: string, model: string): BoulesModel | undefined {
+  return BOULES_DATABASE.find(b => b.brand === brand && b.model === model);
+}

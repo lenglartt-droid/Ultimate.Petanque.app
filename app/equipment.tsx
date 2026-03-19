@@ -27,6 +27,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
 import { BoulesSet } from '@/services/mockData';
 import { uploadBoulesSetPhoto } from '@/services/storageService';
+import { BOULES_BRANDS, BOULES_DATABASE, getModelsByBrand, findModel, BoulesModel } from '@/constants/boulesDatabase';
 
 // ============================================
 // Mini Win Chart
@@ -147,6 +148,9 @@ export default function EquipmentScreen() {
   // Form state
   const [formName, setFormName] = useState('');
   const [formBrand, setFormBrand] = useState('');
+  const [formModel, setFormModel] = useState('');
+  const [formCustomBrand, setFormCustomBrand] = useState('');
+  const [formCustomModel, setFormCustomModel] = useState('');
   const [formDiameter, setFormDiameter] = useState('');
   const [formWeight, setFormWeight] = useState('');
   const [formSerialNumber, setFormSerialNumber] = useState('');
@@ -156,6 +160,23 @@ export default function EquipmentScreen() {
   const [formPhoto, setFormPhoto] = useState<string | null>(null);
   const [formPurchasePrice, setFormPurchasePrice] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [showBrandPicker, setShowBrandPicker] = useState(false);
+  const [showModelPicker, setShowModelPicker] = useState(false);
+
+  // Resolved selected model from database
+  const selectedDbModel: BoulesModel | undefined = useMemo(() => {
+    if (!formBrand || formBrand === '__other__' || !formModel) return undefined;
+    return findModel(formBrand, formModel);
+  }, [formBrand, formModel]);
+
+  const availableModels = useMemo(() => {
+    if (!formBrand || formBrand === '__other__') return [];
+    return getModelsByBrand(formBrand);
+  }, [formBrand]);
+
+  // Effective brand/model for display
+  const effectiveBrandDisplay = formBrand === '__other__' ? formCustomBrand : formBrand;
+  const effectiveModelDisplay = formBrand === '__other__' ? formCustomModel : formModel;
 
   // Detailed stats per set
   const setStats = useMemo(() => {
@@ -197,6 +218,9 @@ export default function EquipmentScreen() {
   const resetForm = useCallback(() => {
     setFormName('');
     setFormBrand('');
+    setFormModel('');
+    setFormCustomBrand('');
+    setFormCustomModel('');
     setFormDiameter('');
     setFormWeight('');
     setFormSerialNumber('');
@@ -218,7 +242,33 @@ export default function EquipmentScreen() {
   const openEditForm = useCallback((set: BoulesSet) => {
     setEditingSet(set);
     setFormName(set.name);
-    setFormBrand(set.brand || '');
+    // Try to match existing brand/model from database
+    const brandStr = set.brand || '';
+    const dbMatch = BOULES_DATABASE.find(b => {
+      const nameUpper = set.name.toUpperCase();
+      return b.brand === brandStr && nameUpper.includes(b.model.toUpperCase());
+    });
+    if (dbMatch) {
+      setFormBrand(dbMatch.brand);
+      setFormModel(dbMatch.model);
+      setFormCustomBrand('');
+      setFormCustomModel('');
+    } else if (brandStr && BOULES_BRANDS.includes(brandStr as any)) {
+      setFormBrand(brandStr);
+      setFormModel('');
+      setFormCustomBrand('');
+      setFormCustomModel('');
+    } else if (brandStr) {
+      setFormBrand('__other__');
+      setFormCustomBrand(brandStr);
+      setFormModel('');
+      setFormCustomModel('');
+    } else {
+      setFormBrand('');
+      setFormModel('');
+      setFormCustomBrand('');
+      setFormCustomModel('');
+    }
     setFormDiameter(set.diameter ? String(set.diameter) : '');
     setFormWeight(set.weight ? String(set.weight) : '');
     setFormSerialNumber(set.serialNumber || '');
@@ -275,13 +325,15 @@ export default function EquipmentScreen() {
 
   const handleSave = useCallback(async () => {
     if (!formName.trim()) { Alert.alert(t('common', 'error'), t('equipment', 'nameRequired')); return; }
+    const finalBrand = formBrand === '__other__' ? formCustomBrand.trim() : formBrand;
+    const resolvedHardness = selectedDbModel ? selectedDbModel.hardness : formHardness;
     const setData: Omit<BoulesSet, 'id'> = {
       name: formName.trim(),
-      brand: formBrand.trim() || undefined,
+      brand: finalBrand || undefined,
       diameter: formDiameter ? parseFloat(formDiameter) : undefined,
       weight: formWeight ? parseInt(formWeight, 10) : undefined,
       serialNumber: formSerialNumber.trim() || undefined,
-      hardness: formHardness || undefined,
+      hardness: resolvedHardness || undefined,
       isPrimary: formIsPrimary,
       notes: formNotes.trim() || undefined,
       photo: formPhoto || undefined,
@@ -521,6 +573,7 @@ export default function EquipmentScreen() {
                       <Text style={styles.setMeta}>
                         {[set.brand, set.diameter ? `${set.diameter} mm` : '', set.weight ? `${set.weight} g` : '', set.hardness].filter(Boolean).join(' \u2022 ')}
                       </Text>
+                      {(() => { const dbM = set.brand ? BOULES_DATABASE.find(b => b.brand === set.brand && set.name.toUpperCase().includes(b.model.toUpperCase())) : null; return dbM ? <Text style={{ fontSize: 11, color: theme.accent, fontWeight: '500', marginTop: 2 }}>{dbM.targetUsage} \u2022 {dbM.particularities}</Text> : null; })()}
                     </View>
                     {!compareMode ? (
                       <View style={styles.setActions}>
@@ -687,6 +740,125 @@ export default function EquipmentScreen() {
         ) : null}
       </ScrollView>
 
+      {/* Brand Picker Modal */}
+      <Modal visible={showBrandPicker} animationType="slide" transparent onRequestClose={() => setShowBrandPicker(false)}>
+        <View style={styles.pickerOverlay}>
+          <View style={styles.pickerContent}>
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>{t('equipment', 'selectBrand')}</Text>
+              <Pressable style={styles.pickerCloseBtn} onPress={() => setShowBrandPicker(false)}>
+                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+            <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+              {BOULES_BRANDS.map(brand => {
+                const modelCount = getModelsByBrand(brand).length;
+                const isSelected = formBrand === brand;
+                return (
+                  <Pressable
+                    key={brand}
+                    style={[styles.pickerItem, isSelected && styles.pickerItemSelected]}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setFormBrand(brand);
+                      setFormModel('');
+                      setFormCustomBrand('');
+                      setFormCustomModel('');
+                      setShowBrandPicker(false);
+                    }}
+                  >
+                    <View style={[styles.pickerItemIcon, isSelected && { backgroundColor: theme.primary + '15' }]}>
+                      <MaterialIcons name="sports-baseball" size={20} color={isSelected ? theme.primary : theme.textMuted} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.pickerItemTitle, isSelected && { color: theme.primary }]}>{brand}</Text>
+                      <Text style={styles.pickerItemSub}>{modelCount} {t('equipment', 'models')}</Text>
+                    </View>
+                    {isSelected ? <MaterialIcons name="check-circle" size={22} color={theme.primary} /> : null}
+                  </Pressable>
+                );
+              })}
+              {/* Other brand option */}
+              <Pressable
+                style={[styles.pickerItem, formBrand === '__other__' && styles.pickerItemSelected]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setFormBrand('__other__');
+                  setFormModel('');
+                  setShowBrandPicker(false);
+                }}
+              >
+                <View style={[styles.pickerItemIcon, formBrand === '__other__' && { backgroundColor: theme.accent + '15' }]}>
+                  <MaterialIcons name="edit" size={20} color={formBrand === '__other__' ? theme.accent : theme.textMuted} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.pickerItemTitle, formBrand === '__other__' && { color: theme.accent }]}>{t('equipment', 'otherBrand')}</Text>
+                  <Text style={styles.pickerItemSub}>{language === 'fr' ? 'Saisie manuelle' : 'Manual entry'}</Text>
+                </View>
+                {formBrand === '__other__' ? <MaterialIcons name="check-circle" size={22} color={theme.accent} /> : null}
+              </Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Model Picker Modal */}
+      <Modal visible={showModelPicker} animationType="slide" transparent onRequestClose={() => setShowModelPicker(false)}>
+        <View style={styles.pickerOverlay}>
+          <View style={styles.pickerContent}>
+            <View style={styles.pickerHeader}>
+              <View>
+                <Text style={styles.pickerTitle}>{t('equipment', 'selectModel')}</Text>
+                <Text style={styles.pickerSubtitle}>{formBrand}</Text>
+              </View>
+              <Pressable style={styles.pickerCloseBtn} onPress={() => setShowModelPicker(false)}>
+                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+            <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+              {availableModels.map(m => {
+                const isSelected = formModel === m.model;
+                return (
+                  <Pressable
+                    key={m.model}
+                    style={[styles.pickerItem, styles.modelPickerItem, isSelected && styles.pickerItemSelected]}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setFormModel(m.model);
+                      // Auto-fill name if empty
+                      if (!formName.trim()) setFormName(`${m.brand} ${m.model}`);
+                      setShowModelPicker(false);
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <Text style={[styles.pickerItemTitle, { fontSize: 16 }, isSelected && { color: theme.primary }]}>{m.model}</Text>
+                        {isSelected ? <MaterialIcons name="check-circle" size={18} color={theme.primary} /> : null}
+                      </View>
+                      <View style={styles.modelSpecsRow}>
+                        <View style={styles.modelSpecTag}>
+                          <Text style={styles.modelSpecTagText}>{m.material}</Text>
+                        </View>
+                        <View style={styles.modelSpecTag}>
+                          <Text style={styles.modelSpecTagText}>{m.hardness}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.modelSpecsRow}>
+                        <View style={[styles.modelSpecTag, { backgroundColor: theme.primary + '10' }]}>
+                          <MaterialIcons name="person" size={10} color={theme.primary} />
+                          <Text style={[styles.modelSpecTagText, { color: theme.primary }]}>{m.targetUsage}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.modelParticularity}>{m.particularities}</Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* Form Modal */}
       <Modal visible={showForm} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { setShowForm(false); resetForm(); }}>
         <SafeAreaView edges={['top']} style={styles.modalContainer}>
@@ -738,11 +910,77 @@ export default function EquipmentScreen() {
                 <TextInput style={styles.formInput} value={formName} onChangeText={setFormName} placeholder={t('equipment', 'setNamePlaceholder')} placeholderTextColor={theme.textMuted} autoFocus={!editingSet} />
               </View>
 
-              {/* Brand */}
+              {/* Brand Picker */}
               <View style={styles.formField}>
                 <Text style={styles.formLabel}>{t('equipment', 'brandLabel')}</Text>
-                <TextInput style={styles.formInput} value={formBrand} onChangeText={setFormBrand} placeholder={t('equipment', 'brandPlaceholder')} placeholderTextColor={theme.textMuted} />
+                <Pressable
+                  style={[styles.formInput, styles.formPickerBtn]}
+                  onPress={() => { Haptics.selectionAsync(); setShowBrandPicker(true); }}
+                >
+                  <Text style={effectiveBrandDisplay ? styles.formPickerValue : styles.formPickerPlaceholder} numberOfLines={1}>
+                    {effectiveBrandDisplay || t('equipment', 'selectBrand')}
+                  </Text>
+                  <MaterialIcons name="expand-more" size={22} color={theme.textMuted} />
+                </Pressable>
               </View>
+
+              {/* Model Picker — shown only when a known brand is selected */}
+              {formBrand && formBrand !== '__other__' ? (
+                <View style={styles.formField}>
+                  <Text style={styles.formLabel}>{'MOD\u00c8LE'}</Text>
+                  <Pressable
+                    style={[styles.formInput, styles.formPickerBtn]}
+                    onPress={() => { Haptics.selectionAsync(); setShowModelPicker(true); }}
+                  >
+                    <Text style={formModel ? styles.formPickerValue : styles.formPickerPlaceholder} numberOfLines={1}>
+                      {formModel || t('equipment', 'selectModel')}
+                    </Text>
+                    <MaterialIcons name="expand-more" size={22} color={theme.textMuted} />
+                  </Pressable>
+                </View>
+              ) : null}
+
+              {/* Custom brand/model fields for "Other" */}
+              {formBrand === '__other__' ? (
+                <>
+                  <View style={styles.formField}>
+                    <Text style={styles.formLabel}>{t('equipment', 'brandLabel')}</Text>
+                    <TextInput style={styles.formInput} value={formCustomBrand} onChangeText={setFormCustomBrand} placeholder={t('equipment', 'otherBrandPlaceholder')} placeholderTextColor={theme.textMuted} />
+                  </View>
+                  <View style={styles.formField}>
+                    <Text style={styles.formLabel}>{'MOD\u00c8LE'}</Text>
+                    <TextInput style={styles.formInput} value={formCustomModel} onChangeText={setFormCustomModel} placeholder={t('equipment', 'otherModelPlaceholder')} placeholderTextColor={theme.textMuted} />
+                  </View>
+                </>
+              ) : null}
+
+              {/* Auto-filled specs from database */}
+              {selectedDbModel ? (
+                <View style={styles.specsAutoCard}>
+                  <View style={styles.specsAutoHeader}>
+                    <MaterialIcons name="auto-awesome" size={16} color={theme.primary} />
+                    <Text style={styles.specsAutoTitle}>{t('equipment', 'modelSpecs')}</Text>
+                  </View>
+                  <View style={styles.specsAutoGrid}>
+                    <View style={styles.specsAutoItem}>
+                      <Text style={styles.specsAutoLabel}>{t('equipment', 'materialLabel')}</Text>
+                      <Text style={styles.specsAutoValue}>{selectedDbModel.material}</Text>
+                    </View>
+                    <View style={styles.specsAutoItem}>
+                      <Text style={styles.specsAutoLabel}>{t('equipment', 'hardnessLabel')}</Text>
+                      <Text style={styles.specsAutoValue}>{selectedDbModel.hardness}</Text>
+                    </View>
+                    <View style={styles.specsAutoItem}>
+                      <Text style={styles.specsAutoLabel}>{t('equipment', 'targetUsageLabel')}</Text>
+                      <Text style={styles.specsAutoValue}>{selectedDbModel.targetUsage}</Text>
+                    </View>
+                    <View style={styles.specsAutoItem}>
+                      <Text style={styles.specsAutoLabel}>{t('equipment', 'particularitiesLabel')}</Text>
+                      <Text style={styles.specsAutoValue}>{selectedDbModel.particularities}</Text>
+                    </View>
+                  </View>
+                </View>
+              ) : null}
 
               {/* Diameter & Weight */}
               <View style={styles.formRow}>
@@ -768,17 +1006,19 @@ export default function EquipmentScreen() {
                 <TextInput style={styles.formInput} value={formPurchasePrice} onChangeText={setFormPurchasePrice} placeholder={t('equipment', 'purchasePricePlaceholder')} placeholderTextColor={theme.textMuted} keyboardType="decimal-pad" />
               </View>
 
-              {/* Hardness */}
-              <View style={styles.formField}>
-                <Text style={styles.formLabel}>{t('equipment', 'hardnessLabel')}</Text>
-                <View style={styles.hardnessRow}>
-                  {HARDNESS_OPTIONS.map(h => (
-                    <Pressable key={h} style={[styles.hardnessChip, formHardness === h && styles.hardnessChipActive]} onPress={() => { Haptics.selectionAsync(); setFormHardness(formHardness === h ? '' : h); }}>
-                      <Text style={[styles.hardnessChipText, formHardness === h && styles.hardnessChipTextActive]}>{h}</Text>
-                    </Pressable>
-                  ))}
+              {/* Hardness — show only when no db model selected (or custom brand) */}
+              {!selectedDbModel ? (
+                <View style={styles.formField}>
+                  <Text style={styles.formLabel}>{t('equipment', 'hardnessLabel')}</Text>
+                  <View style={styles.hardnessRow}>
+                    {HARDNESS_OPTIONS.map(h => (
+                      <Pressable key={h} style={[styles.hardnessChip, formHardness === h && styles.hardnessChipActive]} onPress={() => { Haptics.selectionAsync(); setFormHardness(formHardness === h ? '' : h); }}>
+                        <Text style={[styles.hardnessChipText, formHardness === h && styles.hardnessChipTextActive]}>{h}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
                 </View>
-              </View>
+              ) : null}
 
               {/* Primary toggle */}
               <Pressable style={[styles.primaryToggle, formIsPrimary && styles.primaryToggleActive]} onPress={() => { Haptics.selectionAsync(); setFormIsPrimary(!formIsPrimary); }}>
@@ -965,4 +1205,37 @@ const styles = StyleSheet.create({
   toggleIndicatorActive: { backgroundColor: theme.carreauColor },
   toggleDot: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#FFF' },
   toggleDotActive: { alignSelf: 'flex-end' },
+
+  // Brand/Model picker button
+  formPickerBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  formPickerValue: { fontSize: 16, color: theme.textPrimary, fontWeight: '600', flex: 1 },
+  formPickerPlaceholder: { fontSize: 16, color: theme.textMuted, flex: 1 },
+
+  // Picker modals
+  pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  pickerContent: { backgroundColor: theme.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '75%', paddingBottom: Platform.OS === 'ios' ? 34 : 16 },
+  pickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
+  pickerTitle: { fontSize: 18, fontWeight: '700', color: theme.textPrimary },
+  pickerSubtitle: { fontSize: 13, color: theme.primary, fontWeight: '600', marginTop: 2 },
+  pickerCloseBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
+  pickerScroll: { paddingHorizontal: 16, paddingTop: 8 },
+  pickerItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, paddingHorizontal: 12, borderRadius: 14, marginBottom: 4 },
+  pickerItemSelected: { backgroundColor: theme.primary + '08' },
+  pickerItemIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
+  pickerItemTitle: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  pickerItemSub: { fontSize: 12, color: theme.textMuted, marginTop: 1 },
+  modelPickerItem: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: theme.border + '40' },
+  modelSpecsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
+  modelSpecTag: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  modelSpecTagText: { fontSize: 11, fontWeight: '600', color: theme.textSecondary },
+  modelParticularity: { fontSize: 12, color: theme.textMuted, fontStyle: 'italic', marginTop: 6 },
+
+  // Auto-filled specs card
+  specsAutoCard: { backgroundColor: theme.primary + '06', borderRadius: theme.borderRadius.lg, padding: 16, borderWidth: 1, borderColor: theme.primary + '20' },
+  specsAutoHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  specsAutoTitle: { fontSize: 13, fontWeight: '700', color: theme.primary },
+  specsAutoGrid: { gap: 10 },
+  specsAutoItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  specsAutoLabel: { fontSize: 10, fontWeight: '700', color: theme.textMuted, letterSpacing: 0.5, width: 90, textTransform: 'uppercase' },
+  specsAutoValue: { fontSize: 14, fontWeight: '600', color: theme.textPrimary, flex: 1 },
 });
