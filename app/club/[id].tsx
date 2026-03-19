@@ -535,7 +535,7 @@ export default function ClubDetailScreen() {
         </View>
 
         {/* Club Leaderboard - public players ranked */}
-        <Animated.View entering={FadeInDown.duration(400).delay(550)} style={[styles.section, { marginBottom: 8, zIndex: 1 }]}>
+        <Animated.View entering={FadeInDown.duration(400).delay(300)} style={[styles.section, { marginBottom: 24 }]}>
           <View style={styles.sectionHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: '#D97706' + '15', alignItems: 'center', justifyContent: 'center' }}>
@@ -634,7 +634,7 @@ export default function ClubDetailScreen() {
 
         <View style={isTablet ? styles.tabletRow : undefined}>
         {clubPlayers.length > 0 && (
-          <Animated.View entering={FadeInDown.duration(400).delay(500)} style={[styles.section, isTablet && styles.tabletHalf]}>
+          <Animated.View entering={FadeInDown.duration(400).delay(400)} style={[styles.section, isTablet && styles.tabletHalf]}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>{t('club', 'membersCount')} ({clubPlayers.length})</Text>
             </View>
@@ -664,7 +664,7 @@ export default function ClubDetailScreen() {
 
         {/* Tournaments */}
         {clubTournaments.length > 0 && (
-          <Animated.View entering={FadeInDown.duration(400).delay(600)} style={[styles.section, isTablet && styles.tabletHalf]}>
+          <Animated.View entering={FadeInDown.duration(400).delay(450)} style={[styles.section, isTablet && styles.tabletHalf]}>
             <Text style={styles.sectionTitle}>{t('club', 'organizedTournaments')}</Text>
             {clubTournaments.map(tournament => (
               <Pressable 
