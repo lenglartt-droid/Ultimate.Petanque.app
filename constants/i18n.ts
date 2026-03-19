@@ -2306,6 +2306,8 @@ export const translations = {
     sortByMatches: { fr: 'Matchs', en: 'Games' },
     sortByTirRate: { fr: 'Tir', en: 'Shot Rate' },
     sortByCarreauRate: { fr: 'Carreau', en: 'Carreau' },
+    sortByPointRate: { fr: 'Point', en: 'Point' },
+    devantBouleShort: { fr: 'Dev. boule', en: 'Front' },
     you: { fr: 'Vous', en: 'You' },
     topPlayers: { fr: 'Top joueurs', en: 'Top players' },
     publicPlayersCount: { fr: 'joueur(s) public(s)', en: 'public player(s)' },

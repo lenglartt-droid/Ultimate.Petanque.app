@@ -42,7 +42,7 @@ import { fetchLeaderboard, sortLeaderboard, LeaderboardPlayer } from '@/services
 export default function ClubDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getClubById, players, tournaments, deleteClub, updateClub, getSharedPermission, setItemPublic, isFavoriteClub, toggleFavoriteClub, refreshData, loading: appLoading } = useApp();
+  const { getClubById, players, tournaments, deleteClub, updateClub, getSharedPermission, setItemPublic, isFavoriteClub, toggleFavoriteClub, refreshData, loading: appLoading, selfPlayer } = useApp();
   const [refreshing, setRefreshing] = React.useState(false);
   const [screenWidth, setScreenWidth] = React.useState(() => Dimensions.get('window').width);
   React.useEffect(() => {
@@ -559,6 +559,7 @@ export default function ClubDetailScreen() {
                 <Text style={{ width: 42, fontSize: 10, fontWeight: '700', color: '#D97706', textTransform: 'uppercase', textAlign: 'center' }}>%V</Text>
                 <Text style={{ width: 36, fontSize: 10, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', textAlign: 'center' }}>{t('leaderboard', 'matches')}</Text>
                 <Text style={{ width: 36, fontSize: 10, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', textAlign: 'center' }}>Tir</Text>
+                <Text style={{ width: 32, fontSize: 10, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', textAlign: 'center' }}>Pt</Text>
               </View>
               {clubLeaderboard.slice(0, 10).map((p, idx) => {
                 const rank = idx + 1;
@@ -608,6 +609,7 @@ export default function ClubDetailScreen() {
                     <Text style={{ width: 42, fontSize: 13, fontWeight: '700', color: '#D97706', textAlign: 'center' }}>{p.stats.winRate}%</Text>
                     <Text style={{ width: 36, fontSize: 12, fontWeight: '500', color: theme.textPrimary, textAlign: 'center' }}>{p.stats.matchesPlayed}</Text>
                     <Text style={{ width: 36, fontSize: 12, fontWeight: '500', color: theme.textPrimary, textAlign: 'center' }}>{p.stats.tirRate > 0 ? `${p.stats.tirRate}%` : '-'}</Text>
+                    <Text style={{ width: 32, fontSize: 12, fontWeight: '500', color: theme.textPrimary, textAlign: 'center' }}>{p.stats.pointRate > 0 ? `${p.stats.pointRate}%` : '-'}</Text>
                   </Pressable>
                 );
               })}

@@ -1040,6 +1040,7 @@ export default function StatsScreen() {
       tirs: number; tirsSuccess: number; carreaux: number;
       points: number; pointsSuccess: number;
       challenges: number;
+      devantBoule: number; pointQualitiesSuccess: number;
     }> = {};
 
     filteredMatches.forEach(match => {
@@ -1049,6 +1050,7 @@ export default function StatsScreen() {
       if (!bySet[match.boulesSetId]) bySet[match.boulesSetId] = {
         name: bs.name, brand: bs.brand, diameter: bs.diameter, weight: bs.weight,
         matches: 0, wins: 0, tirs: 0, tirsSuccess: 0, carreaux: 0, points: 0, pointsSuccess: 0, challenges: 0,
+        devantBoule: 0, pointQualitiesSuccess: 0,
       };
       const s = bySet[match.boulesSetId];
       s.matches++;
@@ -1060,6 +1062,12 @@ export default function StatsScreen() {
           s.carreaux += pa.actions.carreaux;
           s.points += pa.actions.points;
           s.pointsSuccess += pa.actions.pointsSuccess;
+          if ((pa as any).detailedShots) {
+            (pa as any).detailedShots.filter((shot: any) => shot.actionType === 'point' && shot.success && shot.pointQuality).forEach((shot: any) => {
+              s.pointQualitiesSuccess++;
+              if (shot.pointQuality === 'devant_boule') s.devantBoule++;
+            });
+          }
         });
       }
     });
@@ -1071,6 +1079,7 @@ export default function StatsScreen() {
       if (!bySet[ch.boulesSetId]) bySet[ch.boulesSetId] = {
         name: bs.name, brand: bs.brand, diameter: bs.diameter, weight: bs.weight,
         matches: 0, wins: 0, tirs: 0, tirsSuccess: 0, carreaux: 0, points: 0, pointsSuccess: 0, challenges: 0,
+        devantBoule: 0, pointQualitiesSuccess: 0,
       };
       bySet[ch.boulesSetId].challenges++;
     });
@@ -1110,6 +1119,12 @@ export default function StatsScreen() {
           s.carreaux += pa.actions.carreaux;
           s.points += pa.actions.points;
           s.pointsSuccess += pa.actions.pointsSuccess;
+          if ((pa as any).detailedShots) {
+            (pa as any).detailedShots.filter((shot: any) => shot.actionType === 'point' && shot.success && shot.pointQuality).forEach((shot: any) => {
+              s.pointQualitiesSuccess++;
+              if (shot.pointQuality === 'devant_boule') s.devantBoule++;
+            });
+          }
         });
       }
     });
@@ -1400,7 +1415,7 @@ export default function StatsScreen() {
             </View>
           </View>
           <View style={styles.headerStatsRow}>
-            {[{ val: `${performanceStats.winRate}%`, lbl: t('stats', 'victoriesLabel') }, { val: `${tirStats.successRate}%`, lbl: t('stats', 'shotShort') }, { val: `${pointStats.successRate}%`, lbl: t('stats', 'pointShort') }, { val: `${tirStats.carreauRate}%`, lbl: t('stats', 'carreauxLabel') }].map((s, i) => (<React.Fragment key={i}>{i > 0 ? <View style={styles.headerStatDivider} /> : null}<View style={styles.headerStatItem}><Text style={styles.headerStatValue}>{s.val}</Text><Text style={styles.headerStatLabel}>{s.lbl}</Text></View></React.Fragment>))}
+            {[{ val: `${performanceStats.winRate}%`, lbl: t('stats', 'victoriesLabel') }, { val: `${tirStats.successRate}%`, lbl: t('stats', 'shotShort') }, { val: `${pointStats.successRate}%`, lbl: t('stats', 'pointShort') }, { val: `${tirStats.carreauRate}%`, lbl: t('stats', 'carreauxLabel') }, { val: pointStats.successQualitiesTotal > 0 ? `${Math.round((pointStats.pointDevantBoule / pointStats.successQualitiesTotal) * 100)}%` : '-', lbl: t('leaderboard', 'devantBouleShort') }].map((s, i) => (<React.Fragment key={i}>{i > 0 ? <View style={styles.headerStatDivider} /> : null}<View style={styles.headerStatItem}><Text style={styles.headerStatValue}>{s.val}</Text><Text style={styles.headerStatLabel}>{s.lbl}</Text></View></React.Fragment>))}
           </View>
         </LinearGradient>
 
@@ -1872,6 +1887,7 @@ export default function StatsScreen() {
                         <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: theme.tirColor }]}>{t('statsExtra', 'shotLabel')}</Text></View>
                         <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: theme.pointColor }]}>Pt</Text></View>
                         <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: theme.carreauColor }]}>C</Text></View>
+                        <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: '#8B5CF6' }]}>DB</Text></View>
                       </View>
                       {boulesSetStats.sets.map((setId, idx) => {
                         const data = boulesSetStats.bySet[setId];
@@ -1879,6 +1895,7 @@ export default function StatsScreen() {
                         const tirRate = data.tirs > 0 ? Math.round((data.tirsSuccess / data.tirs) * 100) : 0;
                         const ptRate = data.points > 0 ? Math.round((data.pointsSuccess / data.points) * 100) : 0;
                         const carRate = data.tirs > 0 ? Math.round((data.carreaux / data.tirs) * 100) : 0;
+                        const dbRate = data.pointQualitiesSuccess > 0 ? Math.round((data.devantBoule / data.pointQualitiesSuccess) * 100) : 0;
                         return (
                           <Pressable key={setId} style={[styles.crossTableRow, idx % 2 === 0 && styles.crossTableRowAlt]} onPress={() => selectBoulesSet(setId)}>
                             <View style={styles.crossTableRowLabel}>
@@ -1900,6 +1917,9 @@ export default function StatsScreen() {
                             <View style={styles.crossTableCell}>
                               <Text style={[styles.crossTableCellValue, { color: theme.carreauColor }]}>{carRate > 0 ? `${carRate}%` : '-'}</Text>
                             </View>
+                            <View style={styles.crossTableCell}>
+                              <Text style={[styles.crossTableCellValue, { color: '#8B5CF6' }]}>{dbRate > 0 ? `${dbRate}%` : '-'}</Text>
+                            </View>
                           </Pressable>
                         );
                       })}
@@ -1914,6 +1934,7 @@ export default function StatsScreen() {
                           { key: 'tir', label: t('statsExtra', 'shotLabel'), color: theme.tirColor, getValue: (d: typeof boulesSetStats.bySet[string]) => d.tirs > 0 ? Math.round((d.tirsSuccess / d.tirs) * 100) : 0 },
                           { key: 'pt', label: 'Point', color: theme.pointColor, getValue: (d: typeof boulesSetStats.bySet[string]) => d.points > 0 ? Math.round((d.pointsSuccess / d.points) * 100) : 0 },
                           { key: 'car', label: t('statsExtra', 'carreauLabel'), color: theme.carreauColor, getValue: (d: typeof boulesSetStats.bySet[string]) => d.tirs > 0 ? Math.round((d.carreaux / d.tirs) * 100) : 0 },
+                          { key: 'db', label: t('stats', 'inFrontBallLabel'), color: '#8B5CF6', getValue: (d: typeof boulesSetStats.bySet[string]) => d.pointQualitiesSuccess > 0 ? Math.round((d.devantBoule / d.pointQualitiesSuccess) * 100) : 0 },
                         ];
                         return (
                           <View style={styles.boulesCompChart}>
@@ -3678,7 +3699,7 @@ const styles = StyleSheet.create({
   historyButton:{width:40,height:40,borderRadius:20,backgroundColor:'rgba(255,255,255,0.1)',alignItems:'center' as const,justifyContent:'center' as const},
   headerStatsRow:{flexDirection:'row',alignItems:'center',backgroundColor:'rgba(255,255,255,0.12)',borderRadius:14,paddingVertical:12,paddingHorizontal:8},
   headerStatItem:{flex:1,alignItems:'center' as const},
-  headerStatValue:{fontSize:18,fontWeight:'800',color:'#FFF'},
+  headerStatValue:{fontSize:16,fontWeight:'800',color:'#FFF'},
   headerStatLabel:{fontSize:9,fontWeight:'600',color:'rgba(255,255,255,0.65)',marginTop:2,textTransform:'uppercase' as const},
   headerStatDivider:{width:1,height:24,backgroundColor:'rgba(255,255,255,0.15)'},
   filterBar:{paddingHorizontal:16,gap:8,marginTop:12,marginBottom:8},

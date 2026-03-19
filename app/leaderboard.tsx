@@ -120,6 +120,10 @@ const MemoizedPlayerRow = React.memo(function PlayerRow({
           <Text style={s.statLabel}>{t('leaderboard', 'shotRate')}</Text>
         </View>
         <View style={s.statBlock}>
+          <Text style={[s.statValue, sortBy === 'pointRate' && { color: theme.pointColor, fontWeight: '800' }]}>{player.stats.pointRate > 0 ? `${player.stats.pointRate}%` : '-'}</Text>
+          <Text style={s.statLabel}>Pt</Text>
+        </View>
+        <View style={s.statBlock}>
           <Text style={[s.statValue, sortBy === 'carreauRate' && { color: theme.carreauColor, fontWeight: '800' }]}>{player.stats.carreauRate > 0 ? `${player.stats.carreauRate}%` : '-'}</Text>
           <Text style={s.statLabel}>Car.</Text>
         </View>
@@ -369,6 +373,7 @@ export default function LeaderboardScreen() {
               { id: 'winRate' as LeaderboardSort, label: t('leaderboard', 'sortByWinRate'), icon: 'emoji-events' },
               { id: 'matches' as LeaderboardSort, label: t('leaderboard', 'sortByMatches'), icon: 'sports' },
               { id: 'tirRate' as LeaderboardSort, label: t('leaderboard', 'sortByTirRate'), icon: 'gps-fixed' },
+              { id: 'pointRate' as LeaderboardSort, label: t('leaderboard', 'sortByPointRate'), icon: 'adjust' },
               { id: 'carreauRate' as LeaderboardSort, label: t('leaderboard', 'sortByCarreauRate'), icon: 'stars' },
             ]).map(chip => (
               <Pressable

@@ -250,7 +250,7 @@ export default function MyPlayerCardScreen() {
   }, [selfPlayer?.id, selfPlayer?.role, matches, boulesSets]);
 
   // Shot stats
-  let totalTirs = 0, totalTirsSuccess = 0, totalPoints = 0, totalPointsSuccess = 0, totalCarreaux = 0;
+  let totalTirs = 0, totalTirsSuccess = 0, totalPoints = 0, totalPointsSuccess = 0, totalCarreaux = 0, totalDevantBoule = 0, totalPointQualitiesSuccess = 0;
   matches.forEach(m => {
     if (m.playerActions) {
       m.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
@@ -259,12 +259,19 @@ export default function MyPlayerCardScreen() {
         totalPoints += pa.actions.points;
         totalPointsSuccess += pa.actions.pointsSuccess;
         totalCarreaux += pa.actions.carreaux;
+        if ((pa as any).detailedShots) {
+          (pa as any).detailedShots.filter((s: any) => s.actionType === 'point' && s.success && s.pointQuality).forEach((s: any) => {
+            totalPointQualitiesSuccess++;
+            if (s.pointQuality === 'devant_boule') totalDevantBoule++;
+          });
+        }
       });
     }
   });
   const tirRate = totalTirs > 0 ? Math.round((totalTirsSuccess / totalTirs) * 100) : 0;
   const pointRate = totalPoints > 0 ? Math.round((totalPointsSuccess / totalPoints) * 100) : 0;
   const carreauRate = totalTirsSuccess > 0 ? Math.round((totalCarreaux / totalTirsSuccess) * 100) : 0;
+  const devantBouleRate = totalPointQualitiesSuccess > 0 ? Math.round((totalDevantBoule / totalPointQualitiesSuccess) * 100) : 0;
 
   const totalMatches = matches.length;
   const tournamentMatches = matches.filter(m => m.mode === 'Tournoi');
@@ -618,8 +625,9 @@ export default function MyPlayerCardScreen() {
             { icon: 'gps-fixed', label: t('player', 'shotRate'), rate: tirRate, success: totalTirsSuccess, total: totalTirs, color: theme.accent },
             { icon: 'adjust', label: t('player', 'pointRate'), rate: pointRate, success: totalPointsSuccess, total: totalPoints, color: theme.primary },
             { icon: 'stars', label: t('player', 'carreauRate'), rate: carreauRate, success: totalCarreaux, total: totalTirsSuccess, color: theme.carreauColor },
+            { icon: 'sports-baseball', label: t('stats', 'inFrontBallLabel'), rate: devantBouleRate, success: totalDevantBoule, total: totalPointQualitiesSuccess, color: '#8B5CF6' },
           ].map((item, idx) => (
-            <View key={idx} style={[s.perfRow, idx === 2 && { borderBottomWidth: 0 }]}>
+            <View key={idx} style={[s.perfRow, idx === 3 && { borderBottomWidth: 0 }]}>
               <View style={[s.perfIcon, { backgroundColor: item.color + '15' }]}>
                 <MaterialIcons name={item.icon as any} size={18} color={item.color} />
               </View>

@@ -24,7 +24,7 @@ export interface LeaderboardPlayer {
   };
 }
 
-export type LeaderboardSort = 'winRate' | 'matches' | 'tirRate' | 'carreauRate';
+export type LeaderboardSort = 'winRate' | 'matches' | 'tirRate' | 'pointRate' | 'carreauRate';
 
 export async function fetchLeaderboard(): Promise<{ players: LeaderboardPlayer[]; error: string | null }> {
   const supabase = getSupabaseClient();
@@ -85,6 +85,9 @@ export function sortLeaderboard(players: LeaderboardPlayer[], sortBy: Leaderboar
         return b.stats.matchesPlayed - a.stats.matchesPlayed;
       case 'tirRate':
         if (b.stats.tirRate !== a.stats.tirRate) return b.stats.tirRate - a.stats.tirRate;
+        return b.stats.matchesPlayed - a.stats.matchesPlayed;
+      case 'pointRate':
+        if (b.stats.pointRate !== a.stats.pointRate) return b.stats.pointRate - a.stats.pointRate;
         return b.stats.matchesPlayed - a.stats.matchesPlayed;
       case 'carreauRate':
         if (b.stats.carreauRate !== a.stats.carreauRate) return b.stats.carreauRate - a.stats.carreauRate;

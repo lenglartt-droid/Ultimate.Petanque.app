@@ -60,6 +60,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
           { id: 'winRate' as LeaderboardSort, label: t('leaderboard', 'sortByWinRate') },
           { id: 'matches' as LeaderboardSort, label: t('leaderboard', 'sortByMatches') },
           { id: 'tirRate' as LeaderboardSort, label: t('leaderboard', 'sortByTirRate') },
+          { id: 'pointRate' as LeaderboardSort, label: t('leaderboard', 'sortByPointRate') },
           { id: 'carreauRate' as LeaderboardSort, label: t('leaderboard', 'sortByCarreauRate') },
         ]).map(chip => (
           <Pressable
@@ -103,6 +104,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
               <Text style={[s.headerCell, s.headerCellStat]}>{t('leaderboard', 'matches')}</Text>
               <Text style={[s.headerCell, s.headerCellStat, sortBy === 'winRate' && { color: '#D97706' }]}>%V</Text>
               <Text style={[s.headerCell, s.headerCellStat, sortBy === 'tirRate' && { color: theme.tirColor }]}>Tir</Text>
+              <Text style={[s.headerCell, s.headerCellStat, sortBy === 'pointRate' && { color: theme.pointColor }]}>Pt</Text>
               <Text style={[s.headerCell, s.headerCellStat, sortBy === 'carreauRate' && { color: theme.carreauColor }]}>Car.</Text>
             </View>
 
@@ -148,6 +150,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                   <Text style={s.statCell}>{p.stats.matchesPlayed}</Text>
                   <Text style={[s.statCell, sortBy === 'winRate' && { color: '#D97706', fontWeight: '700' }]}>{p.stats.winRate}%</Text>
                   <Text style={[s.statCell, sortBy === 'tirRate' && { color: theme.tirColor, fontWeight: '700' }]}>{p.stats.tirRate > 0 ? `${p.stats.tirRate}%` : '-'}</Text>
+                  <Text style={[s.statCell, sortBy === 'pointRate' && { color: theme.pointColor, fontWeight: '700' }]}>{p.stats.pointRate > 0 ? `${p.stats.pointRate}%` : '-'}</Text>
                   <Text style={[s.statCell, sortBy === 'carreauRate' && { color: theme.carreauColor, fontWeight: '700' }]}>{p.stats.carreauRate > 0 ? `${p.stats.carreauRate}%` : '-'}</Text>
                 </Pressable>
               );
@@ -187,6 +190,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                     <Text style={s.statCell}>{myP.stats.matchesPlayed}</Text>
                     <Text style={[s.statCell, { color: '#D97706', fontWeight: '700' }]}>{myP.stats.winRate}%</Text>
                     <Text style={s.statCell}>{myP.stats.tirRate > 0 ? `${myP.stats.tirRate}%` : '-'}</Text>
+                    <Text style={s.statCell}>{myP.stats.pointRate > 0 ? `${myP.stats.pointRate}%` : '-'}</Text>
                     <Text style={s.statCell}>{myP.stats.carreauRate > 0 ? `${myP.stats.carreauRate}%` : '-'}</Text>
                   </View>
                 </>
@@ -268,7 +272,7 @@ const s = StyleSheet.create({
   emptyDesc: { fontSize: 12, color: theme.textSecondary, textAlign: 'center', marginTop: 4, maxWidth: 240 },
   headerRow: { flexDirection: 'row', alignItems: 'center', paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: theme.border, gap: 4 },
   headerCell: { fontSize: 10, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
-  headerCellStat: { width: 38, textAlign: 'center' },
+  headerCellStat: { width: 34, textAlign: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 4, borderBottomWidth: 1, borderBottomColor: theme.border + '40' },
   rowAlt: { backgroundColor: theme.backgroundSecondary + '30' },
   rowMe: { backgroundColor: theme.primary + '08', borderLeftWidth: 3, borderLeftColor: theme.primary, paddingLeft: 4 },
@@ -281,7 +285,7 @@ const s = StyleSheet.create({
   meBadge: { position: 'absolute', bottom: -2, right: -2, width: 14, height: 14, borderRadius: 7, backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: theme.surface },
   playerName: { fontSize: 13, fontWeight: '600', color: theme.textPrimary },
   playerClub: { fontSize: 10, color: theme.textMuted, marginTop: 1 },
-  statCell: { width: 38, fontSize: 12, fontWeight: '500', color: theme.textPrimary, textAlign: 'center' },
+  statCell: { width: 34, fontSize: 12, fontWeight: '500', color: theme.textPrimary, textAlign: 'center' },
   separator: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 6 },
   separatorDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: theme.textMuted },
   note: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border },
