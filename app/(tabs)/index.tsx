@@ -290,18 +290,7 @@ export default function HomeScreen() {
   const meetupKeyExtractor = useCallback((item: any) => item.id, []);
   const tournamentKeyExtractor = useCallback((item: any) => item.id, []);
 
-  // Auto-scroll when leaderboard filters open
   const scrollViewRef = useRef<ScrollView>(null);
-  const leaderboardYRef = useRef(0);
-
-  const handleLeaderboardFiltersToggled = useCallback((open: boolean) => {
-    if (open && scrollViewRef.current) {
-      // Small delay to let the filter panel render and measure
-      setTimeout(() => {
-        scrollViewRef.current?.scrollTo({ y: leaderboardYRef.current, animated: true });
-      }, 80);
-    }
-  }, []);
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
@@ -581,9 +570,9 @@ export default function HomeScreen() {
         <Animated.View
           entering={FadeIn.duration(400).delay(170)}
           style={[styles.section, isTablet && styles.sectionTablet]}
-          onLayout={(e) => { leaderboardYRef.current = e.nativeEvent.layout.y; }}
+
         >
-          <CommunityLeaderboard onFiltersToggled={handleLeaderboardFiltersToggled} />
+          <CommunityLeaderboard />
         </Animated.View>
 
         {/* ========== QUICK ACCESS GRID ========== */}

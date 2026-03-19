@@ -20,12 +20,6 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<LeaderboardSort>('winRate');
-  const [filterCity, setFilterCity] = useState<string>('all');
-  const [filterCountry, setFilterCountry] = useState<string>('all');
-  const [filterRole, setFilterRole] = useState<string>('all');
-  const [filterLevel, setFilterLevel] = useState<string>('all');
-  const [filterClub, setFilterClub] = useState<string>('all');
-  const [showFilters, setShowFilters] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -37,50 +31,16 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // Extract unique values for filters
-  const uniqueCities = useMemo(() => {
-    const cities = players.map(p => p.city).filter(Boolean) as string[];
-    return [...new Set(cities)].sort();
-  }, [players]);
-
-  const uniqueCountries = useMemo(() => {
-    const countries = players.map(p => p.country).filter(Boolean) as string[];
-    return [...new Set(countries)].sort();
-  }, [players]);
-
-  const uniqueClubs = useMemo(() => {
-    const clubs = players.map(p => p.club).filter(Boolean) as string[];
-    return [...new Set(clubs)].sort();
-  }, [players]);
-
-  const activeFilterCount = useMemo(() => {
-    return [filterCity, filterCountry, filterRole, filterLevel, filterClub].filter(f => f !== 'all').length;
-  }, [filterCity, filterCountry, filterRole, filterLevel, filterClub]);
-
-  // Apply filters then sort
+  // No filters on home widget — just sort
   const filteredSorted = useMemo(() => {
-    let result = players;
-    if (filterCity !== 'all') result = result.filter(p => p.city === filterCity);
-    if (filterCountry !== 'all') result = result.filter(p => p.country === filterCountry);
-    if (filterRole !== 'all') result = result.filter(p => p.role === filterRole);
-    if (filterLevel !== 'all') result = result.filter(p => p.level === filterLevel);
-    if (filterClub !== 'all') result = result.filter(p => p.club === filterClub);
-    return sortLeaderboard(result, sortBy);
-  }, [players, sortBy, filterCity, filterCountry, filterRole, filterLevel, filterClub]);
+    return sortLeaderboard(players, sortBy);
+  }, [players, sortBy]);
 
   const myRank = useMemo(() => {
     if (!selfPlayer || !user) return null;
     const idx = filteredSorted.findIndex(p => p.userId === user.id || p.id === selfPlayer.id);
     return idx >= 0 ? idx + 1 : null;
   }, [filteredSorted, selfPlayer, user]);
-
-  const clearFilters = () => {
-    setFilterCity('all');
-    setFilterCountry('all');
-    setFilterRole('all');
-    setFilterLevel('all');
-    setFilterClub('all');
-  };
 
   return (
     <View style={s.section}>
@@ -92,18 +52,6 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
           <Text style={s.sectionTitle}>{t('leaderboard', 'title')}</Text>
           {filteredSorted.length > 0 ? <Text style={s.sectionSubtitle}>{filteredSorted.length} {t('leaderboard', 'publicPlayersCount')}</Text> : null}
         </View>
-        {/* Filter toggle */}
-        <Pressable
-          style={[s.filterToggle, activeFilterCount > 0 && s.filterToggleActive]}
-          onPress={() => { Haptics.selectionAsync(); const next = !showFilters; setShowFilters(next); onFiltersToggled?.(next); }}
-        >
-          <MaterialIcons name="tune" size={16} color={activeFilterCount > 0 ? '#D97706' : theme.textMuted} />
-          {activeFilterCount > 0 ? (
-            <View style={s.filterBadge}>
-              <Text style={s.filterBadgeText}>{activeFilterCount}</Text>
-            </View>
-          ) : null}
-        </Pressable>
       </View>
 
       {/* Sort chips */}
@@ -123,165 +71,6 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
           </Pressable>
         ))}
       </ScrollView>
-
-      {/* Expandable Filters */}
-      {showFilters ? (
-        <View style={s.filtersPanel}>
-          {/* Role filter */}
-          <View style={s.filterGroup}>
-            <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByRole')}</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
-              {['all', 'Tireur', 'Pointeur', 'Milieu'].map(opt => (
-                <Pressable
-                  key={opt}
-                  style={[s.filterChip, filterRole === opt && s.filterChipActive]}
-                  onPress={() => { Haptics.selectionAsync(); setFilterRole(opt); }}
-                >
-                  <Text style={[s.filterChipText, filterRole === opt && s.filterChipTextActive]}>
-                    {opt === 'all' ? t('leaderboard', 'allRoles') : t('roles', opt)}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Level filter */}
-          <View style={s.filterGroup}>
-            <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByLevel')}</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
-              {['all', 'Débutant', 'Intermédiaire', 'Confirmé', 'Expert'].map(opt => (
-                <Pressable
-                  key={opt}
-                  style={[s.filterChip, filterLevel === opt && s.filterChipActive]}
-                  onPress={() => { Haptics.selectionAsync(); setFilterLevel(opt); }}
-                >
-                  <Text style={[s.filterChipText, filterLevel === opt && s.filterChipTextActive]}>
-                    {opt === 'all' ? t('leaderboard', 'allLevels') : t('levels', opt)}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Club filter */}
-          {uniqueClubs.length > 0 ? (
-            <View style={s.filterGroup}>
-              <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByClub')}</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
-                <Pressable
-                  style={[s.filterChip, filterClub === 'all' && s.filterChipActive]}
-                  onPress={() => { Haptics.selectionAsync(); setFilterClub('all'); }}
-                >
-                  <Text style={[s.filterChipText, filterClub === 'all' && s.filterChipTextActive]}>{t('leaderboard', 'allClubs')}</Text>
-                </Pressable>
-                {uniqueClubs.map(club => (
-                  <Pressable
-                    key={club}
-                    style={[s.filterChip, filterClub === club && s.filterChipActive]}
-                    onPress={() => { Haptics.selectionAsync(); setFilterClub(club); }}
-                  >
-                    <Text style={[s.filterChipText, filterClub === club && s.filterChipTextActive]}>{club}</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-          ) : null}
-
-          {/* Country filter */}
-          {uniqueCountries.length > 0 ? (
-            <View style={s.filterGroup}>
-              <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByCountry')}</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
-                <Pressable
-                  style={[s.filterChip, filterCountry === 'all' && s.filterChipActive]}
-                  onPress={() => { Haptics.selectionAsync(); setFilterCountry('all'); }}
-                >
-                  <Text style={[s.filterChipText, filterCountry === 'all' && s.filterChipTextActive]}>{t('leaderboard', 'allCountries')}</Text>
-                </Pressable>
-                {uniqueCountries.map(country => (
-                  <Pressable
-                    key={country}
-                    style={[s.filterChip, filterCountry === country && s.filterChipActive]}
-                    onPress={() => { Haptics.selectionAsync(); setFilterCountry(country); }}
-                  >
-                    <Text style={[s.filterChipText, filterCountry === country && s.filterChipTextActive]}>{country}</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-          ) : null}
-
-          {/* City filter */}
-          {uniqueCities.length > 0 ? (
-            <View style={s.filterGroup}>
-              <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByCity')}</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
-                <Pressable
-                  style={[s.filterChip, filterCity === 'all' && s.filterChipActive]}
-                  onPress={() => { Haptics.selectionAsync(); setFilterCity('all'); }}
-                >
-                  <Text style={[s.filterChipText, filterCity === 'all' && s.filterChipTextActive]}>{t('leaderboard', 'allCities')}</Text>
-                </Pressable>
-                {uniqueCities.map(city => (
-                  <Pressable
-                    key={city}
-                    style={[s.filterChip, filterCity === city && s.filterChipActive]}
-                    onPress={() => { Haptics.selectionAsync(); setFilterCity(city); }}
-                  >
-                    <Text style={[s.filterChipText, filterCity === city && s.filterChipTextActive]}>{city}</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-          ) : null}
-
-          {/* Clear filters */}
-          {activeFilterCount > 0 ? (
-            <Pressable style={s.clearFiltersBtn} onPress={clearFilters}>
-              <MaterialIcons name="clear-all" size={14} color={theme.error} />
-              <Text style={s.clearFiltersBtnText}>{t('directory', 'clearAll')}</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
-
-      {/* Active filter pills (when panel is closed) */}
-      {activeFilterCount > 0 && !showFilters ? (
-        <View style={s.activeFiltersRow}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.activeFiltersScroll}>
-            {filterRole !== 'all' ? (
-              <Pressable style={s.activeFilterPill} onPress={() => setFilterRole('all')}>
-                <Text style={s.activeFilterPillText}>{t('roles', filterRole)}</Text>
-                <MaterialIcons name="close" size={12} color="#D97706" />
-              </Pressable>
-            ) : null}
-            {filterLevel !== 'all' ? (
-              <Pressable style={s.activeFilterPill} onPress={() => setFilterLevel('all')}>
-                <Text style={s.activeFilterPillText}>{t('levels', filterLevel)}</Text>
-                <MaterialIcons name="close" size={12} color="#D97706" />
-              </Pressable>
-            ) : null}
-            {filterClub !== 'all' ? (
-              <Pressable style={s.activeFilterPill} onPress={() => setFilterClub('all')}>
-                <Text style={s.activeFilterPillText}>{filterClub}</Text>
-                <MaterialIcons name="close" size={12} color="#D97706" />
-              </Pressable>
-            ) : null}
-            {filterCountry !== 'all' ? (
-              <Pressable style={s.activeFilterPill} onPress={() => setFilterCountry('all')}>
-                <Text style={s.activeFilterPillText}>{filterCountry}</Text>
-                <MaterialIcons name="close" size={12} color="#D97706" />
-              </Pressable>
-            ) : null}
-            {filterCity !== 'all' ? (
-              <Pressable style={s.activeFilterPill} onPress={() => setFilterCity('all')}>
-                <Text style={s.activeFilterPillText}>{filterCity}</Text>
-                <MaterialIcons name="close" size={12} color="#D97706" />
-              </Pressable>
-            ) : null}
-          </ScrollView>
-        </View>
-      ) : null}
 
       <View style={s.card}>
         {loading ? (
@@ -303,17 +92,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
           <View style={s.center}>
             <MaterialIcons name="people-outline" size={40} color={theme.textMuted} />
             <Text style={s.emptyTitle}>{t('leaderboard', 'noPlayers')}</Text>
-            <Text style={s.emptyDesc}>
-              {activeFilterCount > 0
-                ? t('leaderboard', 'noPlayersMatchingFilters')
-                : t('leaderboard', 'noPlayersDesc')}
-            </Text>
-            {activeFilterCount > 0 ? (
-              <Pressable style={s.resetBtn} onPress={clearFilters}>
-                <MaterialIcons name="refresh" size={14} color="#D97706" />
-                <Text style={s.resetBtnText}>{t('common', 'reset')}</Text>
-              </Pressable>
-            ) : null}
+            <Text style={s.emptyDesc}>{t('leaderboard', 'noPlayersDesc')}</Text>
           </View>
         ) : (
           <>

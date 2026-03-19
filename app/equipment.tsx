@@ -129,8 +129,6 @@ function RadarChart({ setA, setB, labels, size, colorA, colorB }: {
   );
 }
 
-const HARDNESS_OPTIONS = ['Tendre', 'Demi-tendre', 'Dure'] as const;
-
 export default function EquipmentScreen() {
   const insets = useSafeAreaInsets();
   const { boulesSets, addBoulesSet, updateBoulesSet, deleteBoulesSet, setPrimaryBoulesSet, matches, challenges } = useApp();
@@ -815,7 +813,7 @@ export default function EquipmentScreen() {
                 <MaterialIcons name="close" size={22} color={theme.textSecondary} />
               </Pressable>
             </View>
-            <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+            <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingBottom: 40 }}>
               {availableModels.map(m => {
                 const isSelected = formModel === m.model;
                 return (
@@ -1005,20 +1003,6 @@ export default function EquipmentScreen() {
                 <Text style={styles.formLabel}>{t('equipment', 'purchasePriceLabel')}</Text>
                 <TextInput style={styles.formInput} value={formPurchasePrice} onChangeText={setFormPurchasePrice} placeholder={t('equipment', 'purchasePricePlaceholder')} placeholderTextColor={theme.textMuted} keyboardType="decimal-pad" />
               </View>
-
-              {/* Hardness — show only when no db model selected (or custom brand) */}
-              {!selectedDbModel ? (
-                <View style={styles.formField}>
-                  <Text style={styles.formLabel}>{t('equipment', 'hardnessLabel')}</Text>
-                  <View style={styles.hardnessRow}>
-                    {HARDNESS_OPTIONS.map(h => (
-                      <Pressable key={h} style={[styles.hardnessChip, formHardness === h && styles.hardnessChipActive]} onPress={() => { Haptics.selectionAsync(); setFormHardness(formHardness === h ? '' : h); }}>
-                        <Text style={[styles.hardnessChipText, formHardness === h && styles.hardnessChipTextActive]}>{h}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-              ) : null}
 
               {/* Primary toggle */}
               <Pressable style={[styles.primaryToggle, formIsPrimary && styles.primaryToggleActive]} onPress={() => { Haptics.selectionAsync(); setFormIsPrimary(!formIsPrimary); }}>

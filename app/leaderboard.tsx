@@ -163,7 +163,9 @@ export default function LeaderboardScreen() {
   const [filterCity, setFilterCity] = useState<string>('all');
   const [filterCountry, setFilterCountry] = useState<string>('all');
   const [filterClub, setFilterClub] = useState<string>('all');
+  const [filterBrand, setFilterBrand] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [filterSearchText, setFilterSearchText] = useState('');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   // Meetup invitation
@@ -200,10 +202,15 @@ export default function LeaderboardScreen() {
     return [...new Set(clubs)].sort();
   }, [allPlayers]);
 
+  const uniqueBrands = useMemo(() => {
+    const brands = allPlayers.map(p => p.boulesBrand).filter(Boolean) as string[];
+    return [...new Set(brands)].sort();
+  }, [allPlayers]);
+
   // Active filter count
   const activeFilterCount = useMemo(() => {
-    return [filterRole, filterLevel, filterCity, filterCountry, filterClub].filter(f => f !== 'all').length;
-  }, [filterRole, filterLevel, filterCity, filterCountry, filterClub]);
+    return [filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand].filter(f => f !== 'all').length;
+  }, [filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand]);
 
   // Filtered, sorted, paginated data
   const filteredSorted = useMemo(() => {
@@ -226,15 +233,16 @@ export default function LeaderboardScreen() {
     if (filterCity !== 'all') result = result.filter(p => p.city === filterCity);
     if (filterCountry !== 'all') result = result.filter(p => p.country === filterCountry);
     if (filterClub !== 'all') result = result.filter(p => p.club === filterClub);
+    if (filterBrand !== 'all') result = result.filter(p => p.boulesBrand === filterBrand);
 
     return sortLeaderboard(result, sortBy);
-  }, [allPlayers, search, filterRole, filterLevel, filterCity, filterCountry, filterClub, sortBy]);
+  }, [allPlayers, search, filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand, sortBy]);
 
   const paginatedData = useMemo(() => filteredSorted.slice(0, visibleCount), [filteredSorted, visibleCount]);
   const hasMore = filteredSorted.length > visibleCount;
 
   // Reset pagination on filter/search change
-  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [search, filterRole, filterLevel, filterCity, filterCountry, filterClub, sortBy]);
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [search, filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand, sortBy]);
 
   const handleLoadMore = useCallback(() => {
     if (hasMore) setVisibleCount(prev => prev + PAGE_SIZE);
@@ -253,7 +261,9 @@ export default function LeaderboardScreen() {
     setFilterCity('all');
     setFilterCountry('all');
     setFilterClub('all');
+    setFilterBrand('all');
     setSearch('');
+    setFilterSearchText('');
   };
 
   const handleInviteToMeetup = useCallback(async (targetUserId: string, targetName: string) => {
@@ -408,6 +418,23 @@ export default function LeaderboardScreen() {
               {/* Filters expandable — inside list so content pushes down */}
               {showFilters ? (
                 <Animated.View entering={FadeIn.duration(200)} style={s.filtersPanel}>
+                  {/* Search within filters */}
+                  <View style={s.filterSearchBar}>
+                    <MaterialIcons name="search" size={16} color={theme.textMuted} />
+                    <TextInput
+                      style={s.filterSearchInput}
+                      placeholder={language === 'fr' ? 'Filtrer les options...' : 'Filter options...'}
+                      placeholderTextColor={theme.textMuted}
+                      value={filterSearchText}
+                      onChangeText={setFilterSearchText}
+                    />
+                    {filterSearchText.length > 0 ? (
+                      <Pressable onPress={() => setFilterSearchText('')} hitSlop={8}>
+                        <MaterialIcons name="close" size={14} color={theme.textMuted} />
+                      </Pressable>
+                    ) : null}
+                  </View>
+
                   {/* Role filter */}
                   <View style={s.filterGroup}>
                     <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByRole')}</Text>
@@ -430,7 +457,7 @@ export default function LeaderboardScreen() {
                   <View style={s.filterGroup}>
                     <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByLevel')}</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
-                      {['all', 'Débutant', 'Intermédiaire', 'Confirmé', 'Expert'].map(opt => (
+                      {['all', 'D\u00e9butant', 'Interm\u00e9diaire', 'Confirm\u00e9', 'Expert'].map(opt => (
                         <Pressable
                           key={opt}
                           style={[s.filterChip, filterLevel === opt && s.filterChipActive]}
@@ -443,6 +470,37 @@ export default function LeaderboardScreen() {
                       ))}
                     </ScrollView>
                   </View>
+
+                  {/* Brand filter */}
+                  {uniqueBrands.length > 0 ? (
+                    <View style={s.filterGroup}>
+                      <View style={s.filterGroupHeader}>
+                        <MaterialIcons name="sports-baseball" size={14} color="#D97706" />
+                        <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByBrand')}</Text>
+                      </View>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
+                        <Pressable
+                          style={[s.filterChip, filterBrand === 'all' && s.filterChipActive]}
+                          onPress={() => { Haptics.selectionAsync(); setFilterBrand('all'); }}
+                        >
+                          <Text style={[s.filterChipText, filterBrand === 'all' && s.filterChipTextActive]}>
+                            {t('leaderboard', 'allBrands')}
+                          </Text>
+                        </Pressable>
+                        {uniqueBrands
+                          .filter(b => !filterSearchText || b.toLowerCase().includes(filterSearchText.toLowerCase()))
+                          .map(brand => (
+                          <Pressable
+                            key={brand}
+                            style={[s.filterChip, filterBrand === brand && s.filterChipActive]}
+                            onPress={() => { Haptics.selectionAsync(); setFilterBrand(brand); }}
+                          >
+                            <Text style={[s.filterChipText, filterBrand === brand && s.filterChipTextActive]}>{brand}</Text>
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  ) : null}
 
                   {/* Club filter */}
                   {uniqueClubs.length > 0 ? (
@@ -457,7 +515,9 @@ export default function LeaderboardScreen() {
                             {t('leaderboard', 'allClubs')}
                           </Text>
                         </Pressable>
-                        {uniqueClubs.map(club => (
+                        {uniqueClubs
+                          .filter(c => !filterSearchText || c.toLowerCase().includes(filterSearchText.toLowerCase()))
+                          .map(club => (
                           <Pressable
                             key={club}
                             style={[s.filterChip, filterClub === club && s.filterChipActive]}
@@ -483,7 +543,9 @@ export default function LeaderboardScreen() {
                             {t('leaderboard', 'allCountries')}
                           </Text>
                         </Pressable>
-                        {uniqueCountries.map(country => (
+                        {uniqueCountries
+                          .filter(c => !filterSearchText || c.toLowerCase().includes(filterSearchText.toLowerCase()))
+                          .map(country => (
                           <Pressable
                             key={country}
                             style={[s.filterChip, filterCountry === country && s.filterChipActive]}
@@ -508,7 +570,9 @@ export default function LeaderboardScreen() {
                             {t('leaderboard', 'allCities')}
                           </Text>
                         </Pressable>
-                        {uniqueCities.map(city => (
+                        {uniqueCities
+                          .filter(c => !filterSearchText || c.toLowerCase().includes(filterSearchText.toLowerCase()))
+                          .map(city => (
                           <Pressable
                             key={city}
                             style={[s.filterChip, filterCity === city && s.filterChipActive]}
@@ -550,6 +614,13 @@ export default function LeaderboardScreen() {
                     {filterClub !== 'all' ? (
                       <Pressable style={s.activeFilterPill} onPress={() => setFilterClub('all')}>
                         <Text style={s.activeFilterPillText}>{filterClub}</Text>
+                        <MaterialIcons name="close" size={14} color="#D97706" />
+                      </Pressable>
+                    ) : null}
+                    {filterBrand !== 'all' ? (
+                      <Pressable style={s.activeFilterPill} onPress={() => setFilterBrand('all')}>
+                        <MaterialIcons name="sports-baseball" size={12} color="#D97706" />
+                        <Text style={s.activeFilterPillText}>{filterBrand}</Text>
                         <MaterialIcons name="close" size={14} color="#D97706" />
                       </Pressable>
                     ) : null}
@@ -726,7 +797,10 @@ const s = StyleSheet.create({
   sortChipTextActive: { color: '#FFF' },
 
   // Filters panel (inside FlatList ListHeaderComponent)
-  filtersPanel: { marginBottom: 12, backgroundColor: theme.surface, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: theme.border },
+  filtersPanel: { marginBottom: 12, backgroundColor: theme.surface, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: theme.border, maxHeight: 420 },
+  filterSearchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.backgroundSecondary, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 12, borderWidth: 1, borderColor: theme.border },
+  filterSearchInput: { flex: 1, fontSize: 13, color: theme.textPrimary, paddingVertical: 0 },
+  filterGroupHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
   filterGroup: { marginBottom: 12 },
   filterGroupTitle: { fontSize: 11, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
   filterChipsRow: { gap: 6 },
