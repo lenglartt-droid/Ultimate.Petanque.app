@@ -162,6 +162,7 @@ export default function LeaderboardScreen() {
   const [filterLevel, setFilterLevel] = useState<string>('all');
   const [filterCity, setFilterCity] = useState<string>('all');
   const [filterCountry, setFilterCountry] = useState<string>('all');
+  const [filterClub, setFilterClub] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
@@ -194,10 +195,15 @@ export default function LeaderboardScreen() {
     return [...new Set(countries)].sort();
   }, [allPlayers]);
 
+  const uniqueClubs = useMemo(() => {
+    const clubs = allPlayers.map(p => p.club).filter(Boolean) as string[];
+    return [...new Set(clubs)].sort();
+  }, [allPlayers]);
+
   // Active filter count
   const activeFilterCount = useMemo(() => {
-    return [filterRole, filterLevel, filterCity, filterCountry].filter(f => f !== 'all').length;
-  }, [filterRole, filterLevel, filterCity, filterCountry]);
+    return [filterRole, filterLevel, filterCity, filterCountry, filterClub].filter(f => f !== 'all').length;
+  }, [filterRole, filterLevel, filterCity, filterCountry, filterClub]);
 
   // Filtered, sorted, paginated data
   const filteredSorted = useMemo(() => {
@@ -219,15 +225,16 @@ export default function LeaderboardScreen() {
     if (filterLevel !== 'all') result = result.filter(p => p.level === filterLevel);
     if (filterCity !== 'all') result = result.filter(p => p.city === filterCity);
     if (filterCountry !== 'all') result = result.filter(p => p.country === filterCountry);
+    if (filterClub !== 'all') result = result.filter(p => p.club === filterClub);
 
     return sortLeaderboard(result, sortBy);
-  }, [allPlayers, search, filterRole, filterLevel, filterCity, filterCountry, sortBy]);
+  }, [allPlayers, search, filterRole, filterLevel, filterCity, filterCountry, filterClub, sortBy]);
 
   const paginatedData = useMemo(() => filteredSorted.slice(0, visibleCount), [filteredSorted, visibleCount]);
   const hasMore = filteredSorted.length > visibleCount;
 
   // Reset pagination on filter/search change
-  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [search, filterRole, filterLevel, filterCity, filterCountry, sortBy]);
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [search, filterRole, filterLevel, filterCity, filterCountry, filterClub, sortBy]);
 
   const handleLoadMore = useCallback(() => {
     if (hasMore) setVisibleCount(prev => prev + PAGE_SIZE);
@@ -245,6 +252,7 @@ export default function LeaderboardScreen() {
     setFilterLevel('all');
     setFilterCity('all');
     setFilterCountry('all');
+    setFilterClub('all');
     setSearch('');
   };
 
@@ -436,6 +444,32 @@ export default function LeaderboardScreen() {
                     </ScrollView>
                   </View>
 
+                  {/* Club filter */}
+                  {uniqueClubs.length > 0 ? (
+                    <View style={s.filterGroup}>
+                      <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByClub')}</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
+                        <Pressable
+                          style={[s.filterChip, filterClub === 'all' && s.filterChipActive]}
+                          onPress={() => { Haptics.selectionAsync(); setFilterClub('all'); }}
+                        >
+                          <Text style={[s.filterChipText, filterClub === 'all' && s.filterChipTextActive]}>
+                            {t('leaderboard', 'allClubs')}
+                          </Text>
+                        </Pressable>
+                        {uniqueClubs.map(club => (
+                          <Pressable
+                            key={club}
+                            style={[s.filterChip, filterClub === club && s.filterChipActive]}
+                            onPress={() => { Haptics.selectionAsync(); setFilterClub(club); }}
+                          >
+                            <Text style={[s.filterChipText, filterClub === club && s.filterChipTextActive]}>{club}</Text>
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  ) : null}
+
                   {/* Country filter */}
                   {uniqueCountries.length > 0 ? (
                     <View style={s.filterGroup}>
@@ -510,6 +544,12 @@ export default function LeaderboardScreen() {
                     {filterLevel !== 'all' ? (
                       <Pressable style={s.activeFilterPill} onPress={() => setFilterLevel('all')}>
                         <Text style={s.activeFilterPillText}>{t('levels', filterLevel)}</Text>
+                        <MaterialIcons name="close" size={14} color="#D97706" />
+                      </Pressable>
+                    ) : null}
+                    {filterClub !== 'all' ? (
+                      <Pressable style={s.activeFilterPill} onPress={() => setFilterClub('all')}>
+                        <Text style={s.activeFilterPillText}>{filterClub}</Text>
                         <MaterialIcons name="close" size={14} color="#D97706" />
                       </Pressable>
                     ) : null}

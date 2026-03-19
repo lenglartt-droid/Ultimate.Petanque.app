@@ -24,6 +24,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
   const [filterCountry, setFilterCountry] = useState<string>('all');
   const [filterRole, setFilterRole] = useState<string>('all');
   const [filterLevel, setFilterLevel] = useState<string>('all');
+  const [filterClub, setFilterClub] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -47,9 +48,14 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
     return [...new Set(countries)].sort();
   }, [players]);
 
+  const uniqueClubs = useMemo(() => {
+    const clubs = players.map(p => p.club).filter(Boolean) as string[];
+    return [...new Set(clubs)].sort();
+  }, [players]);
+
   const activeFilterCount = useMemo(() => {
-    return [filterCity, filterCountry, filterRole, filterLevel].filter(f => f !== 'all').length;
-  }, [filterCity, filterCountry, filterRole, filterLevel]);
+    return [filterCity, filterCountry, filterRole, filterLevel, filterClub].filter(f => f !== 'all').length;
+  }, [filterCity, filterCountry, filterRole, filterLevel, filterClub]);
 
   // Apply filters then sort
   const filteredSorted = useMemo(() => {
@@ -58,8 +64,9 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
     if (filterCountry !== 'all') result = result.filter(p => p.country === filterCountry);
     if (filterRole !== 'all') result = result.filter(p => p.role === filterRole);
     if (filterLevel !== 'all') result = result.filter(p => p.level === filterLevel);
+    if (filterClub !== 'all') result = result.filter(p => p.club === filterClub);
     return sortLeaderboard(result, sortBy);
-  }, [players, sortBy, filterCity, filterCountry, filterRole, filterLevel]);
+  }, [players, sortBy, filterCity, filterCountry, filterRole, filterLevel, filterClub]);
 
   const myRank = useMemo(() => {
     if (!selfPlayer || !user) return null;
@@ -72,6 +79,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
     setFilterCountry('all');
     setFilterRole('all');
     setFilterLevel('all');
+    setFilterClub('all');
   };
 
   return (
@@ -155,6 +163,30 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
             </ScrollView>
           </View>
 
+          {/* Club filter */}
+          {uniqueClubs.length > 0 ? (
+            <View style={s.filterGroup}>
+              <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByClub')}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
+                <Pressable
+                  style={[s.filterChip, filterClub === 'all' && s.filterChipActive]}
+                  onPress={() => { Haptics.selectionAsync(); setFilterClub('all'); }}
+                >
+                  <Text style={[s.filterChipText, filterClub === 'all' && s.filterChipTextActive]}>{t('leaderboard', 'allClubs')}</Text>
+                </Pressable>
+                {uniqueClubs.map(club => (
+                  <Pressable
+                    key={club}
+                    style={[s.filterChip, filterClub === club && s.filterChipActive]}
+                    onPress={() => { Haptics.selectionAsync(); setFilterClub(club); }}
+                  >
+                    <Text style={[s.filterChipText, filterClub === club && s.filterChipTextActive]}>{club}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+
           {/* Country filter */}
           {uniqueCountries.length > 0 ? (
             <View style={s.filterGroup}>
@@ -226,6 +258,12 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
             {filterLevel !== 'all' ? (
               <Pressable style={s.activeFilterPill} onPress={() => setFilterLevel('all')}>
                 <Text style={s.activeFilterPillText}>{t('levels', filterLevel)}</Text>
+                <MaterialIcons name="close" size={12} color="#D97706" />
+              </Pressable>
+            ) : null}
+            {filterClub !== 'all' ? (
+              <Pressable style={s.activeFilterPill} onPress={() => setFilterClub('all')}>
+                <Text style={s.activeFilterPillText}>{filterClub}</Text>
                 <MaterialIcons name="close" size={12} color="#D97706" />
               </Pressable>
             ) : null}

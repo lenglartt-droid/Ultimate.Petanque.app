@@ -2315,6 +2315,12 @@ export const translations = {
     filterByLevel: { fr: 'Niveau', en: 'Level' },
     allRoles: { fr: 'Tous les rôles', en: 'All roles' },
     allLevels: { fr: 'Tous les niveaux', en: 'All levels' },
+    filterByClub: { fr: 'Club', en: 'Club' },
+    allClubs: { fr: 'Tous les clubs', en: 'All clubs' },
+    clubRanking: { fr: 'Classement du club', en: 'Club Ranking' },
+    clubRankingDesc: { fr: 'Meilleurs joueurs inscrits dans ce club', en: 'Best registered players in this club' },
+    noClubPlayers: { fr: 'Aucun joueur public dans ce club', en: 'No public players in this club' },
+    noClubPlayersDesc: { fr: 'Les joueurs publics membres de ce club apparaîtront ici', en: 'Public players who are members of this club will appear here' },
   },
 
   statsExtra: {
