@@ -9,11 +9,12 @@ import {
   Modal,
   FlatList,
   TextInput,
+  Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
@@ -31,6 +32,12 @@ import {
 } from '@/services/exportService';
 import { Tournament, Match, Challenge, Player } from '@/services/mockData';
 
+// ============================================
+// STEP-BASED EXPORT WIZARD
+// ============================================
+
+type WizardStep = 'preset' | 'config' | 'preview';
+
 export default function ExportScreen() {
   const insets = useSafeAreaInsets();
   const { matches, challenges, tournaments, players, userStats } = useApp();
@@ -38,60 +45,44 @@ export default function ExportScreen() {
   const { user } = useAuth();
   const { showAlert } = useAlert();
 
-  const [format, setFormat] = useState<ExportFormat>('csv');
+  // Wizard state
+  const [currentStep, setCurrentStep] = useState<WizardStep>('preset');
+
+  const [format, setFormat] = useState<ExportFormat>('pdf');
   const [dataType, setDataType] = useState<ExportDataType>('matches');
   const [period, setPeriod] = useState<ExportPeriod>('all');
   const [exporting, setExporting] = useState(false);
 
-  // Preset state
   const [preset, setPreset] = useState<ExportPreset>('none');
   const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null);
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
   const [comparePeriod, setComparePeriod] = useState<ExportPeriod>('30d');
-
-  // New preset state
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null);
 
-  // Picker modals
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
   const [showMatchPicker, setShowMatchPicker] = useState(false);
   const [showPlayerPicker, setShowPlayerPicker] = useState(false);
   const [showChallengePicker, setShowChallengePicker] = useState(false);
   const [pickerSearch, setPickerSearch] = useState('');
 
-  // Available seasons (Sept-June)
+  const lbl = useCallback((fr: string, en: string) => language === 'fr' ? fr : en, [language]);
+
   const availableSeasons = useMemo(() => {
     const now = new Date();
     const currentYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-    const seasons: { year: number; label: string }[] = [];
-    for (let y = currentYear; y >= currentYear - 3; y--) {
-      seasons.push({ year: y, label: `${y}-${y + 1}` });
-    }
-    return seasons;
+    return Array.from({ length: 4 }, (_, i) => ({ year: currentYear - i, label: `${currentYear - i}-${currentYear - i + 1}` }));
   }, []);
 
-  const tournamentsWithMatches = useMemo(() => {
-    return tournaments.filter(tr => matches.some(m => m.tournamentId === tr.id));
-  }, [tournaments, matches]);
-
-  const sortedMatches = useMemo(() => {
-    return [...matches].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [matches]);
-
-  const sortedChallenges = useMemo(() => {
-    return [...challenges].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [challenges]);
+  const tournamentsWithMatches = useMemo(() => tournaments.filter(tr => matches.some(m => m.tournamentId === tr.id)), [tournaments, matches]);
+  const sortedMatches = useMemo(() => [...matches].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [matches]);
+  const sortedChallenges = useMemo(() => [...challenges].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [challenges]);
 
   const filteredPickerMatches = useMemo(() => {
     if (!pickerSearch.trim()) return sortedMatches;
     const s = pickerSearch.toLowerCase();
-    return sortedMatches.filter(m =>
-      m.teamA.playerNames.some(n => n.toLowerCase().includes(s)) ||
-      m.teamB.playerNames.some(n => n.toLowerCase().includes(s)) ||
-      (m.tournamentName || '').toLowerCase().includes(s)
-    );
+    return sortedMatches.filter(m => m.teamA.playerNames.some(n => n.toLowerCase().includes(s)) || m.teamB.playerNames.some(n => n.toLowerCase().includes(s)) || (m.tournamentName || '').toLowerCase().includes(s));
   }, [sortedMatches, pickerSearch]);
 
   const filteredPickerPlayers = useMemo(() => {
@@ -103,903 +94,579 @@ export default function ExportScreen() {
   const filteredPickerChallenges = useMemo(() => {
     if (!pickerSearch.trim()) return sortedChallenges;
     const s = pickerSearch.toLowerCase();
-    const typeLabels: Record<string, string> = { '10_tirs': '10 tirs', '10_tirs_sautee': '10 tirs sautee', 'precision': 'precision' };
-    return sortedChallenges.filter(c =>
-      (typeLabels[c.type] || c.type).includes(s) ||
-      (c.opponentName || '').toLowerCase().includes(s)
-    );
+    return sortedChallenges.filter(c => c.type.includes(s) || (c.opponentName || '').toLowerCase().includes(s));
   }, [sortedChallenges, pickerSearch]);
 
-  // Comparative delta preview
+  // Delta preview for comparative
   const deltaPreview = useMemo(() => {
     if (preset !== 'comparative') return null;
-    const filteredA = period === 'all' ? matches : matches.filter(m => {
+    const filterP = (items: any[], p: ExportPeriod) => {
+      if (p === 'all') return items;
       const cutoff = new Date();
-      switch (period) {
-        case '7d': cutoff.setDate(cutoff.getDate() - 7); break;
-        case '30d': cutoff.setDate(cutoff.getDate() - 30); break;
-        case '3m': cutoff.setMonth(cutoff.getMonth() - 3); break;
-        case '6m': cutoff.setMonth(cutoff.getMonth() - 6); break;
-        case '1y': cutoff.setFullYear(cutoff.getFullYear() - 1); break;
-      }
-      return new Date(m.date) >= cutoff;
-    });
-    const filteredB = comparePeriod === 'all' ? matches : matches.filter(m => {
-      const cutoff = new Date();
-      switch (comparePeriod) {
-        case '7d': cutoff.setDate(cutoff.getDate() - 7); break;
-        case '30d': cutoff.setDate(cutoff.getDate() - 30); break;
-        case '3m': cutoff.setMonth(cutoff.getMonth() - 3); break;
-        case '6m': cutoff.setMonth(cutoff.getMonth() - 6); break;
-        case '1y': cutoff.setFullYear(cutoff.getFullYear() - 1); break;
-      }
-      return new Date(m.date) >= cutoff;
-    });
-    const challengesA = period === 'all' ? challenges : challenges.filter(c => {
-      const cutoff = new Date();
-      switch (period) {
-        case '7d': cutoff.setDate(cutoff.getDate() - 7); break;
-        case '30d': cutoff.setDate(cutoff.getDate() - 30); break;
-        case '3m': cutoff.setMonth(cutoff.getMonth() - 3); break;
-        case '6m': cutoff.setMonth(cutoff.getMonth() - 6); break;
-        case '1y': cutoff.setFullYear(cutoff.getFullYear() - 1); break;
-      }
-      return new Date(c.date) >= cutoff;
-    });
-    const challengesB = comparePeriod === 'all' ? challenges : challenges.filter(c => {
-      const cutoff = new Date();
-      switch (comparePeriod) {
-        case '7d': cutoff.setDate(cutoff.getDate() - 7); break;
-        case '30d': cutoff.setDate(cutoff.getDate() - 30); break;
-        case '3m': cutoff.setMonth(cutoff.getMonth() - 3); break;
-        case '6m': cutoff.setMonth(cutoff.getMonth() - 6); break;
-        case '1y': cutoff.setFullYear(cutoff.getFullYear() - 1); break;
-      }
-      return new Date(c.date) >= cutoff;
-    });
-    const pLabels: Record<string, string> = language === 'fr'
-      ? { all: 'Tout', '7d': '7j', '30d': '30j', '3m': '3m', '6m': '6m', '1y': '1an' }
-      : { all: 'All', '7d': '7d', '30d': '30d', '3m': '3m', '6m': '6m', '1y': '1y' };
-    const statsA = computePeriodStats(filteredA, challengesA, pLabels[period] || period);
-    const statsB = computePeriodStats(filteredB, challengesB, pLabels[comparePeriod] || comparePeriod);
-    return { statsA, statsB };
+      switch (p) { case '7d': cutoff.setDate(cutoff.getDate() - 7); break; case '30d': cutoff.setDate(cutoff.getDate() - 30); break; case '3m': cutoff.setMonth(cutoff.getMonth() - 3); break; case '6m': cutoff.setMonth(cutoff.getMonth() - 6); break; case '1y': cutoff.setFullYear(cutoff.getFullYear() - 1); break; }
+      return items.filter((item: any) => new Date(item.date) >= cutoff);
+    };
+    const pLabels: Record<string, string> = language === 'fr' ? { all: 'Tout', '7d': '7j', '30d': '30j', '3m': '3m', '6m': '6m', '1y': '1an' } : { all: 'All', '7d': '7d', '30d': '30d', '3m': '3m', '6m': '6m', '1y': '1y' };
+    return {
+      statsA: computePeriodStats(filterP(matches, period), filterP(challenges, period), pLabels[period] || period),
+      statsB: computePeriodStats(filterP(matches, comparePeriod), filterP(challenges, comparePeriod), pLabels[comparePeriod] || comparePeriod),
+    };
   }, [preset, period, comparePeriod, matches, challenges, language]);
 
-  // Data preview
   const preview: PreviewData | null = useMemo(() => {
-    const hasSelection =
-      preset === 'none' ||
-      (preset === 'tournament' && selectedTournament) ||
-      (preset === 'season' && selectedSeason) ||
-      preset === 'comparative' ||
-      (preset === 'match' && selectedMatch) ||
-      (preset === 'player' && selectedPlayer) ||
-      (preset === 'challenge' && selectedChallenge);
+    const hasSelection = preset === 'none' || (preset === 'tournament' && selectedTournament) || (preset === 'season' && selectedSeason) || preset === 'comparative' || (preset === 'match' && selectedMatch) || (preset === 'player' && selectedPlayer) || (preset === 'challenge' && selectedChallenge);
     if (!hasSelection) return null;
-    return generatePreview(
-      {
-        format, dataType, period, language, username: user?.username || '',
-        preset,
-        tournamentId: selectedTournament?.id,
-        tournamentName: selectedTournament?.name,
-        seasonYear: selectedSeason ?? undefined,
-        comparePeriod: preset === 'comparative' ? comparePeriod : undefined,
-        matchId: selectedMatch?.id,
-        playerId: selectedPlayer?.id,
-        playerName: selectedPlayer?.name,
-        challengeId: selectedChallenge?.id,
-      },
-      matches, challenges, tournaments, userStats, 6,
-    );
+    return generatePreview({ format, dataType, period, language, username: user?.username || '', preset, tournamentId: selectedTournament?.id, tournamentName: selectedTournament?.name, seasonYear: selectedSeason ?? undefined, comparePeriod: preset === 'comparative' ? comparePeriod : undefined, matchId: selectedMatch?.id, playerId: selectedPlayer?.id, playerName: selectedPlayer?.name, challengeId: selectedChallenge?.id }, matches, challenges, tournaments, userStats, 6);
   }, [format, dataType, period, language, preset, selectedTournament, selectedSeason, comparePeriod, selectedMatch, selectedPlayer, selectedChallenge, matches, challenges, tournaments, userStats, user]);
 
-  const dataTypes: { id: ExportDataType; icon: string; color: string }[] = [
-    { id: 'matches', icon: 'sports', color: theme.primary },
-    { id: 'challenges', icon: 'flag', color: theme.accent },
-    { id: 'statistics', icon: 'bar-chart', color: theme.carreauColor },
+  const periods: { id: ExportPeriod; label: string }[] = [
+    { id: 'all', label: lbl('Tout', 'All') },
+    { id: '7d', label: lbl('7 jours', '7 days') },
+    { id: '30d', label: lbl('30 jours', '30 days') },
+    { id: '3m', label: '3 mois' },
+    { id: '6m', label: '6 mois' },
+    { id: '1y', label: lbl('1 an', '1 year') },
   ];
 
-  const periods: { id: ExportPeriod; labelFr: string; labelEn: string }[] = [
-    { id: 'all', labelFr: 'Tout', labelEn: 'All' },
-    { id: '7d', labelFr: '7 jours', labelEn: '7 days' },
-    { id: '30d', labelFr: '30 jours', labelEn: '30 days' },
-    { id: '3m', labelFr: '3 mois', labelEn: '3 months' },
-    { id: '6m', labelFr: '6 mois', labelEn: '6 months' },
-    { id: '1y', labelFr: '1 an', labelEn: '1 year' },
+  const presetOptions: { id: ExportPreset; icon: string; label: string; desc: string; color: string }[] = [
+    { id: 'none', icon: 'list-alt', label: lbl('Standard', 'Standard'), desc: lbl('Matchs, defis ou stats', 'Matches, challenges or stats'), color: theme.primary },
+    { id: 'match', icon: 'sports', label: lbl('Par match', 'By match'), desc: lbl('Fiche detaillee', 'Detailed sheet'), color: '#10B981' },
+    { id: 'challenge', icon: 'flag', label: lbl('Par defi', 'By challenge'), desc: lbl('Avec graphiques', 'With charts'), color: '#F59E0B' },
+    { id: 'player', icon: 'person', label: lbl('Par joueur', 'By player'), desc: lbl('Stats individuelles', 'Individual stats'), color: '#8B5CF6' },
+    { id: 'tournament', icon: 'emoji-events', label: lbl('Par tournoi', 'By tournament'), desc: lbl('Tous les matchs', 'All matches'), color: '#D97706' },
+    { id: 'season', icon: 'date-range', label: lbl('Par saison', 'By season'), desc: 'Sept-Juin', color: '#059669' },
+    { id: 'comparative', icon: 'compare-arrows', label: lbl('Comparatif', 'Comparative'), desc: lbl('Delta entre periodes', 'Delta between periods'), color: '#6366F1' },
   ];
 
-  const formatOptions: { id: ExportFormat; icon: string; label: string; desc: string }[] = [
-    { id: 'csv', icon: 'table-chart', label: 'CSV', desc: language === 'fr' ? 'Tableur (Excel, Google Sheets)' : 'Spreadsheet (Excel, Google Sheets)' },
-    { id: 'pdf', icon: 'picture-as-pdf', label: 'PDF', desc: language === 'fr' ? 'Document formate' : 'Formatted document' },
-  ];
-
-  const presetOptions: { id: ExportPreset; icon: string; color: string }[] = [
-    { id: 'tournament', icon: 'emoji-events', color: theme.carreauColor },
-    { id: 'season', icon: 'date-range', color: theme.success },
-    { id: 'comparative', icon: 'compare-arrows', color: '#6366F1' },
-    { id: 'match', icon: 'sports', color: theme.primary },
-    { id: 'player', icon: 'person', color: theme.accent },
-    { id: 'challenge', icon: 'flag', color: theme.warning },
-  ];
-
-  const getPresetLabel = (id: ExportPreset) => {
-    switch (id) {
-      case 'tournament': return language === 'fr' ? 'Par tournoi' : 'By tournament';
-      case 'season': return language === 'fr' ? 'Par saison' : 'By season';
-      case 'comparative': return language === 'fr' ? 'Comparatif' : 'Comparative';
-      case 'match': return language === 'fr' ? 'Par match' : 'By match';
-      case 'player': return language === 'fr' ? 'Par joueur' : 'By player';
-      case 'challenge': return language === 'fr' ? 'Par defi' : 'By challenge';
-      default: return '';
-    }
+  const canProceedToConfig = () => {
+    if (preset === 'match') return !!selectedMatch;
+    if (preset === 'challenge') return !!selectedChallenge;
+    if (preset === 'player') return !!selectedPlayer;
+    if (preset === 'tournament') return !!selectedTournament;
+    if (preset === 'season') return !!selectedSeason;
+    return true;
   };
 
-  const getDataTypeLabel = (id: ExportDataType) => {
-    switch (id) {
-      case 'matches': return language === 'fr' ? 'Matchs' : 'Matches';
-      case 'challenges': return language === 'fr' ? 'Defis' : 'Challenges';
-      case 'statistics': return language === 'fr' ? 'Statistiques' : 'Statistics';
-    }
-  };
+  const showDataTypeInConfig = !['comparative', 'match', 'challenge'].includes(preset);
+  const showPeriodInConfig = preset === 'none' || preset === 'comparative';
 
-  const getDataTypeCount = (id: ExportDataType) => {
-    switch (id) {
-      case 'matches': return matches.length;
-      case 'challenges': return challenges.length;
-      case 'statistics': return `${matches.length} matchs + ${challenges.length} ${language === 'fr' ? 'defis' : 'challenges'}`;
-    }
-  };
-
-  const getSummaryText = () => {
-    if (preset === 'match' && selectedMatch) {
-      return language === 'fr'
-        ? `Export ${format.toUpperCase()} — Match du ${new Date(selectedMatch.date).toLocaleDateString('fr-FR')}`
-        : `${format.toUpperCase()} export — Match ${new Date(selectedMatch.date).toLocaleDateString('en-US')}`;
-    }
-    if (preset === 'player' && selectedPlayer) {
-      return language === 'fr'
-        ? `Export ${format.toUpperCase()} — Joueur "${selectedPlayer.name}"`
-        : `${format.toUpperCase()} export — Player "${selectedPlayer.name}"`;
-    }
-    if (preset === 'challenge' && selectedChallenge) {
-      const typeLabels: Record<string, Record<string, string>> = { '10_tirs': { fr: '10 Tirs', en: '10 Shots' }, '10_tirs_sautee': { fr: '10 Tirs sautee', en: '10 Lob' }, 'precision': { fr: 'Precision', en: 'Precision' } };
-      return language === 'fr'
-        ? `Export ${format.toUpperCase()} — Defi ${typeLabels[selectedChallenge.type]?.fr || selectedChallenge.type}`
-        : `${format.toUpperCase()} export — Challenge ${typeLabels[selectedChallenge.type]?.en || selectedChallenge.type}`;
-    }
-    if (preset === 'tournament' && selectedTournament) {
-      return language === 'fr'
-        ? `Export ${format.toUpperCase()} — Tournoi "${selectedTournament.name}"`
-        : `${format.toUpperCase()} export — Tournament "${selectedTournament.name}"`;
-    }
-    if (preset === 'season' && selectedSeason) {
-      return language === 'fr'
-        ? `Export ${format.toUpperCase()} — Saison ${selectedSeason}-${selectedSeason + 1}`
-        : `${format.toUpperCase()} export — Season ${selectedSeason}-${selectedSeason + 1}`;
-    }
-    if (preset === 'comparative') {
-      const pA = periods.find(p => p.id === period);
-      const pB = periods.find(p => p.id === comparePeriod);
-      return language === 'fr'
-        ? `Comparatif ${format.toUpperCase()} — ${pA?.labelFr} vs ${pB?.labelFr}`
-        : `Comparative ${format.toUpperCase()} — ${pA?.labelEn} vs ${pB?.labelEn}`;
-    }
-    const pLabel = periods.find(p => p.id === period);
-    return language === 'fr'
-      ? `Export ${format.toUpperCase()} des ${getDataTypeLabel(dataType)?.toLowerCase()} — ${pLabel?.labelFr}`
-      : `${format.toUpperCase()} export of ${getDataTypeLabel(dataType)?.toLowerCase()} — ${pLabel?.labelEn}`;
-  };
-
-  const isExportDisabled = exporting ||
-    (preset === 'tournament' && !selectedTournament) ||
-    (preset === 'season' && !selectedSeason) ||
-    (preset === 'match' && !selectedMatch) ||
-    (preset === 'player' && !selectedPlayer) ||
-    (preset === 'challenge' && !selectedChallenge);
+  const isExportDisabled = exporting || (preset === 'tournament' && !selectedTournament) || (preset === 'season' && !selectedSeason) || (preset === 'match' && !selectedMatch) || (preset === 'player' && !selectedPlayer) || (preset === 'challenge' && !selectedChallenge);
 
   const handleExport = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setExporting(true);
-
-    const result = await exportData(
-      {
-        format, dataType, period, language,
-        username: user?.username || user?.email || 'Joueur',
-        preset,
-        tournamentId: selectedTournament?.id,
-        tournamentName: selectedTournament?.name,
-        seasonYear: selectedSeason ?? undefined,
-        comparePeriod: preset === 'comparative' ? comparePeriod : undefined,
-        matchId: selectedMatch?.id,
-        playerId: selectedPlayer?.id,
-        playerName: selectedPlayer?.name,
-        challengeId: selectedChallenge?.id,
-      },
-      matches, challenges, tournaments, userStats,
-    );
-
+    const result = await exportData({
+      format, dataType, period, language, username: user?.username || user?.email || 'Joueur',
+      preset, tournamentId: selectedTournament?.id, tournamentName: selectedTournament?.name,
+      seasonYear: selectedSeason ?? undefined, comparePeriod: preset === 'comparative' ? comparePeriod : undefined,
+      matchId: selectedMatch?.id, playerId: selectedPlayer?.id, playerName: selectedPlayer?.name, challengeId: selectedChallenge?.id,
+    }, matches, challenges, tournaments, userStats);
     setExporting(false);
-
     if (result.success) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showAlert(
-        language === 'fr' ? 'Export reussi' : 'Export successful',
-        language === 'fr' ? 'Fichier genere et partage' : 'File generated and shared',
-      );
+      showAlert(lbl('Export reussi', 'Export successful'), lbl('Fichier genere et partage', 'File generated and shared'));
     } else {
-      showAlert(
-        language === 'fr' ? 'Erreur' : 'Error',
-        result.error || (language === 'fr' ? "Erreur lors de l'export" : 'Export error'),
-      );
+      showAlert(lbl('Erreur', 'Error'), result.error || lbl("Erreur lors de l'export", 'Export error'));
     }
-  }, [format, dataType, period, language, user, matches, challenges, tournaments, userStats, showAlert, preset, selectedTournament, selectedSeason, comparePeriod, selectedMatch, selectedPlayer, selectedChallenge]);
+  }, [format, dataType, period, language, user, matches, challenges, tournaments, userStats, showAlert, preset, selectedTournament, selectedSeason, comparePeriod, selectedMatch, selectedPlayer, selectedChallenge, lbl]);
 
   const handleSelectPreset = (id: ExportPreset) => {
     Haptics.selectionAsync();
-    if (preset === id) {
-      setPreset('none');
-      resetPresetSelections();
-    } else {
-      setPreset(id);
-      resetPresetSelections();
-      if (id === 'tournament') setDataType('matches');
-      if (id === 'comparative') setDataType('statistics');
-      if (id === 'challenge') setDataType('challenges');
-    }
+    setPreset(id);
+    setSelectedTournament(null); setSelectedSeason(null); setSelectedMatch(null); setSelectedPlayer(null); setSelectedChallenge(null);
+    if (id === 'tournament') setDataType('matches');
+    if (id === 'comparative') setDataType('statistics');
+    if (id === 'challenge') setDataType('challenges');
   };
 
-  const resetPresetSelections = () => {
-    setSelectedTournament(null);
-    setSelectedSeason(null);
-    setSelectedMatch(null);
-    setSelectedPlayer(null);
-    setSelectedChallenge(null);
+  const getSummaryText = () => {
+    if (preset === 'match' && selectedMatch) return lbl(`Match du ${new Date(selectedMatch.date).toLocaleDateString('fr-FR')}`, `Match ${new Date(selectedMatch.date).toLocaleDateString('en-US')}`);
+    if (preset === 'player' && selectedPlayer) return `${selectedPlayer.name}`;
+    if (preset === 'challenge' && selectedChallenge) { const tl: Record<string, string> = { '10_tirs': '10 Tirs', '10_tirs_sautee': '10 Tirs sautee', 'precision': 'Precision' }; return `${tl[selectedChallenge.type] || selectedChallenge.type}`; }
+    if (preset === 'tournament' && selectedTournament) return selectedTournament.name;
+    if (preset === 'season' && selectedSeason) return `${lbl('Saison', 'Season')} ${selectedSeason}-${selectedSeason + 1}`;
+    if (preset === 'comparative') return lbl('Comparatif', 'Comparative');
+    return lbl('Standard', 'Standard');
   };
 
-  const showDataTypeSection = !['comparative', 'match', 'challenge'].includes(preset);
-  const showPeriodSection = preset === 'none';
+  const getDataTypeLabel = (id: ExportDataType) => ({ matches: lbl('Matchs', 'Matches'), challenges: lbl('Defis', 'Challenges'), statistics: lbl('Statistiques', 'Statistics') }[id]);
 
   const DeltaValue = ({ a, b, suffix = '' }: { a: number; b: number; suffix?: string }) => {
     const d = a - b;
-    const color = d > 0 ? theme.success : d < 0 ? theme.error : theme.textMuted;
-    const sign = d > 0 ? '+' : '';
-    return <Text style={{ fontSize: 12, fontWeight: '700', color }}>{sign}{d}{suffix}</Text>;
+    return <Text style={{ fontSize: 13, fontWeight: '700', color: d > 0 ? theme.success : d < 0 ? theme.error : theme.textMuted }}>{d > 0 ? '+' : ''}{d}{suffix}</Text>;
   };
 
   // Shared picker modal
   const renderPickerModal = (visible: boolean, onClose: () => void, title: string, data: any[], renderItem: any, emptyIcon: string, emptyText: string) => (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <SafeAreaView edges={['top']} style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>{title}</Text>
-          <Pressable style={styles.modalCloseBtn} onPress={onClose}>
-            <MaterialIcons name="close" size={24} color={theme.textPrimary} />
-          </Pressable>
+      <SafeAreaView edges={['top']} style={s.modalContainer}>
+        <View style={s.modalHeader}>
+          <Text style={s.modalTitle}>{title}</Text>
+          <Pressable style={s.modalCloseBtn} onPress={onClose}><MaterialIcons name="close" size={24} color={theme.textPrimary} /></Pressable>
         </View>
-        <View style={styles.modalSearchBar}>
+        <View style={s.modalSearchBar}>
           <MaterialIcons name="search" size={20} color={theme.textMuted} />
-          <TextInput
-            style={styles.modalSearchInput}
-            value={pickerSearch}
-            onChangeText={setPickerSearch}
-            placeholder={language === 'fr' ? 'Rechercher...' : 'Search...'}
-            placeholderTextColor={theme.textMuted}
-          />
-          {pickerSearch.length > 0 ? (
-            <Pressable onPress={() => setPickerSearch('')} hitSlop={8}>
-              <MaterialIcons name="close" size={18} color={theme.textMuted} />
-            </Pressable>
-          ) : null}
+          <TextInput style={s.modalSearchInput} value={pickerSearch} onChangeText={setPickerSearch} placeholder={lbl('Rechercher...', 'Search...')} placeholderTextColor={theme.textMuted} />
+          {pickerSearch.length > 0 ? <Pressable onPress={() => setPickerSearch('')} hitSlop={8}><MaterialIcons name="close" size={18} color={theme.textMuted} /></Pressable> : null}
         </View>
-        <FlatList
-          data={data}
-          keyExtractor={(item: any) => item.id}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32 }}
-          renderItem={renderItem}
-          ListEmptyComponent={
-            <View style={styles.emptyList}>
-              <MaterialIcons name={emptyIcon as any} size={40} color={theme.textMuted} />
-              <Text style={styles.emptyListText}>{emptyText}</Text>
-            </View>
-          }
-        />
+        <FlatList data={data} keyExtractor={(item: any) => item.id} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32 }} renderItem={renderItem} ListEmptyComponent={<View style={s.emptyList}><MaterialIcons name={emptyIcon as any} size={40} color={theme.textMuted} /><Text style={s.emptyListText}>{emptyText}</Text></View>} />
       </SafeAreaView>
     </Modal>
   );
 
-  return (
-    <SafeAreaView edges={['top']} style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
-        </Pressable>
-        <Text style={styles.headerTitle}>{language === 'fr' ? 'Exporter mes donnees' : 'Export my data'}</Text>
-        <View style={{ width: 40 }} />
+  // ============================================
+  // STEP 1: PRESET SELECTION
+  // ============================================
+  const renderPresetStep = () => (
+    <Animated.View entering={FadeIn.duration(300)}>
+      <Text style={s.stepTitle}>{lbl('Quel type d\'export ?', 'What type of export?')}</Text>
+      <Text style={s.stepSubtitle}>{lbl('Choisissez un prereglage pour configurer automatiquement votre export', 'Choose a preset to automatically configure your export')}</Text>
+
+      <View style={s.presetList}>
+        {presetOptions.map(p => {
+          const active = preset === p.id;
+          return (
+            <Pressable key={p.id} style={[s.presetCard, active && { borderColor: p.color, backgroundColor: p.color + '08' }]} onPress={() => handleSelectPreset(p.id)}>
+              <View style={[s.presetIconBg, { backgroundColor: active ? p.color : theme.backgroundSecondary }]}>
+                <MaterialIcons name={p.icon as any} size={22} color={active ? '#FFF' : theme.textMuted} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.presetCardTitle, active && { color: p.color }]}>{p.label}</Text>
+                <Text style={s.presetCardDesc}>{p.desc}</Text>
+              </View>
+              {active ? <View style={[s.radioOuter, { borderColor: p.color }]}><View style={[s.radioInner, { backgroundColor: p.color }]} /></View> : <View style={s.radioOuter} />}
+            </Pressable>
+          );
+        })}
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Hero */}
-        <Animated.View entering={FadeInDown.duration(400)} style={styles.heroCard}>
-          <View style={styles.heroIconBg}>
-            <MaterialIcons name="file-download" size={32} color={theme.primary} />
-          </View>
-          <Text style={styles.heroTitle}>{language === 'fr' ? 'Exportez vos donnees' : 'Export your data'}</Text>
-          <Text style={styles.heroSubtitle}>
-            {language === 'fr'
-              ? 'Generez un fichier CSV ou PDF avec prereglages intelligents'
-              : 'Generate a CSV or PDF file with smart presets'}
-          </Text>
-        </Animated.View>
+      {/* Inline selection for presets that need it */}
+      {preset === 'match' ? (
+        <View style={s.inlineSelection}>
+          <Pressable style={s.selectionBtn} onPress={() => { setPickerSearch(''); setShowMatchPicker(true); }}>
+            {selectedMatch ? (
+              <View style={s.selectedItem}>
+                <View style={[s.selectedIcon, { backgroundColor: '#10B98115' }]}><MaterialIcons name="sports" size={18} color="#10B981" /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.selectedName} numberOfLines={1}>{selectedMatch.teamA.playerNames.join(' + ')} vs {selectedMatch.teamB.playerNames.join(' + ')}</Text>
+                  <Text style={s.selectedMeta}>{new Date(selectedMatch.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')} {'\u2022'} {selectedMatch.teamA.score}-{selectedMatch.teamB.score}</Text>
+                </View>
+                <Pressable onPress={() => { setSelectedMatch(null); Haptics.selectionAsync(); }} hitSlop={8}><MaterialIcons name="close" size={16} color={theme.textMuted} /></Pressable>
+              </View>
+            ) : (
+              <View style={s.placeholderItem}><MaterialIcons name="touch-app" size={18} color={theme.textMuted} /><Text style={s.placeholderText}>{lbl('Selectionner un match', 'Select a match')}</Text><MaterialIcons name="chevron-right" size={18} color={theme.textMuted} /></View>
+            )}
+          </Pressable>
+        </View>
+      ) : null}
 
-        {/* Presets - 2 rows of 3 */}
-        <Animated.View entering={FadeInDown.duration(400).delay(25)} style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="auto-awesome" size={16} color={theme.textSecondary} />
-            <Text style={styles.sectionTitle}>{language === 'fr' ? 'PREREGLAGES' : 'PRESETS'}</Text>
-          </View>
-          <View style={styles.presetGrid}>
-            {presetOptions.map(p => {
-              const active = preset === p.id;
+      {preset === 'challenge' ? (
+        <View style={s.inlineSelection}>
+          <Pressable style={s.selectionBtn} onPress={() => { setPickerSearch(''); setShowChallengePicker(true); }}>
+            {selectedChallenge ? (
+              <View style={s.selectedItem}>
+                <View style={[s.selectedIcon, { backgroundColor: '#F59E0B15' }]}><MaterialIcons name="flag" size={18} color="#F59E0B" /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.selectedName} numberOfLines={1}>{selectedChallenge.type === '10_tirs' ? '10 Tirs' : selectedChallenge.type === '10_tirs_sautee' ? '10 Tirs sautee' : 'Precision'} {selectedChallenge.mode === '1v1' ? `vs ${selectedChallenge.opponentName || '?'}` : 'Solo'}</Text>
+                  <Text style={s.selectedMeta}>{new Date(selectedChallenge.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')}{selectedChallenge.successRate != null ? ` \u2022 ${Math.round(selectedChallenge.successRate)}%` : ''}</Text>
+                </View>
+                <Pressable onPress={() => { setSelectedChallenge(null); Haptics.selectionAsync(); }} hitSlop={8}><MaterialIcons name="close" size={16} color={theme.textMuted} /></Pressable>
+              </View>
+            ) : (
+              <View style={s.placeholderItem}><MaterialIcons name="touch-app" size={18} color={theme.textMuted} /><Text style={s.placeholderText}>{lbl('Selectionner un defi', 'Select a challenge')}</Text><MaterialIcons name="chevron-right" size={18} color={theme.textMuted} /></View>
+            )}
+          </Pressable>
+        </View>
+      ) : null}
+
+      {preset === 'player' ? (
+        <View style={s.inlineSelection}>
+          <Pressable style={s.selectionBtn} onPress={() => { setPickerSearch(''); setShowPlayerPicker(true); }}>
+            {selectedPlayer ? (
+              <View style={s.selectedItem}>
+                <View style={[s.selectedIcon, { backgroundColor: '#8B5CF615' }]}><Text style={{ fontSize: 14, fontWeight: '700', color: '#8B5CF6' }}>{selectedPlayer.name.charAt(0)}</Text></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.selectedName}>{selectedPlayer.name}</Text>
+                  <Text style={s.selectedMeta}>{selectedPlayer.role} {'\u2022'} {selectedPlayer.stats.matchesPlayed} matchs</Text>
+                </View>
+                <Pressable onPress={() => { setSelectedPlayer(null); Haptics.selectionAsync(); }} hitSlop={8}><MaterialIcons name="close" size={16} color={theme.textMuted} /></Pressable>
+              </View>
+            ) : (
+              <View style={s.placeholderItem}><MaterialIcons name="touch-app" size={18} color={theme.textMuted} /><Text style={s.placeholderText}>{lbl('Selectionner un joueur', 'Select a player')}</Text><MaterialIcons name="chevron-right" size={18} color={theme.textMuted} /></View>
+            )}
+          </Pressable>
+        </View>
+      ) : null}
+
+      {preset === 'tournament' ? (
+        <View style={s.inlineSelection}>
+          <Pressable style={s.selectionBtn} onPress={() => { setPickerSearch(''); setShowTournamentPicker(true); }}>
+            {selectedTournament ? (
+              <View style={s.selectedItem}>
+                <View style={[s.selectedIcon, { backgroundColor: '#D9770615' }]}><MaterialIcons name="emoji-events" size={18} color="#D97706" /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.selectedName} numberOfLines={1}>{selectedTournament.name}</Text>
+                  <Text style={s.selectedMeta}>{new Date(selectedTournament.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')} {'\u2022'} {matches.filter(m => m.tournamentId === selectedTournament.id).length} matchs</Text>
+                </View>
+                <Pressable onPress={() => { setSelectedTournament(null); Haptics.selectionAsync(); }} hitSlop={8}><MaterialIcons name="close" size={16} color={theme.textMuted} /></Pressable>
+              </View>
+            ) : (
+              <View style={s.placeholderItem}><MaterialIcons name="touch-app" size={18} color={theme.textMuted} /><Text style={s.placeholderText}>{lbl('Selectionner un tournoi', 'Select a tournament')}</Text><MaterialIcons name="chevron-right" size={18} color={theme.textMuted} /></View>
+            )}
+          </Pressable>
+        </View>
+      ) : null}
+
+      {preset === 'season' ? (
+        <View style={s.inlineSelection}>
+          <View style={s.seasonRow}>
+            {availableSeasons.map(ss => {
+              const active = selectedSeason === ss.year;
               return (
-                <Pressable
-                  key={p.id}
-                  style={[styles.presetChip, active && { backgroundColor: p.color + '12', borderColor: p.color }]}
-                  onPress={() => handleSelectPreset(p.id)}
-                >
-                  <MaterialIcons name={p.icon as any} size={16} color={active ? p.color : theme.textSecondary} />
-                  <Text style={[styles.presetChipText, active && { color: p.color, fontWeight: '700' }]} numberOfLines={1}>{getPresetLabel(p.id)}</Text>
+                <Pressable key={ss.year} style={[s.seasonBtn, active && { backgroundColor: '#059669', borderColor: '#059669' }]} onPress={() => { Haptics.selectionAsync(); setSelectedSeason(active ? null : ss.year); }}>
+                  <Text style={[s.seasonBtnText, active && { color: '#FFF' }]}>{ss.label}</Text>
                 </Pressable>
               );
             })}
           </View>
+          <Text style={s.hintText}>{lbl('Septembre a Juin', 'September to June')}</Text>
+        </View>
+      ) : null}
+    </Animated.View>
+  );
 
-          {/* Tournament Picker Content */}
-          {preset === 'tournament' ? (
-            <Animated.View entering={FadeIn.duration(250)} style={styles.presetContent}>
-              <Pressable style={styles.itemPickerBtn} onPress={() => { setPickerSearch(''); setShowTournamentPicker(true); }}>
-                {selectedTournament ? (
-                  <View style={styles.itemPickerSelected}>
-                    <View style={[styles.itemPickerIcon, { backgroundColor: theme.carreauColor + '15' }]}>
-                      <MaterialIcons name="emoji-events" size={20} color={theme.carreauColor} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.itemPickerName} numberOfLines={1}>{selectedTournament.name}</Text>
-                      <Text style={styles.itemPickerMeta}>{new Date(selectedTournament.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')} {'\u2022'} {matches.filter(m => m.tournamentId === selectedTournament.id).length} matchs</Text>
-                    </View>
-                    <Pressable onPress={() => { setSelectedTournament(null); Haptics.selectionAsync(); }} hitSlop={8}><MaterialIcons name="close" size={18} color={theme.textMuted} /></Pressable>
-                  </View>
-                ) : (
-                  <View style={styles.itemPickerPlaceholder}>
-                    <MaterialIcons name="emoji-events" size={20} color={theme.textMuted} />
-                    <Text style={styles.itemPickerPlaceholderText}>{language === 'fr' ? 'Choisir un tournoi' : 'Choose a tournament'}</Text>
-                    <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-                  </View>
-                )}
-              </Pressable>
-            </Animated.View>
-          ) : null}
+  // ============================================
+  // STEP 2: CONFIG (Format + Data Type + Period)
+  // ============================================
+  const renderConfigStep = () => (
+    <Animated.View entering={FadeIn.duration(300)}>
+      <Text style={s.stepTitle}>{lbl('Configuration', 'Configuration')}</Text>
 
-          {/* Match Picker Content */}
-          {preset === 'match' ? (
-            <Animated.View entering={FadeIn.duration(250)} style={styles.presetContent}>
-              <Pressable style={styles.itemPickerBtn} onPress={() => { setPickerSearch(''); setShowMatchPicker(true); }}>
-                {selectedMatch ? (
-                  <View style={styles.itemPickerSelected}>
-                    <View style={[styles.itemPickerIcon, { backgroundColor: theme.primary + '15' }]}>
-                      <MaterialIcons name="sports" size={20} color={theme.primary} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.itemPickerName} numberOfLines={1}>{selectedMatch.teamA.playerNames.join(' + ')} vs {selectedMatch.teamB.playerNames.join(' + ')}</Text>
-                      <Text style={styles.itemPickerMeta}>{new Date(selectedMatch.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')} {'\u2022'} {selectedMatch.teamA.score}-{selectedMatch.teamB.score} {'\u2022'} {selectedMatch.format}</Text>
-                    </View>
-                    <Pressable onPress={() => { setSelectedMatch(null); Haptics.selectionAsync(); }} hitSlop={8}><MaterialIcons name="close" size={18} color={theme.textMuted} /></Pressable>
-                  </View>
-                ) : (
-                  <View style={styles.itemPickerPlaceholder}>
-                    <MaterialIcons name="sports" size={20} color={theme.textMuted} />
-                    <Text style={styles.itemPickerPlaceholderText}>{language === 'fr' ? 'Choisir un match' : 'Choose a match'}</Text>
-                    <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-                  </View>
-                )}
-              </Pressable>
-            </Animated.View>
-          ) : null}
+      {/* Format */}
+      <Text style={s.configLabel}>FORMAT</Text>
+      <View style={s.formatRow}>
+        {[
+          { id: 'pdf' as ExportFormat, icon: 'picture-as-pdf', label: 'PDF', desc: lbl('Document formate', 'Formatted document') },
+          { id: 'csv' as ExportFormat, icon: 'table-chart', label: 'CSV', desc: lbl('Tableur', 'Spreadsheet') },
+        ].map(f => (
+          <Pressable key={f.id} style={[s.formatCard, format === f.id && s.formatCardActive]} onPress={() => { Haptics.selectionAsync(); setFormat(f.id); }}>
+            <MaterialIcons name={f.icon as any} size={24} color={format === f.id ? theme.primary : theme.textMuted} />
+            <Text style={[s.formatLabel, format === f.id && { color: theme.primary, fontWeight: '700' }]}>{f.label}</Text>
+            <Text style={s.formatDesc}>{f.desc}</Text>
+          </Pressable>
+        ))}
+      </View>
 
-          {/* Player Picker Content */}
-          {preset === 'player' ? (
-            <Animated.View entering={FadeIn.duration(250)} style={styles.presetContent}>
-              <Pressable style={styles.itemPickerBtn} onPress={() => { setPickerSearch(''); setShowPlayerPicker(true); }}>
-                {selectedPlayer ? (
-                  <View style={styles.itemPickerSelected}>
-                    <View style={[styles.itemPickerIcon, { backgroundColor: theme.accent + '15' }]}>
-                      <MaterialIcons name="person" size={20} color={theme.accent} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.itemPickerName} numberOfLines={1}>{selectedPlayer.name}</Text>
-                      <Text style={styles.itemPickerMeta}>{selectedPlayer.role} {'\u2022'} {selectedPlayer.stats.matchesPlayed} matchs {'\u2022'} {selectedPlayer.stats.winRate}%</Text>
-                    </View>
-                    <Pressable onPress={() => { setSelectedPlayer(null); Haptics.selectionAsync(); }} hitSlop={8}><MaterialIcons name="close" size={18} color={theme.textMuted} /></Pressable>
-                  </View>
-                ) : (
-                  <View style={styles.itemPickerPlaceholder}>
-                    <MaterialIcons name="person" size={20} color={theme.textMuted} />
-                    <Text style={styles.itemPickerPlaceholderText}>{language === 'fr' ? 'Choisir un joueur' : 'Choose a player'}</Text>
-                    <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-                  </View>
-                )}
-              </Pressable>
-            </Animated.View>
-          ) : null}
-
-          {/* Challenge Picker Content */}
-          {preset === 'challenge' ? (
-            <Animated.View entering={FadeIn.duration(250)} style={styles.presetContent}>
-              <Pressable style={styles.itemPickerBtn} onPress={() => { setPickerSearch(''); setShowChallengePicker(true); }}>
-                {selectedChallenge ? (
-                  <View style={styles.itemPickerSelected}>
-                    <View style={[styles.itemPickerIcon, { backgroundColor: theme.warning + '15' }]}>
-                      <MaterialIcons name="flag" size={20} color={theme.warning} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.itemPickerName} numberOfLines={1}>
-                        {selectedChallenge.type === '10_tirs' ? '10 Tirs' : selectedChallenge.type === '10_tirs_sautee' ? '10 Tirs sautee' : 'Precision'}
-                        {selectedChallenge.mode === '1v1' ? ` vs ${selectedChallenge.opponentName || '?'}` : ' Solo'}
-                      </Text>
-                      <Text style={styles.itemPickerMeta}>
-                        {new Date(selectedChallenge.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')}
-                        {selectedChallenge.successRate != null ? ` \u2022 ${Math.round(selectedChallenge.successRate)}%` : ''}
-                      </Text>
-                    </View>
-                    <Pressable onPress={() => { setSelectedChallenge(null); Haptics.selectionAsync(); }} hitSlop={8}><MaterialIcons name="close" size={18} color={theme.textMuted} /></Pressable>
-                  </View>
-                ) : (
-                  <View style={styles.itemPickerPlaceholder}>
-                    <MaterialIcons name="flag" size={20} color={theme.textMuted} />
-                    <Text style={styles.itemPickerPlaceholderText}>{language === 'fr' ? 'Choisir un defi' : 'Choose a challenge'}</Text>
-                    <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-                  </View>
-                )}
-              </Pressable>
-            </Animated.View>
-          ) : null}
-
-          {/* Season Picker */}
-          {preset === 'season' ? (
-            <Animated.View entering={FadeIn.duration(250)} style={styles.presetContent}>
-              <View style={styles.seasonGrid}>
-                {availableSeasons.map(s => {
-                  const active = selectedSeason === s.year;
-                  return (
-                    <Pressable key={s.year} style={[styles.seasonChip, active && styles.seasonChipActive]} onPress={() => { Haptics.selectionAsync(); setSelectedSeason(active ? null : s.year); }}>
-                      <MaterialIcons name="calendar-today" size={14} color={active ? theme.success : theme.textMuted} />
-                      <Text style={[styles.seasonChipText, active && styles.seasonChipTextActive]}>{s.label}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              <Text style={styles.presetHint}>{language === 'fr' ? 'Septembre a Juin' : 'September to June'}</Text>
-            </Animated.View>
-          ) : null}
-
-          {/* Comparative */}
-          {preset === 'comparative' ? (
-            <Animated.View entering={FadeIn.duration(250)} style={styles.presetContent}>
-              <View style={styles.compareRow}>
-                <View style={styles.compareSide}>
-                  <Text style={styles.compareLabel}>{language === 'fr' ? 'PERIODE A' : 'PERIOD A'}</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                    {periods.map(p => (
-                      <Pressable key={p.id} style={[styles.comparePeriodChip, period === p.id && { backgroundColor: '#6366F1' + '12', borderColor: '#6366F1' }]} onPress={() => { Haptics.selectionAsync(); setPeriod(p.id); }}>
-                        <Text style={[styles.comparePeriodText, period === p.id && { color: '#6366F1', fontWeight: '700' }]}>{language === 'fr' ? p.labelFr : p.labelEn}</Text>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-                </View>
-                <View style={styles.compareVs}><Text style={styles.compareVsText}>vs</Text></View>
-                <View style={styles.compareSide}>
-                  <Text style={styles.compareLabel}>{language === 'fr' ? 'PERIODE B' : 'PERIOD B'}</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                    {periods.map(p => (
-                      <Pressable key={p.id} style={[styles.comparePeriodChip, comparePeriod === p.id && { backgroundColor: theme.accent + '12', borderColor: theme.accent }]} onPress={() => { Haptics.selectionAsync(); setComparePeriod(p.id); }}>
-                        <Text style={[styles.comparePeriodText, comparePeriod === p.id && { color: theme.accent, fontWeight: '700' }]}>{language === 'fr' ? p.labelFr : p.labelEn}</Text>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-                </View>
-              </View>
-              {deltaPreview ? (
-                <View style={styles.deltaPreview}>
-                  <View style={styles.deltaPreviewHeader}>
-                    <MaterialIcons name="analytics" size={14} color="#6366F1" />
-                    <Text style={styles.deltaPreviewTitle}>{language === 'fr' ? 'Apercu delta' : 'Delta preview'}</Text>
-                  </View>
-                  <View style={styles.deltaGrid}>
-                    {[
-                      { label: language === 'fr' ? 'Matchs' : 'Games', a: deltaPreview.statsA.totalMatches, b: deltaPreview.statsB.totalMatches },
-                      { label: language === 'fr' ? 'Victoires' : 'Win%', a: deltaPreview.statsA.winRate, b: deltaPreview.statsB.winRate, pct: true },
-                      { label: language === 'fr' ? 'Tir' : 'Shot', a: deltaPreview.statsA.tirRate, b: deltaPreview.statsB.tirRate, pct: true },
-                      { label: 'Carreau', a: deltaPreview.statsA.carreauRate, b: deltaPreview.statsB.carreauRate, pct: true },
-                    ].map((m, i) => (
-                      <View key={i} style={styles.deltaItem}>
-                        <Text style={styles.deltaItemLabel}>{m.label}</Text>
-                        <View style={styles.deltaItemValues}>
-                          <Text style={styles.deltaItemA}>{m.a}{m.pct ? '%' : ''}</Text>
-                          <DeltaValue a={m.a} b={m.b} suffix={m.pct ? '%' : ''} />
-                          <Text style={styles.deltaItemB}>{m.b}{m.pct ? '%' : ''}</Text>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              ) : null}
-            </Animated.View>
-          ) : null}
-        </Animated.View>
-
-        {/* Data Type */}
-        {showDataTypeSection ? (
-          <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialIcons name="dataset" size={16} color={theme.textSecondary} />
-              <Text style={styles.sectionTitle}>{language === 'fr' ? 'DONNEES A EXPORTER' : 'DATA TO EXPORT'}</Text>
-            </View>
-            <View style={styles.optionGrid}>
-              {dataTypes.map(dt => {
-                const disabled = preset === 'tournament' && dt.id === 'challenges';
-                return (
-                  <Pressable key={dt.id} style={[styles.optionCard, dataType === dt.id && { borderColor: dt.color, backgroundColor: dt.color + '08' }, disabled && { opacity: 0.4 }]} onPress={() => { if (!disabled) { Haptics.selectionAsync(); setDataType(dt.id); } }} disabled={disabled}>
-                    <View style={[styles.optionIconBg, { backgroundColor: dt.color + '15' }]}>
-                      <MaterialIcons name={dt.icon as any} size={22} color={dt.color} />
-                    </View>
-                    <Text style={[styles.optionLabel, dataType === dt.id && { color: dt.color, fontWeight: '700' }]}>{getDataTypeLabel(dt.id)}</Text>
-                    <Text style={styles.optionCount}>{getDataTypeCount(dt.id)}</Text>
-                    {dataType === dt.id ? <View style={[styles.optionCheck, { backgroundColor: dt.color }]}><MaterialIcons name="check" size={14} color="#FFF" /></View> : null}
-                  </Pressable>
-                );
-              })}
-            </View>
-          </Animated.View>
-        ) : null}
-
-        {/* Period */}
-        {showPeriodSection ? (
-          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialIcons name="date-range" size={16} color={theme.textSecondary} />
-              <Text style={styles.sectionTitle}>{language === 'fr' ? 'PERIODE' : 'PERIOD'}</Text>
-            </View>
-            <View style={styles.periodGrid}>
-              {periods.map(p => (
-                <Pressable key={p.id} style={[styles.periodChip, period === p.id && styles.periodChipActive]} onPress={() => { Haptics.selectionAsync(); setPeriod(p.id); }}>
-                  <Text style={[styles.periodChipText, period === p.id && styles.periodChipTextActive]}>{language === 'fr' ? p.labelFr : p.labelEn}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </Animated.View>
-        ) : null}
-
-        {/* Format */}
-        <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="description" size={16} color={theme.textSecondary} />
-            <Text style={styles.sectionTitle}>FORMAT</Text>
-          </View>
-          <View style={styles.formatRow}>
-            {formatOptions.map(f => (
-              <Pressable key={f.id} style={[styles.formatCard, format === f.id && styles.formatCardActive]} onPress={() => { Haptics.selectionAsync(); setFormat(f.id); }}>
-                <View style={[styles.formatIconBg, format === f.id && { backgroundColor: theme.primary + '20' }]}>
-                  <MaterialIcons name={f.icon as any} size={24} color={format === f.id ? theme.primary : theme.textMuted} />
-                </View>
-                <Text style={[styles.formatLabel, format === f.id && { color: theme.primary, fontWeight: '700' }]}>{f.label}</Text>
-                <Text style={styles.formatDesc}>{f.desc}</Text>
+      {/* Data type - only for relevant presets */}
+      {showDataTypeInConfig ? (
+        <>
+          <Text style={s.configLabel}>{lbl('DONNEES', 'DATA')}</Text>
+          <View style={s.dataTypeRow}>
+            {[
+              { id: 'matches' as ExportDataType, icon: 'sports', label: lbl('Matchs', 'Matches'), count: matches.length, disabled: preset === 'tournament' ? false : false },
+              { id: 'challenges' as ExportDataType, icon: 'flag', label: lbl('Defis', 'Challenges'), count: challenges.length, disabled: preset === 'tournament' },
+              { id: 'statistics' as ExportDataType, icon: 'bar-chart', label: 'Stats', count: null, disabled: false },
+            ].map(dt => (
+              <Pressable key={dt.id} style={[s.dataTypeBtn, dataType === dt.id && s.dataTypeBtnActive, dt.disabled && { opacity: 0.35 }]} onPress={() => { if (!dt.disabled) { Haptics.selectionAsync(); setDataType(dt.id); } }} disabled={dt.disabled}>
+                <MaterialIcons name={dt.icon as any} size={18} color={dataType === dt.id ? theme.primary : theme.textSecondary} />
+                <Text style={[s.dataTypeBtnText, dataType === dt.id && { color: theme.primary, fontWeight: '700' }]}>{dt.label}</Text>
+                {dt.count != null ? <Text style={s.dataTypeBtnCount}>{dt.count}</Text> : null}
               </Pressable>
             ))}
           </View>
-        </Animated.View>
+        </>
+      ) : null}
 
-        {/* Data Preview */}
-        {preview && preview.headers.length > 0 && preview.rows.length > 0 ? (
-          <Animated.View entering={FadeIn.duration(300)} style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialIcons name="preview" size={16} color={theme.textSecondary} />
-              <Text style={styles.sectionTitle}>{language === 'fr' ? 'APERCU DES DONNEES' : 'DATA PREVIEW'}</Text>
-              <View style={styles.previewBadge}>
-                <Text style={styles.previewBadgeText}>{preview.totalRows} {language === 'fr' ? 'lignes' : 'rows'}</Text>
+      {/* Period */}
+      {showPeriodInConfig ? (
+        <>
+          <Text style={s.configLabel}>{preset === 'comparative' ? lbl('PERIODE A', 'PERIOD A') : lbl('PERIODE', 'PERIOD')}</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+            {periods.map(p => (
+              <Pressable key={p.id} style={[s.periodChip, period === p.id && s.periodChipActive]} onPress={() => { Haptics.selectionAsync(); setPeriod(p.id); }}>
+                <Text style={[s.periodChipText, period === p.id && s.periodChipTextActive]}>{p.label}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </>
+      ) : null}
+
+      {/* Period B for comparative */}
+      {preset === 'comparative' ? (
+        <>
+          <Text style={[s.configLabel, { marginTop: 16 }]}>{lbl('PERIODE B', 'PERIOD B')}</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+            {periods.map(p => (
+              <Pressable key={p.id} style={[s.periodChip, comparePeriod === p.id && { backgroundColor: '#6366F112', borderColor: '#6366F1' }]} onPress={() => { Haptics.selectionAsync(); setComparePeriod(p.id); }}>
+                <Text style={[s.periodChipText, comparePeriod === p.id && { color: '#6366F1', fontWeight: '700' }]}>{p.label}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+          {/* Delta preview card */}
+          {deltaPreview ? (
+            <View style={s.deltaCard}>
+              <View style={s.deltaCardHeader}>
+                <MaterialIcons name="analytics" size={14} color="#6366F1" />
+                <Text style={s.deltaCardTitle}>{lbl('Apercu delta', 'Delta preview')}</Text>
               </View>
+              {[
+                { label: lbl('Matchs', 'Games'), a: deltaPreview.statsA.totalMatches, b: deltaPreview.statsB.totalMatches },
+                { label: lbl('Vict.', 'Win'), a: deltaPreview.statsA.winRate, b: deltaPreview.statsB.winRate, pct: true },
+                { label: 'Tir', a: deltaPreview.statsA.tirRate, b: deltaPreview.statsB.tirRate, pct: true },
+                { label: 'Carreau', a: deltaPreview.statsA.carreauRate, b: deltaPreview.statsB.carreauRate, pct: true },
+              ].map((m, i) => (
+                <View key={i} style={s.deltaRow}>
+                  <Text style={s.deltaLabel}>{m.label}</Text>
+                  <Text style={s.deltaValA}>{m.a}{m.pct ? '%' : ''}</Text>
+                  <DeltaValue a={m.a} b={m.b} suffix={m.pct ? '%' : ''} />
+                  <Text style={s.deltaValB}>{m.b}{m.pct ? '%' : ''}</Text>
+                </View>
+              ))}
             </View>
-            <View style={styles.previewCard}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={true} contentContainerStyle={{ minWidth: '100%' }}>
-                <View>
-                  {/* Table header */}
-                  <View style={styles.previewHeaderRow}>
-                    {preview.headers.map((h, i) => (
-                      <View key={i} style={[styles.previewCell, styles.previewHeaderCell, { minWidth: i === 0 ? 70 : 60 }]}>
-                        <Text style={styles.previewHeaderText} numberOfLines={1}>{h}</Text>
+          ) : null}
+        </>
+      ) : null}
+    </Animated.View>
+  );
+
+  // ============================================
+  // STEP 3: PREVIEW + EXPORT
+  // ============================================
+  const renderPreviewStep = () => (
+    <Animated.View entering={FadeIn.duration(300)}>
+      <Text style={s.stepTitle}>{lbl('Apercu et export', 'Preview and export')}</Text>
+
+      {/* Summary */}
+      <View style={s.summaryCard}>
+        <View style={s.summaryRow}>
+          <View style={s.summaryChip}><MaterialIcons name="auto-awesome" size={12} color={theme.primary} /><Text style={s.summaryChipText}>{getSummaryText()}</Text></View>
+          <View style={s.summaryChip}><MaterialIcons name={format === 'pdf' ? 'picture-as-pdf' : 'table-chart'} size={12} color={theme.accent} /><Text style={s.summaryChipText}>{format.toUpperCase()}</Text></View>
+          {showDataTypeInConfig ? <View style={s.summaryChip}><Text style={s.summaryChipText}>{getDataTypeLabel(dataType)}</Text></View> : null}
+        </View>
+      </View>
+
+      {/* Preview table */}
+      {preview && preview.headers.length > 0 && preview.rows.length > 0 ? (
+        <View style={s.previewSection}>
+          <View style={s.previewHeader}>
+            <Text style={s.previewTitle}>{lbl('Apercu des donnees', 'Data preview')}</Text>
+            <View style={s.previewBadge}><Text style={s.previewBadgeText}>{preview.totalRows} {lbl('lignes', 'rows')}</Text></View>
+          </View>
+          <View style={s.previewCard}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={true} contentContainerStyle={{ minWidth: '100%' }}>
+              <View>
+                <View style={s.previewHeaderRow}>
+                  {preview.headers.map((h, i) => (
+                    <View key={i} style={[s.previewCell, { minWidth: i === 0 ? 80 : 65 }]}>
+                      <Text style={s.previewHeaderText} numberOfLines={1}>{h}</Text>
+                    </View>
+                  ))}
+                </View>
+                {preview.rows.map((row, ri) => (
+                  <View key={ri} style={[s.previewRow, ri % 2 === 0 ? { backgroundColor: theme.backgroundSecondary } : null]}>
+                    {row.map((cell, ci) => (
+                      <View key={ci} style={[s.previewCell, { minWidth: ci === 0 ? 80 : 65 }]}>
+                        <Text style={s.previewCellText} numberOfLines={1}>{cell}</Text>
                       </View>
                     ))}
                   </View>
-                  {/* Table rows */}
-                  {preview.rows.map((row, ri) => (
-                    <View key={ri} style={[styles.previewRow, ri % 2 === 0 ? { backgroundColor: theme.backgroundSecondary } : null]}>
-                      {row.map((cell, ci) => (
-                        <View key={ci} style={[styles.previewCell, { minWidth: ci === 0 ? 70 : 60 }]}>
-                          <Text style={styles.previewCellText} numberOfLines={1}>{cell}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  ))}
-                  {/* More rows indicator */}
-                  {preview.totalRows > preview.rows.length ? (
-                    <View style={styles.previewMoreRow}>
-                      <Text style={styles.previewMoreText}>
-                        ... {language === 'fr' ? `et ${preview.totalRows - preview.rows.length} lignes de plus` : `and ${preview.totalRows - preview.rows.length} more rows`}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-              </ScrollView>
-            </View>
-          </Animated.View>
-        ) : null}
+                ))}
+                {preview.totalRows > preview.rows.length ? (
+                  <View style={s.previewMore}><Text style={s.previewMoreText}>... {lbl(`et ${preview.totalRows - preview.rows.length} lignes de plus`, `and ${preview.totalRows - preview.rows.length} more rows`)}</Text></View>
+                ) : null}
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      ) : (
+        <View style={s.noPreview}>
+          <MaterialIcons name="info-outline" size={20} color={theme.textMuted} />
+          <Text style={s.noPreviewText}>{lbl('Aucune donnee disponible pour cet export', 'No data available for this export')}</Text>
+        </View>
+      )}
+    </Animated.View>
+  );
 
-        {/* Summary */}
-        <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.summaryCard}>
-          <MaterialIcons name="info-outline" size={16} color={theme.textSecondary} />
-          <Text style={styles.summaryText}>{getSummaryText()}</Text>
-        </Animated.View>
-      </ScrollView>
+  const steps: WizardStep[] = ['preset', 'config', 'preview'];
+  const stepIndex = steps.indexOf(currentStep);
+  const stepLabels = [lbl('Type', 'Type'), lbl('Config', 'Config'), lbl('Export', 'Export')];
 
-      {/* Export Button */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-        <Pressable
-          style={[styles.exportBtn, isExportDisabled && styles.exportBtnDisabled]}
-          onPress={handleExport}
-          disabled={isExportDisabled}
-        >
-          {exporting ? (
-            <>
-              <ActivityIndicator size="small" color="#FFF" />
-              <Text style={styles.exportBtnText}>{language === 'fr' ? 'Generation en cours...' : 'Generating...'}</Text>
-            </>
-          ) : (
-            <>
-              <MaterialIcons name="file-download" size={22} color="#FFF" />
-              <Text style={styles.exportBtnText}>{language === 'fr' ? `Exporter en ${format.toUpperCase()}` : `Export as ${format.toUpperCase()}`}</Text>
-            </>
-          )}
+  return (
+    <SafeAreaView edges={['top']} style={s.container}>
+      {/* Header */}
+      <View style={s.header}>
+        <Pressable style={s.backBtn} onPress={() => { if (stepIndex > 0) { setCurrentStep(steps[stepIndex - 1]); } else { router.back(); } }}>
+          <MaterialIcons name={stepIndex > 0 ? 'arrow-back' : 'close'} size={24} color={theme.textPrimary} />
         </Pressable>
+        <View style={s.headerCenter}>
+          <Text style={s.headerTitle}>{lbl('Export', 'Export')}</Text>
+        </View>
+        <View style={{ width: 40 }} />
       </View>
 
-      {/* Tournament Picker Modal */}
-      {renderPickerModal(
-        showTournamentPicker,
-        () => setShowTournamentPicker(false),
-        language === 'fr' ? 'Choisir un tournoi' : 'Choose a tournament',
-        tournamentsWithMatches,
-        ({ item: tr }: { item: Tournament }) => {
-          const matchCount = matches.filter(m => m.tournamentId === tr.id).length;
-          const isSelected = selectedTournament?.id === tr.id;
-          return (
-            <Pressable style={[styles.pickerItem, isSelected && styles.pickerItemSelected]} onPress={() => { Haptics.selectionAsync(); setSelectedTournament(tr); setShowTournamentPicker(false); }}>
-              <View style={[styles.pickerItemIcon, { backgroundColor: isSelected ? theme.carreauColor : theme.backgroundSecondary }]}>
-                <MaterialIcons name="emoji-events" size={22} color={isSelected ? '#FFF' : theme.textSecondary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.pickerItemName}>{tr.name}</Text>
-                <Text style={styles.pickerItemMeta}>{new Date(tr.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })} {'\u2022'} {matchCount} matchs {'\u2022'} {tr.format}</Text>
-              </View>
-              {isSelected ? <MaterialIcons name="check-circle" size={22} color={theme.carreauColor} /> : null}
-            </Pressable>
-          );
-        },
-        'emoji-events',
-        language === 'fr' ? 'Aucun tournoi avec des matchs' : 'No tournaments with matches',
-      )}
+      {/* Step indicator */}
+      <View style={s.stepIndicator}>
+        {steps.map((step, i) => (
+          <View key={step} style={s.stepDotRow}>
+            <View style={[s.stepDot, i <= stepIndex && s.stepDotActive]}>
+              {i < stepIndex ? <MaterialIcons name="check" size={12} color="#FFF" /> : <Text style={[s.stepDotText, i <= stepIndex && { color: '#FFF' }]}>{i + 1}</Text>}
+            </View>
+            <Text style={[s.stepDotLabel, i === stepIndex && { color: theme.primary, fontWeight: '700' }]}>{stepLabels[i]}</Text>
+            {i < steps.length - 1 ? <View style={[s.stepLine, i < stepIndex && { backgroundColor: theme.primary }]} /> : null}
+          </View>
+        ))}
+      </View>
 
-      {/* Match Picker Modal */}
-      {renderPickerModal(
-        showMatchPicker,
-        () => setShowMatchPicker(false),
-        language === 'fr' ? 'Choisir un match' : 'Choose a match',
-        filteredPickerMatches,
-        ({ item: m }: { item: Match }) => {
-          const isSelected = selectedMatch?.id === m.id;
-          const isWin = m.winner === 'A';
-          return (
-            <Pressable style={[styles.pickerItem, isSelected && styles.pickerItemSelected]} onPress={() => { Haptics.selectionAsync(); setSelectedMatch(m); setShowMatchPicker(false); }}>
-              <View style={[styles.pickerItemIcon, { backgroundColor: isSelected ? theme.primary : (isWin ? theme.success + '15' : theme.error + '15') }]}>
-                <MaterialIcons name="sports" size={22} color={isSelected ? '#FFF' : (isWin ? theme.success : theme.error)} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.pickerItemName} numberOfLines={1}>{m.teamA.playerNames.join(' + ')} vs {m.teamB.playerNames.join(' + ')}</Text>
-                <Text style={styles.pickerItemMeta}>{new Date(m.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')} {'\u2022'} {m.teamA.score}-{m.teamB.score} {'\u2022'} {m.format}{m.tournamentName ? ` \u2022 ${m.tournamentName}` : ''}</Text>
-              </View>
-              {isSelected ? <MaterialIcons name="check-circle" size={22} color={theme.primary} /> : null}
-            </Pressable>
-          );
-        },
-        'sports',
-        language === 'fr' ? 'Aucun match' : 'No matches',
-      )}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false}>
+        {currentStep === 'preset' ? renderPresetStep() : null}
+        {currentStep === 'config' ? renderConfigStep() : null}
+        {currentStep === 'preview' ? renderPreviewStep() : null}
+      </ScrollView>
 
-      {/* Player Picker Modal */}
-      {renderPickerModal(
-        showPlayerPicker,
-        () => setShowPlayerPicker(false),
-        language === 'fr' ? 'Choisir un joueur' : 'Choose a player',
-        filteredPickerPlayers,
-        ({ item: p }: { item: Player }) => {
-          const isSelected = selectedPlayer?.id === p.id;
-          return (
-            <Pressable style={[styles.pickerItem, isSelected && styles.pickerItemSelected]} onPress={() => { Haptics.selectionAsync(); setSelectedPlayer(p); setShowPlayerPicker(false); }}>
-              <View style={[styles.pickerItemIcon, { backgroundColor: isSelected ? theme.accent : theme.backgroundSecondary }]}>
-                <Text style={{ fontSize: 16, fontWeight: '700', color: isSelected ? '#FFF' : theme.textSecondary }}>{p.name.charAt(0)}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.pickerItemName}>{p.name}</Text>
-                <Text style={styles.pickerItemMeta}>{p.role} {'\u2022'} {p.stats.matchesPlayed} matchs {'\u2022'} {p.stats.winRate}%{p.club ? ` \u2022 ${p.club}` : ''}</Text>
-              </View>
-              {isSelected ? <MaterialIcons name="check-circle" size={22} color={theme.accent} /> : null}
-            </Pressable>
-          );
-        },
-        'person',
-        language === 'fr' ? 'Aucun joueur' : 'No players',
-      )}
+      {/* Footer */}
+      <View style={[s.footer, { paddingBottom: insets.bottom + 16 }]}>
+        {currentStep === 'preview' ? (
+          <Pressable style={[s.exportBtn, isExportDisabled && { opacity: 0.5 }]} onPress={handleExport} disabled={isExportDisabled}>
+            {exporting ? (
+              <><ActivityIndicator size="small" color="#FFF" /><Text style={s.exportBtnText}>{lbl('Generation...', 'Generating...')}</Text></>
+            ) : (
+              <><MaterialIcons name="file-download" size={22} color="#FFF" /><Text style={s.exportBtnText}>{lbl(`Exporter en ${format.toUpperCase()}`, `Export as ${format.toUpperCase()}`)}</Text></>
+            )}
+          </Pressable>
+        ) : (
+          <Pressable style={[s.nextBtn, !canProceedToConfig() && { opacity: 0.4 }]} onPress={() => { if (canProceedToConfig()) { Haptics.selectionAsync(); setCurrentStep(steps[stepIndex + 1]); } }} disabled={!canProceedToConfig()}>
+            <Text style={s.nextBtnText}>{lbl('Continuer', 'Continue')}</Text>
+            <MaterialIcons name="arrow-forward" size={20} color="#FFF" />
+          </Pressable>
+        )}
+      </View>
 
-      {/* Challenge Picker Modal */}
-      {renderPickerModal(
-        showChallengePicker,
-        () => setShowChallengePicker(false),
-        language === 'fr' ? 'Choisir un defi' : 'Choose a challenge',
-        filteredPickerChallenges,
-        ({ item: c }: { item: Challenge }) => {
-          const isSelected = selectedChallenge?.id === c.id;
-          const typeLabels: Record<string, string> = language === 'fr'
-            ? { '10_tirs': '10 Tirs', '10_tirs_sautee': '10 Tirs sautee', 'precision': 'Precision' }
-            : { '10_tirs': '10 Shots', '10_tirs_sautee': '10 Lob', 'precision': 'Precision' };
-          return (
-            <Pressable style={[styles.pickerItem, isSelected && styles.pickerItemSelected]} onPress={() => { Haptics.selectionAsync(); setSelectedChallenge(c); setShowChallengePicker(false); }}>
-              <View style={[styles.pickerItemIcon, { backgroundColor: isSelected ? theme.warning : theme.backgroundSecondary }]}>
-                <MaterialIcons name="flag" size={22} color={isSelected ? '#FFF' : theme.textSecondary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.pickerItemName}>{typeLabels[c.type] || c.type} {c.mode === '1v1' ? `vs ${c.opponentName || '?'}` : 'Solo'}</Text>
-                <Text style={styles.pickerItemMeta}>
-                  {new Date(c.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')}
-                  {c.successRate != null ? ` \u2022 ${Math.round(c.successRate)}%` : ''}
-                  {c.carreauCount ? ` \u2022 ${c.carreauCount} car.` : ''}
-                </Text>
-              </View>
-              {isSelected ? <MaterialIcons name="check-circle" size={22} color={theme.warning} /> : null}
-            </Pressable>
-          );
-        },
-        'flag',
-        language === 'fr' ? 'Aucun defi' : 'No challenges',
-      )}
+      {/* Picker modals */}
+      {renderPickerModal(showTournamentPicker, () => setShowTournamentPicker(false), lbl('Choisir un tournoi', 'Choose a tournament'), tournamentsWithMatches, ({ item: tr }: { item: Tournament }) => { const mc = matches.filter(m => m.tournamentId === tr.id).length; const sel = selectedTournament?.id === tr.id; return (<Pressable style={[s.pickerItem, sel && s.pickerItemSel]} onPress={() => { Haptics.selectionAsync(); setSelectedTournament(tr); setShowTournamentPicker(false); }}><View style={[s.pickerIcon, { backgroundColor: sel ? '#D97706' : theme.backgroundSecondary }]}><MaterialIcons name="emoji-events" size={22} color={sel ? '#FFF' : theme.textSecondary} /></View><View style={{ flex: 1 }}><Text style={s.pickerName}>{tr.name}</Text><Text style={s.pickerMeta}>{new Date(tr.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')} {'\u2022'} {mc} matchs</Text></View>{sel ? <MaterialIcons name="check-circle" size={22} color="#D97706" /> : null}</Pressable>); }, 'emoji-events', lbl('Aucun tournoi avec des matchs', 'No tournaments with matches'))}
+
+      {renderPickerModal(showMatchPicker, () => setShowMatchPicker(false), lbl('Choisir un match', 'Choose a match'), filteredPickerMatches, ({ item: m }: { item: Match }) => { const sel = selectedMatch?.id === m.id; const isWin = m.winner === 'A'; return (<Pressable style={[s.pickerItem, sel && s.pickerItemSel]} onPress={() => { Haptics.selectionAsync(); setSelectedMatch(m); setShowMatchPicker(false); }}><View style={[s.pickerIcon, { backgroundColor: sel ? '#10B981' : (isWin ? '#10B98115' : '#EF444415') }]}><MaterialIcons name="sports" size={22} color={sel ? '#FFF' : (isWin ? theme.success : theme.error)} /></View><View style={{ flex: 1 }}><Text style={s.pickerName} numberOfLines={1}>{m.teamA.playerNames.join(' + ')} vs {m.teamB.playerNames.join(' + ')}</Text><Text style={s.pickerMeta}>{new Date(m.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')} {'\u2022'} {m.teamA.score}-{m.teamB.score} {'\u2022'} {m.format}</Text></View>{sel ? <MaterialIcons name="check-circle" size={22} color="#10B981" /> : null}</Pressable>); }, 'sports', lbl('Aucun match', 'No matches'))}
+
+      {renderPickerModal(showPlayerPicker, () => setShowPlayerPicker(false), lbl('Choisir un joueur', 'Choose a player'), filteredPickerPlayers, ({ item: p }: { item: Player }) => { const sel = selectedPlayer?.id === p.id; return (<Pressable style={[s.pickerItem, sel && s.pickerItemSel]} onPress={() => { Haptics.selectionAsync(); setSelectedPlayer(p); setShowPlayerPicker(false); }}><View style={[s.pickerIcon, { backgroundColor: sel ? '#8B5CF6' : theme.backgroundSecondary }]}><Text style={{ fontSize: 16, fontWeight: '700', color: sel ? '#FFF' : theme.textSecondary }}>{p.name.charAt(0)}</Text></View><View style={{ flex: 1 }}><Text style={s.pickerName}>{p.name}</Text><Text style={s.pickerMeta}>{p.role} {'\u2022'} {p.stats.matchesPlayed} matchs {'\u2022'} {p.stats.winRate}%</Text></View>{sel ? <MaterialIcons name="check-circle" size={22} color="#8B5CF6" /> : null}</Pressable>); }, 'person', lbl('Aucun joueur', 'No players'))}
+
+      {renderPickerModal(showChallengePicker, () => setShowChallengePicker(false), lbl('Choisir un defi', 'Choose a challenge'), filteredPickerChallenges, ({ item: c }: { item: Challenge }) => { const sel = selectedChallenge?.id === c.id; const tl: Record<string, string> = language === 'fr' ? { '10_tirs': '10 Tirs', '10_tirs_sautee': '10 Tirs sautee', 'precision': 'Precision' } : { '10_tirs': '10 Shots', '10_tirs_sautee': '10 Lob', 'precision': 'Precision' }; return (<Pressable style={[s.pickerItem, sel && s.pickerItemSel]} onPress={() => { Haptics.selectionAsync(); setSelectedChallenge(c); setShowChallengePicker(false); }}><View style={[s.pickerIcon, { backgroundColor: sel ? '#F59E0B' : theme.backgroundSecondary }]}><MaterialIcons name="flag" size={22} color={sel ? '#FFF' : theme.textSecondary} /></View><View style={{ flex: 1 }}><Text style={s.pickerName}>{tl[c.type] || c.type} {c.mode === '1v1' ? `vs ${c.opponentName || '?'}` : 'Solo'}</Text><Text style={s.pickerMeta}>{new Date(c.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')}{c.successRate != null ? ` \u2022 ${Math.round(c.successRate)}%` : ''}</Text></View>{sel ? <MaterialIcons name="check-circle" size={22} color="#F59E0B" /> : null}</Pressable>); }, 'flag', lbl('Aucun defi', 'No challenges'))}
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.backgroundSecondary },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
-  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+
+  // Header
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
+  headerCenter: { flex: 1, alignItems: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '700', color: theme.textPrimary },
-  scrollView: { flex: 1 },
+
+  // Step indicator
+  stepIndicator: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingVertical: 16, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  stepDotRow: { flexDirection: 'row', alignItems: 'center' },
+  stepDot: { width: 26, height: 26, borderRadius: 13, backgroundColor: theme.backgroundSecondary, borderWidth: 2, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' },
+  stepDotActive: { backgroundColor: theme.primary, borderColor: theme.primary },
+  stepDotText: { fontSize: 11, fontWeight: '700', color: theme.textMuted },
+  stepDotLabel: { fontSize: 11, fontWeight: '600', color: theme.textMuted, marginLeft: 6 },
+  stepLine: { width: 28, height: 2, backgroundColor: theme.border, marginHorizontal: 6, borderRadius: 1 },
+
+  // Scroll content
   scrollContent: { paddingHorizontal: 16, paddingTop: 20 },
 
-  heroCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.xl, padding: 24, alignItems: 'center', marginBottom: 20, ...theme.shadows.card },
-  heroIconBg: { width: 64, height: 64, borderRadius: 18, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
-  heroTitle: { fontSize: 20, fontWeight: '700', color: theme.textPrimary, marginBottom: 6 },
-  heroSubtitle: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 20 },
+  // Step titles
+  stepTitle: { fontSize: 20, fontWeight: '700', color: theme.textPrimary, marginBottom: 6 },
+  stepSubtitle: { fontSize: 14, color: theme.textSecondary, lineHeight: 20, marginBottom: 20 },
 
-  section: { marginBottom: 20 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, paddingLeft: 4 },
-  sectionTitle: { fontSize: 11, fontWeight: '700', color: theme.textMuted, letterSpacing: 0.5, flex: 1 },
+  // Preset cards
+  presetList: { gap: 8 },
+  presetCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: 14, padding: 14, borderWidth: 2, borderColor: theme.border, gap: 12, ...theme.shadows.card },
+  presetIconBg: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  presetCardTitle: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  presetCardDesc: { fontSize: 12, color: theme.textMuted, marginTop: 1 },
+  radioOuter: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' },
+  radioInner: { width: 12, height: 12, borderRadius: 6 },
 
-  // Presets - 2x3 grid
-  presetGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  presetChip: { width: '31%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 11, borderRadius: theme.borderRadius.md, backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border, ...theme.shadows.card },
-  presetChipText: { fontSize: 11, fontWeight: '600', color: theme.textSecondary },
-  presetContent: { marginTop: 12 },
-  presetHint: { fontSize: 11, color: theme.textMuted, fontStyle: 'italic', marginTop: 6, paddingLeft: 4 },
+  // Inline selection (preset specifics)
+  inlineSelection: { marginTop: 14, paddingLeft: 4 },
+  selectionBtn: { backgroundColor: theme.surface, borderRadius: 12, borderWidth: 1.5, borderColor: theme.border, overflow: 'hidden', ...theme.shadows.card },
+  selectedItem: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 },
+  selectedIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  selectedName: { fontSize: 14, fontWeight: '600', color: theme.textPrimary },
+  selectedMeta: { fontSize: 12, color: theme.textSecondary, marginTop: 1 },
+  placeholderItem: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 10 },
+  placeholderText: { flex: 1, fontSize: 14, color: theme.textMuted },
+  seasonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  seasonBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border },
+  seasonBtnText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
+  hintText: { fontSize: 11, color: theme.textMuted, fontStyle: 'italic', marginTop: 8, paddingLeft: 4 },
 
-  // Item picker button (shared)
-  itemPickerBtn: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.border, overflow: 'hidden', ...theme.shadows.card },
-  itemPickerSelected: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 },
-  itemPickerIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  itemPickerName: { fontSize: 14, fontWeight: '600', color: theme.textPrimary },
-  itemPickerMeta: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
-  itemPickerPlaceholder: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 10 },
-  itemPickerPlaceholderText: { flex: 1, fontSize: 14, color: theme.textMuted },
-
-  // Season
-  seasonGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  seasonChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: theme.borderRadius.md, backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border },
-  seasonChipActive: { backgroundColor: theme.success + '10', borderColor: theme.success },
-  seasonChipText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
-  seasonChipTextActive: { color: theme.success },
-
-  // Comparative
-  compareRow: { gap: 10 },
-  compareSide: { gap: 6 },
-  compareLabel: { fontSize: 10, fontWeight: '700', color: theme.textMuted, letterSpacing: 0.5 },
-  compareVs: { alignItems: 'center', paddingVertical: 4 },
-  compareVsText: { fontSize: 12, fontWeight: '700', color: theme.textMuted },
-  comparePeriodChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border },
-  comparePeriodText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
-
-  deltaPreview: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 14, marginTop: 12, borderWidth: 1, borderColor: '#6366F1' + '20', ...theme.shadows.card },
-  deltaPreviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
-  deltaPreviewTitle: { fontSize: 12, fontWeight: '700', color: '#6366F1' },
-  deltaGrid: { gap: 8 },
-  deltaItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  deltaItemLabel: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, width: 70 },
-  deltaItemValues: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  deltaItemA: { fontSize: 12, fontWeight: '600', color: '#6366F1', width: 36, textAlign: 'right' },
-  deltaItemB: { fontSize: 12, fontWeight: '600', color: theme.accent, width: 36, textAlign: 'right' },
-
-  // Data type
-  optionGrid: { gap: 10 },
-  optionCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 14, borderWidth: 2, borderColor: 'transparent', ...theme.shadows.card },
-  optionIconBg: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  optionLabel: { fontSize: 15, fontWeight: '600', color: theme.textPrimary, flex: 1 },
-  optionCount: { fontSize: 12, color: theme.textMuted, marginRight: 8 },
-  optionCheck: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-
-  periodGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  periodChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border },
+  // Config step
+  configLabel: { fontSize: 11, fontWeight: '700', color: theme.textMuted, letterSpacing: 0.5, marginBottom: 10, marginTop: 20 },
+  formatRow: { flexDirection: 'row', gap: 12 },
+  formatCard: { flex: 1, backgroundColor: theme.surface, borderRadius: 14, padding: 16, alignItems: 'center', borderWidth: 2, borderColor: 'transparent', ...theme.shadows.card, gap: 6 },
+  formatCardActive: { borderColor: theme.primary, backgroundColor: theme.primary + '05' },
+  formatLabel: { fontSize: 16, fontWeight: '600', color: theme.textPrimary },
+  formatDesc: { fontSize: 11, color: theme.textMuted, textAlign: 'center' },
+  dataTypeRow: { flexDirection: 'row', gap: 8 },
+  dataTypeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: theme.surface, paddingVertical: 12, borderRadius: 12, borderWidth: 1.5, borderColor: theme.border },
+  dataTypeBtnActive: { borderColor: theme.primary, backgroundColor: theme.primary + '08' },
+  dataTypeBtnText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
+  dataTypeBtnCount: { fontSize: 10, fontWeight: '700', color: theme.textMuted, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 6 },
+  periodChip: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20, backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border },
   periodChipActive: { backgroundColor: theme.primary + '12', borderColor: theme.primary },
   periodChipText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
-  periodChipTextActive: { color: theme.primary },
+  periodChipTextActive: { color: theme.primary, fontWeight: '700' },
 
-  formatRow: { flexDirection: 'row', gap: 12 },
-  formatCard: { flex: 1, backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, alignItems: 'center', borderWidth: 2, borderColor: 'transparent', ...theme.shadows.card },
-  formatCardActive: { borderColor: theme.primary, backgroundColor: theme.primary + '05' },
-  formatIconBg: { width: 52, height: 52, borderRadius: 14, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  formatLabel: { fontSize: 16, fontWeight: '600', color: theme.textPrimary, marginBottom: 4 },
-  formatDesc: { fontSize: 11, color: theme.textMuted, textAlign: 'center' },
+  // Delta card
+  deltaCard: { backgroundColor: theme.surface, borderRadius: 12, padding: 14, marginTop: 14, borderWidth: 1, borderColor: '#6366F120', ...theme.shadows.card },
+  deltaCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
+  deltaCardTitle: { fontSize: 12, fontWeight: '700', color: '#6366F1' },
+  deltaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 },
+  deltaLabel: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, width: 65 },
+  deltaValA: { fontSize: 13, fontWeight: '600', color: '#6366F1', width: 42, textAlign: 'right' },
+  deltaValB: { fontSize: 13, fontWeight: '600', color: theme.accent, width: 42, textAlign: 'right' },
 
-  // Preview
+  // Preview step
+  summaryCard: { backgroundColor: theme.surface, borderRadius: 12, padding: 12, marginBottom: 16, ...theme.shadows.card },
+  summaryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  summaryChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 },
+  summaryChipText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  previewSection: {},
+  previewHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  previewTitle: { fontSize: 13, fontWeight: '700', color: theme.textSecondary },
   previewBadge: { backgroundColor: theme.primary + '15', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12 },
   previewBadgeText: { fontSize: 10, fontWeight: '700', color: theme.primary },
-  previewCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, overflow: 'hidden', borderWidth: 1, borderColor: theme.border, ...theme.shadows.card },
+  previewCard: { backgroundColor: theme.surface, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: theme.border, ...theme.shadows.card },
   previewHeaderRow: { flexDirection: 'row', backgroundColor: theme.primary + '08', borderBottomWidth: 2, borderBottomColor: theme.primary + '30' },
-  previewHeaderCell: {},
-  previewHeaderText: { fontSize: 10, fontWeight: '700', color: theme.primary, textTransform: 'uppercase', letterSpacing: 0.3 },
   previewRow: { flexDirection: 'row' },
   previewCell: { paddingHorizontal: 8, paddingVertical: 7, borderRightWidth: 1, borderRightColor: theme.border + '60' },
+  previewHeaderText: { fontSize: 10, fontWeight: '700', color: theme.primary, textTransform: 'uppercase', letterSpacing: 0.3 },
   previewCellText: { fontSize: 11, color: theme.textPrimary },
-  previewMoreRow: { paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: 1, borderTopColor: theme.border, backgroundColor: theme.backgroundSecondary },
+  previewMore: { paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: 1, borderTopColor: theme.border, backgroundColor: theme.backgroundSecondary },
   previewMoreText: { fontSize: 11, fontWeight: '600', color: theme.textMuted, fontStyle: 'italic', textAlign: 'center' },
+  noPreview: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.surface, borderRadius: 12, padding: 16, ...theme.shadows.card },
+  noPreviewText: { flex: 1, fontSize: 13, color: theme.textMuted, lineHeight: 18 },
 
-  summaryCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.primary + '08', borderRadius: theme.borderRadius.md, padding: 14, borderWidth: 1, borderColor: theme.primary + '15' },
-  summaryText: { flex: 1, fontSize: 13, color: theme.textSecondary, lineHeight: 18 },
-
+  // Footer
   footer: { paddingHorizontal: 16, paddingTop: 12, backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border },
-  exportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.primary, paddingVertical: 16, borderRadius: theme.borderRadius.lg, ...theme.shadows.cardElevated },
-  exportBtnDisabled: { opacity: 0.6 },
+  exportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.primary, paddingVertical: 16, borderRadius: 14, ...theme.shadows.cardElevated },
   exportBtnText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
+  nextBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.primary, paddingVertical: 16, borderRadius: 14, ...theme.shadows.cardElevated },
+  nextBtnText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
 
-  // Modals
+  // Picker modals
   modalContainer: { flex: 1, backgroundColor: theme.backgroundSecondary },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
   modalTitle: { fontSize: 17, fontWeight: '700', color: theme.textPrimary },
   modalCloseBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  modalSearchBar: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginVertical: 10, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.border },
+  modalSearchBar: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginVertical: 10, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: theme.surface, borderRadius: 12, borderWidth: 1, borderColor: theme.border },
   modalSearchInput: { flex: 1, fontSize: 15, color: theme.textPrimary, padding: 0 },
-  pickerItem: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.surface, padding: 14, borderRadius: theme.borderRadius.md, marginBottom: 8, ...theme.shadows.card },
-  pickerItemSelected: { borderWidth: 2, borderColor: theme.primary },
-  pickerItemIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  pickerItemName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
-  pickerItemMeta: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  pickerItem: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.surface, padding: 14, borderRadius: 12, marginBottom: 8, ...theme.shadows.card },
+  pickerItemSel: { borderWidth: 2, borderColor: theme.primary },
+  pickerIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  pickerName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  pickerMeta: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
   emptyList: { alignItems: 'center', paddingVertical: 48 },
   emptyListText: { fontSize: 14, color: theme.textMuted, marginTop: 12 },
 });
