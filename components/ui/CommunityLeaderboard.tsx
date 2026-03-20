@@ -141,9 +141,16 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                       {isMe ? <View style={s.meBadge}><MaterialIcons name="star" size={7} color="#FFF" /></View> : null}
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[s.playerName, isMe && { color: theme.primary }]} numberOfLines={1}>
-                        {p.name}{isMe ? ` (${t('leaderboard', 'you')})` : ''}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Text style={[s.playerName, isMe && { color: theme.primary }]} numberOfLines={1}>
+                          {p.name}{isMe ? ` (${t('leaderboard', 'you')})` : ''}
+                        </Text>
+                        {p.isPremium ? (
+                          <View style={s.premiumBadge}>
+                            <MaterialIcons name="star" size={8} color="#A8B4C0" />
+                          </View>
+                        ) : null}
+                      </View>
                       {p.club ? <Text style={s.playerClub} numberOfLines={1}>{p.club}</Text> : null}
                     </View>
                   </View>
@@ -183,7 +190,14 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                         <View style={s.meBadge}><MaterialIcons name="star" size={7} color="#FFF" /></View>
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={[s.playerName, { color: theme.primary }]} numberOfLines={1}>{myP.name} ({t('leaderboard', 'you')})</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Text style={[s.playerName, { color: theme.primary }]} numberOfLines={1}>{myP.name} ({t('leaderboard', 'you')})</Text>
+                          {myP.isPremium ? (
+                            <View style={s.premiumBadge}>
+                              <MaterialIcons name="star" size={8} color="#A8B4C0" />
+                            </View>
+                          ) : null}
+                        </View>
                         {myP.club ? <Text style={s.playerClub} numberOfLines={1}>{myP.club}</Text> : null}
                       </View>
                     </View>
@@ -285,6 +299,7 @@ const s = StyleSheet.create({
   meBadge: { position: 'absolute', bottom: -2, right: -2, width: 14, height: 14, borderRadius: 7, backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: theme.surface },
   playerName: { fontSize: 13, fontWeight: '600', color: theme.textPrimary },
   playerClub: { fontSize: 10, color: theme.textMuted, marginTop: 1 },
+  premiumBadge: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#A8B4C0' + '20', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#A8B4C0' + '40' },
   statCell: { width: 34, fontSize: 12, fontWeight: '500', color: theme.textPrimary, textAlign: 'center' },
   separator: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 6 },
   separatorDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: theme.textMuted },

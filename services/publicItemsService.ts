@@ -12,6 +12,7 @@ export interface PublicPlayer {
   location?: { latitude: number; longitude: number; city: string };
   country?: string;
   stats: any;
+  isPremium?: boolean;
 }
 
 export interface PublicClub {
@@ -72,12 +73,24 @@ export async function fetchPublicPlayers(): Promise<{ items: PublicPlayer[]; err
   const { data, error } = await supabase.from('players').select('*').eq('is_public', true);
   if (error) return { items: [], error: error.message };
 
-  const items: PublicPlayer[] = (data || [])
-    .filter((p: any) => p.user_id !== userId) // exclude own items
-    .map((p: any) => ({
+  const filtered = (data || []).filter((p: any) => p.user_id !== userId);
+
+  // Fetch premium status for all player user_ids
+  const userIds = filtered.map((p: any) => p.user_id).filter(Boolean);
+  let premiumIds: Set<string> = new Set();
+  if (userIds.length > 0) {
+    try {
+      const { data: premiumData } = await supabase.rpc('get_premium_user_ids', { user_ids: userIds });
+      if (Array.isArray(premiumData)) {
+        premiumIds = new Set(premiumData);
+      }
+    } catch { /* silent */ }
+  }
+
+  const items: PublicPlayer[] = filtered.map((p: any) => ({
       id: p.id, userId: p.user_id, name: p.name, nickname: p.nickname, avatar: p.avatar,
       club: p.club, role: p.role, level: p.level, location: p.location,
-      country: p.country, stats: p.stats || {},
+      country: p.country, stats: p.stats || {}, isPremium: premiumIds.has(p.user_id),
     }));
   return { items, error: null };
 }

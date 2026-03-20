@@ -14,6 +14,7 @@ export interface LeaderboardPlayer {
   boulesBrand?: string;
   boulesModel?: string;
   terrainName?: string;
+  isPremium?: boolean;
   stats: {
     matchesPlayed: number;
     wins: number;
@@ -38,12 +39,24 @@ export async function fetchLeaderboard(): Promise<{ players: LeaderboardPlayer[]
 
     if (error) return { players: [], error: error.message };
 
-    const players: LeaderboardPlayer[] = (data || [])
-      .filter((p: any) => {
-        const stats = p.stats || {};
-        return (stats.matchesPlayed || 0) >= 1;
-      })
-      .map((p: any) => {
+    const filteredData = (data || []).filter((p: any) => {
+      const stats = p.stats || {};
+      return (stats.matchesPlayed || 0) >= 1;
+    });
+
+    // Fetch premium status for all player user_ids
+    const userIds = filteredData.map((p: any) => p.user_id).filter(Boolean);
+    let premiumIds: Set<string> = new Set();
+    if (userIds.length > 0) {
+      try {
+        const { data: premiumData } = await supabase.rpc('get_premium_user_ids', { user_ids: userIds });
+        if (Array.isArray(premiumData)) {
+          premiumIds = new Set(premiumData);
+        }
+      } catch { /* silent - premium badges just won't show */ }
+    }
+
+    const players: LeaderboardPlayer[] = filteredData.map((p: any) => {
         const stats = p.stats || {};
         return {
           id: p.id,
@@ -59,6 +72,7 @@ export async function fetchLeaderboard(): Promise<{ players: LeaderboardPlayer[]
           boulesBrand: p.boules?.brand || undefined,
           boulesModel: p.boules?.model || undefined,
           terrainName: p.terrain_name || undefined,
+          isPremium: premiumIds.has(p.user_id),
           stats: {
             matchesPlayed: stats.matchesPlayed || 0,
             wins: stats.wins || 0,

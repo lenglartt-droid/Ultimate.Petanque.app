@@ -83,9 +83,16 @@ const MemoizedPlayerRow = React.memo(function PlayerRow({
           {isMe ? <View style={s.meBadge}><MaterialIcons name="star" size={8} color="#FFF" /></View> : null}
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[s.playerName, isMe && { color: theme.primary }]} numberOfLines={1}>
-            {player.name}{isMe ? ` (${t('leaderboard', 'you')})` : ''}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Text style={[s.playerName, isMe && { color: theme.primary }]} numberOfLines={1}>
+              {player.name}{isMe ? ` (${t('leaderboard', 'you')})` : ''}
+            </Text>
+            {player.isPremium ? (
+              <View style={s.premiumBadge}>
+                <MaterialIcons name="star" size={9} color="#A8B4C0" />
+              </View>
+            ) : null}
+          </View>
           <View style={s.playerMeta}>
             {player.club ? <Text style={s.playerClub} numberOfLines={1}>{player.club}</Text> : null}
             {player.city ? (
@@ -970,6 +977,7 @@ const s = StyleSheet.create({
   statValue: { fontSize: 14, fontWeight: '600', color: theme.textPrimary },
   statLabel: { fontSize: 9, color: theme.textMuted, marginTop: 1 },
   inviteBtn: { position: 'absolute', top: 12, right: 12, width: 34, height: 34, borderRadius: 17, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.primary + '25' },
+  premiumBadge: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#A8B4C0' + '20', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#A8B4C0' + '40' },
 
   // States
   centerState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },

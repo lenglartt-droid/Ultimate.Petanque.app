@@ -235,6 +235,11 @@ const ListItem = React.memo(({ item, onPress, singularLabel, terrainTypeLabel, i
       <View style={styles.listContent}>
         <View style={styles.listNameRow}>
           <Text style={styles.listName} numberOfLines={1}>{item.name}</Text>
+          {isPublicItem && item.itemType === 'players' && item.isPremium ? (
+            <View style={styles.premiumBadgeListMap}>
+              <MaterialIcons name="star" size={7} color="#A8B4C0" />
+            </View>
+          ) : null}
           {isPublicItem ? (
             <View style={styles.publicBadgeSmall}>
               <MaterialIcons name="public" size={10} color={theme.success} />
@@ -947,6 +952,11 @@ export default function MapScreen() {
             <View style={styles.selectedContent}>
               <View style={styles.selectedTitleRow}>
                 <Text style={styles.selectedTitle} numberOfLines={1}>{selected.name}</Text>
+                {selected._isPublic && selected.itemType === 'players' && selected.isPremium ? (
+                  <View style={styles.premiumBadgeMap}>
+                    <MaterialIcons name="star" size={8} color="#A8B4C0" />
+                  </View>
+                ) : null}
                 {selected._isPublic ? (
                   <View style={styles.publicBadgeSelected}>
                     <MaterialIcons name="public" size={10} color={theme.success} />
@@ -1280,6 +1290,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6, paddingVertical: 2, borderRadius: theme.borderRadius.full,
   },
   publicBadgeSelectedText: { fontSize: 9, fontWeight: '600', color: theme.success },
+  premiumBadgeMap: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#A8B4C0' + '20', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#A8B4C0' + '40' },
   // List fallback
   listContainer: { flex: 1, paddingBottom: 200 },
   listHeader: { alignItems: 'center', paddingHorizontal: 24, marginBottom: 16 },
@@ -1299,6 +1310,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   importBtnSmall: { padding: 4 },
+  premiumBadgeListMap: { width: 14, height: 14, borderRadius: 7, backgroundColor: '#A8B4C0' + '20', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#A8B4C0' + '40' },
   selectedInviteBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.primary + '10', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.primary + '25' },
   // Meetup Picker (Map)
   meetupOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 24 },
