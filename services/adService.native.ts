@@ -96,7 +96,16 @@ export async function preloadInterstitial(): Promise<void> {
   }
 }
 
+// Check premium status before showing interstitial
+let _isPremiumFn: (() => boolean) | null = null;
+export function setIsPremiumCheck(fn: () => boolean) {
+  _isPremiumFn = fn;
+}
+
 export async function showInterstitial(): Promise<boolean> {
+  // Skip interstitial for premium users
+  if (_isPremiumFn && _isPremiumFn()) return false;
+
   if (!isInterstitialLoaded || !interstitialAd) {
     preloadInterstitial();
     return false;

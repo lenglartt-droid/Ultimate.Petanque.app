@@ -5,6 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { AD_UNIT_IDS } from '@/services/adService';
+import { useApp } from '@/contexts/AppContext';
 import theme from '@/constants/theme';
 
 interface AdBannerProps {
@@ -42,6 +43,8 @@ function loadAdsModule() {
 
 const AdBanner = React.memo(({ position = 'inline', bottomOffset = 0 }: AdBannerProps) => {
   const [isAvailable, setIsAvailable] = useState(true);
+  let isPremium = false;
+  try { isPremium = useApp().isPremium; } catch { /* outside provider */ }
 
   useEffect(() => {
     loadAdsModule();
@@ -49,6 +52,9 @@ const AdBanner = React.memo(({ position = 'inline', bottomOffset = 0 }: AdBanner
       setIsAvailable(false);
     }
   }, []);
+
+  // Hide ads for premium users
+  if (isPremium) return null;
 
   if (!isAvailable || !adsModuleAvailable || !BannerAdComponent || !AD_UNIT_IDS.banner) {
     return null;

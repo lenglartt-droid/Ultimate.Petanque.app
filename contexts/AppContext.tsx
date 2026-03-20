@@ -137,6 +137,10 @@ interface AppContextType {
   // Retry failed operations
   retryFailedOps: (opIds?: string[]) => Promise<void>;
   
+  // Premium (ad-free)
+  isPremium: boolean;
+  setIsPremium: (val: boolean) => void;
+
   // Refresh
   refreshData: () => Promise<void>;
 }
@@ -318,11 +322,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [sharedItemPermissions, setSharedItemPermissions] = useState<Record<string, 'read' | 'write'>>({});
   const [tournamentNotifications, setTournamentNotifications] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isPremium, setIsPremiumState] = useState(false);
   const [isReplayingQueue, setIsReplayingQueue] = useState(false);
   const [replayProgress, setReplayProgress] = useState({ current: 0, total: 0 });
   const [currentConflict, setCurrentConflict] = useState<ConflictInfo | null>(null);
   const [conflictRemaining, setConflictRemaining] = useState(0);
   const conflictResolverRef = useRef<((choice: 'local' | 'server' | 'skip') => void) | null>(null);
+
+  // Premium setter that also persists to DB
+  const setIsPremium = useCallback((val: boolean) => {
+    setIsPremiumState(val);
+    if (user?.id) {
+      supabase.from('user_profiles').update({ is_premium: val }).eq('id', user.id).then(() => {});
+    }
+  }, [user?.id, supabase]);
 
   // Resolve conflict from UI
   const resolveConflict = useCallback((choice: 'local' | 'server' | 'skip') => {
@@ -700,6 +713,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         supabase.from('terrains').select('*').order('created_at', { ascending: false }),
         supabase.from('user_profiles').select('*').eq('id', user.id).single(),
       ]);
+
+      // Load premium status from profile
+      if (profileRes.data) {
+        setIsPremiumState(profileRes.data.is_premium ?? false);
+      }
 
       let dbPlayers: Player[] = [];
       if (playersRes.data) {
@@ -2292,6 +2310,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         retryFailedOps,
         refreshData,
         selfPlayer,
+        isPremium,
+        setIsPremium,
         setItemPublic,
         isReplayingQueue,
         replayProgress,

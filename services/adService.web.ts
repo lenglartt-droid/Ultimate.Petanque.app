@@ -10,6 +10,7 @@ export const AD_UNIT_IDS = {
 } as const;
 
 export async function preloadInterstitial(): Promise<void> {}
+export function setIsPremiumCheck(_fn: () => boolean) {}
 export async function showInterstitial(): Promise<boolean> { return false; }
 export async function checkAdMobAvailability(): Promise<boolean> { return false; }
 export function isInterstitialReady(): boolean { return false; }

@@ -40,7 +40,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, logout, operationLoading, sendOTP } = useAuth();
   const { showAlert } = useAlert();
-  const { clubs, terrains, addClub, updatePlayer, selfPlayer, userStats, matches, challenges, tournaments, refreshData, boulesSets, addBoulesSet, updateBoulesSet, setPrimaryBoulesSet } = useApp();
+  const { clubs, terrains, addClub, updatePlayer, selfPlayer, userStats, matches, challenges, tournaments, refreshData, boulesSets, addBoulesSet, updateBoulesSet, setPrimaryBoulesSet, isPremium } = useApp();
   const supabase = getSupabaseClient();
   const { t, language, setLanguage } = useLanguage();
   const params = useLocalSearchParams<{ edit?: string }>();
@@ -1775,6 +1775,30 @@ export default function ProfileScreen() {
               <View style={styles.langBadge}>
                 <Text style={styles.langBadgeText}>{language.toUpperCase()}</Text>
               </View>
+            </Pressable>
+
+            {/* Partners */}
+            <Pressable 
+              style={styles.menuItem}
+              onPress={() => {
+                Haptics.selectionAsync();
+                router.push('/remove-ads' as any);
+              }}
+            >
+              <View style={[styles.menuIcon, { backgroundColor: isPremium ? theme.success + '15' : theme.primary + '15' }]}>
+                <MaterialIcons name={isPremium ? 'verified' : 'block'} size={20} color={isPremium ? theme.success : theme.primary} />
+              </View>
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuItemText}>{language === 'fr' ? 'Supprimer les pubs' : 'Remove Ads'}</Text>
+                <Text style={styles.menuItemSubtext}>{isPremium ? (language === 'fr' ? 'Premium actif' : 'Premium active') : (language === 'fr' ? 'Achat unique ou code promo' : 'One-time purchase or promo code')}</Text>
+              </View>
+              {isPremium ? (
+                <View style={{ backgroundColor: theme.success + '15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: theme.borderRadius.full }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: theme.success }}>Premium</Text>
+                </View>
+              ) : (
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              )}
             </Pressable>
 
             {/* Partners */}

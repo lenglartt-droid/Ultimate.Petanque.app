@@ -333,6 +333,13 @@ function LayoutInner() {
                 }} 
               />
               <Stack.Screen 
+                name="remove-ads" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="partners" 
                 options={{ 
                   presentation: 'card',
