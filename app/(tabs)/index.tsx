@@ -26,21 +26,8 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { preloadInterstitial } from '@/services/adService';
 import CommunityLeaderboard from '@/components/ui/CommunityLeaderboard';
 import { getMyMeetups, getInvitedMeetups, getMeetupResponses, getPendingInvitationsCount, findMeetupByCode, Meetup, MeetupResponse } from '@/services/meetupService';
-import * as Clipboard from 'expo-clipboard';
 import { config } from '@/constants/config';
 import { Share as RNShare, Platform } from 'react-native';
-
-// Conditionally import QRCode to avoid web crash
-// Use indirect module name so webpack cannot statically resolve it
-let QRCodeComponent: any = null;
-if (Platform.OS !== 'web') {
-  try {
-    const _mod = ['react-native', 'qrcode-svg'].join('-');
-    QRCodeComponent = require(_mod).default;
-  } catch {
-    QRCodeComponent = null;
-  }
-}
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -756,19 +743,10 @@ export default function HomeScreen() {
 
             <View style={styles.qrBody}>
               <View style={styles.qrCodeWrapper}>
-                {QRCodeComponent ? (
-                  <QRCodeComponent
-                    value={config.appDownloadUrl}
-                    size={200}
-                    color="#1E3A8A"
-                    backgroundColor="#FFF"
-                  />
-                ) : (
-                  <View style={{ width: 200, height: 200, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F4F6', borderRadius: 12 }}>
-                    <MaterialIcons name="qr-code-2" size={80} color="#1E3A8A" />
-                    <Text style={{ fontSize: 12, color: theme.textMuted, marginTop: 8, textAlign: 'center' }}>{config.appDownloadUrl}</Text>
-                  </View>
-                )}
+                <View style={{ width: 200, height: 200, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F4F6', borderRadius: 12 }}>
+                  <MaterialIcons name="qr-code-2" size={80} color="#1E3A8A" />
+                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 8, textAlign: 'center', paddingHorizontal: 12 }} numberOfLines={2}>{config.appDownloadUrl}</Text>
+                </View>
               </View>
               <Text style={styles.qrAppName}>Ultimate Petanque</Text>
               <Text style={styles.qrDesc}>{t('home', 'shareAppDesc')}</Text>
@@ -783,7 +761,12 @@ export default function HomeScreen() {
               <Pressable
                 style={styles.qrCopyBtn}
                 onPress={async () => {
-                  await Clipboard.setStringAsync(config.appDownloadUrl);
+                  try {
+                    const Clipboard = await import('expo-clipboard');
+                    await Clipboard.setStringAsync(config.appDownloadUrl);
+                  } catch {
+                    try { await RNShare.share({ message: config.appDownloadUrl }); } catch {}
+                  }
                   showAlert(t('home', 'linkCopied'));
                 }}
               >

@@ -992,11 +992,12 @@ async function shareFile(content: string, fileName: string, mimeType: string, la
     URL.revokeObjectURL(url);
     return { success: true };
   }
-  const FileSystem = require('expo-file-system');
-  const Sharing = require('expo-sharing');
-  const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
-  await FileSystem.writeAsStringAsync(fileUri, '\ufeff' + content, { encoding: FileSystem.EncodingType.UTF8 });
-  if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(fileUri, { mimeType, dialogTitle: fileName });
+  // Dynamic imports for native-only modules
+  const { writeAsStringAsync, cacheDirectory, EncodingType } = await import('expo-file-system');
+  const { isAvailableAsync, shareAsync } = await import('expo-sharing');
+  const fileUri = `${cacheDirectory}${fileName}`;
+  await writeAsStringAsync(fileUri, '\ufeff' + content, { encoding: EncodingType.UTF8 });
+  if (await isAvailableAsync()) await shareAsync(fileUri, { mimeType, dialogTitle: fileName });
   return { success: true };
 }
 
@@ -1006,12 +1007,13 @@ async function sharePdf(fullHtml: string, fileName: string, language: string): P
     if (pw) { pw.document.write(fullHtml); pw.document.close(); pw.print(); }
     return { success: true };
   }
-  const Print = require('expo-print');
-  const FileSystem = require('expo-file-system');
-  const Sharing = require('expo-sharing');
-  const { uri } = await Print.printToFileAsync({ html: fullHtml });
-  const newUri = `${FileSystem.cacheDirectory}${fileName}`;
-  await FileSystem.moveAsync({ from: uri, to: newUri });
-  if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(newUri, { mimeType: 'application/pdf', dialogTitle: fileName });
+  // Dynamic imports for native-only modules
+  const PrintModule = await import('expo-print');
+  const FSModule = await import('expo-file-system');
+  const SharingModule = await import('expo-sharing');
+  const { uri } = await PrintModule.printToFileAsync({ html: fullHtml });
+  const newUri = `${FSModule.cacheDirectory}${fileName}`;
+  await FSModule.moveAsync({ from: uri, to: newUri });
+  if (await SharingModule.isAvailableAsync()) await SharingModule.shareAsync(newUri, { mimeType: 'application/pdf', dialogTitle: fileName });
   return { success: true };
 }
