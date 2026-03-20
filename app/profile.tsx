@@ -34,6 +34,7 @@ import { Club, Terrain } from '@/services/mockData';
 import { getUnreadShareNotificationCount } from '@/services/shareService';
 import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
+import AdBanner from '@/components/ui/AdBanner';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -1461,6 +1462,9 @@ export default function ProfileScreen() {
             })()}
           </Animated.View>
         )}
+
+        {/* Ad Banner */}
+        {!isEditing ? <AdBanner position="inline" /> : null}
 
         {/* Account Section */}
         {!isEditing && (

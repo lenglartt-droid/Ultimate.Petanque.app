@@ -24,6 +24,7 @@ import { useAuth, useAlert } from '@/template';
 import { useApp } from '@/contexts/AppContext';
 import { fetchLeaderboard, sortLeaderboard, LeaderboardPlayer, LeaderboardSort } from '@/services/leaderboardService';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services/meetupService';
+import AdBanner from '@/components/ui/AdBanner';
 
 const PAGE_SIZE = 30;
 
@@ -754,11 +755,13 @@ export default function LeaderboardScreen() {
             </View>
           }
           ListFooterComponent={
-            hasMore ? (
-              <View style={s.loadMoreFooter}>
-                <ActivityIndicator size="small" color="#D97706" />
-              </View>
-            ) : null
+            <>
+              {hasMore ? (
+                <View style={s.loadMoreFooter}>
+                  <ActivityIndicator size="small" color="#D97706" />
+                </View>
+              ) : filteredSorted.length > 5 ? <AdBanner position="inline" /> : null}
+            </>
           }
           ListEmptyComponent={
             <View style={s.emptyState}>

@@ -28,6 +28,7 @@ import { useAuth } from '@/template';
 import { BoulesSet } from '@/services/mockData';
 import { uploadBoulesSetPhoto } from '@/services/storageService';
 import { BOULES_BRANDS, BOULES_DATABASE, getModelsByBrand, findModel, BoulesModel } from '@/constants/boulesDatabase';
+import AdBanner from '@/components/ui/AdBanner';
 
 // ============================================
 // Mini Win Chart
@@ -602,6 +603,9 @@ export default function EquipmentScreen() {
             );
           })
         )}
+
+        {/* Ad Banner between sets */}
+        {boulesSets.length >= 2 ? <AdBanner position="inline" /> : null}
 
         {/* Add button at bottom */}
         {boulesSets.length > 0 ? (

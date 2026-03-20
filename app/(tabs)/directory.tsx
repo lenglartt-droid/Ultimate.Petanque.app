@@ -26,6 +26,7 @@ import { Terrain, Player, Club, Tournament } from '@/services/mockData';
 import { TerrainType } from '@/constants/config';
 import { useLanguage } from '@/hooks/useLanguage';
 import { SharedOverlayBadge } from '@/components/ui/SharedBadge';
+import AdBanner from '@/components/ui/AdBanner';
 
 import MergePickerModal from '@/components/ui/MergePickerModal';
 import { saveMergeLog, getMergeLogs, undoMerge, isUndoable, getUndoTimeRemaining, deleteMergeLog, MergeLog, ReassignedRelation } from '@/services/mergeHistoryService';
@@ -1198,11 +1199,13 @@ export default function DirectoryScreen() {
               />
             }
             ListFooterComponent={
-              hasMore ? (
-                <View style={styles.loadMoreFooter}>
-                  <ActivityIndicator size="small" color={theme.primary} />
-                </View>
-              ) : null
+              <>
+                {hasMore ? (
+                  <View style={styles.loadMoreFooter}>
+                    <ActivityIndicator size="small" color={theme.primary} />
+                  </View>
+                ) : dataCount > 3 ? <AdBanner position="inline" /> : null}
+              </>
             }
             ListEmptyComponent={
               <View style={styles.emptyState}>
