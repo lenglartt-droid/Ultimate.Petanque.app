@@ -13,6 +13,7 @@ export interface LeaderboardPlayer {
   city?: string;
   boulesBrand?: string;
   boulesModel?: string;
+  terrainName?: string;
   stats: {
     matchesPlayed: number;
     wins: number;
@@ -32,7 +33,7 @@ export async function fetchLeaderboard(): Promise<{ players: LeaderboardPlayer[]
   try {
     const { data, error } = await supabase
       .from('players')
-      .select('id, user_id, name, nickname, avatar, club, role, level, country, location, stats, boules')
+      .select('id, user_id, name, nickname, avatar, club, role, level, country, location, stats, boules, terrain_name')
       .eq('is_public', true);
 
     if (error) return { players: [], error: error.message };
@@ -57,6 +58,7 @@ export async function fetchLeaderboard(): Promise<{ players: LeaderboardPlayer[]
           city: p.location?.city || undefined,
           boulesBrand: p.boules?.brand || undefined,
           boulesModel: p.boules?.model || undefined,
+          terrainName: p.terrain_name || undefined,
           stats: {
             matchesPlayed: stats.matchesPlayed || 0,
             wins: stats.wins || 0,

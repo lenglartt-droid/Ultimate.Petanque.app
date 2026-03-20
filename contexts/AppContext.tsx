@@ -2054,9 +2054,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!user?.id) return;
     const boulesData = {
       name: set.name || undefined,
+      brand: set.brand || undefined,
       diameter: set.diameter || undefined,
       weight: set.weight || undefined,
       serialNumber: set.serialNumber || undefined,
+      hardness: set.hardness || undefined,
     };
     updatePlayer(user.id, { boules: boulesData });
   }, [user?.id, updatePlayer]);

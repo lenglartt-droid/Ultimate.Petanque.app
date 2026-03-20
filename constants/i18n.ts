@@ -2337,6 +2337,8 @@ export const translations = {
     allClubs: { fr: 'Tous les clubs', en: 'All clubs' },
     filterByBrand: { fr: 'Marque de boules', en: 'Boules brand' },
     allBrands: { fr: 'Toutes les marques', en: 'All brands' },
+    filterByTerrain: { fr: 'Terrain', en: 'Terrain' },
+    allTerrains: { fr: 'Tous les terrains', en: 'All terrains' },
     filterByModel: { fr: 'Modèle', en: 'Model' },
     allModels: { fr: 'Tous les modèles', en: 'All models' },
     clubRanking: { fr: 'Classement du club', en: 'Club Ranking' },

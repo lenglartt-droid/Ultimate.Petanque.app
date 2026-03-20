@@ -29,6 +29,7 @@ import { getMyMeetups, getInvitedMeetups, getMeetupResponses, getPendingInvitati
 import * as Clipboard from 'expo-clipboard';
 import { config } from '@/constants/config';
 import QRCode from 'react-native-qrcode-svg';
+import { Share as RNShare } from 'react-native';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -322,6 +323,9 @@ export default function HomeScreen() {
                 <Text style={styles.heroName} numberOfLines={1}>{displayName}</Text>
               </View>
               <View style={styles.heroTopActions}>
+                <Pressable style={styles.heroShareAppBtn} onPress={() => setShowQRModal(true)}>
+                  <MaterialIcons name="qr-code-2" size={20} color="#FFF" />
+                </Pressable>
                 {pendingInviteCount > 0 ? (
                   <Pressable style={styles.heroBellBtn} onPress={() => router.push('/meetup/invitations' as any)}>
                     <MaterialIcons name="mail" size={22} color="#FFF" />
@@ -579,32 +583,8 @@ export default function HomeScreen() {
           <CommunityLeaderboard />
         </Animated.View>
 
-        {/* ========== SHARE APP BUTTON ========== */}
-        <Animated.View entering={FadeIn.duration(400).delay(185)} style={[styles.section, isTablet && styles.sectionTablet]}>
-          <Pressable
-            style={({ pressed }) => [styles.shareAppCard, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
-            onPress={() => setShowQRModal(true)}
-          >
-            <LinearGradient
-              colors={['#059669', '#10B981', '#34D399']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.shareAppGradient}
-            >
-              <View style={styles.shareAppIconBg}>
-                <MaterialIcons name="qr-code-2" size={28} color="#FFF" />
-              </View>
-              <View style={styles.shareAppText}>
-                <Text style={styles.shareAppTitle}>{t('home', 'shareApp')}</Text>
-                <Text style={styles.shareAppDesc}>{t('home', 'shareAppDesc')}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.7)" />
-            </LinearGradient>
-          </Pressable>
-        </Animated.View>
-
         {/* ========== QUICK ACCESS GRID ========== */}
-        <Animated.View entering={FadeIn.duration(400).delay(200)} style={[styles.section, isTablet && styles.sectionTablet]}>
+        <Animated.View entering={FadeIn.duration(400).delay(190)} style={[styles.section, isTablet && styles.sectionTablet]}>
           <Text style={styles.sectionTitle}>{t('home', 'quickAccess')}</Text>
           <View style={styles.quickGrid}>
             {[
@@ -893,7 +873,8 @@ const styles = StyleSheet.create({
   heroTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
   heroGreeting: { fontSize: 16, fontWeight: '500', color: 'rgba(255,255,255,0.75)' },
   heroName: { fontSize: 26, fontWeight: '800', color: '#FFF', marginTop: 2 },
-  heroTopActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  heroTopActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  heroShareAppBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
   heroBellBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center', position: 'relative' as const },
   heroBellBadge: { position: 'absolute' as const, top: -2, right: -2, backgroundColor: theme.error, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: '#2563EB' },
   heroBellBadgeText: { fontSize: 10, fontWeight: '800', color: '#FFF' },
@@ -1031,14 +1012,6 @@ const styles = StyleSheet.create({
   meetupModalScroll: { flex: 1 },
   meetupModalScrollContent: { padding: 16 },
   meetupModalItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: 16, padding: 14, marginBottom: 12, gap: 12, ...theme.shadows.card },
-
-  // ========== SHARE APP CARD ==========
-  shareAppCard: { borderRadius: 18, overflow: 'hidden' as const, ...theme.shadows.cardElevated },
-  shareAppGradient: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingVertical: 16, paddingHorizontal: 18, gap: 14 },
-  shareAppIconBg: { width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center' as const, justifyContent: 'center' as const },
-  shareAppText: { flex: 1 },
-  shareAppTitle: { fontSize: 16, fontWeight: '700' as const, color: '#FFF' },
-  shareAppDesc: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
 
   // ========== QR CODE MODAL ==========
   qrOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center' as const, paddingHorizontal: 24 },

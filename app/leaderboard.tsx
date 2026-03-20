@@ -168,6 +168,7 @@ export default function LeaderboardScreen() {
   const [filterCountry, setFilterCountry] = useState<string>('all');
   const [filterClub, setFilterClub] = useState<string>('all');
   const [filterBrand, setFilterBrand] = useState<string>('all');
+  const [filterTerrain, setFilterTerrain] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [filterSearchText, setFilterSearchText] = useState('');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -211,10 +212,15 @@ export default function LeaderboardScreen() {
     return [...new Set(brands)].sort();
   }, [allPlayers]);
 
+  const uniqueTerrains = useMemo(() => {
+    const tNames = allPlayers.map(p => p.terrainName).filter(Boolean) as string[];
+    return [...new Set(tNames)].sort();
+  }, [allPlayers]);
+
   // Active filter count
   const activeFilterCount = useMemo(() => {
-    return [filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand].filter(f => f !== 'all').length;
-  }, [filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand]);
+    return [filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand, filterTerrain].filter(f => f !== 'all').length;
+  }, [filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand, filterTerrain]);
 
   // Filtered, sorted, paginated data
   const filteredSorted = useMemo(() => {
@@ -238,15 +244,16 @@ export default function LeaderboardScreen() {
     if (filterCountry !== 'all') result = result.filter(p => p.country === filterCountry);
     if (filterClub !== 'all') result = result.filter(p => p.club === filterClub);
     if (filterBrand !== 'all') result = result.filter(p => p.boulesBrand === filterBrand);
+    if (filterTerrain !== 'all') result = result.filter(p => p.terrainName === filterTerrain);
 
     return sortLeaderboard(result, sortBy);
-  }, [allPlayers, search, filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand, sortBy]);
+  }, [allPlayers, search, filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand, filterTerrain, sortBy]);
 
   const paginatedData = useMemo(() => filteredSorted.slice(0, visibleCount), [filteredSorted, visibleCount]);
   const hasMore = filteredSorted.length > visibleCount;
 
   // Reset pagination on filter/search change
-  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [search, filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand, sortBy]);
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [search, filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand, filterTerrain, sortBy]);
 
   const handleLoadMore = useCallback(() => {
     if (hasMore) setVisibleCount(prev => prev + PAGE_SIZE);
@@ -266,6 +273,7 @@ export default function LeaderboardScreen() {
     setFilterCountry('all');
     setFilterClub('all');
     setFilterBrand('all');
+    setFilterTerrain('all');
     setSearch('');
     setFilterSearchText('');
   };
@@ -476,6 +484,37 @@ export default function LeaderboardScreen() {
                     </ScrollView>
                   </View>
 
+                  {/* Terrain filter */}
+                  {uniqueTerrains.length > 0 ? (
+                    <View style={s.filterGroup}>
+                      <View style={s.filterGroupHeader}>
+                        <MaterialIcons name="sports-soccer" size={14} color={theme.success} />
+                        <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByTerrain')}</Text>
+                      </View>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
+                        <Pressable
+                          style={[s.filterChip, filterTerrain === 'all' && s.filterChipActive]}
+                          onPress={() => { Haptics.selectionAsync(); setFilterTerrain('all'); }}
+                        >
+                          <Text style={[s.filterChipText, filterTerrain === 'all' && s.filterChipTextActive]}>
+                            {t('leaderboard', 'allTerrains')}
+                          </Text>
+                        </Pressable>
+                        {uniqueTerrains
+                          .filter(tn => !filterSearchText || tn.toLowerCase().includes(filterSearchText.toLowerCase()))
+                          .map(tn => (
+                          <Pressable
+                            key={tn}
+                            style={[s.filterChip, filterTerrain === tn && s.filterChipActive]}
+                            onPress={() => { Haptics.selectionAsync(); setFilterTerrain(tn); }}
+                          >
+                            <Text style={[s.filterChipText, filterTerrain === tn && s.filterChipTextActive]}>{tn}</Text>
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  ) : null}
+
                   {/* Brand filter */}
                   {uniqueBrands.length > 0 ? (
                     <View style={s.filterGroup}>
@@ -619,6 +658,13 @@ export default function LeaderboardScreen() {
                     {filterClub !== 'all' ? (
                       <Pressable style={s.activeFilterPill} onPress={() => setFilterClub('all')}>
                         <Text style={s.activeFilterPillText}>{filterClub}</Text>
+                        <MaterialIcons name="close" size={14} color="#D97706" />
+                      </Pressable>
+                    ) : null}
+                    {filterTerrain !== 'all' ? (
+                      <Pressable style={s.activeFilterPill} onPress={() => setFilterTerrain('all')}>
+                        <MaterialIcons name="sports-soccer" size={12} color="#D97706" />
+                        <Text style={s.activeFilterPillText}>{filterTerrain}</Text>
                         <MaterialIcons name="close" size={14} color="#D97706" />
                       </Pressable>
                     ) : null}
