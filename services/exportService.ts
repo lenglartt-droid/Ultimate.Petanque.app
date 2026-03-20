@@ -1,6 +1,3 @@
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
-import * as Print from 'expo-print';
 import { Platform } from 'react-native';
 import { Match, Challenge, Tournament, Player, PRECISION_ATELIERS, PrecisionAtelier } from '@/services/mockData';
 
@@ -995,6 +992,8 @@ async function shareFile(content: string, fileName: string, mimeType: string, la
     URL.revokeObjectURL(url);
     return { success: true };
   }
+  const FileSystem = require('expo-file-system');
+  const Sharing = require('expo-sharing');
   const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
   await FileSystem.writeAsStringAsync(fileUri, '\ufeff' + content, { encoding: FileSystem.EncodingType.UTF8 });
   if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(fileUri, { mimeType, dialogTitle: fileName });
@@ -1007,6 +1006,9 @@ async function sharePdf(fullHtml: string, fileName: string, language: string): P
     if (pw) { pw.document.write(fullHtml); pw.document.close(); pw.print(); }
     return { success: true };
   }
+  const Print = require('expo-print');
+  const FileSystem = require('expo-file-system');
+  const Sharing = require('expo-sharing');
   const { uri } = await Print.printToFileAsync({ html: fullHtml });
   const newUri = `${FileSystem.cacheDirectory}${fileName}`;
   await FileSystem.moveAsync({ from: uri, to: newUri });
