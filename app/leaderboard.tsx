@@ -431,12 +431,38 @@ export default function LeaderboardScreen() {
               {/* Filters expandable — inside list so content pushes down */}
               {showFilters ? (
                 <Animated.View entering={FadeIn.duration(200)} style={s.filtersPanel}>
+                  {/* Panel header with title, count & close */}
+                  <View style={s.fpHeader}>
+                    <View style={s.fpHeaderLeft}>
+                      <View style={s.fpHeaderIcon}>
+                        <MaterialIcons name="tune" size={16} color="#D97706" />
+                      </View>
+                      <Text style={s.fpHeaderTitle}>{language === 'fr' ? 'Filtres' : 'Filters'}</Text>
+                      {activeFilterCount > 0 ? (
+                        <View style={s.fpCountBadge}>
+                          <Text style={s.fpCountBadgeText}>{activeFilterCount}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <View style={s.fpHeaderRight}>
+                      {activeFilterCount > 0 ? (
+                        <Pressable style={s.fpClearBtn} onPress={clearFilters} hitSlop={6}>
+                          <MaterialIcons name="clear-all" size={16} color={theme.error} />
+                          <Text style={s.fpClearBtnText}>{t('directory', 'clearAll')}</Text>
+                        </Pressable>
+                      ) : null}
+                      <Pressable style={s.fpCloseBtn} onPress={() => setShowFilters(false)} hitSlop={6}>
+                        <MaterialIcons name="close" size={18} color={theme.textSecondary} />
+                      </Pressable>
+                    </View>
+                  </View>
+
                   {/* Search within filters */}
                   <View style={s.filterSearchBar}>
                     <MaterialIcons name="search" size={16} color={theme.textMuted} />
                     <TextInput
                       style={s.filterSearchInput}
-                      placeholder={language === 'fr' ? 'Filtrer les options...' : 'Filter options...'}
+                      placeholder={language === 'fr' ? 'Rechercher dans les filtres...' : 'Search filters...'}
                       placeholderTextColor={theme.textMuted}
                       value={filterSearchText}
                       onChangeText={setFilterSearchText}
@@ -450,7 +476,11 @@ export default function LeaderboardScreen() {
 
                   {/* Role filter */}
                   <View style={s.filterGroup}>
-                    <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByRole')}</Text>
+                    <View style={s.filterGroupHeader}>
+                      <MaterialIcons name="person" size={14} color={theme.primary} />
+                      <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByRole')}</Text>
+                      {filterRole !== 'all' ? <View style={s.fgActiveDot} /> : null}
+                    </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
                       {['all', 'Tireur', 'Pointeur', 'Milieu'].map(opt => (
                         <Pressable
@@ -468,7 +498,11 @@ export default function LeaderboardScreen() {
 
                   {/* Level filter */}
                   <View style={s.filterGroup}>
-                    <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByLevel')}</Text>
+                    <View style={s.filterGroupHeader}>
+                      <MaterialIcons name="signal-cellular-alt" size={14} color={theme.accent} />
+                      <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByLevel')}</Text>
+                      {filterLevel !== 'all' ? <View style={s.fgActiveDot} /> : null}
+                    </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
                       {['all', 'D\u00e9butant', 'Interm\u00e9diaire', 'Confirm\u00e9', 'Expert'].map(opt => (
                         <Pressable
@@ -484,12 +518,15 @@ export default function LeaderboardScreen() {
                     </ScrollView>
                   </View>
 
+                  <View style={s.fgDivider} />
+
                   {/* Terrain filter */}
                   {uniqueTerrains.length > 0 ? (
                     <View style={s.filterGroup}>
                       <View style={s.filterGroupHeader}>
                         <MaterialIcons name="sports-soccer" size={14} color={theme.success} />
                         <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByTerrain')}</Text>
+                        {filterTerrain !== 'all' ? <View style={s.fgActiveDot} /> : null}
                       </View>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
                         <Pressable
@@ -521,6 +558,7 @@ export default function LeaderboardScreen() {
                       <View style={s.filterGroupHeader}>
                         <MaterialIcons name="sports-baseball" size={14} color="#D97706" />
                         <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByBrand')}</Text>
+                        {filterBrand !== 'all' ? <View style={s.fgActiveDot} /> : null}
                       </View>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
                         <Pressable
@@ -549,7 +587,11 @@ export default function LeaderboardScreen() {
                   {/* Club filter */}
                   {uniqueClubs.length > 0 ? (
                     <View style={s.filterGroup}>
-                      <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByClub')}</Text>
+                      <View style={s.filterGroupHeader}>
+                        <MaterialIcons name="home" size={14} color={theme.primary} />
+                        <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByClub')}</Text>
+                        {filterClub !== 'all' ? <View style={s.fgActiveDot} /> : null}
+                      </View>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
                         <Pressable
                           style={[s.filterChip, filterClub === 'all' && s.filterChipActive]}
@@ -574,10 +616,16 @@ export default function LeaderboardScreen() {
                     </View>
                   ) : null}
 
+                  <View style={s.fgDivider} />
+
                   {/* Country filter */}
                   {uniqueCountries.length > 0 ? (
                     <View style={s.filterGroup}>
-                      <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByCountry')}</Text>
+                      <View style={s.filterGroupHeader}>
+                        <MaterialIcons name="public" size={14} color={theme.textSecondary} />
+                        <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByCountry')}</Text>
+                        {filterCountry !== 'all' ? <View style={s.fgActiveDot} /> : null}
+                      </View>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
                         <Pressable
                           style={[s.filterChip, filterCountry === 'all' && s.filterChipActive]}
@@ -604,7 +652,11 @@ export default function LeaderboardScreen() {
 
                   {uniqueCities.length > 0 ? (
                     <View style={s.filterGroup}>
-                      <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByCity')}</Text>
+                      <View style={s.filterGroupHeader}>
+                        <MaterialIcons name="place" size={14} color={theme.error} />
+                        <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByCity')}</Text>
+                        {filterCity !== 'all' ? <View style={s.fgActiveDot} /> : null}
+                      </View>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
                         <Pressable
                           style={[s.filterChip, filterCity === 'all' && s.filterChipActive]}
@@ -629,13 +681,14 @@ export default function LeaderboardScreen() {
                     </View>
                   ) : null}
 
-                  {/* Clear filters */}
-                  {activeFilterCount > 0 ? (
-                    <Pressable style={s.clearFiltersBtn} onPress={clearFilters}>
-                      <MaterialIcons name="clear-all" size={16} color={theme.error} />
-                      <Text style={s.clearFiltersBtnText}>{t('directory', 'clearAll')}</Text>
-                    </Pressable>
-                  ) : null}
+                  {/* Bottom close button */}
+                  <Pressable
+                    style={s.fpBottomCloseBtn}
+                    onPress={() => { Haptics.selectionAsync(); setShowFilters(false); }}
+                  >
+                    <MaterialIcons name="keyboard-arrow-up" size={18} color={theme.textSecondary} />
+                    <Text style={s.fpBottomCloseBtnText}>{language === 'fr' ? 'Masquer les filtres' : 'Hide filters'}</Text>
+                  </Pressable>
                 </Animated.View>
               ) : null}
 
@@ -848,17 +901,31 @@ const s = StyleSheet.create({
   sortChipTextActive: { color: '#FFF' },
 
   // Filters panel (inside FlatList ListHeaderComponent)
-  filtersPanel: { marginBottom: 12, backgroundColor: theme.surface, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: theme.border, maxHeight: 420 },
-  filterSearchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.backgroundSecondary, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 12, borderWidth: 1, borderColor: theme.border },
+  filtersPanel: { marginBottom: 12, backgroundColor: theme.surface, borderRadius: 16, padding: 0, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' as const },
+  fpHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.border, backgroundColor: '#D97706' + '06' },
+  fpHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  fpHeaderIcon: { width: 28, height: 28, borderRadius: 8, backgroundColor: '#D97706' + '15', alignItems: 'center', justifyContent: 'center' },
+  fpHeaderTitle: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
+  fpCountBadge: { backgroundColor: '#D97706', minWidth: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  fpCountBadgeText: { fontSize: 11, fontWeight: '800', color: '#FFF' },
+  fpHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  fpClearBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: theme.error + '10', borderRadius: 8 },
+  fpClearBtnText: { fontSize: 12, fontWeight: '600', color: theme.error },
+  fpCloseBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
+  filterSearchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.backgroundSecondary, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginHorizontal: 14, marginTop: 12, marginBottom: 14, borderWidth: 1, borderColor: theme.border },
   filterSearchInput: { flex: 1, fontSize: 13, color: theme.textPrimary, paddingVertical: 0 },
   filterGroupHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  filterGroup: { marginBottom: 12 },
-  filterGroupTitle: { fontSize: 11, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
-  filterChipsRow: { gap: 6 },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 18, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
+  filterGroup: { marginBottom: 14, paddingHorizontal: 14 },
+  filterGroupTitle: { fontSize: 11, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 0 },
+  fgActiveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#D97706', marginLeft: 4 },
+  fgDivider: { height: 1, backgroundColor: theme.border, marginHorizontal: 14, marginBottom: 14 },
+  filterChipsRow: { gap: 6, paddingRight: 4 },
+  filterChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: theme.backgroundSecondary, borderWidth: 1.5, borderColor: theme.border },
   filterChipActive: { backgroundColor: '#D97706' + '15', borderColor: '#D97706' },
   filterChipText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
   filterChipTextActive: { color: '#D97706' },
+  fpBottomCloseBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderTopWidth: 1, borderTopColor: theme.border, backgroundColor: theme.backgroundSecondary + '80' },
+  fpBottomCloseBtnText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
   clearFiltersBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8 },
   clearFiltersBtnText: { fontSize: 13, fontWeight: '600', color: theme.error },
 
