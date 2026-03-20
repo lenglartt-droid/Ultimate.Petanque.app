@@ -15,7 +15,7 @@ import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 
 const CONTACT_EMAIL = 'ultimate.petanque.app@gmail.com';
-const EFFECTIVE_DATE = '2026-03-17';
+const EFFECTIVE_DATE = '2026-03-20';
 
 export default function TermsScreen() {
   const insets = useSafeAreaInsets();
@@ -129,6 +129,24 @@ export default function TermsScreen() {
       color: '#6366F1',
       title: t('terms', 'deepLinkingRulesTitle'),
       content: t('terms', 'deepLinkingRulesContent'),
+    },
+    {
+      icon: 'star',
+      color: '#A8B4C0',
+      title: t('terms', 'premiumRulesTitle'),
+      content: t('terms', 'premiumRulesContent'),
+    },
+    {
+      icon: 'file-download',
+      color: '#6366F1',
+      title: t('terms', 'exportRulesTitle'),
+      content: t('terms', 'exportRulesContent'),
+    },
+    {
+      icon: 'handshake',
+      color: '#D97706',
+      title: t('terms', 'partnersRulesTitle'),
+      content: t('terms', 'partnersRulesContent'),
     },
     {
       icon: 'email',

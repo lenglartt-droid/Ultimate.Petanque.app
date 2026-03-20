@@ -100,6 +100,16 @@ function getFaqData(t: (s: string, k: string) => string) {
     { id: 'financial', category: t('faq', 'financialCat'), icon: 'savings', color: '#10B981', questions: [
       { id: 'fin1', q: t('faq', 'fin1Q'), a: t('faq', 'fin1A') },
     ]},
+    { id: 'export', category: t('faq', 'exportCat'), icon: 'file-download', color: '#6366F1', questions: [
+      { id: 'exp1', q: t('faq', 'exp1Q'), a: t('faq', 'exp1A') },
+      { id: 'exp2', q: t('faq', 'exp2Q'), a: t('faq', 'exp2A') },
+      { id: 'exp3', q: t('faq', 'exp3Q'), a: t('faq', 'exp3A') },
+    ]},
+    { id: 'premium', category: t('faq', 'premiumCat'), icon: 'star', color: '#A8B4C0', questions: [
+      { id: 'prem1', q: t('faq', 'prem1Q'), a: t('faq', 'prem1A') },
+      { id: 'prem2', q: t('faq', 'prem2Q'), a: t('faq', 'prem2A') },
+      { id: 'prem3', q: t('faq', 'prem3Q'), a: t('faq', 'prem3A') },
+    ]},
     { id: 'leaderboard', category: t('faq', 'leaderboardCat'), icon: 'leaderboard', color: '#D97706', questions: [
       { id: 'lb1', q: t('faq', 'lb1Q'), a: t('faq', 'lb1A') },
       { id: 'lb2', q: t('faq', 'lb2Q'), a: t('faq', 'lb2A') },
@@ -129,6 +139,8 @@ function getTips(t: (s: string, k: string) => string) {
     { icon: 'phone-disabled', text: t('faq', 'tip7'), color: theme.error },
     { icon: 'leaderboard', text: t('faq', 'tip8'), color: '#D97706' },
     { icon: 'filter-list', text: t('faq', 'tip9'), color: theme.success },
+    { icon: 'file-download', text: t('faq', 'tip10'), color: '#6366F1' },
+    { icon: 'star', text: t('faq', 'tip11'), color: '#A8B4C0' },
   ];
 }
 

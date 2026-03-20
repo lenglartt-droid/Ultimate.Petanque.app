@@ -15,7 +15,7 @@ import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 
 const CONTACT_EMAIL = 'ultimate.petanque.app@gmail.com';
-const EFFECTIVE_DATE = '2026-03-17';
+const EFFECTIVE_DATE = '2026-03-20';
 
 export default function PrivacyPolicyScreen() {
   const insets = useSafeAreaInsets();
@@ -87,6 +87,24 @@ export default function PrivacyPolicyScreen() {
       color: '#D97706',
       title: t('privacyExtra', 'leaderboardTitle'),
       content: t('privacyExtra', 'leaderboardContent'),
+    },
+    {
+      icon: 'campaign',
+      color: theme.error,
+      title: t('privacy', 'advertisingTitle'),
+      content: t('privacy', 'advertisingContent'),
+    },
+    {
+      icon: 'shopping-cart',
+      color: '#10B981',
+      title: t('privacy', 'purchasesTitle'),
+      content: t('privacy', 'purchasesContent'),
+    },
+    {
+      icon: 'file-download',
+      color: '#6366F1',
+      title: t('privacy', 'exportTitle'),
+      content: t('privacy', 'exportContent'),
     },
     {
       icon: 'child-care',
