@@ -1404,6 +1404,20 @@ export default function ProfileScreen() {
               <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
             </Pressable>
 
+            <Pressable 
+              style={[styles.playerCardLink, { marginTop: 10 }]}
+              onPress={() => router.push('/export')}
+            >
+              <View style={[styles.playerCardLinkIcon, { backgroundColor: '#0EA5E9' + '15' }]}>
+                <MaterialIcons name="file-download" size={24} color="#0EA5E9" />
+              </View>
+              <View style={styles.playerCardLinkInfo}>
+                <Text style={styles.playerCardLinkTitle}>{language === 'fr' ? 'Exporter mes données' : 'Export my data'}</Text>
+                <Text style={styles.playerCardLinkSubtitle}>{language === 'fr' ? 'CSV / PDF — Matchs, défis, statistiques' : 'CSV / PDF — Matches, challenges, statistics'}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
+            </Pressable>
+
           </Animated.View>
         )}
 
