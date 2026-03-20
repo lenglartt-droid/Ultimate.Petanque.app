@@ -42,6 +42,9 @@ export const config = {
   appName: 'PetanqueScore',
   version: '1.0.0',
   
+  // App download URL (replace with actual store link when published)
+  appDownloadUrl: 'https://ultimatepetanque.app/download',
+  
   // Game Rules
   game: {
     maxScore: 13,

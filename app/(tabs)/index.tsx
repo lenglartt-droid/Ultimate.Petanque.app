@@ -26,6 +26,9 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { preloadInterstitial } from '@/services/adService';
 import CommunityLeaderboard from '@/components/ui/CommunityLeaderboard';
 import { getMyMeetups, getInvitedMeetups, getMeetupResponses, getPendingInvitationsCount, findMeetupByCode, Meetup, MeetupResponse } from '@/services/meetupService';
+import * as Clipboard from 'expo-clipboard';
+import { config } from '@/constants/config';
+import QRCode from 'react-native-qrcode-svg';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -42,6 +45,7 @@ export default function HomeScreen() {
   const [pendingInviteCount, setPendingInviteCount] = useState(0);
   const [showJoinMeetupModal, setShowJoinMeetupModal] = useState(false);
   const [showMeetupListModal, setShowMeetupListModal] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [joinLoading, setJoinLoading] = useState(false);
   const { showAlert } = useAlert();
@@ -575,6 +579,30 @@ export default function HomeScreen() {
           <CommunityLeaderboard />
         </Animated.View>
 
+        {/* ========== SHARE APP BUTTON ========== */}
+        <Animated.View entering={FadeIn.duration(400).delay(185)} style={[styles.section, isTablet && styles.sectionTablet]}>
+          <Pressable
+            style={({ pressed }) => [styles.shareAppCard, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
+            onPress={() => setShowQRModal(true)}
+          >
+            <LinearGradient
+              colors={['#059669', '#10B981', '#34D399']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.shareAppGradient}
+            >
+              <View style={styles.shareAppIconBg}>
+                <MaterialIcons name="qr-code-2" size={28} color="#FFF" />
+              </View>
+              <View style={styles.shareAppText}>
+                <Text style={styles.shareAppTitle}>{t('home', 'shareApp')}</Text>
+                <Text style={styles.shareAppDesc}>{t('home', 'shareAppDesc')}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.7)" />
+            </LinearGradient>
+          </Pressable>
+        </Animated.View>
+
         {/* ========== QUICK ACCESS GRID ========== */}
         <Animated.View entering={FadeIn.duration(400).delay(200)} style={[styles.section, isTablet && styles.sectionTablet]}>
           <Text style={styles.sectionTitle}>{t('home', 'quickAccess')}</Text>
@@ -720,6 +748,54 @@ export default function HomeScreen() {
                 </>
               )}
             </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========== QR CODE SHARE MODAL ========== */}
+      <Modal visible={showQRModal} animationType="slide" transparent onRequestClose={() => setShowQRModal(false)}>
+        <View style={styles.qrOverlay}>
+          <View style={styles.qrContent}>
+            <View style={styles.qrHeader}>
+              <Text style={styles.qrHeaderTitle}>{t('home', 'shareAppTitle')}</Text>
+              <Pressable style={styles.qrCloseBtn} onPress={() => setShowQRModal(false)}>
+                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+
+            <View style={styles.qrBody}>
+              <View style={styles.qrCodeWrapper}>
+                <QRCode
+                  value={config.appDownloadUrl}
+                  size={200}
+                  color="#1E3A8A"
+                  backgroundColor="#FFF"
+                />
+              </View>
+              <Text style={styles.qrAppName}>Ultimate Petanque</Text>
+              <Text style={styles.qrDesc}>{t('home', 'shareAppDesc')}</Text>
+
+              <View style={styles.qrNote}>
+                <MaterialIcons name="people" size={18} color={theme.success} />
+                <Text style={styles.qrNoteText}>{t('home', 'shareAppNote')}</Text>
+              </View>
+            </View>
+
+            <View style={styles.qrActions}>
+              <Pressable
+                style={styles.qrCopyBtn}
+                onPress={async () => {
+                  await Clipboard.setStringAsync(config.appDownloadUrl);
+                  showAlert(t('home', 'linkCopied'));
+                }}
+              >
+                <MaterialIcons name="content-copy" size={18} color={theme.primary} />
+                <Text style={styles.qrCopyBtnText}>{t('home', 'copyLink')}</Text>
+              </Pressable>
+              <Pressable style={styles.qrDoneBtn} onPress={() => setShowQRModal(false)}>
+                <Text style={styles.qrDoneBtnText}>{t('common', 'close')}</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </Modal>
@@ -955,6 +1031,32 @@ const styles = StyleSheet.create({
   meetupModalScroll: { flex: 1 },
   meetupModalScrollContent: { padding: 16 },
   meetupModalItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: 16, padding: 14, marginBottom: 12, gap: 12, ...theme.shadows.card },
+
+  // ========== SHARE APP CARD ==========
+  shareAppCard: { borderRadius: 18, overflow: 'hidden' as const, ...theme.shadows.cardElevated },
+  shareAppGradient: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingVertical: 16, paddingHorizontal: 18, gap: 14 },
+  shareAppIconBg: { width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center' as const, justifyContent: 'center' as const },
+  shareAppText: { flex: 1 },
+  shareAppTitle: { fontSize: 16, fontWeight: '700' as const, color: '#FFF' },
+  shareAppDesc: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
+
+  // ========== QR CODE MODAL ==========
+  qrOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center' as const, paddingHorizontal: 24 },
+  qrContent: { backgroundColor: theme.surface, borderRadius: 24, overflow: 'hidden' as const },
+  qrHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: theme.border },
+  qrHeaderTitle: { fontSize: 18, fontWeight: '700' as const, color: theme.textPrimary },
+  qrCloseBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.backgroundSecondary, alignItems: 'center' as const, justifyContent: 'center' as const },
+  qrBody: { alignItems: 'center' as const, paddingVertical: 28, paddingHorizontal: 24 },
+  qrCodeWrapper: { backgroundColor: '#FFF', padding: 16, borderRadius: 20, borderWidth: 2, borderColor: theme.border, marginBottom: 20, ...theme.shadows.card },
+  qrAppName: { fontSize: 20, fontWeight: '800' as const, color: '#1E3A8A', marginBottom: 6 },
+  qrDesc: { fontSize: 14, color: theme.textSecondary, textAlign: 'center' as const, lineHeight: 20, marginBottom: 16 },
+  qrNote: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 10, backgroundColor: theme.success + '08', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: theme.success + '15' },
+  qrNoteText: { flex: 1, fontSize: 12, color: theme.textSecondary, lineHeight: 17 },
+  qrActions: { flexDirection: 'row' as const, gap: 10, paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: theme.border },
+  qrCopyBtn: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, paddingVertical: 14, borderRadius: 12, backgroundColor: theme.primary + '10' },
+  qrCopyBtnText: { fontSize: 15, fontWeight: '600' as const, color: theme.primary },
+  qrDoneBtn: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, paddingVertical: 14, borderRadius: 12, backgroundColor: theme.backgroundSecondary },
+  qrDoneBtnText: { fontSize: 15, fontWeight: '600' as const, color: theme.textSecondary },
 
   // ========== BRAND BANNER ==========
   bannerSection: { paddingHorizontal: 16, marginBottom: 24 },
