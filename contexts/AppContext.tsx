@@ -141,6 +141,9 @@ interface AppContextType {
   isPremium: boolean;
   setIsPremium: (val: boolean) => void;
 
+  // Admin
+  isAdmin: boolean;
+
   // Refresh
   refreshData: () => Promise<void>;
 }
@@ -323,6 +326,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [tournamentNotifications, setTournamentNotifications] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [isPremium, setIsPremiumState] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isReplayingQueue, setIsReplayingQueue] = useState(false);
   const [replayProgress, setReplayProgress] = useState({ current: 0, total: 0 });
   const [currentConflict, setCurrentConflict] = useState<ConflictInfo | null>(null);
@@ -714,9 +718,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         supabase.from('user_profiles').select('*').eq('id', user.id).single(),
       ]);
 
-      // Load premium status from profile
+      // Load premium & admin status from profile
       if (profileRes.data) {
         setIsPremiumState(profileRes.data.is_premium ?? false);
+        setIsAdmin(profileRes.data.is_admin ?? false);
       }
 
       let dbPlayers: Player[] = [];
@@ -2312,6 +2317,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         selfPlayer,
         isPremium,
         setIsPremium,
+        isAdmin,
         setItemPublic,
         isReplayingQueue,
         replayProgress,

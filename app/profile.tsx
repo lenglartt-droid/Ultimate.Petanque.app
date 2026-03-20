@@ -40,7 +40,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, logout, operationLoading, sendOTP } = useAuth();
   const { showAlert } = useAlert();
-  const { clubs, terrains, addClub, updatePlayer, selfPlayer, userStats, matches, challenges, tournaments, refreshData, boulesSets, addBoulesSet, updateBoulesSet, setPrimaryBoulesSet, isPremium } = useApp();
+  const { clubs, terrains, addClub, updatePlayer, selfPlayer, userStats, matches, challenges, tournaments, refreshData, boulesSets, addBoulesSet, updateBoulesSet, setPrimaryBoulesSet, isPremium, isAdmin } = useApp();
   const supabase = getSupabaseClient();
   const { t, language, setLanguage } = useLanguage();
   const params = useLocalSearchParams<{ edit?: string }>();
@@ -1826,6 +1826,26 @@ export default function ProfileScreen() {
               </View>
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </Pressable>
+
+            {/* Admin Promo Codes - only for admins */}
+            {isAdmin ? (
+              <Pressable 
+                style={styles.menuItem}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  router.push('/admin-promos' as any);
+                }}
+              >
+                <View style={[styles.menuIcon, { backgroundColor: theme.carreauColor + '15' }]}>
+                  <MaterialIcons name="admin-panel-settings" size={20} color={theme.carreauColor} />
+                </View>
+                <View style={styles.menuItemContent}>
+                  <Text style={styles.menuItemText}>{language === 'fr' ? 'Gestion codes promo' : 'Promo Code Management'}</Text>
+                  <Text style={styles.menuItemSubtext}>{language === 'fr' ? 'Creer, activer et suivre les codes' : 'Create, toggle and track codes'}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              </Pressable>
+            ) : null}
 
             {/* Creator Note */}
             <Pressable 
