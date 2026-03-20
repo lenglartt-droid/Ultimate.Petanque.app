@@ -762,7 +762,7 @@ export default function HomeScreen() {
                 style={styles.qrCopyBtn}
                 onPress={async () => {
                   try {
-                    const Clipboard = await import('expo-clipboard');
+                    const Clipboard = require('expo-clipboard');
                     await Clipboard.setStringAsync(config.appDownloadUrl);
                   } catch {
                     try { await RNShare.share({ message: config.appDownloadUrl }); } catch {}

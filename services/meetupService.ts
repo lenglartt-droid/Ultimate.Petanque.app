@@ -1,14 +1,6 @@
 import { getSupabaseClient } from '@/template';
 import { Platform } from 'react-native';
-
-// expo-notifications is native-only; lazy-load to avoid web bundler crash
-let _Notifications: typeof import('expo-notifications') | null = null;
-async function getNotifications() {
-  if (!_Notifications && Platform.OS !== 'web') {
-    _Notifications = await import('expo-notifications');
-  }
-  return _Notifications;
-}
+import * as Notifications from './nativeNotifications';
 
 export interface Meetup {
   id: string;
@@ -65,7 +57,7 @@ export async function createMeetup(data: {
   try {
     const supabase = getSupabaseClient();
     const { data: userData } = await supabase.auth.getUser();
-    if (!userData?.user?.id) return { meetup: null, error: 'Non authentifié' };
+    if (!userData?.user?.id) return { meetup: null, error: 'Non authentifie' };
 
     const shareCode = generateShareCode();
 
@@ -110,7 +102,7 @@ export async function getMyMeetups(): Promise<{ meetups: Meetup[]; error: string
   try {
     const supabase = getSupabaseClient();
     const { data: userData } = await supabase.auth.getUser();
-    if (!userData?.user?.id) return { meetups: [], error: 'Non authentifié' };
+    if (!userData?.user?.id) return { meetups: [], error: 'Non authentifie' };
 
     const { data, error } = await supabase
       .from('terrain_meetups')
@@ -153,9 +145,8 @@ export async function getInvitedMeetups(): Promise<{ meetups: Meetup[]; error: s
   try {
     const supabase = getSupabaseClient();
     const { data: userData } = await supabase.auth.getUser();
-    if (!userData?.user?.id) return { meetups: [], error: 'Non authentifié' };
+    if (!userData?.user?.id) return { meetups: [], error: 'Non authentifie' };
 
-    // Get meetup IDs from responses
     const { data: responses, error: respError } = await supabase
       .from('terrain_meetup_responses')
       .select('meetup_id')
@@ -235,9 +226,8 @@ export async function respondToMeetup(meetupId: string, status: 'accepted' | 'de
   try {
     const supabase = getSupabaseClient();
     const { data: userData } = await supabase.auth.getUser();
-    if (!userData?.user?.id) return { error: 'Non authentifié' };
+    if (!userData?.user?.id) return { error: 'Non authentifie' };
 
-    // Upsert the response
     const { error } = await supabase
       .from('terrain_meetup_responses')
       .upsert({
@@ -323,20 +313,19 @@ export interface MeetupReminderSettings {
  * Schedule a local reminder notification for a meetup (legacy - single 1h reminder)
  */
 export async function scheduleMeetupReminder(meetup: Meetup, terrainName: string): Promise<string | null> {
+  if (Platform.OS === 'web') return null;
   try {
     const meetupDate = new Date(meetup.date);
     const reminderDate = new Date(meetupDate);
-    reminderDate.setHours(reminderDate.getHours() - 1); // 1 hour before
+    reminderDate.setHours(reminderDate.getHours() - 1);
 
     if (reminderDate <= new Date()) return null;
 
     const formattedTime = meetupDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
-    const Notif = await getNotifications();
-    if (!Notif) return null;
-    const id = await Notif.scheduleNotificationAsync({
+    const id = await Notifications.scheduleNotificationAsync({
       content: {
-        title: `\u{1F3AF} RDV Petanque dans 1h !`,
+        title: '\u{1F3AF} RDV Petanque dans 1h !',
         body: `${meetup.title} a ${terrainName} - ${formattedTime}`,
         data: { meetupId: meetup.id, type: 'meetup_reminder' },
         sound: 'default',
@@ -344,7 +333,7 @@ export async function scheduleMeetupReminder(meetup: Meetup, terrainName: string
       },
       trigger: {
         date: reminderDate,
-        type: Notif.SchedulableTriggerInputTypes.DATE,
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
       },
       identifier: `meetup_${meetup.id}_reminder`,
     });
@@ -360,9 +349,9 @@ export async function scheduleMeetupReminder(meetup: Meetup, terrainName: string
  * Cancel meetup reminder (legacy single reminder)
  */
 export async function cancelMeetupReminder(meetupId: string): Promise<void> {
+  if (Platform.OS === 'web') return;
   try {
-    const Notif = await getNotifications();
-    if (Notif) await Notif.cancelScheduledNotificationAsync(`meetup_${meetupId}_reminder`);
+    await Notifications.cancelScheduledNotificationAsync(`meetup_${meetupId}_reminder`);
   } catch {
     // Ignore if not found
   }
@@ -376,7 +365,7 @@ export async function scheduleMeetupNotifications(
   terrainName: string,
   settings: MeetupReminderSettings
 ): Promise<string[]> {
-  // Cancel all existing reminders for this meetup first
+  if (Platform.OS === 'web') return [];
   await cancelAllMeetupReminders(meetup.id);
 
   const notificationIds: string[] = [];
@@ -385,11 +374,10 @@ export async function scheduleMeetupNotifications(
   const formattedTime = meetupDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   const formattedDate = meetupDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
-  const Notif = await getNotifications();
   const scheduleOne = async (triggerDate: Date, title: string, body: string, identifier: string): Promise<string | null> => {
-    if (triggerDate <= now || !Notif) return null;
+    if (triggerDate <= now) return null;
     try {
-      const id = await Notif.scheduleNotificationAsync({
+      const id = await Notifications.scheduleNotificationAsync({
         content: {
           title,
           body,
@@ -400,7 +388,7 @@ export async function scheduleMeetupNotifications(
         },
         trigger: {
           date: triggerDate,
-          type: Notif.SchedulableTriggerInputTypes.DATE,
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
         },
         identifier,
       });
@@ -411,7 +399,6 @@ export async function scheduleMeetupNotifications(
     }
   };
 
-  // 1 day before at 9:00
   if (settings.oneDayBefore) {
     const d = new Date(meetupDate);
     d.setDate(d.getDate() - 1);
@@ -420,7 +407,6 @@ export async function scheduleMeetupNotifications(
     if (id) notificationIds.push(id);
   }
 
-  // 3 hours before
   if (settings.threeHoursBefore) {
     const d = new Date(meetupDate);
     d.setHours(d.getHours() - 3);
@@ -428,7 +414,6 @@ export async function scheduleMeetupNotifications(
     if (id) notificationIds.push(id);
   }
 
-  // 1 hour before
   if (settings.oneHourBefore) {
     const d = new Date(meetupDate);
     d.setHours(d.getHours() - 1);
@@ -443,6 +428,7 @@ export async function scheduleMeetupNotifications(
  * Cancel all meetup reminders (all variants)
  */
 export async function cancelAllMeetupReminders(meetupId: string): Promise<void> {
+  if (Platform.OS === 'web') return;
   const identifiers = [
     `meetup_${meetupId}_reminder`,
     `meetup_${meetupId}_1day`,
@@ -451,8 +437,7 @@ export async function cancelAllMeetupReminders(meetupId: string): Promise<void> 
   ];
   for (const id of identifiers) {
     try {
-      const Notif2 = await getNotifications();
-      if (Notif2) await Notif2.cancelScheduledNotificationAsync(id);
+      await Notifications.cancelScheduledNotificationAsync(id);
     } catch {
       // Ignore if not found
     }
@@ -461,7 +446,6 @@ export async function cancelAllMeetupReminders(meetupId: string): Promise<void> 
 
 /**
  * Invite users directly to a meetup by creating pending responses
- * Works for public players and shared players whose user_id we know
  */
 export async function inviteUsersToMeetup(
   meetupId: string,
@@ -472,7 +456,6 @@ export async function inviteUsersToMeetup(
 
     const supabase = getSupabaseClient();
 
-    // Filter out users who already have a response
     const { data: existing } = await supabase
       .from('terrain_meetup_responses')
       .select('user_id')
@@ -503,7 +486,6 @@ export async function inviteUsersToMeetup(
 
 /**
  * Get invitable users: public players + players shared with me
- * Returns user_id and display info for selection
  */
 export async function getInvitableUsers(): Promise<{ users: InvitableUser[]; error: string | null }> {
   try {
@@ -514,7 +496,6 @@ export async function getInvitableUsers(): Promise<{ users: InvitableUser[]; err
     const myId = userData.user.id;
     const usersMap = new Map<string, InvitableUser>();
 
-    // 1. Public players (their user_id is the owner)
     const { data: publicPlayers } = await supabase
       .from('players')
       .select('user_id, name, club, role, avatar')
@@ -534,7 +515,6 @@ export async function getInvitableUsers(): Promise<{ users: InvitableUser[]; err
       }
     });
 
-    // 2. Players shared with me (owner_id is the player owner)
     const { data: sharedItems } = await supabase
       .from('shared_items')
       .select('owner_id, item_type')
@@ -564,7 +544,6 @@ export async function getInvitableUsers(): Promise<{ users: InvitableUser[]; err
       }
     }
 
-    // 3. Users who shared items with me (shared_with_id = me, so owner is known)
     const { data: itemsSharedWithMe } = await supabase
       .from('shared_items')
       .select('owner_id')
@@ -651,7 +630,6 @@ export async function getPendingInvitations(): Promise<{ invitations: PendingInv
 
     if (meetupError) return { invitations: [], error: meetupError.message };
 
-    // Get creator profiles
     const creatorIds = [...new Set((meetups || []).map((m: any) => m.creator_id))];
     let creatorsMap: Record<string, { username: string; email: string }> = {};
     if (creatorIds.length > 0) {
@@ -664,7 +642,6 @@ export async function getPendingInvitations(): Promise<{ invitations: PendingInv
       });
     }
 
-    // Get terrain names
     const terrainIds = [...new Set((meetups || []).map((m: any) => m.terrain_id))];
     let terrainsMap: Record<string, { name: string; city: string }> = {};
     if (terrainIds.length > 0) {
@@ -677,7 +654,6 @@ export async function getPendingInvitations(): Promise<{ invitations: PendingInv
       });
     }
 
-    // Get response counts per meetup
     const invitations: PendingInvitation[] = [];
     for (const m of (meetups || [])) {
       const resp = responses.find(r => r.meetup_id === m.id);

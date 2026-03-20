@@ -1,30 +1,5 @@
 import { Platform } from 'react-native';
-
-// expo-notifications is native-only; lazy-load to avoid web bundler crash
-let _Notifications: any = null;
-let _notifReady = false;
-
-async function getNotifications(): Promise<any> {
-  if (Platform.OS === 'web') return null;
-  if (!_notifReady) {
-    try {
-      _Notifications = await import('expo-notifications');
-      // Configure notification behavior once
-      _Notifications.setNotificationHandler({
-        handleNotification: async () => ({
-          shouldShowAlert: true,
-          shouldPlaySound: true,
-          shouldSetBadge: true,
-        }),
-      });
-      _notifReady = true;
-    } catch {
-      _Notifications = null;
-      _notifReady = true;
-    }
-  }
-  return _Notifications;
-}
+import * as Notifications from './nativeNotifications';
 
 export interface TournamentNotificationSettings {
   tournamentId: string;
@@ -40,6 +15,15 @@ export interface ScheduledNotification {
   notificationIds: string[];
 }
 
+// Configure notification behavior (no-op on web via stub)
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
+
 // Storage for scheduled notification IDs
 const scheduledNotifications: Map<string, string[]> = new Map();
 
@@ -47,15 +31,13 @@ const scheduledNotifications: Map<string, string[]> = new Map();
  * Request notification permissions
  */
 export async function requestNotificationPermissions(): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
   try {
-    const Notif = await getNotifications();
-    if (!Notif) return false;
-
-    const { status: existingStatus } = await Notif.getPermissionsAsync();
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
 
     if (existingStatus !== 'granted') {
-      const { status } = await Notif.requestPermissionsAsync();
+      const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
 
@@ -64,12 +46,11 @@ export async function requestNotificationPermissions(): Promise<boolean> {
       return false;
     }
 
-    // Configure Android channel
     if (Platform.OS === 'android') {
-      await Notif.setNotificationChannelAsync('tournament-reminders', {
+      await Notifications.setNotificationChannelAsync('tournament-reminders', {
         name: 'Rappels de tournoi',
         description: 'Notifications de rappel pour les tournois à venir',
-        importance: Notif.AndroidImportance.HIGH,
+        importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#FF6B35',
         sound: 'default',
@@ -87,10 +68,9 @@ export async function requestNotificationPermissions(): Promise<boolean> {
  * Check if notifications are enabled
  */
 export async function areNotificationsEnabled(): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
   try {
-    const Notif = await getNotifications();
-    if (!Notif) return false;
-    const { status } = await Notif.getPermissionsAsync();
+    const { status } = await Notifications.getPermissionsAsync();
     return status === 'granted';
   } catch (error) {
     console.log('Error checking notification status:', error);
@@ -104,13 +84,10 @@ export async function areNotificationsEnabled(): Promise<boolean> {
 export async function scheduleTournamentNotifications(
   settings: TournamentNotificationSettings
 ): Promise<string[]> {
+  if (Platform.OS === 'web') return [];
   const { tournamentId, tournamentName, tournamentDate, oneWeekBefore, threeDaysBefore, oneDayBefore } = settings;
 
-  // Cancel any existing notifications for this tournament first
   await cancelTournamentNotifications(tournamentId);
-
-  const Notif = await getNotifications();
-  if (!Notif) return [];
 
   const notificationIds: string[] = [];
   const now = new Date();
@@ -124,7 +101,7 @@ export async function scheduleTournamentNotifications(
     if (triggerDate <= now) return null;
 
     try {
-      const id = await Notif.scheduleNotificationAsync({
+      const id = await Notifications.scheduleNotificationAsync({
         content: {
           title,
           body,
@@ -135,7 +112,7 @@ export async function scheduleTournamentNotifications(
         },
         trigger: {
           date: triggerDate,
-          type: Notif.SchedulableTriggerInputTypes.DATE,
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
         },
         identifier,
       });
@@ -166,7 +143,7 @@ export async function scheduleTournamentNotifications(
     const d = new Date(tournamentDate);
     d.setDate(d.getDate() - 3);
     d.setHours(9, 0, 0, 0);
-    const id = await scheduleNotification(d, '\u{1F3AF} Tournoi dans 3 jours !', `${tournamentName} approche. N'oubliez pas votre equipement !`, `tournament_${tournamentId}_3days`);
+    const id = await scheduleNotification(d, '\u{1F3AF} Tournoi dans 3 jours !', `${tournamentName} approche. Preparez votre equipement !`, `tournament_${tournamentId}_3days`);
     if (id) notificationIds.push(id);
   }
 
@@ -189,14 +166,12 @@ export async function scheduleTournamentNotifications(
  * Cancel all notifications for a tournament
  */
 export async function cancelTournamentNotifications(tournamentId: string): Promise<void> {
+  if (Platform.OS === 'web') return;
   try {
-    const Notif = await getNotifications();
-    if (!Notif) return;
-
     const storedIds = scheduledNotifications.get(tournamentId);
     if (storedIds) {
       for (const id of storedIds) {
-        await Notif.cancelScheduledNotificationAsync(id);
+        await Notifications.cancelScheduledNotificationAsync(id);
       }
       scheduledNotifications.delete(tournamentId);
     }
@@ -209,7 +184,7 @@ export async function cancelTournamentNotifications(tournamentId: string): Promi
 
     for (const identifier of identifiers) {
       try {
-        await Notif.cancelScheduledNotificationAsync(identifier);
+        await Notifications.cancelScheduledNotificationAsync(identifier);
       } catch {
         // Ignore if not found
       }
@@ -225,10 +200,9 @@ export async function cancelTournamentNotifications(tournamentId: string): Promi
  * Get all scheduled notifications
  */
 export async function getAllScheduledNotifications(): Promise<any[]> {
+  if (Platform.OS === 'web') return [];
   try {
-    const Notif = await getNotifications();
-    if (!Notif) return [];
-    return await Notif.getAllScheduledNotificationsAsync();
+    return await Notifications.getAllScheduledNotificationsAsync();
   } catch (error) {
     console.log('Error getting scheduled notifications:', error);
     return [];
@@ -239,10 +213,9 @@ export async function getAllScheduledNotifications(): Promise<any[]> {
  * Cancel all notifications
  */
 export async function cancelAllNotifications(): Promise<void> {
+  if (Platform.OS === 'web') return;
   try {
-    const Notif = await getNotifications();
-    if (!Notif) return;
-    await Notif.cancelAllScheduledNotificationsAsync();
+    await Notifications.cancelAllScheduledNotificationsAsync();
     scheduledNotifications.clear();
     console.log('All notifications cancelled');
   } catch (error) {
@@ -254,10 +227,9 @@ export async function cancelAllNotifications(): Promise<void> {
  * Send immediate test notification
  */
 export async function sendTestNotification(): Promise<void> {
+  if (Platform.OS === 'web') return;
   try {
-    const Notif = await getNotifications();
-    if (!Notif) return;
-    await Notif.scheduleNotificationAsync({
+    await Notifications.scheduleNotificationAsync({
       content: {
         title: '\u{1F3AF} Test Ultimate Petanque',
         body: 'Les notifications fonctionnent correctement !',
@@ -276,19 +248,9 @@ export async function sendTestNotification(): Promise<void> {
  */
 export function addNotificationResponseListener(
   callback: (response: any) => void
-): any {
+): { remove: () => void } {
   if (Platform.OS === 'web') return { remove: () => {} };
-  // Synchronous access requires the module to be already loaded
-  // This will be called after getNotifications() has been awaited elsewhere
-  if (_Notifications) {
-    return _Notifications.addNotificationResponseReceivedListener(callback);
-  }
-  // Fallback: load then subscribe
-  let sub: any = null;
-  getNotifications().then(Notif => {
-    if (Notif) sub = Notif.addNotificationResponseReceivedListener(callback);
-  });
-  return { remove: () => { if (sub) sub.remove(); } };
+  return Notifications.addNotificationResponseReceivedListener(callback);
 }
 
 /**
@@ -296,14 +258,7 @@ export function addNotificationResponseListener(
  */
 export function addNotificationReceivedListener(
   callback: (notification: any) => void
-): any {
+): { remove: () => void } {
   if (Platform.OS === 'web') return { remove: () => {} };
-  if (_Notifications) {
-    return _Notifications.addNotificationReceivedListener(callback);
-  }
-  let sub: any = null;
-  getNotifications().then(Notif => {
-    if (Notif) sub = Notif.addNotificationReceivedListener(callback);
-  });
-  return { remove: () => { if (sub) sub.remove(); } };
+  return Notifications.addNotificationReceivedListener(callback);
 }

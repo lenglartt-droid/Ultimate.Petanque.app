@@ -38,7 +38,7 @@ export async function uploadImageToStorage(
         reader.readAsDataURL(blob);
       });
     } else {
-      const FileSystem = await import('expo-file-system');
+      const FileSystem = require('expo-file-system');
       base64Data = await FileSystem.readAsStringAsync(fileUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
