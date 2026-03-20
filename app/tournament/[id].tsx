@@ -33,6 +33,7 @@ import { isSharedWithMe, saveSharedItemToMyAccount } from '@/services/shareServi
 import { toggleItemPublic } from '@/services/publicItemsService';
 import { useAlert } from '@/template';
 import { useAuth } from '@/template';
+import { showInterstitial } from '@/services/adService';
 import {
   requestNotificationPermissions,
   areNotificationsEnabled,
@@ -498,6 +499,8 @@ export default function TournamentDetailScreen() {
       setEndTournamentStep(0);
       setSelectedFinalResult(null);
       setPrizeWonInput('');
+      // Show interstitial ad after tournament closure
+      showInterstitial();
     } catch (e) {
       console.log('Error ending tournament:', e);
       Alert.alert(t('common', 'error'), t('tournament', 'errorEndTournament'));
