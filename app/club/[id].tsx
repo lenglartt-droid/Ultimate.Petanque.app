@@ -37,12 +37,12 @@ import { isSharedWithMe, saveSharedItemToMyAccount } from '@/services/shareServi
 import { toggleItemPublic } from '@/services/publicItemsService';
 import { useAlert } from '@/template';
 import { useAuth } from '@/template';
-import { fetchLeaderboard, sortLeaderboard, LeaderboardPlayer } from '@/services/leaderboardService';
+
 
 export default function ClubDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getClubById, players, tournaments, deleteClub, updateClub, getSharedPermission, setItemPublic, isFavoriteClub, toggleFavoriteClub, refreshData, loading: appLoading, selfPlayer } = useApp();
+  const { getClubById, players, tournaments, deleteClub, updateClub, getSharedPermission, setItemPublic, isFavoriteClub, toggleFavoriteClub, refreshData, loading: appLoading } = useApp();
   const [refreshing, setRefreshing] = React.useState(false);
   const [screenWidth, setScreenWidth] = React.useState(() => Dimensions.get('window').width);
   React.useEffect(() => {
@@ -74,9 +74,7 @@ export default function ClubDetailScreen() {
   const [showSharePreview, setShowSharePreview] = React.useState(false);
   const [previewShowContacts, setPreviewShowContacts] = React.useState(false);
 
-  // Club leaderboard
-  const [clubLeaderboard, setClubLeaderboard] = React.useState<LeaderboardPlayer[]>([]);
-  const [clubLbLoading, setClubLbLoading] = React.useState(true);
+
   const sharedPermission = getSharedPermission(id!);
   const isSharedItem = sharedPermission !== null;
   const isReadOnly = sharedPermission === 'read';
@@ -119,17 +117,7 @@ export default function ClubDetailScreen() {
     }
   }, [club?.clubCardUrl]);
 
-  // Load club leaderboard (public players matching this club name)
-  React.useEffect(() => {
-    if (!club?.name) return;
-    setClubLbLoading(true);
-    fetchLeaderboard().then(({ players: lbPlayers }) => {
-      const clubName = club.name.toLowerCase().trim();
-      const matching = lbPlayers.filter(p => (p.club || '').toLowerCase().trim() === clubName);
-      setClubLeaderboard(sortLeaderboard(matching, 'winRate'));
-      setClubLbLoading(false);
-    }).catch(() => setClubLbLoading(false));
-  }, [club?.name]);
+
 
   // Club card upload helpers
   const uploadClubCardFile = React.useCallback(async (fileUri: string, fileName: string, mimeType: string) => {
@@ -533,104 +521,6 @@ export default function ClubDetailScreen() {
         })() : null}
 
         </View>
-
-        {/* Club Leaderboard - public players ranked — uses FadeIn (opacity only) to prevent vertical overlap with sections below */}
-        <Animated.View entering={FadeIn.duration(400).delay(300)} style={[styles.section, { marginBottom: 24 }]}>
-          <View style={styles.sectionHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: '#D97706' + '15', alignItems: 'center', justifyContent: 'center' }}>
-                <MaterialIcons name="leaderboard" size={16} color="#D97706" />
-              </View>
-              <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>{t('leaderboard', 'clubRanking')}</Text>
-            </View>
-          </View>
-          <Text style={{ fontSize: 12, color: theme.textSecondary, marginBottom: 12, marginTop: -4 }}>{t('leaderboard', 'clubRankingDesc')}</Text>
-
-          {clubLbLoading ? (
-            <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 32, alignItems: 'center', ...theme.shadows.card }}>
-              <ActivityIndicator size="small" color="#D97706" />
-            </View>
-          ) : clubLeaderboard.length > 0 ? (
-            <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, ...theme.shadows.card }}>
-              {/* Header row */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border, gap: 4, borderTopLeftRadius: theme.borderRadius.lg, borderTopRightRadius: theme.borderRadius.lg }}>
-                <Text style={{ width: 26, fontSize: 10, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', textAlign: 'center' }}>#</Text>
-                <Text style={{ flex: 1, fontSize: 10, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase' }}>{t('leaderboard', 'player')}</Text>
-                <Text style={{ width: 42, fontSize: 10, fontWeight: '700', color: '#D97706', textTransform: 'uppercase', textAlign: 'center' }}>%V</Text>
-                <Text style={{ width: 36, fontSize: 10, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', textAlign: 'center' }}>{t('leaderboard', 'matches')}</Text>
-                <Text style={{ width: 36, fontSize: 10, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', textAlign: 'center' }}>Tir</Text>
-                <Text style={{ width: 32, fontSize: 10, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', textAlign: 'center' }}>Pt</Text>
-              </View>
-              {clubLeaderboard.slice(0, 10).map((p, idx) => {
-                const rank = idx + 1;
-                const isMe = user && (p.userId === user.id || (selfPlayer && p.id === selfPlayer.id));
-                const medalColors: Record<number, string> = { 1: '#FFD700', 2: '#A8B4C0', 3: '#CD7F32' };
-                const medalColor = medalColors[rank];
-                return (
-                  <Pressable
-                    key={p.id}
-                    style={[{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, gap: 4, borderBottomWidth: idx < clubLeaderboard.length - 1 && idx < 9 ? 1 : 0, borderBottomColor: theme.border + '40' }, isMe && { backgroundColor: theme.primary + '08', borderLeftWidth: 3, borderLeftColor: theme.primary }]}
-                    onPress={() => router.push(isMe ? '/player/me' : `/player/${p.id}` as any)}
-                  >
-                    <View style={{ width: 26, alignItems: 'center' }}>
-                      {medalColor ? (
-                        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: medalColor + '20', alignItems: 'center', justifyContent: 'center' }}>
-                          <Text style={{ fontSize: 12, fontWeight: '900', color: medalColor }}>{rank}</Text>
-                        </View>
-                      ) : (
-                        <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary }}>{rank}</Text>
-                      )}
-                    </View>
-                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, marginRight: 4 }}>
-                      <View style={{ position: 'relative' }}>
-                        {p.avatar ? (
-                          <Image source={{ uri: p.avatar }} style={{ width: 32, height: 32, borderRadius: 10, overflow: 'hidden' }} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
-                        ) : (
-                          <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: isMe ? theme.primary : theme.textMuted + '30', alignItems: 'center', justifyContent: 'center' }}>
-                            <Text style={{ fontSize: 12, fontWeight: '700', color: isMe ? '#FFF' : theme.textSecondary }}>{p.name.charAt(0)}</Text>
-                          </View>
-                        )}
-                        {isMe ? <View style={{ position: 'absolute', bottom: -2, right: -2, width: 12, height: 12, borderRadius: 6, backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: theme.surface }}><MaterialIcons name="star" size={6} color="#FFF" /></View> : null}
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[{ fontSize: 13, fontWeight: '600', color: theme.textPrimary }, isMe && { color: theme.primary }]} numberOfLines={1}>
-                          {p.name}{isMe ? ` (${t('leaderboard', 'you')})` : ''}
-                        </Text>
-                        <View style={{ flexDirection: 'row', gap: 4, marginTop: 2 }}>
-                          <View style={{ paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, backgroundColor: theme.primary + '12' }}>
-                            <Text style={{ fontSize: 9, fontWeight: '600', color: theme.primary }}>{t('roles', p.role)}</Text>
-                          </View>
-                          <View style={{ paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, backgroundColor: theme.accent + '12' }}>
-                            <Text style={{ fontSize: 9, fontWeight: '600', color: theme.accent }}>{t('levels', p.level)}</Text>
-                          </View>
-                        </View>
-                      </View>
-                    </View>
-                    <Text style={{ width: 42, fontSize: 13, fontWeight: '700', color: '#D97706', textAlign: 'center' }}>{p.stats.winRate}%</Text>
-                    <Text style={{ width: 36, fontSize: 12, fontWeight: '500', color: theme.textPrimary, textAlign: 'center' }}>{p.stats.matchesPlayed}</Text>
-                    <Text style={{ width: 36, fontSize: 12, fontWeight: '500', color: theme.textPrimary, textAlign: 'center' }}>{p.stats.tirRate > 0 ? `${p.stats.tirRate}%` : '-'}</Text>
-                    <Text style={{ width: 32, fontSize: 12, fontWeight: '500', color: theme.textPrimary, textAlign: 'center' }}>{p.stats.pointRate > 0 ? `${p.stats.pointRate}%` : '-'}</Text>
-                  </Pressable>
-                );
-              })}
-              {/* Link to full leaderboard filtered by club */}
-              <Pressable
-                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 16, borderTopWidth: 1, borderTopColor: theme.border, minHeight: 52, borderBottomLeftRadius: theme.borderRadius.lg, borderBottomRightRadius: theme.borderRadius.lg }}
-                onPress={() => { Haptics.selectionAsync(); router.push('/leaderboard' as any); }}
-                hitSlop={{ top: 4, bottom: 8, left: 16, right: 16 }}
-              >
-                <Text style={{ fontSize: 14, fontWeight: '700', color: '#D97706' }}>{t('leaderboard', 'seeFullLeaderboard')}</Text>
-                <MaterialIcons name="arrow-forward" size={16} color="#D97706" />
-              </Pressable>
-            </View>
-          ) : (
-            <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 28, alignItems: 'center', ...theme.shadows.card }}>
-              <MaterialIcons name="people-outline" size={36} color={theme.textMuted} />
-              <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginTop: 10 }}>{t('leaderboard', 'noClubPlayers')}</Text>
-              <Text style={{ fontSize: 12, color: theme.textSecondary, textAlign: 'center', marginTop: 4, maxWidth: 240 }}>{t('leaderboard', 'noClubPlayersDesc')}</Text>
-            </View>
-          )}
-        </Animated.View>
 
         <View style={isTablet ? styles.tabletRow : undefined}>
         {clubPlayers.length > 0 && (
