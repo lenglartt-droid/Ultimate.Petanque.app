@@ -16,6 +16,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { getSupabaseClient } from '@/template';
 import { useAuth, useAlert } from '@/template';
 import { useApp } from '@/contexts/AppContext';
@@ -73,6 +75,50 @@ export default function AdminPromosScreen() {
   const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
 
   const fr = language === 'fr';
+
+  // Export CSV
+  const handleExportCSV = useCallback(async () => {
+    if (promoCodes.length === 0) {
+      showAlert(fr ? 'Aucune donnee' : 'No data', fr ? 'Aucun code promo a exporter.' : 'No promo codes to export.');
+      return;
+    }
+    Haptics.selectionAsync();
+
+    const headers = ['Code', fr ? 'Statut' : 'Status', fr ? 'Utilisations' : 'Uses', 'Max', fr ? 'Date creation' : 'Created', fr ? 'Expiration' : 'Expires'];
+    const rows = promoCodes.map(p => {
+      const isExpired = p.expires_at && new Date(p.expires_at) < new Date();
+      const isFull = p.current_uses >= p.max_uses;
+      let status = p.is_active ? (isExpired ? (fr ? 'Expire' : 'Expired') : isFull ? (fr ? 'Epuise' : 'Exhausted') : (fr ? 'Actif' : 'Active')) : (fr ? 'Desactive' : 'Disabled');
+      const created = new Date(p.created_at).toLocaleDateString(fr ? 'fr-FR' : 'en-US');
+      const expires = p.expires_at ? new Date(p.expires_at).toLocaleDateString(fr ? 'fr-FR' : 'en-US') : (fr ? 'Jamais' : 'Never');
+      return [p.code, status, String(p.current_uses), String(p.max_uses), created, expires];
+    });
+
+    const csvContent = [headers, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+
+    try {
+      if (Platform.OS === 'web') {
+        // Web: copy to clipboard
+        const { Clipboard } = await import('react-native');
+        // @ts-ignore
+        if (Clipboard?.setString) { Clipboard.setString(csvContent); }
+        showAlert(fr ? 'Copie !' : 'Copied!', fr ? 'CSV copie dans le presse-papiers.' : 'CSV copied to clipboard.');
+        return;
+      }
+
+      const fileUri = `${FileSystem.cacheDirectory}promo_codes_${Date.now()}.csv`;
+      await FileSystem.writeAsStringAsync(fileUri, csvContent, { encoding: FileSystem.EncodingType.UTF8 });
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: fr ? 'Exporter codes promo' : 'Export promo codes' });
+      } else {
+        showAlert(fr ? 'Erreur' : 'Error', fr ? 'Partage non disponible' : 'Sharing not available');
+      }
+    } catch (e: any) {
+      showAlert(fr ? 'Erreur' : 'Error', e.message || 'Export failed');
+    }
+  }, [promoCodes, fr, showAlert]);
 
   // Load promo codes
   const loadData = useCallback(async () => {
@@ -433,6 +479,9 @@ export default function AdminPromosScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>{fr ? 'Codes promo' : 'Promo Codes'}</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Pressable style={styles.bulkBtn} onPress={handleExportCSV}>
+            <MaterialIcons name="file-download" size={20} color={theme.primary} />
+          </Pressable>
           <Pressable style={styles.bulkBtn} onPress={() => { Haptics.selectionAsync(); setShowBulkModal(true); }}>
             <MaterialIcons name="dynamic-feed" size={20} color={theme.primary} />
           </Pressable>
