@@ -12,10 +12,14 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.ultimatepetanque.app",
       "associatedDomains": ["applinks:ultimatepetanque.app"],
+      "entitlements": {
+        "aps-environment": "production"
+      },
       "infoPlist": {
         "NSCameraUsageDescription": "Ultimate Petanque utilise la caméra pour prendre des photos de profil, de boules et de terrains.",
         "NSPhotoLibraryUsageDescription": "Ultimate Petanque accède à vos photos pour ajouter des images de profil, de boules et de terrains.",
-        "NSLocationWhenInUseUsageDescription": "Ultimate Petanque utilise votre position pour afficher les terrains et joueurs à proximité sur la carte."
+        "NSLocationWhenInUseUsageDescription": "Ultimate Petanque utilise votre position pour afficher les terrains et joueurs à proximité sur la carte.",
+        "UIBackgroundModes": ["remote-notification"]
       }
     },
     "android": {
@@ -84,6 +88,15 @@
         }
       ],
       "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/app-logo.png",
+          "color": "#2563EB",
+          "sounds": [],
+          "mode": "production"
+        }
+      ],
       [
         "react-native-google-mobile-ads",
         {
