@@ -108,7 +108,7 @@ export default function PlayerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const { t, language } = useLanguage();
-  const { getPlayerById, getMatchesByPlayer, getClubById, getTerrainById, deletePlayer, updatePlayer, selfPlayer, matches, getSharedPermission, loading: appLoading, boulesSets, players, challenges: allChallenges } = useApp();
+  const { getPlayerById, getMatchesByPlayer, getClubById, getTerrainById, deletePlayer, updatePlayer, selfPlayer, matches, getSharedPermission, loading: appLoading, boulesSets, players, challenges: allChallenges, isPremium } = useApp();
 
   const player = getPlayerById(id!);
   const playerMatches = getMatchesByPlayer(id!);
@@ -395,7 +395,15 @@ export default function PlayerDetailScreen() {
               </View>
 
               {/* Name & Nickname */}
-              <Text style={s.heroName}>{player.name}</Text>
+              <View style={s.heroNameRow}>
+                <Text style={s.heroName}>{player.name}</Text>
+                {isSelf && isPremium ? (
+                  <View style={s.premiumBadge}>
+                    <MaterialIcons name="star" size={12} color="#C0C0C0" />
+                    <Text style={s.premiumBadgeText}>Premium</Text>
+                  </View>
+                ) : null}
+              </View>
               {player.nickname ? <Text style={s.heroNickname}>"{player.nickname}"</Text> : null}
 
               {/* Badges Row */}
@@ -1022,8 +1030,11 @@ const s = StyleSheet.create({
   avatarImage: { width: 100, height: 100, borderRadius: 50 },
   avatarText: { fontSize: 36, fontWeight: '700', color: '#FFF' },
   roleBadgeOnAvatar: { position: 'absolute', bottom: 0, right: 0, width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: theme.surface },
-  heroName: { fontSize: 24, fontWeight: '700', color: theme.textPrimary, marginBottom: 4 },
-  heroNickname: { fontSize: 15, fontStyle: 'italic', color: theme.textSecondary, marginBottom: 8 },
+  heroNameRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 10, marginBottom: 4 },
+  heroName: { fontSize: 24, fontWeight: '700', color: theme.textPrimary },
+  premiumBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: '#E8E8E8', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14, borderWidth: 1, borderColor: '#C0C0C0' + '40' },
+  premiumBadgeText: { fontSize: 11, fontWeight: '700' as const, color: '#808080', letterSpacing: 0.5 },
+  heroNickname: { fontSize: 15, fontStyle: 'italic' as const, color: theme.textSecondary, marginBottom: 8 },
 
   // Badges
   badgesRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginBottom: 12, marginTop: 4 },

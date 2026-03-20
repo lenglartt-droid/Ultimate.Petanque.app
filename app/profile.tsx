@@ -864,7 +864,15 @@ export default function ProfileScreen() {
 
           {/* Name and Role */}
           <View style={styles.heroInfo}>
-            <Text style={styles.heroName}>{username || t('share', 'userFallback')}</Text>
+            <View style={styles.heroNameRow}>
+              <Text style={styles.heroName}>{username || t('share', 'userFallback')}</Text>
+              {isPremium ? (
+                <View style={styles.premiumBadge}>
+                  <MaterialIcons name="star" size={12} color="#C0C0C0" />
+                  <Text style={styles.premiumBadgeText}>Premium</Text>
+                </View>
+              ) : null}
+            </View>
             {selfPlayer?.nickname ? (
               <Text style={styles.heroNickname}>"{selfPlayer.nickname}"</Text>
             ) : null}
@@ -2424,11 +2432,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
+  heroNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
   heroName: {
     fontSize: 24,
     fontWeight: '700',
     color: theme.textPrimary,
-    marginBottom: 10,
+  },
+  premiumBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#E8E8E8',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#C0C0C0' + '40',
+  },
+  premiumBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#808080',
+    letterSpacing: 0.5,
   },
   heroMeta: {
     flexDirection: 'row',
