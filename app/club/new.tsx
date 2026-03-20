@@ -237,7 +237,7 @@ export default function NewClubScreen() {
                       const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.8 });
                       if (!result.canceled && result.assets[0]) {
                         setUploadingLogo(true);
-                        const url = await uploadImageToStorage('avatars', 'clubs/new', result.assets[0].uri);
+                        const url = await uploadImageToStorage('avatars', 'avatars/clubs/new', result.assets[0].uri);
                         setUploadingLogo(false);
                         if (url) { setLogoUri(url); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }
                         else { showAlert(t('common', 'error'), t('profile', 'errorUploadPhoto')); }
@@ -249,7 +249,7 @@ export default function NewClubScreen() {
                       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.8 });
                       if (!result.canceled && result.assets[0]) {
                         setUploadingLogo(true);
-                        const url = await uploadImageToStorage('avatars', 'clubs/new', result.assets[0].uri);
+                        const url = await uploadImageToStorage('avatars', 'avatars/clubs/new', result.assets[0].uri);
                         setUploadingLogo(false);
                         if (url) { setLogoUri(url); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }
                         else { showAlert(t('common', 'error'), t('profile', 'errorUploadPhoto')); }
