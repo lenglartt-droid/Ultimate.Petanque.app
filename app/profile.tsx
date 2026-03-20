@@ -1777,6 +1777,24 @@ export default function ProfileScreen() {
               </View>
             </Pressable>
 
+            {/* Partners */}
+            <Pressable 
+              style={styles.menuItem}
+              onPress={() => {
+                Haptics.selectionAsync();
+                router.push('/partners' as any);
+              }}
+            >
+              <View style={[styles.menuIcon, { backgroundColor: '#FFD700' + '15' }]}>
+                <MaterialIcons name="handshake" size={20} color="#FFD700" />
+              </View>
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuItemText}>{language === 'fr' ? 'Nos Partenaires' : 'Our Partners'}</Text>
+                <Text style={styles.menuItemSubtext}>{language === 'fr' ? 'Sponsors et partenaires de l\'application' : 'App sponsors and partners'}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+            </Pressable>
+
             {/* Creator Note */}
             <Pressable 
               style={styles.menuItem}
