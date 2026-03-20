@@ -18,7 +18,7 @@ import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -534,8 +534,8 @@ export default function ClubDetailScreen() {
 
         </View>
 
-        {/* Club Leaderboard - public players ranked */}
-        <Animated.View entering={FadeInDown.duration(400).delay(300)} style={[styles.section, { marginBottom: 24 }]}>
+        {/* Club Leaderboard - public players ranked — uses FadeIn (opacity only) to prevent vertical overlap with sections below */}
+        <Animated.View entering={FadeIn.duration(400).delay(300)} style={[styles.section, { marginBottom: 24 }]}>
           <View style={styles.sectionHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: '#D97706' + '15', alignItems: 'center', justifyContent: 'center' }}>
@@ -634,7 +634,7 @@ export default function ClubDetailScreen() {
 
         <View style={isTablet ? styles.tabletRow : undefined}>
         {clubPlayers.length > 0 && (
-          <Animated.View entering={FadeInDown.duration(400).delay(400)} style={[styles.section, isTablet && styles.tabletHalf]}>
+          <Animated.View entering={FadeIn.duration(400).delay(400)} style={[styles.section, isTablet && styles.tabletHalf]}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>{t('club', 'membersCount')} ({clubPlayers.length})</Text>
             </View>
@@ -664,7 +664,7 @@ export default function ClubDetailScreen() {
 
         {/* Tournaments */}
         {clubTournaments.length > 0 && (
-          <Animated.View entering={FadeInDown.duration(400).delay(450)} style={[styles.section, isTablet && styles.tabletHalf]}>
+          <Animated.View entering={FadeIn.duration(400).delay(450)} style={[styles.section, isTablet && styles.tabletHalf]}>
             <Text style={styles.sectionTitle}>{t('club', 'organizedTournaments')}</Text>
             {clubTournaments.map(tournament => (
               <Pressable 
@@ -715,7 +715,7 @@ export default function ClubDetailScreen() {
 
         {/* Contact Visibility Toggle - only when public */}
         {canEdit && !isSharedItem && (club.isPublic ?? false) && (club.contactEmail || club.contactPhone) && (
-          <Animated.View entering={FadeInDown.duration(400).delay(640)} style={styles.section}>
+          <Animated.View entering={FadeIn.duration(400).delay(500)} style={styles.section}>
             <Pressable
               style={styles.visibilityCard}
               onPress={() => {
@@ -744,7 +744,7 @@ export default function ClubDetailScreen() {
 
         {/* Visibility Toggle - only for owner */}
         {canEdit && !isSharedItem && (
-          <Animated.View entering={FadeInDown.duration(400).delay(650)} style={styles.section}>
+          <Animated.View entering={FadeIn.duration(400).delay(550)} style={styles.section}>
             <Text style={styles.sectionTitle}>{t('map', 'visibility').toUpperCase()}</Text>
             <Pressable
               style={styles.visibilityCard}
