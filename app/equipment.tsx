@@ -138,10 +138,6 @@ export default function EquipmentScreen() {
   const [showForm, setShowForm] = useState(false);
   const [editingSet, setEditingSet] = useState<BoulesSet | null>(null);
 
-  // Comparison mode
-  const [compareMode, setCompareMode] = useState(false);
-  const [compareSetA, setCompareSetA] = useState<string | null>(null);
-  const [compareSetB, setCompareSetB] = useState<string | null>(null);
 
   // Form state
   const [formName, setFormName] = useState('');
@@ -360,29 +356,7 @@ export default function EquipmentScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [setPrimaryBoulesSet]);
 
-  // Toggle compare set selection
-  const toggleCompareSet = useCallback((id: string) => {
-    Haptics.selectionAsync();
-    if (compareSetA === id) { setCompareSetA(compareSetB); setCompareSetB(null); }
-    else if (compareSetB === id) { setCompareSetB(null); }
-    else if (!compareSetA) { setCompareSetA(id); }
-    else if (!compareSetB) { setCompareSetB(id); }
-    else { setCompareSetA(compareSetB); setCompareSetB(id); }
-  }, [compareSetA, compareSetB]);
-
   const primarySet = boulesSets.find(s => s.isPrimary);
-  const setsWithMatches = boulesSets.filter(s => (setStats[s.id]?.matches || 0) > 0);
-
-  // Comparison data
-  const comparisonData = useMemo(() => {
-    if (!compareSetA || !compareSetB) return null;
-    const a = setStats[compareSetA];
-    const b = setStats[compareSetB];
-    const nameA = boulesSets.find(s => s.id === compareSetA)?.name || 'Set A';
-    const nameB = boulesSets.find(s => s.id === compareSetB)?.name || 'Set B';
-    if (!a || !b) return null;
-    return { a, b, nameA, nameB };
-  }, [compareSetA, compareSetB, setStats, boulesSets]);
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
@@ -393,18 +367,6 @@ export default function EquipmentScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>{t('equipment', 'title')}</Text>
         <View style={styles.headerRight}>
-          {setsWithMatches.length >= 2 ? (
-            <Pressable
-              style={[styles.compareToggleBtn, compareMode && styles.compareToggleBtnActive]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setCompareMode(prev => !prev);
-                if (compareMode) { setCompareSetA(null); setCompareSetB(null); }
-              }}
-            >
-              <MaterialIcons name="compare" size={18} color={compareMode ? '#FFF' : theme.primary} />
-            </Pressable>
-          ) : null}
           <Pressable style={styles.addBtn} onPress={openNewForm}>
             <MaterialIcons name="add" size={24} color={theme.primary} />
           </Pressable>
@@ -433,80 +395,6 @@ export default function EquipmentScreen() {
           ) : null}
         </Animated.View>
 
-        {/* Compare Mode Banner */}
-        {compareMode ? (
-          <Animated.View entering={FadeIn.duration(300)} style={styles.compareBanner}>
-            <MaterialIcons name="compare" size={18} color={theme.primary} />
-            <Text style={styles.compareBannerText}>
-              {`${t('equipment', 'selectSets')} (${[compareSetA, compareSetB].filter(Boolean).length}/2)`}
-            </Text>
-            {compareSetA && compareSetB ? (
-              <View style={styles.compareBannerBadge}>
-                <MaterialIcons name="check" size={14} color="#FFF" />
-              </View>
-            ) : null}
-          </Animated.View>
-        ) : null}
-
-        {/* Comparison Radar Chart */}
-        {compareMode && comparisonData ? (
-          <Animated.View entering={FadeInDown.duration(400)} style={styles.compareCard}>
-            <View style={styles.compareHeader}>
-              <MaterialIcons name="radar" size={18} color={theme.primary} />
-              <Text style={styles.compareTitle}>{t('equipment', 'comparison')}</Text>
-            </View>
-
-            <View style={styles.radarContainer}>
-              <RadarChart
-                setA={[comparisonData.a.winRate, comparisonData.a.tirRate, comparisonData.a.pointRate, comparisonData.a.carreauRate]}
-                setB={[comparisonData.b.winRate, comparisonData.b.tirRate, comparisonData.b.pointRate, comparisonData.b.carreauRate]}
-                labels={[t('equipment', 'winsLabel'), t('equipment', 'shotsLabel'), 'Points', 'Carreaux']}
-                size={Math.min(Dimensions.get('window').width - 64, 280)}
-                colorA="#D97706"
-                colorB="#3B82F6"
-              />
-            </View>
-
-            {/* Legend */}
-            <View style={styles.compareLegend}>
-              <View style={styles.compareLegendItem}>
-                <View style={[styles.compareLegendDot, { backgroundColor: '#D97706' }]} />
-                <Text style={styles.compareLegendText} numberOfLines={1}>{comparisonData.nameA}</Text>
-              </View>
-              <View style={styles.compareLegendItem}>
-                <View style={[styles.compareLegendDot, { backgroundColor: '#3B82F6' }]} />
-                <Text style={styles.compareLegendText} numberOfLines={1}>{comparisonData.nameB}</Text>
-              </View>
-            </View>
-
-            {/* Side-by-side stats */}
-            <View style={styles.compareTable}>
-              <View style={styles.compareTableHeader}>
-                <Text style={[styles.compareTableCell, { flex: 1.5, textAlign: 'left' }]}> </Text>
-                <Text style={[styles.compareTableCell, { color: '#D97706', fontWeight: '700' }]} numberOfLines={1}>{comparisonData.nameA.substring(0, 10)}</Text>
-                <Text style={[styles.compareTableCell, { color: '#3B82F6', fontWeight: '700' }]} numberOfLines={1}>{comparisonData.nameB.substring(0, 10)}</Text>
-              </View>
-              {[
-                { label: t('equipment', 'matchesLabel'), va: comparisonData.a.matches, vb: comparisonData.b.matches, suffix: '' },
-                { label: t('equipment', 'winsLabel'), va: comparisonData.a.winRate, vb: comparisonData.b.winRate, suffix: '%' },
-                { label: t('equipment', 'shotsLabel'), va: comparisonData.a.tirRate, vb: comparisonData.b.tirRate, suffix: '%' },
-                { label: 'Points', va: comparisonData.a.pointRate, vb: comparisonData.b.pointRate, suffix: '%' },
-                { label: 'Carreaux', va: comparisonData.a.carreauRate, vb: comparisonData.b.carreauRate, suffix: '%' },
-              ].map((row, idx) => {
-                const aWins = row.va > row.vb;
-                const bWins = row.vb > row.va;
-                return (
-                  <View key={idx} style={[styles.compareTableRow, idx % 2 === 0 && styles.compareTableRowAlt]}>
-                    <Text style={[styles.compareTableCell, { flex: 1.5, textAlign: 'left', color: theme.textSecondary, fontWeight: '600' }]}>{row.label}</Text>
-                    <Text style={[styles.compareTableCell, { color: aWins ? '#D97706' : theme.textPrimary, fontWeight: aWins ? '700' : '500' }]}>{row.va}{row.suffix}</Text>
-                    <Text style={[styles.compareTableCell, { color: bWins ? '#3B82F6' : theme.textPrimary, fontWeight: bWins ? '700' : '500' }]}>{row.vb}{row.suffix}</Text>
-                  </View>
-                );
-              })}
-            </View>
-          </Animated.View>
-        ) : null}
-
         {/* Sets List */}
         {boulesSets.length === 0 ? (
           <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.emptyState}>
@@ -526,35 +414,21 @@ export default function EquipmentScreen() {
           boulesSets.map((set, idx) => {
             const stats = setStats[set.id] || { matches: 0, wins: 0, challenges: 0, totalTirs: 0, tirsSuccess: 0, totalPoints: 0, pointsSuccess: 0, carreaux: 0, winRate: 0, tirRate: 0, pointRate: 0, carreauRate: 0, evolution: [] };
             const chartWidth = Dimensions.get('window').width - 96;
-            const isSelectedA = compareSetA === set.id;
-            const isSelectedB = compareSetB === set.id;
-            const isSelected = isSelectedA || isSelectedB;
-
             return (
               <Animated.View key={set.id} entering={FadeInDown.duration(400).delay(100 + idx * 60)}>
                 <Pressable
                   style={[
                     styles.setCard,
                     set.isPrimary && styles.setCardPrimary,
-                    compareMode && isSelected && { borderWidth: 2, borderColor: isSelectedA ? '#D97706' : '#3B82F6' },
                   ]}
-                  onPress={() => compareMode ? toggleCompareSet(set.id) : openEditForm(set)}
+                  onPress={() => openEditForm(set)}
                 >
-                  {/* Compare selection indicator */}
-                  {compareMode ? (
-                    <View style={[styles.compareCheckbox, isSelected && { backgroundColor: isSelectedA ? '#D97706' : '#3B82F6', borderColor: isSelectedA ? '#D97706' : '#3B82F6' }]}>
-                      {isSelected ? <MaterialIcons name="check" size={14} color="#FFF" /> : null}
-                    </View>
-                  ) : null}
-
                   {/* Primary badge */}
-                  {set.isPrimary && !compareMode ? (
+                  {set.isPrimary ? (
                     <View style={styles.primaryBadge}>
                       <MaterialIcons name="star" size={12} color="#FFF" />
                       <Text style={styles.primaryBadgeText}>{t('equipment', 'primary')}</Text>
                     </View>
-                  ) : null}
-
                   {/* Header row */}
                   <View style={styles.setHeader}>
                     {set.photo ? (
@@ -573,18 +447,16 @@ export default function EquipmentScreen() {
                       </Text>
                       {(() => { const dbM = set.brand ? BOULES_DATABASE.find(b => b.brand === set.brand && set.name.toUpperCase().includes(b.model.toUpperCase())) : null; return dbM ? <Text style={{ fontSize: 11, color: theme.accent, fontWeight: '500', marginTop: 2 }}>{dbM.targetUsage} \u2022 {dbM.particularities}</Text> : null; })()}
                     </View>
-                    {!compareMode ? (
-                      <View style={styles.setActions}>
-                        {!set.isPrimary ? (
-                          <Pressable style={styles.setActionBtn} onPress={(e) => { e.stopPropagation(); handleSetPrimary(set); }} hitSlop={8}>
-                            <MaterialIcons name="star-outline" size={20} color={theme.textMuted} />
-                          </Pressable>
-                        ) : null}
-                        <Pressable style={[styles.setActionBtn, { backgroundColor: theme.error + '10' }]} onPress={(e) => { e.stopPropagation(); handleDelete(set); }} hitSlop={8}>
-                          <MaterialIcons name="delete-outline" size={20} color={theme.error} />
+                    <View style={styles.setActions}>
+                      {!set.isPrimary ? (
+                        <Pressable style={styles.setActionBtn} onPress={(e) => { e.stopPropagation(); handleSetPrimary(set); }} hitSlop={8}>
+                          <MaterialIcons name="star-outline" size={20} color={theme.textMuted} />
                         </Pressable>
-                      </View>
-                    ) : null}
+                      ) : null}
+                      <Pressable style={[styles.setActionBtn, { backgroundColor: theme.error + '10' }]} onPress={(e) => { e.stopPropagation(); handleDelete(set); }} hitSlop={8}>
+                        <MaterialIcons name="delete-outline" size={20} color={theme.error} />
+                      </Pressable>
+                    </View>
                   </View>
 
                   {/* Serial + Price */}
@@ -730,7 +602,7 @@ export default function EquipmentScreen() {
         )}
 
         {/* Add button at bottom */}
-        {boulesSets.length > 0 && !compareMode ? (
+        {boulesSets.length > 0 ? (
           <Pressable style={styles.addSetBtn} onPress={openNewForm}>
             <MaterialIcons name="add-circle-outline" size={22} color={theme.primary} />
             <Text style={styles.addSetBtnText}>{t('equipment', 'addBoulesSetFull')}</Text>
@@ -1036,8 +908,6 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 17, fontWeight: '700', color: theme.textPrimary },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   addBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.primary + '15', borderRadius: 20 },
-  compareToggleBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.primary + '15', borderRadius: 18 },
-  compareToggleBtnActive: { backgroundColor: theme.primary },
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 20 },
 
@@ -1048,29 +918,6 @@ const styles = StyleSheet.create({
   heroSubtitle: { fontSize: 14, color: theme.textSecondary },
   heroPrimaryBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, backgroundColor: theme.carreauColor + '12', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
   heroPrimaryText: { fontSize: 13, fontWeight: '600', color: theme.carreauColor },
-
-  // Compare banner
-  compareBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.primary + '10', paddingVertical: 12, paddingHorizontal: 16, borderRadius: theme.borderRadius.lg, marginBottom: 16, borderWidth: 1, borderColor: theme.primary + '25' },
-  compareBannerText: { flex: 1, fontSize: 14, fontWeight: '600', color: theme.primary },
-  compareBannerBadge: { width: 24, height: 24, borderRadius: 12, backgroundColor: theme.success, alignItems: 'center', justifyContent: 'center' },
-
-  // Compare card
-  compareCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 16, ...theme.shadows.card },
-  compareHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-  compareTitle: { fontSize: 16, fontWeight: '700', color: theme.textPrimary },
-  radarContainer: { alignItems: 'center', marginBottom: 12 },
-  compareLegend: { flexDirection: 'row', justifyContent: 'center', gap: 24, marginBottom: 16 },
-  compareLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: 140 },
-  compareLegendDot: { width: 10, height: 10, borderRadius: 5 },
-  compareLegendText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
-  compareTable: { borderRadius: theme.borderRadius.md, overflow: 'hidden', borderWidth: 1, borderColor: theme.border },
-  compareTableHeader: { flexDirection: 'row', backgroundColor: theme.backgroundSecondary, paddingVertical: 10, paddingHorizontal: 12 },
-  compareTableRow: { flexDirection: 'row', paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: 1, borderTopColor: theme.border },
-  compareTableRowAlt: { backgroundColor: theme.backgroundSecondary + '50' },
-  compareTableCell: { flex: 1, fontSize: 13, textAlign: 'center', color: theme.textPrimary },
-
-  // Compare checkbox
-  compareCheckbox: { position: 'absolute', top: 12, right: 12, width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: theme.border, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
 
   // Empty
   emptyState: { alignItems: 'center', paddingVertical: 48 },

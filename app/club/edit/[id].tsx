@@ -28,11 +28,12 @@ import { decode } from 'base64-arraybuffer';
 import { getSupabaseClient } from '@/template';
 import { useAuth } from '@/template';
 
-import theme from '@/constants/theme';
+import theme, { blurhash } from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAlert } from '@/template';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
+import { uploadImageToStorage } from '@/services/storageService';
 import {
   checkDuplicatePublicClubsExcluding,
   fetchPublicClubById,
@@ -117,6 +118,8 @@ export default function EditClubScreen() {
   const [membershipCost, setMembershipCost] = useState('');
   const [selectedTerrainId, setSelectedTerrainId] = useState<string | undefined>();
   const [isSaving, setIsSaving] = useState(false);
+  const [logoUri, setLogoUri] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   // Terrain picker modal
   const [showTerrainPicker, setShowTerrainPicker] = useState(false);
@@ -166,6 +169,7 @@ export default function EditClubScreen() {
       setMembershipCost(club.membershipCost ? String(club.membershipCost) : '');
       if (club.clubCardUrl) { setClubCardUrl(club.clubCardUrl); setClubCardType(club.clubCardUrl.toLowerCase().endsWith('.pdf') ? 'pdf' : 'image'); }
       else { setClubCardUrl(null); }
+      setLogoUri(club.logo || null);
     }
   }, [club]);
 
@@ -318,7 +322,7 @@ export default function EditClubScreen() {
         }
       }
       await updateClub(club.id, {
-        name: name.trim(), address: finalAddress, city: finalCity, country: location.country || 'France',
+        name: name.trim(), logo: logoUri || undefined, address: finalAddress, city: finalCity, country: location.country || 'France',
         location: { latitude: finalLat, longitude: finalLng },
         foundedYear: parseInt(foundedYear) || undefined, description: description.trim() || null,
         facilities: facilityLabels, contactEmail: contactEmail.trim() || null, contactPhone: contactPhone.trim() || null,
@@ -366,11 +370,66 @@ export default function EditClubScreen() {
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView style={styles.scrollView} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          {/* Icon Preview */}
+          {/* Logo Preview */}
           <Animated.View entering={FadeInDown.duration(400)} style={styles.iconSection}>
-            <View style={styles.clubIcon}>
-              <MaterialIcons name="home" size={48} color="#FFF" />
-            </View>
+            <Pressable
+              style={styles.clubIconPressable}
+              onPress={() => {
+                Alert.alert(
+                  t('club', 'clubLabel'),
+                  language === 'fr' ? 'Logo du club' : 'Club logo',
+                  [
+                    { text: t('player', 'fromCamera'), onPress: async () => {
+                      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+                      if (status !== 'granted') { showAlert(t('profile', 'permissionRequired'), t('profile', 'cameraPermission')); return; }
+                      const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+                      if (!result.canceled && result.assets[0]) {
+                        setUploadingLogo(true);
+                        const url = await uploadImageToStorage('avatars', `clubs/${user?.id}`, result.assets[0].uri);
+                        setUploadingLogo(false);
+                        if (url) { setLogoUri(url); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }
+                        else { showAlert(t('common', 'error'), t('profile', 'errorUploadPhoto')); }
+                      }
+                    }},
+                    { text: t('player', 'fromGallery'), onPress: async () => {
+                      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                      if (status !== 'granted') { showAlert(t('profile', 'permissionRequired'), t('profile', 'galleryPermission')); return; }
+                      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+                      if (!result.canceled && result.assets[0]) {
+                        setUploadingLogo(true);
+                        const url = await uploadImageToStorage('avatars', `clubs/${user?.id}`, result.assets[0].uri);
+                        setUploadingLogo(false);
+                        if (url) { setLogoUri(url); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }
+                        else { showAlert(t('common', 'error'), t('profile', 'errorUploadPhoto')); }
+                      }
+                    }},
+                    ...(logoUri ? [{ text: language === 'fr' ? 'Supprimer le logo' : 'Remove logo', style: 'destructive' as const, onPress: () => { setLogoUri(null); Haptics.selectionAsync(); } }] : []),
+                    { text: t('common', 'cancel'), style: 'cancel' },
+                  ]
+                );
+              }}
+              disabled={uploadingLogo}
+            >
+              {uploadingLogo ? (
+                <View style={styles.clubIcon}>
+                  <ActivityIndicator size="large" color="#FFF" />
+                </View>
+              ) : logoUri ? (
+                <View style={styles.clubLogoWrap}>
+                  <Image source={{ uri: logoUri }} style={styles.clubLogoImg} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
+                  <View style={styles.clubLogoEditBadge}>
+                    <MaterialIcons name="camera-alt" size={14} color="#FFF" />
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.clubIcon}>
+                  <MaterialIcons name="home" size={48} color="#FFF" />
+                  <View style={styles.clubLogoEditBadge}>
+                    <MaterialIcons name="camera-alt" size={14} color="#FFF" />
+                  </View>
+                </View>
+              )}
+            </Pressable>
           </Animated.View>
 
           {/* 1. Nom du club */}
@@ -624,7 +683,11 @@ const styles = StyleSheet.create({
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
   iconSection: { alignItems: 'center', marginBottom: 14 },
-  clubIcon: { width: 96, height: 96, borderRadius: 20, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' },
+  clubIconPressable: {},
+  clubIcon: { width: 96, height: 96, borderRadius: 48, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center', position: 'relative' as const },
+  clubLogoWrap: { width: 96, height: 96, borderRadius: 48, overflow: 'hidden' as const, position: 'relative' as const },
+  clubLogoImg: { width: 96, height: 96, borderRadius: 48 },
+  clubLogoEditBadge: { position: 'absolute' as const, bottom: 2, right: 2, width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 2, borderColor: '#FFF' },
 
   // SectionCard
   sectionCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 14, ...theme.shadows.card },

@@ -26,6 +26,7 @@ import * as FileSystem from 'expo-file-system';
 import * as Linking2 from 'expo-linking';
 import { decode } from 'base64-arraybuffer';
 import { getSupabaseClient } from '@/template';
+import { uploadImageToStorage } from '@/services/storageService';
 import theme, { blurhash } from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -81,6 +82,9 @@ export default function ClubDetailScreen() {
   const canEdit = !isReadOnly;
   const supabase = getSupabaseClient();
 
+  // Logo upload state
+  const [uploadingLogo, setUploadingLogo] = React.useState(false);
+
   // Club card state
   const [clubCardUrl, setClubCardUrl] = React.useState<string | null>(null);
   const [clubCardType, setClubCardType] = React.useState<'image' | 'pdf'>('image');
@@ -96,6 +100,45 @@ export default function ClubDetailScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   };
+
+  const handleUploadLogo = React.useCallback(() => {
+    if (!club || !canEdit || isSharedItem) return;
+    Alert.alert(
+      t('club', 'clubLabel'),
+      language === 'fr' ? 'Logo du club' : 'Club logo',
+      [
+        { text: t('player', 'fromCamera'), onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') { showAlert(t('profile', 'permissionRequired'), t('profile', 'cameraPermission')); return; }
+          const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+          if (!result.canceled && result.assets[0]) {
+            setUploadingLogo(true);
+            const url = await uploadImageToStorage('avatars', `clubs/${user?.id}`, result.assets[0].uri);
+            setUploadingLogo(false);
+            if (url) { await updateClub(club.id, { logo: url }); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }
+            else { showAlert(t('common', 'error'), t('profile', 'errorUploadPhoto')); }
+          }
+        }},
+        { text: t('player', 'fromGallery'), onPress: async () => {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== 'granted') { showAlert(t('profile', 'permissionRequired'), t('profile', 'galleryPermission')); return; }
+          const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+          if (!result.canceled && result.assets[0]) {
+            setUploadingLogo(true);
+            const url = await uploadImageToStorage('avatars', `clubs/${user?.id}`, result.assets[0].uri);
+            setUploadingLogo(false);
+            if (url) { await updateClub(club.id, { logo: url }); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }
+            else { showAlert(t('common', 'error'), t('profile', 'errorUploadPhoto')); }
+          }
+        }},
+        ...(club.logo ? [{ text: language === 'fr' ? 'Supprimer le logo' : 'Remove logo', style: 'destructive' as const, onPress: async () => {
+          await updateClub(club.id, { logo: undefined });
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }}] : []),
+        { text: t('common', 'cancel'), style: 'cancel' },
+      ]
+    );
+  }, [club, canEdit, isSharedItem, user?.id, updateClub, showAlert, t, language]);
 
   React.useEffect(() => {
     if (id) {
@@ -365,9 +408,31 @@ export default function ClubDetailScreen() {
       >
         {/* Club Card */}
         <Animated.View entering={FadeInDown.duration(400)} style={[styles.clubCard, isTablet && styles.clubCardTablet]}>
-          <View style={styles.clubIcon}>
-            <MaterialIcons name="home" size={48} color="#FFF" />
-          </View>
+          <Pressable style={styles.clubIconPressable} onPress={handleUploadLogo} disabled={!canEdit || isSharedItem || uploadingLogo}>
+            {uploadingLogo ? (
+              <View style={styles.clubIcon}>
+                <ActivityIndicator size="large" color="#FFF" />
+              </View>
+            ) : club.logo ? (
+              <View style={styles.clubLogoWrap}>
+                <Image source={{ uri: club.logo }} style={styles.clubLogoImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
+                {canEdit && !isSharedItem ? (
+                  <View style={styles.clubLogoEditBadge}>
+                    <MaterialIcons name="camera-alt" size={14} color="#FFF" />
+                  </View>
+                ) : null}
+              </View>
+            ) : (
+              <View style={styles.clubIcon}>
+                <MaterialIcons name="home" size={48} color="#FFF" />
+                {canEdit && !isSharedItem ? (
+                  <View style={styles.clubLogoEditBadge}>
+                    <MaterialIcons name="camera-alt" size={14} color="#FFF" />
+                  </View>
+                ) : null}
+              </View>
+            )}
+          </Pressable>
           <Text style={styles.clubName}>{club.name}</Text>
           {sharedPermission ? (
             <View style={{ marginBottom: 8 }}>
@@ -1059,6 +1124,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...theme.shadows.card,
   },
+  clubIconPressable: {
+    marginBottom: 16,
+  },
   clubIcon: {
     width: 100,
     height: 100,
@@ -1066,7 +1134,31 @@ const styles = StyleSheet.create({
     backgroundColor: theme.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+  },
+  clubLogoWrap: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  clubLogoImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+  },
+  clubLogoEditBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFF',
   },
   clubName: {
     fontSize: 24,
