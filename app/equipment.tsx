@@ -429,6 +429,8 @@ export default function EquipmentScreen() {
                       <MaterialIcons name="star" size={12} color="#FFF" />
                       <Text style={styles.primaryBadgeText}>{t('equipment', 'primary')}</Text>
                     </View>
+                  ) : null}
+
                   {/* Header row */}
                   <View style={styles.setHeader}>
                     {set.photo ? (
