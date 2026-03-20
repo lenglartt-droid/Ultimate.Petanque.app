@@ -1,6 +1,14 @@
 import { getSupabaseClient } from '@/template';
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+
+// expo-notifications is native-only; lazy-load to avoid web bundler crash
+let _Notifications: typeof import('expo-notifications') | null = null;
+async function getNotifications() {
+  if (!_Notifications && Platform.OS !== 'web') {
+    _Notifications = await import('expo-notifications');
+  }
+  return _Notifications;
+}
 
 export interface Meetup {
   id: string;
@@ -324,7 +332,9 @@ export async function scheduleMeetupReminder(meetup: Meetup, terrainName: string
 
     const formattedTime = meetupDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
-    const id = await Notifications.scheduleNotificationAsync({
+    const Notif = await getNotifications();
+    if (!Notif) return null;
+    const id = await Notif.scheduleNotificationAsync({
       content: {
         title: `\u{1F3AF} RDV Petanque dans 1h !`,
         body: `${meetup.title} a ${terrainName} - ${formattedTime}`,
@@ -334,7 +344,7 @@ export async function scheduleMeetupReminder(meetup: Meetup, terrainName: string
       },
       trigger: {
         date: reminderDate,
-        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        type: Notif.SchedulableTriggerInputTypes.DATE,
       },
       identifier: `meetup_${meetup.id}_reminder`,
     });
@@ -351,7 +361,8 @@ export async function scheduleMeetupReminder(meetup: Meetup, terrainName: string
  */
 export async function cancelMeetupReminder(meetupId: string): Promise<void> {
   try {
-    await Notifications.cancelScheduledNotificationAsync(`meetup_${meetupId}_reminder`);
+    const Notif = await getNotifications();
+    if (Notif) await Notif.cancelScheduledNotificationAsync(`meetup_${meetupId}_reminder`);
   } catch {
     // Ignore if not found
   }
@@ -374,10 +385,11 @@ export async function scheduleMeetupNotifications(
   const formattedTime = meetupDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   const formattedDate = meetupDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
+  const Notif = await getNotifications();
   const scheduleOne = async (triggerDate: Date, title: string, body: string, identifier: string): Promise<string | null> => {
-    if (triggerDate <= now) return null;
+    if (triggerDate <= now || !Notif) return null;
     try {
-      const id = await Notifications.scheduleNotificationAsync({
+      const id = await Notif.scheduleNotificationAsync({
         content: {
           title,
           body,
@@ -388,7 +400,7 @@ export async function scheduleMeetupNotifications(
         },
         trigger: {
           date: triggerDate,
-          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          type: Notif.SchedulableTriggerInputTypes.DATE,
         },
         identifier,
       });
@@ -439,7 +451,8 @@ export async function cancelAllMeetupReminders(meetupId: string): Promise<void> 
   ];
   for (const id of identifiers) {
     try {
-      await Notifications.cancelScheduledNotificationAsync(id);
+      const Notif2 = await getNotifications();
+      if (Notif2) await Notif2.cancelScheduledNotificationAsync(id);
     } catch {
       // Ignore if not found
     }

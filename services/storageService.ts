@@ -1,7 +1,6 @@
 import { Platform } from 'react-native';
 import { getSupabaseClient } from '@/template';
 import { decode } from 'base64-arraybuffer';
-import * as FileSystem from 'expo-file-system';
 
 const supabase = getSupabaseClient();
 
@@ -39,6 +38,7 @@ export async function uploadImageToStorage(
         reader.readAsDataURL(blob);
       });
     } else {
+      const FileSystem = await import('expo-file-system');
       base64Data = await FileSystem.readAsStringAsync(fileUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
