@@ -565,6 +565,186 @@ function matchesToHtml(matches: Match[], lang: 'fr' | 'en'): string {
   return `<table><thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
+// ============================================
+// SVG CHART GENERATORS FOR PDF
+// ============================================
+
+function generateScoreProgressionSvg(menes: { teamAPoints: number; teamBPoints: number }[], teamAName: string, teamBName: string, lang: 'fr' | 'en'): string {
+  if (!menes || menes.length === 0) return '';
+  const lbl = (fr: string, en: string) => lang === 'fr' ? fr : en;
+  const W = 520, H = 260;
+  const padL = 44, padR = 20, padT = 30, padB = 36;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+
+  // Compute cumulative scores
+  let cumA = 0, cumB = 0;
+  const pointsA = [0], pointsB = [0];
+  menes.forEach(me => {
+    cumA += me.teamAPoints; cumB += me.teamBPoints;
+    pointsA.push(cumA); pointsB.push(cumB);
+  });
+  const maxScore = Math.max(cumA, cumB, 13);
+  const totalPoints = pointsA.length;
+
+  const xScale = (i: number) => padL + (i / (totalPoints - 1)) * chartW;
+  const yScale = (v: number) => padT + chartH - (v / maxScore) * chartH;
+
+  const lineA = pointsA.map((v, i) => `${xScale(i).toFixed(1)},${yScale(v).toFixed(1)}`).join(' ');
+  const lineB = pointsB.map((v, i) => `${xScale(i).toFixed(1)},${yScale(v).toFixed(1)}`).join(' ');
+
+  // Grid lines
+  const gridLines: string[] = [];
+  const ySteps = [0, Math.round(maxScore / 4), Math.round(maxScore / 2), Math.round(maxScore * 3 / 4), maxScore];
+  const uniqueSteps = [...new Set(ySteps)];
+  uniqueSteps.forEach(v => {
+    const y = yScale(v);
+    gridLines.push(`<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="4,3"/>`);
+    gridLines.push(`<text x="${padL - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="#9ca3af">${v}</text>`);
+  });
+
+  // X labels (mène numbers)
+  const xLabels: string[] = [];
+  for (let i = 0; i < totalPoints; i++) {
+    const x = xScale(i);
+    if (i === 0) {
+      xLabels.push(`<text x="${x.toFixed(1)}" y="${H - padB + 18}" text-anchor="middle" font-size="9" fill="#9ca3af">${lbl('Debut', 'Start')}</text>`);
+    } else {
+      xLabels.push(`<text x="${x.toFixed(1)}" y="${H - padB + 18}" text-anchor="middle" font-size="9" fill="#9ca3af">${i}</text>`);
+    }
+  }
+
+  // Dots for final score
+  const dotsA = pointsA.map((v, i) => `<circle cx="${xScale(i).toFixed(1)}" cy="${yScale(v).toFixed(1)}" r="${i === totalPoints - 1 ? 5 : 3}" fill="#D97706"/>`).join('');
+  const dotsB = pointsB.map((v, i) => `<circle cx="${xScale(i).toFixed(1)}" cy="${yScale(v).toFixed(1)}" r="${i === totalPoints - 1 ? 5 : 3}" fill="#6366F1"/>`).join('');
+
+  return `
+    <div style="margin-top:24px;margin-bottom:8px">
+      <h2 style="font-size:16px;color:#374151;margin-bottom:12px">${lbl('Progression du score', 'Score Progression')}</h2>
+      <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="background:#fafafa;border-radius:8px;border:1px solid #e5e7eb">
+        ${gridLines.join('')}
+        ${xLabels.join('')}
+        <polyline points="${lineA}" fill="none" stroke="#D97706" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <polyline points="${lineB}" fill="none" stroke="#6366F1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        ${dotsA}
+        ${dotsB}
+        <!-- Final score labels -->
+        <text x="${(xScale(totalPoints - 1) + 8).toFixed(1)}" y="${(yScale(cumA) + 4).toFixed(1)}" font-size="11" font-weight="700" fill="#D97706">${cumA}</text>
+        <text x="${(xScale(totalPoints - 1) + 8).toFixed(1)}" y="${(yScale(cumB) + 4).toFixed(1)}" font-size="11" font-weight="700" fill="#6366F1">${cumB}</text>
+      </svg>
+      <div style="display:flex;gap:20px;margin-top:8px;font-size:11px">
+        <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:3px;background:#D97706;border-radius:2px;display:inline-block"></span><span style="color:#D97706;font-weight:600">${teamAName}</span></span>
+        <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:3px;background:#6366F1;border-radius:2px;display:inline-block"></span><span style="color:#6366F1;font-weight:600">${teamBName}</span></span>
+      </div>
+    </div>`;
+}
+
+function generatePlayerRadarSvg(playerActions: Match['playerActions'], lang: 'fr' | 'en'): string {
+  if (!playerActions || playerActions.length === 0) return '';
+  const lbl = (fr: string, en: string) => lang === 'fr' ? fr : en;
+
+  const axes = [
+    { key: 'tir', label: lbl('Tir %', 'Shot %') },
+    { key: 'point', label: lbl('Point %', 'Point %') },
+    { key: 'carreau', label: lbl('Carreau %', 'Car. %') },
+    { key: 'volume', label: 'Volume' },
+    { key: 'efficacite', label: lbl('Efficacite', 'Efficiency') },
+  ];
+  const n = axes.length;
+  const cx = 150, cy = 145, R = 100;
+  const angleStep = (2 * Math.PI) / n;
+  const startAngle = -Math.PI / 2;
+
+  const colors = ['#D97706', '#6366F1', '#059669', '#dc2626', '#0EA5E9', '#8B5CF6'];
+
+  // Compute max volume for normalization
+  const maxVolume = Math.max(...playerActions.map(pa => pa.actions.tirs + pa.actions.points), 1);
+
+  // Build data per player
+  const playersData = playerActions.map((pa, idx) => {
+    const tirRate = pa.actions.tirs > 0 ? (pa.actions.tirsSuccess / pa.actions.tirs) * 100 : 0;
+    const pointRate = pa.actions.points > 0 ? (pa.actions.pointsSuccess / pa.actions.points) * 100 : 0;
+    const carreauRate = pa.actions.tirsSuccess > 0 ? (pa.actions.carreaux / pa.actions.tirsSuccess) * 100 : 0;
+    const volume = ((pa.actions.tirs + pa.actions.points) / maxVolume) * 100;
+    const totalActions = pa.actions.tirs + pa.actions.points;
+    const totalSuccess = pa.actions.tirsSuccess + pa.actions.pointsSuccess;
+    const efficacite = totalActions > 0 ? (totalSuccess / totalActions) * 100 : 0;
+    return {
+      name: pa.playerName,
+      team: pa.team,
+      color: colors[idx % colors.length],
+      values: [tirRate, pointRate, Math.min(carreauRate, 100), volume, efficacite],
+      raw: { tirRate, pointRate, carreauRate, volume: pa.actions.tirs + pa.actions.points, efficacite },
+    };
+  });
+
+  // Axis lines and labels
+  const axisLines: string[] = [];
+  const axisLabels: string[] = [];
+  axes.forEach((axis, i) => {
+    const angle = startAngle + i * angleStep;
+    const x = cx + R * Math.cos(angle);
+    const y = cy + R * Math.sin(angle);
+    axisLines.push(`<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#d1d5db" stroke-width="1"/>`);
+    const lx = cx + (R + 16) * Math.cos(angle);
+    const ly = cy + (R + 16) * Math.sin(angle);
+    axisLabels.push(`<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="600" fill="#6b7280">${axis.label}</text>`);
+  });
+
+  // Grid circles
+  const gridCircles = [25, 50, 75, 100].map(pct => {
+    const r = (pct / 100) * R;
+    return `<circle cx="${cx}" cy="${cy}" r="${r.toFixed(1)}" fill="none" stroke="#e5e7eb" stroke-width="0.8" stroke-dasharray="${pct === 100 ? '0' : '3,2'}"/>`;
+  }).join('');
+
+  // Player polygons
+  const polygons = playersData.map(pd => {
+    const points = pd.values.map((v, i) => {
+      const angle = startAngle + i * angleStep;
+      const r = (Math.min(v, 100) / 100) * R;
+      return `${(cx + r * Math.cos(angle)).toFixed(1)},${(cy + r * Math.sin(angle)).toFixed(1)}`;
+    }).join(' ');
+    return `<polygon points="${points}" fill="${pd.color}20" stroke="${pd.color}" stroke-width="2" stroke-linejoin="round"/>`;
+  }).join('');
+
+  // Legend
+  const legendItems = playersData.map((pd, i) =>
+    `<span style="display:flex;align-items:center;gap:5px;margin-right:14px"><span style="width:10px;height:10px;border-radius:50%;background:${pd.color};display:inline-block"></span><span style="font-size:11px;font-weight:600;color:${pd.color}">${pd.name} (${pd.team})</span></span>`
+  ).join('');
+
+  // Stats table
+  const statsRows = playersData.map(pd =>
+    `<tr><td style="padding:5px 8px;font-weight:600;color:${pd.color}">${pd.name}</td><td style="padding:5px 8px;text-align:center">${Math.round(pd.raw.tirRate)}%</td><td style="padding:5px 8px;text-align:center">${Math.round(pd.raw.pointRate)}%</td><td style="padding:5px 8px;text-align:center">${Math.round(pd.raw.carreauRate)}%</td><td style="padding:5px 8px;text-align:center">${pd.raw.volume}</td><td style="padding:5px 8px;text-align:center;font-weight:700;color:#374151">${Math.round(pd.raw.efficacite)}%</td></tr>`
+  ).join('');
+
+  return `
+    <div style="margin-top:24px">
+      <h2 style="font-size:16px;color:#374151;margin-bottom:12px">${lbl('Radar des performances', 'Performance Radar')}</h2>
+      <div style="display:flex;align-items:flex-start;gap:24px;flex-wrap:wrap">
+        <svg width="300" height="300" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg" style="background:#fafafa;border-radius:8px;border:1px solid #e5e7eb">
+          ${gridCircles}
+          ${axisLines.join('')}
+          ${polygons}
+          ${axisLabels.join('')}
+        </svg>
+        <div style="flex:1;min-width:200px">
+          <table style="width:100%;border-collapse:collapse;font-size:11px">
+            <thead><tr style="background:#f3f4f6">
+              <th style="padding:6px 8px;text-align:left;border-bottom:2px solid #D97706">${lbl('Joueur', 'Player')}</th>
+              <th style="padding:6px 8px;text-align:center;border-bottom:2px solid #D97706">${lbl('Tir', 'Shot')}</th>
+              <th style="padding:6px 8px;text-align:center;border-bottom:2px solid #D97706">Point</th>
+              <th style="padding:6px 8px;text-align:center;border-bottom:2px solid #D97706">Car.</th>
+              <th style="padding:6px 8px;text-align:center;border-bottom:2px solid #D97706">Vol.</th>
+              <th style="padding:6px 8px;text-align:center;border-bottom:2px solid #D97706">${lbl('Eff.', 'Eff.')}</th>
+            </tr></thead>
+            <tbody>${statsRows}</tbody>
+          </table>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;margin-top:10px">${legendItems}</div>
+    </div>`;
+}
+
 function singleMatchToHtml(m: Match, lang: 'fr' | 'en'): string {
   const lbl = (fr: string, en: string) => lang === 'fr' ? fr : en;
   const winA = m.winner === 'A';
@@ -577,8 +757,21 @@ function singleMatchToHtml(m: Match, lang: 'fr' | 'en'): string {
   html += `<tr class="stat-row"><td>Score</td><td style="font-weight:700">${m.teamA.score} - ${m.teamB.score}</td></tr>`;
   html += `<tr class="stat-row"><td>${lbl('Duree', 'Duration')}</td><td>${m.duration ? `${m.duration} min` : '-'}</td></tr>`;
   html += `</tbody></table>`;
+  // Score progression chart (mène by mène)
+  if (m.menes && m.menes.length > 0) {
+    html += generateScoreProgressionSvg(
+      m.menes,
+      m.teamA.playerNames.join(', '),
+      m.teamB.playerNames.join(', '),
+      lang,
+    );
+  }
+
   if (m.playerActions && m.playerActions.length > 0) {
-    html += `<h2 style="font-size:16px;margin-top:20px;color:#374151">${lbl('Actions des joueurs', 'Player actions')}</h2>`;
+    // Player radar chart
+    html += generatePlayerRadarSvg(m.playerActions, lang);
+
+    html += `<h2 style="font-size:16px;margin-top:24px;color:#374151">${lbl('Actions des joueurs', 'Player actions')}</h2>`;
     html += `<table><thead><tr><th>${lbl('Joueur', 'Player')}</th><th>${lbl('Tirs', 'Shots')}</th><th>${lbl('Reussis', 'Hit')}</th><th>Points</th><th>${lbl('Reussis', 'Hit')}</th><th>Carreaux</th></tr></thead><tbody>`;
     m.playerActions.forEach(pa => {
       html += `<tr><td>${pa.playerName} (${pa.team})</td><td>${pa.actions.tirs}</td><td style="color:#059669;font-weight:700">${pa.actions.tirsSuccess}</td><td>${pa.actions.points}</td><td style="color:#059669;font-weight:700">${pa.actions.pointsSuccess}</td><td style="color:#D97706;font-weight:700">${pa.actions.carreaux}</td></tr>`;
