@@ -2,12 +2,12 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import { Platform } from 'react-native';
-import { Match, Challenge, Tournament } from '@/services/mockData';
+import { Match, Challenge, Tournament, Player } from '@/services/mockData';
 
 export type ExportFormat = 'csv' | 'pdf';
 export type ExportDataType = 'matches' | 'challenges' | 'statistics';
 export type ExportPeriod = 'all' | '7d' | '30d' | '3m' | '6m' | '1y';
-export type ExportPreset = 'none' | 'tournament' | 'season' | 'comparative';
+export type ExportPreset = 'none' | 'tournament' | 'season' | 'comparative' | 'match' | 'player' | 'challenge';
 
 interface ExportOptions {
   format: ExportFormat;
@@ -21,6 +21,10 @@ interface ExportOptions {
   seasonYear?: number;
   comparePeriod?: ExportPeriod;
   compareSeasonYear?: number;
+  matchId?: string;
+  playerId?: string;
+  playerName?: string;
+  challengeId?: string;
 }
 
 export interface PeriodStats {
@@ -39,6 +43,13 @@ export interface PeriodStats {
   carreauRate: number;
   totalChallenges: number;
   avgDuration: number;
+}
+
+export interface PreviewData {
+  headers: string[];
+  rows: string[][];
+  totalRows: number;
+  title: string;
 }
 
 // ============================================
@@ -60,8 +71,8 @@ function filterByPeriod<T extends { date: string }>(items: T[], period: ExportPe
 }
 
 function filterBySeason<T extends { date: string }>(items: T[], startYear: number): T[] {
-  const seasonStart = new Date(startYear, 8, 1); // Sept 1
-  const seasonEnd = new Date(startYear + 1, 5, 30, 23, 59, 59); // June 30
+  const seasonStart = new Date(startYear, 8, 1);
+  const seasonEnd = new Date(startYear + 1, 5, 30, 23, 59, 59);
   return items.filter(item => {
     const d = new Date(item.date);
     return d >= seasonStart && d <= seasonEnd;
@@ -70,6 +81,12 @@ function filterBySeason<T extends { date: string }>(items: T[], startYear: numbe
 
 function filterByTournament(matches: Match[], tournamentId: string): Match[] {
   return matches.filter(m => m.tournamentId === tournamentId);
+}
+
+function filterMatchesByPlayer(matches: Match[], playerId: string): Match[] {
+  return matches.filter(m =>
+    m.teamA.players.includes(playerId) || m.teamB.players.includes(playerId)
+  );
 }
 
 function escapeCsv(val: any): string {
@@ -127,6 +144,190 @@ export function computePeriodStats(
 }
 
 // ============================================
+// PREVIEW GENERATION
+// ============================================
+
+function matchToRow(m: Match, lang: 'fr' | 'en'): string[] {
+  return [
+    new Date(m.date).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US'),
+    m.mode,
+    m.format,
+    m.teamA.playerNames.join(' + '),
+    `${m.teamA.score} - ${m.teamB.score}`,
+    m.winner === 'A' ? (lang === 'fr' ? 'V' : 'W') : (lang === 'fr' ? 'D' : 'L'),
+    m.duration ? `${m.duration} min` : '-',
+  ];
+}
+
+function challengeToRow(c: Challenge, lang: 'fr' | 'en'): string[] {
+  const typeLabels: Record<string, Record<string, string>> = {
+    '10_tirs': { fr: '10 Tirs', en: '10 Shots' },
+    '10_tirs_sautee': { fr: '10 Tirs sautee', en: '10 Lob' },
+    'precision': { fr: 'Precision', en: 'Precision' },
+  };
+  return [
+    new Date(c.date).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US'),
+    typeLabels[c.type]?.[lang] || c.type,
+    c.mode === 'solo' ? 'Solo' : '1v1',
+    c.successCount != null ? `${c.successCount}/${c.totalShots || 10}` : (c.totalPoints != null ? `${c.totalPoints} pts` : '-'),
+    c.carreauCount != null ? String(c.carreauCount) : '-',
+    c.winner === 'player' ? (lang === 'fr' ? 'V' : 'W') : c.winner === 'opponent' ? (lang === 'fr' ? 'D' : 'L') : c.winner === 'draw' ? '=' : '-',
+  ];
+}
+
+export function generatePreview(
+  options: ExportOptions,
+  matches: Match[],
+  challenges: Challenge[],
+  tournaments: Tournament[],
+  userStats: any,
+  maxRows: number = 5,
+): PreviewData {
+  const { dataType, period, language, preset, tournamentId, tournamentName, seasonYear, comparePeriod, matchId, playerId, playerName, challengeId } = options;
+  const lbl = (fr: string, en: string) => language === 'fr' ? fr : en;
+
+  // ---- COMPARATIVE ----
+  if (preset === 'comparative' && comparePeriod) {
+    const matchesA = filterByPeriod(matches, period);
+    const matchesB = filterByPeriod(matches, comparePeriod);
+    const challengesA = filterByPeriod(challenges, period);
+    const challengesB = filterByPeriod(challenges, comparePeriod);
+    const pLabels: Record<string, string> = language === 'fr'
+      ? { all: 'Tout', '7d': '7j', '30d': '30j', '3m': '3m', '6m': '6m', '1y': '1an' }
+      : { all: 'All', '7d': '7d', '30d': '30d', '3m': '3m', '6m': '6m', '1y': '1y' };
+    const statsA = computePeriodStats(matchesA, challengesA, pLabels[period] || period);
+    const statsB = computePeriodStats(matchesB, challengesB, pLabels[comparePeriod] || comparePeriod);
+    const headers = [lbl('Stat', 'Stat'), statsA.label, statsB.label, 'Delta'];
+    const rows = [
+      [lbl('Matchs', 'Games'), String(statsA.totalMatches), String(statsB.totalMatches), `${statsA.totalMatches - statsB.totalMatches > 0 ? '+' : ''}${statsA.totalMatches - statsB.totalMatches}`],
+      [lbl('Vict.%', 'Win%'), `${statsA.winRate}%`, `${statsB.winRate}%`, `${statsA.winRate - statsB.winRate > 0 ? '+' : ''}${statsA.winRate - statsB.winRate}%`],
+      [lbl('Tir%', 'Shot%'), `${statsA.tirRate}%`, `${statsB.tirRate}%`, `${statsA.tirRate - statsB.tirRate > 0 ? '+' : ''}${statsA.tirRate - statsB.tirRate}%`],
+      [lbl('Carreau%', 'Car.%'), `${statsA.carreauRate}%`, `${statsB.carreauRate}%`, `${statsA.carreauRate - statsB.carreauRate > 0 ? '+' : ''}${statsA.carreauRate - statsB.carreauRate}%`],
+    ];
+    return { headers, rows, totalRows: rows.length, title: lbl('Comparatif', 'Comparative') };
+  }
+
+  // ---- SINGLE MATCH ----
+  if (preset === 'match' && matchId) {
+    const m = matches.find(mt => mt.id === matchId);
+    if (!m) return { headers: [], rows: [], totalRows: 0, title: lbl('Match', 'Match') };
+    const headers = [lbl('Info', 'Info'), lbl('Valeur', 'Value')];
+    const rows: string[][] = [
+      [lbl('Date', 'Date'), new Date(m.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')],
+      ['Format', m.format],
+      ['Mode', m.mode],
+      [lbl('Equipe A', 'Team A'), m.teamA.playerNames.join(', ')],
+      [lbl('Equipe B', 'Team B'), m.teamB.playerNames.join(', ')],
+      ['Score', `${m.teamA.score} - ${m.teamB.score}`],
+      [lbl('Duree', 'Duration'), m.duration ? `${m.duration} min` : '-'],
+      [lbl('Menes', 'Ends'), String(m.menes?.length || 0)],
+    ];
+    if (m.playerActions) {
+      m.playerActions.forEach(pa => {
+        rows.push([`${pa.playerName} - Tir`, `${pa.actions.tirsSuccess}/${pa.actions.tirs}`]);
+        rows.push([`${pa.playerName} - Pts`, `${pa.actions.pointsSuccess}/${pa.actions.points}`]);
+      });
+    }
+    return { headers, rows: rows.slice(0, maxRows), totalRows: rows.length, title: `Match ${new Date(m.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')}` };
+  }
+
+  // ---- SINGLE CHALLENGE ----
+  if (preset === 'challenge' && challengeId) {
+    const c = challenges.find(ch => ch.id === challengeId);
+    if (!c) return { headers: [], rows: [], totalRows: 0, title: lbl('Defi', 'Challenge') };
+    const typeLabels: Record<string, Record<string, string>> = {
+      '10_tirs': { fr: '10 Tirs', en: '10 Shots' },
+      '10_tirs_sautee': { fr: '10 Tirs sautee', en: '10 Lob Shots' },
+      'precision': { fr: 'Precision', en: 'Precision' },
+    };
+    const headers = [lbl('Info', 'Info'), lbl('Valeur', 'Value')];
+    const rows: string[][] = [
+      [lbl('Date', 'Date'), new Date(c.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')],
+      ['Type', typeLabels[c.type]?.[language] || c.type],
+      ['Mode', c.mode === 'solo' ? 'Solo' : `1v1 vs ${c.opponentName || '?'}`],
+      [lbl('Reussite', 'Success'), c.successCount != null ? `${c.successCount}/${c.totalShots || 10}` : '-'],
+      ['Carreaux', String(c.carreauCount ?? 0)],
+      [lbl('Taux', 'Rate'), c.successRate != null ? `${Math.round(c.successRate)}%` : (c.totalPoints != null ? `${c.totalPoints} pts` : '-')],
+      [lbl('Duree', 'Duration'), c.duration ? `${c.duration}s` : '-'],
+    ];
+    if (c.mode === '1v1' && c.opponentResult) {
+      rows.push([lbl('Adv. reussite', 'Opp. success'), `${c.opponentResult.successCount ?? '-'}/${c.opponentResult.totalShots ?? '-'}`]);
+      rows.push([lbl('Resultat', 'Result'), c.winner === 'player' ? lbl('Victoire', 'Win') : c.winner === 'opponent' ? lbl('Defaite', 'Loss') : lbl('Egalite', 'Draw')]);
+    }
+    return { headers, rows: rows.slice(0, maxRows), totalRows: rows.length, title: `${typeLabels[c.type]?.[language] || c.type}` };
+  }
+
+  // ---- BY PLAYER ----
+  if (preset === 'player' && playerId) {
+    const playerMatches = filterMatchesByPlayer(matches, playerId);
+    const name = playerName || 'Joueur';
+    if (dataType === 'matches') {
+      const headers = [lbl('Date', 'Date'), 'Format', lbl('Equipes', 'Teams'), 'Score', lbl('R', 'R')];
+      const rows = playerMatches.slice(0, maxRows).map(m => [
+        new Date(m.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US'),
+        m.format,
+        `${m.teamA.playerNames.join('+')} vs ${m.teamB.playerNames.join('+')}`,
+        `${m.teamA.score}-${m.teamB.score}`,
+        m.winner === 'A' ? (m.teamA.players.includes(playerId) ? 'V' : 'D') : (m.teamB.players.includes(playerId) ? 'V' : 'D'),
+      ]);
+      return { headers, rows, totalRows: playerMatches.length, title: `${name}` };
+    } else {
+      const playerChallenges = challenges.filter(c => c.playerId === playerId);
+      const stats = computePeriodStats(playerMatches, playerChallenges, name);
+      const headers = [lbl('Stat', 'Stat'), lbl('Valeur', 'Value')];
+      const rows: string[][] = [
+        [lbl('Matchs', 'Games'), String(stats.totalMatches)],
+        [lbl('Victoires', 'Wins'), `${stats.wins} (${stats.winRate}%)`],
+        [lbl('Tir', 'Shot'), `${stats.tirRate}%`],
+        [lbl('Point', 'Point'), `${stats.pointRate}%`],
+        [lbl('Carreau', 'Carreau'), `${stats.carreauRate}%`],
+      ];
+      return { headers, rows, totalRows: rows.length, title: `${name}` };
+    }
+  }
+
+  // ---- STANDARD / TOURNAMENT / SEASON ----
+  let filteredMatches: Match[];
+  let filteredChallenges: Challenge[];
+  let title = '';
+
+  if (preset === 'tournament' && tournamentId) {
+    filteredMatches = filterByTournament(matches, tournamentId);
+    filteredChallenges = [];
+    title = tournamentName || lbl('Tournoi', 'Tournament');
+  } else if (preset === 'season' && seasonYear) {
+    filteredMatches = filterBySeason(matches, seasonYear);
+    filteredChallenges = filterBySeason(challenges, seasonYear);
+    title = `${lbl('Saison', 'Season')} ${seasonYear}-${seasonYear + 1}`;
+  } else {
+    filteredMatches = filterByPeriod(matches, period);
+    filteredChallenges = filterByPeriod(challenges, period);
+    title = lbl('Export', 'Export');
+  }
+
+  if (dataType === 'matches') {
+    const headers = [lbl('Date', 'Date'), 'Mode', 'Format', lbl('Eq. A', 'Tm A'), 'Score', lbl('R', 'R'), lbl('Dur.', 'Dur.')];
+    const rows = filteredMatches.slice(0, maxRows).map(m => matchToRow(m, language));
+    return { headers, rows, totalRows: filteredMatches.length, title };
+  } else if (dataType === 'challenges') {
+    const headers = [lbl('Date', 'Date'), 'Type', 'Mode', lbl('Score', 'Score'), 'Car.', lbl('R', 'R')];
+    const rows = filteredChallenges.slice(0, maxRows).map(c => challengeToRow(c, language));
+    return { headers, rows, totalRows: filteredChallenges.length, title };
+  } else {
+    const stats = computePeriodStats(filteredMatches, filteredChallenges, '');
+    const headers = [lbl('Stat', 'Stat'), lbl('Valeur', 'Value')];
+    const rows: string[][] = [
+      [lbl('Matchs', 'Games'), String(stats.totalMatches)],
+      [lbl('Victoires', 'Wins'), `${stats.wins} (${stats.winRate}%)`],
+      [lbl('Tir', 'Shot'), `${stats.tirRate}% (${stats.tirsSuccess}/${stats.totalTirs})`],
+      [lbl('Point', 'Point'), `${stats.pointRate}% (${stats.pointsSuccess}/${stats.totalPoints})`],
+      [lbl('Carreau', 'Carreau'), `${stats.carreauRate}% (${stats.carreaux})`],
+    ];
+    return { headers, rows, totalRows: rows.length, title };
+  }
+}
+
+// ============================================
 // CSV EXPORTS
 // ============================================
 
@@ -151,6 +352,74 @@ export function matchesToCsv(matches: Match[], lang: 'fr' | 'en'): string {
   ]);
 
   return [headers.map(escapeCsv).join(','), ...rows.map(r => r.map(escapeCsv).join(','))].join('\n');
+}
+
+function singleMatchToCsv(m: Match, lang: 'fr' | 'en'): string {
+  const lbl = (fr: string, en: string) => lang === 'fr' ? fr : en;
+  const rows: string[][] = [
+    [lbl('Info', 'Info'), lbl('Valeur', 'Value')],
+    [lbl('Date', 'Date'), new Date(m.date).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US')],
+    ['Format', m.format],
+    ['Mode', m.mode],
+    [lbl('Equipe A', 'Team A'), m.teamA.playerNames.join(', ')],
+    [lbl('Equipe B', 'Team B'), m.teamB.playerNames.join(', ')],
+    ['Score', `${m.teamA.score} - ${m.teamB.score}`],
+    [lbl('Vainqueur', 'Winner'), m.winner === 'A' ? m.teamA.playerNames.join(', ') : m.teamB.playerNames.join(', ')],
+    [lbl('Duree (min)', 'Duration (min)'), String(m.duration || '-')],
+    [lbl('Menes', 'Ends'), String(m.menes?.length || 0)],
+    [lbl('Tournoi', 'Tournament'), m.tournamentName || '-'],
+    [''],
+  ];
+  if (m.menes && m.menes.length > 0) {
+    rows.push([lbl('Mene', 'End'), lbl('Eq. A', 'Team A'), lbl('Eq. B', 'Team B'), lbl('Score A', 'Score A'), lbl('Score B', 'Score B')]);
+    let cumA = 0, cumB = 0;
+    m.menes.forEach((mene, i) => {
+      cumA += mene.teamAPoints;
+      cumB += mene.teamBPoints;
+      rows.push([String(i + 1), String(mene.teamAPoints), String(mene.teamBPoints), String(cumA), String(cumB)]);
+    });
+    rows.push(['']);
+  }
+  if (m.playerActions) {
+    rows.push([lbl('Joueur', 'Player'), lbl('Equipe', 'Team'), lbl('Tirs', 'Shots'), lbl('Tirs reussis', 'Shots hit'), lbl('Points', 'Points'), lbl('Points reussis', 'Points hit'), lbl('Carreaux', 'Carreaux')]);
+    m.playerActions.forEach(pa => {
+      rows.push([pa.playerName, pa.team, String(pa.actions.tirs), String(pa.actions.tirsSuccess), String(pa.actions.points), String(pa.actions.pointsSuccess), String(pa.actions.carreaux)]);
+    });
+  }
+  return rows.map(r => r.map(escapeCsv).join(',')).join('\n');
+}
+
+function singleChallengeToCsv(c: Challenge, lang: 'fr' | 'en'): string {
+  const lbl = (fr: string, en: string) => lang === 'fr' ? fr : en;
+  const typeLabels: Record<string, Record<string, string>> = {
+    '10_tirs': { fr: '10 Tirs', en: '10 Shots' },
+    '10_tirs_sautee': { fr: '10 Tirs sautee', en: '10 Lob Shots' },
+    'precision': { fr: 'Precision', en: 'Precision' },
+  };
+  const rows: string[][] = [
+    [lbl('Info', 'Info'), lbl('Valeur', 'Value')],
+    [lbl('Date', 'Date'), new Date(c.date).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US')],
+    ['Type', typeLabels[c.type]?.[lang] || c.type],
+    ['Mode', c.mode === 'solo' ? 'Solo' : `1v1 vs ${c.opponentName || '?'}`],
+    [lbl('Reussite', 'Success'), `${c.successCount ?? '-'} / ${c.totalShots ?? '-'}`],
+    ['Carreaux', String(c.carreauCount ?? 0)],
+    [lbl('Taux', 'Rate'), c.successRate != null ? `${Math.round(c.successRate)}%` : (c.totalPoints != null ? `${c.totalPoints} pts` : '-')],
+    [lbl('Duree (s)', 'Duration (s)'), String(c.duration ?? '-')],
+  ];
+  if (c.mode === '1v1' && c.opponentResult) {
+    rows.push(['']);
+    rows.push([lbl('Adversaire', 'Opponent'), c.opponentName || '']);
+    rows.push([lbl('Reussite adv.', 'Opp. success'), `${c.opponentResult.successCount ?? '-'} / ${c.opponentResult.totalShots ?? '-'}`]);
+    rows.push([lbl('Resultat', 'Result'), c.winner === 'player' ? lbl('Victoire', 'Win') : c.winner === 'opponent' ? lbl('Defaite', 'Loss') : lbl('Egalite', 'Draw')]);
+  }
+  if (c.shots && c.shots.length > 0) {
+    rows.push(['']);
+    rows.push([lbl('Tir #', 'Shot #'), lbl('Resultat', 'Result'), lbl('Carreau', 'Carreau')]);
+    c.shots.forEach(s => {
+      rows.push([String(s.number), s.success ? lbl('Reussi', 'Hit') : lbl('Rate', 'Miss'), s.carreau ? lbl('Oui', 'Yes') : '']);
+    });
+  }
+  return rows.map(r => r.map(escapeCsv).join(',')).join('\n');
 }
 
 export function challengesToCsv(challenges: Challenge[], lang: 'fr' | 'en'): string {
@@ -296,6 +565,55 @@ function matchesToHtml(matches: Match[], lang: 'fr' | 'en'): string {
   return `<table><thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
+function singleMatchToHtml(m: Match, lang: 'fr' | 'en'): string {
+  const lbl = (fr: string, en: string) => lang === 'fr' ? fr : en;
+  const winA = m.winner === 'A';
+  let html = `<table><thead><tr><th>${lbl('Info', 'Info')}</th><th>${lbl('Valeur', 'Value')}</th></tr></thead><tbody>`;
+  html += `<tr class="stat-row"><td>${lbl('Date', 'Date')}</td><td>${new Date(m.date).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US')}</td></tr>`;
+  html += `<tr class="stat-row"><td>Format</td><td>${m.format}</td></tr>`;
+  html += `<tr class="stat-row"><td>Mode</td><td>${m.mode}</td></tr>`;
+  html += `<tr class="stat-row"><td>${lbl('Equipe A', 'Team A')}</td><td style="${winA ? 'color:#059669' : ''}">${m.teamA.playerNames.join(', ')}</td></tr>`;
+  html += `<tr class="stat-row"><td>${lbl('Equipe B', 'Team B')}</td><td style="${!winA ? 'color:#059669' : ''}">${m.teamB.playerNames.join(', ')}</td></tr>`;
+  html += `<tr class="stat-row"><td>Score</td><td style="font-weight:700">${m.teamA.score} - ${m.teamB.score}</td></tr>`;
+  html += `<tr class="stat-row"><td>${lbl('Duree', 'Duration')}</td><td>${m.duration ? `${m.duration} min` : '-'}</td></tr>`;
+  html += `</tbody></table>`;
+  if (m.playerActions && m.playerActions.length > 0) {
+    html += `<h2 style="font-size:16px;margin-top:20px;color:#374151">${lbl('Actions des joueurs', 'Player actions')}</h2>`;
+    html += `<table><thead><tr><th>${lbl('Joueur', 'Player')}</th><th>${lbl('Tirs', 'Shots')}</th><th>${lbl('Reussis', 'Hit')}</th><th>Points</th><th>${lbl('Reussis', 'Hit')}</th><th>Carreaux</th></tr></thead><tbody>`;
+    m.playerActions.forEach(pa => {
+      html += `<tr><td>${pa.playerName} (${pa.team})</td><td>${pa.actions.tirs}</td><td style="color:#059669;font-weight:700">${pa.actions.tirsSuccess}</td><td>${pa.actions.points}</td><td style="color:#059669;font-weight:700">${pa.actions.pointsSuccess}</td><td style="color:#D97706;font-weight:700">${pa.actions.carreaux}</td></tr>`;
+    });
+    html += `</tbody></table>`;
+  }
+  return html;
+}
+
+function singleChallengeToHtml(c: Challenge, lang: 'fr' | 'en'): string {
+  const lbl = (fr: string, en: string) => lang === 'fr' ? fr : en;
+  const typeLabels: Record<string, Record<string, string>> = {
+    '10_tirs': { fr: '10 Tirs', en: '10 Shots' },
+    '10_tirs_sautee': { fr: '10 Tirs sautee', en: '10 Lob Shots' },
+    'precision': { fr: 'Precision', en: 'Precision' },
+  };
+  let html = `<table><thead><tr><th>${lbl('Info', 'Info')}</th><th>${lbl('Valeur', 'Value')}</th></tr></thead><tbody>`;
+  html += `<tr class="stat-row"><td>${lbl('Date', 'Date')}</td><td>${new Date(c.date).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US')}</td></tr>`;
+  html += `<tr class="stat-row"><td>Type</td><td>${typeLabels[c.type]?.[lang] || c.type}</td></tr>`;
+  html += `<tr class="stat-row"><td>Mode</td><td>${c.mode === 'solo' ? 'Solo' : `1v1 vs ${c.opponentName || '?'}`}</td></tr>`;
+  html += `<tr class="stat-row"><td>${lbl('Reussite', 'Success')}</td><td>${c.successCount ?? '-'} / ${c.totalShots ?? '-'}</td></tr>`;
+  html += `<tr class="stat-row"><td>Carreaux</td><td>${c.carreauCount ?? 0}</td></tr>`;
+  html += `<tr class="stat-row"><td>${lbl('Taux', 'Rate')}</td><td>${c.successRate != null ? `${Math.round(c.successRate)}%` : (c.totalPoints != null ? `${c.totalPoints} pts` : '-')}</td></tr>`;
+  html += `</tbody></table>`;
+  if (c.shots && c.shots.length > 0) {
+    html += `<h2 style="font-size:16px;margin-top:20px;color:#374151">${lbl('Detail des tirs', 'Shot detail')}</h2>`;
+    html += `<table><thead><tr><th>#</th><th>${lbl('Resultat', 'Result')}</th><th>Carreau</th></tr></thead><tbody>`;
+    c.shots.forEach(s => {
+      html += `<tr><td>${s.number}</td><td style="${s.success ? 'color:#059669;font-weight:700' : 'color:#dc2626'}">${s.success ? lbl('Reussi', 'Hit') : lbl('Rate', 'Miss')}</td><td>${s.carreau ? '\u2022' : ''}</td></tr>`;
+    });
+    html += `</tbody></table>`;
+  }
+  return html;
+}
+
 function challengesToHtml(challenges: Challenge[], lang: 'fr' | 'en'): string {
   const lbl = (fr: string, en: string) => lang === 'fr' ? fr : en;
   const typeLabels: Record<string, Record<string, string>> = {
@@ -394,8 +712,79 @@ export async function exportData(
   userStats: any,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { format, dataType, period, language, username, preset, tournamentId, tournamentName, seasonYear, comparePeriod, compareSeasonYear } = options;
+    const { format, dataType, period, language, username, preset, tournamentId, tournamentName, seasonYear, comparePeriod, compareSeasonYear, matchId, playerId, playerName, challengeId } = options;
     const dateStr = new Date().toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US');
+
+    // ---- SINGLE MATCH ----
+    if (preset === 'match' && matchId) {
+      const m = matches.find(mt => mt.id === matchId);
+      if (!m) return { success: false, error: language === 'fr' ? 'Match introuvable' : 'Match not found' };
+      const title = language === 'fr' ? `Match du ${new Date(m.date).toLocaleDateString('fr-FR')}` : `Match ${new Date(m.date).toLocaleDateString('en-US')}`;
+      if (format === 'csv') {
+        const csvContent = singleMatchToCsv(m, language);
+        const fileName = `match_${new Date(m.date).toISOString().slice(0, 10)}.csv`;
+        return await shareFile(csvContent, fileName, 'text/csv', language);
+      } else {
+        const htmlContent = singleMatchToHtml(m, language);
+        const fullHtml = generatePdfHtml(title, htmlContent, username, dateStr);
+        const fileName = `match_${new Date(m.date).toISOString().slice(0, 10)}.pdf`;
+        return await sharePdf(fullHtml, fileName, language);
+      }
+    }
+
+    // ---- SINGLE CHALLENGE ----
+    if (preset === 'challenge' && challengeId) {
+      const c = challenges.find(ch => ch.id === challengeId);
+      if (!c) return { success: false, error: language === 'fr' ? 'Defi introuvable' : 'Challenge not found' };
+      const typeLabels: Record<string, Record<string, string>> = {
+        '10_tirs': { fr: '10 Tirs', en: '10 Shots' },
+        '10_tirs_sautee': { fr: '10 Tirs sautee', en: '10 Lob Shots' },
+        'precision': { fr: 'Precision', en: 'Precision' },
+      };
+      const title = `${typeLabels[c.type]?.[language] || c.type} - ${new Date(c.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')}`;
+      if (format === 'csv') {
+        const csvContent = singleChallengeToCsv(c, language);
+        const fileName = `defi_${new Date(c.date).toISOString().slice(0, 10)}.csv`;
+        return await shareFile(csvContent, fileName, 'text/csv', language);
+      } else {
+        const htmlContent = singleChallengeToHtml(c, language);
+        const fullHtml = generatePdfHtml(title, htmlContent, username, dateStr);
+        const fileName = `defi_${new Date(c.date).toISOString().slice(0, 10)}.pdf`;
+        return await sharePdf(fullHtml, fileName, language);
+      }
+    }
+
+    // ---- BY PLAYER ----
+    if (preset === 'player' && playerId) {
+      const playerMatches = filterMatchesByPlayer(matches, playerId);
+      const playerChallenges = challenges.filter(c => c.playerId === playerId);
+      const name = playerName || 'Joueur';
+      if (dataType === 'matches') {
+        const title = language === 'fr' ? `Matchs de ${name}` : `Matches of ${name}`;
+        if (format === 'csv') {
+          const csvContent = matchesToCsv(playerMatches, language);
+          const fileName = `matchs_${name.replace(/\s+/g, '_').slice(0, 20)}_${new Date().toISOString().slice(0, 10)}.csv`;
+          return await shareFile(csvContent, fileName, 'text/csv', language);
+        } else {
+          const htmlContent = matchesToHtml(playerMatches, language);
+          const fullHtml = generatePdfHtml(title, htmlContent, username, dateStr);
+          const fileName = `matchs_${name.replace(/\s+/g, '_').slice(0, 20)}_${new Date().toISOString().slice(0, 10)}.pdf`;
+          return await sharePdf(fullHtml, fileName, language);
+        }
+      } else {
+        const title = language === 'fr' ? `Stats de ${name}` : `Stats of ${name}`;
+        if (format === 'csv') {
+          const csvContent = statisticsToCsv(playerMatches, playerChallenges, tournaments, userStats, language);
+          const fileName = `stats_${name.replace(/\s+/g, '_').slice(0, 20)}_${new Date().toISOString().slice(0, 10)}.csv`;
+          return await shareFile(csvContent, fileName, 'text/csv', language);
+        } else {
+          const htmlContent = statisticsToHtml(playerMatches, playerChallenges, tournaments, language);
+          const fullHtml = generatePdfHtml(title, htmlContent, username, dateStr);
+          const fileName = `stats_${name.replace(/\s+/g, '_').slice(0, 20)}_${new Date().toISOString().slice(0, 10)}.pdf`;
+          return await sharePdf(fullHtml, fileName, language);
+        }
+      }
+    }
 
     // ---- COMPARATIVE MODE ----
     if (preset === 'comparative' && comparePeriod) {
@@ -432,33 +821,13 @@ export async function exportData(
       if (format === 'csv') {
         const csvContent = comparativeToCsv(statsA, statsB, language);
         const fileName = `comparatif_${new Date().toISOString().slice(0, 10)}.csv`;
-        if (Platform.OS === 'web') {
-          const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url; link.download = fileName; link.click();
-          URL.revokeObjectURL(url);
-          return { success: true };
-        }
-        const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
-        await FileSystem.writeAsStringAsync(fileUri, '\ufeff' + csvContent, { encoding: FileSystem.EncodingType.UTF8 });
-        if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: fileName });
-        return { success: true };
+        return await shareFile(csvContent, fileName, 'text/csv', language);
       } else {
         const title = language === 'fr' ? `Comparatif : ${statsA.label} vs ${statsB.label}` : `Comparative: ${statsA.label} vs ${statsB.label}`;
         const htmlContent = comparativeToHtml(statsA, statsB, language);
         const fullHtml = generatePdfHtml(title, htmlContent, username, dateStr);
-        if (Platform.OS === 'web') {
-          const pw = window.open('', '_blank');
-          if (pw) { pw.document.write(fullHtml); pw.document.close(); pw.print(); }
-          return { success: true };
-        }
-        const { uri } = await Print.printToFileAsync({ html: fullHtml });
         const fileName = `comparatif_${new Date().toISOString().slice(0, 10)}.pdf`;
-        const newUri = `${FileSystem.cacheDirectory}${fileName}`;
-        await FileSystem.moveAsync({ from: uri, to: newUri });
-        if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(newUri, { mimeType: 'application/pdf', dialogTitle: fileName });
-        return { success: true };
+        return await sharePdf(fullHtml, fileName, language);
       }
     }
 
@@ -502,19 +871,7 @@ export async function exportData(
         fileName = `saison_${seasonYear}-${seasonYear + 1}_${new Date().toISOString().slice(0, 10)}.csv`;
       }
 
-      if (Platform.OS === 'web') {
-        const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url; link.download = fileName; link.click();
-        URL.revokeObjectURL(url);
-        return { success: true };
-      }
-
-      const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
-      await FileSystem.writeAsStringAsync(fileUri, '\ufeff' + csvContent, { encoding: FileSystem.EncodingType.UTF8 });
-      if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: fileName, UTI: 'public.comma-separated-values-text' });
-      return { success: true };
+      return await shareFile(csvContent, fileName, 'text/csv', language);
 
     } else {
       let htmlContent = '';
@@ -541,27 +898,49 @@ export async function exportData(
       }
 
       const fullHtml = generatePdfHtml(title, htmlContent, username, dateStr);
-
-      if (Platform.OS === 'web') {
-        const printWindow = window.open('', '_blank');
-        if (printWindow) { printWindow.document.write(fullHtml); printWindow.document.close(); printWindow.print(); }
-        return { success: true };
-      }
-
-      const { uri } = await Print.printToFileAsync({ html: fullHtml });
       let fileName = `${dataType}_${new Date().toISOString().slice(0, 10)}.pdf`;
       if (preset === 'tournament' && tournamentName) {
         fileName = `tournoi_${tournamentName.replace(/\s+/g, '_').slice(0, 20)}_${new Date().toISOString().slice(0, 10)}.pdf`;
       } else if (preset === 'season' && seasonYear) {
         fileName = `saison_${seasonYear}-${seasonYear + 1}_${new Date().toISOString().slice(0, 10)}.pdf`;
       }
-      const newUri = `${FileSystem.cacheDirectory}${fileName}`;
-      await FileSystem.moveAsync({ from: uri, to: newUri });
-      if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(newUri, { mimeType: 'application/pdf', dialogTitle: fileName, UTI: 'com.adobe.pdf' });
-      return { success: true };
+
+      return await sharePdf(fullHtml, fileName, language);
     }
   } catch (error: any) {
     console.error('Export error:', error);
     return { success: false, error: error.message || 'Export failed' };
   }
+}
+
+// ============================================
+// FILE SHARING HELPERS
+// ============================================
+
+async function shareFile(content: string, fileName: string, mimeType: string, language: string): Promise<{ success: boolean; error?: string }> {
+  if (Platform.OS === 'web') {
+    const blob = new Blob(['\ufeff' + content], { type: `${mimeType};charset=utf-8;` });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = fileName; link.click();
+    URL.revokeObjectURL(url);
+    return { success: true };
+  }
+  const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+  await FileSystem.writeAsStringAsync(fileUri, '\ufeff' + content, { encoding: FileSystem.EncodingType.UTF8 });
+  if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(fileUri, { mimeType, dialogTitle: fileName });
+  return { success: true };
+}
+
+async function sharePdf(fullHtml: string, fileName: string, language: string): Promise<{ success: boolean; error?: string }> {
+  if (Platform.OS === 'web') {
+    const pw = window.open('', '_blank');
+    if (pw) { pw.document.write(fullHtml); pw.document.close(); pw.print(); }
+    return { success: true };
+  }
+  const { uri } = await Print.printToFileAsync({ html: fullHtml });
+  const newUri = `${FileSystem.cacheDirectory}${fileName}`;
+  await FileSystem.moveAsync({ from: uri, to: newUri });
+  if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(newUri, { mimeType: 'application/pdf', dialogTitle: fileName });
+  return { success: true };
 }
