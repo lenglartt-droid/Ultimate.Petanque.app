@@ -31,13 +31,15 @@ import { config } from '@/constants/config';
 import { Share as RNShare, Platform } from 'react-native';
 
 // Conditionally import QRCode to avoid web crash
+// Use indirect module name so webpack cannot statically resolve it
 let QRCodeComponent: any = null;
-try {
-  if (Platform.OS !== 'web') {
-    QRCodeComponent = require('react-native-qrcode-svg').default;
+if (Platform.OS !== 'web') {
+  try {
+    const _mod = ['react-native', 'qrcode-svg'].join('-');
+    QRCodeComponent = require(_mod).default;
+  } catch {
+    QRCodeComponent = null;
   }
-} catch {
-  QRCodeComponent = null;
 }
 
 export default function HomeScreen() {
