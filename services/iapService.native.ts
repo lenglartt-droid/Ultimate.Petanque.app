@@ -89,24 +89,14 @@ export async function purchaseRemoveAds(): Promise<{ success: boolean; error?: s
       return { success: false, error: 'Purchase cancelled' };
     }
 
-    // Validate receipt server-side to prevent fraud
+    // Record purchase on server
     const supabase = getSupabaseClient();
-    const receiptPayload: any = {
-      platform: Platform.OS,
-      productId: PRODUCT_ID,
-    };
-
-    if (Platform.OS === 'ios') {
-      // iOS: send the full receipt data for Apple verification
-      receiptPayload.receiptData = purchase.transactionReceipt || null;
-    } else {
-      // Android: send the purchase token + package name for Google Play verification
-      receiptPayload.purchaseToken = purchase.purchaseToken || null;
-      receiptPayload.packageName = purchase.packageNameAndroid || 'com.ultimatepetanque.app';
-    }
-
-    const { data, error } = await supabase.functions.invoke('validate-receipt', {
-      body: receiptPayload,
+    const { data, error } = await supabase.functions.invoke('record-purchase', {
+      body: {
+        platform: Platform.OS,
+        productId: PRODUCT_ID,
+        transactionId: purchase.transactionId || purchase.purchaseToken || null,
+      },
     });
 
     if (error) {
@@ -114,24 +104,13 @@ export async function purchaseRemoveAds(): Promise<{ success: boolean; error?: s
       if (error instanceof FunctionsHttpError) {
         try {
           const textContent = await error.context?.text();
-          const parsed = textContent ? JSON.parse(textContent) : null;
-          errorMessage = parsed?.error || textContent || error.message;
+          errorMessage = textContent || error.message;
         } catch {
           errorMessage = error.message;
         }
       }
-      // Log but don't block — still finish the transaction
-      // The user may have paid; we record on server as unverified
-      console.log('Receipt validation error:', errorMessage);
-
-      // Fallback: record purchase without validation
-      await supabase.functions.invoke('record-purchase', {
-        body: {
-          platform: Platform.OS,
-          productId: PRODUCT_ID,
-          transactionId: purchase.transactionId || purchase.purchaseToken || null,
-        },
-      }).catch(() => {});
+      // Still finish the transaction even if server recording fails
+      console.log('Server recording error:', errorMessage);
     }
 
     // Finish the transaction
@@ -164,36 +143,15 @@ export async function restorePurchases(): Promise<{ success: boolean; hasPremium
     const hasPremium = purchases.some((p: any) => p.productId === PRODUCT_ID);
 
     if (hasPremium) {
-      // Re-validate restored purchase on server
+      // Re-record on server in case it was missed
       const supabase = getSupabaseClient();
-      const restoredPurchase = purchases.find((p: any) => p.productId === PRODUCT_ID);
-      const receiptPayload: any = {
-        platform: Platform.OS,
-        productId: PRODUCT_ID,
-      };
-
-      if (Platform.OS === 'ios' && restoredPurchase?.transactionReceipt) {
-        receiptPayload.receiptData = restoredPurchase.transactionReceipt;
-      } else if (Platform.OS === 'android' && restoredPurchase?.purchaseToken) {
-        receiptPayload.purchaseToken = restoredPurchase.purchaseToken;
-        receiptPayload.packageName = restoredPurchase.packageNameAndroid || 'com.ultimatepetanque.app';
-      }
-
-      // Try validate-receipt first, fallback to record-purchase
-      const { error: valError } = await supabase.functions.invoke('validate-receipt', {
-        body: receiptPayload,
+      await supabase.functions.invoke('record-purchase', {
+        body: {
+          platform: Platform.OS,
+          productId: PRODUCT_ID,
+          transactionId: 'restored',
+        },
       });
-
-      if (valError) {
-        // Fallback
-        await supabase.functions.invoke('record-purchase', {
-          body: {
-            platform: Platform.OS,
-            productId: PRODUCT_ID,
-            transactionId: restoredPurchase?.transactionId || 'restored',
-          },
-        }).catch(() => {});
-      }
     }
 
     return { success: true, hasPremium };
