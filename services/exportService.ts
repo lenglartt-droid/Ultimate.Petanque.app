@@ -7,6 +7,7 @@ import { Match, Challenge, Tournament } from '@/services/mockData';
 export type ExportFormat = 'csv' | 'pdf';
 export type ExportDataType = 'matches' | 'challenges' | 'statistics';
 export type ExportPeriod = 'all' | '7d' | '30d' | '3m' | '6m' | '1y';
+export type ExportPreset = 'none' | 'tournament' | 'season' | 'comparative';
 
 interface ExportOptions {
   format: ExportFormat;
@@ -14,7 +15,35 @@ interface ExportOptions {
   period: ExportPeriod;
   language: 'fr' | 'en';
   username: string;
+  preset?: ExportPreset;
+  tournamentId?: string;
+  tournamentName?: string;
+  seasonYear?: number;
+  comparePeriod?: ExportPeriod;
+  compareSeasonYear?: number;
 }
+
+export interface PeriodStats {
+  label: string;
+  totalMatches: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  totalTirs: number;
+  tirsSuccess: number;
+  tirRate: number;
+  totalPoints: number;
+  pointsSuccess: number;
+  pointRate: number;
+  carreaux: number;
+  carreauRate: number;
+  totalChallenges: number;
+  avgDuration: number;
+}
+
+// ============================================
+// FILTER HELPERS
+// ============================================
 
 function filterByPeriod<T extends { date: string }>(items: T[], period: ExportPeriod): T[] {
   if (period === 'all') return items;
@@ -30,6 +59,19 @@ function filterByPeriod<T extends { date: string }>(items: T[], period: ExportPe
   return items.filter(item => new Date(item.date) >= cutoff);
 }
 
+function filterBySeason<T extends { date: string }>(items: T[], startYear: number): T[] {
+  const seasonStart = new Date(startYear, 8, 1); // Sept 1
+  const seasonEnd = new Date(startYear + 1, 5, 30, 23, 59, 59); // June 30
+  return items.filter(item => {
+    const d = new Date(item.date);
+    return d >= seasonStart && d <= seasonEnd;
+  });
+}
+
+function filterByTournament(matches: Match[], tournamentId: string): Match[] {
+  return matches.filter(m => m.tournamentId === tournamentId);
+}
+
 function escapeCsv(val: any): string {
   if (val === null || val === undefined) return '';
   const str = String(val);
@@ -37,6 +79,51 @@ function escapeCsv(val: any): string {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
+}
+
+// ============================================
+// PERIOD STATS COMPUTATION
+// ============================================
+
+export function computePeriodStats(
+  matches: Match[],
+  challenges: Challenge[],
+  label: string,
+): PeriodStats {
+  const totalMatches = matches.length;
+  const wins = matches.filter(m => m.winner === 'A').length;
+  let totalTirs = 0, tirsSuccess = 0, totalPoints = 0, pointsSuccess = 0, carreaux = 0, totalDuration = 0;
+
+  matches.forEach(m => {
+    totalDuration += m.duration || 0;
+    if (m.playerActions) {
+      m.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
+        totalTirs += pa.actions.tirs;
+        tirsSuccess += pa.actions.tirsSuccess;
+        totalPoints += pa.actions.points;
+        pointsSuccess += pa.actions.pointsSuccess;
+        carreaux += pa.actions.carreaux;
+      });
+    }
+  });
+
+  return {
+    label,
+    totalMatches,
+    wins,
+    losses: totalMatches - wins,
+    winRate: totalMatches > 0 ? Math.round((wins / totalMatches) * 100) : 0,
+    totalTirs,
+    tirsSuccess,
+    tirRate: totalTirs > 0 ? Math.round((tirsSuccess / totalTirs) * 100) : 0,
+    totalPoints,
+    pointsSuccess,
+    pointRate: totalPoints > 0 ? Math.round((pointsSuccess / totalPoints) * 100) : 0,
+    carreaux,
+    carreauRate: tirsSuccess > 0 ? Math.round((carreaux / tirsSuccess) * 100) : 0,
+    totalChallenges: challenges.length,
+    avgDuration: totalMatches > 0 ? Math.round(totalDuration / totalMatches) : 0,
+  };
 }
 
 // ============================================
@@ -102,53 +189,58 @@ export function statisticsToCsv(
   lang: 'fr' | 'en',
 ): string {
   const lbl = (fr: string, en: string) => lang === 'fr' ? fr : en;
-
-  const totalMatches = matches.length;
-  const wins = matches.filter(m => m.winner === 'A').length;
-  const winRate = totalMatches > 0 ? Math.round((wins / totalMatches) * 100) : 0;
-
-  let totalTirs = 0, tirsSuccess = 0, totalPoints = 0, pointsSuccess = 0, carreaux = 0;
-  matches.forEach(m => {
-    if (m.playerActions) {
-      m.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
-        totalTirs += pa.actions.tirs;
-        tirsSuccess += pa.actions.tirsSuccess;
-        totalPoints += pa.actions.points;
-        pointsSuccess += pa.actions.pointsSuccess;
-        carreaux += pa.actions.carreaux;
-      });
-    }
-  });
-
-  const tirRate = totalTirs > 0 ? Math.round((tirsSuccess / totalTirs) * 100) : 0;
-  const pointRate = totalPoints > 0 ? Math.round((pointsSuccess / totalPoints) * 100) : 0;
-  const carreauRate = tirsSuccess > 0 ? Math.round((carreaux / tirsSuccess) * 100) : 0;
-
-  const totalChallenges = challenges.length;
+  const stats = computePeriodStats(matches, challenges, '');
   const completedTournaments = tournaments.filter(t => t.status === 'Termine' || t.status === 'Terminé').length;
 
   const rows = [
     [lbl('Statistique', 'Statistic'), lbl('Valeur', 'Value')],
-    [lbl('Matchs joues', 'Matches played'), totalMatches],
-    [lbl('Victoires', 'Wins'), wins],
-    [lbl('Defaites', 'Losses'), totalMatches - wins],
-    [lbl('Taux de victoire (%)', 'Win rate (%)'), winRate],
+    [lbl('Matchs joues', 'Matches played'), stats.totalMatches],
+    [lbl('Victoires', 'Wins'), stats.wins],
+    [lbl('Defaites', 'Losses'), stats.losses],
+    [lbl('Taux de victoire (%)', 'Win rate (%)'), stats.winRate],
     [''],
-    [lbl('Tirs tentes', 'Shots attempted'), totalTirs],
-    [lbl('Tirs reussis', 'Shots succeeded'), tirsSuccess],
-    [lbl('Taux de tir (%)', 'Shot rate (%)'), tirRate],
-    [lbl('Carreaux', 'Carreaux'), carreaux],
-    [lbl('Taux de carreaux (%)', 'Carreau rate (%)'), carreauRate],
+    [lbl('Tirs tentes', 'Shots attempted'), stats.totalTirs],
+    [lbl('Tirs reussis', 'Shots succeeded'), stats.tirsSuccess],
+    [lbl('Taux de tir (%)', 'Shot rate (%)'), stats.tirRate],
+    [lbl('Carreaux', 'Carreaux'), stats.carreaux],
+    [lbl('Taux de carreaux (%)', 'Carreau rate (%)'), stats.carreauRate],
     [''],
-    [lbl('Points tentes', 'Points attempted'), totalPoints],
-    [lbl('Points reussis', 'Points succeeded'), pointsSuccess],
-    [lbl('Taux de pointage (%)', 'Point rate (%)'), pointRate],
+    [lbl('Points tentes', 'Points attempted'), stats.totalPoints],
+    [lbl('Points reussis', 'Points succeeded'), stats.pointsSuccess],
+    [lbl('Taux de pointage (%)', 'Point rate (%)'), stats.pointRate],
     [''],
-    [lbl('Defis completes', 'Challenges completed'), totalChallenges],
+    [lbl('Defis completes', 'Challenges completed'), stats.totalChallenges],
     [lbl('Tournois termines', 'Tournaments completed'), completedTournaments],
+    [lbl('Duree moyenne (min)', 'Avg duration (min)'), stats.avgDuration],
   ];
 
   return rows.map(r => r.map(escapeCsv).join(',')).join('\n');
+}
+
+function comparativeToCsv(statsA: PeriodStats, statsB: PeriodStats, lang: 'fr' | 'en'): string {
+  const lbl = (fr: string, en: string) => lang === 'fr' ? fr : en;
+  const delta = (a: number, b: number) => {
+    const d = a - b;
+    return d > 0 ? `+${d}` : `${d}`;
+  };
+  const deltaPct = (a: number, b: number) => {
+    const d = a - b;
+    return d > 0 ? `+${d}%` : `${d}%`;
+  };
+
+  const headers = [lbl('Statistique', 'Statistic'), statsA.label, statsB.label, 'Delta'];
+  const rows = [
+    [lbl('Matchs', 'Matches'), statsA.totalMatches, statsB.totalMatches, delta(statsA.totalMatches, statsB.totalMatches)],
+    [lbl('Victoires', 'Wins'), statsA.wins, statsB.wins, delta(statsA.wins, statsB.wins)],
+    [lbl('Taux victoire', 'Win rate'), `${statsA.winRate}%`, `${statsB.winRate}%`, deltaPct(statsA.winRate, statsB.winRate)],
+    [lbl('Taux tir', 'Shot rate'), `${statsA.tirRate}%`, `${statsB.tirRate}%`, deltaPct(statsA.tirRate, statsB.tirRate)],
+    [lbl('Taux pointage', 'Point rate'), `${statsA.pointRate}%`, `${statsB.pointRate}%`, deltaPct(statsA.pointRate, statsB.pointRate)],
+    [lbl('Taux carreaux', 'Carreau rate'), `${statsA.carreauRate}%`, `${statsB.carreauRate}%`, deltaPct(statsA.carreauRate, statsB.carreauRate)],
+    [lbl('Defis', 'Challenges'), statsA.totalChallenges, statsB.totalChallenges, delta(statsA.totalChallenges, statsB.totalChallenges)],
+    [lbl('Duree moy.', 'Avg duration'), `${statsA.avgDuration} min`, `${statsB.avgDuration} min`, `${delta(statsA.avgDuration, statsB.avgDuration)} min`],
+  ];
+
+  return [headers.map(escapeCsv).join(','), ...rows.map(r => r.map(escapeCsv).join(','))].join('\n');
 }
 
 // ============================================
@@ -172,6 +264,9 @@ function generatePdfHtml(title: string, content: string, username: string, date:
     .stat-row td:first-child { font-weight: 600; color: #374151; }
     .stat-row td:last-child { font-weight: 700; color: #D97706; }
     .section-break { height: 8px; }
+    .delta-positive { color: #059669; font-weight: 700; }
+    .delta-negative { color: #dc2626; font-weight: 700; }
+    .delta-neutral { color: #6b7280; }
   </style>
 </head>
 <body>
@@ -227,38 +322,21 @@ function challengesToHtml(challenges: Challenge[], lang: 'fr' | 'en'): string {
 
 function statisticsToHtml(matches: Match[], challenges: Challenge[], tournaments: Tournament[], lang: 'fr' | 'en'): string {
   const lbl = (fr: string, en: string) => lang === 'fr' ? fr : en;
-  const totalMatches = matches.length;
-  const wins = matches.filter(m => m.winner === 'A').length;
-  const winRate = totalMatches > 0 ? Math.round((wins / totalMatches) * 100) : 0;
-
-  let totalTirs = 0, tirsSuccess = 0, totalPoints = 0, pointsSuccess = 0, carreaux = 0;
-  matches.forEach(m => {
-    if (m.playerActions) {
-      m.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
-        totalTirs += pa.actions.tirs;
-        tirsSuccess += pa.actions.tirsSuccess;
-        totalPoints += pa.actions.points;
-        pointsSuccess += pa.actions.pointsSuccess;
-        carreaux += pa.actions.carreaux;
-      });
-    }
-  });
-
-  const tirRate = totalTirs > 0 ? Math.round((tirsSuccess / totalTirs) * 100) : 0;
-  const pointRate = totalPoints > 0 ? Math.round((pointsSuccess / totalPoints) * 100) : 0;
-  const carreauRate = tirsSuccess > 0 ? Math.round((carreaux / tirsSuccess) * 100) : 0;
+  const stats = computePeriodStats(matches, challenges, '');
+  const completedTournaments = tournaments.filter(t => t.status === 'Termine' || t.status === 'Terminé').length;
 
   const rows = [
-    [lbl('Matchs joues', 'Matches played'), totalMatches],
-    [lbl('Victoires', 'Wins'), `${wins} (${winRate}%)`],
-    [lbl('Defaites', 'Losses'), totalMatches - wins],
+    [lbl('Matchs joues', 'Matches played'), stats.totalMatches],
+    [lbl('Victoires', 'Wins'), `${stats.wins} (${stats.winRate}%)`],
+    [lbl('Defaites', 'Losses'), stats.losses],
     ['', ''],
-    [lbl('Taux de tir', 'Shot rate'), `${tirRate}% (${tirsSuccess}/${totalTirs})`],
-    [lbl('Taux de pointage', 'Point rate'), `${pointRate}% (${pointsSuccess}/${totalPoints})`],
-    [lbl('Taux de carreaux', 'Carreau rate'), `${carreauRate}% (${carreaux})`],
+    [lbl('Taux de tir', 'Shot rate'), `${stats.tirRate}% (${stats.tirsSuccess}/${stats.totalTirs})`],
+    [lbl('Taux de pointage', 'Point rate'), `${stats.pointRate}% (${stats.pointsSuccess}/${stats.totalPoints})`],
+    [lbl('Taux de carreaux', 'Carreau rate'), `${stats.carreauRate}% (${stats.carreaux})`],
     ['', ''],
     [lbl('Defis completes', 'Challenges completed'), challenges.length],
-    [lbl('Tournois termines', 'Tournaments completed'), tournaments.filter(t => t.status === 'Termine' || t.status === 'Terminé').length],
+    [lbl('Tournois termines', 'Tournaments completed'), completedTournaments],
+    [lbl('Duree moyenne', 'Avg duration'), `${stats.avgDuration} min`],
   ];
 
   const tableRows = rows.map(([label, value]) => {
@@ -267,6 +345,41 @@ function statisticsToHtml(matches: Match[], challenges: Challenge[], tournaments
   }).join('');
 
   return `<table><thead><tr><th>${lbl('Statistique', 'Statistic')}</th><th>${lbl('Valeur', 'Value')}</th></tr></thead><tbody>${tableRows}</tbody></table>`;
+}
+
+function comparativeToHtml(statsA: PeriodStats, statsB: PeriodStats, lang: 'fr' | 'en'): string {
+  const lbl = (fr: string, en: string) => lang === 'fr' ? fr : en;
+
+  const deltaClass = (a: number, b: number) => a > b ? 'delta-positive' : a < b ? 'delta-negative' : 'delta-neutral';
+  const deltaStr = (a: number, b: number, suffix = '') => {
+    const d = a - b;
+    const sign = d > 0 ? '+' : '';
+    return `<span class="${deltaClass(a, b)}">${sign}${d}${suffix}</span>`;
+  };
+
+  const metrics = [
+    { label: lbl('Matchs joues', 'Matches played'), a: statsA.totalMatches, b: statsB.totalMatches },
+    { label: lbl('Victoires', 'Wins'), a: statsA.wins, b: statsB.wins },
+    { label: lbl('Taux victoire', 'Win rate'), a: statsA.winRate, b: statsB.winRate, pct: true },
+    { label: lbl('Taux tir', 'Shot rate'), a: statsA.tirRate, b: statsB.tirRate, pct: true },
+    { label: lbl('Taux pointage', 'Point rate'), a: statsA.pointRate, b: statsB.pointRate, pct: true },
+    { label: lbl('Taux carreaux', 'Carreau rate'), a: statsA.carreauRate, b: statsB.carreauRate, pct: true },
+    { label: lbl('Defis', 'Challenges'), a: statsA.totalChallenges, b: statsB.totalChallenges },
+    { label: lbl('Duree moy. (min)', 'Avg duration (min)'), a: statsA.avgDuration, b: statsB.avgDuration },
+  ];
+
+  const headers = `<tr><th>${lbl('Statistique', 'Statistic')}</th><th>${statsA.label}</th><th>${statsB.label}</th><th>Delta</th></tr>`;
+  const rows = metrics.map(m => {
+    const suffix = m.pct ? '%' : '';
+    return `<tr class="stat-row">
+      <td>${m.label}</td>
+      <td>${m.a}${suffix}</td>
+      <td>${m.b}${suffix}</td>
+      <td>${deltaStr(m.a, m.b, suffix)}</td>
+    </tr>`;
+  }).join('');
+
+  return `<table><thead>${headers}</thead><tbody>${rows}</tbody></table>`;
 }
 
 // ============================================
@@ -281,11 +394,88 @@ export async function exportData(
   userStats: any,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { format, dataType, period, language, username } = options;
+    const { format, dataType, period, language, username, preset, tournamentId, tournamentName, seasonYear, comparePeriod, compareSeasonYear } = options;
     const dateStr = new Date().toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US');
 
-    const filteredMatches = filterByPeriod(matches, period);
-    const filteredChallenges = filterByPeriod(challenges, period);
+    // ---- COMPARATIVE MODE ----
+    if (preset === 'comparative' && comparePeriod) {
+      let matchesA: Match[], matchesB: Match[], challengesA: Challenge[], challengesB: Challenge[];
+      let labelA: string, labelB: string;
+
+      if (seasonYear && compareSeasonYear) {
+        matchesA = filterBySeason(matches, seasonYear);
+        matchesB = filterBySeason(matches, compareSeasonYear);
+        challengesA = filterBySeason(challenges, seasonYear);
+        challengesB = filterBySeason(challenges, compareSeasonYear);
+        labelA = `${seasonYear}-${seasonYear + 1}`;
+        labelB = `${compareSeasonYear}-${compareSeasonYear + 1}`;
+      } else {
+        matchesA = filterByPeriod(matches, period);
+        matchesB = filterByPeriod(matches, comparePeriod);
+        challengesA = filterByPeriod(challenges, period);
+        challengesB = filterByPeriod(challenges, comparePeriod);
+        const periodLabels: Record<string, Record<string, string>> = {
+          'all': { fr: 'Tout', en: 'All' },
+          '7d': { fr: '7 jours', en: '7 days' },
+          '30d': { fr: '30 jours', en: '30 days' },
+          '3m': { fr: '3 mois', en: '3 months' },
+          '6m': { fr: '6 mois', en: '6 months' },
+          '1y': { fr: '1 an', en: '1 year' },
+        };
+        labelA = periodLabels[period]?.[language] || period;
+        labelB = periodLabels[comparePeriod]?.[language] || comparePeriod;
+      }
+
+      const statsA = computePeriodStats(matchesA, challengesA, labelA);
+      const statsB = computePeriodStats(matchesB, challengesB, labelB);
+
+      if (format === 'csv') {
+        const csvContent = comparativeToCsv(statsA, statsB, language);
+        const fileName = `comparatif_${new Date().toISOString().slice(0, 10)}.csv`;
+        if (Platform.OS === 'web') {
+          const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url; link.download = fileName; link.click();
+          URL.revokeObjectURL(url);
+          return { success: true };
+        }
+        const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+        await FileSystem.writeAsStringAsync(fileUri, '\ufeff' + csvContent, { encoding: FileSystem.EncodingType.UTF8 });
+        if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: fileName });
+        return { success: true };
+      } else {
+        const title = language === 'fr' ? `Comparatif : ${statsA.label} vs ${statsB.label}` : `Comparative: ${statsA.label} vs ${statsB.label}`;
+        const htmlContent = comparativeToHtml(statsA, statsB, language);
+        const fullHtml = generatePdfHtml(title, htmlContent, username, dateStr);
+        if (Platform.OS === 'web') {
+          const pw = window.open('', '_blank');
+          if (pw) { pw.document.write(fullHtml); pw.document.close(); pw.print(); }
+          return { success: true };
+        }
+        const { uri } = await Print.printToFileAsync({ html: fullHtml });
+        const fileName = `comparatif_${new Date().toISOString().slice(0, 10)}.pdf`;
+        const newUri = `${FileSystem.cacheDirectory}${fileName}`;
+        await FileSystem.moveAsync({ from: uri, to: newUri });
+        if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(newUri, { mimeType: 'application/pdf', dialogTitle: fileName });
+        return { success: true };
+      }
+    }
+
+    // ---- STANDARD / TOURNAMENT / SEASON MODE ----
+    let filteredMatches: Match[];
+    let filteredChallenges: Challenge[];
+
+    if (preset === 'tournament' && tournamentId) {
+      filteredMatches = filterByTournament(matches, tournamentId);
+      filteredChallenges = [];
+    } else if (preset === 'season' && seasonYear) {
+      filteredMatches = filterBySeason(matches, seasonYear);
+      filteredChallenges = filterBySeason(challenges, seasonYear);
+    } else {
+      filteredMatches = filterByPeriod(matches, period);
+      filteredChallenges = filterByPeriod(challenges, period);
+    }
 
     if (format === 'csv') {
       let csvContent = '';
@@ -306,41 +496,46 @@ export async function exportData(
           break;
       }
 
+      if (preset === 'tournament' && tournamentName) {
+        fileName = `tournoi_${tournamentName.replace(/\s+/g, '_').slice(0, 20)}_${new Date().toISOString().slice(0, 10)}.csv`;
+      } else if (preset === 'season' && seasonYear) {
+        fileName = `saison_${seasonYear}-${seasonYear + 1}_${new Date().toISOString().slice(0, 10)}.csv`;
+      }
+
       if (Platform.OS === 'web') {
         const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.href = url;
-        link.download = fileName;
-        link.click();
+        link.href = url; link.download = fileName; link.click();
         URL.revokeObjectURL(url);
         return { success: true };
       }
 
       const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
       await FileSystem.writeAsStringAsync(fileUri, '\ufeff' + csvContent, { encoding: FileSystem.EncodingType.UTF8 });
-
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: fileName, UTI: 'public.comma-separated-values-text' });
-      }
+      if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: fileName, UTI: 'public.comma-separated-values-text' });
       return { success: true };
 
     } else {
-      // PDF
       let htmlContent = '';
       let title = '';
 
       switch (dataType) {
         case 'matches':
           title = language === 'fr' ? 'Mes Matchs' : 'My Matches';
+          if (preset === 'tournament' && tournamentName) title = `${language === 'fr' ? 'Matchs -' : 'Matches -'} ${tournamentName}`;
+          else if (preset === 'season' && seasonYear) title = `${language === 'fr' ? 'Matchs - Saison' : 'Matches - Season'} ${seasonYear}-${seasonYear + 1}`;
           htmlContent = matchesToHtml(filteredMatches, language);
           break;
         case 'challenges':
           title = language === 'fr' ? 'Mes Defis' : 'My Challenges';
+          if (preset === 'season' && seasonYear) title = `${language === 'fr' ? 'Defis - Saison' : 'Challenges - Season'} ${seasonYear}-${seasonYear + 1}`;
           htmlContent = challengesToHtml(filteredChallenges, language);
           break;
         case 'statistics':
           title = language === 'fr' ? 'Mes Statistiques' : 'My Statistics';
+          if (preset === 'tournament' && tournamentName) title = `${language === 'fr' ? 'Stats -' : 'Stats -'} ${tournamentName}`;
+          else if (preset === 'season' && seasonYear) title = `${language === 'fr' ? 'Stats - Saison' : 'Stats - Season'} ${seasonYear}-${seasonYear + 1}`;
           htmlContent = statisticsToHtml(filteredMatches, filteredChallenges, tournaments, language);
           break;
       }
@@ -349,22 +544,20 @@ export async function exportData(
 
       if (Platform.OS === 'web') {
         const printWindow = window.open('', '_blank');
-        if (printWindow) {
-          printWindow.document.write(fullHtml);
-          printWindow.document.close();
-          printWindow.print();
-        }
+        if (printWindow) { printWindow.document.write(fullHtml); printWindow.document.close(); printWindow.print(); }
         return { success: true };
       }
 
       const { uri } = await Print.printToFileAsync({ html: fullHtml });
-      const fileName = `${dataType}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      let fileName = `${dataType}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      if (preset === 'tournament' && tournamentName) {
+        fileName = `tournoi_${tournamentName.replace(/\s+/g, '_').slice(0, 20)}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      } else if (preset === 'season' && seasonYear) {
+        fileName = `saison_${seasonYear}-${seasonYear + 1}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      }
       const newUri = `${FileSystem.cacheDirectory}${fileName}`;
       await FileSystem.moveAsync({ from: uri, to: newUri });
-
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(newUri, { mimeType: 'application/pdf', dialogTitle: fileName, UTI: 'com.adobe.pdf' });
-      }
+      if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(newUri, { mimeType: 'application/pdf', dialogTitle: fileName, UTI: 'com.adobe.pdf' });
       return { success: true };
     }
   } catch (error: any) {
