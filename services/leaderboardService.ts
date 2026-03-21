@@ -15,6 +15,9 @@ export interface LeaderboardPlayer {
   boulesModel?: string;
   terrainName?: string;
   isPremium?: boolean;
+  trustScore?: number;
+  trustLevel?: 'high' | 'medium' | 'low' | 'suspicious';
+  createdAt?: string;
   stats: {
     matchesPlayed: number;
     wins: number;
@@ -36,7 +39,7 @@ export async function fetchLeaderboard(): Promise<{ players: LeaderboardPlayer[]
   try {
     const { data, error } = await supabase
       .from('players')
-      .select('id, user_id, name, nickname, avatar, club, role, level, country, location, stats, boules, terrain_name')
+      .select('id, user_id, name, nickname, avatar, club, role, level, country, location, stats, boules, terrain_name, created_at')
       .eq('is_public', true);
 
     if (error) return { players: [], error: error.message };
@@ -58,6 +61,23 @@ export async function fetchLeaderboard(): Promise<{ players: LeaderboardPlayer[]
       } catch { /* silent - premium badges just won't show */ }
     }
 
+    // Fetch trust scores from suspicious_players table
+    const playerIds = filteredData.map((p: any) => p.id);
+    let trustScoreMap = new Map<string, { score: number; flags: string[] }>();
+    if (playerIds.length > 0) {
+      try {
+        const { data: trustData } = await supabase
+          .from('suspicious_players')
+          .select('player_id, trust_score, flags')
+          .in('player_id', playerIds);
+        if (Array.isArray(trustData)) {
+          for (const td of trustData) {
+            trustScoreMap.set(td.player_id, { score: td.trust_score, flags: td.flags || [] });
+          }
+        }
+      } catch { /* silent */ }
+    }
+
     const players: LeaderboardPlayer[] = filteredData.map((p: any) => {
         const stats = p.stats || {};
         return {
@@ -75,6 +95,16 @@ export async function fetchLeaderboard(): Promise<{ players: LeaderboardPlayer[]
           boulesModel: p.boules?.model || undefined,
           terrainName: p.terrain_name || undefined,
           isPremium: premiumIds.has(p.user_id),
+          trustScore: trustScoreMap.get(p.id)?.score,
+          trustLevel: (() => {
+            const ts = trustScoreMap.get(p.id)?.score;
+            if (ts === undefined) return undefined;
+            if (ts >= 75) return 'high' as const;
+            if (ts >= 50) return 'medium' as const;
+            if (ts >= 25) return 'low' as const;
+            return 'suspicious' as const;
+          })(),
+          createdAt: p.created_at || undefined,
           stats: {
             matchesPlayed: stats.matchesPlayed || 0,
             wins: stats.wins || 0,

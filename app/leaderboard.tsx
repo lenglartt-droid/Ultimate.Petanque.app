@@ -28,6 +28,7 @@ import { fetchBoulesLeaderboard, aggregateBoulesData, sortBoulesLeaderboard, Lea
 import { getBrandVisual, getBrandImage } from '@/constants/boulesDatabase';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services/meetupService';
 import AdBanner from '@/components/ui/AdBanner';
+import { getTrustScoreColor } from '@/services/trustScoreService';
 
 type LeaderboardTab = 'players' | 'clubs' | 'boules';
 
@@ -120,6 +121,12 @@ const MemoizedPlayerRow = React.memo(function PlayerRow({
 
       {/* Stats */}
       <View style={s.statsCol}>
+        {player.trustScore !== undefined && player.trustScore < 75 ? (
+          <View style={[s.trustBadgeRow, { borderColor: getTrustScoreColor(player.trustScore) + '30' }]}>
+            <MaterialIcons name="shield" size={10} color={getTrustScoreColor(player.trustScore)} />
+            <Text style={[s.trustBadgeText, { color: getTrustScoreColor(player.trustScore) }]}>{player.trustScore}</Text>
+          </View>
+        ) : null}
         <View style={s.statBlock}>
           <Text style={[s.statValue, sortBy === 'winRate' && { color: '#D97706', fontWeight: '800' }]}>{player.stats.winRate}%</Text>
           <Text style={s.statLabel}>{t('leaderboard', 'winRate')}</Text>
@@ -1377,6 +1384,8 @@ const s = StyleSheet.create({
   statLabel: { fontSize: 9, color: theme.textMuted, marginTop: 1 },
   inviteBtn: { position: 'absolute', top: 12, right: 12, width: 34, height: 34, borderRadius: 17, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.primary + '25' },
   premiumBadge: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#A8B4C0' + '20', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#A8B4C0' + '40' },
+  trustBadgeRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, position: 'absolute' as const, top: 12, left: 52, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, backgroundColor: theme.backgroundSecondary, borderWidth: 1, zIndex: 1 },
+  trustBadgeText: { fontSize: 9, fontWeight: '800' as const },
 
   // States
   centerState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },

@@ -27,6 +27,7 @@ import { Image } from 'expo-image';
 import { useAlert } from '@/template';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup as MeetupType } from '@/services/meetupService';
 import { submitReport, REPORT_REASONS, ReportReason } from '@/services/reportService';
+import { computeQuickTrustScore, getTrustScoreColor, getTrustLevelLabel, TrustScoreData } from '@/services/trustScoreService';
 import Svg, { Polygon, Line, Circle as SvgCircle, Text as SvgText, G } from 'react-native-svg';
 import { Modal, Switch } from 'react-native';
 import * as Linking from 'expo-linking';
@@ -143,6 +144,15 @@ export default function PlayerDetailScreen() {
   const isRealUser = isPublicItem && playerUserId && playerUserId !== user?.id;
   const [showSharePreview, setShowSharePreview] = React.useState(false);
   const [previewShowContacts, setPreviewShowContacts] = React.useState(false);
+
+  // Trust score (for public players)
+  const trustScore: TrustScoreData | null = React.useMemo(() => {
+    if (!isPublicItem || !player) return null;
+    return computeQuickTrustScore({
+      stats: player.stats,
+      createdAt: player.createdAt,
+    });
+  }, [isPublicItem, player]);
   const { showAlert } = useAlert();
   const { updatePlayer: updatePlayerFn } = useApp();
   const [refreshing, setRefreshing] = React.useState(false);
@@ -500,6 +510,16 @@ export default function PlayerDetailScreen() {
                 <View style={s.locationPill}>
                   <MaterialIcons name="place" size={14} color={theme.textSecondary} />
                   <Text style={s.locationPillText}>{[player.location?.city, player.country].filter(Boolean).join(', ')}</Text>
+                </View>
+              ) : null}
+
+              {/* Trust Score Badge (public players only) */}
+              {trustScore && trustScore.level !== 'high' ? (
+                <View style={[s.trustScoreBadge, { borderColor: getTrustScoreColor(trustScore.score) + '25' }]}>
+                  <MaterialIcons name="shield" size={14} color={getTrustScoreColor(trustScore.score)} />
+                  <Text style={[s.trustScoreText, { color: getTrustScoreColor(trustScore.score) }]}>
+                    {t('trustScore', 'badge')}: {trustScore.score}/100 - {getTrustLevelLabel(trustScore.level, language === 'fr')}
+                  </Text>
                 </View>
               ) : null}
 
@@ -1162,6 +1182,10 @@ const s = StyleSheet.create({
   contactPillsRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginBottom: 8 },
   contactPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.primary + '10', borderRadius: 20 },
   contactPillText: { fontSize: 13, fontWeight: '500', color: theme.primary },
+
+  // Trust score badge
+  trustScoreBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginBottom: 12, borderWidth: 1, width: '100%' },
+  trustScoreText: { fontSize: 12, fontWeight: '600' as const },
 
   // Location pill
   locationPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, marginBottom: 16 },

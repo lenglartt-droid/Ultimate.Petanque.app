@@ -25,6 +25,9 @@ import { useLanguage } from '@/hooks/useLanguage';
 import theme from '@/constants/theme';
 import { Platform } from 'react-native';
 import { fetchAllReports, updateReportStatus, PlayerReport } from '@/services/reportService';
+import { fetchSuspiciousPlayers, updateSuspiciousStatus } from '@/services/trustScoreService';
+import { getTrustScoreColor } from '@/services/trustScoreService';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 
 interface PromoCode {
   id: string;
@@ -107,6 +110,65 @@ export default function AdminPromosScreen() {
   }, [fr, showAlert]);
 
   const pendingReportsCount = reports.filter(r => r.status === 'pending').length;
+
+  // ===== DETECTION STATE =====
+  const [showDetectionSection, setShowDetectionSection] = useState(false);
+  const [suspiciousPlayers, setSuspiciousPlayers] = useState<any[]>([]);
+  const [detectionLoading, setDetectionLoading] = useState(false);
+  const [detectionLoaded, setDetectionLoaded] = useState(false);
+  const [runningAnalysis, setRunningAnalysis] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const [updatingSuspicious, setUpdatingSuspicious] = useState<string | null>(null);
+
+  const loadSuspicious = useCallback(async () => {
+    if (detectionLoaded) return;
+    setDetectionLoading(true);
+    const { players: sp } = await fetchSuspiciousPlayers();
+    setSuspiciousPlayers(sp);
+    setDetectionLoading(false);
+    setDetectionLoaded(true);
+  }, [detectionLoaded]);
+
+  const handleRunAnalysis = useCallback(async () => {
+    setRunningAnalysis(true);
+    setAnalysisResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('detect-suspicious', { body: {} });
+      if (error) {
+        let errorMessage = error.message;
+        if (error instanceof FunctionsHttpError) {
+          try {
+            const textContent = await error.context?.text();
+            errorMessage = textContent || error.message;
+          } catch { /* silent */ }
+        }
+        showAlert(fr ? 'Erreur' : 'Error', errorMessage);
+      } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setAnalysisResult(data);
+        setDetectionLoaded(false);
+        loadSuspicious();
+      }
+    } catch (e: any) {
+      showAlert(fr ? 'Erreur' : 'Error', e.message);
+    } finally {
+      setRunningAnalysis(false);
+    }
+  }, [supabase, fr, showAlert, loadSuspicious]);
+
+  const handleUpdateSuspiciousStatus = useCallback(async (id: string, status: string) => {
+    setUpdatingSuspicious(id);
+    const { error: err } = await updateSuspiciousStatus(id, status);
+    setUpdatingSuspicious(null);
+    if (err) {
+      showAlert(fr ? 'Erreur' : 'Error', err);
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setSuspiciousPlayers(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+    }
+  }, [fr, showAlert]);
+
+  const suspiciousFlaggedCount = suspiciousPlayers.filter(p => p.status === 'flagged' || p.status === 'watch').length;
 
   // Export CSV
   const handleExportCSV = useCallback(async () => {
@@ -511,6 +573,18 @@ export default function AdminPromosScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>{fr ? 'Codes promo' : 'Promo Codes'}</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
+          {/* Detection button */}
+          <Pressable
+            style={[styles.bulkBtn, suspiciousFlaggedCount > 0 && { backgroundColor: '#F97316' + '15' }]}
+            onPress={() => { Haptics.selectionAsync(); setShowDetectionSection(!showDetectionSection); if (!detectionLoaded) loadSuspicious(); }}
+          >
+            <MaterialIcons name="shield" size={20} color={suspiciousFlaggedCount > 0 ? '#F97316' : theme.primary} />
+            {suspiciousFlaggedCount > 0 ? (
+              <View style={{ position: 'absolute', top: 2, right: 2, backgroundColor: '#F97316', width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 9, fontWeight: '800', color: '#FFF' }}>{suspiciousFlaggedCount}</Text>
+              </View>
+            ) : null}
+          </Pressable>
           <Pressable
             style={[styles.bulkBtn, pendingReportsCount > 0 && { backgroundColor: theme.error + '15' }]}
             onPress={() => { Haptics.selectionAsync(); setShowReportsSection(!showReportsSection); if (!reportsLoaded) loadReports(); }}
@@ -570,6 +644,149 @@ export default function AdminPromosScreen() {
                   <Text style={styles.statLabel}>{fr ? 'Expires' : 'Expired'}</Text>
                 </View>
               </Animated.View>
+
+              {/* Detection Section */}
+              {showDetectionSection ? (
+                <Animated.View entering={FadeIn.duration(300)} style={{ marginBottom: 20 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: '#F97316' + '15', alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialIcons name="shield" size={18} color="#F97316" />
+                    </View>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textPrimary, flex: 1 }}>
+                      {fr ? 'DETECTION AUTOMATIQUE' : 'AUTO DETECTION'} ({suspiciousPlayers.length})
+                    </Text>
+                    <Pressable
+                      style={[{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F97316', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 }, runningAnalysis && { opacity: 0.6 }]}
+                      onPress={handleRunAnalysis}
+                      disabled={runningAnalysis}
+                    >
+                      {runningAnalysis ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="radar" size={14} color="#FFF" />}
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFF' }}>
+                        {runningAnalysis ? (fr ? 'Analyse...' : 'Analyzing...') : (fr ? 'Analyser' : 'Analyze')}
+                      </Text>
+                    </Pressable>
+                    <Pressable onPress={() => setShowDetectionSection(false)} hitSlop={8}>
+                      <MaterialIcons name="close" size={20} color={theme.textSecondary} />
+                    </Pressable>
+                  </View>
+
+                  {/* Analysis result */}
+                  {analysisResult ? (
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                      <View style={{ flex: 1, backgroundColor: theme.primary + '12', borderRadius: 10, padding: 10, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 16, fontWeight: '800', color: theme.primary }}>{analysisResult.analyzed}</Text>
+                        <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted }}>{fr ? 'Analyses' : 'Analyzed'}</Text>
+                      </View>
+                      <View style={{ flex: 1, backgroundColor: '#F97316' + '12', borderRadius: 10, padding: 10, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 16, fontWeight: '800', color: '#F97316' }}>{analysisResult.flagged}</Text>
+                        <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted }}>{fr ? 'Signales' : 'Flagged'}</Text>
+                      </View>
+                      <View style={{ flex: 1, backgroundColor: theme.error + '12', borderRadius: 10, padding: 10, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 16, fontWeight: '800', color: theme.error }}>{analysisResult.suspicious}</Text>
+                        <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted }}>{fr ? 'Suspects' : 'Suspicious'}</Text>
+                      </View>
+                    </View>
+                  ) : null}
+
+                  {detectionLoading ? (
+                    <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+                      <ActivityIndicator size="large" color="#F97316" />
+                    </View>
+                  ) : suspiciousPlayers.length === 0 ? (
+                    <View style={{ alignItems: 'center', paddingVertical: 24, backgroundColor: theme.surface, borderRadius: 16, padding: 20 }}>
+                      <MaterialIcons name="verified-user" size={40} color={theme.success} />
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginTop: 8 }}>{fr ? 'Aucun joueur suspect' : 'No suspicious players'}</Text>
+                      <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 4, textAlign: 'center' }}>{fr ? 'Lancez une analyse pour scanner les comportements suspects.' : 'Run an analysis to scan for suspicious behavior.'}</Text>
+                    </View>
+                  ) : (
+                    suspiciousPlayers.map((sp) => {
+                      const tsColor = getTrustScoreColor(sp.trustScore);
+                      const statusLabels: Record<string, string> = {
+                        flagged: fr ? 'Signale' : 'Flagged',
+                        watch: fr ? 'Surveillance' : 'Watch',
+                        ok: 'OK',
+                        cleared: fr ? 'Blanchi' : 'Cleared',
+                      };
+                      return (
+                        <View key={sp.id} style={[styles.promoCard, { borderLeftWidth: 3, borderLeftColor: tsColor }]}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: tsColor + '15', alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: 14, fontWeight: '900', color: tsColor }}>{sp.trustScore}</Text>
+                              </View>
+                              <View>
+                                <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textPrimary }}>{sp.playerName || sp.playerId.slice(0, 8)}</Text>
+                                <Text style={{ fontSize: 10, color: theme.textMuted }}>{statusLabels[sp.status] || sp.status}</Text>
+                              </View>
+                            </View>
+                            <Text style={{ fontSize: 10, color: theme.textMuted }}>
+                              {new Date(sp.analyzedAt).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
+                            </Text>
+                          </View>
+
+                          {/* Flags */}
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+                            {sp.flags.map((flag: string, fi: number) => (
+                              <View key={fi} style={{ backgroundColor: tsColor + '10', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                                <Text style={{ fontSize: 10, fontWeight: '600', color: tsColor }}>{flag.replace(/_/g, ' ')}</Text>
+                              </View>
+                            ))}
+                          </View>
+
+                          {/* Details */}
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 8 }}>
+                            {sp.details.matchesPlayed !== undefined ? (
+                              <Text style={{ fontSize: 11, color: theme.textSecondary }}>{sp.details.matchesPlayed} matchs</Text>
+                            ) : null}
+                            {sp.details.uniqueOpponents !== undefined ? (
+                              <Text style={{ fontSize: 11, color: theme.textSecondary }}>{sp.details.uniqueOpponents} {fr ? 'adv.' : 'opp.'}</Text>
+                            ) : null}
+                            {sp.details.maxMatchesPerDay !== undefined ? (
+                              <Text style={{ fontSize: 11, color: theme.textSecondary }}>{sp.details.maxMatchesPerDay} {fr ? 'matchs/jour' : 'matches/day'}</Text>
+                            ) : null}
+                            {sp.details.accountAgeDays !== undefined ? (
+                              <Text style={{ fontSize: 11, color: theme.textSecondary }}>{sp.details.accountAgeDays}j</Text>
+                            ) : null}
+                          </View>
+
+                          {/* Actions */}
+                          {sp.status !== 'cleared' ? (
+                            <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                              <Pressable
+                                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, borderRadius: 10, backgroundColor: theme.success + '12' }}
+                                onPress={() => handleUpdateSuspiciousStatus(sp.id, 'cleared')}
+                                disabled={updatingSuspicious === sp.id}
+                              >
+                                <MaterialIcons name="verified-user" size={14} color={theme.success} />
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: theme.success }}>{fr ? 'Blanchir' : 'Clear'}</Text>
+                              </Pressable>
+                              <Pressable
+                                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, borderRadius: 10, backgroundColor: theme.error + '12' }}
+                                onPress={() => handleUpdateSuspiciousStatus(sp.id, 'flagged')}
+                                disabled={updatingSuspicious === sp.id}
+                              >
+                                <MaterialIcons name="gavel" size={14} color={theme.error} />
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: theme.error }}>{fr ? 'Signaler' : 'Flag'}</Text>
+                              </Pressable>
+                              <Pressable
+                                style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: 10, backgroundColor: theme.backgroundSecondary }}
+                                onPress={() => router.push(`/player/${sp.playerId}` as any)}
+                              >
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: theme.primary }}>{fr ? 'Voir' : 'View'}</Text>
+                              </Pressable>
+                            </View>
+                          ) : (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <MaterialIcons name="check-circle" size={14} color={theme.success} />
+                              <Text style={{ fontSize: 12, color: theme.success, fontWeight: '600' }}>{fr ? 'Blanchi' : 'Cleared'}</Text>
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })
+                  )}
+                </Animated.View>
+              ) : null}
 
               {/* Reports Section */}
               {showReportsSection ? (
