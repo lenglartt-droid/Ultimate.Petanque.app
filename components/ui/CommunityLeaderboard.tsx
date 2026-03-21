@@ -111,7 +111,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
         <View style={s.sectionHeaderText}>
           <Text style={s.sectionTitle}>{t('leaderboard', 'title')}</Text>
           {activeTab === 'players' && filteredSorted.length > 0 ? (
-            <Text style={s.sectionSubtitle}>{filteredSorted.length} {t('leaderboard', 'publicPlayersCount')}</Text>
+            <Text style={s.sectionSubtitle}>{filteredSorted.length} {t('leaderboard', 'publicPlayersCount')} (≥10 {t('leaderboard', 'matches')})</Text>
           ) : activeTab === 'clubs' && sortedClubs.length > 0 ? (
             <Text style={s.sectionSubtitle}>{sortedClubs.length} {t('leaderboard', 'publicClubsCount')}</Text>
           ) : activeTab === 'boules' && boulesEntries.length > 0 ? (

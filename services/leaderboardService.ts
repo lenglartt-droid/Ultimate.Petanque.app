@@ -28,6 +28,8 @@ export interface LeaderboardPlayer {
 
 export type LeaderboardSort = 'winRate' | 'matches' | 'tirRate' | 'pointRate' | 'carreauRate';
 
+export const LEADERBOARD_MIN_MATCHES = 10;
+
 export async function fetchLeaderboard(): Promise<{ players: LeaderboardPlayer[]; error: string | null }> {
   const supabase = getSupabaseClient();
 
@@ -41,7 +43,7 @@ export async function fetchLeaderboard(): Promise<{ players: LeaderboardPlayer[]
 
     const filteredData = (data || []).filter((p: any) => {
       const stats = p.stats || {};
-      return (stats.matchesPlayed || 0) >= 1;
+      return (stats.matchesPlayed || 0) >= LEADERBOARD_MIN_MATCHES;
     });
 
     // Fetch premium status for all player user_ids

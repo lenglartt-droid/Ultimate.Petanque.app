@@ -26,6 +26,7 @@ import MergePickerModal from '@/components/ui/MergePickerModal';
 import { Image } from 'expo-image';
 import { useAlert } from '@/template';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup as MeetupType } from '@/services/meetupService';
+import { submitReport, REPORT_REASONS, ReportReason } from '@/services/reportService';
 import Svg, { Polygon, Line, Circle as SvgCircle, Text as SvgText, G } from 'react-native-svg';
 import { Modal, Switch } from 'react-native';
 import * as Linking from 'expo-linking';
@@ -131,6 +132,12 @@ export default function PlayerDetailScreen() {
   const [activeMeetups, setActiveMeetups] = React.useState<MeetupType[]>([]);
   const [loadingMeetups, setLoadingMeetups] = React.useState(false);
   const [invitingToMeetup, setInvitingToMeetup] = React.useState<string | null>(null);
+
+  // Report state
+  const [showReportModal, setShowReportModal] = React.useState(false);
+  const [reportReason, setReportReason] = React.useState<ReportReason | ''>('');
+  const [reportDetails, setReportDetails] = React.useState('');
+  const [reportSubmitting, setReportSubmitting] = React.useState(false);
   const isPublicItem = (player as any)?.isPublic === true;
   const playerUserId = (player as any)?.userId;
   const isRealUser = isPublicItem && playerUserId && playerUserId !== user?.id;
@@ -334,6 +341,14 @@ export default function PlayerDetailScreen() {
           {canEdit ? (
             <Pressable style={s.headerIconBtn} onPress={() => setShowMergePicker(true)}>
               <MaterialIcons name="compare-arrows" size={20} color={theme.accent} />
+            </Pressable>
+          ) : null}
+          {isRealUser ? (
+            <Pressable
+              style={[s.headerIconBtn, { backgroundColor: theme.error + '10' }]}
+              onPress={() => { Haptics.selectionAsync(); setShowReportModal(true); }}
+            >
+              <MaterialIcons name="flag" size={20} color={theme.error} />
             </Pressable>
           ) : null}
           {isRealUser ? (
@@ -930,6 +945,103 @@ export default function PlayerDetailScreen() {
       ) : null}
 
       <MergePickerModal visible={showMergePicker} onClose={() => setShowMergePicker(false)} itemType="player" currentItemId={id!} />
+
+      {/* Report Player Modal */}
+      <Modal visible={showReportModal} animationType="slide" transparent onRequestClose={() => setShowReportModal(false)}>
+        <View style={s.mipOverlay}>
+          <View style={s.mipContent}>
+            <View style={s.mipHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.mipTitle}>{t('reports', 'reportTitle')}</Text>
+                <Text style={s.mipSubtitle}>{player?.name}</Text>
+              </View>
+              <Pressable style={s.mipClose} onPress={() => setShowReportModal(false)}>
+                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+            <Text style={{ fontSize: 13, color: theme.textSecondary, marginBottom: 16 }}>{t('reports', 'reportDesc')}</Text>
+
+            {/* Reason chips */}
+            <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('reports', 'reason')}</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+              {REPORT_REASONS.map(reason => (
+                <Pressable
+                  key={reason}
+                  style={[{
+                    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                    backgroundColor: reportReason === reason ? theme.error + '15' : theme.backgroundSecondary,
+                    borderWidth: 1.5, borderColor: reportReason === reason ? theme.error : theme.border,
+                  }]}
+                  onPress={() => setReportReason(reason)}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: reportReason === reason ? theme.error : theme.textSecondary }}>
+                    {t('reports', reason)}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {/* Details */}
+            <TextInput
+              style={{
+                backgroundColor: theme.backgroundSecondary, borderRadius: 12,
+                paddingHorizontal: 14, paddingVertical: 12, fontSize: 14,
+                color: theme.textPrimary, minHeight: 80, textAlignVertical: 'top',
+                borderWidth: 1, borderColor: theme.border,
+              }}
+              value={reportDetails}
+              onChangeText={setReportDetails}
+              placeholder={t('reports', 'detailsPlaceholder')}
+              placeholderTextColor={theme.textMuted}
+              multiline
+              numberOfLines={3}
+            />
+
+            {/* Submit */}
+            <Pressable
+              style={[{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                backgroundColor: theme.error, borderRadius: 14, paddingVertical: 14, marginTop: 16,
+              }, (!reportReason || reportSubmitting) && { opacity: 0.5 }]}
+              disabled={!reportReason || reportSubmitting}
+              onPress={async () => {
+                if (!reportReason) {
+                  showAlert(t('reports', 'selectReason'));
+                  return;
+                }
+                setReportSubmitting(true);
+                const { error: err } = await submitReport({
+                  reportedPlayerId: id!,
+                  reportedUserId: playerUserId || undefined,
+                  reason: reportReason,
+                  details: reportDetails.trim() || undefined,
+                });
+                setReportSubmitting(false);
+                if (err === 'already_reported') {
+                  showAlert(t('reports', 'alreadyReported'), t('reports', 'alreadyReportedDesc'));
+                } else if (err) {
+                  showAlert(t('reports', 'errorSubmit'), err);
+                } else {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  showAlert(t('reports', 'success'), t('reports', 'successDesc'));
+                  setShowReportModal(false);
+                  setReportReason('');
+                  setReportDetails('');
+                }
+              }}
+            >
+              {reportSubmitting ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <>
+                  <MaterialIcons name="flag" size={18} color="#FFF" />
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#FFF' }}>{t('reports', 'submit')}</Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       {/* Meetup Invitation Picker */}
       <Modal visible={showMeetupPicker} animationType="slide" transparent onRequestClose={() => setShowMeetupPicker(false)}>

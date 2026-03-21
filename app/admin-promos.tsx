@@ -23,6 +23,8 @@ import { useAuth, useAlert } from '@/template';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import theme from '@/constants/theme';
+import { Platform } from 'react-native';
+import { fetchAllReports, updateReportStatus, PlayerReport } from '@/services/reportService';
 
 interface PromoCode {
   id: string;
@@ -75,6 +77,36 @@ export default function AdminPromosScreen() {
   const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
 
   const fr = language === 'fr';
+
+  // ===== REPORTS STATE =====
+  const [showReportsSection, setShowReportsSection] = useState(false);
+  const [reports, setReports] = useState<PlayerReport[]>([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportsLoaded, setReportsLoaded] = useState(false);
+  const [updatingReport, setUpdatingReport] = useState<string | null>(null);
+
+  const loadReports = useCallback(async () => {
+    if (reportsLoaded) return;
+    setReportsLoading(true);
+    const { reports: reps } = await fetchAllReports();
+    setReports(reps);
+    setReportsLoading(false);
+    setReportsLoaded(true);
+  }, [reportsLoaded]);
+
+  const handleUpdateReportStatus = useCallback(async (reportId: string, status: PlayerReport['status']) => {
+    setUpdatingReport(reportId);
+    const { error: err } = await updateReportStatus(reportId, status);
+    setUpdatingReport(null);
+    if (err) {
+      showAlert(fr ? 'Erreur' : 'Error', err);
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setReports(prev => prev.map(r => r.id === reportId ? { ...r, status } : r));
+    }
+  }, [fr, showAlert]);
+
+  const pendingReportsCount = reports.filter(r => r.status === 'pending').length;
 
   // Export CSV
   const handleExportCSV = useCallback(async () => {
@@ -479,6 +511,17 @@ export default function AdminPromosScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>{fr ? 'Codes promo' : 'Promo Codes'}</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Pressable
+            style={[styles.bulkBtn, pendingReportsCount > 0 && { backgroundColor: theme.error + '15' }]}
+            onPress={() => { Haptics.selectionAsync(); setShowReportsSection(!showReportsSection); if (!reportsLoaded) loadReports(); }}
+          >
+            <MaterialIcons name="flag" size={20} color={pendingReportsCount > 0 ? theme.error : theme.primary} />
+            {pendingReportsCount > 0 ? (
+              <View style={{ position: 'absolute', top: 2, right: 2, backgroundColor: theme.error, width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 9, fontWeight: '800', color: '#FFF' }}>{pendingReportsCount}</Text>
+              </View>
+            ) : null}
+          </Pressable>
           <Pressable style={styles.bulkBtn} onPress={handleExportCSV}>
             <MaterialIcons name="file-download" size={20} color={theme.primary} />
           </Pressable>
@@ -527,6 +570,116 @@ export default function AdminPromosScreen() {
                   <Text style={styles.statLabel}>{fr ? 'Expires' : 'Expired'}</Text>
                 </View>
               </Animated.View>
+
+              {/* Reports Section */}
+              {showReportsSection ? (
+                <Animated.View entering={FadeIn.duration(300)} style={{ marginBottom: 20 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: theme.error + '15', alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialIcons name="flag" size={18} color={theme.error} />
+                    </View>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textPrimary, flex: 1 }}>
+                      {fr ? 'SIGNALEMENTS' : 'REPORTS'} ({reports.length})
+                    </Text>
+                    <Pressable onPress={() => setShowReportsSection(false)} hitSlop={8}>
+                      <MaterialIcons name="close" size={20} color={theme.textSecondary} />
+                    </Pressable>
+                  </View>
+
+                  {reportsLoading ? (
+                    <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+                      <ActivityIndicator size="large" color={theme.error} />
+                    </View>
+                  ) : reports.length === 0 ? (
+                    <View style={{ alignItems: 'center', paddingVertical: 24, backgroundColor: theme.surface, borderRadius: 16, padding: 20 }}>
+                      <MaterialIcons name="check-circle" size={40} color={theme.success} />
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginTop: 8 }}>{fr ? 'Aucun signalement' : 'No reports'}</Text>
+                      <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 4 }}>{fr ? 'Aucun signalement de joueur pour le moment.' : 'No player reports at the moment.'}</Text>
+                    </View>
+                  ) : (
+                    reports.map((report) => {
+                      const statusColors: Record<string, string> = {
+                        pending: theme.warning, reviewed: theme.primary,
+                        dismissed: theme.textMuted, action_taken: theme.error,
+                      };
+                      const statusLabels: Record<string, string> = {
+                        pending: fr ? 'En attente' : 'Pending',
+                        reviewed: fr ? 'Traite' : 'Reviewed',
+                        dismissed: fr ? 'Rejete' : 'Dismissed',
+                        action_taken: fr ? 'Action prise' : 'Action taken',
+                      };
+                      const reasonLabels: Record<string, string> = {
+                        fake_stats: fr ? 'Stats frauduleuses' : 'Fake stats',
+                        multiple_accounts: fr ? 'Multi-comptes' : 'Multi-accounts',
+                        inappropriate_content: fr ? 'Contenu inapproprie' : 'Inappropriate',
+                        spam: 'Spam',
+                        other: fr ? 'Autre' : 'Other',
+                      };
+                      const sc = statusColors[report.status] || theme.textMuted;
+                      return (
+                        <View key={report.id} style={[styles.promoCard, { borderLeftWidth: 3, borderLeftColor: sc }]}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <View style={[styles.statusBadge, { backgroundColor: sc + '15' }]}>
+                              <View style={[styles.statusDot, { backgroundColor: sc }]} />
+                              <Text style={[styles.statusText, { color: sc }]}>{statusLabels[report.status]}</Text>
+                            </View>
+                            <Text style={{ fontSize: 11, color: theme.textMuted }}>
+                              {new Date(report.created_at).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
+                            </Text>
+                          </View>
+
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                            <View style={{ backgroundColor: theme.error + '10', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: theme.error }}>{reasonLabels[report.reason] || report.reason}</Text>
+                            </View>
+                          </View>
+
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textPrimary, marginBottom: 2 }}>
+                            {fr ? 'Joueur :' : 'Player:'} {report.reported_player_name || report.reported_player_id.slice(0, 8)}
+                          </Text>
+                          <Text style={{ fontSize: 12, color: theme.textMuted, marginBottom: 4 }}>
+                            {fr ? 'Par :' : 'By:'} {report.reporter_email || report.reporter_id.slice(0, 8)}
+                          </Text>
+                          {report.details ? (
+                            <Text style={{ fontSize: 12, color: theme.textSecondary, fontStyle: 'italic', marginBottom: 8 }}>
+                              "{report.details}"
+                            </Text>
+                          ) : null}
+
+                          {report.status === 'pending' ? (
+                            <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                              <Pressable
+                                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, borderRadius: 10, backgroundColor: theme.primary + '12' }}
+                                onPress={() => handleUpdateReportStatus(report.id, 'reviewed')}
+                                disabled={updatingReport === report.id}
+                              >
+                                <MaterialIcons name="check" size={14} color={theme.primary} />
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: theme.primary }}>{fr ? 'Traite' : 'Reviewed'}</Text>
+                              </Pressable>
+                              <Pressable
+                                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, borderRadius: 10, backgroundColor: theme.textMuted + '12' }}
+                                onPress={() => handleUpdateReportStatus(report.id, 'dismissed')}
+                                disabled={updatingReport === report.id}
+                              >
+                                <MaterialIcons name="close" size={14} color={theme.textMuted} />
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted }}>{fr ? 'Rejeter' : 'Dismiss'}</Text>
+                              </Pressable>
+                              <Pressable
+                                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, borderRadius: 10, backgroundColor: theme.error + '12' }}
+                                onPress={() => handleUpdateReportStatus(report.id, 'action_taken')}
+                                disabled={updatingReport === report.id}
+                              >
+                                <MaterialIcons name="gavel" size={14} color={theme.error} />
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: theme.error }}>{fr ? 'Action' : 'Action'}</Text>
+                              </Pressable>
+                            </View>
+                          ) : null}
+                        </View>
+                      );
+                    })
+                  )}
+                </Animated.View>
+              ) : null}
 
               <Text style={styles.sectionTitle}>
                 {fr ? 'TOUS LES CODES' : 'ALL CODES'} ({totalCodes})

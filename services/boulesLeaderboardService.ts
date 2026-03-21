@@ -60,7 +60,7 @@ export async function fetchBoulesLeaderboard(): Promise<{ entries: PlayerBoulesD
 
     for (const p of data || []) {
       const stats = p.stats || {};
-      if ((stats.matchesPlayed || 0) < 1) continue;
+      if ((stats.matchesPlayed || 0) < 10) continue;
 
       const boules = p.boules || {};
       const brand = boules.brand;
