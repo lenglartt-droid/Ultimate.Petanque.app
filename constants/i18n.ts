@@ -123,6 +123,9 @@ export const translations = {
     codeSentMessage: { fr: 'Un code de vérification a été envoyé à votre email', en: 'A verification code was sent to your email' },
     loginError: { fr: 'Erreur de connexion', en: 'Login error' },
     googleError: { fr: 'Erreur Google', en: 'Google error' },
+    disposableEmail: { fr: 'Les adresses email temporaires ne sont pas acceptees. Utilisez une adresse email permanente.', en: 'Temporary email addresses are not accepted. Please use a permanent email address.' },
+    maxAccountsReached: { fr: 'Nombre maximum de comptes atteint pour cet appareil. Contactez le support si necessaire.', en: 'Maximum number of accounts reached for this device. Contact support if needed.' },
+    cooldownActive: { fr: 'Veuillez attendre 24h avant de creer un nouveau compte depuis cet appareil.', en: 'Please wait 24h before creating a new account from this device.' },
   },
 
   // ============================================
@@ -3199,6 +3202,8 @@ export const translations = {
     suspicious: { fr: 'Suspect', en: 'Suspicious' },
     badge: { fr: 'Confiance', en: 'Trust' },
     // Flags
+    multi_account_device: { fr: 'Multi-comptes (meme appareil)', en: 'Multi-accounts (same device)' },
+    multi_account_device_3plus: { fr: 'Multi-comptes 3+ (meme appareil)', en: '3+ multi-accounts (same device)' },
     extreme_win_rate: { fr: 'Taux de victoire extreme (>95%)', en: 'Extreme win rate (>95%)' },
     extreme_loss_rate: { fr: 'Taux de defaite extreme (<5%)', en: 'Extreme loss rate (<5%)' },
     unrealistic_combined_rates: { fr: 'Tir et pointage tous deux >85%', en: 'Shot and point both >85%' },

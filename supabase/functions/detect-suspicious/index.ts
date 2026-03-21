@@ -87,6 +87,24 @@ Deno.serve(async (req: Request) => {
       .from('player_reports')
       .select('reported_player_id, status');
 
+    // 3b. Fetch device registrations for multi-account detection
+    const { data: deviceRegs } = await supabaseClient
+      .from('device_registrations')
+      .select('device_fingerprint, email, user_id');
+
+    // Build map: user email -> set of device fingerprints, and fingerprint -> set of emails
+    const emailToFingerprints = new Map<string, Set<string>>();
+    const fingerprintToEmails = new Map<string, Set<string>>();
+    for (const dr of deviceRegs || []) {
+      if (dr.email && dr.device_fingerprint) {
+        if (!emailToFingerprints.has(dr.email)) emailToFingerprints.set(dr.email, new Set());
+        emailToFingerprints.get(dr.email)!.add(dr.device_fingerprint);
+        if (!fingerprintToEmails.has(dr.device_fingerprint)) fingerprintToEmails.set(dr.device_fingerprint, new Set());
+        fingerprintToEmails.get(dr.device_fingerprint)!.add(dr.email);
+      }
+    }
+    console.log(`[detect-suspicious] Device registrations loaded: ${(deviceRegs || []).length} entries`);
+
     const reportCounts = new Map<string, number>();
     const pendingReportCounts = new Map<string, number>();
     for (const r of reports || []) {
@@ -213,6 +231,38 @@ Deno.serve(async (req: Request) => {
         details.shortMatchCount = shortMatches.length;
       } else if (shortMatches.length > 2) {
         score -= 5;
+      }
+
+      // === Multi-account Detection (15 points) ===
+      // Check if this player's user has multiple accounts from same device
+      const playerUserProfile = await supabaseClient
+        .from('user_profiles')
+        .select('email')
+        .eq('id', player.user_id)
+        .single();
+      const playerEmail = playerUserProfile?.data?.email?.toLowerCase();
+      if (playerEmail) {
+        const userFingerprints = emailToFingerprints.get(playerEmail);
+        if (userFingerprints) {
+          let sharedDeviceAccounts = new Set<string>();
+          for (const fp of userFingerprints) {
+            const accountsOnDevice = fingerprintToEmails.get(fp);
+            if (accountsOnDevice) {
+              for (const email of accountsOnDevice) {
+                if (email !== playerEmail) sharedDeviceAccounts.add(email);
+              }
+            }
+          }
+          if (sharedDeviceAccounts.size >= 3) {
+            score -= 20;
+            flags.push('multi_account_device_3plus');
+            details.sharedDeviceAccounts = sharedDeviceAccounts.size;
+          } else if (sharedDeviceAccounts.size >= 1) {
+            score -= 8;
+            flags.push('multi_account_device');
+            details.sharedDeviceAccounts = sharedDeviceAccounts.size;
+          }
+        }
       }
 
       // === Reports (5 points) ===

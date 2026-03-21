@@ -18,6 +18,8 @@ import { router } from 'expo-router';
 import { useAuth, useAlert } from '@/template';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
+import { isDisposableEmail } from '@/services/emailValidationService';
+import { canCreateAccount, recordAccountCreation } from '@/services/deviceFingerprintService';
 
 type AuthMode = 'login' | 'register';
 type RegisterStep = 'email' | 'otp';
@@ -83,6 +85,25 @@ export default function LoginScreen() {
       return;
     }
 
+    // Check for disposable email
+    if (isDisposableEmail(email.trim())) {
+      showAlert(t('common', 'error'), t('login', 'disposableEmail'));
+      return;
+    }
+
+    // Check device account creation limits
+    const { allowed, reason } = await canCreateAccount(email.trim());
+    if (!allowed) {
+      if (reason === 'max_accounts_reached') {
+        showAlert(t('common', 'error'), t('login', 'maxAccountsReached'));
+      } else if (reason === 'cooldown_active') {
+        showAlert(t('common', 'error'), t('login', 'cooldownActive'));
+      } else {
+        showAlert(t('common', 'error'), t('common', 'error'));
+      }
+      return;
+    }
+
     try {
       const { error } = await sendOTP(email.trim());
       if (error) {
@@ -107,6 +128,9 @@ export default function LoginScreen() {
     const { error } = await verifyOTPAndLogin(email.trim(), otp.trim(), { password });
     if (error) {
       showAlert(t('common', 'error'), error);
+    } else {
+      // Record successful account creation for device fingerprint tracking
+      recordAccountCreation(email.trim()).catch(() => {});
     }
   };
 
