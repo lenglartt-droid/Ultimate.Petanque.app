@@ -714,7 +714,7 @@ export default function LeaderboardScreen() {
               const medalColor = medalColors[rank];
               return (
                 <Animated.View entering={FadeIn.duration(200).delay(Math.min(index * 40, 400))}>
-                  <View style={s.boulesRow}>
+                  <Pressable style={s.boulesRow} onPress={() => router.push({ pathname: `/boules-ranking/${encodeURIComponent(entry.id)}`, params: { brand: entry.brand, model: entry.model || '', mode: boulesMode } } as any)}>
                     <View style={s.boulesHeader}>
                       <View style={s.rankCol}>
                         {medalColor ? (
@@ -774,7 +774,7 @@ export default function LeaderboardScreen() {
                         </View>
                       </View>
                     ) : null}
-                  </View>
+                  </Pressable>
                 </Animated.View>
               );
             }}

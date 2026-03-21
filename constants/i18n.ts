@@ -2387,6 +2387,8 @@ export const translations = {
     noClubPlayers: { fr: 'Aucun joueur public dans ce club', en: 'No public players in this club' },
     noClubPlayersDesc: { fr: 'Les joueurs publics membres de ce club apparaîtront ici', en: 'Public players who are members of this club will appear here' },
     clubActivity: { fr: 'Activité', en: 'Activity' },
+    noBoulesPlayers: { fr: 'Aucun joueur pour ces boules', en: 'No players for these boules' },
+    noBoulesPlayersDesc: { fr: 'Les joueurs publics utilisant cette marque apparaitront ici', en: 'Public players using this brand will appear here' },
   },
 
   statsExtra: {
