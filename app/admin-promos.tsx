@@ -24,6 +24,7 @@ import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import theme from '@/constants/theme';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchAllReports, updateReportStatus, PlayerReport } from '@/services/reportService';
 import { fetchSuspiciousPlayers, updateSuspiciousStatus } from '@/services/trustScoreService';
 import { getTrustScoreColor } from '@/services/trustScoreService';
@@ -80,6 +81,15 @@ export default function AdminPromosScreen() {
   const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
 
   const fr = language === 'fr';
+
+  // ===== LAST ANALYSIS STATE =====
+  const [lastAnalysis, setLastAnalysis] = useState<{
+    date: string;
+    analyzed: number;
+    flagged: number;
+    suspicious: number;
+    previousFlaggedCount: number;
+  } | null>(null);
 
   // ===== REPORTS STATE =====
   const [showReportsSection, setShowReportsSection] = useState(false);
@@ -146,6 +156,33 @@ export default function AdminPromosScreen() {
       } else {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setAnalysisResult(data);
+
+        // Save analysis result and detect new suspects
+        const prevFlagged = lastAnalysis?.flagged || 0;
+        const newAnalysisData = {
+          date: new Date().toISOString(),
+          analyzed: data.analyzed || 0,
+          flagged: data.flagged || 0,
+          suspicious: data.suspicious || 0,
+          previousFlaggedCount: prevFlagged,
+        };
+        setLastAnalysis(newAnalysisData);
+        AsyncStorage.setItem('@admin_last_analysis', JSON.stringify(newAnalysisData)).catch(() => {});
+
+        // Notify if new suspects detected
+        const newSuspects = (data.flagged || 0) - prevFlagged;
+        if (newSuspects > 0) {
+          showAlert(
+            fr ? 'Nouveaux suspects detectes' : 'New suspects detected',
+            fr ? `${newSuspects} nouveau(x) joueur(s) suspect(s) depuis la derniere analyse.` : `${newSuspects} new suspicious player(s) since last analysis.`
+          );
+        } else if (prevFlagged > 0 && (data.flagged || 0) === 0) {
+          showAlert(
+            fr ? 'Aucun suspect' : 'No suspects',
+            fr ? 'Aucun joueur suspect detecte. Tout est en ordre.' : 'No suspicious players detected. All clear.'
+          );
+        }
+
         setDetectionLoaded(false);
         loadSuspicious();
       }
@@ -235,6 +272,15 @@ export default function AdminPromosScreen() {
   useEffect(() => {
     if (isAdmin) loadData();
   }, [isAdmin, loadData]);
+
+  // Load last analysis from persistent storage
+  useEffect(() => {
+    AsyncStorage.getItem('@admin_last_analysis').then(stored => {
+      if (stored) {
+        try { setLastAnalysis(JSON.parse(stored)); } catch { /* silent */ }
+      }
+    });
+  }, []);
 
   // Load redemptions for a specific code
   const loadRedemptions = useCallback(async (codeId: string) => {
@@ -643,6 +689,80 @@ export default function AdminPromosScreen() {
                   <Text style={[styles.statValue, { color: theme.error }]}>{expiredCodes}</Text>
                   <Text style={styles.statLabel}>{fr ? 'Expires' : 'Expired'}</Text>
                 </View>
+              </Animated.View>
+
+              {/* ===== LAST ANALYSIS SUMMARY ===== */}
+              <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.analysisSummaryCard}>
+                <View style={styles.analysisSummaryHeader}>
+                  <View style={styles.analysisSummaryIcon}>
+                    <MaterialIcons name="shield" size={20} color="#F97316" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.analysisSummaryTitle}>{fr ? 'Anti-triche' : 'Anti-cheat'}</Text>
+                    {lastAnalysis ? (
+                      <Text style={styles.analysisSummaryDate}>
+                        {fr ? 'Derniere analyse : ' : 'Last analysis: '}
+                        {(() => {
+                          const diff = Date.now() - new Date(lastAnalysis.date).getTime();
+                          const mins = Math.floor(diff / 60000);
+                          if (mins < 1) return fr ? 'a l\'instant' : 'just now';
+                          if (mins < 60) return `${mins} min`;
+                          const hours = Math.floor(mins / 60);
+                          if (hours < 24) return `${hours}h`;
+                          const days = Math.floor(hours / 24);
+                          return `${days}${fr ? 'j' : 'd'}`;
+                        })()}
+                      </Text>
+                    ) : (
+                      <Text style={styles.analysisSummaryDate}>{fr ? 'Aucune analyse effectuee' : 'No analysis performed yet'}</Text>
+                    )}
+                  </View>
+                  <Pressable
+                    style={[styles.analysisSummaryBtn, runningAnalysis && { opacity: 0.6 }]}
+                    onPress={() => {
+                      if (!showDetectionSection) { setShowDetectionSection(true); if (!detectionLoaded) loadSuspicious(); }
+                      handleRunAnalysis();
+                    }}
+                    disabled={runningAnalysis}
+                  >
+                    {runningAnalysis ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="radar" size={16} color="#FFF" />}
+                    <Text style={styles.analysisSummaryBtnText}>{runningAnalysis ? (fr ? 'Analyse...' : 'Analyzing...') : (fr ? 'Analyser' : 'Analyze')}</Text>
+                  </Pressable>
+                </View>
+                {lastAnalysis ? (
+                  <View style={styles.analysisSummaryStats}>
+                    <View style={styles.analysisSummaryStat}>
+                      <Text style={styles.analysisSummaryStatValue}>{lastAnalysis.analyzed}</Text>
+                      <Text style={styles.analysisSummaryStatLabel}>{fr ? 'Analyses' : 'Analyzed'}</Text>
+                    </View>
+                    <View style={styles.analysisSummaryStatDivider} />
+                    <View style={styles.analysisSummaryStat}>
+                      <Text style={[styles.analysisSummaryStatValue, lastAnalysis.flagged > 0 && { color: '#F97316' }]}>{lastAnalysis.flagged}</Text>
+                      <Text style={styles.analysisSummaryStatLabel}>{fr ? 'Signales' : 'Flagged'}</Text>
+                    </View>
+                    <View style={styles.analysisSummaryStatDivider} />
+                    <View style={styles.analysisSummaryStat}>
+                      <Text style={[styles.analysisSummaryStatValue, lastAnalysis.suspicious > 0 && { color: theme.error }]}>{lastAnalysis.suspicious}</Text>
+                      <Text style={styles.analysisSummaryStatLabel}>{fr ? 'Suspects' : 'Suspicious'}</Text>
+                    </View>
+                    {lastAnalysis.previousFlaggedCount > 0 && lastAnalysis.flagged > lastAnalysis.previousFlaggedCount ? (
+                      <>
+                        <View style={styles.analysisSummaryStatDivider} />
+                        <View style={styles.analysisSummaryStat}>
+                          <Text style={[styles.analysisSummaryStatValue, { color: theme.error }]}>+{lastAnalysis.flagged - lastAnalysis.previousFlaggedCount}</Text>
+                          <Text style={styles.analysisSummaryStatLabel}>{fr ? 'Nouveaux' : 'New'}</Text>
+                        </View>
+                      </>
+                    ) : null}
+                  </View>
+                ) : (
+                  <View style={styles.analysisSummaryEmpty}>
+                    <MaterialIcons name="info-outline" size={14} color={theme.textMuted} />
+                    <Text style={styles.analysisSummaryEmptyText}>
+                      {fr ? 'Lancez une premiere analyse pour scanner les joueurs publics et detecter les comportements suspects.' : 'Run a first analysis to scan public players and detect suspicious behavior.'}
+                    </Text>
+                  </View>
+                )}
               </Animated.View>
 
               {/* Detection Section */}
@@ -1382,4 +1502,55 @@ const styles = StyleSheet.create({
   bulkProgressTrack: { height: 6, backgroundColor: theme.backgroundSecondary, borderRadius: 3, overflow: 'hidden', marginBottom: 6 },
   bulkProgressFill: { height: '100%', backgroundColor: theme.success, borderRadius: 3 },
   bulkProgressText: { fontSize: 12, fontWeight: '600', color: theme.success, textAlign: 'center' },
+
+  // Analysis Summary
+  analysisSummaryCard: {
+    backgroundColor: theme.surface, borderRadius: theme.borderRadius.xl,
+    padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#F97316' + '20',
+    ...theme.shadows.card,
+  },
+  analysisSummaryHeader: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12,
+  },
+  analysisSummaryIcon: {
+    width: 40, height: 40, borderRadius: 12, backgroundColor: '#F97316' + '12',
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
+  analysisSummaryTitle: {
+    fontSize: 15, fontWeight: '700' as const, color: theme.textPrimary,
+  },
+  analysisSummaryDate: {
+    fontSize: 11, color: theme.textMuted, marginTop: 2,
+  },
+  analysisSummaryBtn: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6,
+    backgroundColor: '#F97316', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12,
+  },
+  analysisSummaryBtnText: {
+    fontSize: 12, fontWeight: '700' as const, color: '#FFF',
+  },
+  analysisSummaryStats: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, marginTop: 14, paddingTop: 14,
+    borderTopWidth: 1, borderTopColor: theme.border,
+  },
+  analysisSummaryStat: {
+    flex: 1, alignItems: 'center' as const,
+  },
+  analysisSummaryStatValue: {
+    fontSize: 20, fontWeight: '800' as const, color: theme.textPrimary,
+  },
+  analysisSummaryStatLabel: {
+    fontSize: 10, fontWeight: '600' as const, color: theme.textMuted, marginTop: 2,
+    textTransform: 'uppercase' as const, letterSpacing: 0.3,
+  },
+  analysisSummaryStatDivider: {
+    width: 1, height: 28, backgroundColor: theme.border,
+  },
+  analysisSummaryEmpty: {
+    flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 8,
+    marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: theme.border,
+  },
+  analysisSummaryEmptyText: {
+    flex: 1, fontSize: 12, color: theme.textMuted, lineHeight: 17,
+  },
 });
