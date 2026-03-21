@@ -12,6 +12,7 @@ import { useApp } from '@/contexts/AppContext';
 import { fetchLeaderboard, sortLeaderboard, LeaderboardPlayer, LeaderboardSort } from '@/services/leaderboardService';
 import { fetchClubLeaderboard, sortClubLeaderboard, LeaderboardClub } from '@/services/clubLeaderboardService';
 import { fetchBoulesLeaderboard, aggregateBoulesData, sortBoulesLeaderboard, LeaderboardBoulesEntry } from '@/services/boulesLeaderboardService';
+import { getBrandVisual } from '@/constants/boulesDatabase';
 
 type WidgetTab = 'players' | 'clubs' | 'boules';
 
@@ -395,9 +396,11 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                           <Text style={s.rankText}>{rank}</Text>
                         )}
                       </View>
-                      <View style={s.boulesIconWrap}>
-                        <MaterialIcons name="sports-baseball" size={16} color="#D97706" />
+                      {(() => { const bv = getBrandVisual(entry.brand); return (
+                      <View style={[s.boulesIconWrap, { backgroundColor: bv.bg }]}>
+                        <Text style={{ fontSize: 10, fontWeight: '900', color: bv.text, letterSpacing: -0.5 }}>{bv.abbr}</Text>
                       </View>
+                      ); })()}
                       <View style={{ flex: 1 }}>
                         <Text style={s.boulesName} numberOfLines={1}>{entry.brand}</Text>
                         <View style={s.boulesMeta}>

@@ -23,6 +23,7 @@ import { useApp } from '@/contexts/AppContext';
 import { fetchLeaderboard, sortLeaderboard, LeaderboardPlayer } from '@/services/leaderboardService';
 import RadarChart from '@/components/ui/RadarChart';
 import AdBanner from '@/components/ui/AdBanner';
+import { getBrandVisual } from '@/constants/boulesDatabase';
 
 export default function BoulesRankingScreen() {
   const insets = useSafeAreaInsets();
@@ -252,9 +253,11 @@ export default function BoulesRankingScreen() {
                 : t('leaderboard', 'loading')}
             </Text>
           </View>
-          <View style={s.headerIconWrap}>
-            <MaterialIcons name="sports-baseball" size={28} color="#FFF" />
+          {(() => { const bv = getBrandVisual(brandName); return (
+          <View style={[s.headerIconWrap, { backgroundColor: bv.bg }]}>
+            <Text style={{ fontSize: 16, fontWeight: '900', color: bv.text, letterSpacing: -0.5 }}>{bv.abbr}</Text>
           </View>
+          ); })()}
         </View>
         {isModelMode && modelName ? (
           <View style={s.headerBrandRow}>

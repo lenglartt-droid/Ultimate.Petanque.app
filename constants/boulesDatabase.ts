@@ -82,6 +82,27 @@ export const BOULES_DATABASE: BoulesModel[] = [
   { brand: 'GEOLOGIC', model: 'Alpha', material: 'Acier carbone', hardness: 'Tendre', targetUsage: 'Tireur', particularities: 'Entrée de gamme tireur' },
 ];
 
+// Brand visual identities for leaderboard/widget
+export const BOULES_BRAND_COLORS: Record<string, { bg: string; text: string; abbr: string }> = {
+  'OBUT': { bg: '#1B3A5C', text: '#FFFFFF', abbr: 'OB' },
+  'MS PÉTANQUE': { bg: '#C62828', text: '#FFFFFF', abbr: 'MS' },
+  'LA BOULE BLEUE': { bg: '#1565C0', text: '#FFFFFF', abbr: 'BB' },
+  'BOULENCIEL': { bg: '#6A1B9A', text: '#FFFFFF', abbr: 'BC' },
+  'KTK': { bg: '#2E7D32', text: '#FFFFFF', abbr: 'KTK' },
+  'ODDEKA': { bg: '#E65100', text: '#FFFFFF', abbr: 'OD' },
+  'LA FRANC': { bg: '#00838F', text: '#FFFFFF', abbr: 'LF' },
+  'MARATHON': { bg: '#4E342E', text: '#FFFFFF', abbr: 'MA' },
+  'GEOLOGIC': { bg: '#37474F', text: '#FFFFFF', abbr: 'GE' },
+};
+
+export function getBrandVisual(brand: string): { bg: string; text: string; abbr: string } {
+  const upper = brand.toUpperCase();
+  if (BOULES_BRAND_COLORS[upper]) return BOULES_BRAND_COLORS[upper];
+  // Fallback: generate from brand name
+  const hue = Math.abs(brand.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360);
+  return { bg: `hsl(${hue}, 55%, 40%)`, text: '#FFFFFF', abbr: brand.substring(0, 2).toUpperCase() };
+}
+
 export function getModelsByBrand(brand: string): BoulesModel[] {
   return BOULES_DATABASE.filter(b => b.brand === brand);
 }

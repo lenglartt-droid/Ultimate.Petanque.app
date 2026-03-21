@@ -25,6 +25,7 @@ import { useApp } from '@/contexts/AppContext';
 import { fetchLeaderboard, sortLeaderboard, LeaderboardPlayer, LeaderboardSort } from '@/services/leaderboardService';
 import { fetchClubLeaderboard, sortClubLeaderboard, LeaderboardClub, ClubLeaderboardSort } from '@/services/clubLeaderboardService';
 import { fetchBoulesLeaderboard, aggregateBoulesData, sortBoulesLeaderboard, LeaderboardBoulesEntry, BoulesLeaderboardSort, BoulesLeaderboardMode } from '@/services/boulesLeaderboardService';
+import { getBrandVisual } from '@/constants/boulesDatabase';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services/meetupService';
 import AdBanner from '@/components/ui/AdBanner';
 
@@ -725,9 +726,11 @@ export default function LeaderboardScreen() {
                           <Text style={s.rankText}>{rank}</Text>
                         )}
                       </View>
-                      <View style={s.boulesIconWrap}>
-                        <MaterialIcons name="sports-baseball" size={20} color="#D97706" />
+                      {(() => { const bv = getBrandVisual(entry.brand); return (
+                      <View style={[s.boulesIconWrap, { backgroundColor: bv.bg }]}>
+                        <Text style={{ fontSize: 12, fontWeight: '900', color: bv.text, letterSpacing: -0.5 }}>{bv.abbr}</Text>
                       </View>
+                      ); })()}
                       <View style={{ flex: 1 }}>
                         <Text style={s.boulesName} numberOfLines={1}>{entry.brand}{entry.model ? ` ${entry.model}` : ''}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 }}>
