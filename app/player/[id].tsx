@@ -28,6 +28,7 @@ import { useAlert } from '@/template';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup as MeetupType } from '@/services/meetupService';
 import { submitReport, REPORT_REASONS, ReportReason } from '@/services/reportService';
 import { computeQuickTrustScore, getTrustScoreColor, getTrustLevelLabel, TrustScoreData } from '@/services/trustScoreService';
+import { LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
 import Svg, { Polygon, Line, Circle as SvgCircle, Text as SvgText, G } from 'react-native-svg';
 import { Modal, Switch } from 'react-native';
 import * as Linking from 'expo-linking';
@@ -521,6 +522,32 @@ export default function PlayerDetailScreen() {
                     {t('trustScore', 'badge')}: {trustScore.score}/100 - {getTrustLevelLabel(trustScore.level, language === 'fr')}
                   </Text>
                 </View>
+              ) : null}
+
+              {/* Leaderboard progress bar (public players below threshold) */}
+              {player.isPublic && player.stats.matchesPlayed < LEADERBOARD_MIN_MATCHES ? (
+                <Pressable
+                  style={s.leaderboardProgressCard}
+                  onPress={() => router.push('/leaderboard' as any)}
+                >
+                  <View style={s.leaderboardProgressHeader}>
+                    <MaterialIcons name="leaderboard" size={16} color="#D97706" />
+                    <Text style={s.leaderboardProgressTitle}>{player.stats.matchesPlayed}/{LEADERBOARD_MIN_MATCHES} {t('leaderboard', 'matches')}</Text>
+                    <Text style={s.leaderboardProgressMotivation}>
+                      {player.stats.matchesPlayed >= 7
+                        ? t('leaderboard', 'progressMotivation1')
+                        : player.stats.matchesPlayed >= 3
+                          ? t('leaderboard', 'progressMotivation2')
+                          : t('leaderboard', 'progressMotivation3')}
+                    </Text>
+                  </View>
+                  <View style={s.leaderboardProgressTrack}>
+                    <View style={[s.leaderboardProgressFill, { width: `${Math.min((player.stats.matchesPlayed / LEADERBOARD_MIN_MATCHES) * 100, 100)}%` }]} />
+                  </View>
+                  <Text style={s.leaderboardProgressDesc}>
+                    {t('leaderboard', 'progressAlmostThere').replace('{remaining}', String(LEADERBOARD_MIN_MATCHES - player.stats.matchesPlayed))}
+                  </Text>
+                </Pressable>
               ) : null}
 
               {/* Quick Stats bar */}
@@ -1186,6 +1213,15 @@ const s = StyleSheet.create({
   // Trust score badge
   trustScoreBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginBottom: 12, borderWidth: 1, width: '100%' },
   trustScoreText: { fontSize: 12, fontWeight: '600' as const },
+
+  // Leaderboard progress
+  leaderboardProgressCard: { backgroundColor: '#D97706' + '08', borderRadius: 14, padding: 12, width: '100%', marginBottom: 14, borderWidth: 1, borderColor: '#D97706' + '20' },
+  leaderboardProgressHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 8 },
+  leaderboardProgressTitle: { fontSize: 13, fontWeight: '700' as const, color: '#92400E', flex: 1 },
+  leaderboardProgressMotivation: { fontSize: 10, fontWeight: '600' as const, color: '#B45309', backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: 'hidden' as const },
+  leaderboardProgressTrack: { height: 6, backgroundColor: '#D97706' + '15', borderRadius: 3, overflow: 'hidden' as const, marginBottom: 6 },
+  leaderboardProgressFill: { height: '100%' as const, backgroundColor: '#D97706', borderRadius: 3 },
+  leaderboardProgressDesc: { fontSize: 11, color: '#92400E', fontWeight: '500' as const },
 
   // Location pill
   locationPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, marginBottom: 16 },

@@ -28,6 +28,7 @@ import CommunityLeaderboard from '@/components/ui/CommunityLeaderboard';
 import { getMyMeetups, getInvitedMeetups, getMeetupResponses, getPendingInvitationsCount, findMeetupByCode, Meetup, MeetupResponse } from '@/services/meetupService';
 import { config } from '@/constants/config';
 import { Share as RNShare, Platform } from 'react-native';
+import { LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -366,6 +367,41 @@ export default function HomeScreen() {
             </View>
           </LinearGradient>
         </Animated.View>
+
+        {/* ========== LEADERBOARD PROGRESS BAR ========== */}
+        {selfPlayer?.isPublic && totalMatches < LEADERBOARD_MIN_MATCHES ? (
+          <Animated.View entering={FadeInDown.duration(400).delay(30)} style={[styles.section, isTablet && styles.sectionTablet, { marginBottom: 14 }]}>
+            <Pressable
+              style={styles.progressCard}
+              onPress={() => router.push('/leaderboard' as any)}
+            >
+              <View style={styles.progressHeader}>
+                <View style={styles.progressIconBg}>
+                  <MaterialIcons name="leaderboard" size={18} color="#D97706" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.progressTitle}>{t('leaderboard', 'progressTitle')}</Text>
+                  <Text style={styles.progressCount}>{totalMatches}/10 {t('leaderboard', 'matches')}</Text>
+                </View>
+                <View style={styles.progressBadge}>
+                  <Text style={styles.progressBadgeText}>
+                    {totalMatches >= 7
+                      ? t('leaderboard', 'progressMotivation1')
+                      : totalMatches >= 3
+                        ? t('leaderboard', 'progressMotivation2')
+                        : t('leaderboard', 'progressMotivation3')}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.progressBarTrack}>
+                <View style={[styles.progressBarFill, { width: `${Math.min((totalMatches / LEADERBOARD_MIN_MATCHES) * 100, 100)}%` }]} />
+              </View>
+              <Text style={styles.progressDesc}>
+                {t('leaderboard', 'progressAlmostThere').replace('{remaining}', String(LEADERBOARD_MIN_MATCHES - totalMatches))}
+              </Text>
+            </Pressable>
+          </Animated.View>
+        ) : null}
 
         {/* ========== BRAND BANNER ========== */}
         <Animated.View entering={FadeInDown.duration(400).delay(40)} style={[styles.bannerSection, isTablet && styles.sectionTablet]}>
@@ -982,6 +1018,18 @@ const styles = StyleSheet.create({
   quickItemPressed: { transform: [{ scale: 0.95 }], opacity: 0.85 },
   quickIcon: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 12, ...theme.shadows.card },
   quickLabel: { fontSize: 13, fontWeight: '600', color: theme.textPrimary, textAlign: 'center' },
+
+  // ========== LEADERBOARD PROGRESS ==========
+  progressCard: { backgroundColor: theme.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#D97706' + '25', ...theme.shadows.card },
+  progressHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  progressIconBg: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#D97706' + '12', alignItems: 'center', justifyContent: 'center' },
+  progressTitle: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
+  progressCount: { fontSize: 12, fontWeight: '600', color: '#D97706', marginTop: 1 },
+  progressBadge: { backgroundColor: '#FEF3C7', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
+  progressBadgeText: { fontSize: 11, fontWeight: '700', color: '#92400E' },
+  progressBarTrack: { height: 8, backgroundColor: '#D97706' + '12', borderRadius: 4, overflow: 'hidden' as const, marginBottom: 8 },
+  progressBarFill: { height: '100%', backgroundColor: '#D97706', borderRadius: 4 },
+  progressDesc: { fontSize: 12, color: theme.textSecondary, fontWeight: '500' },
 
   // ========== MEETUP SECTION ==========
   upcomingHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
