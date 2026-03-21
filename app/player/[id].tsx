@@ -30,7 +30,7 @@ import { submitReport, REPORT_REASONS, ReportReason } from '@/services/reportSer
 import { computeQuickTrustScore, getTrustScoreColor, getTrustLevelLabel, TrustScoreData } from '@/services/trustScoreService';
 import { LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
 import Svg, { Polygon, Line, Circle as SvgCircle, Text as SvgText, G } from 'react-native-svg';
-import { Modal, Switch } from 'react-native';
+import { Modal, Switch, TextInput } from 'react-native';
 import * as Linking from 'expo-linking';
 
 // ============================================
