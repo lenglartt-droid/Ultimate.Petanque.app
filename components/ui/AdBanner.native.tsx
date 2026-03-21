@@ -6,6 +6,7 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { AD_UNIT_IDS } from '@/services/adService';
 import { useApp } from '@/contexts/AppContext';
+import { canShowPersonalizedAds } from '@/services/trackingService';
 import theme from '@/constants/theme';
 
 interface AdBannerProps {
@@ -43,6 +44,7 @@ function loadAdsModule() {
 
 const AdBanner = React.memo(({ position = 'inline', bottomOffset = 0 }: AdBannerProps) => {
   const [isAvailable, setIsAvailable] = useState(true);
+  const [nonPersonalized, setNonPersonalized] = useState(true);
   let isPremium = false;
   try { isPremium = useApp().isPremium; } catch { /* outside provider */ }
 
@@ -51,6 +53,7 @@ const AdBanner = React.memo(({ position = 'inline', bottomOffset = 0 }: AdBanner
     if (!adsModuleAvailable) {
       setIsAvailable(false);
     }
+    canShowPersonalizedAds().then(can => setNonPersonalized(!can));
   }, []);
 
   // Hide ads for premium users
@@ -66,7 +69,7 @@ const AdBanner = React.memo(({ position = 'inline', bottomOffset = 0 }: AdBanner
         <BannerAdComponent
           unitId={AD_UNIT_IDS.banner}
           size={BannerAdSizeEnum.ANCHORED_ADAPTIVE_BANNER}
-          requestOptions={{ requestNonPersonalizedAdsOnly: true }}
+          requestOptions={{ requestNonPersonalizedAdsOnly: nonPersonalized }}
           onAdFailedToLoad={() => setIsAvailable(false)}
         />
       </View>
@@ -78,7 +81,7 @@ const AdBanner = React.memo(({ position = 'inline', bottomOffset = 0 }: AdBanner
       <BannerAdComponent
         unitId={AD_UNIT_IDS.banner}
         size={BannerAdSizeEnum.ANCHORED_ADAPTIVE_BANNER}
-        requestOptions={{ requestNonPersonalizedAdsOnly: true }}
+        requestOptions={{ requestNonPersonalizedAdsOnly: nonPersonalized }}
         onAdFailedToLoad={() => setIsAvailable(false)}
       />
     </View>

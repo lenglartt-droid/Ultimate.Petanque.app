@@ -3064,6 +3064,35 @@ export const translations = {
     tipExample: { fr: 'Ex: 12 rue de la Paix, Paris', en: 'Ex: 12 Main Street, London' },
   },
 
+  // ============================================
+  // TRACKING TRANSPARENCY (ATT)
+  // ============================================
+  tracking: {
+    title: { fr: 'Personnalisation des publicites', en: 'Ad Personalization' },
+    description: {
+      fr: 'Ultimate Petanque est gratuite grace a la publicite. Autorisez le suivi pour recevoir des publicites adaptees a vos centres d\'interet.',
+      en: 'Ultimate Petanque is free thanks to advertising. Allow tracking to receive ads tailored to your interests.',
+    },
+    benefit1: {
+      fr: 'Publicites pertinentes et moins intrusives',
+      en: 'Relevant and less intrusive ads',
+    },
+    benefit2: {
+      fr: 'Experience personnalisee',
+      en: 'Personalized experience',
+    },
+    benefit3: {
+      fr: 'Soutenez le developpement de l\'application',
+      en: 'Support app development',
+    },
+    privacyNote: {
+      fr: 'Vos donnees personnelles ne sont jamais vendues. Vous pouvez modifier ce choix dans les reglages de votre appareil.',
+      en: 'Your personal data is never sold. You can change this choice in your device settings.',
+    },
+    allowButton: { fr: 'Autoriser', en: 'Allow' },
+    declineButton: { fr: 'Continuer sans personnalisation', en: 'Continue without personalization' },
+  },
+
   privacyExtra: {
     meetupsTitle: { fr: 'Rendez-vous terrain', en: 'Terrain Meetups' },
     meetupsContent: { fr: 'Les rendez-vous permettent de planifier des sessions de jeu. Les données des RDV (titre, date, terrain, participants) sont stockées de manière sécurisée. Seuls le créateur et les participants invités ont accès aux détails du RDV. Les codes de partage sont générés aléatoirement. Les invitations peuvent être envoyées depuis l\'annuaire ou le classement communautaire.', en: 'Meetups allow scheduling playing sessions. Meetup data (title, date, terrain, participants) is stored securely. Only the creator and invited participants have access to meetup details. Share codes are randomly generated. Invitations can be sent from the directory or the community leaderboard.' },

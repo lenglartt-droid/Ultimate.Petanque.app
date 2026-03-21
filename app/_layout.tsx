@@ -10,6 +10,8 @@ import { ToastProvider } from '@/components/ui/Toast';
 import OfflineBanner from '@/components/ui/OfflineBanner';
 import ConflictResolutionModal from '@/components/ui/ConflictResolutionModal';
 import { useApp } from '@/contexts/AppContext';
+import TrackingConsentModal from '@/components/ui/TrackingConsentModal';
+import { isATTPromptNeeded } from '@/services/trackingService';
 
 export default function RootLayout() {
   return (
@@ -31,10 +33,21 @@ export default function RootLayout() {
 
 function LayoutInner() {
   const { currentConflict, conflictRemaining, resolveConflict } = useApp();
+  const [showATT, setShowATT] = React.useState(false);
+
+  React.useEffect(() => {
+    isATTPromptNeeded().then(needed => {
+      if (needed) setShowATT(true);
+    });
+  }, []);
   return (
             <View style={{ flex: 1 }}>
             <StatusBar style="dark" />
             <OfflineBanner />
+            <TrackingConsentModal
+              visible={showATT}
+              onComplete={() => setShowATT(false)}
+            />
             <ConflictResolutionModal
               visible={currentConflict !== null}
               conflict={currentConflict}

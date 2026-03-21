@@ -5,6 +5,7 @@
 // NOTE: Requires a custom dev build (not Expo Go) to function
 
 import { Platform } from 'react-native';
+import { canShowPersonalizedAds } from '@/services/trackingService';
 
 // ============================================
 // AD UNIT IDS
@@ -73,8 +74,9 @@ export async function preloadInterstitial(): Promise<void> {
     const adUnitId = AD_UNIT_IDS.interstitial;
     if (!adUnitId) return;
 
+    const nonPersonalized = !(await canShowPersonalizedAds());
     interstitialAd = InterstitialAd.createForAdRequest(adUnitId, {
-      requestNonPersonalizedAdsOnly: true,
+      requestNonPersonalizedAdsOnly: nonPersonalized,
     });
 
     interstitialAd.addAdEventListener(AdEventType.LOADED, () => {

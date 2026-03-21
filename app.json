@@ -19,6 +19,7 @@
         "NSCameraUsageDescription": "Ultimate Petanque utilise la caméra pour prendre des photos de profil, de boules et de terrains.",
         "NSPhotoLibraryUsageDescription": "Ultimate Petanque accède à vos photos pour ajouter des images de profil, de boules et de terrains.",
         "NSLocationWhenInUseUsageDescription": "Ultimate Petanque utilise votre position pour afficher les terrains et joueurs à proximité sur la carte.",
+        "NSUserTrackingUsageDescription": "Ultimate Petanque utilise cet identifiant pour vous proposer des publicités pertinentes et améliorer votre expérience.",
         "UIBackgroundModes": ["remote-notification"]
       }
     },
@@ -96,6 +97,9 @@
           "sounds": [],
           "mode": "production"
         }
+      ],
+      [
+        "expo-tracking-transparency"
       ],
       [
         "react-native-google-mobile-ads",
