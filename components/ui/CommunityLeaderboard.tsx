@@ -385,7 +385,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                 const medalColor = medalColors[rank];
                 return (
                   <Animated.View key={entry.id} entering={FadeIn.duration(200).delay(idx * 60)}>
-                    <View style={[s.boulesRow, idx < 2 && { borderBottomWidth: 1, borderBottomColor: theme.border + '40' }]}>
+                    <Pressable style={[s.boulesRow, idx < 2 && { borderBottomWidth: 1, borderBottomColor: theme.border + '40' }]} onPress={() => router.push({ pathname: `/boules-ranking/${encodeURIComponent(entry.id)}`, params: { brand: entry.brand, model: entry.model || '', mode: 'brand' } } as any)}>
                       <View style={{ width: 28, alignItems: 'center' }}>
                         {medalColor ? (
                           <View style={[s.medal, { backgroundColor: medalColor + '20' }]}>
@@ -419,7 +419,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                         <Text style={s.boulesStatValue}>{entry.stats.avgTirRate > 0 ? `${entry.stats.avgTirRate}%` : '-'}</Text>
                         <Text style={s.boulesStatLabel}>{t('leaderboard', 'boulesTir')}</Text>
                       </View>
-                    </View>
+                    </Pressable>
                   </Animated.View>
                 );
               })}
