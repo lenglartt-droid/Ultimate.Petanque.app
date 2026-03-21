@@ -35,12 +35,13 @@ import { getUnreadShareNotificationCount } from '@/services/shareService';
 import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 import AdBanner from '@/components/ui/AdBanner';
+import { Switch } from 'react-native';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, logout, operationLoading, sendOTP } = useAuth();
   const { showAlert } = useAlert();
-  const { clubs, terrains, addClub, updatePlayer, selfPlayer, userStats, matches, challenges, tournaments, refreshData, boulesSets, addBoulesSet, updateBoulesSet, setPrimaryBoulesSet, isPremium, isAdmin } = useApp();
+  const { clubs, terrains, addClub, updatePlayer, selfPlayer, userStats, matches, challenges, tournaments, refreshData, boulesSets, addBoulesSet, updateBoulesSet, setPrimaryBoulesSet, isPremium, isAdmin, batterySaverEnabled, setBatterySaver } = useApp();
   const supabase = getSupabaseClient();
   const { t, language, setLanguage } = useLanguage();
   const params = useLocalSearchParams<{ edit?: string }>();
@@ -1599,6 +1600,28 @@ export default function ProfileScreen() {
               </View>
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </Pressable>
+
+            {/* Battery Saver Mode */}
+            <View style={styles.menuItem}>
+              <View style={[styles.menuIcon, { backgroundColor: (batterySaverEnabled ? theme.warning : '#10B981') + '15' }]}>
+                <MaterialIcons name={batterySaverEnabled ? 'battery-saver' : 'bolt'} size={20} color={batterySaverEnabled ? theme.warning : '#10B981'} />
+              </View>
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuItemText}>{t('syncHistory', 'batterySaver')}</Text>
+                <Text style={styles.menuItemSubtext}>
+                  {batterySaverEnabled ? t('syncHistory', 'batterySaverEnabledDesc') : t('syncHistory', 'batterySaverDisabledDesc')}
+                </Text>
+              </View>
+              <Switch
+                value={batterySaverEnabled}
+                onValueChange={(val) => {
+                  Haptics.selectionAsync();
+                  setBatterySaver(val);
+                }}
+                trackColor={{ false: theme.border, true: theme.warning + '60' }}
+                thumbColor={batterySaverEnabled ? theme.warning : theme.textMuted}
+              />
+            </View>
 
             {/* Partage expandable */}
             <Pressable 

@@ -22,6 +22,7 @@ import {
 } from '@/services/offlineQueueService';
 import { addSyncHistoryEntry } from '@/services/syncHistoryService';
 import { prefetchImages, startPeriodicCacheCleanup, stopPeriodicCacheCleanup, clearAllImageCache } from '@/services/imageCacheService';
+import { loadSyncConfig, getSyncConfig, onSyncConfigChange, setBatterySaverMode, DELTA_SELECT, SyncConfig } from '@/services/syncConfigService';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import {
   mockPlayers,
@@ -146,6 +147,10 @@ interface AppContextType {
 
   // Refresh
   refreshData: () => Promise<void>;
+
+  // Battery saver
+  batterySaverEnabled: boolean;
+  setBatterySaver: (enabled: boolean) => Promise<void>;
 }
 
 // Module-level helper: calculate stats for a single player from matches
@@ -310,7 +315,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const secondaryLoadDone = useRef(false);
   const secondaryLoadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const syncCountRef = useRef(0);
-  const FULL_SYNC_INTERVAL = 5; // Full sync every 5th cycle, delta sync otherwise
+  const [syncConfig, setSyncConfigState] = useState<SyncConfig>(getSyncConfig());
+  const syncConfigRef = useRef(syncConfig);
   
   const [players, setPlayers] = useState<Player[]>([]);
   const [clubs, setClubs] = useState<Club[]>([]);
@@ -482,6 +488,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Helper to transform a raw player DB row (reusable across loadData and addPlayer)
   const mapPlayer = useCallback((p: any): Player => mapPlayerFromDb(p), []);
+
+  // Load sync config on mount
+  useEffect(() => {
+    loadSyncConfig().then(cfg => {
+      setSyncConfigState(cfg);
+      syncConfigRef.current = cfg;
+    });
+    const unsub = onSyncConfigChange(cfg => {
+      setSyncConfigState(cfg);
+      syncConfigRef.current = cfg;
+    });
+    return unsub;
+  }, []);
+
+  // Battery saver toggle
+  const setBatterySaver = useCallback(async (enabled: boolean) => {
+    const cfg = await setBatterySaverMode(enabled);
+    setSyncConfigState(cfg);
+    syncConfigRef.current = cfg;
+  }, []);
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -672,9 +698,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Schedule secondary data loading after primary load completes
   const scheduleSecondaryLoad = useCallback(() => {
     if (secondaryLoadTimerRef.current) clearTimeout(secondaryLoadTimerRef.current);
+    const delay = syncConfigRef.current.secondaryLoadDelayMs;
     secondaryLoadTimerRef.current = setTimeout(() => {
       loadSecondaryData();
-    }, 600); // 600ms delay to let UI render first
+    }, delay);
   }, [loadSecondaryData]);
 
   // Cleanup secondary load timer on unmount
@@ -791,12 +818,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       scheduleSecondaryLoad();
 
       // Phase 2b: Prefetch critical images (avatars, terrain photos) in background
-      setTimeout(() => {
-        prefetchImages({
-          players: dbPlayers,
-          terrains: terrainsRes.data ? terrainsRes.data.map(mapTerrainFromDb) : [],
-        });
-      }, 1200);
+      if (!syncConfigRef.current.skipImagePrefetch) {
+        setTimeout(() => {
+          prefetchImages({
+            players: dbPlayers,
+            terrains: terrainsRes.data ? terrainsRes.data.map(mapTerrainFromDb) : [],
+          });
+        }, 1200);
+      }
 
     } catch (error) {
       console.log('Error loading data from cloud:', error);
@@ -840,13 +869,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     try {
       // Fetch updated records AND soft_deletes since last sync in parallel
+      // Use selective columns to reduce payload size
       const [playersRes, clubsRes, tournamentsRes, matchesRes, challengesRes, terrainsRes, softDeletesRes] = await Promise.all([
-        supabase.from('players').select('*').gt('updated_at', lastSync),
-        supabase.from('clubs').select('*').gt('updated_at', lastSync),
-        supabase.from('tournaments').select('*').gt('updated_at', lastSync),
-        supabase.from('matches').select('*').gt('updated_at', lastSync),
-        supabase.from('challenges').select('*').gt('updated_at', lastSync),
-        supabase.from('terrains').select('*').gt('updated_at', lastSync),
+        supabase.from('players').select(DELTA_SELECT.players).gt('updated_at', lastSync),
+        supabase.from('clubs').select(DELTA_SELECT.clubs).gt('updated_at', lastSync),
+        supabase.from('tournaments').select(DELTA_SELECT.tournaments).gt('updated_at', lastSync),
+        supabase.from('matches').select(DELTA_SELECT.matches).gt('updated_at', lastSync),
+        supabase.from('challenges').select(DELTA_SELECT.challenges).gt('updated_at', lastSync),
+        supabase.from('terrains').select(DELTA_SELECT.terrains).gt('updated_at', lastSync),
         supabase.from('soft_deletes').select('table_name, item_id').gt('deleted_at', lastSync),
       ]);
 
@@ -1021,20 +1051,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => stopPeriodicCacheCleanup();
   }, [user?.id]);
 
-  // Auto-refresh every 30 seconds: delta sync normally, full sync every Nth cycle
+  // Auto-refresh: delta sync normally, full sync every Nth cycle
+  // Interval controlled by syncConfig (0 = disabled for battery saver)
   useEffect(() => {
     if (!user?.id) return;
+    const intervalMs = syncConfigRef.current.syncIntervalMs;
+    if (intervalMs <= 0) {
+      // Battery saver mode: no automatic sync
+      console.log('Battery saver mode: automatic sync disabled');
+      return;
+    }
+    const fullEveryN = syncConfigRef.current.fullSyncEveryN;
+    console.log(`Sync interval: ${intervalMs / 1000}s, full every ${fullEveryN} cycles`);
     const interval = setInterval(() => {
       syncCountRef.current += 1;
-      if (syncCountRef.current % FULL_SYNC_INTERVAL === 0) {
+      if (syncCountRef.current % fullEveryN === 0) {
         console.log('Periodic full sync (cycle', syncCountRef.current, ')');
         loadData();
       } else {
         loadDeltaData();
       }
-    }, 30000);
+    }, intervalMs);
     return () => clearInterval(interval);
-  }, [user?.id, loadData, loadDeltaData]);
+  }, [user?.id, loadData, loadDeltaData, syncConfig]);
 
   // Retry failed operations
   const retryFailedOps = useCallback(async (opIds?: string[]) => {
@@ -2318,6 +2357,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         isPremium,
         setIsPremium,
         isAdmin,
+        batterySaverEnabled: syncConfig.batterySaverEnabled,
+        setBatterySaver,
         setItemPublic,
         isReplayingQueue,
         replayProgress,
