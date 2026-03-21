@@ -3204,6 +3204,17 @@ export const translations = {
     // Flags
     multi_account_device: { fr: 'Multi-comptes (meme appareil)', en: 'Multi-accounts (same device)' },
     multi_account_device_3plus: { fr: 'Multi-comptes 3+ (meme appareil)', en: '3+ multi-accounts (same device)' },
+    // Multi-account section
+    multiAccountTitle: { fr: 'Detection multi-comptes', en: 'Multi-account Detection' },
+    multiAccountDesc: { fr: 'Appareils partageant plusieurs comptes', en: 'Devices sharing multiple accounts' },
+    deviceClusters: { fr: 'appareils partages', en: 'shared devices' },
+    noMultiAccounts: { fr: 'Aucun multi-compte detecte', en: 'No multi-accounts detected' },
+    noMultiAccountsDesc: { fr: 'Aucun appareil ne partage plusieurs comptes.', en: 'No device shares multiple accounts.' },
+    deviceLabel: { fr: 'Appareil', en: 'Device' },
+    accountsLabel: { fr: 'comptes', en: 'accounts' },
+    totalDevices: { fr: 'Appareils', en: 'Devices' },
+    totalRegistrations: { fr: 'Inscriptions', en: 'Registrations' },
+    sharedDevices: { fr: 'Partages', en: 'Shared' },
     extreme_win_rate: { fr: 'Taux de victoire extreme (>95%)', en: 'Extreme win rate (>95%)' },
     extreme_loss_rate: { fr: 'Taux de defaite extreme (<5%)', en: 'Extreme loss rate (<5%)' },
     unrealistic_combined_rates: { fr: 'Tir et pointage tous deux >85%', en: 'Shot and point both >85%' },

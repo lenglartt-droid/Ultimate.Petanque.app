@@ -29,6 +29,7 @@ import { fetchAllReports, updateReportStatus, PlayerReport } from '@/services/re
 import { fetchSuspiciousPlayers, updateSuspiciousStatus } from '@/services/trustScoreService';
 import { getTrustScoreColor } from '@/services/trustScoreService';
 import { FunctionsHttpError } from '@supabase/supabase-js';
+import { fetchDeviceClusters, getDeviceRegistrationStats, DeviceCluster } from '@/services/multiAccountService';
 
 interface PromoCode {
   id: string;
@@ -206,6 +207,28 @@ export default function AdminPromosScreen() {
   }, [fr, showAlert]);
 
   const suspiciousFlaggedCount = suspiciousPlayers.filter(p => p.status === 'flagged' || p.status === 'watch').length;
+
+  // ===== MULTI-ACCOUNT STATE =====
+  const [showMultiAccountSection, setShowMultiAccountSection] = React.useState(false);
+  const [deviceClusters, setDeviceClusters] = React.useState<DeviceCluster[]>([]);
+  const [multiAccountLoading, setMultiAccountLoading] = React.useState(false);
+  const [multiAccountLoaded, setMultiAccountLoaded] = React.useState(false);
+  const [deviceStats, setDeviceStats] = React.useState({ totalDevices: 0, totalRegistrations: 0, multiAccountDevices: 0 });
+
+  const loadMultiAccounts = useCallback(async () => {
+    if (multiAccountLoaded) return;
+    setMultiAccountLoading(true);
+    const [clustersRes, statsRes] = await Promise.all([
+      fetchDeviceClusters(),
+      getDeviceRegistrationStats(),
+    ]);
+    setDeviceClusters(clustersRes.clusters);
+    if (!statsRes.error) setDeviceStats(statsRes);
+    setMultiAccountLoading(false);
+    setMultiAccountLoaded(true);
+  }, [multiAccountLoaded]);
+
+  const multiAccountCount = deviceClusters.length;
 
   // Export CSV
   const handleExportCSV = useCallback(async () => {
@@ -619,6 +642,18 @@ export default function AdminPromosScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>{fr ? 'Codes promo' : 'Promo Codes'}</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
+          {/* Multi-account button */}
+          <Pressable
+            style={[styles.bulkBtn, multiAccountCount > 0 && { backgroundColor: '#7C3AED' + '15' }]}
+            onPress={() => { Haptics.selectionAsync(); setShowMultiAccountSection(!showMultiAccountSection); if (!multiAccountLoaded) loadMultiAccounts(); }}
+          >
+            <MaterialIcons name="devices" size={20} color={multiAccountCount > 0 ? '#7C3AED' : theme.primary} />
+            {multiAccountCount > 0 ? (
+              <View style={{ position: 'absolute', top: 2, right: 2, backgroundColor: '#7C3AED', width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 9, fontWeight: '800', color: '#FFF' }}>{multiAccountCount}</Text>
+              </View>
+            ) : null}
+          </Pressable>
           {/* Detection button */}
           <Pressable
             style={[styles.bulkBtn, suspiciousFlaggedCount > 0 && { backgroundColor: '#F97316' + '15' }]}
@@ -765,6 +800,114 @@ export default function AdminPromosScreen() {
                 )}
               </Animated.View>
 
+              {/* Multi-Account Detection Section */}
+              {showMultiAccountSection ? (
+                <Animated.View entering={FadeIn.duration(300)} style={{ marginBottom: 20 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: '#7C3AED' + '15', alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialIcons name="devices" size={18} color="#7C3AED" />
+                    </View>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textPrimary, flex: 1 }}>
+                      {fr ? 'MULTI-COMPTES' : 'MULTI-ACCOUNTS'} ({deviceClusters.length})
+                    </Text>
+                    <Pressable
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#7C3AED', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 }}
+                      onPress={() => { setMultiAccountLoaded(false); loadMultiAccounts(); }}
+                    >
+                      <MaterialIcons name="refresh" size={14} color="#FFF" />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFF' }}>{fr ? 'Rafraichir' : 'Refresh'}</Text>
+                    </Pressable>
+                    <Pressable onPress={() => setShowMultiAccountSection(false)} hitSlop={8}>
+                      <MaterialIcons name="close" size={20} color={theme.textSecondary} />
+                    </Pressable>
+                  </View>
+
+                  {/* Device stats */}
+                  {multiAccountLoaded ? (
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                      <View style={{ flex: 1, backgroundColor: '#7C3AED' + '12', borderRadius: 10, padding: 10, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 16, fontWeight: '800', color: '#7C3AED' }}>{deviceStats.totalDevices}</Text>
+                        <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted }}>{fr ? 'Appareils' : 'Devices'}</Text>
+                      </View>
+                      <View style={{ flex: 1, backgroundColor: theme.primary + '12', borderRadius: 10, padding: 10, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 16, fontWeight: '800', color: theme.primary }}>{deviceStats.totalRegistrations}</Text>
+                        <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted }}>{fr ? 'Inscriptions' : 'Signups'}</Text>
+                      </View>
+                      <View style={{ flex: 1, backgroundColor: (deviceStats.multiAccountDevices > 0 ? theme.error : theme.success) + '12', borderRadius: 10, padding: 10, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 16, fontWeight: '800', color: deviceStats.multiAccountDevices > 0 ? theme.error : theme.success }}>{deviceStats.multiAccountDevices}</Text>
+                        <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted }}>{fr ? 'Partages' : 'Shared'}</Text>
+                      </View>
+                    </View>
+                  ) : null}
+
+                  {multiAccountLoading ? (
+                    <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+                      <ActivityIndicator size="large" color="#7C3AED" />
+                    </View>
+                  ) : deviceClusters.length === 0 ? (
+                    <View style={{ alignItems: 'center', paddingVertical: 24, backgroundColor: theme.surface, borderRadius: 16, padding: 20 }}>
+                      <MaterialIcons name="verified-user" size={40} color={theme.success} />
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginTop: 8 }}>{fr ? 'Aucun multi-compte detecte' : 'No multi-accounts detected'}</Text>
+                      <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 4, textAlign: 'center' }}>{fr ? 'Aucun appareil ne partage plusieurs comptes.' : 'No device shares multiple accounts.'}</Text>
+                    </View>
+                  ) : (
+                    deviceClusters.map((cluster, ci) => {
+                      const isHighRisk = cluster.accounts.length >= 3;
+                      const riskColor = isHighRisk ? theme.error : '#F97316';
+                      return (
+                        <View key={ci} style={[styles.promoCard, { borderLeftWidth: 3, borderLeftColor: riskColor }]}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: riskColor + '15', alignItems: 'center', justifyContent: 'center' }}>
+                                <MaterialIcons name="devices" size={18} color={riskColor} />
+                              </View>
+                              <View>
+                                <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textPrimary }}>
+                                  {cluster.accounts.length} {fr ? 'comptes' : 'accounts'}
+                                </Text>
+                                <Text style={{ fontSize: 10, color: theme.textMuted, fontFamily: 'monospace' }}>
+                                  {cluster.fingerprint.slice(0, 17)}
+                                </Text>
+                              </View>
+                            </View>
+                            <View style={[styles.statusBadge, { backgroundColor: riskColor + '15' }]}>
+                              <View style={[styles.statusDot, { backgroundColor: riskColor }]} />
+                              <Text style={[styles.statusText, { color: riskColor }]}>
+                                {isHighRisk ? (fr ? 'Risque eleve' : 'High risk') : (fr ? 'A surveiller' : 'Watch')}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* Account list */}
+                          {cluster.accounts.map((acc, ai) => (
+                            <View key={ai} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6, borderTopWidth: ai === 0 ? 1 : 0, borderTopColor: theme.border + '60' }}>
+                              <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center' }}>
+                                <MaterialIcons name="person" size={14} color={theme.primary} />
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textPrimary }} numberOfLines={1}>{acc.email}</Text>
+                                <Text style={{ fontSize: 10, color: theme.textMuted }}>
+                                  {new Date(acc.registeredAt).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                </Text>
+                              </View>
+                              {ai === 0 ? (
+                                <View style={{ backgroundColor: theme.primary + '12', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                                  <Text style={{ fontSize: 9, fontWeight: '700', color: theme.primary }}>{fr ? 'Premier' : 'First'}</Text>
+                                </View>
+                              ) : (
+                                <View style={{ backgroundColor: riskColor + '12', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                                  <Text style={{ fontSize: 9, fontWeight: '700', color: riskColor }}>+{ai}</Text>
+                                </View>
+                              )}
+                            </View>
+                          ))}
+                        </View>
+                      );
+                    })
+                  )}
+                </Animated.View>
+              ) : null}
+
               {/* Detection Section */}
               {showDetectionSection ? (
                 <Animated.View entering={FadeIn.duration(300)} style={{ marginBottom: 20 }}>
@@ -855,6 +998,11 @@ export default function AdminPromosScreen() {
 
                           {/* Details */}
                           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 8 }}>
+                            {sp.details.sharedDeviceAccounts !== undefined ? (
+                              <Text style={{ fontSize: 11, color: '#7C3AED', fontWeight: '600' }}>
+                                <MaterialIcons name="devices" size={11} color="#7C3AED" /> {sp.details.sharedDeviceAccounts} {fr ? 'autres comptes' : 'other accounts'}
+                              </Text>
+                            ) : null}
                             {sp.details.matchesPlayed !== undefined ? (
                               <Text style={{ fontSize: 11, color: theme.textSecondary }}>{sp.details.matchesPlayed} matchs</Text>
                             ) : null}
