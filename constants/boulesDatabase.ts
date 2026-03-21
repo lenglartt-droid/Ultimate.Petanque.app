@@ -82,17 +82,17 @@ export const BOULES_DATABASE: BoulesModel[] = [
   { brand: 'GEOLOGIC', model: 'Alpha', material: 'Acier carbone', hardness: 'Tendre', targetUsage: 'Tireur', particularities: 'Entrée de gamme tireur' },
 ];
 
-// Brand visual identities for leaderboard/widget
-export const BOULES_BRAND_IMAGES: Record<string, any> = {
-  'OBUT': require('@/assets/images/brands/obut.png'),
-  'MS PÉTANQUE': require('@/assets/images/brands/ms-petanque.png'),
-  'LA BOULE BLEUE': require('@/assets/images/brands/la-boule-bleue.png'),
-  'BOULENCIEL': require('@/assets/images/brands/boulenciel.png'),
-  'KTK': require('@/assets/images/brands/ktk.png'),
-  'ODDEKA': require('@/assets/images/brands/oddeka.png'),
-  'LA FRANC': require('@/assets/images/brands/la-franc.png'),
-  'MARATHON': require('@/assets/images/brands/marathon.png'),
-  'GEOLOGIC': require('@/assets/images/brands/geologic.png'),
+// Brand visual identities for leaderboard/widget (real SVG logos - white on transparent)
+export const BOULES_BRAND_IMAGES: Record<string, { uri: string }> = {
+  'OBUT': { uri: 'https://cdn-ai.onspace.ai/onspace/files/2CRjswsPp64i6bBt4tyQfe/obut.svg' },
+  'MS PÉTANQUE': { uri: 'https://cdn-ai.onspace.ai/onspace/files/JutdugqmHdBLRriVKSYneK/ms-petanque.svg' },
+  'LA BOULE BLEUE': { uri: 'https://cdn-ai.onspace.ai/onspace/files/UqCoHYvAzzVEErkRUdaWSC/la-boule-bleue.svg' },
+  'BOULENCIEL': { uri: 'https://cdn-ai.onspace.ai/onspace/files/2LUYxNZTBPejbQQFyZft35/boulenciel.svg' },
+  'KTK': { uri: 'https://cdn-ai.onspace.ai/onspace/files/4QoxX6Bi98yPCxzDRiAHAT/ktk.svg' },
+  'ODDEKA': { uri: 'https://cdn-ai.onspace.ai/onspace/files/hFdTdu4CcBE5WsXuffydDC/oddeka_logo.svg' },
+  'LA FRANC': { uri: 'https://cdn-ai.onspace.ai/onspace/files/TJNik3J7MwEGUoJ5oikjNM/lafranc.svg' },
+  'MARATHON': { uri: 'https://cdn-ai.onspace.ai/onspace/files/BCaojvULkoPrW8zx9FXMTe/marathon_logo.svg' },
+  'GEOLOGIC': { uri: 'https://cdn-ai.onspace.ai/onspace/files/MEPmrRBXHHybXY5WJQxJBn/geologic.svg' },
 };
 
 export const BOULES_BRAND_COLORS: Record<string, { bg: string; text: string; abbr: string }> = {
@@ -107,7 +107,7 @@ export const BOULES_BRAND_COLORS: Record<string, { bg: string; text: string; abb
   'GEOLOGIC': { bg: '#37474F', text: '#FFFFFF', abbr: 'GE' },
 };
 
-export function getBrandImage(brand: string): any | null {
+export function getBrandImage(brand: string): { uri: string } | null {
   const upper = brand.toUpperCase();
   return BOULES_BRAND_IMAGES[upper] || null;
 }

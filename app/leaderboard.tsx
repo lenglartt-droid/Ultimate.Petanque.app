@@ -726,11 +726,13 @@ export default function LeaderboardScreen() {
                           <Text style={s.rankText}>{rank}</Text>
                         )}
                       </View>
-                      {(() => { const bv = getBrandVisual(entry.brand); const bImg = getBrandImage(entry.brand); return bImg ? (
-                      <Image source={bImg} style={s.boulesIconWrap} contentFit="cover" transition={200} />
-                      ) : (
+                      {(() => { const bv = getBrandVisual(entry.brand); const bImg = getBrandImage(entry.brand); return (
                       <View style={[s.boulesIconWrap, { backgroundColor: bv.bg, alignItems: 'center', justifyContent: 'center' }]}>
-                        <Text style={{ fontSize: 12, fontWeight: '900', color: bv.text, letterSpacing: -0.5 }}>{bv.abbr}</Text>
+                        {bImg ? (
+                          <Image source={bImg} style={{ width: '65%', height: '65%' }} contentFit="contain" transition={200} />
+                        ) : (
+                          <Text style={{ fontSize: 12, fontWeight: '900', color: bv.text, letterSpacing: -0.5 }}>{bv.abbr}</Text>
+                        )}
                       </View>
                       ); })()}
                       <View style={{ flex: 1 }}>
