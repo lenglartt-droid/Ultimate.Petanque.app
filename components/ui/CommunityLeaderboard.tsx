@@ -325,7 +325,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                   <Animated.View key={club.id} entering={FadeIn.duration(200).delay(idx * 60)}>
                     <Pressable
                       style={[s.clubRow, idx < 2 && { borderBottomWidth: 1, borderBottomColor: theme.border + '40' }]}
-                      onPress={() => router.push(`/club/${club.id}` as any)}
+                      onPress={() => router.push({ pathname: `/club-ranking/${club.id}`, params: { name: club.name } } as any)}
                     >
                       <View style={{ width: 28, alignItems: 'center' }}>
                         {medalColor ? (

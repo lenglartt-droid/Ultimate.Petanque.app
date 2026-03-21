@@ -597,7 +597,7 @@ export default function LeaderboardScreen() {
               const medalColor = medalColors[rank];
               return (
                 <Animated.View entering={FadeIn.duration(200).delay(Math.min(index * 40, 400))}>
-                  <Pressable style={s.clubRow} onPress={() => router.push(`/club/${club.id}` as any)}>
+                  <Pressable style={s.clubRow} onPress={() => router.push({ pathname: `/club-ranking/${club.id}`, params: { name: club.name } } as any)}>
                     <View style={s.clubHeader}>
                       <View style={s.rankCol}>
                         {medalColor ? (

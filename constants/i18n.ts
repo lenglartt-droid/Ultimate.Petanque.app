@@ -2386,6 +2386,7 @@ export const translations = {
     clubRankingDesc: { fr: 'Meilleurs joueurs inscrits dans ce club', en: 'Best registered players in this club' },
     noClubPlayers: { fr: 'Aucun joueur public dans ce club', en: 'No public players in this club' },
     noClubPlayersDesc: { fr: 'Les joueurs publics membres de ce club apparaîtront ici', en: 'Public players who are members of this club will appear here' },
+    clubActivity: { fr: 'Activité', en: 'Activity' },
   },
 
   statsExtra: {
