@@ -1165,9 +1165,7 @@ export default function LeaderboardScreen() {
             </View>
           }
         />
-      )}
-
-      )}
+      ))}
 
       {/* My rank footer when not visible in list (players tab only) */}
       {activeTab === 'players' && myRank && myRank > visibleCount && !loading ? (() => {
@@ -1197,8 +1195,6 @@ export default function LeaderboardScreen() {
           </View>
         );
       })() : null}
-
-      )}
 
       {/* Meetup Invitation Picker Modal */}
       <Modal visible={showMeetupPicker} animationType="slide" transparent onRequestClose={() => setShowMeetupPicker(false)}>
