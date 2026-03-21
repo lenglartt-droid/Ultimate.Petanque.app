@@ -83,6 +83,18 @@ export const BOULES_DATABASE: BoulesModel[] = [
 ];
 
 // Brand visual identities for leaderboard/widget
+export const BOULES_BRAND_IMAGES: Record<string, any> = {
+  'OBUT': require('@/assets/images/brands/obut.png'),
+  'MS PÉTANQUE': require('@/assets/images/brands/ms-petanque.png'),
+  'LA BOULE BLEUE': require('@/assets/images/brands/la-boule-bleue.png'),
+  'BOULENCIEL': require('@/assets/images/brands/boulenciel.png'),
+  'KTK': require('@/assets/images/brands/ktk.png'),
+  'ODDEKA': require('@/assets/images/brands/oddeka.png'),
+  'LA FRANC': require('@/assets/images/brands/la-franc.png'),
+  'MARATHON': require('@/assets/images/brands/marathon.png'),
+  'GEOLOGIC': require('@/assets/images/brands/geologic.png'),
+};
+
 export const BOULES_BRAND_COLORS: Record<string, { bg: string; text: string; abbr: string }> = {
   'OBUT': { bg: '#1B3A5C', text: '#FFFFFF', abbr: 'OB' },
   'MS PÉTANQUE': { bg: '#C62828', text: '#FFFFFF', abbr: 'MS' },
@@ -94,6 +106,11 @@ export const BOULES_BRAND_COLORS: Record<string, { bg: string; text: string; abb
   'MARATHON': { bg: '#4E342E', text: '#FFFFFF', abbr: 'MA' },
   'GEOLOGIC': { bg: '#37474F', text: '#FFFFFF', abbr: 'GE' },
 };
+
+export function getBrandImage(brand: string): any | null {
+  const upper = brand.toUpperCase();
+  return BOULES_BRAND_IMAGES[upper] || null;
+}
 
 export function getBrandVisual(brand: string): { bg: string; text: string; abbr: string } {
   const upper = brand.toUpperCase();

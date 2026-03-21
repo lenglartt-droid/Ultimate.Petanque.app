@@ -25,7 +25,7 @@ import { useApp } from '@/contexts/AppContext';
 import { fetchLeaderboard, sortLeaderboard, LeaderboardPlayer, LeaderboardSort } from '@/services/leaderboardService';
 import { fetchClubLeaderboard, sortClubLeaderboard, LeaderboardClub, ClubLeaderboardSort } from '@/services/clubLeaderboardService';
 import { fetchBoulesLeaderboard, aggregateBoulesData, sortBoulesLeaderboard, LeaderboardBoulesEntry, BoulesLeaderboardSort, BoulesLeaderboardMode } from '@/services/boulesLeaderboardService';
-import { getBrandVisual } from '@/constants/boulesDatabase';
+import { getBrandVisual, getBrandImage } from '@/constants/boulesDatabase';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services/meetupService';
 import AdBanner from '@/components/ui/AdBanner';
 
@@ -726,8 +726,10 @@ export default function LeaderboardScreen() {
                           <Text style={s.rankText}>{rank}</Text>
                         )}
                       </View>
-                      {(() => { const bv = getBrandVisual(entry.brand); return (
-                      <View style={[s.boulesIconWrap, { backgroundColor: bv.bg }]}>
+                      {(() => { const bv = getBrandVisual(entry.brand); const bImg = getBrandImage(entry.brand); return bImg ? (
+                      <Image source={bImg} style={s.boulesIconWrap} contentFit="cover" transition={200} />
+                      ) : (
+                      <View style={[s.boulesIconWrap, { backgroundColor: bv.bg, alignItems: 'center', justifyContent: 'center' }]}>
                         <Text style={{ fontSize: 12, fontWeight: '900', color: bv.text, letterSpacing: -0.5 }}>{bv.abbr}</Text>
                       </View>
                       ); })()}
@@ -1442,7 +1444,7 @@ const s = StyleSheet.create({
   // Boules rows
   boulesRow: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 14, marginBottom: 10, ...theme.shadows.card },
   boulesHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-  boulesIconWrap: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#D97706' + '12', alignItems: 'center', justifyContent: 'center' },
+  boulesIconWrap: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#D97706' + '12', overflow: 'hidden' as const },
   boulesName: { fontSize: 15, fontWeight: '700', color: theme.textPrimary },
   boulesRoleSection: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border + '30' },
   boulesRoleTitle: { fontSize: 10, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase' as const, letterSpacing: 0.5, marginBottom: 6 },
