@@ -23,8 +23,12 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth, useAlert } from '@/template';
 import { useApp } from '@/contexts/AppContext';
 import { fetchLeaderboard, sortLeaderboard, LeaderboardPlayer, LeaderboardSort } from '@/services/leaderboardService';
+import { fetchClubLeaderboard, sortClubLeaderboard, LeaderboardClub, ClubLeaderboardSort } from '@/services/clubLeaderboardService';
+import { fetchBoulesLeaderboard, aggregateBoulesData, sortBoulesLeaderboard, LeaderboardBoulesEntry, BoulesLeaderboardSort, BoulesLeaderboardMode } from '@/services/boulesLeaderboardService';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services/meetupService';
 import AdBanner from '@/components/ui/AdBanner';
+
+type LeaderboardTab = 'players' | 'clubs' | 'boules';
 
 const PAGE_SIZE = 30;
 
@@ -165,6 +169,10 @@ export default function LeaderboardScreen() {
   }, []);
   const isTablet = screenWidth >= 600;
 
+  // ============ TAB STATE ============
+  const [activeTab, setActiveTab] = useState<LeaderboardTab>('players');
+
+  // ============ PLAYERS STATE ============
   const [allPlayers, setAllPlayers] = useState<LeaderboardPlayer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -180,6 +188,24 @@ export default function LeaderboardScreen() {
   const [showFilters, setShowFilters] = useState(false);
   const [filterSearchText, setFilterSearchText] = useState('');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  // ============ CLUBS STATE ============
+  const [allClubs, setAllClubs] = useState<LeaderboardClub[]>([]);
+  const [clubsLoading, setClubsLoading] = useState(false);
+  const [clubsError, setClubsError] = useState<string | null>(null);
+  const [clubSortBy, setClubSortBy] = useState<ClubLeaderboardSort>('compositeScore');
+  const [clubSearch, setClubSearch] = useState('');
+  const [clubsLoaded, setClubsLoaded] = useState(false);
+
+  // ============ BOULES STATE ============
+  const [boulesRawData, setBoulesRawData] = useState<any[]>([]);
+  const [boulesLoading, setBoulesLoading] = useState(false);
+  const [boulesError, setBoulesError] = useState<string | null>(null);
+  const [boulesSortBy, setBoulesSortBy] = useState<BoulesLeaderboardSort>('avgWinRate');
+  const [boulesMode, setBoulesMode] = useState<BoulesLeaderboardMode>('brand');
+  const [boulesRoleFilter, setBoulesRoleFilter] = useState<string>('all');
+  const [boulesSearch, setBoulesSearch] = useState('');
+  const [boulesLoaded, setBoulesLoaded] = useState(false);
 
   // Meetup invitation
   const [showMeetupPicker, setShowMeetupPicker] = useState(false);
@@ -198,6 +224,54 @@ export default function LeaderboardScreen() {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Lazy load clubs when tab is selected
+  const loadClubs = useCallback(async () => {
+    if (clubsLoaded) return;
+    setClubsLoading(true);
+    const { clubs: c, error: err } = await fetchClubLeaderboard();
+    setAllClubs(c);
+    setClubsError(err);
+    setClubsLoading(false);
+    setClubsLoaded(true);
+  }, [clubsLoaded]);
+
+  // Lazy load boules when tab is selected
+  const loadBoules = useCallback(async () => {
+    if (boulesLoaded) return;
+    setBoulesLoading(true);
+    const { entries, error: err } = await fetchBoulesLeaderboard();
+    setBoulesRawData(entries);
+    setBoulesError(err);
+    setBoulesLoading(false);
+    setBoulesLoaded(true);
+  }, [boulesLoaded]);
+
+  useEffect(() => {
+    if (activeTab === 'clubs') loadClubs();
+    if (activeTab === 'boules') loadBoules();
+  }, [activeTab, loadClubs, loadBoules]);
+
+  // ============ CLUBS COMPUTED ============
+  const filteredClubs = useMemo(() => {
+    let result = allClubs;
+    if (clubSearch.trim()) {
+      const q = clubSearch.toLowerCase().trim();
+      result = result.filter(c => c.name.toLowerCase().includes(q) || (c.city || '').toLowerCase().includes(q));
+    }
+    return sortClubLeaderboard(result, clubSortBy);
+  }, [allClubs, clubSearch, clubSortBy]);
+
+  // ============ BOULES COMPUTED ============
+  const boulesEntries = useMemo(() => {
+    const aggregated = aggregateBoulesData(boulesRawData, boulesMode, boulesRoleFilter);
+    let result = aggregated;
+    if (boulesSearch.trim()) {
+      const q = boulesSearch.toLowerCase().trim();
+      result = result.filter(e => e.brand.toLowerCase().includes(q) || (e.model || '').toLowerCase().includes(q));
+    }
+    return sortBoulesLeaderboard(result, boulesSortBy);
+  }, [boulesRawData, boulesMode, boulesRoleFilter, boulesSearch, boulesSortBy]);
 
   // Extract unique cities for filter
   const uniqueCities = useMemo(() => {
@@ -345,10 +419,30 @@ export default function LeaderboardScreen() {
             <View style={{ flex: 1 }}>
               <Text style={s.headerTitle}>{t('leaderboard', 'title')}</Text>
               <Text style={s.headerSubtitle}>
-                {filteredSorted.length} {t('leaderboard', 'publicPlayersCount')}
-                {myRank ? ` \u2022 #${myRank}` : ''}
+                {activeTab === 'players'
+                  ? `${filteredSorted.length} ${t('leaderboard', 'publicPlayersCount')}${myRank ? ` \u2022 #${myRank}` : ''}`
+                  : activeTab === 'clubs'
+                    ? `${filteredClubs.length} ${t('leaderboard', 'publicClubsCount')}`
+                    : `${boulesEntries.length} ${boulesMode === 'brand' ? t('leaderboard', 'publicBoulesCount') : t('leaderboard', 'publicModelsCount')}`}
               </Text>
             </View>
+          </View>
+
+          {/* Tab switcher */}
+          <View style={s.tabRow}>
+            {([{ id: 'players' as LeaderboardTab, label: t('leaderboard', 'tabPlayers'), icon: 'people' },
+              { id: 'clubs' as LeaderboardTab, label: t('leaderboard', 'tabClubs'), icon: 'home' },
+              { id: 'boules' as LeaderboardTab, label: t('leaderboard', 'tabBoules'), icon: 'sports-baseball' },
+            ]).map(tab => (
+              <Pressable
+                key={tab.id}
+                style={[s.tabBtn, activeTab === tab.id && s.tabBtnActive]}
+                onPress={() => { Haptics.selectionAsync(); setActiveTab(tab.id); }}
+              >
+                <MaterialIcons name={tab.icon as any} size={16} color={activeTab === tab.id ? '#FFF' : 'rgba(255,255,255,0.5)'} />
+                <Text style={[s.tabBtnText, activeTab === tab.id && s.tabBtnTextActive]}>{tab.label}</Text>
+              </Pressable>
+            ))}
           </View>
 
           {/* Search bar */}
@@ -359,33 +453,35 @@ export default function LeaderboardScreen() {
                 style={s.searchInput}
                 placeholder={t('leaderboard', 'searchPlaceholder')}
                 placeholderTextColor="rgba(255,255,255,0.4)"
-                value={search}
-                onChangeText={setSearch}
+                value={activeTab === 'players' ? search : activeTab === 'clubs' ? clubSearch : boulesSearch}
+                onChangeText={activeTab === 'players' ? setSearch : activeTab === 'clubs' ? setClubSearch : setBoulesSearch}
               />
-              {search.length > 0 ? (
-                <Pressable onPress={() => setSearch('')} hitSlop={8}>
+              {(activeTab === 'players' ? search : activeTab === 'clubs' ? clubSearch : boulesSearch).length > 0 ? (
+                <Pressable onPress={() => activeTab === 'players' ? setSearch('') : activeTab === 'clubs' ? setClubSearch('') : setBoulesSearch('')} hitSlop={8}>
                   <MaterialIcons name="close" size={18} color="rgba(255,255,255,0.5)" />
                 </Pressable>
               ) : null}
             </View>
-            <Pressable
-              style={[s.filterBtn, activeFilterCount > 0 && s.filterBtnActive]}
-              onPress={() => { Haptics.selectionAsync(); setShowFilters(!showFilters); }}
-            >
-              <MaterialIcons name="tune" size={20} color={activeFilterCount > 0 ? '#FFF' : 'rgba(255,255,255,0.6)'} />
-              {activeFilterCount > 0 ? (
-                <View style={s.filterBadge}>
-                  <Text style={s.filterBadgeText}>{activeFilterCount}</Text>
-                </View>
-              ) : null}
-            </Pressable>
+            {activeTab === 'players' ? (
+              <Pressable
+                style={[s.filterBtn, activeFilterCount > 0 && s.filterBtnActive]}
+                onPress={() => { Haptics.selectionAsync(); setShowFilters(!showFilters); }}
+              >
+                <MaterialIcons name="tune" size={20} color={activeFilterCount > 0 ? '#FFF' : 'rgba(255,255,255,0.6)'} />
+                {activeFilterCount > 0 ? (
+                  <View style={s.filterBadge}>
+                    <Text style={s.filterBadgeText}>{activeFilterCount}</Text>
+                  </View>
+                ) : null}
+              </Pressable>
+            ) : null}
           </View>
         </LinearGradient>
 
-        {/* Sort chips */}
+        {/* Sort chips - context-dependent */}
         <View style={s.sortWrapper}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.sortRow}>
-            {([
+            {activeTab === 'players' ? ([
               { id: 'winRate' as LeaderboardSort, label: t('leaderboard', 'sortByWinRate'), icon: 'emoji-events' },
               { id: 'matches' as LeaderboardSort, label: t('leaderboard', 'sortByMatches'), icon: 'sports' },
               { id: 'tirRate' as LeaderboardSort, label: t('leaderboard', 'sortByTirRate'), icon: 'gps-fixed' },
@@ -400,13 +496,294 @@ export default function LeaderboardScreen() {
                 <MaterialIcons name={chip.icon as any} size={14} color={sortBy === chip.id ? '#FFF' : theme.textSecondary} />
                 <Text style={[s.sortChipText, sortBy === chip.id && s.sortChipTextActive]}>{chip.label}</Text>
               </Pressable>
+            )) : activeTab === 'clubs' ? ([
+              { id: 'compositeScore' as ClubLeaderboardSort, label: t('leaderboard', 'sortByComposite'), icon: 'stars' },
+              { id: 'avgWinRate' as ClubLeaderboardSort, label: t('leaderboard', 'sortByAvgWinRate'), icon: 'emoji-events' },
+              { id: 'totalMatches' as ClubLeaderboardSort, label: t('leaderboard', 'sortByTotalMatches'), icon: 'sports' },
+              { id: 'playerCount' as ClubLeaderboardSort, label: t('leaderboard', 'sortByPlayerCount'), icon: 'people' },
+              { id: 'avgTirRate' as ClubLeaderboardSort, label: t('leaderboard', 'sortByAvgTirRate'), icon: 'gps-fixed' },
+            ]).map(chip => (
+              <Pressable
+                key={chip.id}
+                style={[s.sortChip, clubSortBy === chip.id && s.sortChipActive]}
+                onPress={() => { Haptics.selectionAsync(); setClubSortBy(chip.id); }}
+              >
+                <MaterialIcons name={chip.icon as any} size={14} color={clubSortBy === chip.id ? '#FFF' : theme.textSecondary} />
+                <Text style={[s.sortChipText, clubSortBy === chip.id && s.sortChipTextActive]}>{chip.label}</Text>
+              </Pressable>
+            )) : ([
+              { id: 'avgWinRate' as BoulesLeaderboardSort, label: t('leaderboard', 'sortByAvgWinRate'), icon: 'emoji-events' },
+              { id: 'userCount' as BoulesLeaderboardSort, label: t('leaderboard', 'boulesPopularity'), icon: 'people' },
+              { id: 'totalMatches' as BoulesLeaderboardSort, label: t('leaderboard', 'sortByTotalMatches'), icon: 'sports' },
+              { id: 'avgTirRate' as BoulesLeaderboardSort, label: t('leaderboard', 'sortByAvgTirRate'), icon: 'gps-fixed' },
+              { id: 'avgCarreauRate' as BoulesLeaderboardSort, label: t('leaderboard', 'sortByAvgCarreauRate'), icon: 'stars' },
+            ]).map(chip => (
+              <Pressable
+                key={chip.id}
+                style={[s.sortChip, boulesSortBy === chip.id && s.sortChipActive]}
+                onPress={() => { Haptics.selectionAsync(); setBoulesSortBy(chip.id); }}
+              >
+                <MaterialIcons name={chip.icon as any} size={14} color={boulesSortBy === chip.id ? '#FFF' : theme.textSecondary} />
+                <Text style={[s.sortChipText, boulesSortBy === chip.id && s.sortChipTextActive]}>{chip.label}</Text>
+              </Pressable>
             ))}
           </ScrollView>
+
+          {/* Boules-specific: mode toggle + role filter */}
+          {activeTab === 'boules' ? (
+            <View style={s.boulesExtraFilters}>
+              <View style={s.boulesModePills}>
+                <Pressable
+                  style={[s.bModePill, boulesMode === 'brand' && s.bModePillActive]}
+                  onPress={() => { Haptics.selectionAsync(); setBoulesMode('brand'); }}
+                >
+                  <Text style={[s.bModePillText, boulesMode === 'brand' && s.bModePillTextActive]}>{t('leaderboard', 'modeBrand')}</Text>
+                </Pressable>
+                <Pressable
+                  style={[s.bModePill, boulesMode === 'model' && s.bModePillActive]}
+                  onPress={() => { Haptics.selectionAsync(); setBoulesMode('model'); }}
+                >
+                  <Text style={[s.bModePillText, boulesMode === 'model' && s.bModePillTextActive]}>{t('leaderboard', 'modeModel')}</Text>
+                </Pressable>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                {['all', 'Tireur', 'Pointeur', 'Milieu'].map(role => (
+                  <Pressable
+                    key={role}
+                    style={[s.sortChip, { paddingHorizontal: 10, paddingVertical: 6 }, boulesRoleFilter === role && s.sortChipActive]}
+                    onPress={() => { Haptics.selectionAsync(); setBoulesRoleFilter(role); }}
+                  >
+                    <Text style={[s.sortChipText, { fontSize: 11 }, boulesRoleFilter === role && s.sortChipTextActive]}>
+                      {role === 'all' ? t('leaderboard', 'boulesAllRoles') : t('roles', role)}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
         </View>
       </View>
 
-      {/* Content */}
-      {loading ? (
+      {/* ============ CLUBS TAB ============ */}
+      {activeTab === 'clubs' ? (
+        clubsLoading ? (
+          <View style={s.centerState}>
+            <View style={s.loadingIconBg}><MaterialIcons name="home" size={32} color="#D97706" /></View>
+            <Text style={s.loadingText}>{t('leaderboard', 'loading')}</Text>
+          </View>
+        ) : clubsError ? (
+          <View style={s.centerState}>
+            <MaterialIcons name="error-outline" size={48} color={theme.error} />
+            <Text style={s.errorText}>{t('leaderboard', 'errorLoading')}</Text>
+            <Pressable style={s.retryBtn} onPress={() => { setClubsLoaded(false); loadClubs(); }}>
+              <Text style={s.retryBtnText}>{t('leaderboard', 'retry')}</Text>
+            </Pressable>
+          </View>
+        ) : filteredClubs.length === 0 ? (
+          <View style={s.centerState}>
+            <MaterialIcons name="home" size={56} color={theme.textMuted} />
+            <Text style={s.emptyTitle}>{t('leaderboard', 'noClubs')}</Text>
+            <Text style={s.emptyDesc}>{t('leaderboard', 'noClubsDesc')}</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredClubs}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={[s.listContent, { paddingBottom: insets.bottom + 32 }, isTablet && s.listContentTablet]}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item: club, index }) => {
+              const rank = index + 1;
+              const medalColors: Record<number, string> = { 1: '#FFD700', 2: '#A8B4C0', 3: '#CD7F32' };
+              const medalColor = medalColors[rank];
+              return (
+                <Animated.View entering={FadeIn.duration(200).delay(Math.min(index * 40, 400))}>
+                  <Pressable style={s.clubRow} onPress={() => router.push(`/club/${club.id}` as any)}>
+                    <View style={s.clubHeader}>
+                      <View style={s.rankCol}>
+                        {medalColor ? (
+                          <View style={[s.medal, { backgroundColor: medalColor + '20' }]}>
+                            <Text style={[s.medalText, { color: medalColor }]}>{rank}</Text>
+                          </View>
+                        ) : (
+                          <Text style={s.rankText}>{rank}</Text>
+                        )}
+                      </View>
+                      <View style={s.clubLogoWrap}>
+                        {club.logo ? (
+                          <Image source={{ uri: club.logo }} style={s.clubLogo} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                        ) : (
+                          <View style={[s.clubLogo, { backgroundColor: '#D97706' + '15', alignItems: 'center', justifyContent: 'center' }]}>
+                            <MaterialIcons name="home" size={18} color="#D97706" />
+                          </View>
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.clubName} numberOfLines={1}>{club.name}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                          {club.city ? <Text style={s.clubCity} numberOfLines={1}>{club.city}</Text> : null}
+                          <View style={s.clubMeta}>
+                            <MaterialIcons name="people" size={11} color={theme.textMuted} />
+                            <Text style={s.clubMetaText}>{club.playerCount}</Text>
+                          </View>
+                          <View style={s.clubMeta}>
+                            <MaterialIcons name="sports" size={11} color={theme.textMuted} />
+                            <Text style={s.clubMetaText}>{club.totalMatches}</Text>
+                          </View>
+                        </View>
+                      </View>
+                      <View style={s.clubScoreBadge}>
+                        <Text style={s.clubScoreValue}>{club.stats.compositeScore}</Text>
+                        <Text style={s.clubScoreLabel}>{t('leaderboard', 'clubComposite')}</Text>
+                      </View>
+                    </View>
+                    <View style={s.clubStats}>
+                      <View style={s.clubStatItem}>
+                        <Text style={[s.clubStatValue, clubSortBy === 'avgWinRate' && { color: '#D97706', fontWeight: '800' }]}>{club.stats.avgWinRate}%</Text>
+                        <Text style={s.clubStatLabel}>{t('leaderboard', 'clubAvgWin')}</Text>
+                      </View>
+                      <View style={s.clubStatItem}>
+                        <Text style={[s.clubStatValue, clubSortBy === 'avgTirRate' && { color: theme.tirColor, fontWeight: '800' }]}>{club.stats.avgTirRate > 0 ? `${club.stats.avgTirRate}%` : '-'}</Text>
+                        <Text style={s.clubStatLabel}>{t('leaderboard', 'clubTir')}</Text>
+                      </View>
+                      <View style={s.clubStatItem}>
+                        <Text style={[s.clubStatValue, clubSortBy === 'avgCarreauRate' && { color: theme.carreauColor, fontWeight: '800' }]}>{club.stats.avgCarreauRate > 0 ? `${club.stats.avgCarreauRate}%` : '-'}</Text>
+                        <Text style={s.clubStatLabel}>{t('leaderboard', 'clubCarreau')}</Text>
+                      </View>
+                      <View style={s.clubStatItem}>
+                        <Text style={s.clubStatValue}>{club.stats.avgPointRate > 0 ? `${club.stats.avgPointRate}%` : '-'}</Text>
+                        <Text style={s.clubStatLabel}>{t('leaderboard', 'clubPoint')}</Text>
+                      </View>
+                    </View>
+                    {club.topPlayers.length > 0 ? (
+                      <View style={s.clubTopPlayers}>
+                        <Text style={s.clubTopLabel}>{t('leaderboard', 'topPlayersLabel')}</Text>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          {club.topPlayers.map((tp, i) => (
+                            <View key={i} style={s.clubTopPlayer}>
+                              {tp.avatar ? (
+                                <Image source={{ uri: tp.avatar }} style={s.clubTopAvatar} contentFit="cover" cachePolicy="memory-disk" />
+                              ) : (
+                                <View style={[s.clubTopAvatar, { backgroundColor: theme.primary + '20', alignItems: 'center', justifyContent: 'center' }]}>
+                                  <Text style={{ fontSize: 9, fontWeight: '700', color: theme.primary }}>{tp.name.charAt(0)}</Text>
+                                </View>
+                              )}
+                              <Text style={s.clubTopPlayerName} numberOfLines={1}>{tp.name.split(' ')[0]}</Text>
+                              <Text style={s.clubTopPlayerStat}>{tp.winRate}%</Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    ) : null}
+                  </Pressable>
+                </Animated.View>
+              );
+            }}
+            ListFooterComponent={filteredClubs.length > 3 ? <AdBanner position="inline" /> : null}
+          />
+        )
+      ) : activeTab === 'boules' ? (
+        /* ============ BOULES TAB ============ */
+        boulesLoading ? (
+          <View style={s.centerState}>
+            <View style={s.loadingIconBg}><MaterialIcons name="sports-baseball" size={32} color="#D97706" /></View>
+            <Text style={s.loadingText}>{t('leaderboard', 'loading')}</Text>
+          </View>
+        ) : boulesError ? (
+          <View style={s.centerState}>
+            <MaterialIcons name="error-outline" size={48} color={theme.error} />
+            <Text style={s.errorText}>{t('leaderboard', 'errorLoading')}</Text>
+            <Pressable style={s.retryBtn} onPress={() => { setBoulesLoaded(false); loadBoules(); }}>
+              <Text style={s.retryBtnText}>{t('leaderboard', 'retry')}</Text>
+            </Pressable>
+          </View>
+        ) : boulesEntries.length === 0 ? (
+          <View style={s.centerState}>
+            <MaterialIcons name="sports-baseball" size={56} color={theme.textMuted} />
+            <Text style={s.emptyTitle}>{t('leaderboard', 'noBoules')}</Text>
+            <Text style={s.emptyDesc}>{t('leaderboard', 'noBoulesDesc')}</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={boulesEntries}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={[s.listContent, { paddingBottom: insets.bottom + 32 }, isTablet && s.listContentTablet]}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item: entry, index }) => {
+              const rank = index + 1;
+              const medalColors: Record<number, string> = { 1: '#FFD700', 2: '#A8B4C0', 3: '#CD7F32' };
+              const medalColor = medalColors[rank];
+              return (
+                <Animated.View entering={FadeIn.duration(200).delay(Math.min(index * 40, 400))}>
+                  <View style={s.boulesRow}>
+                    <View style={s.boulesHeader}>
+                      <View style={s.rankCol}>
+                        {medalColor ? (
+                          <View style={[s.medal, { backgroundColor: medalColor + '20' }]}>
+                            <Text style={[s.medalText, { color: medalColor }]}>{rank}</Text>
+                          </View>
+                        ) : (
+                          <Text style={s.rankText}>{rank}</Text>
+                        )}
+                      </View>
+                      <View style={s.boulesIconWrap}>
+                        <MaterialIcons name="sports-baseball" size={20} color="#D97706" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.boulesName} numberOfLines={1}>{entry.brand}{entry.model ? ` ${entry.model}` : ''}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                          <View style={s.clubMeta}>
+                            <MaterialIcons name="people" size={11} color={theme.textMuted} />
+                            <Text style={s.clubMetaText}>{entry.userCount} {t('leaderboard', 'boulesUsers')}</Text>
+                          </View>
+                          <View style={s.clubMeta}>
+                            <MaterialIcons name="sports" size={11} color={theme.textMuted} />
+                            <Text style={s.clubMetaText}>{entry.totalMatches} {t('leaderboard', 'boulesMatches')}</Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={s.clubStats}>
+                      <View style={s.clubStatItem}>
+                        <Text style={[s.clubStatValue, boulesSortBy === 'avgWinRate' && { color: '#D97706', fontWeight: '800' }]}>{entry.stats.avgWinRate}%</Text>
+                        <Text style={s.clubStatLabel}>{t('leaderboard', 'boulesAvgWin')}</Text>
+                      </View>
+                      <View style={s.clubStatItem}>
+                        <Text style={[s.clubStatValue, boulesSortBy === 'avgTirRate' && { color: theme.tirColor, fontWeight: '800' }]}>{entry.stats.avgTirRate > 0 ? `${entry.stats.avgTirRate}%` : '-'}</Text>
+                        <Text style={s.clubStatLabel}>{t('leaderboard', 'boulesTir')}</Text>
+                      </View>
+                      <View style={s.clubStatItem}>
+                        <Text style={[s.clubStatValue, boulesSortBy === 'avgCarreauRate' && { color: theme.carreauColor, fontWeight: '800' }]}>{entry.stats.avgCarreauRate > 0 ? `${entry.stats.avgCarreauRate}%` : '-'}</Text>
+                        <Text style={s.clubStatLabel}>{t('leaderboard', 'boulesCarreau')}</Text>
+                      </View>
+                      <View style={s.clubStatItem}>
+                        <Text style={s.clubStatValue}>{entry.stats.avgPointRate > 0 ? `${entry.stats.avgPointRate}%` : '-'}</Text>
+                        <Text style={s.clubStatLabel}>{t('leaderboard', 'boulesPoint')}</Text>
+                      </View>
+                    </View>
+                    {entry.byRole && entry.byRole.length > 1 ? (
+                      <View style={s.boulesRoleSection}>
+                        <Text style={s.boulesRoleTitle}>{t('leaderboard', 'boulesRoleBreakdown')}</Text>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          {entry.byRole.map((r, ri) => (
+                            <View key={ri} style={s.boulesRoleChip}>
+                              <Text style={s.boulesRoleName}>{t('roles', r.role)}</Text>
+                              <Text style={s.boulesRoleStat}>{r.avgWinRate}% V</Text>
+                              <Text style={s.boulesRoleCount}>{r.userCount}p</Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    ) : null}
+                  </View>
+                </Animated.View>
+              );
+            }}
+            ListFooterComponent={boulesEntries.length > 3 ? <AdBanner position="inline" /> : null}
+          />
+        )
+      ) : (
+      /* ============ PLAYERS TAB ============ */
+      loading ? (
         <View style={s.centerState}>
           <View style={s.loadingIconBg}>
             <MaterialIcons name="leaderboard" size={32} color="#D97706" />
@@ -790,8 +1167,10 @@ export default function LeaderboardScreen() {
         />
       )}
 
-      {/* My rank footer when not visible in list */}
-      {myRank && myRank > visibleCount && !loading ? (() => {
+      )}
+
+      {/* My rank footer when not visible in list (players tab only) */}
+      {activeTab === 'players' && myRank && myRank > visibleCount && !loading ? (() => {
         const myP = filteredSorted[myRank - 1];
         if (!myP) return null;
         return (
@@ -818,6 +1197,8 @@ export default function LeaderboardScreen() {
           </View>
         );
       })() : null}
+
+      )}
 
       {/* Meetup Invitation Picker Modal */}
       <Modal visible={showMeetupPicker} animationType="slide" transparent onRequestClose={() => setShowMeetupPicker(false)}>
@@ -889,7 +1270,14 @@ const s = StyleSheet.create({
   // Header
   header: { backgroundColor: theme.surface },
   headerBottom: { borderBottomWidth: 1, borderBottomColor: theme.border },
-  headerGradient: { paddingTop: 12, paddingBottom: 20, paddingHorizontal: 20, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
+  headerGradient: { paddingTop: 12, paddingBottom: 16, paddingHorizontal: 20, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
+
+  // Tabs
+  tabRow: { flexDirection: 'row', gap: 6, marginBottom: 12 },
+  tabBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.08)' },
+  tabBtnActive: { backgroundColor: 'rgba(255,255,255,0.22)' },
+  tabBtnText: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.5)' },
+  tabBtnTextActive: { color: '#FFF', fontWeight: '700' },
   headerTop: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
   backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 22, fontWeight: '800', color: '#FFF' },
@@ -903,7 +1291,15 @@ const s = StyleSheet.create({
   filterBadgeText: { fontSize: 10, fontWeight: '700', color: '#FFF' },
 
   // Sort
-  sortWrapper: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border },
+  sortWrapper: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border, gap: 8 },
+
+  // Boules extra filters
+  boulesExtraFilters: { paddingHorizontal: 16, gap: 8 },
+  boulesModePills: { flexDirection: 'row', gap: 6 },
+  bModePill: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
+  bModePillActive: { backgroundColor: '#D97706' + '15', borderColor: '#D97706' },
+  bModePillText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  bModePillTextActive: { color: '#D97706' },
   sortRow: { paddingHorizontal: 16, gap: 8 },
   sortChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
   sortChipActive: { backgroundColor: '#D97706', borderColor: '#D97706' },
@@ -1020,4 +1416,39 @@ const s = StyleSheet.create({
   mipEmptyText: { fontSize: 15, fontWeight: '600', color: theme.textPrimary, marginTop: 12 },
   mipEmptyDesc: { fontSize: 13, color: theme.textSecondary, textAlign: 'center', marginTop: 4, marginBottom: 16, paddingHorizontal: 16 },
   mipCreateBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
+
+  // Club rows
+  clubRow: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 14, marginBottom: 10, ...theme.shadows.card },
+  clubHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  clubLogoWrap: {},
+  clubLogo: { width: 40, height: 40, borderRadius: 12, overflow: 'hidden' as const },
+  clubName: { fontSize: 15, fontWeight: '700', color: theme.textPrimary },
+  clubCity: { fontSize: 11, color: theme.textMuted },
+  clubMeta: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  clubMetaText: { fontSize: 10, color: theme.textMuted },
+  clubScoreBadge: { alignItems: 'center', backgroundColor: '#D97706' + '12', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
+  clubScoreValue: { fontSize: 18, fontWeight: '900', color: '#D97706' },
+  clubScoreLabel: { fontSize: 9, fontWeight: '600', color: '#D97706', marginTop: 1 },
+  clubStats: { flexDirection: 'row', gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border + '40' },
+  clubStatItem: { flex: 1, alignItems: 'center' },
+  clubStatValue: { fontSize: 14, fontWeight: '600', color: theme.textPrimary },
+  clubStatLabel: { fontSize: 9, color: theme.textMuted, marginTop: 1 },
+  clubTopPlayers: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border + '30' },
+  clubTopLabel: { fontSize: 10, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase' as const, letterSpacing: 0.5, marginBottom: 8 },
+  clubTopPlayer: { alignItems: 'center', gap: 3, minWidth: 52 },
+  clubTopAvatar: { width: 28, height: 28, borderRadius: 8, overflow: 'hidden' as const },
+  clubTopPlayerName: { fontSize: 10, fontWeight: '600', color: theme.textPrimary, maxWidth: 60 },
+  clubTopPlayerStat: { fontSize: 10, fontWeight: '700', color: '#D97706' },
+
+  // Boules rows
+  boulesRow: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 14, marginBottom: 10, ...theme.shadows.card },
+  boulesHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  boulesIconWrap: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#D97706' + '12', alignItems: 'center', justifyContent: 'center' },
+  boulesName: { fontSize: 15, fontWeight: '700', color: theme.textPrimary },
+  boulesRoleSection: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border + '30' },
+  boulesRoleTitle: { fontSize: 10, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase' as const, letterSpacing: 0.5, marginBottom: 6 },
+  boulesRoleChip: { backgroundColor: theme.backgroundSecondary, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center', gap: 2 },
+  boulesRoleName: { fontSize: 10, fontWeight: '700', color: theme.textPrimary },
+  boulesRoleStat: { fontSize: 10, fontWeight: '600', color: '#D97706' },
+  boulesRoleCount: { fontSize: 9, color: theme.textMuted },
 });
