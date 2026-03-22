@@ -187,7 +187,7 @@ export default function DirectoryScreen() {
     clubCity: string; clubCountry: string;
     terrainType: string; terrainCity: string; terrainLighting: string; terrainCovered: string; terrainEnvironment: string; terrainAccess: string;
     tournamentStatus: string; tournamentFormat: string; tournamentLevel: string; tournamentCategory: string; tournamentRegistration: string; tournamentScope: string; tournamentCity: string;
-    eventStatus: string; eventType: string;
+    eventStatus: string; eventType: string; eventAmbassador: string;
   }>({
     // Player filters
     playerClub: 'all',
@@ -216,6 +216,7 @@ export default function DirectoryScreen() {
     // Event filters
     eventStatus: 'all',
     eventType: 'all',
+    eventAmbassador: 'all',
   });
 
   // Reset pagination when tab or filters change
@@ -312,7 +313,7 @@ export default function DirectoryScreen() {
     clubs: [filters.clubCity, filters.clubCountry].filter(f => f !== 'all').length,
     terrains: [filters.terrainType, filters.terrainCity, filters.terrainLighting, filters.terrainCovered, filters.terrainEnvironment, filters.terrainAccess].filter(f => f !== 'all').length,
     tournaments: [filters.tournamentStatus, filters.tournamentFormat, filters.tournamentLevel, filters.tournamentCategory, filters.tournamentRegistration, filters.tournamentScope, filters.tournamentCity].filter(f => f !== 'all').length,
-    events: [filters.eventStatus, filters.eventType].filter(f => f !== 'all').length,
+    events: [filters.eventStatus, filters.eventType, filters.eventAmbassador].filter(f => f !== 'all').length,
   }), [filters]);
 
   const currentFilterCount = activeFilterCounts[activeTab];
@@ -429,9 +430,10 @@ export default function DirectoryScreen() {
       const matchesSearch = !searchQuery || e.title.toLowerCase().includes(q) || (e.ambassadorName || '').toLowerCase().includes(q) || (e.city || '').toLowerCase().includes(q);
       const matchesStatus = filters.eventStatus === 'all' || e.status === filters.eventStatus;
       const matchesType = filters.eventType === 'all' || e.challengeType === filters.eventType;
-      return matchesSearch && matchesStatus && matchesType;
+      const matchesAmbassador = filters.eventAmbassador === 'all' || e.ambassadorId === filters.eventAmbassador;
+      return matchesSearch && matchesStatus && matchesType && matchesAmbassador;
     });
-  }, [sponsoredEvents, searchQuery, filters.eventStatus, filters.eventType]);
+  }, [sponsoredEvents, searchQuery, filters.eventStatus, filters.eventType, filters.eventAmbassador]);
 
   // Get current filtered data (after all filtered arrays are defined)
   const getCurrentData = useCallback(() => {
@@ -471,7 +473,7 @@ export default function DirectoryScreen() {
     } else if (activeTab === 'tournaments') {
       setFilters(f => ({ ...f, tournamentStatus: 'all', tournamentFormat: 'all', tournamentLevel: 'all', tournamentCategory: 'all', tournamentRegistration: 'all', tournamentScope: 'all', tournamentCity: 'all' }));
     } else if (activeTab === 'events') {
-      setFilters(f => ({ ...f, eventStatus: 'all', eventType: 'all' }));
+      setFilters(f => ({ ...f, eventStatus: 'all', eventType: 'all', eventAmbassador: 'all' }));
     }
   }, [activeTab]);
 
@@ -995,6 +997,22 @@ export default function DirectoryScreen() {
               icons={{ '10_tirs': 'gps-fixed', '10_tirs_sautee': 'flight-takeoff', precision: 'stars' }}
               allLabel={t('directory', 'allLabel')}
             />
+            {(() => {
+              const ambOptions = ['all', ...new Set(sponsoredEvents.map(e => e.ambassadorId).filter(Boolean))] as string[];
+              const ambLabels: Record<string, string> = { all: t('directory', 'allLabel') };
+              sponsoredEvents.forEach(e => { if (e.ambassadorId && e.ambassadorName) ambLabels[e.ambassadorId] = e.ambassadorName; });
+              return ambOptions.length > 2 ? (
+                <FilterSection
+                  title={language === 'fr' ? 'Ambassadeur' : 'Ambassador'}
+                  options={ambOptions}
+                  labels={ambLabels}
+                  value={filters.eventAmbassador}
+                  onChange={(v) => setFilters(f => ({ ...f, eventAmbassador: v }))}
+                  icons={{}}
+                  allLabel={t('directory', 'allLabel')}
+                />
+              ) : null;
+            })()}
           </>
         );
       case 'tournaments':
@@ -1276,6 +1294,7 @@ export default function DirectoryScreen() {
               <>
                 {filters.eventStatus !== 'all' && <ActiveFilterChip label={filters.eventStatus === 'upcoming' ? (language === 'fr' ? 'A venir' : 'Upcoming') : filters.eventStatus === 'active' ? (language === 'fr' ? 'En cours' : 'Active') : filters.eventStatus === 'completed' ? (language === 'fr' ? 'Termine' : 'Done') : (language === 'fr' ? 'Annule' : 'Cancelled')} onRemove={() => setFilters(f => ({ ...f, eventStatus: 'all' }))} icon="event" />}
                 {filters.eventType !== 'all' && <ActiveFilterChip label={filters.eventType === '10_tirs' ? '10 Tirs' : filters.eventType === '10_tirs_sautee' ? (language === 'fr' ? '10 Tirs sautee' : '10 Lob Shots') : 'Precision'} onRemove={() => setFilters(f => ({ ...f, eventType: 'all' }))} icon="track-changes" />}
+                {filters.eventAmbassador !== 'all' && (() => { const amb = sponsoredEvents.find(e => e.ambassadorId === filters.eventAmbassador); return <ActiveFilterChip label={amb?.ambassadorName || filters.eventAmbassador} onRemove={() => setFilters(f => ({ ...f, eventAmbassador: 'all' }))} icon="verified" />; })()}
               </>
             )}
             {activeTab === 'tournaments' && (
@@ -1839,6 +1858,7 @@ export default function DirectoryScreen() {
                 {activeTab === 'players' ? t('directory', 'filterPlayers') :
                  activeTab === 'clubs' ? t('directory', 'filterClubs') :
                  activeTab === 'terrains' ? t('directory', 'filterTerrains') :
+                 activeTab === 'events' ? (language === 'fr' ? 'Filtrer les defis' : 'Filter challenges') :
                  t('directory', 'filterTournaments')}
               </Text>
             </View>

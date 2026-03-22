@@ -213,7 +213,15 @@ export default function AmbassadorsScreen() {
           <MaterialIcons name="verified" size={18} color="#7C3AED" />
           <Text style={styles.headerTitle}>{fr ? 'Nos Ambassadeurs' : 'Our Ambassadors'}</Text>
         </View>
-        <View style={{ width: 40 }} />
+        {isAmbassador ? (
+          <Pressable
+            style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: '#7C3AED15', alignItems: 'center', justifyContent: 'center' }}
+            onPress={() => router.push('/ambassador-dashboard' as any)}
+            hitSlop={4}
+          >
+            <MaterialIcons name="dashboard" size={20} color="#7C3AED" />
+          </Pressable>
+        ) : <View style={{ width: 40 }} />}
       </View>
 
       <ScrollView
@@ -358,24 +366,6 @@ export default function AmbassadorsScreen() {
             </Pressable>
           </Animated.View>
         )}
-
-        {/* Ambassador Portal Button - only for ambassadors */}
-        {isAmbassador ? (
-          <Animated.View entering={FadeInDown.duration(400).delay(550)} style={{ paddingHorizontal: 16, marginBottom: 16 }}>
-            <Pressable
-              style={({ pressed }) => [{
-                flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 10,
-                backgroundColor: '#7C3AED', paddingVertical: 16, borderRadius: 18,
-                ...Platform.select({ ios: { shadowColor: '#7C3AED', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12 }, android: { elevation: 4 }, default: {} }),
-              }, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push('/ambassador-dashboard' as any); }}
-            >
-              <MaterialIcons name="dashboard" size={20} color="#FFF" />
-              <Text style={{ fontSize: 16, fontWeight: '700', color: '#FFF' }}>{fr ? 'Mon Portail Ambassadeur' : 'My Ambassador Portal'}</Text>
-              <MaterialIcons name="chevron-right" size={20} color="rgba(255,255,255,0.7)" />
-            </Pressable>
-          </Animated.View>
-        ) : null}
 
         {/* CTA */}
         <Animated.View entering={FadeInDown.duration(400).delay(600)}>

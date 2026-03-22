@@ -1216,7 +1216,7 @@ export default function AdminPromosScreen() {
                       <MaterialIcons name="verified" size={18} color="#7C3AED" />
                     </View>
                     <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textPrimary, flex: 1 }}>
-                      {fr ? 'AMBASSADEURS' : 'AMBASSADORS'} ({ambassadors.length})
+                      {fr ? 'AMBASSADEURS, PARTENAIRES & SPONSORS' : 'AMBASSADORS, PARTNERS & SPONSORS'} ({ambassadors.length})
                     </Text>
                     <Pressable
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#7C3AED', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 }}
@@ -1290,8 +1290,8 @@ export default function AdminPromosScreen() {
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                               <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>{amb.display_name}</Text>
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#7C3AED' + '12', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
-                                <MaterialIcons name={amb.badge_type === 'sponsor' ? 'campaign' : amb.badge_type === 'partner' ? 'handshake' : 'verified'} size={10} color={amb.badge_type === 'sponsor' ? '#F59E0B' : amb.badge_type === 'partner' ? '#8B5CF6' : '#7C3AED'} />
-                                <Text style={{ fontSize: 9, fontWeight: '700', color: amb.badge_type === 'sponsor' ? '#F59E0B' : amb.badge_type === 'partner' ? '#8B5CF6' : '#7C3AED' }}>{amb.badge_type === 'sponsor' ? 'SPO' : amb.badge_type === 'partner' ? 'PAR' : 'AMB'}</Text>
+                                <MaterialIcons name={amb.badge_type === 'sponsor' ? 'campaign' : amb.badge_type === 'partner' ? 'handshake' : 'verified'} size={10} color={amb.badge_type === 'sponsor' ? '#F59E0B' : amb.badge_type === 'partner' ? '#3B82F6' : '#7C3AED'} />
+                                <Text style={{ fontSize: 9, fontWeight: '700', color: amb.badge_type === 'sponsor' ? '#F59E0B' : amb.badge_type === 'partner' ? '#3B82F6' : '#7C3AED' }}>{amb.badge_type === 'sponsor' ? 'Sponsor' : amb.badge_type === 'partner' ? (fr ? 'Partenaire' : 'Partner') : (fr ? 'Ambassadeur' : 'Ambassador')}</Text>
                               </View>
                             </View>
                             {amb.bio ? <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 2 }} numberOfLines={1}>{amb.bio}</Text> : null}
@@ -2321,7 +2321,7 @@ export default function AdminPromosScreen() {
                   {[
                     { id: 'ambassador', label: fr ? 'Ambassadeur' : 'Ambassador', color: '#3B82F6', icon: 'verified' },
                     { id: 'sponsor', label: 'Sponsor', color: '#F59E0B', icon: 'campaign' },
-                    { id: 'partner', label: fr ? 'Partenaire' : 'Partner', color: '#8B5CF6', icon: 'handshake' },
+                    { id: 'partner', label: fr ? 'Partenaire' : 'Partner', color: '#3B82F6', icon: 'handshake' },
                   ].map(bt => {
                     const isActive = ambForm.badgeType === bt.id;
                     return (

@@ -1486,432 +1486,174 @@ export default function ProfileScreen() {
         {/* Account Section */}
         {!isEditing && (
           <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('profile', 'settings')}</Text>
+            {/* ===== SECTION: COMPTE ===== */}
+            <Text style={styles.sectionTitle}>{language === 'fr' ? 'COMPTE' : 'ACCOUNT'}</Text>
 
-            <Pressable 
-              style={styles.menuItem}
-              onPress={() => {
-                Haptics.selectionAsync();
-                router.push('/password');
-              }}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: theme.primary + '15' }]}>
-                <MaterialIcons name="lock" size={20} color={theme.primary} />
-              </View>
+            <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/password'); }}>
+              <View style={[styles.menuIcon, { backgroundColor: theme.primary + '15' }]}><MaterialIcons name="lock" size={20} color={theme.primary} /></View>
               <View style={styles.menuItemContent}>
                 <Text style={styles.menuItemText}>{t('profile', 'password')}</Text>
-                <Text style={styles.menuItemSubtext}>{t('profile', 'changePassword')}</Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </Pressable>
 
-            {/* Notifications expandable */}
-            <Pressable 
-              style={styles.menuItem}
-              onPress={() => {
-                Haptics.selectionAsync();
-                setShowNotifSection(prev => !prev);
-              }}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: theme.success + '15' }]}>
-                <MaterialIcons name="notifications" size={20} color={theme.success} />
-                {unreadShareCount > 0 && (
-                  <View style={styles.shareNotifBadge}>
-                    <Text style={styles.shareNotifBadgeText}>{unreadShareCount > 9 ? '9+' : unreadShareCount}</Text>
-                  </View>
-                )}
-              </View>
-              <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>{t('profile', 'notifications')}</Text>
-                <Text style={styles.menuItemSubtext}>{t('profile', 'shareAndTournaments')}</Text>
-              </View>
-              <MaterialIcons name={showNotifSection ? 'expand-less' : 'expand-more'} size={20} color={theme.textMuted} />
-            </Pressable>
-
-            {showNotifSection && (
-              <View style={styles.subMenuContainer}>
-                <Pressable 
-                  style={styles.subMenuItem}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setUnreadShareCount(0);
-                    router.push('/share-notifications');
-                  }}
-                >
-                  <View style={[styles.subMenuIcon, { backgroundColor: theme.warning + '15' }]}>
-                    <MaterialIcons name="share" size={16} color={theme.warning} />
-                  </View>
-                  <View style={styles.menuItemContent}>
-                    <Text style={styles.subMenuItemText}>{t('profile', 'shareNotifications')}</Text>
-                    <Text style={styles.menuItemSubtext}>
-                      {unreadShareCount > 0 
-                        ? `${unreadShareCount} ${t('profile', 'newAccess')}`
-                        : t('profile', 'seeWhoAccessed')}
-                    </Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
-                </Pressable>
-
-                <Pressable 
-                  style={styles.subMenuItem}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    router.push('/notifications');
-                  }}
-                >
-                  <View style={[styles.subMenuIcon, { backgroundColor: theme.success + '15' }]}>
-                    <MaterialIcons name="event" size={16} color={theme.success} />
-                  </View>
-                  <View style={styles.menuItemContent}>
-                    <Text style={styles.subMenuItemText}>{t('profile', 'tournamentNotifications')}</Text>
-                    <Text style={styles.menuItemSubtext}>{t('profile', 'remindersScheduling')}</Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
-                </Pressable>
-              </View>
-            )}
-
-            <Pressable 
-              style={styles.menuItem}
-              onPress={() => {
-                Haptics.selectionAsync();
-                router.push('/merge-history');
-              }}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: theme.warning + '15' }]}>
-                <MaterialIcons name="merge-type" size={20} color={theme.warning} />
-              </View>
-              <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>{t('mergeHistory', 'title')}</Text>
-                <Text style={styles.menuItemSubtext}>{t('directory', 'mergeHistoryEmptyDesc')}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-            </Pressable>
-
-            <Pressable 
-              style={styles.menuItem}
-              onPress={() => {
-                Haptics.selectionAsync();
-                router.push('/sync-history');
-              }}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: '#0EA5E9' + '15' }]}>
-                <MaterialIcons name="cloud-sync" size={20} color="#0EA5E9" />
-              </View>
-              <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>
-                  {t('syncHistory', 'title')}
-                </Text>
-                <Text style={styles.menuItemSubtext}>
-                  {t('syncHistory', 'titleSubtitle')}
-                </Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-            </Pressable>
-
-            {/* Battery Saver Mode */}
-            <View style={styles.menuItem}>
-              <View style={[styles.menuIcon, { backgroundColor: (batterySaverEnabled ? theme.warning : '#10B981') + '15' }]}>
-                <MaterialIcons name={batterySaverEnabled ? 'battery-saver' : 'bolt'} size={20} color={batterySaverEnabled ? theme.warning : '#10B981'} />
-              </View>
-              <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>{t('syncHistory', 'batterySaver')}</Text>
-                <Text style={styles.menuItemSubtext}>
-                  {batterySaverEnabled ? t('syncHistory', 'batterySaverEnabledDesc') : t('syncHistory', 'batterySaverDisabledDesc')}
-                </Text>
-              </View>
-              <Switch
-                value={batterySaverEnabled}
-                onValueChange={(val) => {
-                  Haptics.selectionAsync();
-                  setBatterySaver(val);
-                }}
-                trackColor={{ false: theme.border, true: theme.warning + '60' }}
-                thumbColor={batterySaverEnabled ? theme.warning : theme.textMuted}
-              />
-            </View>
-
-            {/* Partage expandable */}
-            <Pressable 
-              style={styles.menuItem}
-              onPress={() => {
-                Haptics.selectionAsync();
-                setShowShareSection(prev => !prev);
-              }}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: theme.accent + '15' }]}>
-                <MaterialIcons name="folder-shared" size={20} color={theme.accent} />
-              </View>
-              <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>{t('profile', 'sharing')}</Text>
-                <Text style={styles.menuItemSubtext}>{t('profile', 'codesAndManagement')}</Text>
-              </View>
-              <MaterialIcons name={showShareSection ? 'expand-less' : 'expand-more'} size={20} color={theme.textMuted} />
-            </Pressable>
-
-            {showShareSection && (
-              <View style={styles.subMenuContainer}>
-                <Pressable 
-                  style={styles.subMenuItem}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    router.push('/share');
-                  }}
-                >
-                  <View style={[styles.subMenuIcon, { backgroundColor: theme.success + '15' }]}>
-                    <MaterialIcons name="qr-code-2" size={16} color={theme.success} />
-                  </View>
-                  <View style={styles.menuItemContent}>
-                    <Text style={styles.subMenuItemText}>{t('profile', 'shareCode')}</Text>
-                    <Text style={styles.menuItemSubtext}>{t('profile', 'enterCodeToView')}</Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
-                </Pressable>
-
-                <Pressable 
-                  style={styles.subMenuItem}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    router.push('/shared-items');
-                  }}
-                >
-                  <View style={[styles.subMenuIcon, { backgroundColor: theme.warning + '15' }]}>
-                    <MaterialIcons name="manage-accounts" size={16} color={theme.warning} />
-                  </View>
-                  <View style={styles.menuItemContent}>
-                    <Text style={styles.subMenuItemText}>{t('profile', 'shareManagement')}</Text>
-                    <Text style={styles.menuItemSubtext}>{t('profile', 'viewManageShared')}</Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
-                </Pressable>
-              </View>
-            )}
-
-            <Pressable 
-              style={styles.menuItem}
-              onPress={() => {
-                Haptics.selectionAsync();
-                router.push('/faq');
-              }}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: theme.carreauColor + '15' }]}>
-                <MaterialIcons name="help-outline" size={20} color={theme.carreauColor} />
-              </View>
-              <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>{t('profile', 'help')}</Text>
-                <Text style={styles.menuItemSubtext}>{t('profile', 'helpCenter')}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-            </Pressable>
-
-            <Pressable 
-              style={styles.menuItem}
-              onPress={() => {
-                Haptics.selectionAsync();
-                router.push('/privacy-policy');
-              }}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: theme.warning + '15' }]}>
-                <MaterialIcons name="policy" size={20} color={theme.warning} />
-              </View>
-              <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>{t('privacy', 'title')}</Text>
-                <Text style={styles.menuItemSubtext}>{t('profile', 'privacySubtext')}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-            </Pressable>
-
-            <Pressable 
-              style={styles.menuItem}
-              onPress={() => {
-                Haptics.selectionAsync();
-                router.push('/terms');
-              }}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: theme.accent + '15' }]}>
-                <MaterialIcons name="description" size={20} color={theme.accent} />
-              </View>
-              <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>{t('terms', 'title')}</Text>
-                <Text style={styles.menuItemSubtext}>{t('profile', 'termsSubtext')}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-            </Pressable>
-
-            {/* Consent date */}
-            <Pressable 
-              style={styles.menuItem}
-              onPress={() => {
-                Haptics.selectionAsync();
-                setShowConsentDetail(prev => !prev);
-              }}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: theme.success + '15' }]}>
-                <MaterialIcons name="verified-user" size={20} color={theme.success} />
-              </View>
-              <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>{t('profile', 'consentDate')}</Text>
-                <Text style={styles.menuItemSubtext}>
-                  {consentDate 
-                    ? `${t('profile', 'consentAccepted')} ${new Date(consentDate).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' })}`
-                    : t('profile', 'consentNotYet')}
-                </Text>
-              </View>
-              <MaterialIcons name={showConsentDetail ? 'expand-less' : 'expand-more'} size={20} color={theme.textMuted} />
-            </Pressable>
-
-            {showConsentDetail && (
-              <View style={styles.subMenuContainer}>
-                <Pressable 
-                  style={styles.subMenuItem}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    router.push('/terms');
-                  }}
-                >
-                  <View style={[styles.subMenuIcon, { backgroundColor: theme.accent + '15' }]}>
-                    <MaterialIcons name="description" size={16} color={theme.accent} />
-                  </View>
-                  <View style={styles.menuItemContent}>
-                    <Text style={styles.subMenuItemText}>{t('profile', 'termsOfUse')}</Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
-                </Pressable>
-
-                <Pressable 
-                  style={styles.subMenuItem}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    router.push('/privacy-policy');
-                  }}
-                >
-                  <View style={[styles.subMenuIcon, { backgroundColor: theme.warning + '15' }]}>
-                    <MaterialIcons name="policy" size={16} color={theme.warning} />
-                  </View>
-                  <View style={styles.menuItemContent}>
-                    <Text style={styles.subMenuItemText}>{t('profile', 'privacyPolicy')}</Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
-                </Pressable>
-              </View>
-            )}
-
-            {/* Language Switcher */}
-            <Pressable 
-              style={styles.menuItem}
-              onPress={() => {
-                Haptics.selectionAsync();
-                setLanguage(language === 'fr' ? 'en' : 'fr');
-              }}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: '#6366F1' + '15' }]}>
-                <MaterialIcons name="language" size={20} color="#6366F1" />
-              </View>
+            <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); setLanguage(language === 'fr' ? 'en' : 'fr'); }}>
+              <View style={[styles.menuIcon, { backgroundColor: '#6366F1' + '15' }]}><MaterialIcons name="language" size={20} color="#6366F1" /></View>
               <View style={styles.menuItemContent}>
                 <Text style={styles.menuItemText}>{t('profile', 'language')}</Text>
                 <Text style={styles.menuItemSubtext}>{language === 'fr' ? 'Français' : 'English'}</Text>
               </View>
-              <View style={styles.langBadge}>
-                <Text style={styles.langBadgeText}>{language.toUpperCase()}</Text>
-              </View>
+              <View style={styles.langBadge}><Text style={styles.langBadgeText}>{language.toUpperCase()}</Text></View>
             </Pressable>
 
-            {/* Partners */}
-            <Pressable 
-              style={styles.menuItem}
-              onPress={() => {
-                Haptics.selectionAsync();
-                router.push('/remove-ads' as any);
-              }}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: isPremium ? theme.success + '15' : theme.primary + '15' }]}>
-                <MaterialIcons name={isPremium ? 'verified' : 'block'} size={20} color={isPremium ? theme.success : theme.primary} />
-              </View>
+            <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/remove-ads' as any); }}>
+              <View style={[styles.menuIcon, { backgroundColor: isPremium ? theme.success + '15' : theme.primary + '15' }]}><MaterialIcons name={isPremium ? 'verified' : 'block'} size={20} color={isPremium ? theme.success : theme.primary} /></View>
               <View style={styles.menuItemContent}>
                 <Text style={styles.menuItemText}>{language === 'fr' ? 'Supprimer les pubs' : 'Remove Ads'}</Text>
-                <Text style={styles.menuItemSubtext}>{isPremium ? (language === 'fr' ? 'Premium actif' : 'Premium active') : (language === 'fr' ? 'Achat unique ou code promo' : 'One-time purchase or promo code')}</Text>
               </View>
               {isPremium ? (
-                <View style={{ backgroundColor: theme.success + '15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: theme.borderRadius.full }}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: theme.success }}>Premium</Text>
-                </View>
-              ) : (
-                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-              )}
+                <View style={{ backgroundColor: theme.success + '15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: theme.borderRadius.full }}><Text style={{ fontSize: 11, fontWeight: '700', color: theme.success }}>Premium</Text></View>
+              ) : <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />}
             </Pressable>
 
-            {/* Community Section */}
-            <Pressable 
-              style={styles.menuItem}
-              onPress={() => {
-                Haptics.selectionAsync();
-                router.push('/ambassadors' as any);
-              }}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: '#7C3AED' + '15' }]}>
-                <MaterialIcons name="verified" size={20} color="#7C3AED" />
-              </View>
-              <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>{language === 'fr' ? 'Nos Ambassadeurs' : 'Our Ambassadors'}</Text>
-                <Text style={styles.menuItemSubtext}>{language === 'fr' ? 'Decouvrez nos ambassadeurs petanque' : 'Discover our petanque ambassadors'}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-            </Pressable>
+            {/* ===== SECTION: NOTIFICATIONS & PARTAGE ===== */}
+            <Text style={[styles.sectionTitle, { marginTop: 16 }]}>{language === 'fr' ? 'NOTIFICATIONS & PARTAGE' : 'NOTIFICATIONS & SHARING'}</Text>
 
-            <Pressable 
-              style={styles.menuItem}
-              onPress={() => {
-                Haptics.selectionAsync();
-                router.push('/partners' as any);
-              }}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: '#FFD700' + '15' }]}>
-                <MaterialIcons name="handshake" size={20} color="#FFD700" />
-              </View>
-              <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>{language === 'fr' ? 'Nos Partenaires' : 'Our Partners'}</Text>
-                <Text style={styles.menuItemSubtext}>{language === 'fr' ? 'Sponsors et partenaires de l\'application' : 'App sponsors and partners'}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-            </Pressable>
-
-            {/* Admin Promo Codes - only for admins */}
-            {isAdmin ? (
-              <Pressable 
-                style={styles.menuItem}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  router.push('/admin-promos' as any);
-                }}
-              >
-                <View style={[styles.menuIcon, { backgroundColor: theme.carreauColor + '15' }]}>
-                  <MaterialIcons name="admin-panel-settings" size={20} color={theme.carreauColor} />
+            <View style={styles.compactMenuGroup}>
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); setUnreadShareCount(0); router.push('/share-notifications'); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: theme.warning + '15' }]}><MaterialIcons name="share" size={16} color={theme.warning} />
+                  {unreadShareCount > 0 ? <View style={styles.shareNotifBadge}><Text style={styles.shareNotifBadgeText}>{unreadShareCount > 9 ? '9+' : unreadShareCount}</Text></View> : null}
                 </View>
-                <View style={styles.menuItemContent}>
-                  <Text style={styles.menuItemText}>{language === 'fr' ? 'Gestion codes promo' : 'Promo Code Management'}</Text>
-                  <Text style={styles.menuItemSubtext}>{language === 'fr' ? 'Creer, activer et suivre les codes' : 'Create, toggle and track codes'}</Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                <Text style={styles.compactMenuText}>{t('profile', 'shareNotifications')}</Text>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
               </Pressable>
-            ) : null}
+              <View style={styles.compactMenuDivider} />
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/notifications'); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: theme.success + '15' }]}><MaterialIcons name="event" size={16} color={theme.success} /></View>
+                <Text style={styles.compactMenuText}>{t('profile', 'tournamentNotifications')}</Text>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
+              <View style={styles.compactMenuDivider} />
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/share'); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: theme.success + '15' }]}><MaterialIcons name="qr-code-2" size={16} color={theme.success} /></View>
+                <Text style={styles.compactMenuText}>{t('profile', 'shareCode')}</Text>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
+              <View style={styles.compactMenuDivider} />
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/shared-items'); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: theme.accent + '15' }]}><MaterialIcons name="manage-accounts" size={16} color={theme.accent} /></View>
+                <Text style={styles.compactMenuText}>{t('profile', 'shareManagement')}</Text>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
+            </View>
 
-            {/* Creator Note */}
-            <Pressable 
-              style={styles.menuItem}
-              onPress={() => {
-                Haptics.selectionAsync();
-                router.push('/creator-note');
-              }}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: theme.error + '15' }]}>
-                <MaterialIcons name="favorite" size={20} color={theme.error} />
+            {/* ===== SECTION: DONNEES & SYNC ===== */}
+            <Text style={[styles.sectionTitle, { marginTop: 16 }]}>{language === 'fr' ? 'DONNEES & SYNCHRONISATION' : 'DATA & SYNC'}</Text>
+
+            <View style={styles.compactMenuGroup}>
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/merge-history'); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: theme.warning + '15' }]}><MaterialIcons name="merge-type" size={16} color={theme.warning} /></View>
+                <Text style={styles.compactMenuText}>{t('mergeHistory', 'title')}</Text>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
+              <View style={styles.compactMenuDivider} />
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/sync-history'); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: '#0EA5E9' + '15' }]}><MaterialIcons name="cloud-sync" size={16} color="#0EA5E9" /></View>
+                <Text style={styles.compactMenuText}>{t('syncHistory', 'title')}</Text>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
+              <View style={styles.compactMenuDivider} />
+              <View style={[styles.compactMenuItem, { paddingVertical: 10 }]}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: (batterySaverEnabled ? theme.warning : '#10B981') + '15' }]}><MaterialIcons name={batterySaverEnabled ? 'battery-saver' : 'bolt'} size={16} color={batterySaverEnabled ? theme.warning : '#10B981'} /></View>
+                <Text style={[styles.compactMenuText, { flex: 1 }]}>{t('syncHistory', 'batterySaver')}</Text>
+                <Switch value={batterySaverEnabled} onValueChange={(val) => { Haptics.selectionAsync(); setBatterySaver(val); }} trackColor={{ false: theme.border, true: theme.warning + '60' }} thumbColor={batterySaverEnabled ? theme.warning : theme.textMuted} />
               </View>
-              <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>{t('creatorNote', 'title')}</Text>
-                <Text style={styles.menuItemSubtext}>{t('creatorNote', 'signature')}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-            </Pressable>
+            </View>
+
+            {/* ===== SECTION: COMMUNAUTE ===== */}
+            <Text style={[styles.sectionTitle, { marginTop: 16 }]}>{language === 'fr' ? 'COMMUNAUTE' : 'COMMUNITY'}</Text>
+
+            <View style={styles.compactMenuGroup}>
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/ambassadors' as any); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="verified" size={16} color="#7C3AED" /></View>
+                <Text style={styles.compactMenuText}>{language === 'fr' ? 'Nos Ambassadeurs' : 'Our Ambassadors'}</Text>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
+              <View style={styles.compactMenuDivider} />
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/partners' as any); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: '#FFD700' + '15' }]}><MaterialIcons name="handshake" size={16} color="#FFD700" /></View>
+                <Text style={styles.compactMenuText}>{language === 'fr' ? 'Nos Partenaires' : 'Our Partners'}</Text>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
+              <View style={styles.compactMenuDivider} />
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/creator-note'); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: theme.error + '15' }]}><MaterialIcons name="favorite" size={16} color={theme.error} /></View>
+                <Text style={styles.compactMenuText}>{t('creatorNote', 'title')}</Text>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
+            </View>
+
+            {/* ===== SECTION: LEGAL & AIDE ===== */}
+            <Text style={[styles.sectionTitle, { marginTop: 16 }]}>{language === 'fr' ? 'AIDE & LEGAL' : 'HELP & LEGAL'}</Text>
+
+            <View style={styles.compactMenuGroup}>
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/faq'); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: theme.carreauColor + '15' }]}><MaterialIcons name="help-outline" size={16} color={theme.carreauColor} /></View>
+                <Text style={styles.compactMenuText}>{t('profile', 'help')}</Text>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
+              <View style={styles.compactMenuDivider} />
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/privacy-policy'); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: theme.warning + '15' }]}><MaterialIcons name="policy" size={16} color={theme.warning} /></View>
+                <Text style={styles.compactMenuText}>{t('privacy', 'title')}</Text>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
+              <View style={styles.compactMenuDivider} />
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/terms'); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: theme.accent + '15' }]}><MaterialIcons name="description" size={16} color={theme.accent} /></View>
+                <Text style={styles.compactMenuText}>{t('terms', 'title')}</Text>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
+              <View style={styles.compactMenuDivider} />
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); setShowConsentDetail(prev => !prev); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: theme.success + '15' }]}><MaterialIcons name="verified-user" size={16} color={theme.success} /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.compactMenuText}>{t('profile', 'consentDate')}</Text>
+                  <Text style={{ fontSize: 10, color: theme.textMuted, marginTop: 1 }}>
+                    {consentDate ? new Date(consentDate).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : t('profile', 'consentNotYet')}
+                  </Text>
+                </View>
+                <MaterialIcons name={showConsentDetail ? 'expand-less' : 'expand-more'} size={18} color={theme.textMuted} />
+              </Pressable>
+              {showConsentDetail ? (
+                <>
+                  <View style={styles.compactMenuDivider} />
+                  <Pressable style={[styles.compactMenuItem, { paddingLeft: 52 }]} onPress={() => { Haptics.selectionAsync(); router.push('/terms'); }}>
+                    <Text style={[styles.compactMenuText, { fontSize: 13 }]}>{t('profile', 'termsOfUse')}</Text>
+                    <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
+                  </Pressable>
+                  <View style={styles.compactMenuDivider} />
+                  <Pressable style={[styles.compactMenuItem, { paddingLeft: 52 }]} onPress={() => { Haptics.selectionAsync(); router.push('/privacy-policy'); }}>
+                    <Text style={[styles.compactMenuText, { fontSize: 13 }]}>{t('profile', 'privacyPolicy')}</Text>
+                    <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
+                  </Pressable>
+                </>
+              ) : null}
+            </View>
+
+            {/* Admin */}
+            {isAdmin ? (
+              <>
+                <Text style={[styles.sectionTitle, { marginTop: 16 }]}>ADMIN</Text>
+                <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/admin-promos' as any); }}>
+                  <View style={[styles.menuIcon, { backgroundColor: theme.carreauColor + '15' }]}><MaterialIcons name="admin-panel-settings" size={20} color={theme.carreauColor} /></View>
+                  <View style={styles.menuItemContent}>
+                    <Text style={styles.menuItemText}>{language === 'fr' ? 'Gestion codes promo' : 'Promo Code Management'}</Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                </Pressable>
+              </>
+            ) : null}
           </Animated.View>
         )}
 
@@ -3285,6 +3027,40 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#6366F1',
+  },
+  // Compact menu group styles
+  compactMenuGroup: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    marginBottom: 10,
+    overflow: 'hidden' as const,
+    ...theme.shadows.card,
+  },
+  compactMenuItem: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    gap: 12,
+  },
+  compactMenuIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    position: 'relative' as const,
+  },
+  compactMenuText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: theme.textPrimary,
+  },
+  compactMenuDivider: {
+    height: 1,
+    backgroundColor: theme.border,
+    marginLeft: 58,
   },
   // Boules edit fields
   boulesEditRow: {
