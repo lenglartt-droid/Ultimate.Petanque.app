@@ -484,6 +484,17 @@ export default function PlayerDetailScreen() {
                   ) : null}
                 </View>
               ) : null}
+              {/* View ambassador page button */}
+              {ambassadorData ? (
+                <Pressable
+                  style={s.ambPageBtn}
+                  onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/partners', params: { scrollTo: ambassadorData.id } } as any); }}
+                >
+                  <MaterialIcons name="verified" size={16} color="#7C3AED" />
+                  <Text style={s.ambPageBtnText}>{language === 'fr' ? 'Voir la page ambassadeur' : 'View ambassador page'}</Text>
+                  <MaterialIcons name="chevron-right" size={16} color="#7C3AED" />
+                </Pressable>
+              ) : null}
 
               {/* Badges Row */}
               <View style={s.badgesRow}>
@@ -1251,6 +1262,8 @@ const s = StyleSheet.create({
   ambSocialRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, justifyContent: 'center' as const, gap: 8, marginBottom: 8, marginTop: 4 },
   ambSocialBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
   ambSocialText: { fontSize: 12, fontWeight: '600' as const },
+  ambPageBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: '#7C3AED' + '10', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, marginBottom: 8, borderWidth: 1, borderColor: '#7C3AED' + '25' },
+  ambPageBtnText: { fontSize: 13, fontWeight: '700' as const, color: '#7C3AED' },
   heroNickname: { fontSize: 15, fontStyle: 'italic' as const, color: theme.textSecondary, marginBottom: 8 },
 
   // Badges

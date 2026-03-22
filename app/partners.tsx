@@ -13,7 +13,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -57,6 +57,9 @@ export default function PartnersScreen() {
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
   const [ambassadors, setAmbassadors] = useState<Ambassador[]>([]);
   const [ambassadorsLoading, setAmbassadorsLoading] = useState(true);
+  const { scrollTo } = useLocalSearchParams<{ scrollTo?: string }>();
+  const scrollViewRef = React.useRef<ScrollView>(null);
+  const ambassadorPositions = React.useRef<Record<string, number>>({});
 
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
@@ -71,6 +74,18 @@ export default function PartnersScreen() {
   }, []);
 
   useEffect(() => { loadAmbassadors(); }, [loadAmbassadors]);
+
+  // Auto-scroll to ambassador when scrollTo param is set
+  useEffect(() => {
+    if (scrollTo && !ambassadorsLoading && ambassadors.length > 0) {
+      setTimeout(() => {
+        const y = ambassadorPositions.current[scrollTo];
+        if (y !== undefined && scrollViewRef.current) {
+          scrollViewRef.current.scrollTo({ y: y - 20, animated: true });
+        }
+      }, 500);
+    }
+  }, [scrollTo, ambassadorsLoading, ambassadors]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -103,9 +118,13 @@ export default function PartnersScreen() {
   };
 
   const renderAmbassadorCard = (amb: Ambassador, index: number) => (
-    <Animated.View key={amb.id} entering={FadeInDown.duration(400).delay(100 + index * 80)}>
+    <Animated.View
+      key={amb.id}
+      entering={FadeInDown.duration(400).delay(100 + index * 80)}
+      onLayout={(e) => { ambassadorPositions.current[amb.id] = e.nativeEvent.layout.y; }}
+    >
       <Pressable
-        style={({ pressed }) => [styles.ambCard, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
+        style={({ pressed }) => [styles.ambCard, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }, scrollTo === amb.id && styles.ambCardHighlight]}
         onPress={() => amb.playerId ? router.push(`/player/${amb.playerId}` as any) : undefined}
       >
         {/* Header with photo and info */}
@@ -212,6 +231,7 @@ export default function PartnersScreen() {
       </View>
 
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scrollView}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }, isTablet && styles.scrollContentTablet]}
         showsVerticalScrollIndicator={false}
@@ -352,6 +372,7 @@ const styles = StyleSheet.create({
   // Ambassador list
   ambList: { marginBottom: 24 },
   ambCard: { backgroundColor: theme.surface, borderRadius: 20, padding: 18, marginBottom: 14, borderWidth: 1.5, borderColor: '#7C3AED' + '20', ...theme.shadows.card },
+  ambCardHighlight: { borderColor: '#7C3AED', borderWidth: 2, backgroundColor: '#7C3AED' + '05' },
   ambHeader: { flexDirection: 'row', gap: 14, marginBottom: 14 },
   ambAvatarWrap: { position: 'relative' as const },
   ambAvatar: { width: 64, height: 64, borderRadius: 20, overflow: 'hidden' as const },
