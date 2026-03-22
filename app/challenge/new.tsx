@@ -31,7 +31,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { SimplifiedShotNotation, SimpleShotRecord } from '@/components';
 import ShareModal from '@/components/ui/ShareModal';
 import { showInterstitial } from '@/services/adService';
-import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
+import { Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { getSponsoredEvents, getMyParticipationStatus, submitEventResult, SponsoredEvent } from '@/services/sponsoredEventService';
 import { Image } from 'expo-image';
@@ -268,13 +268,8 @@ export default function NewChallengeScreen() {
   const [showChallBoulesSetPicker, setShowChallBoulesSetPicker] = useState(false);
   const [challTerrainSearch, setChallTerrainSearch] = useState('');
 
-  // Sponsor state
+  // Sponsor state (auto-set from active event)
   const [selectedSponsor, setSelectedSponsor] = useState<Ambassador | null>(null);
-  const [showSponsorPicker, setShowSponsorPicker] = useState(false);
-  const [sponsors, setSponsors] = useState<Ambassador[]>([]);
-  const [loadingSponsors, setLoadingSponsors] = useState(false);
-  const [sponsorsLoaded, setSponsorsLoaded] = useState(false);
-  const [sponsorTypeFilter, setSponsorTypeFilter] = useState<'all' | 'sponsor' | 'partner' | 'ambassador'>('all');
 
   // Sponsored event detection
   const [activeEvent, setActiveEvent] = useState<SponsoredEvent | null>(null);
@@ -306,39 +301,23 @@ export default function NewChallengeScreen() {
     })();
   }, [eventDetectionDone]);
 
-  const loadSponsors = useCallback(async () => {
-    if (sponsorsLoaded) return;
-    setLoadingSponsors(true);
-    const { ambassadors } = await fetchAmbassadors();
-    setSponsors(ambassadors);
-    setLoadingSponsors(false);
-    setSponsorsLoaded(true);
-  }, [sponsorsLoaded]);
-
-  const BADGE_TYPE_CONFIG: Record<string, { label: string; color: string; icon: string }> = useMemo(() => ({
-    sponsor: { label: t('challenge', 'sponsorType') || 'Sponsor', color: '#F59E0B', icon: 'campaign' },
-    partner: { label: t('challenge', 'partnerType') || 'Partenaire', color: '#8B5CF6', icon: 'handshake' },
-    ambassador: { label: t('challenge', 'ambassadorType') || 'Ambassadeur', color: '#3B82F6', icon: 'verified' },
-  }), [t]);
-
-  const filteredSponsors = useMemo(() => {
-    if (sponsorTypeFilter === 'all') return sponsors;
-    return sponsors.filter(s => s.badgeType === sponsorTypeFilter);
-  }, [sponsors, sponsorTypeFilter]);
-
-  const groupedSponsors = useMemo(() => {
-    const groups: { type: string; items: Ambassador[] }[] = [];
-    const order = ['sponsor', 'partner', 'ambassador'];
-    order.forEach(type => {
-      const items = filteredSponsors.filter(s => s.badgeType === type);
-      if (items.length > 0) groups.push({ type, items });
-    });
-    // Items with unknown badge types
-    const known = new Set(order);
-    const other = filteredSponsors.filter(s => !known.has(s.badgeType));
-    if (other.length > 0) groups.push({ type: 'ambassador', items: other });
-    return groups;
-  }, [filteredSponsors]);
+  // Auto-sync sponsor from active event
+  useEffect(() => {
+    if (activeEvent && linkToEvent) {
+      setSelectedSponsor({
+        id: activeEvent.ambassadorId,
+        displayName: activeEvent.ambassadorName || '',
+        photo: activeEvent.ambassadorPhoto || null,
+        badgeType: (activeEvent.ambassadorBadgeType || 'ambassador') as any,
+        userId: activeEvent.creatorUserId,
+        isActive: true,
+        isFeatured: false,
+        sortOrder: 0,
+      } as Ambassador);
+    } else {
+      setSelectedSponsor(null);
+    }
+  }, [activeEvent, linkToEvent]);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const config = selectedType ? CHALLENGE_CONFIG[selectedType] : null;
@@ -1078,67 +1057,49 @@ export default function NewChallengeScreen() {
             </View>
           </Animated.View>
 
-          {/* Sponsor Selector */}
-          <Animated.View entering={FadeInDown.duration(300).delay(80)} style={styles.readyPickersSection}>
-            {/* Active Event Detection Banner */}
-            {activeEvent && linkToEvent ? (
-              <View style={[styles.readyPickerBtn, { backgroundColor: '#7C3AED08', borderColor: '#7C3AED30', borderWidth: 1.5 }]}>
-                <View style={[styles.readyPickerIcon, { backgroundColor: '#7C3AED15' }]}>
-                  <MaterialIcons name="campaign" size={20} color="#7C3AED" />
+          {/* Sponsored Event Detection */}
+          {activeEvent ? (
+            <Animated.View entering={FadeInDown.duration(300).delay(80)} style={styles.readyPickersSection}>
+              {linkToEvent ? (
+                <View style={[styles.readyPickerBtn, { backgroundColor: '#7C3AED08', borderColor: '#7C3AED30', borderWidth: 1.5 }]}>
+                  <View style={[styles.readyPickerIcon, { backgroundColor: '#7C3AED15' }]}>
+                    {activeEvent.ambassadorPhoto ? (
+                      <Image source={{ uri: activeEvent.ambassadorPhoto }} style={{ width: 44, height: 44, borderRadius: 12 }} contentFit="cover" />
+                    ) : (
+                      <MaterialIcons name="campaign" size={20} color="#7C3AED" />
+                    )}
+                  </View>
+                  <View style={styles.readyPickerContent}>
+                    <Text style={[styles.readyPickerLabel, { color: '#7C3AED' }]}>{t('challenge', 'sponsoredChallenge')}</Text>
+                    <Text style={styles.readyPickerValue} numberOfLines={1}>{activeEvent.title}</Text>
+                    {activeEvent.ambassadorName ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                        <MaterialIcons name="verified" size={10} color="#7C3AED" />
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#7C3AED' }}>{activeEvent.ambassadorName}</Text>
+                      </View>
+                    ) : null}
+                    <Text style={{ fontSize: 10, color: theme.textMuted, marginTop: 2 }}>
+                      {language === 'fr' ? 'Votre resultat sera lie a cet evenement' : 'Your result will be linked to this event'}
+                    </Text>
+                  </View>
+                  <Pressable onPress={() => { setLinkToEvent(false); Haptics.selectionAsync(); }} hitSlop={8}>
+                    <MaterialIcons name="close" size={18} color={theme.textMuted} />
+                  </Pressable>
                 </View>
-                <View style={styles.readyPickerContent}>
-                  <Text style={[styles.readyPickerLabel, { color: '#7C3AED' }]}>{t('challenge', 'sponsoredChallenge') || (language === 'fr' ? 'Evenement actif' : 'Active event')}</Text>
-                  <Text style={styles.readyPickerValue} numberOfLines={1}>{activeEvent.title}</Text>
-                  <Text style={{ fontSize: 10, color: theme.textMuted, marginTop: 2 }}>
-                    {language === 'fr' ? 'Votre resultat sera lie a cet evenement' : 'Your result will be linked to this event'}
-                  </Text>
-                </View>
-                <Pressable onPress={() => { setLinkToEvent(false); Haptics.selectionAsync(); }} hitSlop={8}>
-                  <MaterialIcons name="close" size={18} color={theme.textMuted} />
-                </Pressable>
-              </View>
-            ) : activeEvent && !linkToEvent ? (
-              <Pressable style={[styles.readyPickerBtn, { borderColor: '#7C3AED20' }]} onPress={() => { setLinkToEvent(true); Haptics.selectionAsync(); }}>
-                <View style={[styles.readyPickerIcon, { backgroundColor: '#7C3AED10' }]}>
-                  <MaterialIcons name="campaign" size={20} color="#7C3AED" />
-                </View>
-                <View style={styles.readyPickerContent}>
-                  <Text style={styles.readyPickerLabel}>{language === 'fr' ? 'Evenement disponible' : 'Event available'}</Text>
-                  <Text style={[styles.readyPickerValue, { color: '#7C3AED' }]} numberOfLines={1}>{activeEvent.title}</Text>
-                </View>
-                <MaterialIcons name="add-circle-outline" size={20} color="#7C3AED" />
-              </Pressable>
-            ) : null}
-
-            <Pressable style={styles.readyPickerBtn} onPress={() => { loadSponsors(); setShowSponsorPicker(true); }}>
-              <View style={[styles.readyPickerIcon, { backgroundColor: selectedSponsor ? '#F59E0B15' : theme.textMuted + '10' }]}>
-                {selectedSponsor?.photo ? (
-                  <Image source={{ uri: selectedSponsor.photo }} style={{ width: 44, height: 44, borderRadius: 12 }} contentFit="cover" />
-                ) : (
-                  <MaterialIcons name="campaign" size={20} color={selectedSponsor ? '#F59E0B' : theme.textMuted} />
-                )}
-              </View>
-              <View style={styles.readyPickerContent}>
-                <Text style={styles.readyPickerLabel}>{t('challenge', 'sponsorLabel')}</Text>
-                <Text style={[styles.readyPickerValue, !selectedSponsor && styles.readyPickerPlaceholder]} numberOfLines={1}>
-                  {selectedSponsor ? selectedSponsor.displayName : t('challenge', 'selectSponsor')}
-                </Text>
-              </View>
-              {selectedSponsor ? (
-                <View style={styles.sponsoredBadgeSmall}>
-                  <MaterialIcons name="verified" size={10} color="#FFF" />
-                  <Text style={styles.sponsoredBadgeSmallText}>{t('challenge', 'sponsoredBadge')}</Text>
-                </View>
-              ) : null}
-              {selectedSponsor ? (
-                <Pressable onPress={(e) => { e.stopPropagation(); setSelectedSponsor(null); Haptics.selectionAsync(); }} hitSlop={8}>
-                  <MaterialIcons name="close" size={18} color={theme.textMuted} />
-                </Pressable>
               ) : (
-                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                <Pressable style={[styles.readyPickerBtn, { borderColor: '#7C3AED20' }]} onPress={() => { setLinkToEvent(true); Haptics.selectionAsync(); }}>
+                  <View style={[styles.readyPickerIcon, { backgroundColor: '#7C3AED10' }]}>
+                    <MaterialIcons name="campaign" size={20} color="#7C3AED" />
+                  </View>
+                  <View style={styles.readyPickerContent}>
+                    <Text style={styles.readyPickerLabel}>{language === 'fr' ? 'Evenement disponible' : 'Event available'}</Text>
+                    <Text style={[styles.readyPickerValue, { color: '#7C3AED' }]} numberOfLines={1}>{activeEvent.title}</Text>
+                  </View>
+                  <MaterialIcons name="add-circle-outline" size={20} color="#7C3AED" />
+                </Pressable>
               )}
-            </Pressable>
-          </Animated.View>
+            </Animated.View>
+          ) : null}
 
           {/* Terrain & Boules Set Selectors */}
           <Animated.View entering={FadeInDown.duration(300).delay(100)} style={styles.readyPickersSection}>
@@ -1265,100 +1226,6 @@ export default function NewChallengeScreen() {
               )}
               ListEmptyComponent={<View style={styles.pickerModalEmpty}><MaterialIcons name="place" size={40} color={theme.textMuted} /><Text style={styles.pickerModalEmptyText}>{t('common', 'noResults')}</Text></View>}
             />
-          </SafeAreaView>
-        </Modal>
-
-        {/* Sponsor Picker Modal */}
-        <Modal visible={showSponsorPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowSponsorPicker(false)}>
-          <SafeAreaView style={styles.pickerModalContainer}>
-            <View style={styles.pickerModalHeader}>
-              <Pressable style={styles.pickerModalCloseBtn} onPress={() => setShowSponsorPicker(false)}>
-                <MaterialIcons name="close" size={24} color={theme.textPrimary} />
-              </Pressable>
-              <Text style={styles.pickerModalTitle}>{t('challenge', 'selectSponsor')}</Text>
-              <View style={{ width: 40 }} />
-            </View>
-            <Pressable style={[styles.pickerModalItem, !selectedSponsor && styles.pickerModalItemActive]} onPress={() => { Haptics.selectionAsync(); setSelectedSponsor(null); setShowSponsorPicker(false); }}>
-              <View style={[styles.pickerModalItemIcon, { backgroundColor: theme.textMuted + '15' }]}><MaterialIcons name="block" size={20} color={theme.textMuted} /></View>
-              <Text style={styles.pickerModalItemName}>{t('challenge', 'noSponsor')}</Text>
-              {!selectedSponsor ? <MaterialIcons name="check-circle" size={20} color={theme.primary} /> : null}
-            </Pressable>
-            {/* Type filter chips */}
-            <View style={styles.sponsorTypeFilterRow}>
-              {(['all', 'sponsor', 'partner', 'ambassador'] as const).map(type => {
-                const isActive = sponsorTypeFilter === type;
-                const cfg = type === 'all' ? { label: t('directory', 'allLabel') || 'Tous', color: theme.primary, icon: 'layers' } : BADGE_TYPE_CONFIG[type];
-                const count = type === 'all' ? sponsors.length : sponsors.filter(s => s.badgeType === type).length;
-                if (type !== 'all' && count === 0) return null;
-                return (
-                  <Pressable
-                    key={type}
-                    style={[styles.sponsorTypeChip, isActive && { backgroundColor: cfg.color, borderColor: cfg.color }]}
-                    onPress={() => { Haptics.selectionAsync(); setSponsorTypeFilter(type); }}
-                  >
-                    <MaterialIcons name={cfg.icon as any} size={14} color={isActive ? '#FFF' : cfg.color} />
-                    <Text style={[styles.sponsorTypeChipText, isActive && { color: '#FFF' }]}>{cfg.label}</Text>
-                    <View style={[styles.sponsorTypeChipCount, isActive && { backgroundColor: 'rgba(255,255,255,0.25)' }]}>
-                      <Text style={[styles.sponsorTypeChipCountText, isActive && { color: '#FFF' }]}>{count}</Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-            {loadingSponsors ? (
-              <View style={styles.pickerModalEmpty}>
-                <ActivityIndicator size="large" color={theme.accent} />
-                <Text style={styles.pickerModalEmptyText}>{t('challenge', 'loadingSponsors')}</Text>
-              </View>
-            ) : (
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
-                {groupedSponsors.length === 0 ? (
-                  <View style={styles.pickerModalEmpty}><MaterialIcons name="campaign" size={40} color={theme.textMuted} /><Text style={styles.pickerModalEmptyText}>{t('challenge', 'noSponsorsAvailable')}</Text></View>
-                ) : (
-                  groupedSponsors.map(group => {
-                    const gcfg = BADGE_TYPE_CONFIG[group.type] || BADGE_TYPE_CONFIG.ambassador;
-                    return (
-                      <View key={group.type} style={{ marginBottom: 16 }}>
-                        <View style={styles.sponsorGroupHeader}>
-                          <View style={[styles.sponsorGroupIcon, { backgroundColor: gcfg.color + '15' }]}>
-                            <MaterialIcons name={gcfg.icon as any} size={14} color={gcfg.color} />
-                          </View>
-                          <Text style={[styles.sponsorGroupTitle, { color: gcfg.color }]}>{gcfg.label}</Text>
-                          <View style={[styles.sponsorGroupCount, { backgroundColor: gcfg.color + '12' }]}>
-                            <Text style={[styles.sponsorGroupCountText, { color: gcfg.color }]}>{group.items.length}</Text>
-                          </View>
-                        </View>
-                        {group.items.map(amb => {
-                          const ambCfg = BADGE_TYPE_CONFIG[amb.badgeType] || BADGE_TYPE_CONFIG.ambassador;
-                          return (
-                            <Pressable key={amb.id} style={[styles.pickerModalItem, { marginHorizontal: 0 }, selectedSponsor?.id === amb.id && { borderWidth: 2, borderColor: ambCfg.color }]} onPress={() => { Haptics.selectionAsync(); setSelectedSponsor(amb); setShowSponsorPicker(false); }}>
-                              <View style={[styles.sponsorPickerAvatar, selectedSponsor?.id === amb.id && { borderColor: ambCfg.color, borderWidth: 2 }]}>
-                                {amb.photo ? (
-                                  <Image source={{ uri: amb.photo }} style={{ width: 40, height: 40, borderRadius: 10 }} contentFit="cover" />
-                                ) : (
-                                  <MaterialIcons name="person" size={20} color={ambCfg.color} />
-                                )}
-                              </View>
-                              <View style={{ flex: 1 }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                  <Text style={styles.pickerModalItemName}>{amb.displayName}</Text>
-                                  <View style={[styles.sponsorTypeBadgeInline, { backgroundColor: ambCfg.color + '12', borderColor: ambCfg.color + '25' }]}>
-                                    <MaterialIcons name={ambCfg.icon as any} size={9} color={ambCfg.color} />
-                                    <Text style={[styles.sponsorTypeBadgeInlineText, { color: ambCfg.color }]}>{ambCfg.label}</Text>
-                                  </View>
-                                </View>
-                                <Text style={styles.pickerModalItemSub}>{amb.club || amb.city || ''}</Text>
-                              </View>
-                              {selectedSponsor?.id === amb.id ? <MaterialIcons name="check-circle" size={20} color={ambCfg.color} /> : null}
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-                    );
-                  })
-                )}
-              </ScrollView>
-            )}
           </SafeAreaView>
         </Modal>
 
@@ -2120,18 +1987,7 @@ const styles = StyleSheet.create({
   sponsoredBadgeSmallText: { fontSize: 8, fontWeight: '800', color: '#FFF', letterSpacing: 0.5 },
   sponsorPickerAvatar: { width: 40, height: 40, borderRadius: 10, backgroundColor: '#F59E0B10', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' as const },
   sponsorPickerBadge: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#F59E0B15', alignItems: 'center', justifyContent: 'center', marginRight: 6 },
-  sponsorTypeFilterRow: { flexDirection: 'row', gap: 6, paddingHorizontal: 16, paddingVertical: 10, flexWrap: 'wrap' },
-  sponsorTypeChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: theme.backgroundSecondary, borderWidth: 1.5, borderColor: theme.border },
-  sponsorTypeChipText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
-  sponsorTypeChipCount: { backgroundColor: theme.border, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, marginLeft: 2 },
-  sponsorTypeChipCountText: { fontSize: 10, fontWeight: '700', color: theme.textSecondary },
-  sponsorGroupHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: theme.border, marginBottom: 8 },
-  sponsorGroupIcon: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  sponsorGroupTitle: { fontSize: 12, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' as const, flex: 1 },
-  sponsorGroupCount: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  sponsorGroupCountText: { fontSize: 11, fontWeight: '700' },
-  sponsorTypeBadgeInline: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1 },
-  sponsorTypeBadgeInlineText: { fontSize: 8, fontWeight: '700', letterSpacing: 0.3 },
+
   sponsorInProgressBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FEF3C7', paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#FDE68A' },
   sponsorInProgressPhoto: { width: 28, height: 28, borderRadius: 8, overflow: 'hidden' as const },
   sponsorInProgressText: { flex: 1, fontSize: 12, color: '#92400E', fontWeight: '500' },
