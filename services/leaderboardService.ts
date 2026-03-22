@@ -1,4 +1,5 @@
 import { getSupabaseClient } from '@/template';
+import { getAmbassadorUserIds } from '@/services/ambassadorService';
 
 export interface LeaderboardPlayer {
   id: string;
@@ -15,6 +16,7 @@ export interface LeaderboardPlayer {
   boulesModel?: string;
   terrainName?: string;
   isPremium?: boolean;
+  isAmbassador?: boolean;
   trustScore?: number;
   trustLevel?: 'high' | 'medium' | 'low' | 'suspicious';
   createdAt?: string;
@@ -177,6 +179,12 @@ export async function fetchLeaderboard(period?: LeaderboardPeriod): Promise<{ pl
       } catch { /* silent - premium badges just won't show */ }
     }
 
+    // Fetch ambassador user IDs
+    let ambassadorIds: Set<string> = new Set();
+    try {
+      ambassadorIds = await getAmbassadorUserIds();
+    } catch { /* silent */ }
+
     // Fetch trust scores from suspicious_players table
     const playerIds = filteredData.map((p: any) => p.id);
     let trustScoreMap = new Map<string, { score: number; flags: string[] }>();
@@ -212,6 +220,7 @@ export async function fetchLeaderboard(period?: LeaderboardPeriod): Promise<{ pl
           boulesModel: p.boules?.model || undefined,
           terrainName: p.terrain_name || undefined,
           isPremium: premiumIds.has(p.user_id),
+          isAmbassador: ambassadorIds.has(p.user_id),
           trustScore: trustScoreMap.get(p.id)?.score,
           trustLevel: (() => {
             const ts = trustScoreMap.get(p.id)?.score;

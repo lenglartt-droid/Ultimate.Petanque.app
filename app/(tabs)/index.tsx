@@ -25,6 +25,7 @@ import { useAuth, useAlert } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import { preloadInterstitial } from '@/services/adService';
 import CommunityLeaderboard from '@/components/ui/CommunityLeaderboard';
+import { getFeaturedAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { getMyMeetups, getInvitedMeetups, getMeetupResponses, getPendingInvitationsCount, findMeetupByCode, Meetup, MeetupResponse } from '@/services/meetupService';
 import { config } from '@/constants/config';
 import { Share as RNShare, Platform } from 'react-native';
@@ -38,6 +39,10 @@ export default function HomeScreen() {
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'À venir' | 'En cours' | 'Terminé'>('all');
   const [refreshing, setRefreshing] = useState(false);
+
+  // Ambassadors state
+  const [featuredAmbassadors, setFeaturedAmbassadors] = useState<Ambassador[]>([]);
+  const [ambassadorsLoaded, setAmbassadorsLoaded] = useState(false);
 
   // Meetups state
   const [meetups, setMeetups] = useState<(Meetup & { _source: 'created' | 'invited'; _acceptedCount?: number; _maxParticipants?: number })[]>([]);
@@ -105,6 +110,14 @@ export default function HomeScreen() {
     await Promise.all([refreshData(), loadMeetups()]);
     setRefreshing(false);
   };
+
+  // Load featured ambassadors
+  useEffect(() => {
+    getFeaturedAmbassadors().then((ambassadors) => {
+      setFeaturedAmbassadors(ambassadors);
+      setAmbassadorsLoaded(true);
+    });
+  }, []);
 
   // Status priority
   const statusOrder: Record<string, number> = { 'En cours': 0, 'À venir': 1, 'Terminé': 2 };
@@ -609,6 +622,61 @@ export default function HomeScreen() {
             </View>
           </View>
         </Animated.View>
+
+
+
+        {/* ========== AMBASSADORS TO FOLLOW ========== */}
+        {ambassadorsLoaded && featuredAmbassadors.length > 0 ? (
+          <Animated.View entering={FadeIn.duration(400).delay(165)} style={[styles.section, isTablet && styles.sectionTablet]}>
+            <View style={styles.ambassadorSectionHeader}>
+              <View style={styles.ambassadorSectionIcon}>
+                <MaterialIcons name="verified" size={18} color="#7C3AED" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionTitle} numberOfLines={1}>{language === 'fr' ? 'Ambassadeurs' : 'Ambassadors'}</Text>
+              </View>
+              <Pressable style={styles.ambassadorSeeAllBtn} onPress={() => router.push('/partners' as any)}>
+                <Text style={styles.ambassadorSeeAllText}>{t('common', 'seeAll')}</Text>
+                <MaterialIcons name="chevron-right" size={16} color="#7C3AED" />
+              </Pressable>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.ambassadorScroll}>
+              {featuredAmbassadors.map((amb, idx) => (
+                <Pressable
+                  key={amb.id}
+                  style={({ pressed }) => [styles.ambassadorCard, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
+                  onPress={() => amb.playerId ? router.push(`/player/${amb.playerId}` as any) : router.push('/partners' as any)}
+                >
+                  <View style={styles.ambassadorAvatarWrap}>
+                    {amb.photo ? (
+                      <Image source={{ uri: amb.photo }} style={styles.ambassadorAvatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
+                    ) : (
+                      <View style={[styles.ambassadorAvatar, { backgroundColor: '#7C3AED' + '20', alignItems: 'center', justifyContent: 'center' }]}>
+                        <Text style={{ fontSize: 20, fontWeight: '800', color: '#7C3AED' }}>{amb.displayName.charAt(0)}</Text>
+                      </View>
+                    )}
+                    <View style={styles.ambassadorVerifiedBadge}>
+                      <MaterialIcons name="verified" size={12} color="#7C3AED" />
+                    </View>
+                  </View>
+                  <Text style={styles.ambassadorName} numberOfLines={1}>{amb.displayName}</Text>
+                  {amb.role ? <Text style={styles.ambassadorRole}>{t('roles', amb.role)}</Text> : null}
+                  {amb.stats ? (
+                    <View style={styles.ambassadorStatRow}>
+                      <Text style={styles.ambassadorStatValue}>{amb.stats.winRate}%</Text>
+                      <Text style={styles.ambassadorStatLabel}>{language === 'fr' ? 'Victoires' : 'Win rate'}</Text>
+                    </View>
+                  ) : null}
+                  <View style={styles.ambassadorSocialRow}>
+                    {amb.youtubeUrl ? <View style={[styles.ambassadorSocialDot, { backgroundColor: '#FF0000' + '20' }]}><MaterialIcons name="play-arrow" size={10} color="#FF0000" /></View> : null}
+                    {amb.instagramHandle ? <View style={[styles.ambassadorSocialDot, { backgroundColor: '#E4405F' + '20' }]}><MaterialIcons name="camera-alt" size={10} color="#E4405F" /></View> : null}
+                    {amb.tiktokUrl ? <View style={[styles.ambassadorSocialDot, { backgroundColor: '#000' + '15' }]}><MaterialIcons name="music-note" size={10} color="#000" /></View> : null}
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </Animated.View>
+        ) : null}
 
 
 
@@ -1139,6 +1207,24 @@ const styles = StyleSheet.create({
   emptyTournamentIcon: { width: 100, height: 100, borderRadius: 50, backgroundColor: theme.carreauColor + '12', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
   emptyTournamentTitle: { fontSize: 20, fontWeight: '700', color: theme.textPrimary, marginBottom: 8 },
   emptyTournamentText: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
+
+  // ========== AMBASSADORS SECTION ==========
+  ambassadorSectionHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 14 },
+  ambassadorSectionIcon: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#7C3AED' + '15', alignItems: 'center' as const, justifyContent: 'center' as const },
+  ambassadorSeeAllBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 2 },
+  ambassadorSeeAllText: { fontSize: 13, fontWeight: '600' as const, color: '#7C3AED' },
+  ambassadorScroll: { gap: 12, paddingRight: 16 },
+  ambassadorCard: { width: 140, backgroundColor: theme.surface, borderRadius: 18, padding: 14, alignItems: 'center' as const, borderWidth: 1.5, borderColor: '#7C3AED' + '15', ...theme.shadows.card },
+  ambassadorAvatarWrap: { position: 'relative' as const, marginBottom: 10 },
+  ambassadorAvatar: { width: 60, height: 60, borderRadius: 20, overflow: 'hidden' as const },
+  ambassadorVerifiedBadge: { position: 'absolute' as const, bottom: -3, right: -3, width: 20, height: 20, borderRadius: 10, backgroundColor: '#7C3AED', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 2, borderColor: theme.surface },
+  ambassadorName: { fontSize: 14, fontWeight: '700' as const, color: theme.textPrimary, textAlign: 'center' as const, marginBottom: 2 },
+  ambassadorRole: { fontSize: 11, color: theme.textSecondary, marginBottom: 6 },
+  ambassadorStatRow: { backgroundColor: '#7C3AED' + '08', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, marginBottom: 8 },
+  ambassadorStatValue: { fontSize: 14, fontWeight: '800' as const, color: '#7C3AED', textAlign: 'center' as const },
+  ambassadorStatLabel: { fontSize: 9, color: theme.textMuted, textAlign: 'center' as const },
+  ambassadorSocialRow: { flexDirection: 'row' as const, gap: 4 },
+  ambassadorSocialDot: { width: 22, height: 22, borderRadius: 11, alignItems: 'center' as const, justifyContent: 'center' as const },
   createTournamentBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.carreauColor, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14 },
   createTournamentBtnText: { fontSize: 15, fontWeight: '600', color: '#FFF' },
 });

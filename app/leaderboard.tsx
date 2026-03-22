@@ -100,7 +100,11 @@ const MemoizedPlayerRow = React.memo(function PlayerRow({
             <Text style={[s.playerName, isMe && { color: theme.primary }]} numberOfLines={1}>
               {player.name}{isMe ? ` (${t('leaderboard', 'you')})` : ''}
             </Text>
-            {player.isPremium ? (
+            {player.isAmbassador ? (
+              <View style={s.ambassadorBadge}>
+                <MaterialIcons name="verified" size={10} color="#7C3AED" />
+              </View>
+            ) : player.isPremium ? (
               <View style={s.premiumBadge}>
                 <MaterialIcons name="star" size={9} color="#A8B4C0" />
               </View>
@@ -1468,6 +1472,7 @@ const s = StyleSheet.create({
   statLabel: { fontSize: 9, color: theme.textMuted, marginTop: 1 },
   inviteBtn: { position: 'absolute', top: 12, right: 12, width: 34, height: 34, borderRadius: 17, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.primary + '25' },
   premiumBadge: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#A8B4C0' + '20', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#A8B4C0' + '40' },
+  ambassadorBadge: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#7C3AED' + '20', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#7C3AED' + '40' },
   trustBadgeRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, position: 'absolute' as const, top: 12, left: 52, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, backgroundColor: theme.backgroundSecondary, borderWidth: 1, zIndex: 1 },
   trustBadgeText: { fontSize: 9, fontWeight: '800' as const },
 

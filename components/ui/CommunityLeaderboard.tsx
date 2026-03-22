@@ -246,7 +246,11 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                           <Text style={[s.playerName, isMe && { color: theme.primary }]} numberOfLines={1}>
                             {p.name}{isMe ? ` (${t('leaderboard', 'you')})` : ''}
                           </Text>
-                          {p.isPremium ? (
+                          {p.isAmbassador ? (
+                            <View style={s.ambassadorBadge}>
+                              <MaterialIcons name="verified" size={9} color="#7C3AED" />
+                            </View>
+                          ) : p.isPremium ? (
                             <View style={s.premiumBadge}>
                               <MaterialIcons name="star" size={8} color="#A8B4C0" />
                             </View>
@@ -299,7 +303,11 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                         <View style={{ flex: 1 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                             <Text style={[s.playerName, { color: theme.primary }]} numberOfLines={1}>{myP.name} ({t('leaderboard', 'you')})</Text>
-                            {myP.isPremium ? (
+                            {myP.isAmbassador ? (
+                              <View style={s.ambassadorBadge}>
+                                <MaterialIcons name="verified" size={9} color="#7C3AED" />
+                              </View>
+                            ) : myP.isPremium ? (
                               <View style={s.premiumBadge}>
                                 <MaterialIcons name="star" size={8} color="#A8B4C0" />
                               </View>
@@ -585,6 +593,7 @@ const s = StyleSheet.create({
   playerName: { fontSize: 13, fontWeight: '600', color: theme.textPrimary },
   playerClub: { fontSize: 10, color: theme.textMuted, marginTop: 1 },
   premiumBadge: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#A8B4C0' + '20', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#A8B4C0' + '40' },
+  ambassadorBadge: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#7C3AED' + '20', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#7C3AED' + '40' },
   statCell: { width: 34, fontSize: 12, fontWeight: '500', color: theme.textPrimary, textAlign: 'center' },
   trustBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 2, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 6, backgroundColor: theme.backgroundSecondary },
   trustBadgeText: { fontSize: 8, fontWeight: '800' as const },
