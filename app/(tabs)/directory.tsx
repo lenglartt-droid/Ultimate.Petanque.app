@@ -1039,6 +1039,23 @@ export default function DirectoryScreen() {
               );
             })}
           </ScrollView>
+
+          {/* Quick Add Button for current tab */}
+          <Pressable
+            style={({ pressed }) => [styles.quickAddBtn, pressed && { opacity: 0.85, transform: [{ scale: 0.95 }] }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              const routes: Record<DirectoryTab, string> = {
+                players: '/player/new',
+                clubs: '/club/new',
+                terrains: '/terrain/new',
+                tournaments: '/tournament/new',
+              };
+              router.push(routes[activeTab] as any);
+            }}
+          >
+            <MaterialIcons name="add" size={22} color="#FFF" />
+          </Pressable>
         </View>
       </View>
 
@@ -1877,6 +1894,19 @@ const styles = StyleSheet.create({
   tabsWrapper: {
     paddingLeft: 16,
     marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  quickAddBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+    marginLeft: 4,
+    ...theme.shadows.cardElevated,
   },
   tabsContainer: {
     gap: 8,

@@ -572,24 +572,6 @@ export default function HomeScreen() {
           <CommunityLeaderboard />
         </Animated.View>
 
-        {/* ========== QUICK ACCESS GRID ========== */}
-        <Animated.View entering={FadeIn.duration(400).delay(260)} style={[s.section, isTablet && s.sectionTablet]}>
-          <Text style={[s.sectionTitle, { marginBottom: 14, paddingLeft: 2 }]}>{t('home', 'quickAccess')}</Text>
-          <View style={s.quickGrid}>
-            {[
-              { label: t('home', 'player'), icon: 'person-add' as const, bg: theme.primary, route: '/player/new' },
-              { label: t('home', 'tournament'), icon: 'add-circle' as const, bg: theme.carreauColor, route: '/tournament/new' },
-              { label: t('home', 'terrain'), icon: 'sports-soccer' as const, bg: theme.accent, route: '/terrain/new' },
-              { label: t('home', 'club'), icon: 'add-home' as const, bg: theme.success, route: '/club/new' },
-            ].map((q, i) => (
-              <Pressable key={i} style={({ pressed }) => [s.quickItem, pressed && { transform: [{ scale: 0.95 }], opacity: 0.85 }]} onPress={() => router.push(q.route as any)}>
-                <View style={[s.quickIcon, { backgroundColor: q.bg }]}><MaterialIcons name={q.icon} size={20} color="#FFF" /></View>
-                <Text style={s.quickLabel}>{q.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </Animated.View>
-
         {/* ========== AMBASSADORS ROTATING BANNER ========== */}
         {ambassadorsLoaded && featuredAmbassadors.length > 0 ? (
           <Animated.View entering={FadeIn.duration(400).delay(300)} style={[s.section, isTablet && s.sectionTablet]}>
@@ -894,12 +876,6 @@ const s = StyleSheet.create({
   emptyText: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 20 },
   emptyCta: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.primary, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14 },
   emptyCtaText: { fontSize: 15, fontWeight: '600', color: '#FFF' },
-
-  // ===== QUICK ACCESS =====
-  quickGrid: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
-  quickItem: { flex: 1, alignItems: 'center', backgroundColor: '#FFF', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 6, borderWidth: 1, borderColor: '#E2E8F0' },
-  quickIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  quickLabel: { fontSize: 12, fontWeight: '600', color: theme.textPrimary, textAlign: 'center' },
 
   // ===== AMBASSADORS =====
   ambassadorIcon: { width: 28, height: 28, borderRadius: 8, backgroundColor: '#7C3AED' + '12', alignItems: 'center', justifyContent: 'center' },
