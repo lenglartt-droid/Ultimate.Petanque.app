@@ -27,6 +27,7 @@ import { TerrainType } from '@/constants/config';
 import { useLanguage } from '@/hooks/useLanguage';
 import { SharedOverlayBadge } from '@/components/ui/SharedBadge';
 import AdBanner from '@/components/ui/AdBanner';
+import SponsorBanner from '@/components/ui/SponsorBanner';
 
 import MergePickerModal from '@/components/ui/MergePickerModal';
 import { saveMergeLog, getMergeLogs, undoMerge, isUndoable, getUndoTimeRemaining, deleteMergeLog, MergeLog, ReassignedRelation } from '@/services/mergeHistoryService';
@@ -1169,6 +1170,8 @@ export default function DirectoryScreen() {
           </ScrollView>
         </Animated.View>
       )}
+
+      <SponsorBanner style={{ marginTop: 10 }} />
 
       {/* Results Count - only when searching */}
       {searchQuery ? (

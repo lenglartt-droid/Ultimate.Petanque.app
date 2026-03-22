@@ -32,6 +32,7 @@ import {
 } from '@/services/publicItemsService';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup as MeetupType } from '@/services/meetupService';
 import AdBanner from '@/components/ui/AdBanner';
+import SponsorBanner from '@/components/ui/SponsorBanner';
 import { useToast } from '@/components/ui/Toast';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 
@@ -954,6 +955,8 @@ export default function MapScreen() {
             {search.trim() ? <Text style={styles.searchCount}>{counts.total} {counts.total !== 1 ? t('map', 'results') : t('map', 'result')}</Text> : null}
           </Animated.View>
         ) : null}
+
+        <SponsorBanner style={{ marginHorizontal: 12, marginTop: 6, marginBottom: 2 }} />
 
         {/* Category filters */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
