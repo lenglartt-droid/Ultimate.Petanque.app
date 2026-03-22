@@ -1823,6 +1823,21 @@ export default function NewMatchScreen() {
             </Animated.View>
           )}
 
+          {/* Actions Editor Button */}
+          <Animated.View entering={FadeInDown.duration(300).delay(50)}>
+            <Pressable 
+              style={styles.actionsEditorButton}
+              onPress={() => { Haptics.selectionAsync(); setShowActionsEditor(true); }}
+            >
+              <MaterialIcons name="edit-note" size={24} color={theme.primary} />
+              <View style={styles.actionsEditorContent}>
+                <Text style={styles.actionsEditorTitle}>{t('match', 'matchActions')}</Text>
+                <Text style={styles.actionsEditorSubtitle}>{t('match', 'menActionsTimer')}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
+            </Pressable>
+          </Animated.View>
+
           {/* Tournament Phase Selection */}
           {isTournamentMode && linkedTournament && (
             <Animated.View entering={FadeInDown.duration(300)} style={styles.phaseSection}>
@@ -1925,21 +1940,6 @@ export default function NewMatchScreen() {
                 )}
               </View>
               <Text style={styles.teamCardCount}>{teamBPlayers.length}/{maxPlayersPerTeam}</Text>
-            </Pressable>
-          </Animated.View>
-
-          {/* Actions Editor Button */}
-          <Animated.View entering={FadeInDown.duration(300).delay(150)}>
-            <Pressable 
-              style={styles.actionsEditorButton}
-              onPress={() => { Haptics.selectionAsync(); setShowActionsEditor(true); }}
-            >
-              <MaterialIcons name="edit-note" size={24} color={theme.primary} />
-              <View style={styles.actionsEditorContent}>
-                <Text style={styles.actionsEditorTitle}>{t('match', 'matchActions')}</Text>
-                <Text style={styles.actionsEditorSubtitle}>{t('match', 'menActionsTimer')}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
             </Pressable>
           </Animated.View>
 
