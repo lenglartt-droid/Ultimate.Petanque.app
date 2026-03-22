@@ -1086,7 +1086,7 @@ export default function AdminPromosScreen() {
                       <MaterialIcons name="campaign" size={18} color="#F59E0B" />
                     </View>
                     <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textPrimary, flex: 1 }}>
-                      {fr ? 'EVENEMENTS SPONSORISES' : 'SPONSORED EVENTS'} ({sponsoredEvents.length})
+                      {fr ? 'DEFIS AMBASSADEURS' : 'AMBASSADOR CHALLENGES'} ({sponsoredEvents.length})
                     </Text>
                     <Pressable
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#7C3AED', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 }}
@@ -1130,7 +1130,7 @@ export default function AdminPromosScreen() {
                     <View style={{ alignItems: 'center', paddingVertical: 24, backgroundColor: theme.surface, borderRadius: 16, padding: 20 }}>
                       <MaterialIcons name="campaign" size={40} color={theme.textMuted} />
                       <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginTop: 8 }}>{fr ? 'Aucun evenement' : 'No events'}</Text>
-                      <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 4, textAlign: 'center' }}>{fr ? 'Les evenements sponsorises apparaitront ici.' : 'Sponsored events will appear here.'}</Text>
+                      <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 4, textAlign: 'center' }}>{fr ? 'Les defis ambassadeurs apparaitront ici.' : 'Ambassador challenges will appear here.'}</Text>
                     </View>
                   ) : (
                     filteredSponsoredEvents.map((ev) => {
@@ -1484,7 +1484,7 @@ export default function AdminPromosScreen() {
                             <MaterialIcons name="campaign" size={16} color="#F59E0B" />
                           </View>
                           <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textPrimary, flex: 1 }}>
-                            {fr ? 'DEFIS SPONSORISES' : 'SPONSORED CHALLENGES'}
+                            {fr ? 'DEFIS AMBASSADEURS' : 'AMBASSADOR CHALLENGES'}
                           </Text>
                           <View style={{ backgroundColor: '#F59E0B' + '15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
                             <Text style={{ fontSize: 11, fontWeight: '800', color: '#F59E0B' }}>{totalSponsored}</Text>
@@ -2342,8 +2342,8 @@ export default function AdminPromosScreen() {
                   })}
                 </View>
                 <Text style={styles.formHint}>
-                  {ambForm.badgeType === 'sponsor' ? (fr ? 'Visible dans les bannieres sponsor et les defis sponsorises' : 'Visible in sponsor banners and sponsored challenges') :
-                   ambForm.badgeType === 'partner' ? (fr ? 'Visible dans les bannieres partenaires et les defis sponsorises' : 'Visible in partner banners and sponsored challenges') :
+                  {ambForm.badgeType === 'sponsor' ? (fr ? 'Visible dans les bannieres sponsor et les defis ambassadeurs' : 'Visible in sponsor banners and ambassador challenges') :
+                   ambForm.badgeType === 'partner' ? (fr ? 'Visible dans les bannieres partenaires et les defis ambassadeurs' : 'Visible in partner banners and ambassador challenges') :
                    (fr ? 'Visible dans le classement et la page partenaires' : 'Visible in leaderboard and partners page')}
                 </Text>
               </View>

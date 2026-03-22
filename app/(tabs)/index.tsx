@@ -373,6 +373,9 @@ export default function HomeScreen() {
                       <Text style={s.heroAvatarLetter}>{displayName.charAt(0).toUpperCase()}</Text>
                     </LinearGradient>
                   )}
+                  {eventNotifCount > 0 ? (
+                    <View style={s.avatarNotifBadge}><Text style={s.avatarNotifBadgeText}>{eventNotifCount > 9 ? '9+' : eventNotifCount}</Text></View>
+                  ) : null}
                 </Pressable>
               </View>
             </View>
@@ -400,7 +403,6 @@ export default function HomeScreen() {
             {[
               { label: t('home', 'match'), sub: t('home', 'training'), icon: 'sports' as const, gradient: ['#2563EB', '#60A5FA'] as [string, string], onPress: () => router.push('/match/new') },
               { label: t('home', 'challenge'), sub: t('home', 'shotsPoints'), icon: 'track-changes' as const, gradient: ['#D97706', '#FBBF24'] as [string, string], onPress: () => router.push('/challenge/new') },
-              { label: language === 'fr' ? 'Evenements' : 'Events', sub: language === 'fr' ? 'Defis sponsorises' : 'Sponsored', icon: 'campaign' as const, gradient: ['#7C3AED', '#A855F7'] as [string, string], onPress: () => router.push('/sponsored-event/list' as any) },
               { label: t('home', 'tournament'), sub: t('home', 'myJourney'), icon: 'emoji-events' as const, gradient: ['#B45309', '#F59E0B'] as [string, string], onPress: () => setShowTournamentPicker(true) },
             ].map((action, idx) => (
               <Pressable key={idx} style={({ pressed }) => [s.actionCard, isTablet && s.actionCardTablet, pressed && { transform: [{ scale: 0.96 }], opacity: 0.9 }]} onPress={action.onPress}>
@@ -848,6 +850,8 @@ const s = StyleSheet.create({
   heroAvatarImg: { width: 48, height: 48, borderRadius: 16 },
   heroAvatarFallback: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   heroAvatarLetter: { fontSize: 20, fontWeight: '700', color: '#FFF' },
+  avatarNotifBadge: { position: 'absolute' as const, top: -4, right: -4, backgroundColor: '#7C3AED', minWidth: 20, height: 20, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const, paddingHorizontal: 4, borderWidth: 2.5, borderColor: '#FFF' },
+  avatarNotifBadgeText: { fontSize: 10, fontWeight: '800' as const, color: '#FFF' },
 
   // Stats chips
   statsChipRow: { flexDirection: 'row', gap: 8 },

@@ -187,7 +187,7 @@ export default function SponsoredEventListScreen() {
             <MaterialIcons name="arrow-back" size={24} color="#FFF" />
           </Pressable>
           <View style={{ flex: 1 }}>
-            <Text style={s.headerTitle}>{fr ? 'Evenements Sponsorises' : 'Sponsored Events'}</Text>
+            <Text style={s.headerTitle}>{fr ? 'Defis Ambassadeurs' : 'Ambassador Challenges'}</Text>
             <Text style={s.headerSubtitle}>{filtered.length} {fr ? 'evenement(s)' : 'event(s)'}</Text>
           </View>
           <Pressable style={s.joinBtn} onPress={() => setShowJoinModal(true)}>
@@ -248,7 +248,7 @@ export default function SponsoredEventListScreen() {
             <View style={s.emptyState}>
               <MaterialIcons name="campaign" size={56} color={theme.textMuted} />
               <Text style={s.emptyTitle}>{fr ? 'Aucun evenement' : 'No events'}</Text>
-              <Text style={s.emptyDesc}>{fr ? 'Les evenements sponsorises par les ambassadeurs apparaitront ici.' : 'Sponsored events by ambassadors will appear here.'}</Text>
+              <Text style={s.emptyDesc}>{fr ? 'Les defis ambassadeurs apparaitront ici.' : 'Ambassador challenges will appear here.'}</Text>
             </View>
           }
         />

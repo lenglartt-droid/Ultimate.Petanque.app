@@ -28,13 +28,14 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { SharedOverlayBadge } from '@/components/ui/SharedBadge';
 import AdBanner from '@/components/ui/AdBanner';
 import SponsorBanner from '@/components/ui/SponsorBanner';
+import { getSponsoredEvents, SponsoredEvent } from '@/services/sponsoredEventService';
 
 import MergePickerModal from '@/components/ui/MergePickerModal';
 import { saveMergeLog, getMergeLogs, undoMerge, isUndoable, getUndoTimeRemaining, deleteMergeLog, MergeLog, ReassignedRelation } from '@/services/mergeHistoryService';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services/meetupService';
 import { useAuth, useAlert } from '@/template';
 
-type DirectoryTab = 'players' | 'clubs' | 'terrains' | 'tournaments';
+type DirectoryTab = 'players' | 'clubs' | 'terrains' | 'tournaments' | 'events';
 type TournamentStatus = 'all' | 'À venir' | 'En cours' | 'Terminé';
 
 export default function DirectoryScreen() {
@@ -133,12 +134,28 @@ export default function DirectoryScreen() {
     setRefreshing(false);
   }, [refreshData]);
 
+  // Events state
+  const [sponsoredEvents, setSponsoredEvents] = useState<SponsoredEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const loadSponsoredEvents = useCallback(async () => {
+    setEventsLoading(true);
+    const [r1, r2, r3] = await Promise.all([getSponsoredEvents(), getSponsoredEvents('completed'), getSponsoredEvents('cancelled')]);
+    const all = [...r1.events];
+    r2.events.forEach(e => { if (!all.find(x => x.id === e.id)) all.push(e); });
+    r3.events.forEach(e => { if (!all.find(x => x.id === e.id)) all.push(e); });
+    all.sort((a, b) => new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime());
+    setSponsoredEvents(all);
+    setEventsLoading(false);
+  }, []);
+  useEffect(() => { loadSponsoredEvents(); }, [loadSponsoredEvents]);
+
   // Tab configuration (uses t() for labels)
   const TABS: { id: DirectoryTab; label: string; icon: string; color: string }[] = useMemo(() => [
     { id: 'players', label: t('directory', 'players'), icon: 'person', color: theme.primary },
     { id: 'clubs', label: t('directory', 'clubs'), icon: 'home', color: theme.accent },
     { id: 'terrains', label: t('directory', 'terrains'), icon: 'sports-soccer', color: theme.success },
     { id: 'tournaments', label: t('directory', 'tournaments'), icon: 'emoji-events', color: theme.carreauColor },
+    { id: 'events', label: language === 'fr' ? 'Defis' : 'Challenges', icon: 'campaign', color: '#7C3AED' },
   ], [language]);
 
   // Dynamic gradient colors per tab
@@ -148,6 +165,7 @@ export default function DirectoryScreen() {
       clubs: ['#451A03', '#92400E', '#D97706'],
       terrains: ['#022C22', '#064E3B', '#10B981'],
       tournaments: ['#451A03', '#78350F', '#B45309'],
+      events: ['#4C1D95', '#6D28D9', '#7C3AED'],
     };
     return gradients[activeTab];
   }, [activeTab]);
@@ -158,6 +176,7 @@ export default function DirectoryScreen() {
       clubs: theme.accent,
       terrains: theme.success,
       tournaments: theme.carreauColor,
+      events: '#7C3AED',
     };
     return colors[activeTab];
   }, [activeTab]);
@@ -251,7 +270,7 @@ export default function DirectoryScreen() {
 
   // Set active tab from navigation param
   React.useEffect(() => {
-    if (tabParam && ['players', 'clubs', 'terrains', 'tournaments'].includes(tabParam)) {
+    if (tabParam && ['players', 'clubs', 'terrains', 'tournaments', 'events'].includes(tabParam)) {
       setActiveTab(tabParam as DirectoryTab);
     }
   }, [tabParam]);
@@ -262,7 +281,8 @@ export default function DirectoryScreen() {
     clubs: clubs.length,
     terrains: terrains.length,
     tournaments: tournaments.length,
-  }), [players.length, clubs.length, terrains.length, tournaments.length]);
+    events: sponsoredEvents.length,
+  }), [players.length, clubs.length, terrains.length, tournaments.length, sponsoredEvents.length]);
 
   // Unique values for filters
   const uniqueValues = useMemo(() => ({
@@ -288,6 +308,7 @@ export default function DirectoryScreen() {
     clubs: [filters.clubCity, filters.clubCountry].filter(f => f !== 'all').length,
     terrains: [filters.terrainType, filters.terrainCity, filters.terrainLighting, filters.terrainCovered, filters.terrainEnvironment, filters.terrainAccess].filter(f => f !== 'all').length,
     tournaments: [filters.tournamentStatus, filters.tournamentFormat, filters.tournamentLevel, filters.tournamentCategory, filters.tournamentRegistration, filters.tournamentScope, filters.tournamentCity].filter(f => f !== 'all').length,
+    events: 0,
   }), [filters]);
 
   const currentFilterCount = activeFilterCounts[activeTab];
@@ -299,6 +320,7 @@ export default function DirectoryScreen() {
       clubs: t('directory', 'club'),
       terrains: t('directory', 'terrain'),
       tournaments: t('directory', 'tournament'),
+      events: language === 'fr' ? 'defi' : 'challenge',
     };
     return map[tab];
   };
@@ -309,6 +331,7 @@ export default function DirectoryScreen() {
       clubs: t('directory', 'clubsLabel'),
       terrains: t('directory', 'terrainsLabel'),
       tournaments: t('directory', 'tournamentsLabel'),
+      events: language === 'fr' ? 'defis ambassadeurs' : 'ambassador challenges',
     };
     return map[tab];
   };
@@ -320,6 +343,7 @@ export default function DirectoryScreen() {
       clubs: t('directory', 'searchClub'),
       terrains: t('directory', 'searchTerrain'),
       tournaments: t('directory', 'searchTournament'),
+      events: language === 'fr' ? 'Rechercher un defi...' : 'Search a challenge...',
     };
     return map[activeTab];
   };
@@ -394,6 +418,13 @@ export default function DirectoryScreen() {
     }).sort((a, b) => (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3));
   }, [tournaments, searchQuery, filters]);
 
+  // Filtered events for events tab
+  const filteredEvents = useMemo(() => {
+    if (!searchQuery) return sponsoredEvents;
+    const q = searchQuery.toLowerCase();
+    return sponsoredEvents.filter(e => e.title.toLowerCase().includes(q) || (e.ambassadorName || '').toLowerCase().includes(q) || (e.city || '').toLowerCase().includes(q));
+  }, [sponsoredEvents, searchQuery]);
+
   // Get current filtered data (after all filtered arrays are defined)
   const getCurrentData = useCallback(() => {
     switch (activeTab) {
@@ -401,9 +432,10 @@ export default function DirectoryScreen() {
       case 'clubs': return filteredClubs;
       case 'terrains': return filteredTerrains;
       case 'tournaments': return filteredTournaments;
+      case 'events': return filteredEvents as any[];
       default: return filteredPlayers;
     }
-  }, [activeTab, filteredPlayers, filteredClubs, filteredTerrains, filteredTournaments]);
+  }, [activeTab, filteredPlayers, filteredClubs, filteredTerrains, filteredTournaments, filteredEvents]);
 
   // Paginated data
   const paginatedData = useMemo(() => {
@@ -753,12 +785,62 @@ export default function DirectoryScreen() {
     );
   };
 
+  const renderEvent = ({ item }: { item: any }) => {
+    const ev = item as SponsoredEvent;
+    const evDate = new Date(ev.startTime);
+    const endDate = new Date(ev.endTime);
+    const isActive = ev.status === 'active' || (ev.status === 'upcoming' && new Date() >= evDate && new Date() <= endDate);
+    const sc = isActive ? '#22C55E' : ev.status === 'completed' ? '#3B82F6' : ev.status === 'cancelled' ? '#EF4444' : '#F59E0B';
+    const typeColor: Record<string, string> = { '10_tirs': '#2563EB', '10_tirs_sautee': '#D97706', precision: '#7C3AED' };
+    const tc = typeColor[ev.challengeType] || '#7C3AED';
+    const challengeLabel = ev.challengeType === '10_tirs' ? '10 Tirs' : ev.challengeType === '10_tirs_sautee' ? (language === 'fr' ? '10 Tirs sautee' : '10 Lob Shots') : (language === 'fr' ? 'Precision' : 'Precision');
+    return (
+      <Pressable style={[styles.itemCard, { borderLeftWidth: 3, borderLeftColor: sc }]} onPress={() => router.push(`/sponsored-event/${ev.id}` as any)}>
+        <View style={[styles.itemAvatar, { backgroundColor: tc + '15' }]}>
+          <MaterialIcons name={ev.challengeType === '10_tirs' ? 'gps-fixed' : ev.challengeType === 'precision' ? 'stars' : 'flight-takeoff'} size={24} color={tc} />
+        </View>
+        <View style={styles.itemContent}>
+          <Text style={styles.itemTitle} numberOfLines={1}>{ev.title}</Text>
+          <View style={styles.itemMeta}>
+            <View style={styles.metaItem}>
+              <MaterialIcons name="event" size={12} color={theme.textMuted} />
+              <Text style={styles.metaText}>{evDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
+            </View>
+            {ev.ambassadorName ? (
+              <View style={styles.metaItem}>
+                <MaterialIcons name="verified" size={12} color="#7C3AED" />
+                <Text style={[styles.metaText, { color: '#7C3AED' }]}>{ev.ambassadorName}</Text>
+              </View>
+            ) : null}
+          </View>
+          <View style={styles.itemTags}>
+            <View style={[styles.tag, { backgroundColor: sc + '15' }]}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: sc }} />
+              <Text style={[styles.tagText, { color: sc }]}>
+                {isActive ? (language === 'fr' ? 'En cours' : 'Active') : ev.status === 'upcoming' ? (language === 'fr' ? 'A venir' : 'Upcoming') : ev.status === 'completed' ? (language === 'fr' ? 'Termine' : 'Done') : (language === 'fr' ? 'Annule' : 'Cancelled')}
+              </Text>
+            </View>
+            <View style={[styles.tag, { backgroundColor: tc + '12' }]}>
+              <Text style={[styles.tagText, { color: tc }]}>{challengeLabel}</Text>
+            </View>
+            <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}>
+              <MaterialIcons name="group" size={10} color={theme.textSecondary} />
+              <Text style={[styles.tagText, { color: theme.textSecondary }]}>{ev.maxParticipants}</Text>
+            </View>
+          </View>
+        </View>
+        <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
+      </Pressable>
+    );
+  };
+
   const getCurrentRenderItem = () => {
     switch (activeTab) {
       case 'players': return renderPlayer;
       case 'clubs': return renderClub;
       case 'terrains': return renderTerrain;
       case 'tournaments': return renderTournament;
+      case 'events': return renderEvent;
     }
   };
 
@@ -1088,6 +1170,7 @@ export default function DirectoryScreen() {
                 clubs: '/club/new',
                 terrains: '/terrain/new',
                 tournaments: '/tournament/new',
+                events: '/sponsored-event/new',
               };
               router.push(routes[activeTab] as any);
             }}

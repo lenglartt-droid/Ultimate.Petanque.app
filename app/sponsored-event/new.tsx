@@ -121,8 +121,8 @@ export default function NewSponsoredEventScreen() {
           <Text style={s.emptyTitle}>{language === 'fr' ? 'Acces reserve aux ambassadeurs' : 'Ambassadors only'}</Text>
           <Text style={s.emptyDesc}>
             {language === 'fr'
-              ? 'Seuls les ambassadeurs, sponsors et partenaires peuvent creer des defis sponsorises. Contactez l\'equipe pour devenir ambassadeur.'
-              : 'Only ambassadors, sponsors and partners can create sponsored challenges. Contact the team to become an ambassador.'}
+              ? 'Seuls les ambassadeurs, sponsors et partenaires peuvent creer des defis ambassadeurs. Contactez l\'equipe pour devenir ambassadeur.'
+              : 'Only ambassadors, sponsors and partners can create ambassador challenges. Contact the team to become an ambassador.'}
           </Text>
           <Pressable style={s.emptyBtn} onPress={() => router.push('/partners' as any)}>
             <MaterialIcons name="group" size={18} color="#FFF" />

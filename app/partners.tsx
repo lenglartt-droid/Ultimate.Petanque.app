@@ -21,7 +21,10 @@ import * as Haptics from 'expo-haptics';
 import theme, { blurhash } from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
-import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
+import { trackAmbassadorEvent, fetchDetailedBannerAnalytics, BannerDetailedAnalytics } from '@/services/ambassadorAnalyticsService';
+import { useAuth } from '@/template';
+import { getSupabaseClient } from '@/template';
+import Svg, { Polyline, Circle as SvgCircle } from 'react-native-svg';
 
 // Partner slot types
 interface PartnerSlot {
@@ -60,11 +63,64 @@ const SOCIAL_CONFIG: Record<string, { icon: string; color: string; bg: string; l
   website: { icon: 'language', color: '#6366F1', bg: '#6366F110', label: 'Web' },
 };
 
+// Mini Sparkline for ROI view
+function MiniSparkline({ data, width, height, color }: { data: number[]; width: number; height: number; color: string }) {
+  if (!data || data.length < 2) return null;
+  const max = Math.max(...data, 1);
+  const pad = 2;
+  const w = width - pad * 2;
+  const h = height - pad * 2;
+  const points = data.map((v, i) => {
+    const x = pad + (i / (data.length - 1)) * w;
+    const y = pad + h - (v / max) * h;
+    return `${x},${y}`;
+  }).join(' ');
+  const lastIdx = data.length - 1;
+  const lastX = pad + (lastIdx / (data.length - 1)) * w;
+  const lastY = pad + h - (data[lastIdx] / max) * h;
+  return (
+    <Svg width={width} height={height}>
+      <Polyline points={points} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      <SvgCircle cx={lastX} cy={lastY} r={3} fill={color} />
+    </Svg>
+  );
+}
+
 export default function PartnersScreen() {
   const insets = useSafeAreaInsets();
   const { t, language } = useLanguage();
+  const { user } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
+
+  // ROI view state for sponsors/partners
+  const [myAmbassadorRecord, setMyAmbassadorRecord] = useState<any | null>(null);
+  const [roiData, setRoiData] = useState<BannerDetailedAnalytics | null>(null);
+  const [roiPeriod, setRoiPeriod] = useState<7 | 30>(30);
+  const [roiLoading, setRoiLoading] = useState(false);
+  const [showRoi, setShowRoi] = useState(false);
+
+  // Load ambassador record for current user (only sponsors/partners get ROI view)
+  useEffect(() => {
+    if (!user?.id) return;
+    const supabase = getSupabaseClient();
+    supabase.from('ambassadors').select('*').eq('user_id', user.id).eq('is_active', true).maybeSingle().then(({ data }) => {
+      if (data && (data.badge_type === 'sponsor' || data.badge_type === 'partner')) {
+        setMyAmbassadorRecord(data);
+        setShowRoi(true);
+      }
+    });
+  }, [user?.id]);
+
+  // Load ROI data when ambassador record is available
+  useEffect(() => {
+    if (!myAmbassadorRecord?.id) return;
+    setRoiLoading(true);
+    fetchDetailedBannerAnalytics(myAmbassadorRecord.id, roiPeriod).then(({ data }) => {
+      setRoiData(data);
+      setRoiLoading(false);
+    });
+  }, [myAmbassadorRecord?.id, roiPeriod]);
   const [ambassadors, setAmbassadors] = useState<Ambassador[]>([]);
   const [ambassadorsLoading, setAmbassadorsLoading] = useState(true);
   const { scrollTo } = useLocalSearchParams<{ scrollTo?: string }>();
@@ -374,6 +430,91 @@ export default function PartnersScreen() {
           </LinearGradient>
         </Animated.View>
 
+        {/* ====== SPONSOR/PARTNER ROI VIEW ====== */}
+        {showRoi && myAmbassadorRecord ? (
+          <Animated.View entering={FadeInDown.duration(400).delay(80)} style={roiStyles.container}>
+            <View style={roiStyles.header}>
+              <View style={roiStyles.headerIcon}>
+                <MaterialIcons name={myAmbassadorRecord.badge_type === 'sponsor' ? 'campaign' : 'handshake'} size={20} color={myAmbassadorRecord.badge_type === 'sponsor' ? '#F59E0B' : '#8B5CF6'} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={roiStyles.headerTitle}>{language === 'fr' ? 'Votre visibilite' : 'Your visibility'}</Text>
+                <Text style={roiStyles.headerSub}>{myAmbassadorRecord.display_name}</Text>
+              </View>
+              <View style={roiStyles.periodRow}>
+                {([7, 30] as const).map(p => (
+                  <Pressable key={p} style={[roiStyles.periodChip, roiPeriod === p && roiStyles.periodChipActive]} onPress={() => { Haptics.selectionAsync(); setRoiPeriod(p); }}>
+                    <Text style={[roiStyles.periodChipText, roiPeriod === p && { color: '#FFF' }]}>{p}{language === 'fr' ? 'j' : 'd'}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+            {roiLoading ? (
+              <View style={{ alignItems: 'center', paddingVertical: 24 }}><ActivityIndicator size="small" color="#7C3AED" /></View>
+            ) : roiData ? (() => {
+              const dailyImp = roiData.dailyImpressions.slice(-roiPeriod);
+              const dailyClk = roiData.dailyClicks.slice(-roiPeriod);
+              const totalImp = dailyImp.reduce((s, v) => s + v, 0);
+              const totalClk = dailyClk.reduce((s, v) => s + v, 0);
+              const ctr = totalImp > 0 ? Math.round((totalClk / totalImp) * 1000) / 10 : 0;
+              const chartW = Math.min(screenWidth - 120, 200);
+              return (
+                <>
+                  <View style={roiStyles.kpiRow}>
+                    <View style={roiStyles.kpiCard}>
+                      <MaterialIcons name="visibility" size={16} color="#3B82F6" />
+                      <Text style={roiStyles.kpiValue}>{totalImp}</Text>
+                      <Text style={roiStyles.kpiLabel}>{language === 'fr' ? 'Impressions' : 'Impressions'}</Text>
+                    </View>
+                    <View style={roiStyles.kpiCard}>
+                      <MaterialIcons name="touch-app" size={16} color="#10B981" />
+                      <Text style={roiStyles.kpiValue}>{totalClk}</Text>
+                      <Text style={roiStyles.kpiLabel}>{language === 'fr' ? 'Clics' : 'Clicks'}</Text>
+                    </View>
+                    <View style={roiStyles.kpiCard}>
+                      <MaterialIcons name="percent" size={16} color="#F59E0B" />
+                      <Text style={[roiStyles.kpiValue, { color: '#F59E0B' }]}>{ctr}%</Text>
+                      <Text style={roiStyles.kpiLabel}>CTR</Text>
+                    </View>
+                    <View style={roiStyles.kpiCard}>
+                      <MaterialIcons name="people" size={16} color="#7C3AED" />
+                      <Text style={[roiStyles.kpiValue, { color: '#7C3AED' }]}>{roiData.uniqueViewers}</Text>
+                      <Text style={roiStyles.kpiLabel}>{language === 'fr' ? 'Portee' : 'Reach'}</Text>
+                    </View>
+                  </View>
+                  <View style={roiStyles.sparkRow}>
+                    <View style={roiStyles.sparkBlock}>
+                      <View style={roiStyles.sparkHeader}>
+                        <View style={[roiStyles.sparkDot, { backgroundColor: '#3B82F6' }]} />
+                        <Text style={roiStyles.sparkLabel}>{language === 'fr' ? 'Impressions' : 'Impressions'}</Text>
+                        <Text style={[roiStyles.sparkTotal, { color: '#3B82F6' }]}>{totalImp}</Text>
+                      </View>
+                      <MiniSparkline data={dailyImp} width={chartW} height={36} color="#3B82F6" />
+                    </View>
+                    <View style={roiStyles.sparkBlock}>
+                      <View style={roiStyles.sparkHeader}>
+                        <View style={[roiStyles.sparkDot, { backgroundColor: '#10B981' }]} />
+                        <Text style={roiStyles.sparkLabel}>{language === 'fr' ? 'Clics' : 'Clicks'}</Text>
+                        <Text style={[roiStyles.sparkTotal, { color: '#10B981' }]}>{totalClk}</Text>
+                      </View>
+                      <MiniSparkline data={dailyClk} width={chartW} height={36} color="#10B981" />
+                    </View>
+                  </View>
+                  <Pressable style={roiStyles.portalLink} onPress={() => router.push('/ambassador-dashboard' as any)}>
+                    <MaterialIcons name="dashboard" size={16} color="#7C3AED" />
+                    <Text style={roiStyles.portalLinkText}>{language === 'fr' ? 'Voir le portail complet' : 'View full portal'}</Text>
+                    <MaterialIcons name="chevron-right" size={16} color="#7C3AED" />
+                  </Pressable>
+                </>
+              );
+            })() : (
+              <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                <Text style={{ fontSize: 13, color: theme.textMuted }}>{language === 'fr' ? 'Aucune donnee' : 'No data'}</Text>
+              </View>
+            )}
+          </Animated.View>
+        ) : null}
+
         {/* ====== AMBASSADOR LEADERBOARD ====== */}
         {!ambassadorsLoading && rankedAmbassadors.length >= 2 ? (
           <Animated.View entering={FadeInDown.duration(450).delay(100)} style={styles.podiumSection}>
@@ -614,6 +755,30 @@ export default function PartnersScreen() {
     </SafeAreaView>
   );
 }
+
+const roiStyles = StyleSheet.create({
+  container: { marginHorizontal: 16, marginTop: 20, backgroundColor: '#FFF', borderRadius: 20, padding: 18, borderWidth: 1.5, borderColor: '#7C3AED20', ...Platform.select({ ios: { shadowColor: '#7C3AED', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 }, android: { elevation: 2 }, default: {} }) },
+  header: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 14 },
+  headerIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#7C3AED12', alignItems: 'center' as const, justifyContent: 'center' as const },
+  headerTitle: { fontSize: 16, fontWeight: '700' as const, color: '#0F172A' },
+  headerSub: { fontSize: 12, color: '#7C3AED', fontWeight: '600' as const, marginTop: 1 },
+  periodRow: { flexDirection: 'row' as const, gap: 4 },
+  periodChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
+  periodChipActive: { backgroundColor: '#7C3AED', borderColor: '#7C3AED' },
+  periodChipText: { fontSize: 12, fontWeight: '700' as const, color: '#64748B' },
+  kpiRow: { flexDirection: 'row' as const, gap: 8, marginBottom: 14 },
+  kpiCard: { flex: 1, alignItems: 'center' as const, backgroundColor: '#F8FAFC', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 4, borderWidth: 1, borderColor: '#E2E8F0' },
+  kpiValue: { fontSize: 20, fontWeight: '900' as const, color: '#0F172A', marginTop: 4 },
+  kpiLabel: { fontSize: 9, fontWeight: '600' as const, color: '#94A3B8', marginTop: 2, textTransform: 'uppercase' as const },
+  sparkRow: { flexDirection: 'row' as const, gap: 10, marginBottom: 12 },
+  sparkBlock: { flex: 1, backgroundColor: '#F8FAFC', borderRadius: 12, padding: 10, borderWidth: 1, borderColor: '#E2E8F0' },
+  sparkHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginBottom: 6 },
+  sparkDot: { width: 8, height: 8, borderRadius: 4 },
+  sparkLabel: { flex: 1, fontSize: 11, fontWeight: '600' as const, color: '#334155' },
+  sparkTotal: { fontSize: 13, fontWeight: '800' as const },
+  portalLink: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, paddingVertical: 10, backgroundColor: '#7C3AED0A', borderRadius: 12, borderWidth: 1, borderColor: '#7C3AED18' },
+  portalLinkText: { fontSize: 13, fontWeight: '600' as const, color: '#7C3AED' },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F3FF' },
