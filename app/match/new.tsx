@@ -2136,7 +2136,7 @@ export default function NewMatchScreen() {
                     <View key={p.playerId} style={styles.playerActionCard}>
                       <View style={styles.playerActionHeader}>
                         <View style={[styles.playerActionDot, { backgroundColor: isTeamA ? theme.primary : theme.accent }]} />
-                        <Text style={styles.playerActionName}>{getPlayerName(p.playerId)}</Text>
+                        <Text style={styles.playerActionName} numberOfLines={2}>{getPlayerName(p.playerId)}</Text>
                         <View style={styles.playerActionStats}>
                           <Text style={styles.playerActionStat}>T: {stats.tirsSuccess}/{stats.tirs}</Text>
                           <Text style={styles.playerActionStat}>P: {stats.pointsSuccess}/{stats.points}</Text>
@@ -2684,12 +2684,12 @@ const styles = StyleSheet.create({
   meneHistorySep: { fontSize: 10, color: theme.textMuted },
   meneHistoryNull: { fontSize: 12, color: theme.warning },
   playerActionCard: { backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, padding: 12, marginBottom: 10 },
-  playerActionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  playerActionHeader: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginBottom: 10, rowGap: 4 },
   playerActionDot: { width: 8, height: 8, borderRadius: 4, marginRight: 10 },
-  playerActionName: { flex: 1, fontSize: 14, fontWeight: '500', color: theme.textPrimary },
+  playerActionName: { flexShrink: 1, minWidth: 60, fontSize: 14, fontWeight: '500', color: theme.textPrimary },
   playerActionStats: { flexDirection: 'row', gap: 12 },
   playerActionStat: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
-  playerNotationBtns: { flexDirection: 'row', gap: 8 },
+  playerNotationBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   playerNotationBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: theme.borderRadius.sm },
   playerNotationBtnText: { fontSize: 12, fontWeight: '600', color: '#FFF' },
   searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, marginHorizontal: 16, marginVertical: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: theme.borderRadius.md, gap: 10 },
