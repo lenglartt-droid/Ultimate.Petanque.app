@@ -368,9 +368,9 @@ export default function AmbassadorDashboardScreen() {
 
             {/* Quick Links */}
             <View style={s.quickLinksRow}>
-              <Pressable style={s.quickLink} onPress={() => router.push('/partners' as any)}>
+              <Pressable style={s.quickLink} onPress={() => router.push('/ambassadors' as any)}>
                 <MaterialIcons name="group" size={20} color="#7C3AED" />
-                <Text style={s.quickLinkText}>{fr ? 'Page partenaires' : 'Partners page'}</Text>
+                <Text style={s.quickLinkText}>{fr ? 'Nos ambassadeurs' : 'Our ambassadors'}</Text>
               </Pressable>
               <Pressable style={s.quickLink} onPress={() => router.push('/sponsored-event/new' as any)}>
                 <MaterialIcons name="add-circle" size={20} color="#10B981" />

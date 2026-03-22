@@ -651,7 +651,7 @@ export default function HomeScreen() {
               <View style={s.ambassadorIcon}><MaterialIcons name="verified" size={16} color="#7C3AED" /></View>
               <Text style={s.sectionTitle}>{language === 'fr' ? 'Ambassadeurs' : 'Ambassadors'}</Text>
               <View style={{ flex: 1 }} />
-              <Pressable style={s.seeAllBtn} onPress={() => router.push('/partners' as any)}>
+              <Pressable style={s.seeAllBtn} onPress={() => router.push('/ambassadors' as any)}>
                 <Text style={[s.seeAllText, { color: '#7C3AED' }]}>{t('common', 'seeAll')}</Text>
                 <MaterialIcons name="chevron-right" size={16} color="#7C3AED" />
               </Pressable>
@@ -673,7 +673,7 @@ export default function HomeScreen() {
                   <Pressable
                     key={amb.id}
                     style={[s.bannerSlide, { width: screenWidth - 32 }]}
-                    onPress={() => amb.playerId ? router.push(`/player/${amb.playerId}` as any) : router.push({ pathname: '/partners', params: { scrollTo: amb.id } } as any)}
+                    onPress={() => amb.playerId ? router.push(`/player/${amb.playerId}` as any) : router.push({ pathname: '/ambassadors', params: { scrollTo: amb.id } } as any)}
                   >
                     <LinearGradient colors={['#7C3AED', '#9333EA', '#A855F7']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.bannerGradient}>
                       <View style={s.bannerSponsorTag}><MaterialIcons name="campaign" size={10} color="rgba(255,255,255,0.7)" /><Text style={s.bannerSponsorText}>{language === 'fr' ? 'Ambassadeur' : 'Ambassador'}</Text></View>

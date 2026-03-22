@@ -20,8 +20,7 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme, { blurhash } from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
-import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
-import { trackAmbassadorEvent, fetchDetailedBannerAnalytics, BannerDetailedAnalytics } from '@/services/ambassadorAnalyticsService';
+import { fetchDetailedBannerAnalytics, BannerDetailedAnalytics } from '@/services/ambassadorAnalyticsService';
 import { useAuth } from '@/template';
 import { getSupabaseClient } from '@/template';
 import Svg, { Polyline, Circle as SvgCircle } from 'react-native-svg';
@@ -121,12 +120,7 @@ export default function PartnersScreen() {
       setRoiLoading(false);
     });
   }, [myAmbassadorRecord?.id, roiPeriod]);
-  const [ambassadors, setAmbassadors] = useState<Ambassador[]>([]);
-  const [ambassadorsLoading, setAmbassadorsLoading] = useState(true);
-  const { scrollTo } = useLocalSearchParams<{ scrollTo?: string }>();
   const scrollViewRef = React.useRef<ScrollView>(null);
-  const ambassadorPositions = React.useRef<Record<string, number>>({});
-  const [rankingTab, setRankingTab] = useState<'matches' | 'winRate' | 'engagement'>('matches');
 
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
@@ -134,186 +128,14 @@ export default function PartnersScreen() {
   }, []);
   const isTablet = screenWidth >= 600;
 
-  const loadAmbassadors = useCallback(async () => {
-    const { ambassadors: data } = await fetchAmbassadors();
-    setAmbassadors(data);
-    setAmbassadorsLoading(false);
-  }, []);
-
-  useEffect(() => { loadAmbassadors(); }, [loadAmbassadors]);
-
-  // Auto-scroll to ambassador when scrollTo param is set
-  useEffect(() => {
-    if (scrollTo && !ambassadorsLoading && ambassadors.length > 0) {
-      setTimeout(() => {
-        const y = ambassadorPositions.current[scrollTo];
-        if (y !== undefined && scrollViewRef.current) {
-          scrollViewRef.current.scrollTo({ y: y - 20, animated: true });
-        }
-      }, 500);
-    }
-  }, [scrollTo, ambassadorsLoading, ambassadors]);
-
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadAmbassadors();
     setRefreshing(false);
   };
-
-  const handleSocialPress = (amb: Ambassador, platform: string, url: string) => {
-    Haptics.selectionAsync();
-    trackAmbassadorEvent(amb.id, 'social_click', platform);
-    Linking.openURL(url);
-  };
-
-  // Ranked ambassadors for podium
-  const rankedAmbassadors = useMemo(() => {
-    if (ambassadors.length < 2) return [];
-    const withScore = ambassadors.map(amb => {
-      const socialCount = [amb.youtubeUrl, amb.tiktokUrl, amb.instagramHandle, amb.twitterHandle, amb.websiteUrl].filter(Boolean).length;
-      let score = 0;
-      let displayValue = '';
-      switch (rankingTab) {
-        case 'matches': score = amb.stats?.matchesPlayed || 0; displayValue = `${score}`; break;
-        case 'winRate': score = amb.stats?.winRate || 0; displayValue = `${score}%`; break;
-        case 'engagement': score = socialCount; displayValue = `${score}`; break;
-      }
-      return { ...amb, score, displayValue, socialCount };
-    });
-    return withScore.sort((a, b) => b.score - a.score).slice(0, 3);
-  }, [ambassadors, rankingTab]);
 
   const goldSlots = PARTNER_SLOTS.filter(s => s.category === 'gold');
   const silverSlots = PARTNER_SLOTS.filter(s => s.category === 'silver');
   const bronzeSlots = PARTNER_SLOTS.filter(s => s.category === 'bronze');
-
-  const renderSocialChips = (amb: Ambassador) => {
-    const links: { platform: string; url: string; label: string }[] = [];
-    if (amb.youtubeUrl) links.push({ platform: 'youtube', url: amb.youtubeUrl, label: 'YouTube' });
-    if (amb.tiktokUrl) links.push({ platform: 'tiktok', url: amb.tiktokUrl, label: 'TikTok' });
-    if (amb.instagramHandle) {
-      const handle = amb.instagramHandle.replace('@', '');
-      links.push({ platform: 'instagram', url: `https://instagram.com/${handle}`, label: `@${handle}` });
-    }
-    if (amb.twitterHandle) {
-      const handle = amb.twitterHandle.replace('@', '');
-      links.push({ platform: 'twitter', url: `https://x.com/${handle}`, label: amb.twitterHandle });
-    }
-    if (amb.websiteUrl) {
-      const url = amb.websiteUrl.startsWith('http') ? amb.websiteUrl : `https://${amb.websiteUrl}`;
-      links.push({ platform: 'website', url, label: 'Web' });
-    }
-    if (links.length === 0) return null;
-    return (
-      <View style={styles.socialRow}>
-        {links.map((link) => {
-          const cfg = SOCIAL_CONFIG[link.platform];
-          return (
-            <Pressable
-              key={link.platform}
-              style={({ pressed }) => [styles.socialChip, { backgroundColor: cfg.bg, borderColor: cfg.color + '18' }, pressed && { opacity: 0.75, transform: [{ scale: 0.96 }] }]}
-              onPress={() => handleSocialPress(amb, link.platform, link.url)}
-            >
-              <MaterialIcons name={cfg.icon as any} size={14} color={cfg.color} />
-              <Text style={[styles.socialChipText, { color: cfg.color }]} numberOfLines={1}>{link.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-    );
-  };
-
-  const renderAmbassadorCard = (amb: Ambassador, index: number) => (
-    <Animated.View
-      key={amb.id}
-      entering={FadeInDown.duration(450).delay(80 + index * 100)}
-      onLayout={(e) => { ambassadorPositions.current[amb.id] = e.nativeEvent.layout.y; }}
-    >
-      <Pressable
-        style={({ pressed }) => [styles.ambCard, pressed && { transform: [{ scale: 0.985 }], opacity: 0.95 }, scrollTo === amb.id && styles.ambCardHighlight]}
-        onPress={() => { trackAmbassadorEvent(amb.id, 'profile_view'); if (amb.playerId) router.push(`/player/${amb.playerId}` as any); }}
-      >
-        {/* Top gradient accent bar */}
-        <LinearGradient
-          colors={['#7C3AED', '#A855F7']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.ambAccentBar}
-        />
-
-        {/* Header: Photo + Name + Badge */}
-        <View style={styles.ambHeader}>
-          <View style={styles.ambAvatarWrap}>
-            {amb.photo ? (
-              <Image source={{ uri: amb.photo }} style={styles.ambAvatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
-            ) : (
-              <LinearGradient colors={['#7C3AED', '#A855F7']} style={[styles.ambAvatar, { alignItems: 'center', justifyContent: 'center' }]}>
-                <Text style={styles.ambAvatarLetter}>{amb.displayName.charAt(0)}</Text>
-              </LinearGradient>
-            )}
-            <View style={styles.ambVerifiedBadge}>
-              <MaterialIcons name="verified" size={14} color="#FFF" />
-            </View>
-          </View>
-
-          <View style={styles.ambInfo}>
-            <Text style={styles.ambName} numberOfLines={1}>{amb.displayName}</Text>
-            <View style={styles.ambBadgeRow}>
-              <View style={styles.ambBadgePill}>
-                <MaterialIcons name="verified" size={10} color="#7C3AED" />
-                <Text style={styles.ambBadgePillText}>{language === 'fr' ? 'Ambassadeur' : 'Ambassador'}</Text>
-              </View>
-            </View>
-            {(amb.role || amb.club || amb.city) ? (
-              <Text style={styles.ambMeta} numberOfLines={1}>
-                {[amb.role ? t('roles', amb.role) : null, amb.club, amb.city].filter(Boolean).join(' \u2022 ')}
-              </Text>
-            ) : null}
-          </View>
-
-          {/* CTA arrow */}
-          {amb.playerId ? (
-            <View style={styles.ambArrowBtn}>
-              <MaterialIcons name="arrow-forward" size={18} color="#7C3AED" />
-            </View>
-          ) : null}
-        </View>
-
-        {/* Bio */}
-        {amb.bio ? (
-          <Text style={styles.ambBio} numberOfLines={3}>{amb.bio}</Text>
-        ) : null}
-
-        {/* Stats Row */}
-        {amb.stats ? (
-          <View style={styles.ambStatsRow}>
-            <View style={styles.ambStatItem}>
-              <Text style={[styles.ambStatValue, { color: theme.success }]}>{amb.stats.winRate}%</Text>
-              <Text style={styles.ambStatLabel}>{language === 'fr' ? 'Victoires' : 'Win rate'}</Text>
-            </View>
-            <View style={styles.ambStatDivider} />
-            <View style={styles.ambStatItem}>
-              <Text style={styles.ambStatValue}>{amb.stats.matchesPlayed}</Text>
-              <Text style={styles.ambStatLabel}>{t('leaderboard', 'matches')}</Text>
-            </View>
-            <View style={styles.ambStatDivider} />
-            <View style={styles.ambStatItem}>
-              <Text style={[styles.ambStatValue, { color: theme.tirColor }]}>{amb.stats.tirRate > 0 ? `${amb.stats.tirRate}%` : '-'}</Text>
-              <Text style={styles.ambStatLabel}>Tir</Text>
-            </View>
-            <View style={styles.ambStatDivider} />
-            <View style={styles.ambStatItem}>
-              <Text style={[styles.ambStatValue, { color: theme.carreauColor }]}>{amb.stats.carreauRate > 0 ? `${amb.stats.carreauRate}%` : '-'}</Text>
-              <Text style={styles.ambStatLabel}>Carreau</Text>
-            </View>
-          </View>
-        ) : null}
-
-        {/* Social Links */}
-        {renderSocialChips(amb)}
-      </Pressable>
-    </Animated.View>
-  );
 
   const renderPartnerCategory = (
     slots: PartnerSlot[],
@@ -379,8 +201,8 @@ export default function PartnersScreen() {
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <View style={styles.headerCenter}>
-          <MaterialIcons name="verified" size={18} color="#7C3AED" />
-          <Text style={styles.headerTitle}>{language === 'fr' ? 'Ambassadeurs & Partenaires' : 'Ambassadors & Partners'}</Text>
+          <MaterialIcons name="handshake" size={18} color={theme.primary} />
+          <Text style={styles.headerTitle}>{language === 'fr' ? 'Nos Partenaires' : 'Our Partners'}</Text>
         </View>
         <View style={{ width: 40 }} />
       </View>
@@ -395,37 +217,38 @@ export default function PartnersScreen() {
         {/* ====== HERO SECTION ====== */}
         <Animated.View entering={FadeInDown.duration(500)}>
           <LinearGradient
-            colors={['#5B21B6', '#7C3AED', '#A855F7']}
+            colors={['#1E3A8A', '#2563EB', '#3B82F6']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.heroGradient}
           >
-            {/* Decorative circles */}
             <View style={styles.heroDecoCircle1} />
             <View style={styles.heroDecoCircle2} />
-
             <View style={styles.heroContent}>
               <View style={styles.heroIconWrap}>
-                <MaterialIcons name="verified" size={32} color="#FFF" />
+                <MaterialIcons name="handshake" size={32} color="#FFF" />
               </View>
-              <Text style={styles.heroTitle}>{language === 'fr' ? 'Nos Ambassadeurs' : 'Our Ambassadors'}</Text>
+              <Text style={styles.heroTitle}>{language === 'fr' ? 'Nos Partenaires' : 'Our Partners'}</Text>
               <Text style={styles.heroSubtitle}>
                 {language === 'fr'
-                  ? 'Les passionnes qui representent la communaute Ultimate Petanque'
-                  : 'The enthusiasts who represent the Ultimate Petanque community'}
+                  ? 'Soutenez la communaute Ultimate Petanque en devenant partenaire ou sponsor'
+                  : 'Support the Ultimate Petanque community by becoming a partner or sponsor'}
               </Text>
-
-              {/* Stats pills */}
               <View style={styles.heroPillsRow}>
-                <View style={styles.heroPill}>
-                  <MaterialIcons name="people" size={14} color="rgba(255,255,255,0.9)" />
-                  <Text style={styles.heroPillText}>{ambassadors.length} {language === 'fr' ? 'ambassadeurs' : 'ambassadors'}</Text>
-                </View>
                 <View style={styles.heroPill}>
                   <MaterialIcons name="handshake" size={14} color="rgba(255,255,255,0.9)" />
                   <Text style={styles.heroPillText}>{PARTNER_SLOTS.length} {language === 'fr' ? 'emplacements' : 'slots'}</Text>
                 </View>
               </View>
+              {/* Link to ambassadors page */}
+              <Pressable
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, marginTop: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' }}
+                onPress={() => router.push('/ambassadors' as any)}
+              >
+                <MaterialIcons name="verified" size={16} color="rgba(255,255,255,0.9)" />
+                <Text style={{ fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.9)' }}>{language === 'fr' ? 'Voir nos ambassadeurs' : 'View our ambassadors'}</Text>
+                <MaterialIcons name="chevron-right" size={16} color="rgba(255,255,255,0.7)" />
+              </Pressable>
             </View>
           </LinearGradient>
         </Animated.View>
@@ -515,165 +338,6 @@ export default function PartnersScreen() {
           </Animated.View>
         ) : null}
 
-        {/* ====== AMBASSADOR LEADERBOARD ====== */}
-        {!ambassadorsLoading && rankedAmbassadors.length >= 2 ? (
-          <Animated.View entering={FadeInDown.duration(450).delay(100)} style={styles.podiumSection}>
-            {/* Section label */}
-            <View style={styles.sectionLabel}>
-              <View style={styles.sectionLabelLine} />
-              <Text style={styles.sectionLabelText}>{language === 'fr' ? 'CLASSEMENT' : 'RANKINGS'}</Text>
-              <View style={styles.sectionLabelLine} />
-            </View>
-
-            {/* Ranking tabs */}
-            <View style={styles.podiumTabs}>
-              {([
-                { key: 'matches' as const, label: language === 'fr' ? 'Matchs' : 'Matches', icon: 'sports' },
-                { key: 'winRate' as const, label: language === 'fr' ? 'Victoires' : 'Win Rate', icon: 'emoji-events' },
-                { key: 'engagement' as const, label: language === 'fr' ? 'Reseaux' : 'Social', icon: 'share' },
-              ]).map(tab => {
-                const isActive = rankingTab === tab.key;
-                return (
-                  <Pressable
-                    key={tab.key}
-                    style={[styles.podiumTab, isActive && styles.podiumTabActive]}
-                    onPress={() => { Haptics.selectionAsync(); setRankingTab(tab.key); }}
-                  >
-                    <MaterialIcons name={tab.icon as any} size={14} color={isActive ? '#FFF' : '#7C3AED'} />
-                    <Text style={[styles.podiumTabText, isActive && styles.podiumTabTextActive]}>{tab.label}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            {/* Podium */}
-            <View style={styles.podiumRow}>
-              {/* 2nd place (left) */}
-              {rankedAmbassadors[1] ? (
-                <Animated.View entering={FadeInDown.duration(500).delay(250)} style={styles.podiumCol}>
-                  <Pressable
-                    style={styles.podiumCard}
-                    onPress={() => rankedAmbassadors[1].playerId ? router.push(`/player/${rankedAmbassadors[1].playerId}` as any) : null}
-                  >
-                    <View style={[styles.podiumBar, styles.podiumBarSilver]}>
-                      <Text style={styles.podiumRank}>2</Text>
-                    </View>
-                    <View style={styles.podiumAvatarWrap}>
-                      {rankedAmbassadors[1].photo ? (
-                        <Image source={{ uri: rankedAmbassadors[1].photo }} style={styles.podiumAvatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
-                      ) : (
-                        <LinearGradient colors={['#90A4AE', '#78909C']} style={[styles.podiumAvatar, { alignItems: 'center', justifyContent: 'center' }]}>
-                          <Text style={styles.podiumAvatarLetter}>{rankedAmbassadors[1].displayName.charAt(0)}</Text>
-                        </LinearGradient>
-                      )}
-                    </View>
-                    <Text style={styles.podiumName} numberOfLines={1}>{rankedAmbassadors[1].displayName}</Text>
-                    <Text style={[styles.podiumValue, { color: '#78909C' }]}>{rankedAmbassadors[1].displayValue}</Text>
-                    <Text style={styles.podiumMetric}>
-                      {rankingTab === 'matches' ? (language === 'fr' ? 'matchs' : 'matches') : rankingTab === 'winRate' ? (language === 'fr' ? 'victoires' : 'win rate') : (language === 'fr' ? 'reseaux' : 'social')}
-                    </Text>
-                  </Pressable>
-                </Animated.View>
-              ) : null}
-
-              {/* 1st place (center, taller) */}
-              {rankedAmbassadors[0] ? (
-                <Animated.View entering={FadeInDown.duration(500).delay(150)} style={[styles.podiumCol, styles.podiumColGold]}>
-                  <Pressable
-                    style={styles.podiumCard}
-                    onPress={() => rankedAmbassadors[0].playerId ? router.push(`/player/${rankedAmbassadors[0].playerId}` as any) : null}
-                  >
-                    <View style={[styles.podiumBar, styles.podiumBarGold]}>
-                      <MaterialIcons name="emoji-events" size={18} color="#FFF" />
-                      <Text style={styles.podiumRank}>1</Text>
-                    </View>
-                    <View style={[styles.podiumAvatarWrap, styles.podiumAvatarWrapGold]}>
-                      {rankedAmbassadors[0].photo ? (
-                        <Image source={{ uri: rankedAmbassadors[0].photo }} style={styles.podiumAvatarGold} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
-                      ) : (
-                        <LinearGradient colors={['#F9E547', '#D4A017']} style={[styles.podiumAvatarGold, { alignItems: 'center', justifyContent: 'center' }]}>
-                          <Text style={[styles.podiumAvatarLetter, { fontSize: 24 }]}>{rankedAmbassadors[0].displayName.charAt(0)}</Text>
-                        </LinearGradient>
-                      )}
-                    </View>
-                    <Text style={[styles.podiumName, { fontSize: 14, fontWeight: '800' }]} numberOfLines={1}>{rankedAmbassadors[0].displayName}</Text>
-                    <Text style={[styles.podiumValue, { color: '#D4A017', fontSize: 22 }]}>{rankedAmbassadors[0].displayValue}</Text>
-                    <Text style={styles.podiumMetric}>
-                      {rankingTab === 'matches' ? (language === 'fr' ? 'matchs' : 'matches') : rankingTab === 'winRate' ? (language === 'fr' ? 'victoires' : 'win rate') : (language === 'fr' ? 'reseaux' : 'social')}
-                    </Text>
-                  </Pressable>
-                </Animated.View>
-              ) : null}
-
-              {/* 3rd place (right) */}
-              {rankedAmbassadors[2] ? (
-                <Animated.View entering={FadeInDown.duration(500).delay(350)} style={styles.podiumCol}>
-                  <Pressable
-                    style={styles.podiumCard}
-                    onPress={() => rankedAmbassadors[2].playerId ? router.push(`/player/${rankedAmbassadors[2].playerId}` as any) : null}
-                  >
-                    <View style={[styles.podiumBar, styles.podiumBarBronze]}>
-                      <Text style={styles.podiumRank}>3</Text>
-                    </View>
-                    <View style={styles.podiumAvatarWrap}>
-                      {rankedAmbassadors[2].photo ? (
-                        <Image source={{ uri: rankedAmbassadors[2].photo }} style={styles.podiumAvatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
-                      ) : (
-                        <LinearGradient colors={['#D7CCC8', '#A1887F']} style={[styles.podiumAvatar, { alignItems: 'center', justifyContent: 'center' }]}>
-                          <Text style={styles.podiumAvatarLetter}>{rankedAmbassadors[2].displayName.charAt(0)}</Text>
-                        </LinearGradient>
-                      )}
-                    </View>
-                    <Text style={styles.podiumName} numberOfLines={1}>{rankedAmbassadors[2].displayName}</Text>
-                    <Text style={[styles.podiumValue, { color: '#A1887F' }]}>{rankedAmbassadors[2].displayValue}</Text>
-                    <Text style={styles.podiumMetric}>
-                      {rankingTab === 'matches' ? (language === 'fr' ? 'matchs' : 'matches') : rankingTab === 'winRate' ? (language === 'fr' ? 'victoires' : 'win rate') : (language === 'fr' ? 'reseaux' : 'social')}
-                    </Text>
-                  </Pressable>
-                </Animated.View>
-              ) : null}
-            </View>
-          </Animated.View>
-        ) : null}
-
-        {/* ====== AMBASSADORS SECTION ====== */}
-        {ambassadorsLoading ? (
-          <View style={styles.loadingState}>
-            <ActivityIndicator size="large" color="#7C3AED" />
-            <Text style={styles.loadingText}>{language === 'fr' ? 'Chargement...' : 'Loading...'}</Text>
-          </View>
-        ) : ambassadors.length > 0 ? (
-          <View style={styles.ambSection}>
-            {/* Section label */}
-            <Animated.View entering={FadeIn.duration(300).delay(60)} style={styles.sectionLabel}>
-              <View style={styles.sectionLabelLine} />
-              <Text style={styles.sectionLabelText}>{language === 'fr' ? 'AMBASSADEURS' : 'AMBASSADORS'}</Text>
-              <View style={styles.sectionLabelLine} />
-            </Animated.View>
-
-            {ambassadors.map((amb, idx) => renderAmbassadorCard(amb, idx))}
-          </View>
-        ) : (
-          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.ambEmptyState}>
-            <View style={styles.ambEmptyIconBg}>
-              <MaterialIcons name="verified" size={40} color="#7C3AED" />
-            </View>
-            <Text style={styles.ambEmptyTitle}>{language === 'fr' ? 'Bientot disponible' : 'Coming soon'}</Text>
-            <Text style={styles.ambEmptyDesc}>
-              {language === 'fr'
-                ? 'Notre programme ambassadeur est en cours de lancement.'
-                : 'Our ambassador program is launching soon.'}
-            </Text>
-            <Pressable
-              style={({ pressed }) => [styles.ambEmptyBtn, pressed && { opacity: 0.85 }]}
-              onPress={() => { Haptics.selectionAsync(); Linking.openURL('mailto:ultimate.petanque.app@gmail.com?subject=Programme%20Ambassadeur%20Ultimate%20Petanque'); }}
-            >
-              <MaterialIcons name="email" size={16} color="#FFF" />
-              <Text style={styles.ambEmptyBtnText}>{language === 'fr' ? 'Devenir ambassadeur' : 'Become an ambassador'}</Text>
-            </Pressable>
-          </Animated.View>
-        )}
-
         {/* ====== PARTNERS SECTION ====== */}
         <View style={styles.partnersSection}>
           {/* Section label */}
@@ -718,12 +382,12 @@ export default function PartnersScreen() {
                 <MaterialIcons name="campaign" size={28} color="#FFF" />
               </View>
               <Text style={styles.ctaTitle}>
-                {language === 'fr' ? 'Rejoignez l\'aventure' : 'Join the adventure'}
+                {language === 'fr' ? 'Devenez partenaire' : 'Become a partner'}
               </Text>
               <Text style={styles.ctaDescription}>
                 {language === 'fr'
-                  ? 'Devenez ambassadeur ou partenaire et gagnez en visibilite aupres de la communaute petanque.'
-                  : 'Become an ambassador or partner and gain visibility within the petanque community.'}
+                  ? 'Devenez partenaire ou sponsor et gagnez en visibilite aupres de la communaute petanque.'
+                  : 'Become a partner or sponsor and gain visibility within the petanque community.'}
               </Text>
 
               <View style={styles.ctaBenefits}>

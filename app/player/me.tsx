@@ -409,7 +409,7 @@ export default function MyPlayerCardScreen() {
               {ambassadorData ? (
                 <Pressable
                   style={s.ambPageBtn}
-                  onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/partners', params: { scrollTo: ambassadorData.id } } as any); }}
+                  onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/ambassadors', params: { scrollTo: ambassadorData.id } } as any); }}
                 >
                   <MaterialIcons name="verified" size={16} color="#7C3AED" />
                   <Text style={s.ambPageBtnText}>{language === 'fr' ? 'Voir la page ambassadeur' : 'View ambassador page'}</Text>

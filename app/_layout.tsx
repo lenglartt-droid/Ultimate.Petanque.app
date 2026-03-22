@@ -382,6 +382,13 @@ function LayoutInner() {
                 }} 
               />
               <Stack.Screen 
+                name="ambassadors" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="admin-promos" 
                 options={{ 
                   presentation: 'card',
