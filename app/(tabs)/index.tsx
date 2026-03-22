@@ -672,9 +672,90 @@ export default function HomeScreen() {
 
 
 
+        {/* ========== COMMUNITY LEADERBOARD ========== */}
+        <Animated.View
+          entering={FadeIn.duration(400).delay(170)}
+          style={[styles.section, isTablet && styles.sectionTablet]}
+
+        >
+          <CommunityLeaderboard />
+        </Animated.View>
+
+        {/* ========== QUICK ACCESS GRID ========== */}
+        <Animated.View entering={FadeIn.duration(400).delay(190)} style={[styles.section, isTablet && styles.sectionTablet]}>
+          <Text style={styles.sectionTitle}>{t('home', 'quickAccess')}</Text>
+          <View style={styles.quickGrid}>
+            {[
+              { label: t('home', 'player'), icon: 'person-add' as keyof typeof MaterialIcons.glyphMap, bg: theme.primary, route: '/player/new' },
+              { label: t('home', 'tournament'), icon: 'add-circle' as keyof typeof MaterialIcons.glyphMap, bg: theme.carreauColor, route: '/tournament/new' },
+              { label: t('home', 'terrain'), icon: 'sports-soccer' as keyof typeof MaterialIcons.glyphMap, bg: theme.accent, route: '/terrain/new' },
+              { label: t('home', 'club'), icon: 'add-home' as keyof typeof MaterialIcons.glyphMap, bg: theme.success, route: '/club/new' },
+            ].map((q, i) => (
+              <Pressable key={i} style={({ pressed }) => [styles.quickItem, pressed && styles.quickItemPressed]} onPress={() => router.push(q.route as any)}>
+                <View style={[styles.quickIcon, { backgroundColor: q.bg }]}>
+                  <MaterialIcons name={q.icon} size={22} color="#FFF" />
+                </View>
+                <Text style={styles.quickLabel}>{q.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </Animated.View>
+
+        {/* ========== COMPACT HISTORY ========== */}
+        {recentResults.length > 0 ? (
+          <Animated.View entering={FadeIn.duration(400).delay(260)} style={[styles.section, isTablet && styles.sectionTablet, { zIndex: 0 }]}>
+            <View style={styles.historyHeaderRow}>
+              <View style={styles.historyHeaderLeft}>
+                <MaterialIcons name="history" size={20} color={theme.primary} />
+                <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>{t('history', 'history')}</Text>
+              </View>
+              <Pressable onPress={() => router.push('/history')} style={styles.historySeeAllBtn}>
+                <Text style={styles.seeAllBtn}>{t('common', 'seeAll')}</Text>
+                <MaterialIcons name="chevron-right" size={16} color={theme.primary} />
+              </Pressable>
+            </View>
+            <View style={styles.historyCompactList}>
+              {recentResults.map((item, idx) => {
+                const d = new Date(item.date);
+                const isLast = idx === recentResults.length - 1;
+                return (
+                  <Pressable
+                    key={item.id}
+                    style={({ pressed }) => [styles.hcRow, !isLast && styles.hcRowBorder, pressed && { opacity: 0.75, backgroundColor: theme.backgroundSecondary }]}
+                    onPress={() => item.type === 'match' ? router.push({ pathname: '/history', params: { openMatchId: item.id } }) : router.push({ pathname: '/history', params: { openChallengeId: item.id } })}
+                  >
+                    <View style={[styles.hcDot, { backgroundColor: resultColor(item.result) }]} />
+                    <View style={[styles.hcTypeIcon, { backgroundColor: (item.type === 'match' ? theme.primary : theme.accent) + '12' }]}>
+                      <MaterialIcons name={item.icon} size={14} color={item.type === 'match' ? theme.primary : theme.accent} />
+                    </View>
+                    <View style={styles.hcInfo}>
+                      <Text style={styles.hcTitle} numberOfLines={1}>{item.title}</Text>
+                      <Text style={styles.hcSub} numberOfLines={1}>{item.subtitle} {' \u2022 '} {d.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
+                    </View>
+                    <Text style={[styles.hcScore, { color: resultColor(item.result) }]}>{item.score}</Text>
+                    <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Animated.View>
+        ) : (matches.length === 0 && challenges.length === 0) ? (
+          <Animated.View entering={FadeIn.duration(500).delay(200)} style={[styles.emptyCard, isTablet && styles.emptyCardTablet]}>
+            <View style={styles.emptyIconBg}>
+              <MaterialIcons name="sports" size={44} color={theme.primary} />
+            </View>
+            <Text style={styles.emptyTitle}>{t('home', 'welcomeTitle')}</Text>
+            <Text style={styles.emptyText}>{t('home', 'welcomeText')}</Text>
+            <Pressable style={styles.emptyCta} onPress={() => router.push('/match/new')}>
+              <MaterialIcons name="play-arrow" size={20} color="#FFF" />
+              <Text style={styles.emptyCtaText}>{t('home', 'firstMatch')}</Text>
+            </Pressable>
+          </Animated.View>
+        ) : null}
+
         {/* ========== AMBASSADORS ROTATING BANNER ========== */}
         {ambassadorsLoaded && featuredAmbassadors.length > 0 ? (
-          <Animated.View entering={FadeIn.duration(400).delay(165)} style={[styles.section, isTablet && styles.sectionTablet]}>
+          <Animated.View entering={FadeIn.duration(400).delay(280)} style={[styles.section, isTablet && styles.sectionTablet]}>
             <View style={styles.ambassadorSectionHeader}>
               <View style={styles.ambassadorSectionIcon}>
                 <MaterialIcons name="verified" size={18} color="#7C3AED" />
@@ -810,89 +891,6 @@ export default function HomeScreen() {
                 </View>
               ) : null}
             </View>
-          </Animated.View>
-        ) : null}
-
-
-
-        {/* ========== COMMUNITY LEADERBOARD ========== */}
-        <Animated.View
-          entering={FadeIn.duration(400).delay(170)}
-          style={[styles.section, isTablet && styles.sectionTablet]}
-
-        >
-          <CommunityLeaderboard />
-        </Animated.View>
-
-        {/* ========== QUICK ACCESS GRID ========== */}
-        <Animated.View entering={FadeIn.duration(400).delay(190)} style={[styles.section, isTablet && styles.sectionTablet]}>
-          <Text style={styles.sectionTitle}>{t('home', 'quickAccess')}</Text>
-          <View style={styles.quickGrid}>
-            {[
-              { label: t('home', 'player'), icon: 'person-add' as keyof typeof MaterialIcons.glyphMap, bg: theme.primary, route: '/player/new' },
-              { label: t('home', 'tournament'), icon: 'add-circle' as keyof typeof MaterialIcons.glyphMap, bg: theme.carreauColor, route: '/tournament/new' },
-              { label: t('home', 'terrain'), icon: 'sports-soccer' as keyof typeof MaterialIcons.glyphMap, bg: theme.accent, route: '/terrain/new' },
-              { label: t('home', 'club'), icon: 'add-home' as keyof typeof MaterialIcons.glyphMap, bg: theme.success, route: '/club/new' },
-            ].map((q, i) => (
-              <Pressable key={i} style={({ pressed }) => [styles.quickItem, pressed && styles.quickItemPressed]} onPress={() => router.push(q.route as any)}>
-                <View style={[styles.quickIcon, { backgroundColor: q.bg }]}>
-                  <MaterialIcons name={q.icon} size={22} color="#FFF" />
-                </View>
-                <Text style={styles.quickLabel}>{q.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </Animated.View>
-
-        {/* ========== COMPACT HISTORY ========== */}
-        {recentResults.length > 0 ? (
-          <Animated.View entering={FadeIn.duration(400).delay(260)} style={[styles.section, isTablet && styles.sectionTablet, { zIndex: 0 }]}>
-            <View style={styles.historyHeaderRow}>
-              <View style={styles.historyHeaderLeft}>
-                <MaterialIcons name="history" size={20} color={theme.primary} />
-                <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>{t('history', 'history')}</Text>
-              </View>
-              <Pressable onPress={() => router.push('/history')} style={styles.historySeeAllBtn}>
-                <Text style={styles.seeAllBtn}>{t('common', 'seeAll')}</Text>
-                <MaterialIcons name="chevron-right" size={16} color={theme.primary} />
-              </Pressable>
-            </View>
-            <View style={styles.historyCompactList}>
-              {recentResults.map((item, idx) => {
-                const d = new Date(item.date);
-                const isLast = idx === recentResults.length - 1;
-                return (
-                  <Pressable
-                    key={item.id}
-                    style={({ pressed }) => [styles.hcRow, !isLast && styles.hcRowBorder, pressed && { opacity: 0.75, backgroundColor: theme.backgroundSecondary }]}
-                    onPress={() => item.type === 'match' ? router.push({ pathname: '/history', params: { openMatchId: item.id } }) : router.push({ pathname: '/history', params: { openChallengeId: item.id } })}
-                  >
-                    <View style={[styles.hcDot, { backgroundColor: resultColor(item.result) }]} />
-                    <View style={[styles.hcTypeIcon, { backgroundColor: (item.type === 'match' ? theme.primary : theme.accent) + '12' }]}>
-                      <MaterialIcons name={item.icon} size={14} color={item.type === 'match' ? theme.primary : theme.accent} />
-                    </View>
-                    <View style={styles.hcInfo}>
-                      <Text style={styles.hcTitle} numberOfLines={1}>{item.title}</Text>
-                      <Text style={styles.hcSub} numberOfLines={1}>{item.subtitle} {' \u2022 '} {d.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
-                    </View>
-                    <Text style={[styles.hcScore, { color: resultColor(item.result) }]}>{item.score}</Text>
-                    <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
-                  </Pressable>
-                );
-              })}
-            </View>
-          </Animated.View>
-        ) : (matches.length === 0 && challenges.length === 0) ? (
-          <Animated.View entering={FadeIn.duration(500).delay(200)} style={[styles.emptyCard, isTablet && styles.emptyCardTablet]}>
-            <View style={styles.emptyIconBg}>
-              <MaterialIcons name="sports" size={44} color={theme.primary} />
-            </View>
-            <Text style={styles.emptyTitle}>{t('home', 'welcomeTitle')}</Text>
-            <Text style={styles.emptyText}>{t('home', 'welcomeText')}</Text>
-            <Pressable style={styles.emptyCta} onPress={() => router.push('/match/new')}>
-              <MaterialIcons name="play-arrow" size={20} color="#FFF" />
-              <Text style={styles.emptyCtaText}>{t('home', 'firstMatch')}</Text>
-            </Pressable>
           </Animated.View>
         ) : null}
 
