@@ -956,7 +956,7 @@ export default function MapScreen() {
           </Animated.View>
         ) : null}
 
-        <SponsorBanner style={{ marginHorizontal: 12, marginTop: 6, marginBottom: 2 }} />
+        <SponsorBanner style={{ marginHorizontal: 12, marginTop: 6, marginBottom: 2 }} page="map" />
 
         {/* Category filters */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>

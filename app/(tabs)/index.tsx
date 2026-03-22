@@ -182,7 +182,7 @@ export default function HomeScreen() {
       const amb = featuredAmbassadors[bannerIndex];
       if (amb && !trackedBannerImpressions.current.has(amb.id)) {
         trackedBannerImpressions.current.add(amb.id);
-        trackAmbassadorEvent(amb.id, 'banner_impression');
+        trackAmbassadorEvent(amb.id, 'banner_impression', undefined, { sourcePage: 'home', viewerId: user?.id });
       }
     }
   }, [bannerIndex, featuredAmbassadors]);
@@ -459,7 +459,7 @@ export default function HomeScreen() {
         ) : null}
 
         {/* ========== SPONSOR BANNER ========== */}
-        <SponsorBanner style={{ marginBottom: 8 }} />
+        <SponsorBanner style={{ marginBottom: 8 }} page="home" />
 
         {/* ========== LEADERBOARD PROGRESS ========== */}
         {selfPlayer?.isPublic && totalMatches < LEADERBOARD_MIN_MATCHES ? (

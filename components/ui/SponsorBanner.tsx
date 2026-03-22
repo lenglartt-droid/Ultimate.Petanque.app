@@ -11,9 +11,10 @@ import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 
 interface SponsorBannerProps {
   style?: any;
+  page?: string;
 }
 
-export default function SponsorBanner({ style }: SponsorBannerProps) {
+export default function SponsorBanner({ style, page = 'unknown' }: SponsorBannerProps) {
   const [ambassadors, setAmbassadors] = useState<Ambassador[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -47,14 +48,14 @@ export default function SponsorBanner({ style }: SponsorBannerProps) {
     const amb = ambassadors[currentIndex];
     if (!impressionTracked.current.has(amb.id)) {
       impressionTracked.current.add(amb.id);
-      trackAmbassadorEvent(amb.id, 'banner_impression');
+      trackAmbassadorEvent(amb.id, 'banner_impression', undefined, { sourcePage: page });
     }
   }, [currentIndex, ambassadors]);
 
   const handlePress = useCallback(() => {
     Haptics.selectionAsync();
     if (ambassadors.length > 0 && currentIndex < ambassadors.length) {
-      trackAmbassadorEvent(ambassadors[currentIndex].id, 'profile_view');
+      trackAmbassadorEvent(ambassadors[currentIndex].id, 'profile_view', undefined, { sourcePage: page });
     }
     router.push('/partners');
   }, [ambassadors, currentIndex]);

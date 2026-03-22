@@ -1171,7 +1171,7 @@ export default function DirectoryScreen() {
         </Animated.View>
       )}
 
-      <SponsorBanner style={{ marginTop: 10 }} />
+      <SponsorBanner style={{ marginTop: 10 }} page="directory" />
 
       {/* Results Count - only when searching */}
       {searchQuery ? (

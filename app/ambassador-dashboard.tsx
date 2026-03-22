@@ -18,9 +18,10 @@ import { useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import { Ambassador, invalidateAmbassadorCache } from '@/services/ambassadorService';
-import { fetchAmbassadorAnalytics, AmbassadorAnalytics, fetchSponsoredChallengeAnalytics } from '@/services/ambassadorAnalyticsService';
+import { fetchAmbassadorAnalytics, AmbassadorAnalytics, fetchSponsoredChallengeAnalytics, fetchDetailedBannerAnalytics, BannerDetailedAnalytics } from '@/services/ambassadorAnalyticsService';
 import { getMySponsoredEvents, SponsoredEvent, getEventParticipants } from '@/services/sponsoredEventService';
 import { getMyEventNotifications, markEventNotificationRead, EventNotification } from '@/services/eventNotificationService';
+import Svg, { Polyline, Circle as SvgCircle, Line, Text as SvgText } from 'react-native-svg';
 
 export default function AmbassadorDashboardScreen() {
   const insets = useSafeAreaInsets();
@@ -36,7 +37,7 @@ export default function AmbassadorDashboardScreen() {
   const [sponsoredCount, setSponsoredCount] = useState(0);
   const [events, setEvents] = useState<(SponsoredEvent & { _participantCount?: number })[]>([]);
   const [notifications, setNotifications] = useState<EventNotification[]>([]);
-  const [activeTab, setActiveTab] = useState<'overview' | 'events' | 'edit' | 'notifications'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'visibility' | 'events' | 'edit' | 'notifications'>('overview');
   const [analyticsPeriod, setAnalyticsPeriod] = useState<'today' | '7d' | '30d' | 'all'>('30d');
 
   // Edit fields
@@ -48,6 +49,11 @@ export default function AmbassadorDashboardScreen() {
   const [editWebsite, setEditWebsite] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // Visibility tab state
+  const [bannerAnalytics, setBannerAnalytics] = useState<BannerDetailedAnalytics | null>(null);
+  const [visibilityPeriod, setVisibilityPeriod] = useState<7 | 30>(30);
+  const [visibilityLoading, setVisibilityLoading] = useState(false);
 
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
   useEffect(() => {
@@ -84,6 +90,13 @@ export default function AmbassadorDashboardScreen() {
     setSponsoredCount(counts.get(ambId) || 0);
   }, [analyticsPeriod]);
 
+  const loadBannerAnalytics = useCallback(async (ambId: string) => {
+    setVisibilityLoading(true);
+    const { data } = await fetchDetailedBannerAnalytics(ambId, visibilityPeriod);
+    setBannerAnalytics(data);
+    setVisibilityLoading(false);
+  }, [visibilityPeriod]);
+
   const loadEvents = useCallback(async () => {
     const { events: evts } = await getMySponsoredEvents();
     const withCounts = await Promise.all(
@@ -103,12 +116,17 @@ export default function AmbassadorDashboardScreen() {
   const loadAll = useCallback(async () => {
     const amb = await loadAmbassador();
     if (amb) {
-      await Promise.all([loadAnalytics(amb.id), loadEvents(), loadNotifications()]);
+      await Promise.all([loadAnalytics(amb.id), loadEvents(), loadNotifications(), loadBannerAnalytics(amb.id)]);
     }
     setLoading(false);
-  }, [loadAmbassador, loadAnalytics, loadEvents, loadNotifications]);
+  }, [loadAmbassador, loadAnalytics, loadEvents, loadNotifications, loadBannerAnalytics]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  // Reload banner analytics on period change
+  useEffect(() => {
+    if (ambassador?.id) loadBannerAnalytics(ambassador.id);
+  }, [visibilityPeriod, ambassador?.id, loadBannerAnalytics]);
 
   // Reload analytics on period change
   useEffect(() => {
@@ -233,6 +251,7 @@ export default function AmbassadorDashboardScreen() {
 
   const tabs = [
     { id: 'overview' as const, icon: 'dashboard' as const, label: fr ? 'Apercu' : 'Overview' },
+    { id: 'visibility' as const, icon: 'visibility' as const, label: fr ? 'Visibilite' : 'Visibility' },
     { id: 'events' as const, icon: 'event' as const, label: fr ? 'Evenements' : 'Events' },
     { id: 'notifications' as const, icon: 'notifications' as const, label: fr ? 'Notifs' : 'Notifs' },
     { id: 'edit' as const, icon: 'edit' as const, label: fr ? 'Modifier' : 'Edit' },
@@ -359,6 +378,19 @@ export default function AmbassadorDashboardScreen() {
               </Pressable>
             </View>
           </>
+        ) : null}
+
+        {/* ===== VISIBILITY TAB ===== */}
+        {activeTab === 'visibility' ? (
+          <VisibilityTab
+            bannerAnalytics={bannerAnalytics}
+            visibilityPeriod={visibilityPeriod}
+            setVisibilityPeriod={setVisibilityPeriod}
+            loading={visibilityLoading}
+            badgeColor={badgeColor}
+            fr={fr}
+            chartWidth={Math.min(screenWidth - 80, 560)}
+          />
         ) : null}
 
         {/* ===== EVENTS TAB ===== */}
@@ -503,6 +535,271 @@ export default function AmbassadorDashboardScreen() {
     </SafeAreaView>
   );
 }
+
+// ===== SPARKLINE COMPONENT =====
+function Sparkline({ data, width, height, color, fillColor, showDots }: { data: number[]; width: number; height: number; color: string; fillColor?: string; showDots?: boolean }) {
+  if (!data || data.length < 2) return null;
+  const max = Math.max(...data, 1);
+  const padding = 4;
+  const w = width - padding * 2;
+  const h = height - padding * 2;
+  const points = data.map((v, i) => {
+    const x = padding + (i / (data.length - 1)) * w;
+    const y = padding + h - (v / max) * h;
+    return `${x},${y}`;
+  }).join(' ');
+  const lastIdx = data.length - 1;
+  const lastX = padding + (lastIdx / (data.length - 1)) * w;
+  const lastY = padding + h - (data[lastIdx] / max) * h;
+  return (
+    <Svg width={width} height={height}>
+      <Polyline points={points} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      {showDots ? <SvgCircle cx={lastX} cy={lastY} r={3} fill={color} /> : null}
+    </Svg>
+  );
+}
+
+// ===== VISIBILITY TAB COMPONENT =====
+function VisibilityTab({ bannerAnalytics, visibilityPeriod, setVisibilityPeriod, loading, badgeColor, fr, chartWidth }: {
+  bannerAnalytics: BannerDetailedAnalytics | null;
+  visibilityPeriod: 7 | 30;
+  setVisibilityPeriod: (p: 7 | 30) => void;
+  loading: boolean;
+  badgeColor: string;
+  fr: boolean;
+  chartWidth: number;
+}) {
+  const ba = bannerAnalytics;
+  const pageLabels: Record<string, { label: string; icon: string; color: string }> = {
+    home: { label: fr ? 'Accueil' : 'Home', icon: 'home', color: '#3B82F6' },
+    stats: { label: 'Stats', icon: 'bar-chart', color: '#7C3AED' },
+    directory: { label: fr ? 'Annuaire' : 'Directory', icon: 'people', color: '#10B981' },
+    map: { label: fr ? 'Carte' : 'Map', icon: 'map', color: '#F59E0B' },
+    unknown: { label: fr ? 'Autre' : 'Other', icon: 'help-outline', color: '#94A3B8' },
+  };
+
+  // Trim daily data to match period
+  const dailyImp = ba ? ba.dailyImpressions.slice(-visibilityPeriod) : [];
+  const dailyClk = ba ? ba.dailyClicks.slice(-visibilityPeriod) : [];
+  const dailyDates = ba ? ba.dailyDates.slice(-visibilityPeriod) : [];
+
+  // Compute period totals from trimmed daily data
+  const periodImpressions = dailyImp.reduce((s, v) => s + v, 0);
+  const periodClicks = dailyClk.reduce((s, v) => s + v, 0);
+  const periodCTR = periodImpressions > 0 ? Math.round((periodClicks / periodImpressions) * 1000) / 10 : 0;
+
+  return (
+    <>
+      {/* Period Selector */}
+      <View style={vs.periodRow}>
+        {([7, 30] as const).map(p => (
+          <Pressable key={p} style={[vs.periodChip, visibilityPeriod === p && { backgroundColor: badgeColor, borderColor: badgeColor }]} onPress={() => { Haptics.selectionAsync(); setVisibilityPeriod(p); }}>
+            <Text style={[vs.periodChipText, visibilityPeriod === p && { color: '#FFF' }]}>{p === 7 ? '7j' : '30j'}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {loading ? (
+        <View style={vs.loadingWrap}><ActivityIndicator size="large" color={badgeColor} /></View>
+      ) : !ba ? (
+        <View style={vs.emptyState}>
+          <MaterialIcons name="visibility-off" size={48} color="#94A3B8" />
+          <Text style={vs.emptyText}>{fr ? 'Aucune donnee de visibilite' : 'No visibility data'}</Text>
+        </View>
+      ) : (
+        <>
+          {/* KPI Cards Row */}
+          <View style={vs.kpiRow}>
+            <View style={vs.kpiCard}>
+              <View style={[vs.kpiIcon, { backgroundColor: '#3B82F615' }]}><MaterialIcons name="visibility" size={18} color="#3B82F6" /></View>
+              <Text style={vs.kpiValue}>{periodImpressions}</Text>
+              <Text style={vs.kpiLabel}>{fr ? 'Impressions' : 'Impressions'}</Text>
+            </View>
+            <View style={vs.kpiCard}>
+              <View style={[vs.kpiIcon, { backgroundColor: '#10B98115' }]}><MaterialIcons name="touch-app" size={18} color="#10B981" /></View>
+              <Text style={vs.kpiValue}>{periodClicks}</Text>
+              <Text style={vs.kpiLabel}>{fr ? 'Clics' : 'Clicks'}</Text>
+            </View>
+            <View style={vs.kpiCard}>
+              <View style={[vs.kpiIcon, { backgroundColor: '#F59E0B15' }]}><MaterialIcons name="percent" size={18} color="#F59E0B" /></View>
+              <Text style={[vs.kpiValue, { color: '#F59E0B' }]}>{periodCTR}%</Text>
+              <Text style={vs.kpiLabel}>CTR</Text>
+            </View>
+          </View>
+
+          {/* Unique Reach */}
+          <View style={vs.reachCard}>
+            <View style={vs.reachLeft}>
+              <MaterialIcons name="people" size={20} color={badgeColor} />
+              <View>
+                <Text style={vs.reachLabel}>{fr ? 'Portee unique' : 'Unique reach'}</Text>
+                <Text style={vs.reachSub}>{fr ? 'Utilisateurs distincts' : 'Distinct users'}</Text>
+              </View>
+            </View>
+            <Text style={[vs.reachValue, { color: badgeColor }]}>{ba.uniqueViewers}</Text>
+          </View>
+
+          {/* Impressions by Page */}
+          <View style={vs.sectionCard}>
+            <Text style={vs.sectionTitle}>{fr ? 'Impressions par page' : 'Impressions by page'}</Text>
+            {Object.entries(ba.impressionsByPage).sort((a, b) => b[1] - a[1]).map(([page, count]) => {
+              const cfg = pageLabels[page] || pageLabels.unknown;
+              const pct = ba.totalImpressions > 0 ? Math.round((count / ba.totalImpressions) * 100) : 0;
+              return (
+                <View key={page} style={vs.pageRow}>
+                  <View style={[vs.pageIcon, { backgroundColor: cfg.color + '15' }]}>
+                    <MaterialIcons name={cfg.icon as any} size={16} color={cfg.color} />
+                  </View>
+                  <View style={vs.pageInfo}>
+                    <Text style={vs.pageName}>{cfg.label}</Text>
+                    <View style={vs.pageBarTrack}>
+                      <View style={[vs.pageBarFill, { width: `${pct}%`, backgroundColor: cfg.color }]} />
+                    </View>
+                  </View>
+                  <View style={vs.pageValues}>
+                    <Text style={vs.pageCount}>{count}</Text>
+                    <Text style={vs.pagePct}>{pct}%</Text>
+                  </View>
+                </View>
+              );
+            })}
+            {Object.keys(ba.impressionsByPage).length === 0 ? (
+              <Text style={vs.noDataText}>{fr ? 'Aucune impression enregistree' : 'No impressions recorded'}</Text>
+            ) : null}
+          </View>
+
+          {/* Clicks by Page */}
+          {Object.keys(ba.clicksByPage).length > 0 ? (
+            <View style={vs.sectionCard}>
+              <Text style={vs.sectionTitle}>{fr ? 'Clics par page' : 'Clicks by page'}</Text>
+              {Object.entries(ba.clicksByPage).sort((a, b) => b[1] - a[1]).map(([page, count]) => {
+                const cfg = pageLabels[page] || pageLabels.unknown;
+                return (
+                  <View key={page} style={vs.clickRow}>
+                    <View style={[vs.pageIcon, { backgroundColor: cfg.color + '15' }]}>
+                      <MaterialIcons name={cfg.icon as any} size={14} color={cfg.color} />
+                    </View>
+                    <Text style={vs.clickLabel}>{cfg.label}</Text>
+                    <Text style={vs.clickValue}>{count}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
+
+          {/* Sparkline Charts */}
+          <View style={vs.sectionCard}>
+            <Text style={vs.sectionTitle}>{fr ? `Evolution ${visibilityPeriod}j` : `${visibilityPeriod}d Evolution`}</Text>
+
+            {/* Impressions sparkline */}
+            <View style={vs.chartBlock}>
+              <View style={vs.chartHeader}>
+                <View style={vs.chartLegendDot}><View style={[vs.chartDot, { backgroundColor: '#3B82F6' }]} /></View>
+                <Text style={vs.chartLabel}>{fr ? 'Impressions' : 'Impressions'}</Text>
+                <Text style={vs.chartTotal}>{periodImpressions}</Text>
+              </View>
+              <View style={vs.chartContainer}>
+                <Sparkline data={dailyImp} width={chartWidth} height={48} color="#3B82F6" showDots />
+              </View>
+              <View style={vs.chartDateRow}>
+                <Text style={vs.chartDateLabel}>{dailyDates.length > 0 ? dailyDates[0].slice(5) : ''}</Text>
+                <Text style={vs.chartDateLabel}>{dailyDates.length > 0 ? dailyDates[dailyDates.length - 1].slice(5) : ''}</Text>
+              </View>
+            </View>
+
+            {/* Clicks sparkline */}
+            <View style={[vs.chartBlock, { marginTop: 16 }]}>
+              <View style={vs.chartHeader}>
+                <View style={vs.chartLegendDot}><View style={[vs.chartDot, { backgroundColor: '#10B981' }]} /></View>
+                <Text style={vs.chartLabel}>{fr ? 'Clics' : 'Clicks'}</Text>
+                <Text style={vs.chartTotal}>{periodClicks}</Text>
+              </View>
+              <View style={vs.chartContainer}>
+                <Sparkline data={dailyClk} width={chartWidth} height={48} color="#10B981" showDots />
+              </View>
+              <View style={vs.chartDateRow}>
+                <Text style={vs.chartDateLabel}>{dailyDates.length > 0 ? dailyDates[0].slice(5) : ''}</Text>
+                <Text style={vs.chartDateLabel}>{dailyDates.length > 0 ? dailyDates[dailyDates.length - 1].slice(5) : ''}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* CTR Trend */}
+          {dailyImp.length > 1 ? (
+            <View style={vs.sectionCard}>
+              <Text style={vs.sectionTitle}>{fr ? 'Tendance CTR' : 'CTR Trend'}</Text>
+              <View style={vs.chartBlock}>
+                <View style={vs.chartContainer}>
+                  <Sparkline
+                    data={dailyImp.map((imp, i) => imp > 0 ? Math.round((dailyClk[i] / imp) * 100) : 0)}
+                    width={chartWidth}
+                    height={48}
+                    color="#F59E0B"
+                    showDots
+                  />
+                </View>
+                <View style={vs.chartDateRow}>
+                  <Text style={vs.chartDateLabel}>{dailyDates.length > 0 ? dailyDates[0].slice(5) : ''}</Text>
+                  <Text style={[vs.chartDateLabel, { color: '#F59E0B', fontWeight: '700' }]}>{periodCTR}%</Text>
+                  <Text style={vs.chartDateLabel}>{dailyDates.length > 0 ? dailyDates[dailyDates.length - 1].slice(5) : ''}</Text>
+                </View>
+              </View>
+            </View>
+          ) : null}
+        </>
+      )}
+    </>
+  );
+}
+
+const vs = StyleSheet.create({
+  periodRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  periodChip: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20, backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E2E8F0' },
+  periodChipText: { fontSize: 14, fontWeight: '700', color: '#64748B' },
+  loadingWrap: { alignItems: 'center', paddingVertical: 48 },
+  emptyState: { alignItems: 'center', paddingVertical: 48, gap: 12 },
+  emptyText: { fontSize: 15, color: '#94A3B8' },
+  // KPIs
+  kpiRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  kpiCard: { flex: 1, backgroundColor: '#FFF', borderRadius: 16, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
+  kpiIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  kpiValue: { fontSize: 22, fontWeight: '900', color: '#0F172A' },
+  kpiLabel: { fontSize: 10, fontWeight: '600', color: '#94A3B8', marginTop: 2, textTransform: 'uppercase' },
+  // Reach
+  reachCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFF', borderRadius: 14, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0' },
+  reachLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  reachLabel: { fontSize: 15, fontWeight: '600', color: '#0F172A' },
+  reachSub: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
+  reachValue: { fontSize: 28, fontWeight: '900' },
+  // Section
+  sectionCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0' },
+  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A', marginBottom: 14 },
+  noDataText: { fontSize: 13, color: '#94A3B8', textAlign: 'center', paddingVertical: 12 },
+  // Page rows
+  pageRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  pageIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  pageInfo: { flex: 1, gap: 4 },
+  pageName: { fontSize: 13, fontWeight: '600', color: '#334155' },
+  pageBarTrack: { height: 6, backgroundColor: '#F1F5F9', borderRadius: 3, overflow: 'hidden' },
+  pageBarFill: { height: '100%', borderRadius: 3 },
+  pageValues: { alignItems: 'flex-end' },
+  pageCount: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
+  pagePct: { fontSize: 10, fontWeight: '600', color: '#94A3B8' },
+  // Click rows
+  clickRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  clickLabel: { flex: 1, fontSize: 14, fontWeight: '500', color: '#334155' },
+  clickValue: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
+  // Charts
+  chartBlock: {},
+  chartHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  chartLegendDot: { width: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
+  chartDot: { width: 8, height: 8, borderRadius: 4 },
+  chartLabel: { flex: 1, fontSize: 13, fontWeight: '600', color: '#334155' },
+  chartTotal: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
+  chartContainer: { alignItems: 'center' },
+  chartDateRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4, paddingHorizontal: 4 },
+  chartDateLabel: { fontSize: 9, fontWeight: '500', color: '#94A3B8' },
+});
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },

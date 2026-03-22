@@ -1580,7 +1580,7 @@ export default function StatsScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }, isTablet && styles.scrollContentTablet]}
         showsVerticalScrollIndicator={false}
       >
-        <SponsorBanner />
+        <SponsorBanner page="stats" />
 
         {!hasData ? (
           <View style={styles.emptyState}>
