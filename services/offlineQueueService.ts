@@ -580,6 +580,9 @@ export function buildChallengeDbPayload(challenge: Record<string, any>): Record<
     date: challenge.date,
     player_id: challenge.playerId,
     player_name: challenge.playerName,
+    sponsor_id: challenge.sponsorId || null,
+    sponsor_name: challenge.sponsorName || null,
+    sponsor_photo: challenge.sponsorPhoto || null,
     opponent_id: challenge.opponentId,
     opponent_name: challenge.opponentName,
     opponent_result: challenge.opponentResult,
@@ -666,6 +669,7 @@ export function buildUpdateDbPayload(table: string, updates: Record<string, any>
       atelierScores: 'atelier_scores', duration: 'duration',
       notes: 'notes', detailedShots: 'detailed_shots',
       boulesSetId: 'boules_set_id', terrainId: 'terrain_id',
+      sponsorId: 'sponsor_id', sponsorName: 'sponsor_name', sponsorPhoto: 'sponsor_photo',
     },
   };
 

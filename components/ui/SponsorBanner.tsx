@@ -6,7 +6,7 @@ import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import theme from '@/constants/theme';
-import { getFeaturedAmbassadors, Ambassador } from '@/services/ambassadorService';
+import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 
 interface SponsorBannerProps {
@@ -21,8 +21,11 @@ export default function SponsorBanner({ style }: SponsorBannerProps) {
   const impressionTracked = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    getFeaturedAmbassadors().then(ambs => {
-      setAmbassadors(ambs);
+    fetchAmbassadors().then(({ ambassadors: ambs }) => {
+      // Only show sponsors and partners, not ambassadors
+      const sponsorsAndPartners = ambs.filter(a => a.badgeType === 'sponsor' || a.badgeType === 'partner');
+      const featured = sponsorsAndPartners.filter(a => a.isFeatured);
+      setAmbassadors(featured.length > 0 ? featured : sponsorsAndPartners.slice(0, 3));
       setLoaded(true);
     });
   }, []);

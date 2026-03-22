@@ -265,6 +265,9 @@ function mapChallengeFromDb(c: any): Challenge {
     id: c.id, type: c.type, mode: c.mode || 'solo', date: c.date,
     boulesSetId: c.boules_set_id, terrainId: c.terrain_id,
     playerId: c.player_id, playerName: c.player_name,
+    sponsorId: c.sponsor_id || undefined,
+    sponsorName: c.sponsor_name || undefined,
+    sponsorPhoto: c.sponsor_photo || undefined,
     opponentId: c.opponent_id, opponentName: c.opponent_name,
     opponentResult: c.opponent_result, winner: c.winner,
     shots: c.shots, successCount: c.success_count, totalShots: c.total_shots,
@@ -1523,6 +1526,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         date: challenge.date,
         player_id: challenge.playerId,
         player_name: challenge.playerName,
+        sponsor_id: challenge.sponsorId || null,
+        sponsor_name: challenge.sponsorName || null,
+        sponsor_photo: challenge.sponsorPhoto || null,
         opponent_id: challenge.opponentId,
         opponent_name: challenge.opponentName,
         opponent_result: challenge.opponentResult,
@@ -1553,6 +1559,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           date: data.date,
           playerId: data.player_id,
           playerName: data.player_name,
+          sponsorId: data.sponsor_id || challenge.sponsorId,
+          sponsorName: data.sponsor_name || challenge.sponsorName,
+          sponsorPhoto: data.sponsor_photo || challenge.sponsorPhoto,
           opponentId: data.opponent_id || challenge.opponentId,
           opponentName: data.opponent_name || challenge.opponentName,
           opponentResult: data.opponent_result || challenge.opponentResult,
@@ -1881,6 +1890,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
       if (updates.detailedShots !== undefined) dbUpdates.detailed_shots = updates.detailedShots;
       if (updates.terrainId !== undefined) dbUpdates.terrain_id = updates.terrainId || null;
+      if (updates.sponsorId !== undefined) dbUpdates.sponsor_id = updates.sponsorId || null;
+      if (updates.sponsorName !== undefined) dbUpdates.sponsor_name = updates.sponsorName || null;
+      if (updates.sponsorPhoto !== undefined) dbUpdates.sponsor_photo = updates.sponsorPhoto || null;
       dbUpdates.updated_at = new Date().toISOString();
 
       await supabase.from('challenges').update(dbUpdates).eq('id', id);
