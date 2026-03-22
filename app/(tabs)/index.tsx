@@ -25,6 +25,7 @@ import { useAuth, useAlert } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import { preloadInterstitial } from '@/services/adService';
 import CommunityLeaderboard from '@/components/ui/CommunityLeaderboard';
+import SponsorBanner from '@/components/ui/SponsorBanner';
 import { getFeaturedAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { getMyMeetups, getInvitedMeetups, getMeetupResponses, getPendingInvitationsCount, findMeetupByCode, Meetup, MeetupResponse } from '@/services/meetupService';
@@ -390,6 +391,9 @@ export default function HomeScreen() {
             ))}
           </View>
         </Animated.View>
+
+        {/* ========== SPONSOR BANNER ========== */}
+        <SponsorBanner style={{ marginBottom: 8 }} />
 
         {/* ========== LEADERBOARD PROGRESS ========== */}
         {selfPlayer?.isPublic && totalMatches < LEADERBOARD_MIN_MATCHES ? (
