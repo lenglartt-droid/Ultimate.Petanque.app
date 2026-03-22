@@ -308,6 +308,7 @@ export default function AdminPromosScreen() {
   const [ambassadorAnalytics, setAmbassadorAnalytics] = useState<Map<string, AmbassadorAnalytics>>(new Map());
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsPeriod, setAnalyticsPeriod] = useState<'today' | '7d' | '30d' | 'all'>('all');
+  const [ambBadgeFilter, setAmbBadgeFilter] = useState<'all' | 'ambassador' | 'sponsor' | 'partner'>('all');
   const [sparklineData, setSparklineData] = useState<Map<string, number[]>>(new Map());
   const [sponsoredChallengeCounts, setSponsoredChallengeCounts] = useState<Map<string, number>>(new Map());
   const [sponsoredChallengeDaily, setSponsoredChallengeDaily] = useState<Map<string, number[]>>(new Map());
@@ -1256,6 +1257,37 @@ export default function AdminPromosScreen() {
                     {analyticsLoading ? <ActivityIndicator size="small" color="#7C3AED" style={{ marginLeft: 4 }} /> : null}
                   </View>
 
+                  {/* Badge type filter chips */}
+                  <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+                    {([
+                      { key: 'all' as const, label: fr ? 'Tous' : 'All', icon: 'select-all' as const, color: '#7C3AED' },
+                      { key: 'ambassador' as const, label: fr ? 'Ambassadeurs' : 'Ambassadors', icon: 'verified' as const, color: '#7C3AED' },
+                      { key: 'sponsor' as const, label: 'Sponsors', icon: 'campaign' as const, color: '#F59E0B' },
+                      { key: 'partner' as const, label: fr ? 'Partenaires' : 'Partners', icon: 'handshake' as const, color: '#3B82F6' },
+                    ]).map(f => {
+                      const isActive = ambBadgeFilter === f.key;
+                      const count = f.key === 'all' ? ambassadors.length : ambassadors.filter(a => a.badge_type === f.key).length;
+                      return (
+                        <Pressable
+                          key={f.key}
+                          style={{
+                            flexDirection: 'row', alignItems: 'center', gap: 6,
+                            paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                            backgroundColor: isActive ? f.color : theme.backgroundSecondary,
+                            borderWidth: 1.5, borderColor: isActive ? f.color : theme.border,
+                          }}
+                          onPress={() => { Haptics.selectionAsync(); setAmbBadgeFilter(f.key); }}
+                        >
+                          <MaterialIcons name={f.icon} size={14} color={isActive ? '#FFF' : f.color} />
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: isActive ? '#FFF' : f.color }}>{f.label}</Text>
+                          <View style={{ backgroundColor: isActive ? 'rgba(255,255,255,0.25)' : f.color + '15', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8 }}>
+                            <Text style={{ fontSize: 10, fontWeight: '800', color: isActive ? '#FFF' : f.color }}>{count}</Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
                   {ambassadorsLoading ? (
                     <View style={{ alignItems: 'center', paddingVertical: 24 }}>
                       <ActivityIndicator size="large" color="#7C3AED" />
@@ -1276,7 +1308,7 @@ export default function AdminPromosScreen() {
                       </Pressable>
                     </View>
                   ) : (
-                    ambassadors.map((amb) => (
+                    ambassadors.filter(amb => ambBadgeFilter === 'all' || amb.badge_type === ambBadgeFilter).map((amb) => (
                       <View key={amb.id} style={[styles.promoCard, { borderLeftWidth: 3, borderLeftColor: '#7C3AED' }]}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 }}>
                           {amb.photo ? (
