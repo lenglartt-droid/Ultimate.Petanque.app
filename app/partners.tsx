@@ -9,6 +9,7 @@ import {
   Dimensions,
   RefreshControl,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -46,9 +47,17 @@ const PARTNER_SLOTS: PartnerSlot[] = [
 ];
 
 const CATEGORY_CONFIG = {
-  gold: { icon: 'emoji-events' as const, color: '#FFD700', bg: '#FFD700', label: { fr: 'Partenaire Or', en: 'Gold Partner' } },
-  silver: { icon: 'workspace-premium' as const, color: '#A8B4C0', bg: '#A8B4C0', label: { fr: 'Partenaire Argent', en: 'Silver Partner' } },
-  bronze: { icon: 'military-tech' as const, color: '#CD7F32', bg: '#CD7F32', label: { fr: 'Partenaire Bronze', en: 'Bronze Partner' } },
+  gold: { icon: 'emoji-events' as const, color: '#D4A017', bg: '#FFF8E1', gradient: ['#F9E547', '#D4A017'] as [string, string], label: { fr: 'Or', en: 'Gold' } },
+  silver: { icon: 'workspace-premium' as const, color: '#78909C', bg: '#ECEFF1', gradient: ['#CFD8DC', '#90A4AE'] as [string, string], label: { fr: 'Argent', en: 'Silver' } },
+  bronze: { icon: 'military-tech' as const, color: '#A1887F', bg: '#EFEBE9', gradient: ['#D7CCC8', '#A1887F'] as [string, string], label: { fr: 'Bronze', en: 'Bronze' } },
+};
+
+const SOCIAL_CONFIG: Record<string, { icon: string; color: string; bg: string; label: string }> = {
+  youtube: { icon: 'play-arrow', color: '#FF0000', bg: '#FF000010', label: 'YouTube' },
+  tiktok: { icon: 'music-note', color: '#010101', bg: '#01010108', label: 'TikTok' },
+  instagram: { icon: 'camera-alt', color: '#E4405F', bg: '#E4405F10', label: 'Instagram' },
+  twitter: { icon: 'alternate-email', color: '#1DA1F2', bg: '#1DA1F210', label: 'X' },
+  website: { icon: 'language', color: '#6366F1', bg: '#6366F110', label: 'Web' },
 };
 
 export default function PartnersScreen() {
@@ -94,60 +103,91 @@ export default function PartnersScreen() {
     setRefreshing(false);
   };
 
+  const handleSocialPress = (amb: Ambassador, platform: string, url: string) => {
+    Haptics.selectionAsync();
+    trackAmbassadorEvent(amb.id, 'social_click', platform);
+    Linking.openURL(url);
+  };
+
   const goldSlots = PARTNER_SLOTS.filter(s => s.category === 'gold');
   const silverSlots = PARTNER_SLOTS.filter(s => s.category === 'silver');
   const bronzeSlots = PARTNER_SLOTS.filter(s => s.category === 'bronze');
 
-  const renderPartnerSlot = (slot: PartnerSlot, index: number, sectionDelay: number) => {
-    const cfg = CATEGORY_CONFIG[slot.category];
-    if (slot.isAvailable) {
-      return (
-        <Animated.View key={slot.id} entering={FadeInDown.duration(350).delay(sectionDelay + index * 80)} style={[styles.partnerCard, styles.partnerCardAvailable, slot.category === 'gold' && styles.partnerCardGold]}>
-          <View style={[styles.availableIconBg, { backgroundColor: cfg.bg + '15' }]}>
-            <MaterialIcons name={cfg.icon} size={slot.category === 'gold' ? 36 : 28} color={cfg.color} />
-          </View>
-          <Text style={styles.availableTitle}>{language === 'fr' ? 'Emplacement disponible' : 'Slot available'}</Text>
-          <Text style={styles.availableCategory}>{cfg.label[language]}</Text>
-          <Pressable style={[styles.contactBtn, { backgroundColor: cfg.color + '18', borderColor: cfg.color + '40' }]} onPress={() => { Haptics.selectionAsync(); Linking.openURL('mailto:ultimate.petanque.app@gmail.com?subject=Partenariat%20Ultimate%20Petanque%20-%20' + encodeURIComponent(cfg.label.fr)); }}>
-            <MaterialIcons name="email" size={14} color={cfg.color} />
-            <Text style={[styles.contactBtnText, { color: cfg.color }]}>{language === 'fr' ? 'Devenir partenaire' : 'Become a partner'}</Text>
-          </Pressable>
-        </Animated.View>
-      );
+  const renderSocialChips = (amb: Ambassador) => {
+    const links: { platform: string; url: string; label: string }[] = [];
+    if (amb.youtubeUrl) links.push({ platform: 'youtube', url: amb.youtubeUrl, label: 'YouTube' });
+    if (amb.tiktokUrl) links.push({ platform: 'tiktok', url: amb.tiktokUrl, label: 'TikTok' });
+    if (amb.instagramHandle) {
+      const handle = amb.instagramHandle.replace('@', '');
+      links.push({ platform: 'instagram', url: `https://instagram.com/${handle}`, label: `@${handle}` });
     }
-    return null;
+    if (amb.twitterHandle) {
+      const handle = amb.twitterHandle.replace('@', '');
+      links.push({ platform: 'twitter', url: `https://x.com/${handle}`, label: amb.twitterHandle });
+    }
+    if (amb.websiteUrl) {
+      const url = amb.websiteUrl.startsWith('http') ? amb.websiteUrl : `https://${amb.websiteUrl}`;
+      links.push({ platform: 'website', url, label: 'Web' });
+    }
+    if (links.length === 0) return null;
+    return (
+      <View style={styles.socialRow}>
+        {links.map((link) => {
+          const cfg = SOCIAL_CONFIG[link.platform];
+          return (
+            <Pressable
+              key={link.platform}
+              style={({ pressed }) => [styles.socialChip, { backgroundColor: cfg.bg, borderColor: cfg.color + '18' }, pressed && { opacity: 0.75, transform: [{ scale: 0.96 }] }]}
+              onPress={() => handleSocialPress(amb, link.platform, link.url)}
+            >
+              <MaterialIcons name={cfg.icon as any} size={14} color={cfg.color} />
+              <Text style={[styles.socialChipText, { color: cfg.color }]} numberOfLines={1}>{link.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    );
   };
 
   const renderAmbassadorCard = (amb: Ambassador, index: number) => (
     <Animated.View
       key={amb.id}
-      entering={FadeInDown.duration(400).delay(100 + index * 80)}
+      entering={FadeInDown.duration(450).delay(80 + index * 100)}
       onLayout={(e) => { ambassadorPositions.current[amb.id] = e.nativeEvent.layout.y; }}
     >
       <Pressable
-        style={({ pressed }) => [styles.ambCard, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }, scrollTo === amb.id && styles.ambCardHighlight]}
+        style={({ pressed }) => [styles.ambCard, pressed && { transform: [{ scale: 0.985 }], opacity: 0.95 }, scrollTo === amb.id && styles.ambCardHighlight]}
         onPress={() => { trackAmbassadorEvent(amb.id, 'profile_view'); if (amb.playerId) router.push(`/player/${amb.playerId}` as any); }}
       >
-        {/* Header with photo and info */}
+        {/* Top gradient accent bar */}
+        <LinearGradient
+          colors={['#7C3AED', '#A855F7']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.ambAccentBar}
+        />
+
+        {/* Header: Photo + Name + Badge */}
         <View style={styles.ambHeader}>
           <View style={styles.ambAvatarWrap}>
             {amb.photo ? (
               <Image source={{ uri: amb.photo }} style={styles.ambAvatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
             ) : (
-              <View style={[styles.ambAvatar, { backgroundColor: '#7C3AED' + '20', alignItems: 'center', justifyContent: 'center' }]}>
-                <Text style={{ fontSize: 24, fontWeight: '800', color: '#7C3AED' }}>{amb.displayName.charAt(0)}</Text>
-              </View>
+              <LinearGradient colors={['#7C3AED', '#A855F7']} style={[styles.ambAvatar, { alignItems: 'center', justifyContent: 'center' }]}>
+                <Text style={styles.ambAvatarLetter}>{amb.displayName.charAt(0)}</Text>
+              </LinearGradient>
             )}
             <View style={styles.ambVerifiedBadge}>
-              <MaterialIcons name="verified" size={16} color="#FFF" />
+              <MaterialIcons name="verified" size={14} color="#FFF" />
             </View>
           </View>
+
           <View style={styles.ambInfo}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={styles.ambName} numberOfLines={1}>{amb.displayName}</Text>
-              <View style={styles.ambBadge}>
-                <MaterialIcons name="verified" size={11} color="#7C3AED" />
-                <Text style={styles.ambBadgeText}>{language === 'fr' ? 'Ambassadeur' : 'Ambassador'}</Text>
+            <Text style={styles.ambName} numberOfLines={1}>{amb.displayName}</Text>
+            <View style={styles.ambBadgeRow}>
+              <View style={styles.ambBadgePill}>
+                <MaterialIcons name="verified" size={10} color="#7C3AED" />
+                <Text style={styles.ambBadgePillText}>{language === 'fr' ? 'Ambassadeur' : 'Ambassador'}</Text>
               </View>
             </View>
             {(amb.role || amb.club || amb.city) ? (
@@ -155,11 +195,22 @@ export default function PartnersScreen() {
                 {[amb.role ? t('roles', amb.role) : null, amb.club, amb.city].filter(Boolean).join(' \u2022 ')}
               </Text>
             ) : null}
-            {amb.bio ? <Text style={styles.ambBio} numberOfLines={3}>{amb.bio}</Text> : null}
           </View>
+
+          {/* CTA arrow */}
+          {amb.playerId ? (
+            <View style={styles.ambArrowBtn}>
+              <MaterialIcons name="arrow-forward" size={18} color="#7C3AED" />
+            </View>
+          ) : null}
         </View>
 
-        {/* Stats row */}
+        {/* Bio */}
+        {amb.bio ? (
+          <Text style={styles.ambBio} numberOfLines={3}>{amb.bio}</Text>
+        ) : null}
+
+        {/* Stats Row */}
         {amb.stats ? (
           <View style={styles.ambStatsRow}>
             <View style={styles.ambStatItem}>
@@ -179,176 +230,246 @@ export default function PartnersScreen() {
             <View style={styles.ambStatDivider} />
             <View style={styles.ambStatItem}>
               <Text style={[styles.ambStatValue, { color: theme.carreauColor }]}>{amb.stats.carreauRate > 0 ? `${amb.stats.carreauRate}%` : '-'}</Text>
-              <Text style={styles.ambStatLabel}>Car.</Text>
+              <Text style={styles.ambStatLabel}>Carreau</Text>
             </View>
           </View>
         ) : null}
 
-        {/* Social links */}
-        <View style={styles.ambSocialRow}>
-          {amb.youtubeUrl ? (
-            <Pressable style={[styles.ambSocialBtn, { backgroundColor: '#FF0000' + '12' }]} onPress={() => { trackAmbassadorEvent(amb.id, 'social_click', 'youtube'); Linking.openURL(amb.youtubeUrl!); }}>
-              <MaterialIcons name="play-arrow" size={16} color="#FF0000" />
-              <Text style={[styles.ambSocialText, { color: '#FF0000' }]}>YouTube</Text>
-            </Pressable>
-          ) : null}
-          {amb.tiktokUrl ? (
-            <Pressable style={[styles.ambSocialBtn, { backgroundColor: '#000' + '08' }]} onPress={() => { trackAmbassadorEvent(amb.id, 'social_click', 'tiktok'); Linking.openURL(amb.tiktokUrl!); }}>
-              <MaterialIcons name="music-note" size={16} color="#000" />
-              <Text style={[styles.ambSocialText, { color: '#000' }]}>TikTok</Text>
-            </Pressable>
-          ) : null}
-          {amb.instagramHandle ? (
-            <Pressable style={[styles.ambSocialBtn, { backgroundColor: '#E4405F' + '12' }]} onPress={() => { trackAmbassadorEvent(amb.id, 'social_click', 'instagram'); const handle = amb.instagramHandle!.replace('@', ''); Linking.openURL(`https://instagram.com/${handle}`); }}>
-              <MaterialIcons name="camera-alt" size={16} color="#E4405F" />
-              <Text style={[styles.ambSocialText, { color: '#E4405F' }]}>@{amb.instagramHandle!.replace('@', '')}</Text>
-            </Pressable>
-          ) : null}
-          {amb.twitterHandle ? (
-            <Pressable style={[styles.ambSocialBtn, { backgroundColor: '#1DA1F2' + '12' }]} onPress={() => { trackAmbassadorEvent(amb.id, 'social_click', 'twitter'); const handle = amb.twitterHandle!.replace('@', ''); Linking.openURL(`https://x.com/${handle}`); }}>
-              <MaterialIcons name="alternate-email" size={16} color="#1DA1F2" />
-              <Text style={[styles.ambSocialText, { color: '#1DA1F2' }]}>{amb.twitterHandle}</Text>
-            </Pressable>
-          ) : null}
-          {amb.websiteUrl ? (
-            <Pressable style={[styles.ambSocialBtn, { backgroundColor: theme.primary + '10' }]} onPress={() => { trackAmbassadorEvent(amb.id, 'social_click', 'website'); const url = amb.websiteUrl!.startsWith('http') ? amb.websiteUrl! : `https://${amb.websiteUrl}`; Linking.openURL(url); }}>
-              <MaterialIcons name="language" size={16} color={theme.primary} />
-              <Text style={[styles.ambSocialText, { color: theme.primary }]}>Web</Text>
-            </Pressable>
-          ) : null}
-        </View>
+        {/* Social Links */}
+        {renderSocialChips(amb)}
       </Pressable>
     </Animated.View>
   );
 
+  const renderPartnerCategory = (
+    slots: PartnerSlot[],
+    category: 'gold' | 'silver' | 'bronze',
+    sectionDelay: number
+  ) => {
+    const cfg = CATEGORY_CONFIG[category];
+    const isGold = category === 'gold';
+    return (
+      <Animated.View key={category} entering={FadeInDown.duration(400).delay(sectionDelay)} style={styles.partnerCategoryBlock}>
+        {/* Category header */}
+        <View style={styles.partnerCatHeader}>
+          <LinearGradient colors={cfg.gradient} style={styles.partnerCatIconBg}>
+            <MaterialIcons name={cfg.icon} size={isGold ? 18 : 16} color="#FFF" />
+          </LinearGradient>
+          <Text style={[styles.partnerCatTitle, { color: cfg.color }]}>
+            {cfg.label[language]}
+          </Text>
+          <View style={[styles.partnerCatCountBadge, { backgroundColor: cfg.bg }]}>
+            <Text style={[styles.partnerCatCountText, { color: cfg.color }]}>{slots.length} {language === 'fr' ? 'empl.' : 'slots'}</Text>
+          </View>
+        </View>
+
+        {/* Grid of slots */}
+        <View style={[styles.partnerSlotsGrid, isGold && styles.partnerSlotsGridGold]}>
+          {slots.map((slot, idx) => (
+            <Animated.View
+              key={slot.id}
+              entering={FadeIn.duration(300).delay(sectionDelay + 100 + idx * 60)}
+              style={[styles.partnerSlotCard, isGold && styles.partnerSlotCardGold, { borderColor: cfg.color + '20' }]}
+            >
+              <View style={[styles.partnerSlotIconBg, { backgroundColor: cfg.bg }]}>
+                <MaterialIcons name={cfg.icon} size={isGold ? 28 : 22} color={cfg.color} />
+              </View>
+              <Text style={styles.partnerSlotTitle}>
+                {language === 'fr' ? 'Disponible' : 'Available'}
+              </Text>
+              <Text style={styles.partnerSlotCategory}>{cfg.label[language]}</Text>
+              <Pressable
+                style={({ pressed }) => [styles.partnerSlotBtn, { borderColor: cfg.color + '40' }, pressed && { opacity: 0.75 }]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  Linking.openURL('mailto:ultimate.petanque.app@gmail.com?subject=Partenariat%20Ultimate%20Petanque%20-%20' + encodeURIComponent(cfg.label.fr));
+                }}
+              >
+                <MaterialIcons name="email" size={12} color={cfg.color} />
+                <Text style={[styles.partnerSlotBtnText, { color: cfg.color }]}>
+                  {language === 'fr' ? 'Nous contacter' : 'Contact us'}
+                </Text>
+              </Pressable>
+            </Animated.View>
+          ))}
+        </View>
+      </Animated.View>
+    );
+  };
+
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
+      {/* Minimal header */}
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+        <Pressable style={styles.backBtn} onPress={() => router.back()} hitSlop={8}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>{language === 'fr' ? 'Ambassadeurs & Partenaires' : 'Ambassadors & Partners'}</Text>
+        <View style={styles.headerCenter}>
+          <MaterialIcons name="verified" size={18} color="#7C3AED" />
+          <Text style={styles.headerTitle}>{language === 'fr' ? 'Ambassadeurs & Partenaires' : 'Ambassadors & Partners'}</Text>
+        </View>
         <View style={{ width: 40 }} />
       </View>
 
       <ScrollView
         ref={scrollViewRef}
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }, isTablet && styles.scrollContentTablet]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }, isTablet && styles.scrollContentTablet]}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#7C3AED" colors={['#7C3AED']} />}
       >
-        {/* ====== AMBASSADORS SECTION ====== */}
-        <Animated.View entering={FadeInDown.duration(400)}>
-          <LinearGradient colors={['#7C3AED', '#A78BFA', '#C4B5FD']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ambHero}>
-            <View style={styles.ambHeroIcon}>
-              <MaterialIcons name="verified" size={40} color="#FFF" />
+        {/* ====== HERO SECTION ====== */}
+        <Animated.View entering={FadeInDown.duration(500)}>
+          <LinearGradient
+            colors={['#5B21B6', '#7C3AED', '#A855F7']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroGradient}
+          >
+            {/* Decorative circles */}
+            <View style={styles.heroDecoCircle1} />
+            <View style={styles.heroDecoCircle2} />
+
+            <View style={styles.heroContent}>
+              <View style={styles.heroIconWrap}>
+                <MaterialIcons name="verified" size={32} color="#FFF" />
+              </View>
+              <Text style={styles.heroTitle}>{language === 'fr' ? 'Nos Ambassadeurs' : 'Our Ambassadors'}</Text>
+              <Text style={styles.heroSubtitle}>
+                {language === 'fr'
+                  ? 'Les passionnes qui representent la communaute Ultimate Petanque'
+                  : 'The enthusiasts who represent the Ultimate Petanque community'}
+              </Text>
+
+              {/* Stats pills */}
+              <View style={styles.heroPillsRow}>
+                <View style={styles.heroPill}>
+                  <MaterialIcons name="people" size={14} color="rgba(255,255,255,0.9)" />
+                  <Text style={styles.heroPillText}>{ambassadors.length} {language === 'fr' ? 'ambassadeurs' : 'ambassadors'}</Text>
+                </View>
+                <View style={styles.heroPill}>
+                  <MaterialIcons name="handshake" size={14} color="rgba(255,255,255,0.9)" />
+                  <Text style={styles.heroPillText}>{PARTNER_SLOTS.length} {language === 'fr' ? 'emplacements' : 'slots'}</Text>
+                </View>
+              </View>
             </View>
-            <Text style={styles.ambHeroTitle}>{language === 'fr' ? 'Nos Ambassadeurs' : 'Our Ambassadors'}</Text>
-            <Text style={styles.ambHeroSubtitle}>
-              {language === 'fr'
-                ? 'Les influenceurs et passionnes qui representent Ultimate Petanque'
-                : 'The influencers and enthusiasts who represent Ultimate Petanque'}
-            </Text>
           </LinearGradient>
         </Animated.View>
 
+        {/* ====== AMBASSADORS SECTION ====== */}
         {ambassadorsLoading ? (
           <View style={styles.loadingState}>
             <ActivityIndicator size="large" color="#7C3AED" />
             <Text style={styles.loadingText}>{language === 'fr' ? 'Chargement...' : 'Loading...'}</Text>
           </View>
         ) : ambassadors.length > 0 ? (
-          <View style={styles.ambList}>
+          <View style={styles.ambSection}>
+            {/* Section label */}
+            <Animated.View entering={FadeIn.duration(300).delay(60)} style={styles.sectionLabel}>
+              <View style={styles.sectionLabelLine} />
+              <Text style={styles.sectionLabelText}>{language === 'fr' ? 'AMBASSADEURS' : 'AMBASSADORS'}</Text>
+              <View style={styles.sectionLabelLine} />
+            </Animated.View>
+
             {ambassadors.map((amb, idx) => renderAmbassadorCard(amb, idx))}
           </View>
         ) : (
-          <View style={styles.ambEmptyState}>
-            <View style={styles.ambEmptyIcon}>
-              <MaterialIcons name="verified" size={48} color={theme.textMuted} />
+          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.ambEmptyState}>
+            <View style={styles.ambEmptyIconBg}>
+              <MaterialIcons name="verified" size={40} color="#7C3AED" />
             </View>
             <Text style={styles.ambEmptyTitle}>{language === 'fr' ? 'Bientot disponible' : 'Coming soon'}</Text>
             <Text style={styles.ambEmptyDesc}>
               {language === 'fr'
-                ? 'Notre programme ambassadeur est en cours de lancement. Contactez-nous pour en faire partie !'
-                : 'Our ambassador program is launching. Contact us to be part of it!'}
+                ? 'Notre programme ambassadeur est en cours de lancement.'
+                : 'Our ambassador program is launching soon.'}
             </Text>
-            <Pressable style={styles.ambEmptyBtn} onPress={() => { Haptics.selectionAsync(); Linking.openURL('mailto:ultimate.petanque.app@gmail.com?subject=Programme%20Ambassadeur%20Ultimate%20Petanque'); }}>
-              <MaterialIcons name="email" size={18} color="#FFF" />
+            <Pressable
+              style={({ pressed }) => [styles.ambEmptyBtn, pressed && { opacity: 0.85 }]}
+              onPress={() => { Haptics.selectionAsync(); Linking.openURL('mailto:ultimate.petanque.app@gmail.com?subject=Programme%20Ambassadeur%20Ultimate%20Petanque'); }}
+            >
+              <MaterialIcons name="email" size={16} color="#FFF" />
               <Text style={styles.ambEmptyBtnText}>{language === 'fr' ? 'Devenir ambassadeur' : 'Become an ambassador'}</Text>
             </Pressable>
-          </View>
+          </Animated.View>
         )}
 
         {/* ====== PARTNERS SECTION ====== */}
-        <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.partnersSection}>
-          <View style={styles.partnersSectionHeader}>
-            <View style={styles.partnersSectionIcon}>
-              <MaterialIcons name="handshake" size={22} color={theme.primary} />
+        <View style={styles.partnersSection}>
+          {/* Section label */}
+          <Animated.View entering={FadeIn.duration(300).delay(200)} style={styles.sectionLabel}>
+            <View style={styles.sectionLabelLine} />
+            <Text style={styles.sectionLabelText}>{language === 'fr' ? 'PARTENAIRES & SPONSORS' : 'PARTNERS & SPONSORS'}</Text>
+            <View style={styles.sectionLabelLine} />
+          </Animated.View>
+
+          <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.partnerIntroCard}>
+            <View style={styles.partnerIntroIcon}>
+              <MaterialIcons name="handshake" size={24} color={theme.primary} />
             </View>
-            <View>
-              <Text style={styles.partnersSectionTitle}>{language === 'fr' ? 'Partenaires & Sponsors' : 'Partners & Sponsors'}</Text>
-              <Text style={styles.partnersSectionSub}>
-                {language === 'fr' ? 'Ils soutiennent la communaute petanque' : 'They support the petanque community'}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.partnerIntroTitle}>
+                {language === 'fr' ? 'Soutenez la communaute' : 'Support the community'}
+              </Text>
+              <Text style={styles.partnerIntroDesc}>
+                {language === 'fr'
+                  ? 'Rejoignez-nous en tant que partenaire et touchez des milliers de joueurs passionnes.'
+                  : 'Join us as a partner and reach thousands of passionate players.'}
               </Text>
             </View>
-          </View>
+          </Animated.View>
 
-          {/* Gold */}
-          <View style={styles.partnerGroupHeader}>
-            <View style={[styles.partnerGroupIcon, { backgroundColor: '#FFD700' + '18' }]}>
-              <MaterialIcons name="emoji-events" size={16} color="#FFD700" />
-            </View>
-            <Text style={styles.partnerGroupTitle}>{language === 'fr' ? 'Partenaires Or' : 'Gold Partners'}</Text>
-          </View>
-          {goldSlots.map((slot, i) => renderPartnerSlot(slot, i, 300))}
+          {renderPartnerCategory(goldSlots, 'gold', 350)}
+          {renderPartnerCategory(silverSlots, 'silver', 500)}
+          {renderPartnerCategory(bronzeSlots, 'bronze', 650)}
+        </View>
 
-          {/* Silver */}
-          <View style={styles.partnerGroupHeader}>
-            <View style={[styles.partnerGroupIcon, { backgroundColor: '#A8B4C0' + '18' }]}>
-              <MaterialIcons name="workspace-premium" size={16} color="#A8B4C0" />
-            </View>
-            <Text style={styles.partnerGroupTitle}>{language === 'fr' ? 'Partenaires Argent' : 'Silver Partners'}</Text>
-          </View>
-          {silverSlots.map((slot, i) => renderPartnerSlot(slot, i, 450))}
-
-          {/* Bronze */}
-          <View style={styles.partnerGroupHeader}>
-            <View style={[styles.partnerGroupIcon, { backgroundColor: '#CD7F32' + '18' }]}>
-              <MaterialIcons name="military-tech" size={16} color="#CD7F32" />
-            </View>
-            <Text style={styles.partnerGroupTitle}>{language === 'fr' ? 'Partenaires Bronze' : 'Bronze Partners'}</Text>
-          </View>
-          {bronzeSlots.map((slot, i) => renderPartnerSlot(slot, i, 600))}
-        </Animated.View>
-
-        {/* ====== CTA ====== */}
-        <Animated.View entering={FadeInDown.duration(400).delay(800)} style={styles.ctaCard}>
-          <View style={styles.ctaIconBg}>
-            <MaterialIcons name="campaign" size={32} color={theme.primary} />
-          </View>
-          <Text style={styles.ctaTitle}>{language === 'fr' ? 'Devenez partenaire ou ambassadeur' : 'Become a partner or ambassador'}</Text>
-          <Text style={styles.ctaDescription}>
-            {language === 'fr'
-              ? 'Rejoignez Ultimate Petanque et touchez des milliers de joueurs passionnes.'
-              : 'Join Ultimate Petanque and reach thousands of passionate players.'}
-          </Text>
-          <View style={styles.ctaBenefits}>
-            {[
-              { icon: 'visibility', text: language === 'fr' ? 'Visibilite dans l\'app' : 'In-app visibility' },
-              { icon: 'people', text: language === 'fr' ? 'Communaute engagee' : 'Engaged community' },
-              { icon: 'verified', text: language === 'fr' ? 'Badge Ambassadeur verifie' : 'Verified Ambassador badge' },
-            ].map((b, i) => (
-              <View key={i} style={styles.ctaBenefitItem}>
-                <MaterialIcons name={b.icon as any} size={16} color={theme.success} />
-                <Text style={styles.ctaBenefitText}>{b.text}</Text>
+        {/* ====== CTA SECTION ====== */}
+        <Animated.View entering={FadeInDown.duration(400).delay(800)}>
+          <LinearGradient
+            colors={['#1E3A8A', '#2563EB']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.ctaGradient}
+          >
+            <View style={styles.ctaDecoCircle} />
+            <View style={styles.ctaContent}>
+              <View style={styles.ctaIconBg}>
+                <MaterialIcons name="campaign" size={28} color="#FFF" />
               </View>
-            ))}
-          </View>
-          <Pressable style={styles.ctaButton} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); Linking.openURL('mailto:ultimate.petanque.app@gmail.com?subject=Partenariat%20Ultimate%20Petanque'); }}>
-            <MaterialIcons name="email" size={20} color="#FFF" />
-            <Text style={styles.ctaButtonText}>{language === 'fr' ? 'Nous contacter' : 'Contact us'}</Text>
-          </Pressable>
+              <Text style={styles.ctaTitle}>
+                {language === 'fr' ? 'Rejoignez l\'aventure' : 'Join the adventure'}
+              </Text>
+              <Text style={styles.ctaDescription}>
+                {language === 'fr'
+                  ? 'Devenez ambassadeur ou partenaire et gagnez en visibilite aupres de la communaute petanque.'
+                  : 'Become an ambassador or partner and gain visibility within the petanque community.'}
+              </Text>
+
+              <View style={styles.ctaBenefits}>
+                {[
+                  { icon: 'visibility', text: language === 'fr' ? 'Visibilite in-app' : 'In-app visibility' },
+                  { icon: 'people', text: language === 'fr' ? 'Communaute engagee' : 'Engaged community' },
+                  { icon: 'verified', text: language === 'fr' ? 'Badge verifie' : 'Verified badge' },
+                ].map((b, i) => (
+                  <View key={i} style={styles.ctaBenefitItem}>
+                    <View style={styles.ctaBenefitDot}>
+                      <MaterialIcons name={b.icon as any} size={14} color="#FFF" />
+                    </View>
+                    <Text style={styles.ctaBenefitText}>{b.text}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <Pressable
+                style={({ pressed }) => [styles.ctaButton, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); Linking.openURL('mailto:ultimate.petanque.app@gmail.com?subject=Partenariat%20Ultimate%20Petanque'); }}
+              >
+                <MaterialIcons name="email" size={18} color="#2563EB" />
+                <Text style={styles.ctaButtonText}>{language === 'fr' ? 'Nous contacter' : 'Contact us'}</Text>
+              </Pressable>
+            </View>
+          </LinearGradient>
         </Animated.View>
       </ScrollView>
     </SafeAreaView>
@@ -356,85 +477,226 @@ export default function PartnersScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.backgroundSecondary },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
-  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: theme.textPrimary },
+  container: { flex: 1, backgroundColor: '#F5F3FF' },
+
+  // Header
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 12,
+    backgroundColor: '#FFFFFFEE',
+    borderBottomWidth: 1, borderBottomColor: '#7C3AED' + '10',
+  },
+  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },
+  headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: theme.textPrimary },
+
+  // Scroll
   scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 20 },
-  scrollContentTablet: { maxWidth: 960, alignSelf: 'center' as const, width: '100%', paddingHorizontal: 24 },
+  scrollContent: { paddingTop: 0 },
+  scrollContentTablet: { maxWidth: 960, alignSelf: 'center' as const, width: '100%' },
 
-  // Ambassador Hero
-  ambHero: { borderRadius: 24, padding: 28, alignItems: 'center', marginBottom: 20 },
-  ambHeroIcon: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
-  ambHeroTitle: { fontSize: 24, fontWeight: '800', color: '#FFF', marginBottom: 8, textAlign: 'center' },
-  ambHeroSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.85)', textAlign: 'center', lineHeight: 20, maxWidth: 320 },
+  // ====== HERO ======
+  heroGradient: {
+    paddingTop: 32, paddingBottom: 36, paddingHorizontal: 24,
+    position: 'relative' as const, overflow: 'hidden' as const,
+  },
+  heroDecoCircle1: {
+    position: 'absolute', top: -40, right: -40, width: 160, height: 160,
+    borderRadius: 80, backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  heroDecoCircle2: {
+    position: 'absolute', bottom: -20, left: -30, width: 100, height: 100,
+    borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  heroContent: { alignItems: 'center', position: 'relative' as const, zIndex: 1 },
+  heroIconWrap: {
+    width: 64, height: 64, borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center',
+    marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+  },
+  heroTitle: { fontSize: 26, fontWeight: '800', color: '#FFF', marginBottom: 10, textAlign: 'center' },
+  heroSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.8)', textAlign: 'center', lineHeight: 21, maxWidth: 340, marginBottom: 20 },
+  heroPillsRow: { flexDirection: 'row', gap: 10 },
+  heroPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+  },
+  heroPillText: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.9)' },
 
-  // Ambassador list
-  ambList: { marginBottom: 24 },
-  ambCard: { backgroundColor: theme.surface, borderRadius: 20, padding: 18, marginBottom: 14, borderWidth: 1.5, borderColor: '#7C3AED' + '20', ...theme.shadows.card },
-  ambCardHighlight: { borderColor: '#7C3AED', borderWidth: 2, backgroundColor: '#7C3AED' + '05' },
-  ambHeader: { flexDirection: 'row', gap: 14, marginBottom: 14 },
+  // ====== SECTION LABEL ======
+  sectionLabel: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    paddingHorizontal: 16, marginBottom: 18,
+  },
+  sectionLabelLine: { flex: 1, height: 1, backgroundColor: theme.border },
+  sectionLabelText: {
+    fontSize: 11, fontWeight: '700', color: theme.textMuted,
+    letterSpacing: 1.5,
+  },
+
+  // ====== AMBASSADORS ======
+  ambSection: { paddingHorizontal: 16, paddingTop: 24, marginBottom: 8 },
+  ambCard: {
+    backgroundColor: theme.surface, borderRadius: 20,
+    marginBottom: 16, overflow: 'hidden',
+    ...Platform.select({
+      ios: { shadowColor: '#7C3AED', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12 },
+      android: { elevation: 3 },
+      default: { shadowColor: '#7C3AED', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 },
+    }),
+  },
+  ambCardHighlight: { borderWidth: 2, borderColor: '#7C3AED' },
+  ambAccentBar: { height: 4, width: '100%' },
+  ambHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 18, paddingBottom: 0 },
   ambAvatarWrap: { position: 'relative' as const },
-  ambAvatar: { width: 64, height: 64, borderRadius: 20, overflow: 'hidden' as const },
-  ambVerifiedBadge: { position: 'absolute' as const, bottom: -4, right: -4, width: 24, height: 24, borderRadius: 12, backgroundColor: '#7C3AED', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 2.5, borderColor: theme.surface },
-  ambInfo: { flex: 1 },
-  ambName: { fontSize: 17, fontWeight: '700', color: theme.textPrimary },
-  ambBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#7C3AED' + '12', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
-  ambBadgeText: { fontSize: 10, fontWeight: '700', color: '#7C3AED' },
+  ambAvatar: { width: 60, height: 60, borderRadius: 18, overflow: 'hidden' as const },
+  ambAvatarLetter: { fontSize: 26, fontWeight: '800', color: '#FFF' },
+  ambVerifiedBadge: {
+    position: 'absolute', bottom: -3, right: -3, width: 22, height: 22, borderRadius: 11,
+    backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2.5, borderColor: theme.surface,
+  },
+  ambInfo: { flex: 1, minWidth: 0 },
+  ambName: { fontSize: 18, fontWeight: '700', color: theme.textPrimary },
+  ambBadgeRow: { flexDirection: 'row', gap: 6, marginTop: 4 },
+  ambBadgePill: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: '#7C3AED' + '0F', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10,
+    borderWidth: 1, borderColor: '#7C3AED' + '18',
+  },
+  ambBadgePillText: { fontSize: 10, fontWeight: '700', color: '#7C3AED' },
   ambMeta: { fontSize: 12, color: theme.textSecondary, marginTop: 4 },
-  ambBio: { fontSize: 13, color: theme.textSecondary, marginTop: 6, lineHeight: 19 },
+  ambArrowBtn: {
+    width: 36, height: 36, borderRadius: 12,
+    backgroundColor: '#7C3AED' + '0C', alignItems: 'center', justifyContent: 'center',
+  },
+  ambBio: { fontSize: 13, color: theme.textSecondary, lineHeight: 20, paddingHorizontal: 18, marginTop: 12 },
 
   // Ambassador stats
-  ambStatsRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 10, marginBottom: 14 },
+  ambStatsRow: {
+    flexDirection: 'row', alignItems: 'center',
+    marginHorizontal: 18, marginTop: 14,
+    backgroundColor: '#F8F7FF', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 8,
+    borderWidth: 1, borderColor: '#7C3AED' + '08',
+  },
   ambStatItem: { flex: 1, alignItems: 'center' },
-  ambStatValue: { fontSize: 16, fontWeight: '800', color: theme.textPrimary },
-  ambStatLabel: { fontSize: 9, color: theme.textMuted, marginTop: 2, textTransform: 'uppercase' as const },
-  ambStatDivider: { width: 1, height: 24, backgroundColor: theme.border },
+  ambStatValue: { fontSize: 17, fontWeight: '800', color: theme.textPrimary },
+  ambStatLabel: { fontSize: 9, color: theme.textMuted, marginTop: 2, textTransform: 'uppercase' as const, letterSpacing: 0.3 },
+  ambStatDivider: { width: 1, height: 26, backgroundColor: '#7C3AED' + '12' },
 
-  // Ambassador social
-  ambSocialRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  ambSocialBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
-  ambSocialText: { fontSize: 12, fontWeight: '600' },
+  // Social chips
+  socialRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 18, paddingTop: 14 },
+  socialChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12,
+    borderWidth: 1,
+  },
+  socialChipText: { fontSize: 12, fontWeight: '600', maxWidth: 120 },
 
   // Loading / Empty
-  loadingState: { alignItems: 'center', paddingVertical: 40, gap: 12 },
+  loadingState: { alignItems: 'center', paddingVertical: 48, gap: 12 },
   loadingText: { fontSize: 14, color: theme.textMuted },
-  ambEmptyState: { alignItems: 'center', paddingVertical: 40, paddingHorizontal: 24, backgroundColor: theme.surface, borderRadius: 20, marginBottom: 24, ...theme.shadows.card },
-  ambEmptyIcon: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#7C3AED' + '10', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  ambEmptyState: {
+    alignItems: 'center', paddingVertical: 40, paddingHorizontal: 24,
+    marginHorizontal: 16, marginTop: 24,
+    backgroundColor: theme.surface, borderRadius: 24,
+    ...theme.shadows.card,
+  },
+  ambEmptyIconBg: {
+    width: 80, height: 80, borderRadius: 24,
+    backgroundColor: '#7C3AED' + '0C', alignItems: 'center', justifyContent: 'center',
+    marginBottom: 16, borderWidth: 1, borderColor: '#7C3AED' + '15',
+  },
   ambEmptyTitle: { fontSize: 20, fontWeight: '700', color: theme.textPrimary, marginBottom: 8 },
-  ambEmptyDesc: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 20, maxWidth: 300 },
-  ambEmptyBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#7C3AED', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14 },
+  ambEmptyDesc: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 21, marginBottom: 20, maxWidth: 280 },
+  ambEmptyBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#7C3AED', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14,
+  },
   ambEmptyBtnText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
 
-  // Partners section
-  partnersSection: { marginBottom: 24 },
-  partnersSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
-  partnersSectionIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center' },
-  partnersSectionTitle: { fontSize: 18, fontWeight: '700', color: theme.textPrimary },
-  partnersSectionSub: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
-  partnerGroupHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10, marginTop: 8 },
-  partnerGroupIcon: { width: 28, height: 28, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
-  partnerGroupTitle: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
+  // ====== PARTNERS ======
+  partnersSection: { paddingTop: 16, marginBottom: 8 },
+  partnerIntroCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    marginHorizontal: 16, marginBottom: 24,
+    backgroundColor: theme.surface, borderRadius: 16, padding: 16,
+    borderWidth: 1, borderColor: theme.primary + '12',
+    ...theme.shadows.card,
+  },
+  partnerIntroIcon: {
+    width: 48, height: 48, borderRadius: 14,
+    backgroundColor: theme.primary + '0C', alignItems: 'center', justifyContent: 'center',
+  },
+  partnerIntroTitle: { fontSize: 15, fontWeight: '700', color: theme.textPrimary, marginBottom: 4 },
+  partnerIntroDesc: { fontSize: 12, color: theme.textSecondary, lineHeight: 18 },
 
-  // Partner cards
-  partnerCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 20, marginBottom: 12, alignItems: 'center', ...theme.shadows.card },
-  partnerCardAvailable: { borderWidth: 2, borderColor: theme.border, borderStyle: 'dashed' as any, backgroundColor: theme.backgroundSecondary },
-  partnerCardGold: { borderColor: '#FFD700' + '40', backgroundColor: '#FFD700' + '04', minHeight: 140 },
-  availableIconBg: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  availableTitle: { fontSize: 14, fontWeight: '600', color: theme.textMuted, marginBottom: 3 },
-  availableCategory: { fontSize: 11, color: theme.textMuted, marginBottom: 12 },
-  contactBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: theme.borderRadius.full, borderWidth: 1.5 },
-  contactBtnText: { fontSize: 12, fontWeight: '600' },
+  // Partner category
+  partnerCategoryBlock: { marginBottom: 20, paddingHorizontal: 16 },
+  partnerCatHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  partnerCatIconBg: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  partnerCatTitle: { fontSize: 15, fontWeight: '700', flex: 1 },
+  partnerCatCountBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
+  partnerCatCountText: { fontSize: 10, fontWeight: '700' },
 
-  // CTA
-  ctaCard: { backgroundColor: theme.surface, borderRadius: 24, padding: 28, alignItems: 'center', marginBottom: 8, borderWidth: 2, borderColor: theme.primary + '20', ...theme.shadows.cardElevated },
-  ctaIconBg: { width: 64, height: 64, borderRadius: 20, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  ctaTitle: { fontSize: 20, fontWeight: '800', color: theme.textPrimary, marginBottom: 10, textAlign: 'center' },
-  ctaDescription: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 20, maxWidth: 340 },
-  ctaBenefits: { gap: 8, marginBottom: 20, width: '100%' },
-  ctaBenefitItem: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.success + '08', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
-  ctaBenefitText: { fontSize: 14, fontWeight: '500', color: theme.textPrimary },
-  ctaButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.primary, paddingVertical: 16, paddingHorizontal: 32, borderRadius: 14, width: '100%', ...theme.shadows.cardElevated },
-  ctaButtonText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
+  // Partner slots grid
+  partnerSlotsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  partnerSlotsGridGold: {},
+  partnerSlotCard: {
+    flex: 1, minWidth: 140,
+    backgroundColor: theme.surface, borderRadius: 16,
+    padding: 16, alignItems: 'center',
+    borderWidth: 1.5, borderStyle: 'dashed' as any,
+    ...theme.shadows.card,
+  },
+  partnerSlotCardGold: { minWidth: 150, paddingVertical: 20 },
+  partnerSlotIconBg: {
+    width: 44, height: 44, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 10,
+  },
+  partnerSlotTitle: { fontSize: 13, fontWeight: '600', color: theme.textSecondary, marginBottom: 2 },
+  partnerSlotCategory: { fontSize: 11, color: theme.textMuted, marginBottom: 12 },
+  partnerSlotBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20,
+    borderWidth: 1.5,
+  },
+  partnerSlotBtnText: { fontSize: 11, fontWeight: '600' },
+
+  // ====== CTA ======
+  ctaGradient: {
+    marginHorizontal: 16, marginBottom: 8, borderRadius: 24,
+    overflow: 'hidden', position: 'relative' as const,
+  },
+  ctaDecoCircle: {
+    position: 'absolute', top: -20, right: -20, width: 120, height: 120,
+    borderRadius: 60, backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  ctaContent: { alignItems: 'center', padding: 28, position: 'relative' as const, zIndex: 1 },
+  ctaIconBg: {
+    width: 56, height: 56, borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center',
+    marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+  },
+  ctaTitle: { fontSize: 22, fontWeight: '800', color: '#FFF', marginBottom: 10, textAlign: 'center' },
+  ctaDescription: { fontSize: 13, color: 'rgba(255,255,255,0.75)', textAlign: 'center', lineHeight: 20, marginBottom: 20, maxWidth: 320 },
+  ctaBenefits: { gap: 10, marginBottom: 24, width: '100%' },
+  ctaBenefitItem: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  ctaBenefitDot: {
+    width: 30, height: 30, borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center',
+  },
+  ctaBenefitText: { fontSize: 14, fontWeight: '500', color: 'rgba(255,255,255,0.9)' },
+  ctaButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: '#FFF', paddingVertical: 16, paddingHorizontal: 32,
+    borderRadius: 16, width: '100%',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8 },
+      android: { elevation: 4 },
+      default: {},
+    }),
+  },
+  ctaButtonText: { fontSize: 16, fontWeight: '700', color: '#2563EB' },
 });
