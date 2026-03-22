@@ -32,6 +32,7 @@ import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { Club, Terrain } from '@/services/mockData';
 import { getUnreadShareNotificationCount } from '@/services/shareService';
+import { isUserAmbassador } from '@/services/ambassadorService';
 import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 import AdBanner from '@/components/ui/AdBanner';
@@ -118,6 +119,7 @@ export default function ProfileScreen() {
   
   // Share notifications count
   const [unreadShareCount, setUnreadShareCount] = useState(0);
+  const [isAmbassador, setIsAmbassador] = useState(false);
   
   // Expandable settings sections
   const [showNotifSection, setShowNotifSection] = useState(false);
@@ -145,6 +147,12 @@ export default function ProfileScreen() {
     loadCount();
     const interval = setInterval(loadCount, 30000);
     return () => clearInterval(interval);
+  }, [user?.id]);
+
+  // Check ambassador status
+  useEffect(() => {
+    if (!user?.id) return;
+    isUserAmbassador(user.id).then(setIsAmbassador);
   }, [user?.id]);
 
   // Load federation card URL
@@ -1831,6 +1839,26 @@ export default function ProfileScreen() {
                 <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
               )}
             </Pressable>
+
+            {/* Ambassador Dashboard - only for ambassadors */}
+            {isAmbassador ? (
+              <Pressable 
+                style={styles.menuItem}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  router.push('/ambassador-dashboard' as any);
+                }}
+              >
+                <View style={[styles.menuIcon, { backgroundColor: '#7C3AED' + '15' }]}>
+                  <MaterialIcons name="verified" size={20} color="#7C3AED" />
+                </View>
+                <View style={styles.menuItemContent}>
+                  <Text style={styles.menuItemText}>{language === 'fr' ? 'Portail Ambassadeur' : 'Ambassador Portal'}</Text>
+                  <Text style={styles.menuItemSubtext}>{language === 'fr' ? 'Analytics, evenements et profil' : 'Analytics, events and profile'}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              </Pressable>
+            ) : null}
 
             {/* Partners */}
             <Pressable 
