@@ -35,7 +35,7 @@ import { fetchDeviceClusters, getDeviceRegistrationStats, DeviceCluster } from '
 import { fetchAmbassadors, invalidateAmbassadorCache, Ambassador } from '@/services/ambassadorService';
 import { fetchAmbassadorAnalytics, fetchDailyAnalyticsCounts, AmbassadorAnalytics, fetchSponsoredChallengeAnalytics, fetchDailySponsoredChallengeCounts } from '@/services/ambassadorAnalyticsService';
 import { Challenge } from '@/services/mockData';
-import { getSponsoredEvents, getEventParticipants, SponsoredEvent } from '@/services/sponsoredEventService';
+import { getSponsoredEvents, getEventParticipants, publishResults, cancelSponsoredEvent, SponsoredEvent } from '@/services/sponsoredEventService';
 import Svg, { Path as SvgPath } from 'react-native-svg';
 import { uploadImageToStorage } from '@/services/storageService';
 
@@ -221,31 +221,75 @@ export default function AdminPromosScreen() {
   const [sponsoredEvents, setSponsoredEvents] = useState<SponsoredEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [eventsLoaded, setEventsLoaded] = useState(false);
-  const [eventsParticipantCounts, setEventsParticipantCounts] = useState<Map<string, { total: number; completed: number }>>(new Map());
+  const [eventsParticipantCounts, setEventsParticipantCounts] = useState<Map<string, { total: number; completed: number; witnessReady: number }>>(new Map());
+  const [eventStatusFilter, setEventStatusFilter] = useState<'all' | 'upcoming' | 'active' | 'completed' | 'cancelled'>('all');
+  const [eventAmbassadorFilter, setEventAmbassadorFilter] = useState<string>('all');
+  const [publishingEvent, setPublishingEvent] = useState<string | null>(null);
+  const [cancellingEvent, setCancellingEvent] = useState<string | null>(null);
 
   const loadSponsoredEvents = useCallback(async () => {
     if (eventsLoaded) return;
     setEventsLoading(true);
     const { events: allEvts } = await getSponsoredEvents();
-    // Also fetch completed events
     const { events: completedEvts } = await getSponsoredEvents('completed');
+    const { events: cancelledEvts } = await getSponsoredEvents('cancelled');
     const allMerged = [...allEvts];
     completedEvts.forEach(e => { if (!allMerged.find(x => x.id === e.id)) allMerged.push(e); });
+    cancelledEvts.forEach(e => { if (!allMerged.find(x => x.id === e.id)) allMerged.push(e); });
     allMerged.sort((a, b) => new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime());
     setSponsoredEvents(allMerged);
-    // Load participant counts
-    const counts = new Map<string, { total: number; completed: number }>();
-    await Promise.all(allMerged.slice(0, 20).map(async (ev) => {
+    const counts = new Map<string, { total: number; completed: number; witnessReady: number }>();
+    await Promise.all(allMerged.slice(0, 30).map(async (ev) => {
       const { participants } = await getEventParticipants(ev.id);
-      counts.set(ev.id, {
-        total: participants.filter(p => p.status === 'accepted' || p.status === 'completed').length,
-        completed: participants.filter(p => p.status === 'completed').length,
-      });
+      const accepted = participants.filter(p => p.status === 'accepted' || p.status === 'completed');
+      const completed = participants.filter(p => p.status === 'completed');
+      const witnessReady = completed.filter(p => (p.witnessesAttested || 0) >= ev.minWitnesses).length;
+      counts.set(ev.id, { total: accepted.length, completed: completed.length, witnessReady });
     }));
     setEventsParticipantCounts(counts);
     setEventsLoading(false);
     setEventsLoaded(true);
   }, [eventsLoaded]);
+
+  const handlePublishEventResults = useCallback(async (eventId: string) => {
+    showAlert(fr ? 'Publier les resultats ?' : 'Publish results?', fr ? 'Les classements seront calcules.' : 'Rankings will be calculated.', [
+      { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
+      { text: fr ? 'Publier' : 'Publish', onPress: async () => {
+        setPublishingEvent(eventId);
+        const { error } = await publishResults(eventId);
+        setPublishingEvent(null);
+        if (error) { showAlert(fr ? 'Erreur' : 'Error', error); }
+        else { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); setEventsLoaded(false); loadSponsoredEvents(); }
+      }},
+    ]);
+  }, [fr, showAlert, loadSponsoredEvents]);
+
+  const handleCancelEvent = useCallback(async (eventId: string) => {
+    showAlert(fr ? 'Annuler cet evenement ?' : 'Cancel this event?', fr ? 'Cette action est irreversible.' : 'This cannot be undone.', [
+      { text: fr ? 'Non' : 'No', style: 'cancel' },
+      { text: fr ? 'Oui, annuler' : 'Yes, cancel', style: 'destructive', onPress: async () => {
+        setCancellingEvent(eventId);
+        await cancelSponsoredEvent(eventId);
+        setCancellingEvent(null);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setEventsLoaded(false); loadSponsoredEvents();
+      }},
+    ]);
+  }, [fr, showAlert, loadSponsoredEvents]);
+
+  const filteredSponsoredEvents = React.useMemo(() => {
+    return sponsoredEvents.filter(ev => {
+      if (eventStatusFilter !== 'all' && ev.status !== eventStatusFilter) return false;
+      if (eventAmbassadorFilter !== 'all' && ev.ambassadorId !== eventAmbassadorFilter) return false;
+      return true;
+    });
+  }, [sponsoredEvents, eventStatusFilter, eventAmbassadorFilter]);
+
+  const uniqueEventAmbassadors = React.useMemo(() => {
+    const map = new Map<string, string>();
+    sponsoredEvents.forEach(ev => { if (ev.ambassadorName) map.set(ev.ambassadorId, ev.ambassadorName); });
+    return Array.from(map.entries());
+  }, [sponsoredEvents]);
 
   // ===== AMBASSADORS STATE =====
   const [showAmbassadorSection, setShowAmbassadorSection] = useState(false);
@@ -1089,7 +1133,7 @@ export default function AdminPromosScreen() {
                       <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 4, textAlign: 'center' }}>{fr ? 'Les evenements sponsorises apparaitront ici.' : 'Sponsored events will appear here.'}</Text>
                     </View>
                   ) : (
-                    sponsoredEvents.map((ev) => {
+                    filteredSponsoredEvents.map((ev) => {
                       const counts = eventsParticipantCounts.get(ev.id);
                       const statusColors: Record<string, string> = { upcoming: '#F59E0B', active: '#22C55E', completed: '#3B82F6', cancelled: '#EF4444' };
                       const sc = statusColors[ev.status] || theme.textMuted;

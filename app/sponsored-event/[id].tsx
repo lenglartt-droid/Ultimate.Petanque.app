@@ -13,6 +13,7 @@ import {
   registerForEvent, declineEvent, attestAsWitness, publishResults,
   cancelSponsoredEvent, SponsoredEvent, SponsoredEventParticipant,
 } from '@/services/sponsoredEventService';
+import { Dimensions } from 'react-native';
 import {
   scheduleEventReminders, cancelEventReminders, getScheduledEventReminders,
   markAllEventNotificationsRead, EventReminderSettings,
@@ -41,9 +42,15 @@ export default function SponsoredEventDetailScreen() {
   const [reminder1h, setReminder1h] = useState(false);
   const [remindersLoading, setRemindersLoading] = useState(false);
 
+  const [prevAcceptedCount, setPrevAcceptedCount] = useState(0);
+  const [showNewBadge, setShowNewBadge] = useState(false);
+  const [pollInterval, setPollInterval] = useState<ReturnType<typeof setInterval> | null>(null);
+
   const isCreator = event?.creatorUserId === user?.id;
   const acceptedCount = participants.filter(p => p.status === 'accepted' || p.status === 'completed').length;
   const completedCount = participants.filter(p => p.status === 'completed').length;
+  const recentRegistrants = [...participants].filter(p => p.status === 'accepted' || p.status === 'completed').sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
+  const fillPercent = event ? Math.min(100, Math.round((acceptedCount / event.maxParticipants) * 100)) : 0;
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -59,6 +66,27 @@ export default function SponsoredEventDetailScreen() {
   }, [id]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Detect new participants for badge animation
+  useEffect(() => {
+    if (acceptedCount > prevAcceptedCount && prevAcceptedCount > 0) {
+      setShowNewBadge(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const t = setTimeout(() => setShowNewBadge(false), 3000);
+      return () => clearTimeout(t);
+    }
+    setPrevAcceptedCount(acceptedCount);
+  }, [acceptedCount]);
+
+  // Poll for participant updates every 15s when event is active/upcoming
+  useEffect(() => {
+    if (!id || !event || event.status === 'completed' || event.status === 'cancelled') return;
+    const interval = setInterval(async () => {
+      const { participants: parts } = await getEventParticipants(id);
+      setParticipants(parts);
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [id, event?.status]);
 
   // Load reminder state
   useEffect(() => {
@@ -256,6 +284,67 @@ export default function SponsoredEventDetailScreen() {
         </View>
 
         {event.description ? <View style={s.descCard}><Text style={s.descText}>{event.description}</Text></View> : null}
+
+        {/* ===== PARTICIPANT COUNTER ===== */}
+        <Animated.View entering={FadeInDown.duration(300)} style={s.counterCard}>
+          <View style={s.counterHeader}>
+            <View style={s.counterIconBg}>
+              <MaterialIcons name="group" size={20} color="#7C3AED" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={s.counterTitle}>{language === 'fr' ? 'Participants' : 'Participants'}</Text>
+                {showNewBadge ? (
+                  <Animated.View entering={FadeInDown.duration(300)} style={s.newBadge}>
+                    <MaterialIcons name="person-add" size={10} color="#FFF" />
+                    <Text style={s.newBadgeText}>+1</Text>
+                  </Animated.View>
+                ) : null}
+              </View>
+              <Text style={s.counterSubtitle}>{acceptedCount} / {event.maxParticipants} {language === 'fr' ? 'inscrits' : 'registered'}</Text>
+            </View>
+            <View style={s.counterValueBg}>
+              <Text style={s.counterValue}>{fillPercent}%</Text>
+            </View>
+          </View>
+          {/* Progress Bar */}
+          <View style={s.progressTrack}>
+            <View style={[s.progressFill, { width: `${fillPercent}%`, backgroundColor: fillPercent >= 90 ? '#EF4444' : fillPercent >= 70 ? '#F59E0B' : '#7C3AED' }]} />
+          </View>
+          <View style={s.progressLabels}>
+            <Text style={s.progressLabel}>0</Text>
+            <Text style={[s.progressLabel, { color: fillPercent >= 90 ? '#EF4444' : '#7C3AED', fontWeight: '700' }]}>{acceptedCount}</Text>
+            <Text style={s.progressLabel}>{event.maxParticipants}</Text>
+          </View>
+          {fillPercent >= 90 ? (
+            <View style={s.almostFullBanner}>
+              <MaterialIcons name="warning" size={14} color="#EF4444" />
+              <Text style={s.almostFullText}>{language === 'fr' ? 'Presque complet !' : 'Almost full!'}</Text>
+            </View>
+          ) : null}
+          {/* Recent Registrants */}
+          {recentRegistrants.length > 0 ? (
+            <View style={s.recentSection}>
+              <Text style={s.recentTitle}>{language === 'fr' ? 'Derniers inscrits' : 'Recent registrants'}</Text>
+              {recentRegistrants.map((p, idx) => (
+                <Animated.View key={p.id} entering={FadeInDown.duration(200).delay(idx * 50)} style={s.recentRow}>
+                  {p.userAvatar ? (
+                    <Image source={{ uri: p.userAvatar }} style={s.recentAvatar} contentFit="cover" cachePolicy="memory-disk" />
+                  ) : (
+                    <View style={[s.recentAvatar, { backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center' }]}>
+                      <Text style={{ fontWeight: '700', color: theme.primary, fontSize: 11 }}>{p.userName?.charAt(0)}</Text>
+                    </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.recentName} numberOfLines={1}>{p.userName} {p.userId === user?.id ? (language === 'fr' ? '(Vous)' : '(You)') : ''}</Text>
+                    <Text style={s.recentDate}>{new Date(p.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</Text>
+                  </View>
+                  <View style={[s.recentStatusDot, { backgroundColor: p.status === 'completed' ? theme.success : theme.primary }]} />
+                </Animated.View>
+              ))}
+            </View>
+          ) : null}
+        </Animated.View>
 
         {/* Reminders Section */}
         {(myStatus === 'accepted' || myStatus === 'completed' || isCreator) && !isPast && event.status !== 'cancelled' ? (
@@ -488,6 +577,29 @@ const s = StyleSheet.create({
   // Actions
   actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FFF', borderRadius: 14, padding: 16, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0' },
   actionBtnText: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  // Participant Counter
+  counterCard: { marginHorizontal: 16, marginBottom: 16, backgroundColor: '#FFF', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#7C3AED20' },
+  counterHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 12 },
+  counterIconBg: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#7C3AED12', alignItems: 'center' as const, justifyContent: 'center' as const },
+  counterTitle: { fontSize: 16, fontWeight: '700' as const, color: theme.textPrimary },
+  counterSubtitle: { fontSize: 12, color: theme.textMuted, marginTop: 1 },
+  counterValueBg: { backgroundColor: '#7C3AED12', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
+  counterValue: { fontSize: 16, fontWeight: '900' as const, color: '#7C3AED' },
+  newBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, backgroundColor: '#22C55E', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
+  newBadgeText: { fontSize: 10, fontWeight: '800' as const, color: '#FFF' },
+  progressTrack: { height: 10, backgroundColor: '#F1F5F9', borderRadius: 5, overflow: 'hidden' as const },
+  progressFill: { height: '100%' as const, borderRadius: 5 },
+  progressLabels: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, marginTop: 4, paddingHorizontal: 2 },
+  progressLabel: { fontSize: 10, fontWeight: '500' as const, color: theme.textMuted },
+  almostFullBanner: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, backgroundColor: '#FEF2F2', borderRadius: 10, padding: 10, marginTop: 10, borderWidth: 1, borderColor: '#FECACA' },
+  almostFullText: { fontSize: 12, fontWeight: '700' as const, color: '#EF4444' },
+  recentSection: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  recentTitle: { fontSize: 12, fontWeight: '700' as const, color: theme.textMuted, textTransform: 'uppercase' as const, letterSpacing: 0.5, marginBottom: 10 },
+  recentRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 8 },
+  recentAvatar: { width: 32, height: 32, borderRadius: 10, overflow: 'hidden' as const },
+  recentName: { fontSize: 13, fontWeight: '600' as const, color: theme.textPrimary },
+  recentDate: { fontSize: 10, color: theme.textMuted, marginTop: 1 },
+  recentStatusDot: { width: 8, height: 8, borderRadius: 4 },
   // Reminders
   remindersCard: { marginHorizontal: 16, marginBottom: 16, backgroundColor: '#FFF', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#7C3AED20' },
   remindersHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
