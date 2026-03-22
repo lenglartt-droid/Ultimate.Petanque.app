@@ -3,6 +3,7 @@
 // Aggregates match stats by boules brand & model
 // ============================================
 import { getSupabaseClient } from '@/template';
+import { LeaderboardPeriod, getPeriodDateRange, LEADERBOARD_MIN_MATCHES } from './leaderboardService';
 
 export interface LeaderboardBoulesEntry {
   id: string;
@@ -44,42 +45,124 @@ interface PlayerBoulesData {
   };
 }
 
-export async function fetchBoulesLeaderboard(): Promise<{ entries: PlayerBoulesData[]; error: string | null }> {
+export async function fetchBoulesLeaderboard(period?: LeaderboardPeriod): Promise<{ entries: PlayerBoulesData[]; error: string | null }> {
   const supabase = getSupabaseClient();
+  const usePeriod = period && period !== 'all';
 
   try {
     // Fetch public players with boules info
     const { data, error } = await supabase
       .from('players')
-      .select('user_id, name, role, stats, boules')
+      .select('id, user_id, name, role, stats, boules')
       .eq('is_public', true);
 
     if (error) return { entries: [], error: error.message };
 
+    // If period filter, fetch matches within range and recompute per-player stats
+    let periodStatsMap: Map<string, { matchesPlayed: number; wins: number; winRate: number; tirRate: number; pointRate: number; carreauRate: number }> | null = null;
+
+    if (usePeriod) {
+      const range = getPeriodDateRange(period);
+      if (range.from) {
+        let matchQuery = supabase
+          .from('matches')
+          .select('id, team_a, team_b, winner, player_actions')
+          .gte('date', range.from.toISOString());
+        if (range.to) {
+          matchQuery = matchQuery.lte('date', range.to.toISOString());
+        }
+        const { data: matchesData } = await matchQuery;
+
+        if (matchesData && matchesData.length > 0) {
+          periodStatsMap = new Map();
+          const playerIds = new Set((data || []).map((p: any) => p.id));
+
+          for (const m of matchesData) {
+            const teamAPlayers: string[] = m.team_a?.players || [];
+            const teamBPlayers: string[] = m.team_b?.players || [];
+            const allMatchPlayers = [...teamAPlayers, ...teamBPlayers].filter(id => playerIds.has(id));
+
+            for (const pid of allMatchPlayers) {
+              if (!periodStatsMap.has(pid)) {
+                periodStatsMap.set(pid, { matchesPlayed: 0, wins: 0, winRate: 0, tirRate: 0, pointRate: 0, carreauRate: 0 });
+              }
+              const ps = periodStatsMap.get(pid)!;
+              ps.matchesPlayed++;
+              const inA = teamAPlayers.includes(pid);
+              if ((inA && m.winner === 'A') || (!inA && m.winner === 'B')) {
+                ps.wins++;
+              }
+              if (m.player_actions) {
+                const pa = (m.player_actions as any[]).find((a: any) => a.playerId === pid);
+                if (pa) {
+                  const prev = (periodStatsMap as any)['_raw_' + pid] || { tirs: 0, tirsSuccess: 0, points: 0, pointsSuccess: 0, carreaux: 0 };
+                  prev.tirs += pa.actions?.tirs || 0;
+                  prev.tirsSuccess += pa.actions?.tirsSuccess || 0;
+                  prev.points += pa.actions?.points || 0;
+                  prev.pointsSuccess += pa.actions?.pointsSuccess || 0;
+                  prev.carreaux += pa.actions?.carreaux || 0;
+                  (periodStatsMap as any)['_raw_' + pid] = prev;
+                }
+              }
+            }
+          }
+
+          for (const [pid, ps] of periodStatsMap.entries()) {
+            if (pid.startsWith('_raw_')) continue;
+            ps.winRate = ps.matchesPlayed > 0 ? Math.round((ps.wins / ps.matchesPlayed) * 1000) / 10 : 0;
+            const raw = (periodStatsMap as any)['_raw_' + pid];
+            if (raw) {
+              ps.tirRate = raw.tirs > 0 ? Math.round((raw.tirsSuccess / raw.tirs) * 1000) / 10 : 0;
+              ps.pointRate = raw.points > 0 ? Math.round((raw.pointsSuccess / raw.points) * 1000) / 10 : 0;
+              ps.carreauRate = raw.tirsSuccess > 0 ? Math.round((raw.carreaux / raw.tirsSuccess) * 1000) / 10 : 0;
+            }
+          }
+        }
+      }
+    }
+
     const entries: PlayerBoulesData[] = [];
 
     for (const p of data || []) {
-      const stats = p.stats || {};
-      if ((stats.matchesPlayed || 0) < 10) continue;
-
       const boules = p.boules || {};
       const brand = boules.brand;
       if (!brand) continue;
 
-      entries.push({
-        userId: p.user_id,
-        brand: brand,
-        model: boules.model || boules.name || '',
-        role: p.role || 'Milieu',
-        stats: {
-          matchesPlayed: stats.matchesPlayed || 0,
-          wins: stats.wins || 0,
-          winRate: stats.winRate || 0,
-          tirRate: stats.tirRate || 0,
-          pointRate: stats.pointRate || 0,
-          carreauRate: stats.carreauRate || 0,
-        },
-      });
+      if (periodStatsMap) {
+        const ps = periodStatsMap.get(p.id);
+        if (!ps || ps.matchesPlayed < LEADERBOARD_MIN_MATCHES) continue;
+        entries.push({
+          userId: p.user_id,
+          brand: brand,
+          model: boules.model || boules.name || '',
+          role: p.role || 'Milieu',
+          stats: {
+            matchesPlayed: ps.matchesPlayed,
+            wins: ps.wins,
+            winRate: ps.winRate,
+            tirRate: ps.tirRate,
+            pointRate: ps.pointRate,
+            carreauRate: ps.carreauRate,
+          },
+        });
+      } else {
+        const stats = p.stats || {};
+        if ((stats.matchesPlayed || 0) < LEADERBOARD_MIN_MATCHES) continue;
+        entries.push({
+          userId: p.user_id,
+          brand: brand,
+          model: boules.model || boules.name || '',
+          role: p.role || 'Milieu',
+          stats: {
+            matchesPlayed: stats.matchesPlayed || 0,
+            wins: stats.wins || 0,
+            winRate: stats.winRate || 0,
+            tirRate: stats.tirRate || 0,
+            pointRate: stats.pointRate || 0,
+            carreauRate: stats.carreauRate || 0,
+          },
+        });
+      }
     }
 
     return { entries, error: null };

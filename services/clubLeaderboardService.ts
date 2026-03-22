@@ -3,7 +3,7 @@
 // Aggregates public player stats by club
 // ============================================
 import { getSupabaseClient } from '@/template';
-import { fetchLeaderboard, LeaderboardPlayer } from './leaderboardService';
+import { fetchLeaderboard, LeaderboardPlayer, LeaderboardPeriod } from './leaderboardService';
 
 export interface LeaderboardClub {
   id: string; // club name as ID (no club table join needed for public)
@@ -27,9 +27,9 @@ export interface LeaderboardClub {
 
 export type ClubLeaderboardSort = 'compositeScore' | 'avgWinRate' | 'totalMatches' | 'playerCount' | 'avgTirRate' | 'avgCarreauRate';
 
-export async function fetchClubLeaderboard(): Promise<{ clubs: LeaderboardClub[]; error: string | null }> {
+export async function fetchClubLeaderboard(period?: LeaderboardPeriod): Promise<{ clubs: LeaderboardClub[]; error: string | null }> {
   try {
-    const { players, error } = await fetchLeaderboard();
+    const { players, error } = await fetchLeaderboard(period);
     if (error) return { clubs: [], error };
 
     // Group players by club

@@ -246,38 +246,49 @@ export default function LeaderboardScreen() {
     Haptics.selectionAsync();
     setPeriodFilter(newPeriod);
     setPeriodLoading(true);
-    const { players: lbP, error: err } = await fetchLeaderboard(newPeriod);
-    setAllPlayers(lbP);
-    setError(err);
+
+    // Reload all tabs with the new period
+    const [playersRes, clubsRes, boulesRes] = await Promise.all([
+      fetchLeaderboard(newPeriod),
+      fetchClubLeaderboard(newPeriod),
+      fetchBoulesLeaderboard(newPeriod),
+    ]);
+
+    setAllPlayers(playersRes.players);
+    setError(playersRes.error);
+    setAllClubs(clubsRes.clubs);
+    setClubsError(clubsRes.error);
+    setClubsLoaded(true);
+    setBoulesRawData(boulesRes.entries);
+    setBoulesError(boulesRes.error);
+    setBoulesLoaded(true);
     setPeriodLoading(false);
   }, []);
 
   // Lazy load clubs when tab is selected
-  const loadClubs = useCallback(async () => {
-    if (clubsLoaded) return;
+  const loadClubs = useCallback(async (period?: LeaderboardPeriod) => {
     setClubsLoading(true);
-    const { clubs: c, error: err } = await fetchClubLeaderboard();
+    const { clubs: c, error: err } = await fetchClubLeaderboard(period);
     setAllClubs(c);
     setClubsError(err);
     setClubsLoading(false);
     setClubsLoaded(true);
-  }, [clubsLoaded]);
+  }, []);
 
   // Lazy load boules when tab is selected
-  const loadBoules = useCallback(async () => {
-    if (boulesLoaded) return;
+  const loadBoules = useCallback(async (period?: LeaderboardPeriod) => {
     setBoulesLoading(true);
-    const { entries, error: err } = await fetchBoulesLeaderboard();
+    const { entries, error: err } = await fetchBoulesLeaderboard(period);
     setBoulesRawData(entries);
     setBoulesError(err);
     setBoulesLoading(false);
     setBoulesLoaded(true);
-  }, [boulesLoaded]);
+  }, []);
 
   useEffect(() => {
-    if (activeTab === 'clubs') loadClubs();
-    if (activeTab === 'boules') loadBoules();
-  }, [activeTab, loadClubs, loadBoules]);
+    if (activeTab === 'clubs' && !clubsLoaded) loadClubs(periodFilter);
+    if (activeTab === 'boules' && !boulesLoaded) loadBoules(periodFilter);
+  }, [activeTab, clubsLoaded, boulesLoaded, loadClubs, loadBoules, periodFilter]);
 
   // ============ CLUBS COMPUTED ============
   const filteredClubs = useMemo(() => {
@@ -557,8 +568,8 @@ export default function LeaderboardScreen() {
           </ScrollView>
 
           {/* Boules-specific: mode toggle + role filter */}
-          {/* Period filter for players */}
-          {activeTab === 'players' ? (
+          {/* Period filter for all tabs */}
+          {true ? (
             <View style={s.periodFilterSection}>
               <View style={s.periodLabelRow}>
                 <MaterialIcons name="date-range" size={13} color={theme.textMuted} />
