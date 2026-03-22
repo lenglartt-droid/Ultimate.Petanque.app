@@ -31,15 +31,36 @@ export function trackAmbassadorEvent(
 /**
  * Fetch aggregated analytics for all ambassadors (admin only).
  */
-export async function fetchAmbassadorAnalytics(): Promise<{
+export async function fetchAmbassadorAnalytics(period?: 'today' | '7d' | '30d' | 'all'): Promise<{
   stats: Map<string, AmbassadorAnalytics>;
   error: string | null;
 }> {
   const supabase = getSupabaseClient();
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('ambassador_analytics')
       .select('ambassador_id, event_type, social_platform');
+
+    if (period && period !== 'all') {
+      const now = new Date();
+      let threshold: Date;
+      switch (period) {
+        case 'today':
+          threshold = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          break;
+        case '7d':
+          threshold = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case '30d':
+          threshold = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        default:
+          threshold = new Date(0);
+      }
+      query = query.gte('created_at', threshold.toISOString());
+    }
+
+    const { data, error } = await query;
 
     if (error) return { stats: new Map(), error: error.message };
 

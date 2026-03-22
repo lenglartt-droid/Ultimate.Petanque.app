@@ -229,6 +229,7 @@ export default function AdminPromosScreen() {
   const [ambUploadingPhoto, setAmbUploadingPhoto] = useState(false);
   const [ambassadorAnalytics, setAmbassadorAnalytics] = useState<Map<string, AmbassadorAnalytics>>(new Map());
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsPeriod, setAnalyticsPeriod] = useState<'today' | '7d' | '30d' | 'all'>('all');
 
   const loadAmbassadors = useCallback(async () => {
     if (ambassadorsLoaded) return;
@@ -240,11 +241,18 @@ export default function AdminPromosScreen() {
     setAmbassadorsLoaded(true);
     // Load analytics in parallel
     setAnalyticsLoading(true);
-    fetchAmbassadorAnalytics().then(({ stats }) => {
+    fetchAmbassadorAnalytics(analyticsPeriod).then(({ stats }) => {
       setAmbassadorAnalytics(stats);
       setAnalyticsLoading(false);
     });
-  }, [ambassadorsLoaded, supabase]);
+  }, [ambassadorsLoaded, supabase, analyticsPeriod]);
+
+  const reloadAnalytics = useCallback(async (period: 'today' | '7d' | '30d' | 'all') => {
+    setAnalyticsLoading(true);
+    const { stats } = await fetchAmbassadorAnalytics(period);
+    setAmbassadorAnalytics(stats);
+    setAnalyticsLoading(false);
+  }, []);
 
   const handleSearchPlayers = useCallback(async (query: string) => {
     setAmbPlayerSearch(query);
@@ -983,6 +991,32 @@ export default function AdminPromosScreen() {
                     <Pressable onPress={() => setShowAmbassadorSection(false)} hitSlop={8}>
                       <MaterialIcons name="close" size={20} color={theme.textSecondary} />
                     </Pressable>
+                  </View>
+
+                  {/* Analytics period filter */}
+                  <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12, alignItems: 'center' }}>
+                    {([
+                      { key: 'today' as const, label: fr ? "Aujourd'hui" : 'Today' },
+                      { key: '7d' as const, label: fr ? '7 jours' : '7 days' },
+                      { key: '30d' as const, label: fr ? '30 jours' : '30 days' },
+                      { key: 'all' as const, label: fr ? 'Tout' : 'All' },
+                    ]).map(f => {
+                      const isActive = analyticsPeriod === f.key;
+                      return (
+                        <Pressable
+                          key={f.key}
+                          style={{
+                            paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20,
+                            backgroundColor: isActive ? '#7C3AED' : theme.backgroundSecondary,
+                            borderWidth: 1.5, borderColor: isActive ? '#7C3AED' : theme.border,
+                          }}
+                          onPress={() => { setAnalyticsPeriod(f.key); reloadAnalytics(f.key); }}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: isActive ? '#FFF' : theme.textSecondary }}>{f.label}</Text>
+                        </Pressable>
+                      );
+                    })}
+                    {analyticsLoading ? <ActivityIndicator size="small" color="#7C3AED" style={{ marginLeft: 4 }} /> : null}
                   </View>
 
                   {ambassadorsLoading ? (
