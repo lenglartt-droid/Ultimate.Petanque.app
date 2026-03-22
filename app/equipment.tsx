@@ -27,7 +27,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
 import { BoulesSet } from '@/services/mockData';
 import { uploadBoulesSetPhoto } from '@/services/storageService';
-import { BOULES_BRANDS, BOULES_DATABASE, getModelsByBrand, findModel, BoulesModel } from '@/constants/boulesDatabase';
+import { BOULES_BRANDS, BOULES_DATABASE, getModelsByBrand, findModel, BoulesModel, getBrandImage } from '@/constants/boulesDatabase';
 import AdBanner from '@/components/ui/AdBanner';
 
 // ============================================
@@ -630,6 +630,7 @@ export default function EquipmentScreen() {
               {BOULES_BRANDS.map(brand => {
                 const modelCount = getModelsByBrand(brand).length;
                 const isSelected = formBrand === brand;
+                const brandLogo = getBrandImage(brand);
                 return (
                   <Pressable
                     key={brand}
@@ -643,8 +644,12 @@ export default function EquipmentScreen() {
                       setShowBrandPicker(false);
                     }}
                   >
-                    <View style={[styles.pickerItemIcon, isSelected && { backgroundColor: theme.primary + '15' }]}>
-                      <MaterialIcons name="sports-baseball" size={20} color={isSelected ? theme.primary : theme.textMuted} />
+                    <View style={[styles.pickerItemIcon, isSelected && { backgroundColor: theme.primary + '15' }, brandLogo ? { overflow: 'hidden' as const } : undefined]}>
+                      {brandLogo ? (
+                        <Image source={brandLogo} style={{ width: 36, height: 36, borderRadius: 8 }} contentFit="contain" transition={200} />
+                      ) : (
+                        <MaterialIcons name="sports-baseball" size={20} color={isSelected ? theme.primary : theme.textMuted} />
+                      )}
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.pickerItemTitle, isSelected && { color: theme.primary }]}>{brand}</Text>

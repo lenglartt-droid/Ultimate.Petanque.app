@@ -811,9 +811,9 @@ export default function LeaderboardScreen() {
                         )}
                       </View>
                       {(() => { const bv = getBrandVisual(entry.brand); const bImg = getBrandImage(entry.brand); return (
-                      <View style={[s.boulesIconWrap, { backgroundColor: bv.bg, alignItems: 'center', justifyContent: 'center' }]}>
+                      <View style={[s.boulesIconWrap, { backgroundColor: bImg ? '#FFF' : bv.bg, alignItems: 'center', justifyContent: 'center' }]}>
                         {bImg ? (
-                          <Image source={bImg} style={{ width: '65%', height: '65%' }} contentFit="contain" transition={200} />
+                          <Image source={bImg} style={{ width: '80%', height: '80%' }} contentFit="contain" transition={200} />
                         ) : (
                           <Text style={{ fontSize: 12, fontWeight: '900', color: bv.text, letterSpacing: -0.5 }}>{bv.abbr}</Text>
                         )}

@@ -82,17 +82,17 @@ export const BOULES_DATABASE: BoulesModel[] = [
   { brand: 'GEOLOGIC', model: 'Alpha', material: 'Acier carbone', hardness: 'Tendre', targetUsage: 'Tireur', particularities: 'Entrée de gamme tireur' },
 ];
 
-// Brand visual identities for leaderboard/widget (real SVG logos - white on transparent)
+// Brand visual identities for leaderboard/widget and brand picker
 export const BOULES_BRAND_IMAGES: Record<string, { uri: string }> = {
-  'OBUT': { uri: 'https://cdn-ai.onspace.ai/onspace/files/2CRjswsPp64i6bBt4tyQfe/obut.svg' },
-  'MS PÉTANQUE': { uri: 'https://cdn-ai.onspace.ai/onspace/files/JutdugqmHdBLRriVKSYneK/ms-petanque.svg' },
-  'LA BOULE BLEUE': { uri: 'https://cdn-ai.onspace.ai/onspace/files/UqCoHYvAzzVEErkRUdaWSC/la-boule-bleue.svg' },
-  'BOULENCIEL': { uri: 'https://cdn-ai.onspace.ai/onspace/files/2LUYxNZTBPejbQQFyZft35/boulenciel.svg' },
-  'KTK': { uri: 'https://cdn-ai.onspace.ai/onspace/files/4QoxX6Bi98yPCxzDRiAHAT/ktk.svg' },
-  'ODDEKA': { uri: 'https://cdn-ai.onspace.ai/onspace/files/hFdTdu4CcBE5WsXuffydDC/oddeka_logo.svg' },
-  'LA FRANC': { uri: 'https://cdn-ai.onspace.ai/onspace/files/TJNik3J7MwEGUoJ5oikjNM/lafranc.svg' },
-  'MARATHON': { uri: 'https://cdn-ai.onspace.ai/onspace/files/BCaojvULkoPrW8zx9FXMTe/marathon_logo.svg' },
-  'GEOLOGIC': { uri: 'https://cdn-ai.onspace.ai/onspace/files/MEPmrRBXHHybXY5WJQxJBn/geologic.svg' },
+  'OBUT': { uri: 'https://cdn-ai.onspace.ai/onspace/files/n7FrcpYxZXS6cHa9kERGE7/obut.png' },
+  'MS PÉTANQUE': { uri: 'https://cdn-ai.onspace.ai/onspace/files/93XrD3jYsFy38KJyLNrrGm/ms_ptanque_logo.jpg' },
+  'LA BOULE BLEUE': { uri: 'https://cdn-ai.onspace.ai/onspace/files/SybtmPZRrYjFntuDiMnNRj/la-boule-bleue.png' },
+  'BOULENCIEL': { uri: 'https://cdn-ai.onspace.ai/onspace/files/gxspgkgoUNfZvPdYvKHcJk/boulenciel.jpg' },
+  'KTK': { uri: 'https://cdn-ai.onspace.ai/onspace/files/kXRRhZXcyEjTBu4dvkcWnP/ktk-logo-300x161.png' },
+  'ODDEKA': { uri: 'https://cdn-ai.onspace.ai/onspace/files/g9wEhCzjRnnr7rKVGMVUof/oddeka-logo-16381810113.jpg' },
+  'LA FRANC': { uri: 'https://cdn-ai.onspace.ai/onspace/files/j3ATX9KiArNeGMTbYooSta/La-franc-Logo-recadre.png' },
+  'MARATHON': { uri: 'https://cdn-ai.onspace.ai/onspace/files/ZaEayyuTQmXnHt9HiFHXWC/marathon.png' },
+  'GEOLOGIC': { uri: 'https://cdn-ai.onspace.ai/onspace/files/7tedt8XwQQXgPcrFmj5Ma5/geologic.png' },
 };
 
 export const BOULES_BRAND_COLORS: Record<string, { bg: string; text: string; abbr: string }> = {

@@ -254,9 +254,9 @@ export default function BoulesRankingScreen() {
             </Text>
           </View>
           {(() => { const bv = getBrandVisual(brandName); const bImg = getBrandImage(brandName); return (
-          <View style={[s.headerIconWrap, { backgroundColor: bv.bg, alignItems: 'center', justifyContent: 'center' }]}>
+          <View style={[s.headerIconWrap, { backgroundColor: bImg ? '#FFF' : bv.bg, alignItems: 'center', justifyContent: 'center' }]}>
             {bImg ? (
-              <Image source={bImg} style={{ width: '65%', height: '65%' }} contentFit="contain" transition={200} />
+              <Image source={bImg} style={{ width: '80%', height: '80%' }} contentFit="contain" transition={200} />
             ) : (
               <Text style={{ fontSize: 16, fontWeight: '900', color: bv.text, letterSpacing: -0.5 }}>{bv.abbr}</Text>
             )}
