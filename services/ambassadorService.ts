@@ -106,13 +106,25 @@ export async function fetchAmbassadors(): Promise<{ ambassadors: Ambassador[]; e
   }
 }
 
-/** Check if a user is an ambassador (cached) */
+/** Check if a user is an ambassador (direct DB query, not limited to is_active) */
 export async function isUserAmbassador(userId: string): Promise<boolean> {
+  // First check the cache for active ambassadors (fast path)
   if (cachedAmbassadorUserIds && Date.now() - lastFetchTime < CACHE_TTL) {
-    return cachedAmbassadorUserIds.has(userId);
+    if (cachedAmbassadorUserIds.has(userId)) return true;
   }
-  await fetchAmbassadors();
-  return cachedAmbassadorUserIds?.has(userId) ?? false;
+  // If not found in cache, query DB directly (includes inactive ambassadors for portal access)
+  const supabase = getSupabaseClient();
+  try {
+    const { data, error } = await supabase
+      .from('ambassadors')
+      .select('id')
+      .eq('user_id', userId)
+      .limit(1);
+    if (error) return false;
+    return (data && data.length > 0) || false;
+  } catch {
+    return false;
+  }
 }
 
 /** Get the set of ambassador user IDs (for leaderboard badge display) */
