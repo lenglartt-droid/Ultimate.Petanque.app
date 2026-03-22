@@ -98,3 +98,49 @@ export async function fetchAmbassadorAnalytics(period?: 'today' | '7d' | '30d' |
     return { stats: new Map(), error: e.message || 'Failed to fetch analytics' };
   }
 }
+
+/**
+ * Fetch daily impression counts per ambassador for sparkline display (admin only).
+ * Returns a Map of ambassadorId -> array of daily counts (oldest first).
+ */
+export async function fetchDailyAnalyticsCounts(days: number = 30): Promise<{
+  data: Map<string, number[]>;
+  error: string | null;
+}> {
+  const supabase = getSupabaseClient();
+  try {
+    const threshold = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const { data, error } = await supabase
+      .from('ambassador_analytics')
+      .select('ambassador_id, event_type, created_at')
+      .gte('created_at', threshold.toISOString());
+
+    if (error) return { data: new Map(), error: error.message };
+
+    // Build all date keys (oldest first)
+    const allDates: string[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+      allDates.push(d.toISOString().slice(0, 10));
+    }
+
+    // Group by ambassador_id and date
+    const grouped = new Map<string, Map<string, number>>();
+    (data || []).forEach((row: any) => {
+      if (!grouped.has(row.ambassador_id)) grouped.set(row.ambassador_id, new Map());
+      const dateStr = new Date(row.created_at).toISOString().slice(0, 10);
+      const dayMap = grouped.get(row.ambassador_id)!;
+      dayMap.set(dateStr, (dayMap.get(dateStr) || 0) + 1);
+    });
+
+    // Build result with 0-filled days
+    const result = new Map<string, number[]>();
+    grouped.forEach((dayMap, ambId) => {
+      result.set(ambId, allDates.map(date => dayMap.get(date) || 0));
+    });
+
+    return { data: result, error: null };
+  } catch (e: any) {
+    return { data: new Map(), error: e.message || 'Failed to fetch daily analytics' };
+  }
+}

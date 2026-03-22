@@ -33,7 +33,8 @@ import { getTrustScoreColor } from '@/services/trustScoreService';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { fetchDeviceClusters, getDeviceRegistrationStats, DeviceCluster } from '@/services/multiAccountService';
 import { fetchAmbassadors, invalidateAmbassadorCache, Ambassador } from '@/services/ambassadorService';
-import { fetchAmbassadorAnalytics, AmbassadorAnalytics } from '@/services/ambassadorAnalyticsService';
+import { fetchAmbassadorAnalytics, fetchDailyAnalyticsCounts, AmbassadorAnalytics } from '@/services/ambassadorAnalyticsService';
+import Svg, { Path as SvgPath } from 'react-native-svg';
 import { uploadImageToStorage } from '@/services/storageService';
 
 interface PromoCode {
@@ -230,6 +231,7 @@ export default function AdminPromosScreen() {
   const [ambassadorAnalytics, setAmbassadorAnalytics] = useState<Map<string, AmbassadorAnalytics>>(new Map());
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsPeriod, setAnalyticsPeriod] = useState<'today' | '7d' | '30d' | 'all'>('all');
+  const [sparklineData, setSparklineData] = useState<Map<string, number[]>>(new Map());
 
   const loadAmbassadors = useCallback(async () => {
     if (ambassadorsLoaded) return;
@@ -241,8 +243,12 @@ export default function AdminPromosScreen() {
     setAmbassadorsLoaded(true);
     // Load analytics in parallel
     setAnalyticsLoading(true);
-    fetchAmbassadorAnalytics(analyticsPeriod).then(({ stats }) => {
-      setAmbassadorAnalytics(stats);
+    Promise.all([
+      fetchAmbassadorAnalytics(analyticsPeriod),
+      fetchDailyAnalyticsCounts(30),
+    ]).then(([analyticsRes, dailyRes]) => {
+      setAmbassadorAnalytics(analyticsRes.stats);
+      if (!dailyRes.error) setSparklineData(dailyRes.data);
       setAnalyticsLoading(false);
     });
   }, [ambassadorsLoaded, supabase, analyticsPeriod]);
@@ -1085,6 +1091,39 @@ export default function AdminPromosScreen() {
                           {amb.website_url ? <View style={{ backgroundColor: theme.primary + '12', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}><Text style={{ fontSize: 10, fontWeight: '600', color: theme.primary }}>Web</Text></View> : null}
                           {amb.player_id ? <View style={{ backgroundColor: theme.success + '12', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}><Text style={{ fontSize: 10, fontWeight: '600', color: theme.success }}>{fr ? 'Joueur lie' : 'Linked player'}</Text></View> : null}
                         </View>
+
+                        {/* Sparkline */}
+                        {(() => {
+                          const daily = sparklineData.get(amb.id);
+                          if (!daily || daily.length < 2 || daily.every(d => d === 0)) return null;
+                          const max = Math.max(...daily, 1);
+                          const w = 220;
+                          const h = 32;
+                          const step = w / (daily.length - 1);
+                          const pts = daily.map((val, i) => {
+                            const x = i * step;
+                            const y = h - (val / max) * (h - 4) - 2;
+                            return `${x},${y}`;
+                          });
+                          const lineD = `M${pts.join(' L')}`;
+                          const areaD = `${lineD} L${w},${h} L0,${h} Z`;
+                          const total30d = daily.reduce((a, b) => a + b, 0);
+                          return (
+                            <View style={{ marginBottom: 10, backgroundColor: '#7C3AED' + '04', borderRadius: 10, padding: 8, borderWidth: 1, borderColor: '#7C3AED' + '08' }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                  <MaterialIcons name="show-chart" size={11} color="#7C3AED" />
+                                  <Text style={{ fontSize: 9, fontWeight: '700', color: '#7C3AED', textTransform: 'uppercase', letterSpacing: 0.3 }}>{fr ? 'Activite 30j' : '30d Activity'}</Text>
+                                </View>
+                                <Text style={{ fontSize: 10, fontWeight: '800', color: '#7C3AED' }}>{total30d} {fr ? 'events' : 'events'}</Text>
+                              </View>
+                              <Svg width={w} height={h}>
+                                <SvgPath d={areaD} fill="#7C3AED" opacity={0.08} />
+                                <SvgPath d={lineD} stroke="#7C3AED" strokeWidth={1.5} fill="none" opacity={0.6} />
+                              </Svg>
+                            </View>
+                          );
+                        })()}
 
                         {/* Analytics stats */}
                         {(() => {

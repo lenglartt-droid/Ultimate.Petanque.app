@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -70,6 +70,7 @@ export default function PartnersScreen() {
   const { scrollTo } = useLocalSearchParams<{ scrollTo?: string }>();
   const scrollViewRef = React.useRef<ScrollView>(null);
   const ambassadorPositions = React.useRef<Record<string, number>>({});
+  const [rankingTab, setRankingTab] = useState<'matches' | 'winRate' | 'engagement'>('matches');
 
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
@@ -108,6 +109,23 @@ export default function PartnersScreen() {
     trackAmbassadorEvent(amb.id, 'social_click', platform);
     Linking.openURL(url);
   };
+
+  // Ranked ambassadors for podium
+  const rankedAmbassadors = useMemo(() => {
+    if (ambassadors.length < 2) return [];
+    const withScore = ambassadors.map(amb => {
+      const socialCount = [amb.youtubeUrl, amb.tiktokUrl, amb.instagramHandle, amb.twitterHandle, amb.websiteUrl].filter(Boolean).length;
+      let score = 0;
+      let displayValue = '';
+      switch (rankingTab) {
+        case 'matches': score = amb.stats?.matchesPlayed || 0; displayValue = `${score}`; break;
+        case 'winRate': score = amb.stats?.winRate || 0; displayValue = `${score}%`; break;
+        case 'engagement': score = socialCount; displayValue = `${score}`; break;
+      }
+      return { ...amb, score, displayValue, socialCount };
+    });
+    return withScore.sort((a, b) => b.score - a.score).slice(0, 3);
+  }, [ambassadors, rankingTab]);
 
   const goldSlots = PARTNER_SLOTS.filter(s => s.category === 'gold');
   const silverSlots = PARTNER_SLOTS.filter(s => s.category === 'silver');
@@ -355,6 +373,127 @@ export default function PartnersScreen() {
             </View>
           </LinearGradient>
         </Animated.View>
+
+        {/* ====== AMBASSADOR LEADERBOARD ====== */}
+        {!ambassadorsLoading && rankedAmbassadors.length >= 2 ? (
+          <Animated.View entering={FadeInDown.duration(450).delay(100)} style={styles.podiumSection}>
+            {/* Section label */}
+            <View style={styles.sectionLabel}>
+              <View style={styles.sectionLabelLine} />
+              <Text style={styles.sectionLabelText}>{language === 'fr' ? 'CLASSEMENT' : 'RANKINGS'}</Text>
+              <View style={styles.sectionLabelLine} />
+            </View>
+
+            {/* Ranking tabs */}
+            <View style={styles.podiumTabs}>
+              {([
+                { key: 'matches' as const, label: language === 'fr' ? 'Matchs' : 'Matches', icon: 'sports' },
+                { key: 'winRate' as const, label: language === 'fr' ? 'Victoires' : 'Win Rate', icon: 'emoji-events' },
+                { key: 'engagement' as const, label: language === 'fr' ? 'Reseaux' : 'Social', icon: 'share' },
+              ]).map(tab => {
+                const isActive = rankingTab === tab.key;
+                return (
+                  <Pressable
+                    key={tab.key}
+                    style={[styles.podiumTab, isActive && styles.podiumTabActive]}
+                    onPress={() => { Haptics.selectionAsync(); setRankingTab(tab.key); }}
+                  >
+                    <MaterialIcons name={tab.icon as any} size={14} color={isActive ? '#FFF' : '#7C3AED'} />
+                    <Text style={[styles.podiumTabText, isActive && styles.podiumTabTextActive]}>{tab.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {/* Podium */}
+            <View style={styles.podiumRow}>
+              {/* 2nd place (left) */}
+              {rankedAmbassadors[1] ? (
+                <Animated.View entering={FadeInDown.duration(500).delay(250)} style={styles.podiumCol}>
+                  <Pressable
+                    style={styles.podiumCard}
+                    onPress={() => rankedAmbassadors[1].playerId ? router.push(`/player/${rankedAmbassadors[1].playerId}` as any) : null}
+                  >
+                    <View style={[styles.podiumBar, styles.podiumBarSilver]}>
+                      <Text style={styles.podiumRank}>2</Text>
+                    </View>
+                    <View style={styles.podiumAvatarWrap}>
+                      {rankedAmbassadors[1].photo ? (
+                        <Image source={{ uri: rankedAmbassadors[1].photo }} style={styles.podiumAvatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
+                      ) : (
+                        <LinearGradient colors={['#90A4AE', '#78909C']} style={[styles.podiumAvatar, { alignItems: 'center', justifyContent: 'center' }]}>
+                          <Text style={styles.podiumAvatarLetter}>{rankedAmbassadors[1].displayName.charAt(0)}</Text>
+                        </LinearGradient>
+                      )}
+                    </View>
+                    <Text style={styles.podiumName} numberOfLines={1}>{rankedAmbassadors[1].displayName}</Text>
+                    <Text style={[styles.podiumValue, { color: '#78909C' }]}>{rankedAmbassadors[1].displayValue}</Text>
+                    <Text style={styles.podiumMetric}>
+                      {rankingTab === 'matches' ? (language === 'fr' ? 'matchs' : 'matches') : rankingTab === 'winRate' ? (language === 'fr' ? 'victoires' : 'win rate') : (language === 'fr' ? 'reseaux' : 'social')}
+                    </Text>
+                  </Pressable>
+                </Animated.View>
+              ) : null}
+
+              {/* 1st place (center, taller) */}
+              {rankedAmbassadors[0] ? (
+                <Animated.View entering={FadeInDown.duration(500).delay(150)} style={[styles.podiumCol, styles.podiumColGold]}>
+                  <Pressable
+                    style={styles.podiumCard}
+                    onPress={() => rankedAmbassadors[0].playerId ? router.push(`/player/${rankedAmbassadors[0].playerId}` as any) : null}
+                  >
+                    <View style={[styles.podiumBar, styles.podiumBarGold]}>
+                      <MaterialIcons name="emoji-events" size={18} color="#FFF" />
+                      <Text style={styles.podiumRank}>1</Text>
+                    </View>
+                    <View style={[styles.podiumAvatarWrap, styles.podiumAvatarWrapGold]}>
+                      {rankedAmbassadors[0].photo ? (
+                        <Image source={{ uri: rankedAmbassadors[0].photo }} style={styles.podiumAvatarGold} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
+                      ) : (
+                        <LinearGradient colors={['#F9E547', '#D4A017']} style={[styles.podiumAvatarGold, { alignItems: 'center', justifyContent: 'center' }]}>
+                          <Text style={[styles.podiumAvatarLetter, { fontSize: 24 }]}>{rankedAmbassadors[0].displayName.charAt(0)}</Text>
+                        </LinearGradient>
+                      )}
+                    </View>
+                    <Text style={[styles.podiumName, { fontSize: 14, fontWeight: '800' }]} numberOfLines={1}>{rankedAmbassadors[0].displayName}</Text>
+                    <Text style={[styles.podiumValue, { color: '#D4A017', fontSize: 22 }]}>{rankedAmbassadors[0].displayValue}</Text>
+                    <Text style={styles.podiumMetric}>
+                      {rankingTab === 'matches' ? (language === 'fr' ? 'matchs' : 'matches') : rankingTab === 'winRate' ? (language === 'fr' ? 'victoires' : 'win rate') : (language === 'fr' ? 'reseaux' : 'social')}
+                    </Text>
+                  </Pressable>
+                </Animated.View>
+              ) : null}
+
+              {/* 3rd place (right) */}
+              {rankedAmbassadors[2] ? (
+                <Animated.View entering={FadeInDown.duration(500).delay(350)} style={styles.podiumCol}>
+                  <Pressable
+                    style={styles.podiumCard}
+                    onPress={() => rankedAmbassadors[2].playerId ? router.push(`/player/${rankedAmbassadors[2].playerId}` as any) : null}
+                  >
+                    <View style={[styles.podiumBar, styles.podiumBarBronze]}>
+                      <Text style={styles.podiumRank}>3</Text>
+                    </View>
+                    <View style={styles.podiumAvatarWrap}>
+                      {rankedAmbassadors[2].photo ? (
+                        <Image source={{ uri: rankedAmbassadors[2].photo }} style={styles.podiumAvatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
+                      ) : (
+                        <LinearGradient colors={['#D7CCC8', '#A1887F']} style={[styles.podiumAvatar, { alignItems: 'center', justifyContent: 'center' }]}>
+                          <Text style={styles.podiumAvatarLetter}>{rankedAmbassadors[2].displayName.charAt(0)}</Text>
+                        </LinearGradient>
+                      )}
+                    </View>
+                    <Text style={styles.podiumName} numberOfLines={1}>{rankedAmbassadors[2].displayName}</Text>
+                    <Text style={[styles.podiumValue, { color: '#A1887F' }]}>{rankedAmbassadors[2].displayValue}</Text>
+                    <Text style={styles.podiumMetric}>
+                      {rankingTab === 'matches' ? (language === 'fr' ? 'matchs' : 'matches') : rankingTab === 'winRate' ? (language === 'fr' ? 'victoires' : 'win rate') : (language === 'fr' ? 'reseaux' : 'social')}
+                    </Text>
+                  </Pressable>
+                </Animated.View>
+              ) : null}
+            </View>
+          </Animated.View>
+        ) : null}
 
         {/* ====== AMBASSADORS SECTION ====== */}
         {ambassadorsLoading ? (
@@ -615,6 +754,54 @@ const styles = StyleSheet.create({
     backgroundColor: '#7C3AED', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14,
   },
   ambEmptyBtnText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
+
+  // ====== PODIUM ======
+  podiumSection: { paddingHorizontal: 16, paddingTop: 20, marginBottom: 8 },
+  podiumTabs: {
+    flexDirection: 'row', gap: 8, marginBottom: 18, justifyContent: 'center',
+  },
+  podiumTab: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20,
+    backgroundColor: '#7C3AED' + '0C', borderWidth: 1.5, borderColor: '#7C3AED' + '18',
+  },
+  podiumTabActive: {
+    backgroundColor: '#7C3AED', borderColor: '#7C3AED',
+  },
+  podiumTabText: { fontSize: 12, fontWeight: '700', color: '#7C3AED' },
+  podiumTabTextActive: { color: '#FFF' },
+  podiumRow: {
+    flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center',
+    gap: 8, paddingHorizontal: 8,
+  },
+  podiumCol: { flex: 1, alignItems: 'center' },
+  podiumColGold: { marginTop: -16 },
+  podiumCard: { alignItems: 'center', width: '100%' },
+  podiumBar: {
+    width: '100%', borderTopLeftRadius: 14, borderTopRightRadius: 14,
+    alignItems: 'center', justifyContent: 'center', paddingVertical: 8,
+    flexDirection: 'row', gap: 4, minHeight: 40,
+  },
+  podiumBarGold: { backgroundColor: '#D4A017', minHeight: 56 },
+  podiumBarSilver: { backgroundColor: '#90A4AE', minHeight: 44 },
+  podiumBarBronze: { backgroundColor: '#A1887F', minHeight: 36 },
+  podiumRank: { fontSize: 16, fontWeight: '900', color: '#FFF' },
+  podiumAvatarWrap: {
+    marginTop: -22, marginBottom: 8,
+    borderRadius: 22, borderWidth: 3, borderColor: '#FFF',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 6 },
+      android: { elevation: 4 },
+      default: {},
+    }),
+  },
+  podiumAvatarWrapGold: { marginTop: -28, borderWidth: 3, borderColor: '#FEF3C7' },
+  podiumAvatar: { width: 44, height: 44, borderRadius: 19, overflow: 'hidden' as const },
+  podiumAvatarGold: { width: 56, height: 56, borderRadius: 24, overflow: 'hidden' as const },
+  podiumAvatarLetter: { fontSize: 18, fontWeight: '800', color: '#FFF' },
+  podiumName: { fontSize: 12, fontWeight: '700', color: theme.textPrimary, textAlign: 'center', maxWidth: '100%' },
+  podiumValue: { fontSize: 18, fontWeight: '900', marginTop: 2 },
+  podiumMetric: { fontSize: 9, fontWeight: '600', color: theme.textMuted, textTransform: 'uppercase' as const, letterSpacing: 0.3, marginTop: 1 },
 
   // ====== PARTNERS ======
   partnersSection: { paddingTop: 16, marginBottom: 8 },
