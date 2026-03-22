@@ -1485,6 +1485,9 @@ export const translations = {
     loadingSponsors: { fr: 'Chargement des sponsors...', en: 'Loading sponsors...' },
     noSponsorsAvailable: { fr: 'Aucun ambassadeur disponible', en: 'No ambassadors available' },
     sponsoredBadge: { fr: 'SPONSORISÉ', en: 'SPONSORED' },
+    sponsorType: { fr: 'Sponsor', en: 'Sponsor' },
+    partnerType: { fr: 'Partenaire', en: 'Partner' },
+    ambassadorType: { fr: 'Ambassadeur', en: 'Ambassador' },
   },
 
   // ============================================

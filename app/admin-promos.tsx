@@ -222,7 +222,7 @@ export default function AdminPromosScreen() {
   const [ambassadorsLoaded, setAmbassadorsLoaded] = useState(false);
   const [showAmbassadorModal, setShowAmbassadorModal] = useState(false);
   const [editingAmbassador, setEditingAmbassador] = useState<any>(null);
-  const [ambForm, setAmbForm] = useState({ displayName: '', bio: '', photo: '', youtubeUrl: '', tiktokUrl: '', instagramHandle: '', twitterHandle: '', websiteUrl: '', isFeatured: false, playerId: '' });
+  const [ambForm, setAmbForm] = useState({ displayName: '', bio: '', photo: '', youtubeUrl: '', tiktokUrl: '', instagramHandle: '', twitterHandle: '', websiteUrl: '', isFeatured: false, playerId: '', badgeType: 'ambassador' as string });
   const [ambSaving, setAmbSaving] = useState(false);
   const [ambDeleting, setAmbDeleting] = useState<string | null>(null);
   const [ambPlayerSearch, setAmbPlayerSearch] = useState('');
@@ -307,10 +307,11 @@ export default function AdminPromosScreen() {
         websiteUrl: amb.website_url || '',
         isFeatured: amb.is_featured || false,
         playerId: amb.player_id || '',
+        badgeType: amb.badge_type || 'ambassador',
       });
     } else {
       setEditingAmbassador(null);
-      setAmbForm({ displayName: '', bio: '', photo: '', youtubeUrl: '', tiktokUrl: '', instagramHandle: '', twitterHandle: '', websiteUrl: '', isFeatured: false, playerId: '' });
+      setAmbForm({ displayName: '', bio: '', photo: '', youtubeUrl: '', tiktokUrl: '', instagramHandle: '', twitterHandle: '', websiteUrl: '', isFeatured: false, playerId: '', badgeType: 'ambassador' });
     }
     setAmbPlayerSearch('');
     setAmbPlayerResults([]);
@@ -331,6 +332,7 @@ export default function AdminPromosScreen() {
         twitter_handle: ambForm.twitterHandle.trim() || null,
         website_url: ambForm.websiteUrl.trim() || null,
         is_featured: ambForm.isFeatured,
+        badge_type: ambForm.badgeType || 'ambassador',
         player_id: ambForm.playerId || null,
         updated_at: new Date().toISOString(),
       };
@@ -1070,8 +1072,8 @@ export default function AdminPromosScreen() {
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                               <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>{amb.display_name}</Text>
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#7C3AED' + '12', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
-                                <MaterialIcons name="verified" size={10} color="#7C3AED" />
-                                <Text style={{ fontSize: 9, fontWeight: '700', color: '#7C3AED' }}>AMB</Text>
+                                <MaterialIcons name={amb.badge_type === 'sponsor' ? 'campaign' : amb.badge_type === 'partner' ? 'handshake' : 'verified'} size={10} color={amb.badge_type === 'sponsor' ? '#F59E0B' : amb.badge_type === 'partner' ? '#8B5CF6' : '#7C3AED'} />
+                                <Text style={{ fontSize: 9, fontWeight: '700', color: amb.badge_type === 'sponsor' ? '#F59E0B' : amb.badge_type === 'partner' ? '#8B5CF6' : '#7C3AED' }}>{amb.badge_type === 'sponsor' ? 'SPO' : amb.badge_type === 'partner' ? 'PAR' : 'AMB'}</Text>
                               </View>
                             </View>
                             {amb.bio ? <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 2 }} numberOfLines={1}>{amb.bio}</Text> : null}
@@ -2092,6 +2094,40 @@ export default function AdminPromosScreen() {
                     <Text style={{ fontSize: 11, color: theme.error, fontWeight: '600' }}>{fr ? 'Supprimer la photo' : 'Remove photo'}</Text>
                   </Pressable>
                 ) : null}
+              </View>
+
+              {/* Badge Type Selector */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>{fr ? 'Type de badge' : 'Badge type'} *</Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                  {[
+                    { id: 'ambassador', label: fr ? 'Ambassadeur' : 'Ambassador', color: '#3B82F6', icon: 'verified' },
+                    { id: 'sponsor', label: 'Sponsor', color: '#F59E0B', icon: 'campaign' },
+                    { id: 'partner', label: fr ? 'Partenaire' : 'Partner', color: '#8B5CF6', icon: 'handshake' },
+                  ].map(bt => {
+                    const isActive = ambForm.badgeType === bt.id;
+                    return (
+                      <Pressable
+                        key={bt.id}
+                        style={{
+                          flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          paddingVertical: 12, borderRadius: 14,
+                          backgroundColor: isActive ? bt.color : theme.backgroundSecondary,
+                          borderWidth: 2, borderColor: isActive ? bt.color : theme.border,
+                        }}
+                        onPress={() => setAmbForm(prev => ({ ...prev, badgeType: bt.id }))}
+                      >
+                        <MaterialIcons name={bt.icon as any} size={16} color={isActive ? '#FFF' : bt.color} />
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: isActive ? '#FFF' : bt.color }}>{bt.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Text style={styles.formHint}>
+                  {ambForm.badgeType === 'sponsor' ? (fr ? 'Visible dans les bannieres sponsor et les defis sponsorises' : 'Visible in sponsor banners and sponsored challenges') :
+                   ambForm.badgeType === 'partner' ? (fr ? 'Visible dans les bannieres partenaires et les defis sponsorises' : 'Visible in partner banners and sponsored challenges') :
+                   (fr ? 'Visible dans le classement et la page partenaires' : 'Visible in leaderboard and partners page')}
+                </Text>
               </View>
 
               {/* Display name */}
