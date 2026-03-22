@@ -438,11 +438,18 @@ export default function EquipmentScreen() {
                       <View style={styles.setPhotoBg}>
                         <Image source={{ uri: set.photo }} style={styles.setPhoto} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.default }} cachePolicy="memory-disk" />
                       </View>
-                    ) : (
-                      <View style={[styles.setIconBg, set.isPrimary && { backgroundColor: theme.accent + '20' }]}>
-                        <MaterialIcons name="sports-baseball" size={24} color={set.isPrimary ? theme.accent : theme.textSecondary} />
-                      </View>
-                    )}
+                    ) : (() => {
+                      const brandLogo = set.brand ? getBrandImage(set.brand) : null;
+                      return brandLogo ? (
+                        <View style={[styles.setIconBg, { backgroundColor: '#FFF', overflow: 'hidden' as const }]}>
+                          <Image source={brandLogo} style={{ width: 36, height: 36, borderRadius: 8 }} contentFit="contain" transition={200} />
+                        </View>
+                      ) : (
+                        <View style={[styles.setIconBg, set.isPrimary && { backgroundColor: theme.accent + '20' }]}>
+                          <MaterialIcons name="sports-baseball" size={24} color={set.isPrimary ? theme.accent : theme.textSecondary} />
+                        </View>
+                      );
+                    })()}
                     <View style={styles.setInfo}>
                       <Text style={styles.setName}>{set.name}</Text>
                       <Text style={styles.setMeta}>
