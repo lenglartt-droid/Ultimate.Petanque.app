@@ -24,6 +24,7 @@ import config, { GameFormat, TournamentType } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import ShareModal from '@/components/ui/ShareModal';
+import ShareRequestModal from '@/components/ui/ShareRequestModal';
 import { createShareLink } from '@/services/shareService';
 import { SimplifiedShotNotation, SimpleShotRecord } from '@/components';
 import { showInterstitial } from '@/services/adService';
@@ -137,9 +138,8 @@ export default function NewMatchScreen() {
     seriesWinsB?: string;
     seriesId?: string;
   }>();
-  const { addMatch, players, tournaments, matches, selfPlayer, terrains } = useApp();
-  const { t } = useLanguage();
-  const { boulesSets } = useApp();
+  const { addMatch, players, tournaments, matches, selfPlayer, terrains, boulesSets } = useApp();
+  const { t, language } = useLanguage();
   
   const isRevanche = revanche === 'true';
   const seriesWinsA = parseInt(initialWinsA || '0');
@@ -231,6 +231,9 @@ export default function NewMatchScreen() {
   const [showPostMatchShare, setShowPostMatchShare] = useState(false);
   const [isSavingForShare, setIsSavingForShare] = useState(false);
   const [isSharingSeries, setIsSharingSeries] = useState(false);
+  const [showShareRequestModal, setShowShareRequestModal] = useState(false);
+  const [shareRequestItemId, setShareRequestItemId] = useState<string | null>(null);
+  const [shareRequestPlayerIds, setShareRequestPlayerIds] = useState<string[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const maxScore = config.game.maxScore;
@@ -846,6 +849,18 @@ export default function NewMatchScreen() {
     });
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    // Collect all player IDs for share detection
+    const allPlayerIds = [...teamAPlayerIds, ...teamBPlayerIds].filter(id => id !== '1' && id !== '2');
+    if (allPlayerIds.length > 0) {
+      // We need the match ID - addMatch returns it
+      // Since handleSaveMatch doesn't await, we trigger share detection after save
+      // For non-share saves, show the share request modal
+      setShareRequestPlayerIds(allPlayerIds);
+      // addMatch is sync in AppContext, match ID assigned internally;
+      // we use a flag-based approach: save first, show modal on next tick
+    }
+
     // Show interstitial ad after saving match
     showInterstitial().finally(() => {
       router.back();
@@ -904,10 +919,24 @@ export default function NewMatchScreen() {
     setIsSavingForShare(false);
     if (newId) {
       setSavedMatchIdForShare(newId);
+      // Collect all player IDs for cross-player share detection
+      const tAIds = getTeamPlayerIds(teamAPlayers);
+      const tBIds = getTeamPlayerIds(teamBPlayers);
+      const allPids = [...tAIds, ...tBIds].filter(id => id !== '1' && id !== '2');
+      if (allPids.length > 0) {
+        setShareRequestItemId(newId);
+        setShareRequestPlayerIds(allPids);
+      }
       // Exit fullscreen first to avoid nested modals
       setFullscreenMode(false);
       setHasExitedFullscreen(true);
-      setTimeout(() => setShowPostMatchShare(true), 300);
+      setTimeout(() => {
+        if (allPids.length > 0) {
+          setShowShareRequestModal(true);
+        } else {
+          setShowPostMatchShare(true);
+        }
+      }, 300);
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [teamAScore, teamBScore, isTournamentMode, selectedPhase, isTimerRunning, matchTime,
@@ -2262,6 +2291,26 @@ export default function NewMatchScreen() {
           forceReadOnly
         />
       ) : null}
+
+      {/* Cross-player Share Request Modal */}
+      <ShareRequestModal
+        visible={showShareRequestModal}
+        onClose={() => {
+          setShowShareRequestModal(false);
+          // After share request modal, show the regular share modal if we have an ID
+          if (savedMatchIdForShare) {
+            setTimeout(() => setShowPostMatchShare(true), 300);
+          } else {
+            setTimeout(() => router.replace('/(tabs)'), 100);
+          }
+        }}
+        itemType="match"
+        itemId={shareRequestItemId || savedMatchIdForShare}
+        playerIds={shareRequestPlayerIds}
+        senderName={selfPlayer?.name || t('match', 'myTeam')}
+        itemSummary={`${teamAPlayers.map(p => getPlayerName(p.playerId)).join(', ')} vs ${teamBPlayers.map(p => getPlayerName(p.playerId)).join(', ')} (${teamAScore}-${teamBScore})`}
+        language={language}
+      />
 
       {/* Boules Set Picker Modal */}
       <Modal

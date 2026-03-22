@@ -30,6 +30,7 @@ import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { SimplifiedShotNotation, SimpleShotRecord } from '@/components';
 import ShareModal from '@/components/ui/ShareModal';
+import ShareRequestModal from '@/components/ui/ShareRequestModal';
 import { showInterstitial } from '@/services/adService';
 import { Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
@@ -262,6 +263,9 @@ export default function NewChallengeScreen() {
   const [savedChallengeIdForShare, setSavedChallengeIdForShare] = useState<string | null>(null);
   const [showPostChallengeShare, setShowPostChallengeShare] = useState(false);
   const [isSavingForShare, setIsSavingForShare] = useState(false);
+  const [showShareRequestModal, setShowShareRequestModal] = useState(false);
+  const [shareRequestItemId, setShareRequestItemId] = useState<string | null>(null);
+  const [shareRequestPlayerIds, setShareRequestPlayerIds] = useState<string[]>([]);
 
   // Picker modals for terrain & boules set
   const [showChallTerrainPicker, setShowChallTerrainPicker] = useState(false);
@@ -709,7 +713,7 @@ export default function NewChallengeScreen() {
   const saveChallenge = useCallback(() => {
     const data = buildChallengeData();
     if (!data) return;
-    addChallenge(data);
+    const newId = addChallenge(data);
     // Submit to event if linked
     if (activeEvent && linkToEvent) {
       const score = selectedType === 'precision' ? playerStats.totalPrecisionPoints : playerStats.successRate;
@@ -717,11 +721,23 @@ export default function NewChallengeScreen() {
     }
     if (selectedSponsor) trackAmbassadorEvent(selectedSponsor.id, 'sponsored_challenge');
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    // Detect linked players for share request (1v1 opponent)
+    const challengePlayerIds: string[] = [];
+    if (selfPlayer?.id) challengePlayerIds.push(selfPlayer.id);
+    if (selectedOpponent?.id) challengePlayerIds.push(selectedOpponent.id);
+    if (challengePlayerIds.length > 0 && newId) {
+      setShareRequestItemId(newId as string);
+      setShareRequestPlayerIds(challengePlayerIds);
+      setShowShareRequestModal(true);
+      return; // Don't navigate yet, modal will handle it
+    }
+
     // Show interstitial ad after saving challenge
     showInterstitial().finally(() => {
       router.back();
     });
-  }, [buildChallengeData, addChallenge]);
+  }, [buildChallengeData, addChallenge, activeEvent, linkToEvent, selectedType, playerStats, selectedSponsor, selfPlayer, selectedOpponent]);
 
   const handleSaveAndShare = useCallback(async () => {
     const data = buildChallengeData();
@@ -732,10 +748,20 @@ export default function NewChallengeScreen() {
     setIsSavingForShare(false);
     if (newId) {
       setSavedChallengeIdForShare(newId);
-      setShowPostChallengeShare(true);
+      // Detect linked players for cross-player sharing
+      const challengePlayerIds: string[] = [];
+      if (selfPlayer?.id) challengePlayerIds.push(selfPlayer.id);
+      if (selectedOpponent?.id) challengePlayerIds.push(selectedOpponent.id);
+      if (challengePlayerIds.length > 0) {
+        setShareRequestItemId(newId);
+        setShareRequestPlayerIds(challengePlayerIds);
+        setShowShareRequestModal(true);
+      } else {
+        setShowPostChallengeShare(true);
+      }
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [buildChallengeData, addChallenge]);
+  }, [buildChallengeData, addChallenge, selectedSponsor, selfPlayer, selectedOpponent]);
 
   const cancelChallenge = useCallback(() => {
     Alert.alert(t('challenge', 'quitChallenge'), t('challenge', 'challengeWillBeLost'), [
@@ -1437,6 +1463,26 @@ export default function NewChallengeScreen() {
               forceReadOnly
             />
           ) : null}
+
+          {/* Cross-player Share Request Modal */}
+          <ShareRequestModal
+            visible={showShareRequestModal}
+            onClose={() => {
+              setShowShareRequestModal(false);
+              // After share request, show the regular share modal if we have an ID
+              if (savedChallengeIdForShare) {
+                setTimeout(() => setShowPostChallengeShare(true), 300);
+              } else {
+                showInterstitial().finally(() => { router.back(); });
+              }
+            }}
+            itemType="challenge"
+            itemId={shareRequestItemId}
+            playerIds={shareRequestPlayerIds}
+            senderName={selfPlayer?.name || userStats.playerName}
+            itemSummary={`${config?.name || ''} - ${challengeMode === '1v1' ? `vs ${selectedOpponent?.name}` : 'Solo'}`}
+            language={language}
+          />
         </ScrollView>
       </SafeAreaView>
     );
