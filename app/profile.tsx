@@ -125,6 +125,17 @@ export default function ProfileScreen() {
   const [showNotifSection, setShowNotifSection] = useState(false);
   const [showShareSection, setShowShareSection] = useState(false);
   const [showConsentDetail, setShowConsentDetail] = useState(false);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    account: true,
+    notifications: false,
+    data: false,
+    community: false,
+    legal: false,
+  });
+  const toggleSection = (key: string) => {
+    Haptics.selectionAsync();
+    setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
+  };
   
   // Consent date
   const [consentDate, setConsentDate] = useState<string | null>(null);
@@ -1487,8 +1498,13 @@ export default function ProfileScreen() {
         {!isEditing && (
           <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
             {/* ===== SECTION: COMPTE ===== */}
-            <Text style={styles.sectionTitle}>{language === 'fr' ? 'COMPTE' : 'ACCOUNT'}</Text>
+            <Pressable style={[styles.accordionHeader, { marginTop: 0 }]} onPress={() => toggleSection('account')}>
+              <Text style={styles.accordionTitle}>{language === 'fr' ? 'COMPTE' : 'ACCOUNT'}</Text>
+              <MaterialIcons name={expandedSections.account ? 'expand-less' : 'expand-more'} size={20} color={theme.textSecondary} />
+            </Pressable>
 
+            {expandedSections.account ? (
+            <>
             <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/password'); }}>
               <View style={[styles.menuIcon, { backgroundColor: theme.primary + '15' }]}><MaterialIcons name="lock" size={20} color={theme.primary} /></View>
               <View style={styles.menuItemContent}>
@@ -1516,9 +1532,16 @@ export default function ProfileScreen() {
               ) : <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />}
             </Pressable>
 
-            {/* ===== SECTION: NOTIFICATIONS & PARTAGE ===== */}
-            <Text style={[styles.sectionTitle, { marginTop: 16 }]}>{language === 'fr' ? 'NOTIFICATIONS & PARTAGE' : 'NOTIFICATIONS & SHARING'}</Text>
+            </>
+            ) : null}
 
+            {/* ===== SECTION: NOTIFICATIONS & PARTAGE ===== */}
+            <Pressable style={styles.accordionHeader} onPress={() => toggleSection('notifications')}>
+              <Text style={styles.accordionTitle}>{language === 'fr' ? 'NOTIFICATIONS & PARTAGE' : 'NOTIFICATIONS & SHARING'}</Text>
+              <MaterialIcons name={expandedSections.notifications ? 'expand-less' : 'expand-more'} size={20} color={theme.textSecondary} />
+            </Pressable>
+
+            {expandedSections.notifications ? (
             <View style={styles.compactMenuGroup}>
               <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); setUnreadShareCount(0); router.push('/share-notifications'); }}>
                 <View style={[styles.compactMenuIcon, { backgroundColor: theme.warning + '15' }]}><MaterialIcons name="share" size={16} color={theme.warning} />
@@ -1547,9 +1570,15 @@ export default function ProfileScreen() {
               </Pressable>
             </View>
 
-            {/* ===== SECTION: DONNEES & SYNC ===== */}
-            <Text style={[styles.sectionTitle, { marginTop: 16 }]}>{language === 'fr' ? 'DONNEES & SYNCHRONISATION' : 'DATA & SYNC'}</Text>
+            ) : null}
 
+            {/* ===== SECTION: DONNEES & SYNC ===== */}
+            <Pressable style={styles.accordionHeader} onPress={() => toggleSection('data')}>
+              <Text style={styles.accordionTitle}>{language === 'fr' ? 'DONNEES & SYNCHRONISATION' : 'DATA & SYNC'}</Text>
+              <MaterialIcons name={expandedSections.data ? 'expand-less' : 'expand-more'} size={20} color={theme.textSecondary} />
+            </Pressable>
+
+            {expandedSections.data ? (
             <View style={styles.compactMenuGroup}>
               <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/merge-history'); }}>
                 <View style={[styles.compactMenuIcon, { backgroundColor: theme.warning + '15' }]}><MaterialIcons name="merge-type" size={16} color={theme.warning} /></View>
@@ -1570,9 +1599,15 @@ export default function ProfileScreen() {
               </View>
             </View>
 
-            {/* ===== SECTION: COMMUNAUTE ===== */}
-            <Text style={[styles.sectionTitle, { marginTop: 16 }]}>{language === 'fr' ? 'COMMUNAUTE' : 'COMMUNITY'}</Text>
+            ) : null}
 
+            {/* ===== SECTION: COMMUNAUTE ===== */}
+            <Pressable style={styles.accordionHeader} onPress={() => toggleSection('community')}>
+              <Text style={styles.accordionTitle}>{language === 'fr' ? 'COMMUNAUTE' : 'COMMUNITY'}</Text>
+              <MaterialIcons name={expandedSections.community ? 'expand-less' : 'expand-more'} size={20} color={theme.textSecondary} />
+            </Pressable>
+
+            {expandedSections.community ? (
             <View style={styles.compactMenuGroup}>
               <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/ambassadors' as any); }}>
                 <View style={[styles.compactMenuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="verified" size={16} color="#7C3AED" /></View>
@@ -1593,9 +1628,15 @@ export default function ProfileScreen() {
               </Pressable>
             </View>
 
-            {/* ===== SECTION: LEGAL & AIDE ===== */}
-            <Text style={[styles.sectionTitle, { marginTop: 16 }]}>{language === 'fr' ? 'AIDE & LEGAL' : 'HELP & LEGAL'}</Text>
+            ) : null}
 
+            {/* ===== SECTION: LEGAL & AIDE ===== */}
+            <Pressable style={styles.accordionHeader} onPress={() => toggleSection('legal')}>
+              <Text style={styles.accordionTitle}>{language === 'fr' ? 'AIDE & LEGAL' : 'HELP & LEGAL'}</Text>
+              <MaterialIcons name={expandedSections.legal ? 'expand-less' : 'expand-more'} size={20} color={theme.textSecondary} />
+            </Pressable>
+
+            {expandedSections.legal ? (
             <View style={styles.compactMenuGroup}>
               <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/faq'); }}>
                 <View style={[styles.compactMenuIcon, { backgroundColor: theme.carreauColor + '15' }]}><MaterialIcons name="help-outline" size={16} color={theme.carreauColor} /></View>
@@ -1640,6 +1681,8 @@ export default function ProfileScreen() {
                 </>
               ) : null}
             </View>
+
+            ) : null}
 
             {/* Admin */}
             {isAdmin ? (
@@ -3061,6 +3104,21 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: theme.border,
     marginLeft: 58,
+  },
+  accordionHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    marginTop: 16,
+    marginBottom: 4,
+  },
+  accordionTitle: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: theme.textSecondary,
+    letterSpacing: 1,
   },
   // Boules edit fields
   boulesEditRow: {
