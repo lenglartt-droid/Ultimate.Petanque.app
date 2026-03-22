@@ -26,6 +26,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import ShareModal from '@/components/ui/ShareModal';
 import AdBanner from '@/components/ui/AdBanner';
 import Svg, { Circle, Line, G, Polygon, Text as SvgText } from 'react-native-svg';
+import { Image } from 'expo-image';
 import { getMyMeetups, getInvitedMeetups, getMeetupResponses, Meetup, MeetupResponse } from '@/services/meetupService';
 import { useAuth } from '@/template';
 
@@ -363,6 +364,20 @@ const ChallengeCard = React.memo(({ challenge, onPress, t, language }: { challen
         </View>
 
         {/* Footer with badges */}
+        {/* Sponsored badge */}
+        {challenge.sponsorId ? (
+          <View style={styles.challengeSponsorRow}>
+            {challenge.sponsorPhoto ? (
+              <Image source={{ uri: challenge.sponsorPhoto }} style={styles.challengeSponsorPhoto} contentFit="cover" transition={200} />
+            ) : null}
+            <Text style={styles.challengeSponsorName} numberOfLines={1}>{challenge.sponsorName}</Text>
+            <View style={styles.challengeSponsorBadge}>
+              <MaterialIcons name="verified" size={9} color="#FFF" />
+              <Text style={styles.challengeSponsorBadgeText}>{t('challenge', 'sponsoredBadge')}</Text>
+            </View>
+          </View>
+        ) : null}
+
         <View style={styles.challengeFooter}>
           {is1v1 && challenge.winner && (
             <View style={[
@@ -1372,6 +1387,33 @@ export default function HistoryScreen() {
                   </View>
 
                 </View>
+                {/* Sponsor banner in detail */}
+                {editingChallenge.sponsorId ? (
+                  <Pressable
+                    style={styles.detailSponsorBanner}
+                    onPress={() => { setEditingChallenge(null); router.push('/partners'); }}
+                  >
+                    <View style={styles.detailSponsorBannerInner}>
+                      {editingChallenge.sponsorPhoto ? (
+                        <Image source={{ uri: editingChallenge.sponsorPhoto }} style={styles.detailSponsorPhoto} contentFit="cover" transition={200} />
+                      ) : (
+                        <View style={[styles.detailSponsorPhoto, { backgroundColor: '#F59E0B15', alignItems: 'center', justifyContent: 'center' }]}>
+                          <MaterialIcons name="campaign" size={18} color="#F59E0B" />
+                        </View>
+                      )}
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.detailSponsorLabel}>{t('challenge', 'sponsoredBy')}</Text>
+                        <Text style={styles.detailSponsorName}>{editingChallenge.sponsorName}</Text>
+                      </View>
+                      <View style={styles.detailSponsorBadge}>
+                        <MaterialIcons name="verified" size={12} color="#FFF" />
+                        <Text style={styles.detailSponsorBadgeText}>{t('challenge', 'sponsoredBadge')}</Text>
+                      </View>
+                      <MaterialIcons name="chevron-right" size={18} color="#92400E" />
+                    </View>
+                  </Pressable>
+                ) : null}
+
                 {/* Mode badges */}
                 <View style={styles.detailHeaderBadges}>
                   {editingChallenge.mode === '1v1' ? (
@@ -2521,6 +2563,12 @@ const styles = StyleSheet.create({
   modeBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 3, borderRadius: theme.borderRadius.sm },
   modeBadgeText: { fontSize: 10, fontWeight: '600' },
   challengeTime: { fontSize: 10, color: theme.textMuted, marginLeft: 'auto' },
+  // Sponsored badge in challenge card
+  challengeSponsorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#FDE68A' },
+  challengeSponsorPhoto: { width: 20, height: 20, borderRadius: 6, overflow: 'hidden' as const },
+  challengeSponsorName: { flex: 1, fontSize: 11, fontWeight: '600', color: '#92400E' },
+  challengeSponsorBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#F59E0B', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
+  challengeSponsorBadgeText: { fontSize: 8, fontWeight: '800', color: '#FFF', letterSpacing: 0.5 },
   
   // Challenge Stats Summary Card
   challengeStatsCard: {
@@ -2912,6 +2960,14 @@ const styles = StyleSheet.create({
   detailName: { fontSize: 20, fontWeight: '700', color: theme.textPrimary },
   detailDate: { fontSize: 13, color: theme.textSecondary, marginTop: 3 },
   detailTime: { fontSize: 12, color: theme.textMuted, marginTop: 1 },
+  // Sponsor banner in challenge detail
+  detailSponsorBanner: { marginTop: 14 },
+  detailSponsorBannerInner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFFBEB', borderRadius: 14, padding: 12, borderWidth: 1.5, borderColor: '#FDE68A' },
+  detailSponsorPhoto: { width: 40, height: 40, borderRadius: 12, overflow: 'hidden' as const },
+  detailSponsorLabel: { fontSize: 9, color: '#92400E', fontWeight: '600', letterSpacing: 0.3, textTransform: 'uppercase' as const },
+  detailSponsorName: { fontSize: 15, fontWeight: '700', color: '#78350F', marginTop: 1 },
+  detailSponsorBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F59E0B', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8 },
+  detailSponsorBadgeText: { fontSize: 8, fontWeight: '800', color: '#FFF', letterSpacing: 0.5 },
   detailHeaderBadges: { flexDirection: 'row', gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border },
   detailModeBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: theme.borderRadius.full },
   detailModeBadgeText: { fontSize: 12, fontWeight: '600' },
