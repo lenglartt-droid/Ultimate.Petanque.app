@@ -341,6 +341,29 @@ export default function MapScreen() {
     players: { label: t('map', 'players'), singular: t('map', 'playerSingular'), icon: 'person', color: theme.primary },
   }), [language]);
 
+  // Dynamic gradient based on active filter
+  const activeGradient: [string, string, string] = useMemo(() => {
+    const gradients: Record<MarkerType, [string, string, string]> = {
+      all: ['#0F172A', '#1E3A8A', '#2563EB'],
+      terrains: ['#022C22', '#064E3B', '#10B981'],
+      clubs: ['#451A03', '#92400E', '#D97706'],
+      tournaments: ['#451A03', '#78350F', '#B45309'],
+      players: ['#0F172A', '#1E3A8A', '#2563EB'],
+    };
+    return gradients[filter];
+  }, [filter]);
+
+  const activeFilterColor = useMemo(() => {
+    const colors: Record<MarkerType, string> = {
+      all: theme.primary,
+      terrains: theme.success,
+      clubs: theme.accent,
+      tournaments: theme.carreauColor,
+      players: theme.primary,
+    };
+    return colors[filter];
+  }, [filter]);
+
   const [publicLoaded, setPublicLoaded] = useState(false);
 
   // Lazy-load public items only when needed (first filter interaction or on demand)
@@ -793,11 +816,15 @@ export default function MapScreen() {
       {/* ========== GRADIENT HERO HEADER ========== */}
       <View style={[styles.heroHeader, { paddingTop: insets.top }]}>
         <LinearGradient
-          colors={['#1E3A8A', '#2563EB', '#3B82F6']}
+          colors={activeGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.heroGradient}
         >
+          {/* Decorative circles for glassmorphism depth */}
+          <View style={styles.heroDecoCircle1} />
+          <View style={styles.heroDecoCircle2} />
+
           <View style={styles.heroTop}>
             <View style={{ flex: 1 }}>
               <Text style={styles.heroTitle}>{t('map', 'map')}</Text>
@@ -828,16 +855,21 @@ export default function MapScreen() {
               </Pressable>
             </View>
           </View>
-          <View style={styles.heroStatsRow}>
-            {(Object.keys(MARKER_CONFIG) as (keyof typeof MARKER_CONFIG)[]).map((k, i) => (
-              <React.Fragment key={k}>
-                {i > 0 ? <View style={styles.heroStatDivider} /> : null}
-                <Pressable style={styles.heroStatItem} onPress={() => handleFilterPress(k)}>
-                  <Text style={styles.heroStatValue}>{counts[k]}</Text>
-                  <Text style={styles.heroStatLabel}>{MARKER_CONFIG[k].label}</Text>
-                </Pressable>
-              </React.Fragment>
-            ))}
+
+          {/* Inline Stats Summary */}
+          <View style={styles.heroStatsSummary}>
+            {(Object.keys(MARKER_CONFIG) as (keyof typeof MARKER_CONFIG)[]).map((k, i) => {
+              const isActive = filter === k;
+              return (
+                <React.Fragment key={k}>
+                  {i > 0 ? <View style={styles.heroStatDivider} /> : null}
+                  <Pressable style={styles.heroStatItem} onPress={() => handleFilterPress(k)}>
+                    <Text style={[styles.heroStatValue, isActive && { color: '#FFF', fontSize: 19 }]}>{counts[k]}</Text>
+                    <Text style={[styles.heroStatLabel, isActive && { color: 'rgba(255,255,255,0.7)' }]}>{MARKER_CONFIG[k].label}</Text>
+                  </Pressable>
+                </React.Fragment>
+              );
+            })}
           </View>
         </LinearGradient>
       </View>
@@ -1207,18 +1239,20 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.backgroundSecondary },
   // ========== GRADIENT HERO HEADER ==========
   heroHeader: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 },
-  heroGradient: { paddingTop: 16, paddingBottom: 24, paddingHorizontal: 20, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
+  heroGradient: { paddingTop: 16, paddingBottom: 28, paddingHorizontal: 20, borderBottomLeftRadius: 32, borderBottomRightRadius: 32, overflow: 'hidden' as const, position: 'relative' as const },
+  heroDecoCircle1: { position: 'absolute' as const, top: -40, right: -30, width: 140, height: 140, borderRadius: 70, backgroundColor: 'rgba(255,255,255,0.04)' },
+  heroDecoCircle2: { position: 'absolute' as const, bottom: -20, left: -20, width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.03)' },
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-  heroTitle: { fontSize: 24, fontWeight: '800', color: '#FFF' },
-  heroSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
+  heroTitle: { fontSize: 26, fontWeight: '800', color: '#FFF', letterSpacing: -0.3 },
+  heroSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 3, fontWeight: '500' },
   heroActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  heroActionBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center' as const, justifyContent: 'center' as const },
-  heroActionBtnActive: { backgroundColor: 'rgba(255,255,255,0.35)' },
-  heroStatsRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 8 },
+  heroActionBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  heroActionBtnActive: { backgroundColor: 'rgba(255,255,255,0.3)' },
+  heroStatsSummary: { flexDirection: 'row' as const, alignItems: 'center' as const, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 16, paddingVertical: 12, paddingHorizontal: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   heroStatItem: { flex: 1, alignItems: 'center' as const },
-  heroStatValue: { fontSize: 18, fontWeight: '800', color: '#FFF' },
-  heroStatLabel: { fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.65)', marginTop: 2, textTransform: 'uppercase' as const },
-  heroStatDivider: { width: 1, height: 24, backgroundColor: 'rgba(255,255,255,0.15)' },
+  heroStatValue: { fontSize: 17, fontWeight: '800' as const, color: 'rgba(255,255,255,0.5)' },
+  heroStatLabel: { fontSize: 9, fontWeight: '700' as const, color: 'rgba(255,255,255,0.35)', marginTop: 2, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
+  heroStatDivider: { width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.1)' },
   bottomPanel: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     backgroundColor: 'rgba(255,255,255,0.97)',
