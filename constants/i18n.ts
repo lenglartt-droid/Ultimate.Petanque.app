@@ -2472,6 +2472,36 @@ export const translations = {
     sortByParticipations: { fr: 'Participations', en: 'Participations' },
   },
 
+  // ============================================
+  // EVENT NOTIFICATIONS
+  // ============================================
+  eventNotifications: {
+    reminders: { fr: 'Rappels', en: 'Reminders' },
+    oneDayBefore: { fr: 'La veille (9h)', en: 'Day before (9am)' },
+    threeHoursBefore: { fr: '3 heures avant', en: '3 hours before' },
+    oneHourBefore: { fr: '1 heure avant', en: '1 hour before' },
+    remindersScheduled: { fr: 'Rappels programmes', en: 'Reminders scheduled' },
+    remindersScheduledCount: { fr: 'rappel(s) programme(s)', en: 'reminder(s) scheduled' },
+    noReminders: { fr: 'Aucun rappel programme', en: 'No reminders scheduled' },
+    remindersDisabled: { fr: 'Rappels desactives', en: 'Reminders disabled' },
+    eventPastNoReminder: { fr: 'Les rappels ne sont disponibles que pour les evenements a venir', en: 'Reminders are only available for upcoming events' },
+    enableNotifications: { fr: 'Activez les notifications dans les reglages', en: 'Enable notifications in settings' },
+    witnessNeeded: { fr: 'Attestation requise', en: 'Attestation needed' },
+    witnessNeededDesc: { fr: 'Un participant a termine son defi. Votre attestation est necessaire.', en: 'A participant completed their challenge. Your attestation is needed.' },
+    attestationReceived: { fr: 'Attestation recue', en: 'Attestation received' },
+    attestNow: { fr: 'Attester maintenant', en: 'Attest now' },
+    pendingAttestations: { fr: 'Attestations en attente', en: 'Pending attestations' },
+    noPendingAttestations: { fr: 'Aucune attestation en attente', en: 'No pending attestations' },
+    viewEvent: { fr: 'Voir l\'evenement', en: 'View event' },
+    markAllRead: { fr: 'Tout marquer comme lu', en: 'Mark all as read' },
+    notificationsLabel: { fr: 'Notifications evenement', en: 'Event notifications' },
+    noNotifications: { fr: 'Aucune notification', en: 'No notifications' },
+    noNotificationsDesc: { fr: 'Les notifications liees aux evenements sponsorises apparaitront ici', en: 'Sponsored event notifications will appear here' },
+    permissionRequired: { fr: 'Permission requise', en: 'Permission required' },
+    testSent: { fr: 'Test envoye', en: 'Test sent' },
+    testSentMsg: { fr: 'Notification de test envoyee', en: 'Test notification sent' },
+  },
+
   statsExtra: {
     withPartner: { fr: 'avec', en: 'with' },
     shotLabel: { fr: 'Tir', en: 'Shot' },

@@ -13,6 +13,14 @@ import {
   registerForEvent, declineEvent, attestAsWitness, publishResults,
   cancelSponsoredEvent, SponsoredEvent, SponsoredEventParticipant,
 } from '@/services/sponsoredEventService';
+import {
+  scheduleEventReminders, cancelEventReminders, getScheduledEventReminders,
+  markAllEventNotificationsRead, EventReminderSettings,
+} from '@/services/eventNotificationService';
+import { requestNotificationPermissions, areNotificationsEnabled } from '@/services/notificationService';
+import * as Haptics from 'expo-haptics';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { Switch } from 'react-native';
 
 export default function SponsoredEventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -26,6 +34,12 @@ export default function SponsoredEventDetailScreen() {
   const [event, setEvent] = useState<SponsoredEvent | null>(null);
   const [participants, setParticipants] = useState<SponsoredEventParticipant[]>([]);
   const [myStatus, setMyStatus] = useState<string | null>(null);
+
+  // Reminders state
+  const [reminderDay, setReminderDay] = useState(false);
+  const [reminder3h, setReminder3h] = useState(false);
+  const [reminder1h, setReminder1h] = useState(false);
+  const [remindersLoading, setRemindersLoading] = useState(false);
 
   const isCreator = event?.creatorUserId === user?.id;
   const acceptedCount = participants.filter(p => p.status === 'accepted' || p.status === 'completed').length;
@@ -46,13 +60,75 @@ export default function SponsoredEventDetailScreen() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // Load reminder state
+  useEffect(() => {
+    if (id) {
+      getScheduledEventReminders(id).then(state => {
+        setReminderDay(state.oneDayBefore);
+        setReminder3h(state.threeHoursBefore);
+        setReminder1h(state.oneHourBefore);
+      });
+      // Mark notifications as read when viewing the event
+      markAllEventNotificationsRead(id);
+    }
+  }, [id]);
+
   const handleRefresh = async () => { setRefreshing(true); await loadData(); setRefreshing(false); };
+
+  const handleToggleReminder = async (type: 'day' | '3h' | '1h', value: boolean) => {
+    if (!event) return;
+    const startTime = new Date(event.startTime);
+    if (startTime <= new Date()) {
+      showAlert(language === 'fr' ? 'Evenement passe' : 'Event past', language === 'fr' ? 'Les rappels ne sont disponibles que pour les evenements a venir' : 'Reminders are only available for upcoming events');
+      return;
+    }
+    const perms = await areNotificationsEnabled();
+    if (!perms) {
+      const granted = await requestNotificationPermissions();
+      if (!granted) {
+        showAlert(language === 'fr' ? 'Permission requise' : 'Permission required', language === 'fr' ? 'Activez les notifications dans les reglages' : 'Enable notifications in settings');
+        return;
+      }
+    }
+    Haptics.selectionAsync();
+    const newDay = type === 'day' ? value : reminderDay;
+    const new3h = type === '3h' ? value : reminder3h;
+    const new1h = type === '1h' ? value : reminder1h;
+    setReminderDay(newDay);
+    setReminder3h(new3h);
+    setReminder1h(new1h);
+    setRemindersLoading(true);
+    if (!newDay && !new3h && !new1h) {
+      await cancelEventReminders(event.id);
+    } else {
+      await scheduleEventReminders({
+        eventId: event.id,
+        eventTitle: event.title,
+        startTime,
+        oneDayBefore: newDay,
+        threeHoursBefore: new3h,
+        oneHourBefore: new1h,
+      });
+    }
+    setRemindersLoading(false);
+  };
 
   const handleRegister = async () => {
     if (!id) return;
     const { error } = await registerForEvent(id);
     if (error) { showAlert(language === 'fr' ? 'Erreur' : 'Error', error); return; }
     setMyStatus('accepted');
+    // Auto-schedule reminders on registration
+    if (event) {
+      const startTime = new Date(event.startTime);
+      if (startTime > new Date()) {
+        const perms = await areNotificationsEnabled();
+        if (perms) {
+          await scheduleEventReminders({ eventId: event.id, eventTitle: event.title, startTime, oneDayBefore: true, threeHoursBefore: true, oneHourBefore: true });
+          setReminderDay(true); setReminder3h(true); setReminder1h(true);
+        }
+      }
+    }
     loadData();
   };
 
@@ -180,6 +256,43 @@ export default function SponsoredEventDetailScreen() {
         </View>
 
         {event.description ? <View style={s.descCard}><Text style={s.descText}>{event.description}</Text></View> : null}
+
+        {/* Reminders Section */}
+        {(myStatus === 'accepted' || myStatus === 'completed' || isCreator) && !isPast && event.status !== 'cancelled' ? (
+          <Animated.View entering={FadeInDown.duration(300)} style={s.remindersCard}>
+            <View style={s.remindersHeader}>
+              <View style={s.remindersIconBg}>
+                <MaterialIcons name="notifications-active" size={18} color="#7C3AED" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.remindersTitle}>{language === 'fr' ? 'Rappels' : 'Reminders'}</Text>
+                <Text style={s.remindersSubtitle}>
+                  {(reminderDay || reminder3h || reminder1h)
+                    ? `${[reminderDay, reminder3h, reminder1h].filter(Boolean).length} ${language === 'fr' ? 'rappel(s) programme(s)' : 'reminder(s) scheduled'}`
+                    : (language === 'fr' ? 'Aucun rappel programme' : 'No reminders scheduled')}
+                </Text>
+              </View>
+              {remindersLoading ? <ActivityIndicator size="small" color="#7C3AED" /> : null}
+            </View>
+            <View style={s.remindersList}>
+              <View style={s.reminderItem}>
+                <MaterialIcons name="today" size={16} color={reminderDay ? '#7C3AED' : theme.textMuted} />
+                <Text style={[s.reminderLabel, reminderDay && { color: theme.textPrimary }]}>{language === 'fr' ? 'La veille (9h)' : 'Day before (9am)'}</Text>
+                <Switch value={reminderDay} onValueChange={(v) => handleToggleReminder('day', v)} trackColor={{ false: theme.border, true: '#7C3AED60' }} thumbColor={reminderDay ? '#7C3AED' : theme.textMuted} />
+              </View>
+              <View style={s.reminderItem}>
+                <MaterialIcons name="schedule" size={16} color={reminder3h ? '#7C3AED' : theme.textMuted} />
+                <Text style={[s.reminderLabel, reminder3h && { color: theme.textPrimary }]}>{language === 'fr' ? '3 heures avant' : '3 hours before'}</Text>
+                <Switch value={reminder3h} onValueChange={(v) => handleToggleReminder('3h', v)} trackColor={{ false: theme.border, true: '#7C3AED60' }} thumbColor={reminder3h ? '#7C3AED' : theme.textMuted} />
+              </View>
+              <View style={s.reminderItem}>
+                <MaterialIcons name="alarm" size={16} color={reminder1h ? '#7C3AED' : theme.textMuted} />
+                <Text style={[s.reminderLabel, reminder1h && { color: theme.textPrimary }]}>{language === 'fr' ? '1 heure avant' : '1 hour before'}</Text>
+                <Switch value={reminder1h} onValueChange={(v) => handleToggleReminder('1h', v)} trackColor={{ false: theme.border, true: '#7C3AED60' }} thumbColor={reminder1h ? '#7C3AED' : theme.textMuted} />
+              </View>
+            </View>
+          </Animated.View>
+        ) : null}
 
         {/* Registration CTA */}
         {!isCreator && !isPast && event.status !== 'cancelled' ? (
@@ -375,4 +488,13 @@ const s = StyleSheet.create({
   // Actions
   actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FFF', borderRadius: 14, padding: 16, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0' },
   actionBtnText: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  // Reminders
+  remindersCard: { marginHorizontal: 16, marginBottom: 16, backgroundColor: '#FFF', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#7C3AED20' },
+  remindersHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+  remindersIconBg: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#7C3AED12', alignItems: 'center', justifyContent: 'center' },
+  remindersTitle: { fontSize: 15, fontWeight: '700', color: theme.textPrimary },
+  remindersSubtitle: { fontSize: 11, color: theme.textMuted, marginTop: 1 },
+  remindersList: { gap: 8 },
+  reminderItem: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#F8FAFC', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#E2E8F0' },
+  reminderLabel: { flex: 1, fontSize: 14, fontWeight: '500', color: theme.textSecondary },
 });

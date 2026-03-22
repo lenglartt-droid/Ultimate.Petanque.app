@@ -1,4 +1,5 @@
 import { getSupabaseClient } from '@/template';
+import { notifyWitnessesForResult, notifyAttestationReceived } from './eventNotificationService';
 
 export interface SponsoredEvent {
   id: string;
@@ -367,6 +368,14 @@ export async function submitEventResult(eventId: string, challengeId: string, sc
     const { data: userData } = await supabase.auth.getUser();
     if (!userData?.user?.id) return { error: 'Non authentifie' };
 
+    // Get participant record
+    const { data: participantData } = await supabase
+      .from('sponsored_event_participants')
+      .select('id')
+      .eq('event_id', eventId)
+      .eq('user_id', userData.user.id)
+      .maybeSingle();
+
     const { error } = await supabase
       .from('sponsored_event_participants')
       .update({
@@ -379,6 +388,19 @@ export async function submitEventResult(eventId: string, challengeId: string, sc
       .eq('user_id', userData.user.id);
 
     if (error) return { error: error.message };
+
+    // Send witness notifications (fire-and-forget)
+    if (participantData?.id) {
+      const { data: profile } = await supabase.from('user_profiles').select('username').eq('id', userData.user.id).maybeSingle();
+      const { data: evData } = await supabase.from('sponsored_events').select('title').eq('id', eventId).maybeSingle();
+      notifyWitnessesForResult(
+        eventId,
+        participantData.id,
+        profile?.username || 'Joueur',
+        evData?.title || 'Evenement'
+      ).catch(() => {});
+    }
+
     return { error: null };
   } catch (e: any) {
     return { error: e.message };
@@ -404,6 +426,21 @@ export async function attestAsWitness(eventId: string, participantId: string, no
       }, { onConflict: 'event_id,witness_user_id,participant_id' });
 
     if (error) return { error: error.message };
+
+    // Notify participant that attestation was received (fire-and-forget)
+    const { data: partData } = await supabase.from('sponsored_event_participants').select('user_id').eq('id', participantId).maybeSingle();
+    if (partData?.user_id) {
+      const { data: profile } = await supabase.from('user_profiles').select('username').eq('id', userData.user.id).maybeSingle();
+      const { data: evData } = await supabase.from('sponsored_events').select('title').eq('id', eventId).maybeSingle();
+      notifyAttestationReceived(
+        eventId,
+        partData.user_id,
+        participantId,
+        profile?.username || 'Temoin',
+        evData?.title || 'Evenement'
+      ).catch(() => {});
+    }
+
     return { error: null };
   } catch (e: any) {
     return { error: e.message };

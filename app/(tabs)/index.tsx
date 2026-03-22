@@ -32,6 +32,7 @@ import { getMyMeetups, getInvitedMeetups, getMeetupResponses, getPendingInvitati
 import { config } from '@/constants/config';
 import { Share as RNShare } from 'react-native';
 import { LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
+import { getPendingWitnessRequests, getUnreadEventNotificationCount, markEventNotificationRead, EventNotification } from '@/services/eventNotificationService';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -56,6 +57,10 @@ export default function HomeScreen() {
   const [showJoinMeetupModal, setShowJoinMeetupModal] = useState(false);
   const [showMeetupListModal, setShowMeetupListModal] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
+
+  // Witness attestation alerts
+  const [witnessRequests, setWitnessRequests] = useState<EventNotification[]>([]);
+  const [eventNotifCount, setEventNotifCount] = useState(0);
   const [joinCode, setJoinCode] = useState('');
   const [joinLoading, setJoinLoading] = useState(false);
   const { showAlert } = useAlert();
@@ -74,6 +79,22 @@ export default function HomeScreen() {
     const interval = setInterval(() => setNow(Date.now()), 60000);
     return () => clearInterval(interval);
   }, []);
+
+  // Load pending witness requests
+  const loadWitnessRequests = useCallback(async () => {
+    const [{ requests }, count] = await Promise.all([
+      getPendingWitnessRequests(),
+      getUnreadEventNotificationCount(),
+    ]);
+    setWitnessRequests(requests);
+    setEventNotifCount(count);
+  }, []);
+
+  useEffect(() => {
+    loadWitnessRequests();
+    const interval = setInterval(loadWitnessRequests, 30000);
+    return () => clearInterval(interval);
+  }, [loadWitnessRequests]);
 
   const loadMeetups = useCallback(async () => {
     try {
@@ -112,7 +133,7 @@ export default function HomeScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([refreshData(), loadMeetups()]);
+    await Promise.all([refreshData(), loadMeetups(), loadWitnessRequests()]);
     setRefreshing(false);
   };
 
@@ -392,6 +413,50 @@ export default function HomeScreen() {
             ))}
           </View>
         </Animated.View>
+
+        {/* ========== WITNESS ATTESTATION ALERTS ========== */}
+        {witnessRequests.length > 0 ? (
+          <Animated.View entering={FadeInDown.duration(400).delay(70)} style={[s.section, isTablet && s.sectionTablet]}>
+            <View style={s.witnessAlertCard}>
+              <View style={s.witnessAlertHeader}>
+                <View style={s.witnessAlertIconBg}>
+                  <MaterialIcons name="visibility" size={18} color="#F59E0B" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.witnessAlertTitle}>{language === 'fr' ? 'Attestations en attente' : 'Pending attestations'}</Text>
+                  <Text style={s.witnessAlertCount}>{witnessRequests.length} {language === 'fr' ? 'demande(s)' : 'request(s)'}</Text>
+                </View>
+              </View>
+              {witnessRequests.slice(0, 3).map((req) => (
+                <Pressable
+                  key={req.id}
+                  style={({ pressed }) => [s.witnessReqRow, pressed && { opacity: 0.85 }]}
+                  onPress={() => {
+                    markEventNotificationRead(req.id);
+                    setWitnessRequests(prev => prev.filter(r => r.id !== req.id));
+                    router.push(`/sponsored-event/${req.eventId}` as any);
+                  }}
+                >
+                  <View style={s.witnessReqDot} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.witnessReqTitle} numberOfLines={1}>{req.eventTitle || req.title}</Text>
+                    <Text style={s.witnessReqMsg} numberOfLines={1}>{req.message}</Text>
+                  </View>
+                  <View style={s.witnessReqBtn}>
+                    <MaterialIcons name="verified" size={14} color="#FFF" />
+                    <Text style={s.witnessReqBtnText}>{language === 'fr' ? 'Attester' : 'Attest'}</Text>
+                  </View>
+                </Pressable>
+              ))}
+              {witnessRequests.length > 3 ? (
+                <Pressable style={s.witnessMoreLink} onPress={() => router.push('/sponsored-event/list' as any)}>
+                  <Text style={s.witnessMoreText}>+{witnessRequests.length - 3} {language === 'fr' ? 'autre(s)' : 'more'}</Text>
+                  <MaterialIcons name="chevron-right" size={14} color="#F59E0B" />
+                </Pressable>
+              ) : null}
+            </View>
+          </Animated.View>
+        ) : null}
 
         {/* ========== SPONSOR BANNER ========== */}
         <SponsorBanner style={{ marginBottom: 8 }} />
@@ -909,6 +974,21 @@ const s = StyleSheet.create({
   bannerDots: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, paddingTop: 12 },
   bannerDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#7C3AED' + '25' },
   bannerDotActive: { width: 24, backgroundColor: '#7C3AED', borderRadius: 4 },
+
+  // ===== WITNESS ALERTS =====
+  witnessAlertCard: { backgroundColor: '#FFFBEB', borderRadius: 16, padding: 16, borderWidth: 1.5, borderColor: '#FDE68A' },
+  witnessAlertHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 12 },
+  witnessAlertIconBg: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#F59E0B18', alignItems: 'center' as const, justifyContent: 'center' as const },
+  witnessAlertTitle: { fontSize: 15, fontWeight: '700' as const, color: '#78350F' },
+  witnessAlertCount: { fontSize: 11, fontWeight: '600' as const, color: '#92400E', marginTop: 1 },
+  witnessReqRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, backgroundColor: '#FEF3C7', borderRadius: 12, padding: 12, marginBottom: 6 },
+  witnessReqDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#F59E0B' },
+  witnessReqTitle: { fontSize: 13, fontWeight: '700' as const, color: '#78350F' },
+  witnessReqMsg: { fontSize: 11, color: '#92400E', marginTop: 2 },
+  witnessReqBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: '#F59E0B', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  witnessReqBtnText: { fontSize: 11, fontWeight: '700' as const, color: '#FFF' },
+  witnessMoreLink: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 4, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#FDE68A' },
+  witnessMoreText: { fontSize: 12, fontWeight: '600' as const, color: '#F59E0B' },
 
   // ===== MODALS =====
   // Meetup list
