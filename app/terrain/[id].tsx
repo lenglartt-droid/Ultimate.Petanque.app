@@ -57,6 +57,7 @@ export default function TerrainDetailScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [isPublicState, setIsPublicState] = useState(false);
   const [showMergePicker, setShowMergePicker] = useState(false);
+  const [showAllTournaments, setShowAllTournaments] = useState(false);
   const [togglingPublic, setTogglingPublic] = useState(false);
   const [showPublicPreview, setShowPublicPreview] = useState(false);
   const [showSharePreview, setShowSharePreview] = useState(false);
@@ -178,8 +179,18 @@ export default function TerrainDetailScreen() {
   };
   const colors = typeColors[terrain.type] || typeColors['Stabilisé'];
 
-  // Get tournaments at this terrain
-  const terrainTournaments = tournaments.filter(t => t.terrainId === terrain.id);
+  // Get tournaments at this terrain, sorted by status then date
+  const terrainTournaments = React.useMemo(() => {
+    const statusOrder: Record<string, number> = { 'En cours': 0, 'À venir': 1, 'Terminé': 2 };
+    return tournaments
+      .filter(t => t.terrainId === terrain.id)
+      .sort((a, b) => {
+        const sa = statusOrder[a.status] ?? 3;
+        const sb = statusOrder[b.status] ?? 3;
+        if (sa !== sb) return sa - sb;
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      });
+  }, [tournaments, terrain.id]);
 
   // Meetups state
   const [meetups, setMeetups] = useState<Meetup[]>([]);
@@ -568,34 +579,105 @@ export default function TerrainDetailScreen() {
           )}
         </Animated.View>
 
-        {/* Upcoming Tournaments */}
-        {terrainTournaments.length > 0 && (
-          <Animated.View entering={FadeInUp.duration(400).delay(400)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('terrain', 'upcomingTournaments')}</Text>
-            {terrainTournaments.slice(0, 3).map((tournament, index) => (
-              <Pressable
-                key={tournament.id}
-                style={styles.tournamentCard}
-                onPress={() => router.push(`/tournament/${tournament.id}`)}
-              >
-                <View style={styles.tournamentIcon}>
-                  <MaterialIcons name="emoji-events" size={20} color={theme.carreauColor} />
-                </View>
-                <View style={styles.tournamentInfo}>
-                  <Text style={styles.tournamentName}>{tournament.name}</Text>
-                  <Text style={styles.tournamentDate}>
-                    {new Date(tournament.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', {
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric',
-                    })}
+        {/* Associated Tournaments */}
+        <Animated.View entering={FadeInUp.duration(400).delay(400)} style={styles.section}>
+          <View style={styles.tournamentSectionHeader}>
+            <Text style={styles.sectionTitle}>{t('terrain', 'associatedTournaments').toUpperCase()}</Text>
+            {terrainTournaments.length > 0 ? (
+              <View style={styles.tournamentCountBadge}>
+                <Text style={styles.tournamentCountText}>{terrainTournaments.length}</Text>
+              </View>
+            ) : null}
+            <View style={{ flex: 1 }} />
+            <Pressable
+              style={styles.tournamentAddBtn}
+              onPress={() => router.push({ pathname: '/tournament/new', params: { terrainId: terrain.id, terrainName: terrain.name } } as any)}
+            >
+              <MaterialIcons name="add" size={16} color={theme.carreauColor} />
+              <Text style={styles.tournamentAddBtnText}>{t('terrain', 'addTournamentHere')}</Text>
+            </Pressable>
+          </View>
+
+          {terrainTournaments.length > 0 ? (
+            <>
+              {(showAllTournaments ? terrainTournaments : terrainTournaments.slice(0, 3)).map((tournament) => {
+                const statusConfig: Record<string, { bg: string; color: string; icon: string }> = {
+                  'À venir': { bg: theme.primary + '15', color: theme.primary, icon: 'event' },
+                  'En cours': { bg: theme.warning + '15', color: theme.warning, icon: 'play-circle-filled' },
+                  'Terminé': { bg: theme.success + '15', color: theme.success, icon: 'check-circle' },
+                };
+                const sc = statusConfig[tournament.status] || statusConfig['À venir'];
+                return (
+                  <Pressable
+                    key={tournament.id}
+                    style={({ pressed }) => [styles.tournamentCard, pressed && { opacity: 0.85, transform: [{ scale: 0.985 }] }]}
+                    onPress={() => router.push(`/tournament/${tournament.id}`)}
+                  >
+                    <View style={[styles.tournamentIcon, { backgroundColor: sc.bg }]}>
+                      <MaterialIcons name="emoji-events" size={20} color={sc.color} />
+                    </View>
+                    <View style={styles.tournamentInfo}>
+                      <Text style={styles.tournamentName} numberOfLines={1}>{tournament.name}</Text>
+                      <View style={styles.tournamentMetaRow}>
+                        <MaterialIcons name="event" size={11} color={theme.textMuted} />
+                        <Text style={styles.tournamentDate}>
+                          {new Date(tournament.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </Text>
+                        <View style={styles.tournamentDot} />
+                        <Text style={styles.tournamentFormat}>{tournament.format}</Text>
+                      </View>
+                      <View style={[styles.tournamentStatusBadge, { backgroundColor: sc.bg }]}>
+                        <MaterialIcons name={sc.icon as any} size={10} color={sc.color} />
+                        <Text style={[styles.tournamentStatusText, { color: sc.color }]}>
+                          {tournament.status === 'À venir' ? t('tournamentStatus', 'upcoming') : tournament.status === 'En cours' ? t('tournamentStatus', 'inProgress') : t('tournamentStatus', 'completed')}
+                        </Text>
+                      </View>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                  </Pressable>
+                );
+              })}
+              {terrainTournaments.length > 3 && !showAllTournaments ? (
+                <Pressable
+                  style={({ pressed }) => [styles.showAllTournamentsBtn, pressed && { opacity: 0.75 }]}
+                  onPress={() => setShowAllTournaments(true)}
+                >
+                  <Text style={styles.showAllTournamentsText}>
+                    {t('terrain', 'showAllTournaments')} ({terrainTournaments.length - 3} {language === 'fr' ? 'de plus' : 'more'})
                   </Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                  <MaterialIcons name="expand-more" size={18} color={theme.carreauColor} />
+                </Pressable>
+              ) : null}
+              {showAllTournaments && terrainTournaments.length > 3 ? (
+                <Pressable
+                  style={({ pressed }) => [styles.showAllTournamentsBtn, pressed && { opacity: 0.75 }]}
+                  onPress={() => setShowAllTournaments(false)}
+                >
+                  <Text style={styles.showAllTournamentsText}>{language === 'fr' ? 'Voir moins' : 'Show less'}</Text>
+                  <MaterialIcons name="expand-less" size={18} color={theme.carreauColor} />
+                </Pressable>
+              ) : null}
+            </>
+          ) : (
+            <View style={styles.tournamentEmptyCard}>
+              <View style={styles.tournamentEmptyIconBg}>
+                <MaterialIcons name="emoji-events" size={32} color={theme.textMuted} />
+              </View>
+              <Text style={styles.tournamentEmptyText}>{t('terrain', 'noAssociatedTournaments')}</Text>
+              <Pressable
+                style={({ pressed }) => [styles.tournamentEmptyBtn, pressed && { opacity: 0.85 }]}
+                onPress={() => router.push({ pathname: '/tournament/new', params: { terrainId: terrain.id, terrainName: terrain.name } } as any)}
+              >
+                <MaterialIcons name="add" size={16} color="#FFF" />
+                <Text style={styles.tournamentEmptyBtnText}>{t('terrain', 'addTournamentHere')}</Text>
               </Pressable>
-            ))}
-          </Animated.View>
-        )}
+            </View>
+          )}
+        </Animated.View>
         {/* Visibility Toggle - only for owner */}
         {canEdit && !isSharedItem && (
           <Animated.View entering={FadeInDown.duration(400).delay(420)} style={styles.section}>
@@ -1174,6 +1256,37 @@ const styles = StyleSheet.create({
     color: theme.textSecondary,
     lineHeight: 20,
   },
+  tournamentSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  tournamentCountBadge: {
+    backgroundColor: theme.carreauColor + '15',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  tournamentCountText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: theme.carreauColor,
+  },
+  tournamentAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: theme.carreauColor + '12',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  tournamentAddBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.carreauColor,
+  },
   tournamentCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1183,11 +1296,13 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     gap: 12,
     ...theme.shadows.card,
+    borderWidth: 1,
+    borderColor: theme.border,
   },
   tournamentIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     backgroundColor: theme.carreauColor + '15',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1199,11 +1314,98 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: theme.textPrimary,
-    marginBottom: 2,
+    marginBottom: 4,
+  },
+  tournamentMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 6,
   },
   tournamentDate: {
-    fontSize: 12,
+    fontSize: 11,
     color: theme.textSecondary,
+  },
+  tournamentDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: theme.textMuted,
+    marginHorizontal: 2,
+  },
+  tournamentFormat: {
+    fontSize: 11,
+    color: theme.textSecondary,
+  },
+  tournamentStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    alignSelf: 'flex-start' as const,
+  },
+  tournamentStatusText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  showAllTournamentsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 10,
+    backgroundColor: theme.carreauColor + '08',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.carreauColor + '18',
+    marginTop: 4,
+  },
+  showAllTournamentsText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.carreauColor,
+  },
+  tournamentEmptyCard: {
+    alignItems: 'center',
+    backgroundColor: theme.surface,
+    borderRadius: 16,
+    paddingVertical: 28,
+    paddingHorizontal: 20,
+    gap: 10,
+    ...theme.shadows.card,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  tournamentEmptyIconBg: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: theme.carreauColor + '10',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  tournamentEmptyText: {
+    fontSize: 13,
+    color: theme.textMuted,
+    textAlign: 'center',
+  },
+  tournamentEmptyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: theme.carreauColor,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginTop: 4,
+  },
+  tournamentEmptyBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFF',
   },
   visibilityCard: {
     flexDirection: 'row',
