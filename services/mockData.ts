@@ -89,6 +89,9 @@ export interface Club {
   isPublic?: boolean;
   showContactPublic?: boolean;
   clubCardUrl?: string;
+  website?: string;
+  facebookUrl?: string;
+  instagramHandle?: string;
 }
 
 export interface TournamentNotification {

@@ -105,6 +105,9 @@ export default function NewClubScreen() {
   const [selectedTerrainId, setSelectedTerrainId] = useState<string | undefined>();
   const [logoUri, setLogoUri] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [website, setWebsite] = useState('');
+  const [facebookUrl, setFacebookUrl] = useState('');
+  const [instagramHandle, setInstagramHandle] = useState('');
 
   // Terrain picker modal
   const [showTerrainPicker, setShowTerrainPicker] = useState(false);
@@ -198,6 +201,9 @@ export default function NewClubScreen() {
       membershipCost: membershipCost ? parseFloat(membershipCost) : undefined,
       terrainId: selectedTerrainId,
       terrainName: selTerrain?.name,
+      website: website.trim() || undefined,
+      facebookUrl: facebookUrl.trim() || undefined,
+      instagramHandle: instagramHandle.trim() || undefined,
     });
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -350,6 +356,22 @@ export default function NewClubScreen() {
             <View style={[styles.contactInputContainer, { marginTop: 10 }]}>
               <MaterialIcons name="phone" size={20} color={theme.textSecondary} />
               <TextInput style={styles.contactInput} value={contactPhone} onChangeText={setContactPhone} placeholder={t('club', 'phonePlaceholder')} placeholderTextColor={theme.textMuted} keyboardType="phone-pad" />
+            </View>
+          </SectionCard>
+
+          {/* 3b. Web & Réseaux sociaux */}
+          <SectionCard title={language === 'fr' ? 'Web & Réseaux sociaux' : 'Web & Social Media'} icon="language" color={theme.accent} delay={160}>
+            <View style={styles.contactInputContainer}>
+              <MaterialIcons name="language" size={20} color={theme.accent} />
+              <TextInput style={styles.contactInput} value={website} onChangeText={setWebsite} placeholder={language === 'fr' ? 'https://www.monclub.fr' : 'https://www.myclub.com'} placeholderTextColor={theme.textMuted} keyboardType="url" autoCapitalize="none" autoCorrect={false} />
+            </View>
+            <View style={[styles.contactInputContainer, { marginTop: 10 }]}>
+              <MaterialIcons name="facebook" size={20} color="#1877F2" />
+              <TextInput style={styles.contactInput} value={facebookUrl} onChangeText={setFacebookUrl} placeholder={language === 'fr' ? 'https://facebook.com/monclub' : 'https://facebook.com/myclub'} placeholderTextColor={theme.textMuted} keyboardType="url" autoCapitalize="none" autoCorrect={false} />
+            </View>
+            <View style={[styles.contactInputContainer, { marginTop: 10 }]}>
+              <MaterialIcons name="camera-alt" size={20} color="#E4405F" />
+              <TextInput style={styles.contactInput} value={instagramHandle} onChangeText={setInstagramHandle} placeholder="@monclub" placeholderTextColor={theme.textMuted} autoCapitalize="none" autoCorrect={false} />
             </View>
           </SectionCard>
 

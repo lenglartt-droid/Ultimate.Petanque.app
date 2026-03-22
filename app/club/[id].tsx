@@ -476,6 +476,30 @@ export default function ClubDetailScreen() {
               ) : null}
             </View>
           ) : null}
+
+          {/* Social / Web links */}
+          {(club.website || club.facebookUrl || club.instagramHandle) ? (
+            <View style={styles.inlineContactSection}>
+              {club.website ? (
+                <Pressable style={styles.contactRowInline} onPress={() => { const url = club.website!.startsWith('http') ? club.website! : `https://${club.website}`; Linking.openURL(url); }}>
+                  <MaterialIcons name="language" size={18} color={theme.accent} />
+                  <Text style={styles.contactTextInline} numberOfLines={1}>{club.website}</Text>
+                </Pressable>
+              ) : null}
+              {club.facebookUrl ? (
+                <Pressable style={styles.contactRowInline} onPress={() => { const url = club.facebookUrl!.startsWith('http') ? club.facebookUrl! : `https://${club.facebookUrl}`; Linking.openURL(url); }}>
+                  <MaterialIcons name="facebook" size={18} color="#1877F2" />
+                  <Text style={[styles.contactTextInline, { color: '#1877F2' }]} numberOfLines={1}>{club.facebookUrl}</Text>
+                </Pressable>
+              ) : null}
+              {club.instagramHandle ? (
+                <Pressable style={styles.contactRowInline} onPress={() => { const handle = club.instagramHandle!.replace('@', ''); Linking.openURL(`https://instagram.com/${handle}`); }}>
+                  <MaterialIcons name="camera-alt" size={18} color="#E4405F" />
+                  <Text style={[styles.contactTextInline, { color: '#E4405F' }]} numberOfLines={1}>@{club.instagramHandle!.replace('@', '')}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
         </Animated.View>
 
         {/* Club Card - right after main card */}

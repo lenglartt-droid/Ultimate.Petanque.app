@@ -212,6 +212,9 @@ function mapClubFromDb(c: any): Club {
     membershipCost: c.membership_cost ? parseFloat(c.membership_cost) : undefined,
     isPublic: c.is_public ?? false, showContactPublic: c.show_contact_public ?? false,
     clubCardUrl: c.club_card_url || undefined,
+    website: c.website || undefined,
+    facebookUrl: c.facebook_url || undefined,
+    instagramHandle: c.instagram_handle || undefined,
   };
 }
 
@@ -1305,6 +1308,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         terrain_name: club.terrainName,
         membership_cost: club.membershipCost,
         club_card_url: club.clubCardUrl || null,
+        website: club.website || null,
+        facebook_url: club.facebookUrl || null,
+        instagram_handle: club.instagramHandle || null,
       }).select().single();
 
       if (error) throw error;
@@ -1330,6 +1336,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           isPublic: data.is_public ?? false,
           showContactPublic: data.show_contact_public ?? false,
           clubCardUrl: data.club_card_url || undefined,
+          website: data.website || undefined,
+          facebookUrl: data.facebook_url || undefined,
+          instagramHandle: data.instagram_handle || undefined,
         };
         setClubs(prev => [...prev, newClub]);
       }
@@ -1711,6 +1720,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.membershipCost !== undefined) dbUpdates.membership_cost = updates.membershipCost;
       if (updates.showContactPublic !== undefined) dbUpdates.show_contact_public = updates.showContactPublic;
       if ((updates as any).clubCardUrl !== undefined) dbUpdates.club_card_url = (updates as any).clubCardUrl || null;
+      if (updates.website !== undefined) dbUpdates.website = updates.website || null;
+      if (updates.facebookUrl !== undefined) dbUpdates.facebook_url = updates.facebookUrl || null;
+      if (updates.instagramHandle !== undefined) dbUpdates.instagram_handle = updates.instagramHandle || null;
       dbUpdates.updated_at = new Date().toISOString();
 
       await supabase.from('clubs').update(dbUpdates).eq('id', id);
