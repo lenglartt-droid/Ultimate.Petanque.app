@@ -238,7 +238,7 @@ export default function AmbassadorDashboardScreen() {
         <View style={s.loadingWrap}>
           <MaterialIcons name="lock" size={48} color={theme.textMuted} />
           <Text style={{ color: theme.textMuted, fontSize: 16, marginTop: 12, textAlign: 'center', paddingHorizontal: 32 }}>
-            {fr ? 'Vous n\'etes pas enregistre comme ambassadeur.' : 'You are not registered as an ambassador.'}
+            {fr ? "Vous n'etes pas enregistre comme ambassadeur." : 'You are not registered as an ambassador.'}
           </Text>
         </View>
       </SafeAreaView>
