@@ -1209,12 +1209,10 @@ export default function NewMatchScreen() {
                           <View style={[styles.fsQuickModeBtns, isCompact && { gap: 5 }]}>
                             {/* TIR section */}
                             <View style={[styles.fsQmSection, isCompact && { gap: 2 }]}>
-                              {!isUltraCompact ? (
-                                <View style={styles.fsQmSectionHeader}>
-                                  <MaterialIcons name="gps-fixed" size={12} color="rgba(255,255,255,0.5)" />
-                                  <Text style={styles.fsQmSectionLabel}>{t('notation', 'tirShort')}</Text>
-                                </View>
-                              ) : null}
+                              <View style={styles.fsQmSectionHeader}>
+                                <MaterialIcons name="gps-fixed" size={isUltraCompact ? 10 : 12} color="rgba(255,255,255,0.5)" />
+                                <Text style={[styles.fsQmSectionLabel, isUltraCompact && { fontSize: 7 }]}>{t('notation', 'tirShort')}</Text>
+                              </View>
                               <View style={[styles.fsQmSectionBtns, isCompact && { gap: 4 }]}>
                                 <Pressable
                                   style={[styles.fsQmTirSuccessBtn, isCompact && { paddingVertical: 10, borderRadius: 10 }]}
@@ -1235,12 +1233,10 @@ export default function NewMatchScreen() {
                             </View>
                             {/* POINT section */}
                             <View style={[styles.fsQmSection, isCompact && { gap: 2 }]}>
-                              {!isUltraCompact ? (
-                                <View style={styles.fsQmSectionHeader}>
-                                  <MaterialIcons name="adjust" size={12} color="rgba(255,255,255,0.5)" />
-                                  <Text style={styles.fsQmSectionLabel}>{t('notation', 'pointShortLabel')}</Text>
-                                </View>
-                              ) : null}
+                              <View style={styles.fsQmSectionHeader}>
+                                <MaterialIcons name="adjust" size={isUltraCompact ? 10 : 12} color="rgba(255,255,255,0.5)" />
+                                <Text style={[styles.fsQmSectionLabel, isUltraCompact && { fontSize: 7 }]}>{t('notation', 'pointShortLabel')}</Text>
+                              </View>
                               <View style={[styles.fsQmSectionBtns, isCompact && { gap: 4 }]}>
                                 <Pressable
                                   style={[styles.fsQmPointSuccessBtn, isCompact && { paddingVertical: 10, borderRadius: 10 }]}
