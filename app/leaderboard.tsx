@@ -574,7 +574,7 @@ export default function LeaderboardScreen() {
         {activeTab === 'players' ? (
             <View style={s.sortWrapper}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.sortRow}>
-            {([
+            {activeTab === 'players' ? ([
               { id: 'winRate' as LeaderboardSort, label: t('leaderboard', 'sortByWinRate'), icon: 'emoji-events' },
               { id: 'matches' as LeaderboardSort, label: t('leaderboard', 'sortByMatches'), icon: 'sports' },
               { id: 'tirRate' as LeaderboardSort, label: t('leaderboard', 'sortByTirRate'), icon: 'gps-fixed' },
@@ -603,6 +603,20 @@ export default function LeaderboardScreen() {
               >
                 <MaterialIcons name={chip.icon as any} size={14} color={clubSortBy === chip.id ? '#FFF' : theme.textSecondary} />
                 <Text style={[s.sortChipText, clubSortBy === chip.id && s.sortChipTextActive]}>{chip.label}</Text>
+              </Pressable>
+            )) : activeTab === 'events' ? ([
+              { id: 'wins' as const, label: t('leaderboard', 'sortByWins'), icon: 'emoji-events' },
+              { id: 'podiums' as const, label: t('leaderboard', 'sortByPodiums'), icon: 'military-tech' },
+              { id: 'avgScore' as const, label: t('leaderboard', 'sortByAvgScore'), icon: 'stars' },
+              { id: 'participations' as const, label: t('leaderboard', 'sortByParticipations'), icon: 'campaign' },
+            ]).map(chip => (
+              <Pressable
+                key={chip.id}
+                style={[s.sortChip, eventSortBy === chip.id && s.sortChipActive]}
+                onPress={() => { Haptics.selectionAsync(); setEventSortBy(chip.id); }}
+              >
+                <MaterialIcons name={chip.icon as any} size={14} color={eventSortBy === chip.id ? '#FFF' : theme.textSecondary} />
+                <Text style={[s.sortChipText, eventSortBy === chip.id && s.sortChipTextActive]}>{chip.label}</Text>
               </Pressable>
             )) : ([
               { id: 'avgWinRate' as BoulesLeaderboardSort, label: t('leaderboard', 'sortByAvgWinRate'), icon: 'emoji-events' },
