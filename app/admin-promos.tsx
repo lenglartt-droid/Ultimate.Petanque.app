@@ -310,6 +310,7 @@ export default function AdminPromosScreen() {
   const [analyticsPeriod, setAnalyticsPeriod] = useState<'today' | '7d' | '30d' | 'all'>('all');
   const [ambBadgeFilter, setAmbBadgeFilter] = useState<'all' | 'ambassador' | 'sponsor' | 'partner'>('all');
   const [ambSortBy, setAmbSortBy] = useState<'name' | 'created' | 'impressions' | 'clicks'>('name');
+  const [ambSearchQuery, setAmbSearchQuery] = useState('');
   const [sparklineData, setSparklineData] = useState<Map<string, number[]>>(new Map());
   const [sponsoredChallengeCounts, setSponsoredChallengeCounts] = useState<Map<string, number>>(new Map());
   const [sponsoredChallengeDaily, setSponsoredChallengeDaily] = useState<Map<string, number[]>>(new Map());
@@ -1317,6 +1318,24 @@ export default function AdminPromosScreen() {
                     })}
                   </View>
 
+                  {/* Search bar */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, backgroundColor: theme.backgroundSecondary, borderRadius: 14, paddingHorizontal: 14, borderWidth: 1.5, borderColor: theme.border }}>
+                    <MaterialIcons name="search" size={18} color={theme.textMuted} />
+                    <TextInput
+                      style={{ flex: 1, paddingVertical: 10, fontSize: 14, color: theme.textPrimary }}
+                      value={ambSearchQuery}
+                      onChangeText={setAmbSearchQuery}
+                      placeholder={fr ? 'Rechercher par nom...' : 'Search by name...'}
+                      placeholderTextColor={theme.textMuted}
+                      autoCorrect={false}
+                    />
+                    {ambSearchQuery.length > 0 ? (
+                      <Pressable onPress={() => setAmbSearchQuery('')} hitSlop={8}>
+                        <MaterialIcons name="close" size={18} color={theme.textMuted} />
+                      </Pressable>
+                    ) : null}
+                  </View>
+
                   {ambassadorsLoading ? (
                     <View style={{ alignItems: 'center', paddingVertical: 24 }}>
                       <ActivityIndicator size="large" color="#7C3AED" />
@@ -1337,7 +1356,16 @@ export default function AdminPromosScreen() {
                       </Pressable>
                     </View>
                   ) : (
-                    ambassadors.filter(amb => ambBadgeFilter === 'all' || amb.badge_type === ambBadgeFilter).sort((a, b) => {
+                    ambassadors.filter(amb => {
+                      if (ambBadgeFilter !== 'all' && amb.badge_type !== ambBadgeFilter) return false;
+                      if (ambSearchQuery.trim()) {
+                        const q = ambSearchQuery.trim().toLowerCase();
+                        const name = (amb.display_name || '').toLowerCase();
+                        const bio = (amb.bio || '').toLowerCase();
+                        if (!name.includes(q) && !bio.includes(q)) return false;
+                      }
+                      return true;
+                    }).sort((a, b) => {
                       if (ambSortBy === 'name') return (a.display_name || '').localeCompare(b.display_name || '');
                       if (ambSortBy === 'created') return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
                       if (ambSortBy === 'impressions') {
