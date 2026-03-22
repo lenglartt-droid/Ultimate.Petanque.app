@@ -139,7 +139,28 @@ export default function DirectoryScreen() {
     { id: 'terrains', label: t('directory', 'terrains'), icon: 'sports-soccer', color: theme.success },
     { id: 'tournaments', label: t('directory', 'tournaments'), icon: 'emoji-events', color: theme.carreauColor },
   ], [language]);
-  
+
+  // Dynamic gradient colors per tab
+  const activeGradient: [string, string, string] = useMemo(() => {
+    const gradients: Record<DirectoryTab, [string, string, string]> = {
+      players: ['#0F172A', '#1E3A8A', '#2563EB'],
+      clubs: ['#451A03', '#92400E', '#D97706'],
+      terrains: ['#022C22', '#064E3B', '#10B981'],
+      tournaments: ['#451A03', '#78350F', '#B45309'],
+    };
+    return gradients[activeTab];
+  }, [activeTab]);
+
+  const activeTabColor = useMemo(() => {
+    const colors: Record<DirectoryTab, string> = {
+      players: theme.primary,
+      clubs: theme.accent,
+      terrains: theme.success,
+      tournaments: theme.carreauColor,
+    };
+    return colors[activeTab];
+  }, [activeTab]);
+
   // All filters state
   const [filters, setFilters] = useState<{
     playerClub: string; playerCity: string; playerCountry: string; playerLevel: string; playerRole: string;
@@ -943,16 +964,19 @@ export default function DirectoryScreen() {
       {/* Header - Gradient Hero */}
       <View style={styles.header}>
         <LinearGradient
-          colors={['#1E3A8A', '#2563EB', '#3B82F6']}
+          colors={activeGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerGradient}
         >
+          {/* Decorative circles for glassmorphism depth */}
+          <View style={styles.headerDecoCircle1} />
+          <View style={styles.headerDecoCircle2} />
           <View style={styles.headerTop}>
             <View style={{ flex: 1 }}>
               <Text style={styles.title}>{t('directory', 'directory')}</Text>
               <Text style={styles.headerSubtitleText}>
-                {t('directory', 'directory')}
+                {dataCount} {getTabPlural(activeTab)}{searchQuery ? ` ${t('directory', 'forSearch')} "${searchQuery}"` : ''}
               </Text>
             </View>
           </View>
@@ -1001,6 +1025,19 @@ export default function DirectoryScreen() {
               ) : null}
             </Pressable>
           </View>
+
+          {/* Header Stats Summary */}
+          <View style={styles.headerStatsSummary}>
+            {TABS.map((tab, i) => (
+              <React.Fragment key={tab.id}>
+                {i > 0 ? <View style={styles.headerStatsDivider} /> : null}
+                <Pressable style={styles.headerStatsItem} onPress={() => { setActiveTab(tab.id); setSearchQuery(''); }}>
+                  <Text style={[styles.headerStatsValue, activeTab === tab.id && { color: '#FFF', fontSize: 19 }]}>{counts[tab.id]}</Text>
+                  <Text style={[styles.headerStatsLabel, activeTab === tab.id && { color: 'rgba(255,255,255,0.7)' }]}>{tab.label}</Text>
+                </Pressable>
+              </React.Fragment>
+            ))}
+          </View>
         </LinearGradient>
 
         {/* Tabs */}
@@ -1042,7 +1079,7 @@ export default function DirectoryScreen() {
 
           {/* Quick Add Button for current tab */}
           <Pressable
-            style={({ pressed }) => [styles.quickAddBtn, pressed && { opacity: 0.85, transform: [{ scale: 0.95 }] }]}
+            style={({ pressed }) => [styles.quickAddBtn, { backgroundColor: activeTabColor }, pressed && { opacity: 0.85, transform: [{ scale: 0.95 }] }]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               const routes: Record<DirectoryTab, string> = {
@@ -1792,10 +1829,63 @@ const styles = StyleSheet.create({
   },
   headerGradient: {
     paddingTop: 16,
-    paddingBottom: 24,
+    paddingBottom: 28,
     paddingHorizontal: 20,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    overflow: 'hidden' as const,
+    position: 'relative' as const,
+  },
+  headerDecoCircle1: {
+    position: 'absolute' as const,
+    top: -40,
+    right: -30,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  headerDecoCircle2: {
+    position: 'absolute' as const,
+    bottom: -20,
+    left: -20,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+  },
+  headerStatsSummary: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  headerStatsDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  headerStatsItem: {
+    flex: 1,
+    alignItems: 'center' as const,
+  },
+  headerStatsValue: {
+    fontSize: 17,
+    fontWeight: '800' as const,
+    color: 'rgba(255,255,255,0.5)',
+  },
+  headerStatsLabel: {
+    fontSize: 9,
+    fontWeight: '700' as const,
+    color: 'rgba(255,255,255,0.35)',
+    marginTop: 2,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
   },
   headerTop: {
     flexDirection: 'row',
@@ -1804,14 +1894,15 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   title: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '800',
     color: '#FFF',
+    letterSpacing: -0.3,
   },
   headerSubtitleText: {
     fontSize: 13,
     color: 'rgba(255,255,255,0.6)',
-    marginTop: 2,
+    marginTop: 3,
     fontWeight: '500',
   },
   headerTablet: {
