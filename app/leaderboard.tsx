@@ -552,7 +552,7 @@ export default function LeaderboardScreen() {
                 <Pressable onPress={() => activeTab === 'players' ? setSearch('') : activeTab === 'clubs' ? setClubSearch('') : activeTab === 'events' ? setEventSearch('') : setBoulesSearch('')} hitSlop={8}>
                   <MaterialIcons name="close" size={18} color="rgba(255,255,255,0.5)" />
                 </Pressable>
-              ) : null}}
+              ) : null}
             </View>
             {activeTab === 'players' ? (
               <Pressable
