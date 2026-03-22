@@ -156,6 +156,20 @@ function LayoutInner() {
                 }} 
               />
               <Stack.Screen 
+                name="sponsored-event/new" 
+                options={{ 
+                  presentation: 'modal',
+                  animation: 'slide_from_bottom',
+                }} 
+              />
+              <Stack.Screen 
+                name="sponsored-event/[id]" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="terrain/[id]" 
                 options={{ 
                   presentation: 'card',
