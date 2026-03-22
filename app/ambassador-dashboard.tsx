@@ -460,11 +460,11 @@ export default function AmbassadorDashboardScreen() {
                       if (notif.eventId) router.push(`/sponsored-event/${notif.eventId}` as any);
                     }}
                   >
-                    <View style={[s.notifIcon, { backgroundColor: notif.type === 'witness_needed' ? '#F59E0B15' : notif.type === 'attestation_received' ? '#10B98115' : '#3B82F615' }]}>
+                    <View style={[s.notifIcon, { backgroundColor: notif.type === 'witness_needed' ? '#F59E0B15' : notif.type === 'attestation_received' || notif.type === 'all_witnesses_attested' ? '#10B98115' : notif.type === 'participant_registered' ? '#3B82F615' : notif.type === 'result_submitted_to_creator' ? '#7C3AED15' : '#3B82F615' }]}>
                       <MaterialIcons
-                        name={notif.type === 'witness_needed' ? 'visibility' : notif.type === 'attestation_received' ? 'verified' : 'notifications'}
+                        name={notif.type === 'witness_needed' ? 'visibility' : notif.type === 'attestation_received' ? 'verified' : notif.type === 'all_witnesses_attested' ? 'check-circle' : notif.type === 'participant_registered' ? 'person-add' : notif.type === 'result_submitted_to_creator' ? 'assessment' : 'notifications'}
                         size={18}
-                        color={notif.type === 'witness_needed' ? '#F59E0B' : notif.type === 'attestation_received' ? '#10B981' : '#3B82F6'}
+                        color={notif.type === 'witness_needed' ? '#F59E0B' : notif.type === 'attestation_received' || notif.type === 'all_witnesses_attested' ? '#10B981' : notif.type === 'participant_registered' ? '#3B82F6' : notif.type === 'result_submitted_to_creator' ? '#7C3AED' : '#3B82F6'}
                       />
                     </View>
                     <View style={{ flex: 1 }}>

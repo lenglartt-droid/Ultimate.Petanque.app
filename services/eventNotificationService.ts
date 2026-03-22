@@ -11,7 +11,7 @@ export interface EventNotification {
   eventId: string;
   recipientUserId: string;
   senderUserId?: string;
-  type: 'witness_needed' | 'result_submitted' | 'attestation_received' | 'event_reminder';
+  type: 'witness_needed' | 'result_submitted' | 'attestation_received' | 'event_reminder' | 'participant_registered' | 'result_submitted_to_creator' | 'all_witnesses_attested';
   participantId?: string;
   title: string;
   message?: string;
@@ -295,6 +295,87 @@ export async function getPendingWitnessRequests(): Promise<{ requests: EventNoti
   } catch (e: any) {
     return { requests: [], error: e.message };
   }
+}
+
+// ============================================
+// CREATOR NOTIFICATIONS
+// ============================================
+
+/** Notify event creator that a participant has registered */
+export async function notifyCreatorParticipantRegistered(
+  eventId: string,
+  creatorUserId: string,
+  participantName: string,
+  eventTitle: string
+): Promise<void> {
+  try {
+    const supabase = getSupabaseClient();
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData?.user?.id) return;
+    // Don't notify the creator if they registered for their own event
+    if (userData.user.id === creatorUserId) return;
+
+    await supabase.from('event_notifications').insert({
+      event_id: eventId,
+      recipient_user_id: creatorUserId,
+      sender_user_id: userData.user.id,
+      type: 'participant_registered',
+      title: '\u{1F3AF} Nouveau participant',
+      message: `${participantName} s'est inscrit a votre evenement "${eventTitle}".`,
+      action_url: `/sponsored-event/${eventId}`,
+    });
+  } catch { /* fire and forget */ }
+}
+
+/** Notify event creator that a participant has submitted their result */
+export async function notifyCreatorResultSubmitted(
+  eventId: string,
+  creatorUserId: string,
+  participantName: string,
+  scoreValue: number,
+  eventTitle: string
+): Promise<void> {
+  try {
+    const supabase = getSupabaseClient();
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData?.user?.id) return;
+    if (userData.user.id === creatorUserId) return;
+
+    await supabase.from('event_notifications').insert({
+      event_id: eventId,
+      recipient_user_id: creatorUserId,
+      sender_user_id: userData.user.id,
+      type: 'result_submitted_to_creator',
+      title: '\u{1F4CA} Resultat soumis',
+      message: `${participantName} a termine son defi (score: ${scoreValue}%) pour "${eventTitle}".`,
+      action_url: `/sponsored-event/${eventId}`,
+    });
+  } catch { /* fire and forget */ }
+}
+
+/** Notify event creator that all witnesses have attested a participant's result */
+export async function notifyCreatorAllWitnessesAttested(
+  eventId: string,
+  creatorUserId: string,
+  participantName: string,
+  witnessCount: number,
+  eventTitle: string
+): Promise<void> {
+  try {
+    const supabase = getSupabaseClient();
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData?.user?.id) return;
+
+    await supabase.from('event_notifications').insert({
+      event_id: eventId,
+      recipient_user_id: creatorUserId,
+      sender_user_id: userData.user.id,
+      type: 'all_witnesses_attested',
+      title: '\u2705 Resultat valide',
+      message: `Le resultat de ${participantName} a ete atteste par ${witnessCount} temoin(s) pour "${eventTitle}". Resultat pret a publier.`,
+      action_url: `/sponsored-event/${eventId}`,
+    });
+  } catch { /* fire and forget */ }
 }
 
 /** Mark notification as read */

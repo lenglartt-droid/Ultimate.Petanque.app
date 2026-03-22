@@ -1,5 +1,5 @@
 import { getSupabaseClient } from '@/template';
-import { notifyWitnessesForResult, notifyAttestationReceived } from './eventNotificationService';
+import { notifyWitnessesForResult, notifyAttestationReceived, notifyCreatorParticipantRegistered, notifyCreatorResultSubmitted, notifyCreatorAllWitnessesAttested } from './eventNotificationService';
 
 export interface SponsoredEvent {
   id: string;
@@ -275,6 +275,25 @@ export async function registerForEvent(eventId: string): Promise<{ error: string
       }, { onConflict: 'event_id,user_id' });
 
     if (error) return { error: error.message };
+
+    // Notify event creator (fire-and-forget)
+    (async () => {
+      try {
+        const [{ data: profile }, { data: evData }] = await Promise.all([
+          supabase.from('user_profiles').select('username').eq('id', userData.user.id).maybeSingle(),
+          supabase.from('sponsored_events').select('title, creator_user_id').eq('id', eventId).maybeSingle(),
+        ]);
+        if (evData?.creator_user_id) {
+          notifyCreatorParticipantRegistered(
+            eventId,
+            evData.creator_user_id,
+            profile?.username || 'Joueur',
+            evData.title || 'Evenement'
+          ).catch(() => {});
+        }
+      } catch { /* silent */ }
+    })();
+
     return { error: null };
   } catch (e: any) {
     return { error: e.message };
@@ -389,16 +408,17 @@ export async function submitEventResult(eventId: string, challengeId: string, sc
 
     if (error) return { error: error.message };
 
-    // Send witness notifications (fire-and-forget)
+    // Send witness notifications + creator notification (fire-and-forget)
     if (participantData?.id) {
       const { data: profile } = await supabase.from('user_profiles').select('username').eq('id', userData.user.id).maybeSingle();
-      const { data: evData } = await supabase.from('sponsored_events').select('title').eq('id', eventId).maybeSingle();
-      notifyWitnessesForResult(
-        eventId,
-        participantData.id,
-        profile?.username || 'Joueur',
-        evData?.title || 'Evenement'
-      ).catch(() => {});
+      const { data: evData } = await supabase.from('sponsored_events').select('title, creator_user_id').eq('id', eventId).maybeSingle();
+      const playerName = profile?.username || 'Joueur';
+      const eventTitle = evData?.title || 'Evenement';
+      notifyWitnessesForResult(eventId, participantData.id, playerName, eventTitle).catch(() => {});
+      // Notify creator
+      if (evData?.creator_user_id) {
+        notifyCreatorResultSubmitted(eventId, evData.creator_user_id, playerName, scoreValue, eventTitle).catch(() => {});
+      }
     }
 
     return { error: null };
@@ -427,19 +447,41 @@ export async function attestAsWitness(eventId: string, participantId: string, no
 
     if (error) return { error: error.message };
 
-    // Notify participant that attestation was received (fire-and-forget)
-    const { data: partData } = await supabase.from('sponsored_event_participants').select('user_id').eq('id', participantId).maybeSingle();
-    if (partData?.user_id) {
-      const { data: profile } = await supabase.from('user_profiles').select('username').eq('id', userData.user.id).maybeSingle();
-      const { data: evData } = await supabase.from('sponsored_events').select('title').eq('id', eventId).maybeSingle();
-      notifyAttestationReceived(
-        eventId,
-        partData.user_id,
-        participantId,
-        profile?.username || 'Temoin',
-        evData?.title || 'Evenement'
-      ).catch(() => {});
-    }
+    // Notify participant that attestation was received + check if all witnesses attested (fire-and-forget)
+    (async () => {
+      try {
+        const { data: partData } = await supabase.from('sponsored_event_participants').select('user_id').eq('id', participantId).maybeSingle();
+        if (!partData?.user_id) return;
+        const [{ data: profile }, { data: evData }] = await Promise.all([
+          supabase.from('user_profiles').select('username').eq('id', userData.user.id).maybeSingle(),
+          supabase.from('sponsored_events').select('title, creator_user_id, min_witnesses').eq('id', eventId).maybeSingle(),
+        ]);
+        const witnessName = profile?.username || 'Temoin';
+        const eventTitle = evData?.title || 'Evenement';
+        notifyAttestationReceived(eventId, partData.user_id, participantId, witnessName, eventTitle).catch(() => {});
+
+        // Check if all required witnesses have attested
+        if (evData?.creator_user_id && evData?.min_witnesses) {
+          const { data: witnesses } = await supabase
+            .from('sponsored_event_witnesses')
+            .select('attested')
+            .eq('participant_id', participantId)
+            .eq('attested', true);
+          const attestedCount = witnesses?.length || 0;
+          if (attestedCount >= evData.min_witnesses) {
+            // Get participant name
+            const { data: partProfile } = await supabase.from('user_profiles').select('username').eq('id', partData.user_id).maybeSingle();
+            notifyCreatorAllWitnessesAttested(
+              eventId,
+              evData.creator_user_id,
+              partProfile?.username || 'Joueur',
+              attestedCount,
+              eventTitle
+            ).catch(() => {});
+          }
+        }
+      } catch { /* silent */ }
+    })();
 
     return { error: null };
   } catch (e: any) {
