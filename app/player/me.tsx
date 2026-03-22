@@ -13,7 +13,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as Linking from 'expo-linking';
 import { Image } from 'expo-image';
@@ -338,12 +338,34 @@ export default function MyPlayerCardScreen() {
           <View style={isTablet ? s.tabletLeft : undefined}>
 
             {/* ===== HERO CARD (matching profile style) ===== */}
-            <Animated.View entering={FadeInDown.duration(400)} style={s.heroCard}>
+            <View style={ambassadorData ? s.heroCardAmbassador : s.heroCard}>
+              {/* Ambassador prestige header */}
+              {ambassadorData ? (
+                <View style={s.ambPrestigeHeader}>
+                  <View style={s.ambPrestigeIconWrap}>
+                    <MaterialIcons name="verified" size={20} color="#FFF" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.ambPrestigeTitle}>
+                      {ambassadorData.badgeType === 'sponsor' ? 'Sponsor' : ambassadorData.badgeType === 'partner' ? (language === 'fr' ? 'Partenaire Officiel' : 'Official Partner') : (language === 'fr' ? 'Ambassadeur Officiel' : 'Official Ambassador')}
+                    </Text>
+                    <Text style={s.ambPrestigeSubtitle}>Ultimate Petanque</Text>
+                  </View>
+                  <Pressable
+                    style={s.ambPrestigePortalBtn}
+                    onPress={() => { Haptics.selectionAsync(); router.push('/ambassador-dashboard' as any); }}
+                  >
+                    <MaterialIcons name="dashboard" size={14} color="#FFF" />
+                    <Text style={s.ambPrestigePortalText}>{language === 'fr' ? 'Portail' : 'Portal'}</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+
               {/* Avatar */}
               <View style={s.avatarContainer}>
-                <View style={s.avatar}>
+                <View style={ambassadorData ? s.avatarAmbassador : s.avatar}>
                   {selfPlayer.avatar ? (
-                    <Image source={{ uri: selfPlayer.avatar }} style={s.avatarImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
+                    <Image source={{ uri: selfPlayer.avatar }} style={ambassadorData ? s.avatarImageAmbassador : s.avatarImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                   ) : (
                     <Text style={s.avatarText}>{selfPlayer.name?.charAt(0).toUpperCase() || '?'}</Text>
                   )}
@@ -359,7 +381,6 @@ export default function MyPlayerCardScreen() {
                 {ambassadorData ? (
                   <View style={s.ambassadorBadge}>
                     <MaterialIcons name="verified" size={12} color="#7C3AED" />
-                    <Text style={s.ambassadorBadgeText}>{language === 'fr' ? 'Ambassadeur' : 'Ambassador'}</Text>
                   </View>
                 ) : isPremium ? (
                   <View style={s.premiumBadge}>
@@ -405,16 +426,25 @@ export default function MyPlayerCardScreen() {
                   ) : null}
                 </View>
               ) : null}
-              {/* View ambassador page button */}
+
+              {/* Ambassador quick actions */}
               {ambassadorData ? (
-                <Pressable
-                  style={s.ambPageBtn}
-                  onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/ambassadors', params: { scrollTo: ambassadorData.id } } as any); }}
-                >
-                  <MaterialIcons name="verified" size={16} color="#7C3AED" />
-                  <Text style={s.ambPageBtnText}>{language === 'fr' ? 'Voir la page ambassadeur' : 'View ambassador page'}</Text>
-                  <MaterialIcons name="chevron-right" size={16} color="#7C3AED" />
-                </Pressable>
+                <View style={s.ambQuickActions}>
+                  <Pressable
+                    style={s.ambQuickActionBtn}
+                    onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/ambassadors', params: { scrollTo: ambassadorData.id } } as any); }}
+                  >
+                    <MaterialIcons name="people" size={14} color="#7C3AED" />
+                    <Text style={s.ambQuickActionText}>{language === 'fr' ? 'Ma page' : 'My page'}</Text>
+                  </Pressable>
+                  <Pressable
+                    style={s.ambQuickActionBtn}
+                    onPress={() => { Haptics.selectionAsync(); router.push('/sponsored-event/new' as any); }}
+                  >
+                    <MaterialIcons name="add-circle" size={14} color="#7C3AED" />
+                    <Text style={s.ambQuickActionText}>{language === 'fr' ? 'Creer un defi' : 'New challenge'}</Text>
+                  </Pressable>
+                </View>
               ) : null}
 
               {/* Badges Row: Role, Level, Handedness */}
@@ -509,14 +539,14 @@ export default function MyPlayerCardScreen() {
                   <Text style={s.quickStatLabel}>{t('player', 'challenges')}</Text>
                 </View>
               </View>
-            </Animated.View>
+            </View>
           </View>
 
           <View style={isTablet ? s.tabletRight : undefined}>
 
             {/* ===== GAME PREFERENCES with Radar ===== */}
             {(roleAnalysis.totalWithRoles > 0 || terrainAnalysis.totalWithTerrain > 0 || partnerAnalysis.totalWithPartners > 0 || preferredBoulesAnalysis) ? (
-              <Animated.View entering={FadeInDown.duration(400).delay(50)} style={s.sectionCard}>
+              <Animated.View entering={FadeIn.duration(400)} style={s.sectionCard}>
                 <View style={s.sectionHeader}>
                   <View style={[s.sectionIconBox, { backgroundColor: '#8B5CF6' + '15' }]}>
                     <MaterialIcons name="psychology" size={18} color="#8B5CF6" />
@@ -632,7 +662,7 @@ export default function MyPlayerCardScreen() {
         </View>
 
         {/* ===== MATCH STATISTICS with progress bars ===== */}
-        <Animated.View entering={FadeInDown.duration(400).delay(100)} style={s.sectionCard}>
+        <Animated.View entering={FadeIn.duration(400)} style={s.sectionCard}>
           <View style={s.sectionHeader}>
             <View style={[s.sectionIconBox, { backgroundColor: theme.primary + '15' }]}>
               <MaterialIcons name="sports" size={18} color={theme.primary} />
@@ -685,7 +715,7 @@ export default function MyPlayerCardScreen() {
         </Animated.View>
 
         {/* ===== SHOT PERFORMANCE with progress bars ===== */}
-        <Animated.View entering={FadeInDown.duration(400).delay(150)} style={s.sectionCard}>
+        <Animated.View entering={FadeIn.duration(400)} style={s.sectionCard}>
           <View style={s.sectionHeader}>
             <View style={[s.sectionIconBox, { backgroundColor: theme.accent + '15' }]}>
               <MaterialIcons name="gps-fixed" size={18} color={theme.accent} />
@@ -718,7 +748,7 @@ export default function MyPlayerCardScreen() {
         </Animated.View>
 
         {/* ===== CHALLENGES ===== */}
-        <Animated.View entering={FadeInDown.duration(400).delay(200)} style={s.sectionCard}>
+        <Animated.View entering={FadeIn.duration(400)} style={s.sectionCard}>
           <View style={s.sectionHeader}>
             <View style={[s.sectionIconBox, { backgroundColor: theme.carreauColor + '15' }]}>
               <MaterialIcons name="star" size={18} color={theme.carreauColor} />
@@ -748,7 +778,7 @@ export default function MyPlayerCardScreen() {
         </Animated.View>
 
         {/* ===== VISIBILITY ===== */}
-        <Animated.View entering={FadeInDown.duration(400).delay(250)} style={s.sectionCard}>
+        <Animated.View entering={FadeIn.duration(400)} style={s.sectionCard}>
           <View style={s.sectionHeader}>
             <View style={[s.sectionIconBox, { backgroundColor: (isPublic ? theme.success : theme.textMuted) + '15' }]}>
               <MaterialIcons name={isPublic ? 'public' : 'lock'} size={18} color={isPublic ? theme.success : theme.textMuted} />
@@ -779,7 +809,7 @@ export default function MyPlayerCardScreen() {
         </Animated.View>
 
         {/* ===== EDIT BUTTON ===== */}
-        <Animated.View entering={FadeInDown.duration(400).delay(300)}>
+        <Animated.View entering={FadeIn.duration(400)}>
           <Pressable style={s.editProfileBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push({ pathname: '/profile', params: { edit: 'true' } } as any); }}>
             <MaterialIcons name="edit" size={20} color="#FFF" />
             <Text style={s.editProfileBtnText}>{t('player', 'editMyProfile')}</Text>
@@ -1167,22 +1197,34 @@ const s = StyleSheet.create({
 
   // Hero Card
   heroCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.xl, padding: 24, alignItems: 'center', marginBottom: 16, ...theme.shadows.card },
+  heroCardAmbassador: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.xl, paddingHorizontal: 24, paddingBottom: 24, paddingTop: 0, alignItems: 'center' as const, marginBottom: 16, overflow: 'hidden' as const, borderWidth: 1.5, borderColor: '#7C3AED' + '25', ...theme.shadows.card },
+  // Ambassador prestige header
+  ambPrestigeHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, backgroundColor: '#7C3AED', paddingVertical: 12, paddingHorizontal: 16, marginHorizontal: -24, marginBottom: 20, width: 'auto' as any, alignSelf: 'stretch' as const },
+  ambPrestigeIconWrap: { width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center' as const, justifyContent: 'center' as const },
+  ambPrestigeTitle: { fontSize: 14, fontWeight: '800' as const, color: '#FFF', letterSpacing: 0.3 },
+  ambPrestigeSubtitle: { fontSize: 10, fontWeight: '600' as const, color: 'rgba(255,255,255,0.7)', marginTop: 1 },
+  ambPrestigePortalBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10 },
+  ambPrestigePortalText: { fontSize: 11, fontWeight: '700' as const, color: '#FFF' },
+  ambQuickActions: { flexDirection: 'row' as const, gap: 8, marginBottom: 8, marginTop: 4 },
+  ambQuickActionBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, backgroundColor: '#7C3AED' + '10', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12, borderWidth: 1, borderColor: '#7C3AED' + '20' },
+  ambQuickActionText: { fontSize: 12, fontWeight: '700' as const, color: '#7C3AED' },
   avatarContainer: { position: 'relative', marginBottom: 14 },
   avatar: { width: 100, height: 100, borderRadius: 50, backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  avatarAmbassador: { width: 100, height: 100, borderRadius: 50, backgroundColor: theme.primary, alignItems: 'center' as const, justifyContent: 'center' as const, overflow: 'hidden' as const, borderWidth: 3, borderColor: '#7C3AED' + '40' },
   avatarImage: { width: 100, height: 100, borderRadius: 50 },
+  avatarImageAmbassador: { width: 94, height: 94, borderRadius: 47 },
   avatarText: { fontSize: 40, fontWeight: '700', color: '#FFF' },
   roleBadgeOnAvatar: { position: 'absolute', bottom: 0, right: 0, width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: theme.surface },
   heroNameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 4 },
   heroName: { fontSize: 24, fontWeight: '700', color: theme.textPrimary },
   premiumBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E8E8E8', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14, borderWidth: 1, borderColor: '#C0C0C0' + '40' },
   premiumBadgeText: { fontSize: 11, fontWeight: '700', color: '#808080', letterSpacing: 0.5 },
-  ambassadorBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: '#7C3AED' + '12', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14, borderWidth: 1, borderColor: '#7C3AED' + '30' },
+  ambassadorBadge: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#7C3AED', alignItems: 'center' as const, justifyContent: 'center' as const },
   ambassadorBadgeText: { fontSize: 11, fontWeight: '700' as const, color: '#7C3AED', letterSpacing: 0.5 },
   ambSocialRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, justifyContent: 'center' as const, gap: 8, marginBottom: 8, marginTop: 4 },
   ambSocialBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
   ambSocialText: { fontSize: 12, fontWeight: '600' as const },
-  ambPageBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: '#7C3AED' + '10', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, marginBottom: 8, borderWidth: 1, borderColor: '#7C3AED' + '25' },
-  ambPageBtnText: { fontSize: 13, fontWeight: '700' as const, color: '#7C3AED' },
+
   heroNickname: { fontSize: 15, fontStyle: 'italic', color: theme.textSecondary, marginBottom: 8 },
 
   // Badges

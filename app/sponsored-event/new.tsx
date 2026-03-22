@@ -18,12 +18,7 @@ const CHALLENGE_TYPES = [
   { id: 'precision', icon: 'stars' as const, color: '#7C3AED' },
 ];
 
-const SCOPES = [
-  { id: 'terrain' as const, icon: 'place' as const, color: '#059669' },
-  { id: 'city' as const, icon: 'location-city' as const, color: '#2563EB' },
-  { id: 'country' as const, icon: 'flag' as const, color: '#D97706' },
-  { id: 'world' as const, icon: 'public' as const, color: '#7C3AED' },
-];
+
 
 export default function NewSponsoredEventScreen() {
   const insets = useSafeAreaInsets();
@@ -45,14 +40,13 @@ export default function NewSponsoredEventScreen() {
   const [startTime, setStartTime] = useState(() => { const d = new Date(); d.setHours(10, 0, 0, 0); return d; });
   const [endTime, setEndTime] = useState(() => { const d = new Date(); d.setHours(18, 0, 0, 0); return d; });
   const [selectedTerrainId, setSelectedTerrainId] = useState<string | null>(null);
-  const [city, setCity] = useState('');
-  const [country, setCountry] = useState('France');
   const [maxParticipants, setMaxParticipants] = useState('50');
   const [minWitnesses, setMinWitnesses] = useState('2');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [showTerrainPicker, setShowTerrainPicker] = useState(false);
+  const [terrainSearchQuery, setTerrainSearchQuery] = useState('');
 
   useEffect(() => {
     getMyAmbassadorRecord().then(({ ambassador: amb }) => {
@@ -62,6 +56,12 @@ export default function NewSponsoredEventScreen() {
   }, []);
 
   const selectedTerrain = terrains.find((t: any) => t.id === selectedTerrainId);
+
+  const filteredTerrainsList = React.useMemo(() => {
+    if (!terrainSearchQuery.trim()) return terrains;
+    const q = terrainSearchQuery.toLowerCase().trim();
+    return terrains.filter((t: any) => t.name.toLowerCase().includes(q) || t.city.toLowerCase().includes(q) || (t.type || '').toLowerCase().includes(q));
+  }, [terrains, terrainSearchQuery]);
 
   const handleCreate = async () => {
     if (!ambassador) return;
@@ -83,11 +83,11 @@ export default function NewSponsoredEventScreen() {
       eventDate: eventDate.toISOString().split('T')[0],
       startTime: startDate.toISOString(),
       endTime: endDate.toISOString(),
-      scope,
-      terrainId: scope === 'terrain' ? selectedTerrainId || undefined : undefined,
-      terrainName: scope === 'terrain' ? selectedTerrain?.name : undefined,
-      city: city.trim() || undefined,
-      country: country.trim() || 'France',
+      scope: selectedTerrainId ? 'terrain' : 'world',
+      terrainId: selectedTerrainId || undefined,
+      terrainName: selectedTerrain?.name || undefined,
+      city: selectedTerrain?.city || undefined,
+      country: selectedTerrain?.country || 'France',
       maxParticipants: parseInt(maxParticipants) || 50,
       minWitnesses: parseInt(minWitnesses) || 2,
     });
@@ -134,7 +134,6 @@ export default function NewSponsoredEventScreen() {
   }
 
   const challengeName = (type: string) => type === '10_tirs' ? (language === 'fr' ? '10 Tirs' : '10 Shots') : type === '10_tirs_sautee' ? (language === 'fr' ? '10 Tirs sautee' : '10 Lob Shots') : (language === 'fr' ? 'Precision' : 'Precision');
-  const scopeName = (s: string) => s === 'terrain' ? (language === 'fr' ? 'Terrain' : 'Court') : s === 'city' ? (language === 'fr' ? 'Ville' : 'City') : s === 'country' ? (language === 'fr' ? 'Pays' : 'Country') : (language === 'fr' ? 'Mondial' : 'World');
 
   return (
     <SafeAreaView style={s.container}>
@@ -225,45 +224,33 @@ export default function NewSponsoredEventScreen() {
           </View>
         </View>
 
-        {/* Scope */}
+        {/* Terrain */}
         <View style={s.field}>
-          <Text style={s.fieldLabel}>{language === 'fr' ? 'Zone geographique' : 'Geographic zone'}</Text>
-          <View style={s.chipRow}>
-            {SCOPES.map((sc) => (
-              <Pressable key={sc.id} style={[s.typeChip, scope === sc.id && { backgroundColor: sc.color, borderColor: sc.color }]} onPress={() => setScope(sc.id)}>
-                <MaterialIcons name={sc.icon} size={16} color={scope === sc.id ? '#FFF' : sc.color} />
-                <Text style={[s.typeChipText, scope === sc.id && { color: '#FFF' }]}>{scopeName(sc.id)}</Text>
+          <Text style={s.fieldLabel}>{language === 'fr' ? 'Terrain' : 'Court'}</Text>
+          {selectedTerrain ? (
+            <View style={s.selectedTerrainCard}>
+              <View style={s.selectedTerrainIcon}>
+                <MaterialIcons name="place" size={22} color={theme.success} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.selectedTerrainName}>{selectedTerrain.name}</Text>
+                <Text style={s.selectedTerrainCity}>{selectedTerrain.city}{selectedTerrain.type ? ` \u2022 ${selectedTerrain.type}` : ''}</Text>
+              </View>
+              <Pressable style={s.selectedTerrainChangeBtn} onPress={() => setShowTerrainPicker(true)}>
+                <MaterialIcons name="swap-horiz" size={18} color={theme.primary} />
               </Pressable>
-            ))}
-          </View>
-        </View>
-
-        {/* Terrain selector (if scope=terrain) */}
-        {scope === 'terrain' ? (
-          <View style={s.field}>
-            <Text style={s.fieldLabel}>{language === 'fr' ? 'Terrain' : 'Court'}</Text>
-            <Pressable style={s.dateBtn} onPress={() => setShowTerrainPicker(true)}>
-              <MaterialIcons name="place" size={18} color={theme.success} />
-              <Text style={[s.dateBtnText, !selectedTerrain && { color: theme.textMuted }]}>{selectedTerrain ? `${selectedTerrain.name} - ${selectedTerrain.city}` : (language === 'fr' ? 'Selectionner un terrain' : 'Select a court')}</Text>
+              <Pressable style={s.selectedTerrainRemoveBtn} onPress={() => setSelectedTerrainId(null)}>
+                <MaterialIcons name="close" size={18} color={theme.error} />
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable style={s.selectTerrainBtn} onPress={() => setShowTerrainPicker(true)}>
+              <MaterialIcons name="add-location" size={22} color={theme.success} />
+              <Text style={s.selectTerrainBtnText}>{language === 'fr' ? 'Selectionner un terrain' : 'Select a court'}</Text>
             </Pressable>
-          </View>
-        ) : null}
-
-        {/* City (if scope=city) */}
-        {scope === 'city' ? (
-          <View style={s.field}>
-            <Text style={s.fieldLabel}>{language === 'fr' ? 'Ville' : 'City'}</Text>
-            <TextInput style={s.input} value={city} onChangeText={setCity} placeholder={language === 'fr' ? 'Ex: Lyon' : 'Ex: Lyon'} placeholderTextColor={theme.textMuted} />
-          </View>
-        ) : null}
-
-        {/* Country (if scope=country) */}
-        {scope === 'country' ? (
-          <View style={s.field}>
-            <Text style={s.fieldLabel}>{language === 'fr' ? 'Pays' : 'Country'}</Text>
-            <TextInput style={s.input} value={country} onChangeText={setCountry} placeholder="France" placeholderTextColor={theme.textMuted} />
-          </View>
-        ) : null}
+          )}
+          <Text style={s.terrainHint}>{language === 'fr' ? 'Optionnel — laissez vide pour un defi mondial' : 'Optional — leave empty for a worldwide challenge'}</Text>
+        </View>
 
         {/* Settings */}
         <View style={s.settingsRow}>
@@ -299,27 +286,54 @@ export default function NewSponsoredEventScreen() {
       </ScrollView>
 
       {/* Terrain Picker Modal */}
-      <Modal visible={showTerrainPicker} animationType="slide" transparent onRequestClose={() => setShowTerrainPicker(false)}>
+      <Modal visible={showTerrainPicker} animationType="slide" transparent onRequestClose={() => { setShowTerrainPicker(false); setTerrainSearchQuery(''); }}>
         <View style={s.modalOverlay}>
           <View style={s.modalContent}>
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>{language === 'fr' ? 'Choisir un terrain' : 'Choose a court'}</Text>
-              <Pressable onPress={() => setShowTerrainPicker(false)}><MaterialIcons name="close" size={24} color={theme.textPrimary} /></Pressable>
+              <Pressable onPress={() => { setShowTerrainPicker(false); setTerrainSearchQuery(''); }}><MaterialIcons name="close" size={24} color={theme.textPrimary} /></Pressable>
+            </View>
+            <View style={s.terrainSearchBar}>
+              <MaterialIcons name="search" size={20} color={theme.textMuted} />
+              <TextInput
+                style={s.terrainSearchInput}
+                value={terrainSearchQuery}
+                onChangeText={setTerrainSearchQuery}
+                placeholder={language === 'fr' ? 'Rechercher un terrain...' : 'Search a court...'}
+                placeholderTextColor={theme.textMuted}
+                autoCorrect={false}
+              />
+              {terrainSearchQuery.length > 0 ? (
+                <Pressable onPress={() => setTerrainSearchQuery('')} hitSlop={8}>
+                  <MaterialIcons name="close" size={18} color={theme.textMuted} />
+                </Pressable>
+              ) : null}
             </View>
             <FlatList
-              data={terrains}
+              data={filteredTerrainsList}
               keyExtractor={(item: any) => item.id}
               renderItem={({ item }: any) => (
-                <Pressable style={s.terrainItem} onPress={() => { setSelectedTerrainId(item.id); setShowTerrainPicker(false); }}>
-                  <MaterialIcons name="place" size={20} color={theme.success} />
+                <Pressable style={[s.terrainItem, selectedTerrainId === item.id && { backgroundColor: theme.success + '08', borderLeftWidth: 3, borderLeftColor: theme.success }]} onPress={() => { setSelectedTerrainId(item.id); setShowTerrainPicker(false); setTerrainSearchQuery(''); }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: selectedTerrainId === item.id ? theme.success + '20' : theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center' }}>
+                    <MaterialIcons name="place" size={20} color={selectedTerrainId === item.id ? theme.success : theme.textSecondary} />
+                  </View>
                   <View style={{ flex: 1 }}>
                     <Text style={s.terrainName}>{item.name}</Text>
-                    <Text style={s.terrainCity}>{item.city}</Text>
+                    <Text style={s.terrainCity}>{item.city}{item.type ? ` \u2022 ${item.type}` : ''}</Text>
                   </View>
-                  {selectedTerrainId === item.id ? <MaterialIcons name="check-circle" size={20} color={theme.success} /> : null}
+                  {selectedTerrainId === item.id ? <MaterialIcons name="check-circle" size={22} color={theme.success} /> : null}
                 </Pressable>
               )}
-              ListEmptyComponent={<Text style={s.emptyList}>{language === 'fr' ? 'Aucun terrain' : 'No courts'}</Text>}
+              ListEmptyComponent={
+                <View style={{ alignItems: 'center', paddingVertical: 40, gap: 8 }}>
+                  <MaterialIcons name="search-off" size={40} color={theme.textMuted} />
+                  <Text style={s.emptyList}>{terrainSearchQuery ? (language === 'fr' ? 'Aucun resultat' : 'No results') : (language === 'fr' ? 'Aucun terrain enregistre' : 'No courts registered')}</Text>
+                  <Pressable style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.success, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, marginTop: 8 }} onPress={() => { setShowTerrainPicker(false); setTerrainSearchQuery(''); router.push('/terrain/new' as any); }}>
+                    <MaterialIcons name="add" size={18} color="#FFF" />
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFF' }}>{language === 'fr' ? 'Ajouter un terrain' : 'Add a court'}</Text>
+                  </Pressable>
+                </View>
+              }
             />
           </View>
         </View>
@@ -369,5 +383,17 @@ const s = StyleSheet.create({
   terrainItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   terrainName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
   terrainCity: { fontSize: 12, color: theme.textMuted },
-  emptyList: { textAlign: 'center', padding: 32, color: theme.textMuted, fontSize: 14 },
+  emptyList: { textAlign: 'center', padding: 8, color: theme.textMuted, fontSize: 14 },
+  // Terrain selector
+  selectedTerrainCard: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, backgroundColor: theme.success + '08', borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: theme.success + '30' },
+  selectedTerrainIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: theme.success + '15', alignItems: 'center' as const, justifyContent: 'center' as const },
+  selectedTerrainName: { fontSize: 15, fontWeight: '700' as const, color: theme.textPrimary },
+  selectedTerrainCity: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  selectedTerrainChangeBtn: { padding: 8, backgroundColor: theme.primary + '15', borderRadius: 8 },
+  selectedTerrainRemoveBtn: { padding: 8, backgroundColor: theme.error + '15', borderRadius: 8 },
+  selectTerrainBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 10, backgroundColor: theme.success + '08', paddingVertical: 18, borderRadius: 14, borderWidth: 2, borderColor: theme.success + '25', borderStyle: 'dashed' as const },
+  selectTerrainBtnText: { fontSize: 15, fontWeight: '600' as const, color: theme.success },
+  terrainHint: { fontSize: 11, color: theme.textMuted, marginTop: 6, paddingLeft: 4 },
+  terrainSearchBar: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginHorizontal: 16, marginVertical: 12, backgroundColor: '#F1F5F9', borderRadius: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: '#E2E8F0' },
+  terrainSearchInput: { flex: 1, paddingVertical: 12, fontSize: 15, color: theme.textPrimary },
 });

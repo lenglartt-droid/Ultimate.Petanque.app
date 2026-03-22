@@ -1609,6 +1609,16 @@ export default function ProfileScreen() {
 
             {expandedSections.community ? (
             <View style={styles.compactMenuGroup}>
+              {isAmbassador ? (
+                <>
+                  <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/ambassador-dashboard' as any); }}>
+                    <View style={[styles.compactMenuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="dashboard" size={16} color="#7C3AED" /></View>
+                    <Text style={[styles.compactMenuText, { color: '#7C3AED', fontWeight: '700' }]}>{language === 'fr' ? 'Portail Ambassadeur' : 'Ambassador Portal'}</Text>
+                    <MaterialIcons name="chevron-right" size={18} color="#7C3AED" />
+                  </Pressable>
+                  <View style={styles.compactMenuDivider} />
+                </>
+              ) : null}
               <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/ambassadors' as any); }}>
                 <View style={[styles.compactMenuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="verified" size={16} color="#7C3AED" /></View>
                 <Text style={styles.compactMenuText}>{language === 'fr' ? 'Nos Ambassadeurs' : 'Our Ambassadors'}</Text>

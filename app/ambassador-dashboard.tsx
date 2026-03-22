@@ -175,7 +175,7 @@ export default function AmbassadorDashboardScreen() {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
@@ -185,7 +185,7 @@ export default function AmbassadorDashboardScreen() {
     try {
       const asset = result.assets[0];
       const ext = asset.uri.split('.').pop()?.toLowerCase() || 'jpg';
-      const path = `ambassadors/${user.id}_${Date.now()}.${ext}`;
+      const path = `avatars/ambassadors_${user.id}_${Date.now()}.${ext}`;
       const supabase = getSupabaseClient();
 
       let base64: string;
