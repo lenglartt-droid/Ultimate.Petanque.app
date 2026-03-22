@@ -24,6 +24,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth, useAlert } from '@/template';
 import ShareModal from '@/components/ui/ShareModal';
 import { toggleItemPublic } from '@/services/publicItemsService';
+import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 
 // ============================================
 // Mini Radar Chart for preferences
@@ -93,6 +94,7 @@ export default function MyPlayerCardScreen() {
   const [showPublicPreview, setShowPublicPreview] = React.useState(false);
   const [showSharePreview, setShowSharePreview] = React.useState(false);
   const [previewShowContacts, setPreviewShowContacts] = React.useState(false);
+  const [ambassadorData, setAmbassadorData] = React.useState<Ambassador | null>(null);
 
   const [screenDims, setScreenDims] = React.useState(() => Dimensions.get('window'));
   React.useEffect(() => {
@@ -105,6 +107,15 @@ export default function MyPlayerCardScreen() {
   React.useEffect(() => {
     if (selfPlayer) setIsPublic(selfPlayer.isPublic ?? false);
   }, [selfPlayer?.isPublic]);
+
+  // Load ambassador data for self player
+  React.useEffect(() => {
+    if (!selfPlayer || !user) return;
+    fetchAmbassadors().then(({ ambassadors }) => {
+      const amb = ambassadors.find(a => a.playerId === selfPlayer.id || a.userId === user.id);
+      setAmbassadorData(amb || null);
+    });
+  }, [selfPlayer?.id, user?.id]);
 
   const handleTogglePublic = React.useCallback(() => {
     if (!selfPlayer || togglingPublic) return;
@@ -344,7 +355,12 @@ export default function MyPlayerCardScreen() {
               {/* Name & Nickname */}
               <View style={s.heroNameRow}>
                 <Text style={s.heroName}>{selfPlayer.name}</Text>
-                {isPremium ? (
+                {ambassadorData ? (
+                  <View style={s.ambassadorBadge}>
+                    <MaterialIcons name="verified" size={12} color="#7C3AED" />
+                    <Text style={s.ambassadorBadgeText}>{language === 'fr' ? 'Ambassadeur' : 'Ambassador'}</Text>
+                  </View>
+                ) : isPremium ? (
                   <View style={s.premiumBadge}>
                     <MaterialIcons name="star" size={12} color="#C0C0C0" />
                     <Text style={s.premiumBadgeText}>Premium</Text>
@@ -352,6 +368,42 @@ export default function MyPlayerCardScreen() {
                 ) : null}
               </View>
               {selfPlayer.nickname ? <Text style={s.heroNickname}>"{selfPlayer.nickname}"</Text> : null}
+
+              {/* Ambassador social links */}
+              {ambassadorData && (ambassadorData.youtubeUrl || ambassadorData.tiktokUrl || ambassadorData.instagramHandle || ambassadorData.twitterHandle || ambassadorData.websiteUrl) ? (
+                <View style={s.ambSocialRow}>
+                  {ambassadorData.youtubeUrl ? (
+                    <Pressable style={[s.ambSocialBtn, { backgroundColor: '#FF0000' + '12' }]} onPress={() => Linking.openURL(ambassadorData.youtubeUrl!)}>
+                      <MaterialIcons name="play-arrow" size={16} color="#FF0000" />
+                      <Text style={[s.ambSocialText, { color: '#FF0000' }]}>YouTube</Text>
+                    </Pressable>
+                  ) : null}
+                  {ambassadorData.tiktokUrl ? (
+                    <Pressable style={[s.ambSocialBtn, { backgroundColor: '#000' + '08' }]} onPress={() => Linking.openURL(ambassadorData.tiktokUrl!)}>
+                      <MaterialIcons name="music-note" size={16} color="#000" />
+                      <Text style={[s.ambSocialText, { color: '#000' }]}>TikTok</Text>
+                    </Pressable>
+                  ) : null}
+                  {ambassadorData.instagramHandle ? (
+                    <Pressable style={[s.ambSocialBtn, { backgroundColor: '#E4405F' + '12' }]} onPress={() => { const h = ambassadorData.instagramHandle!.replace('@', ''); Linking.openURL(`https://instagram.com/${h}`); }}>
+                      <MaterialIcons name="camera-alt" size={16} color="#E4405F" />
+                      <Text style={[s.ambSocialText, { color: '#E4405F' }]}>@{ambassadorData.instagramHandle!.replace('@', '')}</Text>
+                    </Pressable>
+                  ) : null}
+                  {ambassadorData.twitterHandle ? (
+                    <Pressable style={[s.ambSocialBtn, { backgroundColor: '#1DA1F2' + '12' }]} onPress={() => { const h = ambassadorData.twitterHandle!.replace('@', ''); Linking.openURL(`https://x.com/${h}`); }}>
+                      <MaterialIcons name="alternate-email" size={16} color="#1DA1F2" />
+                      <Text style={[s.ambSocialText, { color: '#1DA1F2' }]}>{ambassadorData.twitterHandle}</Text>
+                    </Pressable>
+                  ) : null}
+                  {ambassadorData.websiteUrl ? (
+                    <Pressable style={[s.ambSocialBtn, { backgroundColor: theme.primary + '10' }]} onPress={() => { const u = ambassadorData.websiteUrl!.startsWith('http') ? ambassadorData.websiteUrl! : `https://${ambassadorData.websiteUrl}`; Linking.openURL(u); }}>
+                      <MaterialIcons name="language" size={16} color={theme.primary} />
+                      <Text style={[s.ambSocialText, { color: theme.primary }]}>Web</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : null}
 
               {/* Badges Row: Role, Level, Handedness */}
               <View style={s.badgesRow}>
@@ -1112,6 +1164,11 @@ const s = StyleSheet.create({
   heroName: { fontSize: 24, fontWeight: '700', color: theme.textPrimary },
   premiumBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E8E8E8', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14, borderWidth: 1, borderColor: '#C0C0C0' + '40' },
   premiumBadgeText: { fontSize: 11, fontWeight: '700', color: '#808080', letterSpacing: 0.5 },
+  ambassadorBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: '#7C3AED' + '12', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14, borderWidth: 1, borderColor: '#7C3AED' + '30' },
+  ambassadorBadgeText: { fontSize: 11, fontWeight: '700' as const, color: '#7C3AED', letterSpacing: 0.5 },
+  ambSocialRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, justifyContent: 'center' as const, gap: 8, marginBottom: 8, marginTop: 4 },
+  ambSocialBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
+  ambSocialText: { fontSize: 12, fontWeight: '600' as const },
   heroNickname: { fontSize: 15, fontStyle: 'italic', color: theme.textSecondary, marginBottom: 8 },
 
   // Badges

@@ -27,6 +27,7 @@ import { Image } from 'expo-image';
 import { useAlert } from '@/template';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup as MeetupType } from '@/services/meetupService';
 import { submitReport, REPORT_REASONS, ReportReason } from '@/services/reportService';
+import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { computeQuickTrustScore, getTrustScoreColor, getTrustLevelLabel, TrustScoreData } from '@/services/trustScoreService';
 import { LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
 import Svg, { Polygon, Line, Circle as SvgCircle, Text as SvgText, G } from 'react-native-svg';
@@ -137,6 +138,7 @@ export default function PlayerDetailScreen() {
 
   // Report state
   const [showReportModal, setShowReportModal] = React.useState(false);
+  const [ambassadorData, setAmbassadorData] = React.useState<Ambassador | null>(null);
   const [reportReason, setReportReason] = React.useState<ReportReason | ''>('');
   const [reportDetails, setReportDetails] = React.useState('');
   const [reportSubmitting, setReportSubmitting] = React.useState(false);
@@ -155,6 +157,16 @@ export default function PlayerDetailScreen() {
     });
   }, [isPublicItem, player]);
   const { showAlert } = useAlert();
+
+  // Load ambassador data for this player
+  React.useEffect(() => {
+    if (!player) return;
+    const playerUserId2 = (player as any)?.userId;
+    fetchAmbassadors().then(({ ambassadors }) => {
+      const amb = ambassadors.find(a => a.playerId === id || (playerUserId2 && a.userId === playerUserId2));
+      setAmbassadorData(amb || null);
+    });
+  }, [id, player]);
   const { updatePlayer: updatePlayerFn } = useApp();
   const [refreshing, setRefreshing] = React.useState(false);
   const [screenDims, setScreenDims] = React.useState(() => Dimensions.get('window'));
@@ -423,7 +435,12 @@ export default function PlayerDetailScreen() {
               {/* Name & Nickname */}
               <View style={s.heroNameRow}>
                 <Text style={s.heroName}>{player.name}</Text>
-                {isSelf && isPremium ? (
+                {ambassadorData ? (
+                  <View style={s.ambassadorBadge}>
+                    <MaterialIcons name="verified" size={12} color="#7C3AED" />
+                    <Text style={s.ambassadorBadgeText}>{language === 'fr' ? 'Ambassadeur' : 'Ambassador'}</Text>
+                  </View>
+                ) : isSelf && isPremium ? (
                   <View style={s.premiumBadge}>
                     <MaterialIcons name="star" size={12} color="#C0C0C0" />
                     <Text style={s.premiumBadgeText}>Premium</Text>
@@ -431,6 +448,42 @@ export default function PlayerDetailScreen() {
                 ) : null}
               </View>
               {player.nickname ? <Text style={s.heroNickname}>"{player.nickname}"</Text> : null}
+
+              {/* Ambassador social links */}
+              {ambassadorData && (ambassadorData.youtubeUrl || ambassadorData.tiktokUrl || ambassadorData.instagramHandle || ambassadorData.twitterHandle || ambassadorData.websiteUrl) ? (
+                <View style={s.ambSocialRow}>
+                  {ambassadorData.youtubeUrl ? (
+                    <Pressable style={[s.ambSocialBtn, { backgroundColor: '#FF0000' + '12' }]} onPress={() => Linking.openURL(ambassadorData.youtubeUrl!)}>
+                      <MaterialIcons name="play-arrow" size={16} color="#FF0000" />
+                      <Text style={[s.ambSocialText, { color: '#FF0000' }]}>YouTube</Text>
+                    </Pressable>
+                  ) : null}
+                  {ambassadorData.tiktokUrl ? (
+                    <Pressable style={[s.ambSocialBtn, { backgroundColor: '#000' + '08' }]} onPress={() => Linking.openURL(ambassadorData.tiktokUrl!)}>
+                      <MaterialIcons name="music-note" size={16} color="#000" />
+                      <Text style={[s.ambSocialText, { color: '#000' }]}>TikTok</Text>
+                    </Pressable>
+                  ) : null}
+                  {ambassadorData.instagramHandle ? (
+                    <Pressable style={[s.ambSocialBtn, { backgroundColor: '#E4405F' + '12' }]} onPress={() => { const h = ambassadorData.instagramHandle!.replace('@', ''); Linking.openURL(`https://instagram.com/${h}`); }}>
+                      <MaterialIcons name="camera-alt" size={16} color="#E4405F" />
+                      <Text style={[s.ambSocialText, { color: '#E4405F' }]}>@{ambassadorData.instagramHandle!.replace('@', '')}</Text>
+                    </Pressable>
+                  ) : null}
+                  {ambassadorData.twitterHandle ? (
+                    <Pressable style={[s.ambSocialBtn, { backgroundColor: '#1DA1F2' + '12' }]} onPress={() => { const h = ambassadorData.twitterHandle!.replace('@', ''); Linking.openURL(`https://x.com/${h}`); }}>
+                      <MaterialIcons name="alternate-email" size={16} color="#1DA1F2" />
+                      <Text style={[s.ambSocialText, { color: '#1DA1F2' }]}>{ambassadorData.twitterHandle}</Text>
+                    </Pressable>
+                  ) : null}
+                  {ambassadorData.websiteUrl ? (
+                    <Pressable style={[s.ambSocialBtn, { backgroundColor: theme.primary + '10' }]} onPress={() => { const u = ambassadorData.websiteUrl!.startsWith('http') ? ambassadorData.websiteUrl! : `https://${ambassadorData.websiteUrl}`; Linking.openURL(u); }}>
+                      <MaterialIcons name="language" size={16} color={theme.primary} />
+                      <Text style={[s.ambSocialText, { color: theme.primary }]}>Web</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : null}
 
               {/* Badges Row */}
               <View style={s.badgesRow}>
@@ -1193,6 +1246,11 @@ const s = StyleSheet.create({
   heroName: { fontSize: 24, fontWeight: '700', color: theme.textPrimary },
   premiumBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: '#E8E8E8', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14, borderWidth: 1, borderColor: '#C0C0C0' + '40' },
   premiumBadgeText: { fontSize: 11, fontWeight: '700' as const, color: '#808080', letterSpacing: 0.5 },
+  ambassadorBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: '#7C3AED' + '12', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14, borderWidth: 1, borderColor: '#7C3AED' + '30' },
+  ambassadorBadgeText: { fontSize: 11, fontWeight: '700' as const, color: '#7C3AED', letterSpacing: 0.5 },
+  ambSocialRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, justifyContent: 'center' as const, gap: 8, marginBottom: 8, marginTop: 4 },
+  ambSocialBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
+  ambSocialText: { fontSize: 12, fontWeight: '600' as const },
   heroNickname: { fontSize: 15, fontStyle: 'italic' as const, color: theme.textSecondary, marginBottom: 8 },
 
   // Badges
