@@ -35,6 +35,7 @@ import { fetchDeviceClusters, getDeviceRegistrationStats, DeviceCluster } from '
 import { fetchAmbassadors, invalidateAmbassadorCache, Ambassador } from '@/services/ambassadorService';
 import { fetchAmbassadorAnalytics, fetchDailyAnalyticsCounts, AmbassadorAnalytics, fetchSponsoredChallengeAnalytics, fetchDailySponsoredChallengeCounts } from '@/services/ambassadorAnalyticsService';
 import { Challenge } from '@/services/mockData';
+import { getSponsoredEvents, getEventParticipants, SponsoredEvent } from '@/services/sponsoredEventService';
 import Svg, { Path as SvgPath } from 'react-native-svg';
 import { uploadImageToStorage } from '@/services/storageService';
 
@@ -214,6 +215,37 @@ export default function AdminPromosScreen() {
   }, [fr, showAlert]);
 
   const suspiciousFlaggedCount = suspiciousPlayers.filter(p => p.status === 'flagged' || p.status === 'watch').length;
+
+  // ===== SPONSORED EVENTS STATE =====
+  const [showEventsSection, setShowEventsSection] = useState(false);
+  const [sponsoredEvents, setSponsoredEvents] = useState<SponsoredEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventsLoaded, setEventsLoaded] = useState(false);
+  const [eventsParticipantCounts, setEventsParticipantCounts] = useState<Map<string, { total: number; completed: number }>>(new Map());
+
+  const loadSponsoredEvents = useCallback(async () => {
+    if (eventsLoaded) return;
+    setEventsLoading(true);
+    const { events: allEvts } = await getSponsoredEvents();
+    // Also fetch completed events
+    const { events: completedEvts } = await getSponsoredEvents('completed');
+    const allMerged = [...allEvts];
+    completedEvts.forEach(e => { if (!allMerged.find(x => x.id === e.id)) allMerged.push(e); });
+    allMerged.sort((a, b) => new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime());
+    setSponsoredEvents(allMerged);
+    // Load participant counts
+    const counts = new Map<string, { total: number; completed: number }>();
+    await Promise.all(allMerged.slice(0, 20).map(async (ev) => {
+      const { participants } = await getEventParticipants(ev.id);
+      counts.set(ev.id, {
+        total: participants.filter(p => p.status === 'accepted' || p.status === 'completed').length,
+        completed: participants.filter(p => p.status === 'completed').length,
+      });
+    }));
+    setEventsParticipantCounts(counts);
+    setEventsLoading(false);
+    setEventsLoaded(true);
+  }, [eventsLoaded]);
 
   // ===== AMBASSADORS STATE =====
   const [showAmbassadorSection, setShowAmbassadorSection] = useState(false);
@@ -822,6 +854,18 @@ export default function AdminPromosScreen() {
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {/* Ambassador button */}
           <Pressable
+            style={[styles.bulkBtn, sponsoredEvents.length > 0 && { backgroundColor: '#7C3AED' + '15' }]}
+            onPress={() => { Haptics.selectionAsync(); setShowEventsSection(!showEventsSection); if (!eventsLoaded) loadSponsoredEvents(); }}
+          >
+            <MaterialIcons name="campaign" size={20} color={sponsoredEvents.length > 0 ? '#F59E0B' : theme.primary} />
+            {sponsoredEvents.length > 0 ? (
+              <View style={{ position: 'absolute', top: 2, right: 2, backgroundColor: '#F59E0B', width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 9, fontWeight: '800', color: '#FFF' }}>{sponsoredEvents.length}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+          {/* Ambassador button */}
+          <Pressable
             style={[styles.bulkBtn, ambassadors.length > 0 && { backgroundColor: '#7C3AED' + '15' }]}
             onPress={() => { Haptics.selectionAsync(); setShowAmbassadorSection(!showAmbassadorSection); if (!ambassadorsLoaded) { setAmbassadorsLoaded(false); loadAmbassadors(); } }}
           >
@@ -989,6 +1033,136 @@ export default function AdminPromosScreen() {
                   </View>
                 )}
               </Animated.View>
+
+              {/* ===== SPONSORED EVENTS MANAGEMENT ===== */}
+              {showEventsSection ? (
+                <Animated.View entering={FadeIn.duration(300)} style={{ marginBottom: 20 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: '#F59E0B' + '15', alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialIcons name="campaign" size={18} color="#F59E0B" />
+                    </View>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textPrimary, flex: 1 }}>
+                      {fr ? 'EVENEMENTS SPONSORISES' : 'SPONSORED EVENTS'} ({sponsoredEvents.length})
+                    </Text>
+                    <Pressable
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#7C3AED', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 }}
+                      onPress={() => router.push('/sponsored-event/list' as any)}
+                    >
+                      <MaterialIcons name="list" size={14} color="#FFF" />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFF' }}>{fr ? 'Voir tout' : 'View all'}</Text>
+                    </Pressable>
+                    <Pressable onPress={() => setShowEventsSection(false)} hitSlop={8}>
+                      <MaterialIcons name="close" size={20} color={theme.textSecondary} />
+                    </Pressable>
+                  </View>
+
+                  {/* Stats summary */}
+                  {!eventsLoading && sponsoredEvents.length > 0 ? (
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                      <View style={{ flex: 1, backgroundColor: '#7C3AED' + '12', borderRadius: 12, padding: 12, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 20, fontWeight: '800', color: '#7C3AED' }}>{sponsoredEvents.length}</Text>
+                        <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted, textTransform: 'uppercase' }}>Total</Text>
+                      </View>
+                      <View style={{ flex: 1, backgroundColor: '#22C55E' + '12', borderRadius: 12, padding: 12, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 20, fontWeight: '800', color: '#22C55E' }}>{sponsoredEvents.filter(e => e.status === 'upcoming' || e.status === 'active').length}</Text>
+                        <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted, textTransform: 'uppercase' }}>{fr ? 'Actifs' : 'Active'}</Text>
+                      </View>
+                      <View style={{ flex: 1, backgroundColor: '#3B82F6' + '12', borderRadius: 12, padding: 12, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 20, fontWeight: '800', color: '#3B82F6' }}>{sponsoredEvents.filter(e => e.status === 'completed').length}</Text>
+                        <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted, textTransform: 'uppercase' }}>{fr ? 'Termines' : 'Done'}</Text>
+                      </View>
+                      <View style={{ flex: 1, backgroundColor: '#F59E0B' + '12', borderRadius: 12, padding: 12, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 20, fontWeight: '800', color: '#F59E0B' }}>{Array.from(eventsParticipantCounts.values()).reduce((s, v) => s + v.total, 0)}</Text>
+                        <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted, textTransform: 'uppercase' }}>{fr ? 'Participants' : 'Participants'}</Text>
+                      </View>
+                    </View>
+                  ) : null}
+
+                  {eventsLoading ? (
+                    <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+                      <ActivityIndicator size="large" color="#7C3AED" />
+                    </View>
+                  ) : sponsoredEvents.length === 0 ? (
+                    <View style={{ alignItems: 'center', paddingVertical: 24, backgroundColor: theme.surface, borderRadius: 16, padding: 20 }}>
+                      <MaterialIcons name="campaign" size={40} color={theme.textMuted} />
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginTop: 8 }}>{fr ? 'Aucun evenement' : 'No events'}</Text>
+                      <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 4, textAlign: 'center' }}>{fr ? 'Les evenements sponsorises apparaitront ici.' : 'Sponsored events will appear here.'}</Text>
+                    </View>
+                  ) : (
+                    sponsoredEvents.map((ev) => {
+                      const counts = eventsParticipantCounts.get(ev.id);
+                      const statusColors: Record<string, string> = { upcoming: '#F59E0B', active: '#22C55E', completed: '#3B82F6', cancelled: '#EF4444' };
+                      const sc = statusColors[ev.status] || theme.textMuted;
+                      const challengeTypeLabels: Record<string, { label: string; color: string }> = { '10_tirs': { label: '10 Tirs', color: '#2563EB' }, '10_tirs_sautee': { label: fr ? '10 Tirs sautee' : '10 Lob Shots', color: '#D97706' }, 'precision': { label: fr ? 'Precision' : 'Precision', color: '#7C3AED' } };
+                      const ct = challengeTypeLabels[ev.challengeType] || { label: ev.challengeType, color: theme.textMuted };
+                      return (
+                        <Pressable key={ev.id} style={[styles.promoCard, { borderLeftWidth: 3, borderLeftColor: sc }]} onPress={() => router.push(`/sponsored-event/${ev.id}` as any)}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: sc + '15', alignItems: 'center', justifyContent: 'center' }}>
+                                <MaterialIcons name="campaign" size={18} color={sc} />
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textPrimary }} numberOfLines={1}>{ev.title}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                                  <View style={[styles.statusBadge, { backgroundColor: sc + '15' }]}>
+                                    <View style={[styles.statusDot, { backgroundColor: sc }]} />
+                                    <Text style={[styles.statusText, { color: sc }]}>{ev.status === 'upcoming' ? (fr ? 'A venir' : 'Upcoming') : ev.status === 'active' ? (fr ? 'En cours' : 'Active') : ev.status === 'completed' ? (fr ? 'Termine' : 'Done') : (fr ? 'Annule' : 'Cancelled')}</Text>
+                                  </View>
+                                  <View style={{ backgroundColor: ct.color + '12', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                                    <Text style={{ fontSize: 10, fontWeight: '700', color: ct.color }}>{ct.label}</Text>
+                                  </View>
+                                </View>
+                              </View>
+                            </View>
+                            <Text style={{ fontSize: 11, color: theme.textMuted }}>
+                              {new Date(ev.eventDate).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
+                            </Text>
+                          </View>
+
+                          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+                            {ev.ambassadorName ? (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#7C3AED08', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                                <MaterialIcons name="verified" size={10} color="#7C3AED" />
+                                <Text style={{ fontSize: 10, fontWeight: '600', color: '#7C3AED' }}>{ev.ambassadorName}</Text>
+                              </View>
+                            ) : null}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.textMuted + '10', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                              <MaterialIcons name={ev.scope === 'terrain' ? 'place' : ev.scope === 'city' ? 'location-city' : ev.scope === 'country' ? 'flag' : 'public'} size={10} color={theme.textMuted} />
+                              <Text style={{ fontSize: 10, fontWeight: '600', color: theme.textMuted }}>{ev.terrainName || ev.city || ev.country || (fr ? 'Mondial' : 'World')}</Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                              <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textSecondary }}>{ev.shareCode}</Text>
+                            </View>
+                          </View>
+
+                          {/* Participation stats */}
+                          {counts ? (
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                              <View style={{ flex: 1, backgroundColor: theme.primary + '08', borderRadius: 8, padding: 8, alignItems: 'center' }}>
+                                <Text style={{ fontSize: 16, fontWeight: '800', color: theme.primary }}>{counts.total}</Text>
+                                <Text style={{ fontSize: 8, fontWeight: '600', color: theme.textMuted }}>{fr ? 'INSCRITS' : 'REGISTERED'}</Text>
+                              </View>
+                              <View style={{ flex: 1, backgroundColor: theme.success + '08', borderRadius: 8, padding: 8, alignItems: 'center' }}>
+                                <Text style={{ fontSize: 16, fontWeight: '800', color: theme.success }}>{counts.completed}</Text>
+                                <Text style={{ fontSize: 8, fontWeight: '600', color: theme.textMuted }}>{fr ? 'TERMINES' : 'COMPLETED'}</Text>
+                              </View>
+                              <View style={{ flex: 1, backgroundColor: '#F59E0B08', borderRadius: 8, padding: 8, alignItems: 'center' }}>
+                                <Text style={{ fontSize: 16, fontWeight: '800', color: '#F59E0B' }}>{counts.total > 0 ? Math.round((counts.completed / counts.total) * 100) : 0}%</Text>
+                                <Text style={{ fontSize: 8, fontWeight: '600', color: theme.textMuted }}>{fr ? 'TAUX' : 'RATE'}</Text>
+                              </View>
+                              <View style={{ flex: 1, backgroundColor: theme.accent + '08', borderRadius: 8, padding: 8, alignItems: 'center' }}>
+                                <Text style={{ fontSize: 16, fontWeight: '800', color: theme.accent }}>{ev.minWitnesses}</Text>
+                                <Text style={{ fontSize: 8, fontWeight: '600', color: theme.textMuted }}>{fr ? 'TEMOINS' : 'WITNESSES'}</Text>
+                              </View>
+                            </View>
+                          ) : null}
+                        </Pressable>
+                      );
+                    })
+                  )}
+                </Animated.View>
+              ) : null}
 
               {/* ===== AMBASSADORS SECTION ===== */}
               {showAmbassadorSection ? (

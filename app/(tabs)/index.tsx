@@ -379,7 +379,7 @@ export default function HomeScreen() {
             {[
               { label: t('home', 'match'), sub: t('home', 'training'), icon: 'sports' as const, gradient: ['#2563EB', '#60A5FA'] as [string, string], onPress: () => router.push('/match/new') },
               { label: t('home', 'challenge'), sub: t('home', 'shotsPoints'), icon: 'track-changes' as const, gradient: ['#D97706', '#FBBF24'] as [string, string], onPress: () => router.push('/challenge/new') },
-              { label: language === 'fr' ? 'Evenement' : 'Event', sub: language === 'fr' ? 'Defi sponsorise' : 'Sponsored', icon: 'campaign' as const, gradient: ['#7C3AED', '#A855F7'] as [string, string], onPress: () => router.push('/sponsored-event/new' as any) },
+              { label: language === 'fr' ? 'Evenements' : 'Events', sub: language === 'fr' ? 'Defis sponsorises' : 'Sponsored', icon: 'campaign' as const, gradient: ['#7C3AED', '#A855F7'] as [string, string], onPress: () => router.push('/sponsored-event/list' as any) },
               { label: t('home', 'tournament'), sub: t('home', 'myJourney'), icon: 'emoji-events' as const, gradient: ['#B45309', '#F59E0B'] as [string, string], onPress: () => setShowTournamentPicker(true) },
             ].map((action, idx) => (
               <Pressable key={idx} style={({ pressed }) => [s.actionCard, isTablet && s.actionCardTablet, pressed && { transform: [{ scale: 0.96 }], opacity: 0.9 }]} onPress={action.onPress}>

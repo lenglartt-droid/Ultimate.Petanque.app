@@ -33,6 +33,7 @@ import ShareModal from '@/components/ui/ShareModal';
 import { showInterstitial } from '@/services/adService';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
+import { getSponsoredEvents, getMyParticipationStatus, submitEventResult, SponsoredEvent } from '@/services/sponsoredEventService';
 import { Image } from 'expo-image';
 import { ActivityIndicator } from 'react-native';
 import {
@@ -165,7 +166,7 @@ function CountdownTimer({ seconds, isRunning, onStart, onTimeUp, startLabel }: C
 export default function NewChallengeScreen() {
   const insets = useSafeAreaInsets();
   const { addChallenge, userStats, selfPlayer, players, matches, challenges: pastChallenges, boulesSets, terrains } = useApp();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   // Responsive dimensions
   const [screenWidth, setScreenWidth] = useState(INITIAL_WIDTH);
@@ -274,6 +275,36 @@ export default function NewChallengeScreen() {
   const [loadingSponsors, setLoadingSponsors] = useState(false);
   const [sponsorsLoaded, setSponsorsLoaded] = useState(false);
   const [sponsorTypeFilter, setSponsorTypeFilter] = useState<'all' | 'sponsor' | 'partner' | 'ambassador'>('all');
+
+  // Sponsored event detection
+  const [activeEvent, setActiveEvent] = useState<SponsoredEvent | null>(null);
+  const [linkToEvent, setLinkToEvent] = useState(false);
+  const [eventDetectionDone, setEventDetectionDone] = useState(false);
+
+  // Detect active sponsored events the user is registered for
+  useEffect(() => {
+    if (eventDetectionDone) return;
+    (async () => {
+      try {
+        const { events } = await getSponsoredEvents();
+        const now = new Date();
+        // Find events that are active right now (within time window)
+        for (const ev of events) {
+          const start = new Date(ev.startTime);
+          const end = new Date(ev.endTime);
+          if ((ev.status === 'active' || ev.status === 'upcoming') && now >= start && now <= end) {
+            const status = await getMyParticipationStatus(ev.id);
+            if (status === 'accepted') {
+              setActiveEvent(ev);
+              setLinkToEvent(true);
+              break;
+            }
+          }
+        }
+      } catch { /* silent */ }
+      setEventDetectionDone(true);
+    })();
+  }, [eventDetectionDone]);
 
   const loadSponsors = useCallback(async () => {
     if (sponsorsLoaded) return;
@@ -700,6 +731,11 @@ export default function NewChallengeScreen() {
     const data = buildChallengeData();
     if (!data) return;
     addChallenge(data);
+    // Submit to event if linked
+    if (activeEvent && linkToEvent) {
+      const score = selectedType === 'precision' ? playerStats.totalPrecisionPoints : playerStats.successRate;
+      submitEventResult(activeEvent.id, '', score).catch(() => {});
+    }
     if (selectedSponsor) trackAmbassadorEvent(selectedSponsor.id, 'sponsored_challenge');
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     // Show interstitial ad after saving challenge
@@ -1044,6 +1080,36 @@ export default function NewChallengeScreen() {
 
           {/* Sponsor Selector */}
           <Animated.View entering={FadeInDown.duration(300).delay(80)} style={styles.readyPickersSection}>
+            {/* Active Event Detection Banner */}
+            {activeEvent && linkToEvent ? (
+              <View style={[styles.readyPickerBtn, { backgroundColor: '#7C3AED08', borderColor: '#7C3AED30', borderWidth: 1.5 }]}>
+                <View style={[styles.readyPickerIcon, { backgroundColor: '#7C3AED15' }]}>
+                  <MaterialIcons name="campaign" size={20} color="#7C3AED" />
+                </View>
+                <View style={styles.readyPickerContent}>
+                  <Text style={[styles.readyPickerLabel, { color: '#7C3AED' }]}>{t('challenge', 'sponsoredChallenge') || (language === 'fr' ? 'Evenement actif' : 'Active event')}</Text>
+                  <Text style={styles.readyPickerValue} numberOfLines={1}>{activeEvent.title}</Text>
+                  <Text style={{ fontSize: 10, color: theme.textMuted, marginTop: 2 }}>
+                    {language === 'fr' ? 'Votre resultat sera lie a cet evenement' : 'Your result will be linked to this event'}
+                  </Text>
+                </View>
+                <Pressable onPress={() => { setLinkToEvent(false); Haptics.selectionAsync(); }} hitSlop={8}>
+                  <MaterialIcons name="close" size={18} color={theme.textMuted} />
+                </Pressable>
+              </View>
+            ) : activeEvent && !linkToEvent ? (
+              <Pressable style={[styles.readyPickerBtn, { borderColor: '#7C3AED20' }]} onPress={() => { setLinkToEvent(true); Haptics.selectionAsync(); }}>
+                <View style={[styles.readyPickerIcon, { backgroundColor: '#7C3AED10' }]}>
+                  <MaterialIcons name="campaign" size={20} color="#7C3AED" />
+                </View>
+                <View style={styles.readyPickerContent}>
+                  <Text style={styles.readyPickerLabel}>{language === 'fr' ? 'Evenement disponible' : 'Event available'}</Text>
+                  <Text style={[styles.readyPickerValue, { color: '#7C3AED' }]} numberOfLines={1}>{activeEvent.title}</Text>
+                </View>
+                <MaterialIcons name="add-circle-outline" size={20} color="#7C3AED" />
+              </Pressable>
+            ) : null}
+
             <Pressable style={styles.readyPickerBtn} onPress={() => { loadSponsors(); setShowSponsorPicker(true); }}>
               <View style={[styles.readyPickerIcon, { backgroundColor: selectedSponsor ? '#F59E0B15' : theme.textMuted + '10' }]}>
                 {selectedSponsor?.photo ? (
