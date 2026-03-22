@@ -33,7 +33,8 @@ import { getTrustScoreColor } from '@/services/trustScoreService';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { fetchDeviceClusters, getDeviceRegistrationStats, DeviceCluster } from '@/services/multiAccountService';
 import { fetchAmbassadors, invalidateAmbassadorCache, Ambassador } from '@/services/ambassadorService';
-import { fetchAmbassadorAnalytics, fetchDailyAnalyticsCounts, AmbassadorAnalytics } from '@/services/ambassadorAnalyticsService';
+import { fetchAmbassadorAnalytics, fetchDailyAnalyticsCounts, AmbassadorAnalytics, fetchSponsoredChallengeAnalytics, fetchDailySponsoredChallengeCounts } from '@/services/ambassadorAnalyticsService';
+import { Challenge } from '@/services/mockData';
 import Svg, { Path as SvgPath } from 'react-native-svg';
 import { uploadImageToStorage } from '@/services/storageService';
 
@@ -59,7 +60,7 @@ export default function AdminPromosScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { showAlert } = useAlert();
-  const { isAdmin } = useApp();
+  const { isAdmin, challenges: appChallenges } = useApp();
   const { language } = useLanguage();
   const supabase = getSupabaseClient();
 
@@ -232,6 +233,8 @@ export default function AdminPromosScreen() {
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsPeriod, setAnalyticsPeriod] = useState<'today' | '7d' | '30d' | 'all'>('all');
   const [sparklineData, setSparklineData] = useState<Map<string, number[]>>(new Map());
+  const [sponsoredChallengeCounts, setSponsoredChallengeCounts] = useState<Map<string, number>>(new Map());
+  const [sponsoredChallengeDaily, setSponsoredChallengeDaily] = useState<Map<string, number[]>>(new Map());
 
   const loadAmbassadors = useCallback(async () => {
     if (ambassadorsLoaded) return;
@@ -246,17 +249,25 @@ export default function AdminPromosScreen() {
     Promise.all([
       fetchAmbassadorAnalytics(analyticsPeriod),
       fetchDailyAnalyticsCounts(30),
-    ]).then(([analyticsRes, dailyRes]) => {
+      fetchSponsoredChallengeAnalytics(analyticsPeriod),
+      fetchDailySponsoredChallengeCounts(30),
+    ]).then(([analyticsRes, dailyRes, sponsoredRes, sponsoredDailyRes]) => {
       setAmbassadorAnalytics(analyticsRes.stats);
       if (!dailyRes.error) setSparklineData(dailyRes.data);
+      if (!sponsoredRes.error) setSponsoredChallengeCounts(sponsoredRes.counts);
+      if (!sponsoredDailyRes.error) setSponsoredChallengeDaily(sponsoredDailyRes.data);
       setAnalyticsLoading(false);
     });
   }, [ambassadorsLoaded, supabase, analyticsPeriod]);
 
   const reloadAnalytics = useCallback(async (period: 'today' | '7d' | '30d' | 'all') => {
     setAnalyticsLoading(true);
-    const { stats } = await fetchAmbassadorAnalytics(period);
-    setAmbassadorAnalytics(stats);
+    const [analyticsRes, sponsoredRes] = await Promise.all([
+      fetchAmbassadorAnalytics(period),
+      fetchSponsoredChallengeAnalytics(period),
+    ]);
+    setAmbassadorAnalytics(analyticsRes.stats);
+    if (!sponsoredRes.error) setSponsoredChallengeCounts(sponsoredRes.counts);
     setAnalyticsLoading(false);
   }, []);
 
@@ -1191,6 +1202,213 @@ export default function AdminPromosScreen() {
                       </View>
                     ))
                   )}
+
+                  {/* ===== SPONSORED CHALLENGE STATS SECTION ===== */}
+                  {ambassadors.length > 0 && !ambassadorsLoading ? (() => {
+                    const allChallenges = appChallenges as Challenge[];
+                    const sponsoredChallenges = allChallenges.filter(c => c.sponsorId);
+
+                    const localStatsByAmbassador = new Map<string, { count: number; totalSuccessRate: number; successRateCount: number; byType: Record<string, number> }>();
+                    sponsoredChallenges.forEach(c => {
+                      const sid = c.sponsorId!;
+                      if (!localStatsByAmbassador.has(sid)) localStatsByAmbassador.set(sid, { count: 0, totalSuccessRate: 0, successRateCount: 0, byType: {} });
+                      const s = localStatsByAmbassador.get(sid)!;
+                      s.count++;
+                      if (c.successRate !== undefined) { s.totalSuccessRate += c.successRate; s.successRateCount++; }
+                      else if (c.totalPoints !== undefined && c.maxPoints) { s.totalSuccessRate += (c.totalPoints / c.maxPoints) * 100; s.successRateCount++; }
+                      s.byType[c.type] = (s.byType[c.type] || 0) + 1;
+                    });
+
+                    const allAmbIds = new Set<string>();
+                    ambassadors.forEach(a => allAmbIds.add(a.id));
+                    sponsoredChallengeCounts.forEach((_, id) => allAmbIds.add(id));
+                    localStatsByAmbassador.forEach((_, id) => allAmbIds.add(id));
+
+                    const typeLabels: Record<string, { label: string; color: string; icon: string }> = {
+                      '10_tirs': { label: '10 Tirs', color: '#F97316', icon: 'gps-fixed' },
+                      '10_tirs_sautee': { label: fr ? '10 Tirs sautee' : '10 Lob Shots', color: '#3B82F6', icon: 'sports' },
+                      'precision': { label: fr ? 'Precision' : 'Precision', color: '#F59E0B', icon: 'stars' },
+                    };
+
+                    const ambRows: { id: string; name: string; photo: string | null; eventCount: number; localCount: number; avgSuccessRate: number; byType: Record<string, number>; daily: number[] | null }[] = [];
+                    allAmbIds.forEach(id => {
+                      const amb2 = ambassadors.find(a => a.id === id);
+                      if (!amb2) return;
+                      const eventCount = sponsoredChallengeCounts.get(id) || 0;
+                      const local = localStatsByAmbassador.get(id);
+                      const localCount = local?.count || 0;
+                      const avgRate = local && local.successRateCount > 0 ? Math.round(local.totalSuccessRate / local.successRateCount) : 0;
+                      const daily = sponsoredChallengeDaily.get(id) || null;
+                      if (eventCount > 0 || localCount > 0) ambRows.push({ id, name: amb2.display_name, photo: amb2.photo || null, eventCount, localCount, avgSuccessRate: avgRate, byType: local?.byType || {}, daily });
+                    });
+                    ambRows.sort((a, b) => b.eventCount - a.eventCount);
+
+                    const totalSponsored = ambRows.reduce((s, r) => s + r.eventCount, 0);
+                    const totalLocalSponsored = sponsoredChallenges.length;
+                    const globalAvg = totalLocalSponsored > 0 ? Math.round(sponsoredChallenges.reduce((s, c) => s + (c.successRate || (c.totalPoints && c.maxPoints ? (c.totalPoints / c.maxPoints) * 100 : 0) || 0), 0) / totalLocalSponsored) : 0;
+                    const globalByType: Record<string, number> = {};
+                    sponsoredChallenges.forEach(c => { globalByType[c.type] = (globalByType[c.type] || 0) + 1; });
+
+                    const globalDaily: number[] = [];
+                    if (sponsoredChallengeDaily.size > 0) {
+                      for (let i = 0; i < 30; i++) globalDaily.push(0);
+                      sponsoredChallengeDaily.forEach(arr => { arr.forEach((v, i) => { if (i < 30) globalDaily[i] += v; }); });
+                    }
+
+                    if (totalSponsored === 0 && totalLocalSponsored === 0) return null;
+
+                    return (
+                      <View style={{ marginTop: 8, marginBottom: 16 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                          <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: '#F59E0B' + '15', alignItems: 'center', justifyContent: 'center' }}>
+                            <MaterialIcons name="campaign" size={16} color="#F59E0B" />
+                          </View>
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textPrimary, flex: 1 }}>
+                            {fr ? 'DEFIS SPONSORISES' : 'SPONSORED CHALLENGES'}
+                          </Text>
+                          <View style={{ backgroundColor: '#F59E0B' + '15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#F59E0B' }}>{totalSponsored}</Text>
+                          </View>
+                        </View>
+
+                        <View style={[styles.promoCard, { borderLeftWidth: 3, borderLeftColor: '#F59E0B', marginBottom: 12 }]}>
+                          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                            <View style={{ flex: 1, backgroundColor: '#F59E0B' + '10', borderRadius: 12, padding: 12, alignItems: 'center' }}>
+                              <Text style={{ fontSize: 22, fontWeight: '800', color: '#F59E0B' }}>{totalSponsored}</Text>
+                              <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted, textTransform: 'uppercase', marginTop: 2 }}>Total</Text>
+                            </View>
+                            <View style={{ flex: 1, backgroundColor: theme.success + '10', borderRadius: 12, padding: 12, alignItems: 'center' }}>
+                              <Text style={{ fontSize: 22, fontWeight: '800', color: theme.success }}>{globalAvg}%</Text>
+                              <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted, textTransform: 'uppercase', marginTop: 2 }}>{fr ? 'Reussite' : 'Success'}</Text>
+                            </View>
+                            <View style={{ flex: 1, backgroundColor: theme.primary + '10', borderRadius: 12, padding: 12, alignItems: 'center' }}>
+                              <Text style={{ fontSize: 22, fontWeight: '800', color: theme.primary }}>{ambRows.length}</Text>
+                              <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted, textTransform: 'uppercase', marginTop: 2 }}>Sponsors</Text>
+                            </View>
+                          </View>
+
+                          {Object.keys(globalByType).length > 0 ? (
+                            <View style={{ marginBottom: 12 }}>
+                              <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 8 }}>
+                                {fr ? 'Types les plus populaires' : 'Most popular types'}
+                              </Text>
+                              <View style={{ flexDirection: 'row', gap: 8 }}>
+                                {Object.entries(globalByType).sort((a, b) => b[1] - a[1]).map(([type, count]) => {
+                                  const cfg = typeLabels[type] || { label: type, color: theme.textMuted, icon: 'help' };
+                                  const pct = totalLocalSponsored > 0 ? Math.round((count / totalLocalSponsored) * 100) : 0;
+                                  return (
+                                    <View key={type} style={{ flex: 1, backgroundColor: cfg.color + '08', borderRadius: 10, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: cfg.color + '15' }}>
+                                      <MaterialIcons name={cfg.icon as any} size={18} color={cfg.color} />
+                                      <Text style={{ fontSize: 14, fontWeight: '800', color: cfg.color, marginTop: 4 }}>{count}</Text>
+                                      <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted, marginTop: 1 }}>{cfg.label}</Text>
+                                      <Text style={{ fontSize: 10, fontWeight: '700', color: cfg.color, marginTop: 2 }}>{pct}%</Text>
+                                    </View>
+                                  );
+                                })}
+                              </View>
+                            </View>
+                          ) : null}
+
+                          {globalDaily.length > 0 && globalDaily.some(v => v > 0) ? (() => {
+                            const max = Math.max(...globalDaily, 1);
+                            const w = 220;
+                            const h = 36;
+                            const step = w / (globalDaily.length - 1);
+                            const pts = globalDaily.map((val, i) => {
+                              const x = i * step;
+                              const y = h - (val / max) * (h - 4) - 2;
+                              return `${x},${y}`;
+                            });
+                            const lineD = `M${pts.join(' L')}`;
+                            const areaD = `${lineD} L${w},${h} L0,${h} Z`;
+                            const total30d = globalDaily.reduce((a, b) => a + b, 0);
+                            return (
+                              <View style={{ backgroundColor: '#F59E0B' + '06', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: '#F59E0B' + '12' }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <MaterialIcons name="show-chart" size={12} color="#F59E0B" />
+                                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#F59E0B', textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                                      {fr ? 'Evolution 30j' : '30d Evolution'}
+                                    </Text>
+                                  </View>
+                                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#F59E0B' }}>{total30d} {fr ? 'defis' : 'challenges'}</Text>
+                                </View>
+                                <Svg width={w} height={h}>
+                                  <SvgPath d={areaD} fill="#F59E0B" opacity={0.1} />
+                                  <SvgPath d={lineD} stroke="#F59E0B" strokeWidth={2} fill="none" opacity={0.7} />
+                                </Svg>
+                              </View>
+                            );
+                          })() : null}
+                        </View>
+
+                        {ambRows.map(row => (
+                          <View key={row.id} style={[styles.promoCard, { paddingVertical: 14, paddingHorizontal: 14, marginBottom: 8 }]}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                              {row.photo ? (
+                                <Image source={{ uri: row.photo }} style={{ width: 36, height: 36, borderRadius: 10 }} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                              ) : (
+                                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#F59E0B' + '15', alignItems: 'center', justifyContent: 'center' }}>
+                                  <MaterialIcons name="campaign" size={16} color="#F59E0B" />
+                                </View>
+                              )}
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textPrimary }}>{row.name}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                                  <Text style={{ fontSize: 11, color: theme.textSecondary }}>{row.eventCount} {fr ? 'defis' : 'challenges'}</Text>
+                                  {row.avgSuccessRate > 0 ? (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                                      <MaterialIcons name="check-circle" size={10} color={theme.success} />
+                                      <Text style={{ fontSize: 11, fontWeight: '700', color: theme.success }}>{row.avgSuccessRate}%</Text>
+                                    </View>
+                                  ) : null}
+                                </View>
+                              </View>
+                              <View style={{ backgroundColor: '#F59E0B' + '12', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 }}>
+                                <Text style={{ fontSize: 16, fontWeight: '800', color: '#F59E0B' }}>{row.eventCount}</Text>
+                              </View>
+                            </View>
+
+                            {Object.keys(row.byType).length > 0 ? (
+                              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}>
+                                {Object.entries(row.byType).sort((a, b) => b[1] - a[1]).map(([type, count]) => {
+                                  const cfg = typeLabels[type] || { label: type, color: theme.textMuted, icon: 'help' };
+                                  return (
+                                    <View key={type} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: cfg.color + '10', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                                      <MaterialIcons name={cfg.icon as any} size={11} color={cfg.color} />
+                                      <Text style={{ fontSize: 10, fontWeight: '700', color: cfg.color }}>{count} {cfg.label}</Text>
+                                    </View>
+                                  );
+                                })}
+                              </View>
+                            ) : null}
+
+                            {row.daily && row.daily.length > 1 && row.daily.some(v => v > 0) ? (() => {
+                              const max = Math.max(...row.daily!, 1);
+                              const w = 200;
+                              const h = 24;
+                              const step = w / (row.daily!.length - 1);
+                              const pts = row.daily!.map((val, i) => {
+                                const x = i * step;
+                                const y = h - (val / max) * (h - 3) - 1.5;
+                                return `${x},${y}`;
+                              });
+                              const lineD = `M${pts.join(' L')}`;
+                              const areaD = `${lineD} L${w},${h} L0,${h} Z`;
+                              return (
+                                <View style={{ backgroundColor: '#F59E0B' + '04', borderRadius: 8, padding: 6 }}>
+                                  <Svg width={w} height={h}>
+                                    <SvgPath d={areaD} fill="#F59E0B" opacity={0.08} />
+                                    <SvgPath d={lineD} stroke="#F59E0B" strokeWidth={1.2} fill="none" opacity={0.5} />
+                                  </Svg>
+                                </View>
+                              );
+                            })() : null}
+                          </View>
+                        ))}
+                      </View>
+                    );
+                  })() : null}
                 </Animated.View>
               ) : null}
 
