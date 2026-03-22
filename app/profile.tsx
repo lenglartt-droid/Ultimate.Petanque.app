@@ -1860,6 +1860,24 @@ export default function ProfileScreen() {
               </Pressable>
             ) : null}
 
+            {/* Ambassadors */}
+            <Pressable 
+              style={styles.menuItem}
+              onPress={() => {
+                Haptics.selectionAsync();
+                router.push('/ambassadors' as any);
+              }}
+            >
+              <View style={[styles.menuIcon, { backgroundColor: '#7C3AED' + '15' }]}>
+                <MaterialIcons name="verified" size={20} color="#7C3AED" />
+              </View>
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuItemText}>{language === 'fr' ? 'Nos Ambassadeurs' : 'Our Ambassadors'}</Text>
+                <Text style={styles.menuItemSubtext}>{language === 'fr' ? 'Decouvrez nos ambassadeurs petanque' : 'Discover our petanque ambassadors'}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+            </Pressable>
+
             {/* Partners */}
             <Pressable 
               style={styles.menuItem}
