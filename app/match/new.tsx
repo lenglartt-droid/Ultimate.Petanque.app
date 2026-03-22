@@ -1576,6 +1576,7 @@ export default function NewMatchScreen() {
             {/* Winner Overlay */}
             {(teamAScore >= maxScore || teamBScore >= maxScore) && (
               <Animated.View entering={FadeIn.duration(300)} style={styles.fsWinnerOverlay}>
+               <ScrollView contentContainerStyle={{ alignItems: 'center', flexGrow: 1, justifyContent: 'center', paddingVertical: 24 }} showsVerticalScrollIndicator={false} style={{ width: '100%' }}>
                 <View style={styles.fsWinnerCard}>
                   <MaterialIcons 
                     name={teamAScore > teamBScore ? 'emoji-events' : 'sentiment-dissatisfied'} 
@@ -1587,7 +1588,50 @@ export default function NewMatchScreen() {
                   </Text>
                   <Text style={styles.fsWinnerScore}>{teamAScore} - {teamBScore}</Text>
                   <Text style={styles.fsWinnerMenes}>{menes.length} {t('match', 'endsLabel')} • {formatTime(matchTime)}</Text>
-                  
+
+                  {/* Player Action Summary */}
+                  {playerActions.some(pa => pa.actions.tirs > 0 || pa.actions.points > 0 || pa.actions.carreaux > 0) && (
+                    <View style={styles.fsWinnerActionsSummary}>
+                      <Text style={styles.fsWinnerActionsTitle}>{t('match', 'playerActions')}</Text>
+                      {(['A', 'B'] as const).map(team => {
+                        const teamPlayers = playerActions.filter(pa => pa.team === team);
+                        if (teamPlayers.length === 0) return null;
+                        return (
+                          <View key={team} style={styles.fsWinnerTeamBlock}>
+                            <View style={styles.fsWinnerTeamHeaderRow}>
+                              <View style={[styles.fsWinnerTeamDotSm, { backgroundColor: team === 'A' ? theme.primary : theme.accent }]} />
+                              <Text style={styles.fsWinnerTeamNameLabel}>{team === 'A' ? t('match', 'myTeamLabel') : t('match', 'opponentLabel')}</Text>
+                            </View>
+                            {teamPlayers.map(pa => {
+                              const a = pa.actions;
+                              return (
+                                <View key={pa.playerId} style={styles.fsWinnerPlayerRow}>
+                                  <Text style={styles.fsWinnerPlayerName} numberOfLines={1}>{getPlayerName(pa.playerId).split(' ')[0]}</Text>
+                                  <View style={styles.fsWinnerPlayerStats}>
+                                    <View style={[styles.fsWinnerStatBadge, { backgroundColor: 'rgba(34,197,94,0.2)' }]}>
+                                      <MaterialIcons name="gps-fixed" size={11} color="#4ADE80" />
+                                      <Text style={[styles.fsWinnerStatVal, { color: '#4ADE80' }]}>{a.tirsSuccess}/{a.tirs}</Text>
+                                    </View>
+                                    <View style={[styles.fsWinnerStatBadge, { backgroundColor: 'rgba(59,130,246,0.2)' }]}>
+                                      <MaterialIcons name="adjust" size={11} color="#60A5FA" />
+                                      <Text style={[styles.fsWinnerStatVal, { color: '#60A5FA' }]}>{a.pointsSuccess}/{a.points}</Text>
+                                    </View>
+                                    {a.carreaux > 0 ? (
+                                      <View style={[styles.fsWinnerStatBadge, { backgroundColor: 'rgba(217,119,6,0.2)' }]}>
+                                        <MaterialIcons name="stars" size={11} color="#FBBF24" />
+                                        <Text style={[styles.fsWinnerStatVal, { color: '#FBBF24' }]}>{a.carreaux}</Text>
+                                      </View>
+                                    ) : null}
+                                  </View>
+                                </View>
+                              );
+                            })}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
+
                   {/* Series Info */}
                   {seriesId && (
                     <View style={styles.fsWinnerSeriesInfo}>
@@ -1721,7 +1765,7 @@ export default function NewMatchScreen() {
                     )}
                   </View>
                 </View>
-
+               </ScrollView>
               </Animated.View>
             )}
           </SafeAreaView>
@@ -2886,4 +2930,16 @@ const styles = StyleSheet.create({
   fsPauseResumeBtnText: { fontSize: 17, fontWeight: '700', color: '#FFF' },
   fsPauseExitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
   fsPauseExitBtnText: { fontSize: 14, fontWeight: '500', color: 'rgba(255,255,255,0.7)' },
+  // Winner Action Summary
+  fsWinnerActionsSummary: { width: '100%', marginTop: 20, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 20, padding: 16 },
+  fsWinnerActionsTitle: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.5)', letterSpacing: 1, textTransform: 'uppercase' as const, textAlign: 'center' as const, marginBottom: 12 },
+  fsWinnerTeamBlock: { marginBottom: 10 },
+  fsWinnerTeamHeaderRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginBottom: 8 },
+  fsWinnerTeamDotSm: { width: 8, height: 8, borderRadius: 4 },
+  fsWinnerTeamNameLabel: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.45)', letterSpacing: 0.5, textTransform: 'uppercase' as const },
+  fsWinnerPlayerRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingVertical: 6, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
+  fsWinnerPlayerName: { fontSize: 13, fontWeight: '600', color: '#FFF', maxWidth: 90 },
+  fsWinnerPlayerStats: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
+  fsWinnerStatBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  fsWinnerStatVal: { fontSize: 12, fontWeight: '700' },
 });
