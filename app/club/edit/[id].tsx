@@ -99,7 +99,7 @@ export default function EditClubScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { getClubById, updateClub, terrains, loading: appLoading } = useApp();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { showAlert } = useAlert();
 
   const club = getClubById(id || '');

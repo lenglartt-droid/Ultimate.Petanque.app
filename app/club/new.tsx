@@ -89,7 +89,7 @@ function StepIndicator({ step, total, label }: { step: number; total: number; la
 export default function NewClubScreen() {
   const insets = useSafeAreaInsets();
   const { addClub, terrains } = useApp();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { showAlert } = useAlert();
 
   const [name, setName] = useState('');
