@@ -187,6 +187,7 @@ export default function DirectoryScreen() {
     clubCity: string; clubCountry: string;
     terrainType: string; terrainCity: string; terrainLighting: string; terrainCovered: string; terrainEnvironment: string; terrainAccess: string;
     tournamentStatus: string; tournamentFormat: string; tournamentLevel: string; tournamentCategory: string; tournamentRegistration: string; tournamentScope: string; tournamentCity: string;
+    eventStatus: string; eventType: string;
   }>({
     // Player filters
     playerClub: 'all',
@@ -212,6 +213,9 @@ export default function DirectoryScreen() {
     tournamentRegistration: 'all',
     tournamentScope: 'all',
     tournamentCity: 'all',
+    // Event filters
+    eventStatus: 'all',
+    eventType: 'all',
   });
 
   // Reset pagination when tab or filters change
@@ -308,7 +312,7 @@ export default function DirectoryScreen() {
     clubs: [filters.clubCity, filters.clubCountry].filter(f => f !== 'all').length,
     terrains: [filters.terrainType, filters.terrainCity, filters.terrainLighting, filters.terrainCovered, filters.terrainEnvironment, filters.terrainAccess].filter(f => f !== 'all').length,
     tournaments: [filters.tournamentStatus, filters.tournamentFormat, filters.tournamentLevel, filters.tournamentCategory, filters.tournamentRegistration, filters.tournamentScope, filters.tournamentCity].filter(f => f !== 'all').length,
-    events: 0,
+    events: [filters.eventStatus, filters.eventType].filter(f => f !== 'all').length,
   }), [filters]);
 
   const currentFilterCount = activeFilterCounts[activeTab];
@@ -420,10 +424,14 @@ export default function DirectoryScreen() {
 
   // Filtered events for events tab
   const filteredEvents = useMemo(() => {
-    if (!searchQuery) return sponsoredEvents;
-    const q = searchQuery.toLowerCase();
-    return sponsoredEvents.filter(e => e.title.toLowerCase().includes(q) || (e.ambassadorName || '').toLowerCase().includes(q) || (e.city || '').toLowerCase().includes(q));
-  }, [sponsoredEvents, searchQuery]);
+    return sponsoredEvents.filter(e => {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch = !searchQuery || e.title.toLowerCase().includes(q) || (e.ambassadorName || '').toLowerCase().includes(q) || (e.city || '').toLowerCase().includes(q);
+      const matchesStatus = filters.eventStatus === 'all' || e.status === filters.eventStatus;
+      const matchesType = filters.eventType === 'all' || e.challengeType === filters.eventType;
+      return matchesSearch && matchesStatus && matchesType;
+    });
+  }, [sponsoredEvents, searchQuery, filters.eventStatus, filters.eventType]);
 
   // Get current filtered data (after all filtered arrays are defined)
   const getCurrentData = useCallback(() => {
@@ -462,6 +470,8 @@ export default function DirectoryScreen() {
       setFilters(f => ({ ...f, terrainType: 'all', terrainCity: 'all', terrainLighting: 'all', terrainCovered: 'all', terrainEnvironment: 'all', terrainAccess: 'all' }));
     } else if (activeTab === 'tournaments') {
       setFilters(f => ({ ...f, tournamentStatus: 'all', tournamentFormat: 'all', tournamentLevel: 'all', tournamentCategory: 'all', tournamentRegistration: 'all', tournamentScope: 'all', tournamentCity: 'all' }));
+    } else if (activeTab === 'events') {
+      setFilters(f => ({ ...f, eventStatus: 'all', eventType: 'all' }));
     }
   }, [activeTab]);
 
@@ -964,6 +974,29 @@ export default function DirectoryScreen() {
             />
           </>
         );
+      case 'events':
+        return (
+          <>
+            <FilterSection
+              title={language === 'fr' ? 'Statut' : 'Status'}
+              options={['all', 'upcoming', 'active', 'completed', 'cancelled']}
+              labels={{ all: t('directory', 'allLabel'), upcoming: language === 'fr' ? 'A venir' : 'Upcoming', active: language === 'fr' ? 'En cours' : 'Active', completed: language === 'fr' ? 'Termine' : 'Completed', cancelled: language === 'fr' ? 'Annule' : 'Cancelled' }}
+              value={filters.eventStatus}
+              onChange={(v) => setFilters(f => ({ ...f, eventStatus: v }))}
+              icons={{ upcoming: 'event', active: 'play-circle', completed: 'check-circle', cancelled: 'cancel' }}
+              allLabel={t('directory', 'allLabel')}
+            />
+            <FilterSection
+              title={language === 'fr' ? 'Type de defi' : 'Challenge type'}
+              options={['all', '10_tirs', '10_tirs_sautee', 'precision']}
+              labels={{ all: t('directory', 'allLabel'), '10_tirs': '10 Tirs', '10_tirs_sautee': language === 'fr' ? '10 Tirs sautee' : '10 Lob Shots', precision: language === 'fr' ? 'Precision' : 'Precision' }}
+              value={filters.eventType}
+              onChange={(v) => setFilters(f => ({ ...f, eventType: v }))}
+              icons={{ '10_tirs': 'gps-fixed', '10_tirs_sautee': 'flight-takeoff', precision: 'stars' }}
+              allLabel={t('directory', 'allLabel')}
+            />
+          </>
+        );
       case 'tournaments':
         return (
           <>
@@ -1237,6 +1270,12 @@ export default function DirectoryScreen() {
                 {filters.terrainLighting !== 'all' && <ActiveFilterChip label={filters.terrainLighting === 'yes' ? t('directory', 'litLabel') : t('directory', 'notLitLabel')} onRemove={() => setFilters(f => ({ ...f, terrainLighting: 'all' }))} icon="lightbulb" />}
                 {filters.terrainCovered !== 'all' && <ActiveFilterChip label={filters.terrainCovered === 'yes' ? t('directory', 'coveredLabel') : t('directory', 'outdoorShort')} onRemove={() => setFilters(f => ({ ...f, terrainCovered: 'all' }))} icon="roofing" />}
                 {filters.terrainAccess !== 'all' && <ActiveFilterChip label={filters.terrainAccess === 'public' ? t('directory', 'publicAccessShort') : t('directory', 'privateAccessShort')} onRemove={() => setFilters(f => ({ ...f, terrainAccess: 'all' }))} icon={filters.terrainAccess === 'public' ? 'public' : 'lock'} />}
+              </>
+            )}
+            {activeTab === 'events' && (
+              <>
+                {filters.eventStatus !== 'all' && <ActiveFilterChip label={filters.eventStatus === 'upcoming' ? (language === 'fr' ? 'A venir' : 'Upcoming') : filters.eventStatus === 'active' ? (language === 'fr' ? 'En cours' : 'Active') : filters.eventStatus === 'completed' ? (language === 'fr' ? 'Termine' : 'Done') : (language === 'fr' ? 'Annule' : 'Cancelled')} onRemove={() => setFilters(f => ({ ...f, eventStatus: 'all' }))} icon="event" />}
+                {filters.eventType !== 'all' && <ActiveFilterChip label={filters.eventType === '10_tirs' ? '10 Tirs' : filters.eventType === '10_tirs_sautee' ? (language === 'fr' ? '10 Tirs sautee' : '10 Lob Shots') : 'Precision'} onRemove={() => setFilters(f => ({ ...f, eventType: 'all' }))} icon="track-changes" />}
               </>
             )}
             {activeTab === 'tournaments' && (

@@ -12,8 +12,9 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme, { blurhash } from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
-import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
+import { fetchAmbassadors, Ambassador, isUserAmbassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
+import { useAuth } from '@/template';
 
 const SOCIAL_CONFIG: Record<string, { icon: string; color: string; bg: string; label: string }> = {
   youtube: { icon: 'play-arrow', color: '#FF0000', bg: '#FF000010', label: 'YouTube' },
@@ -27,7 +28,14 @@ export default function AmbassadorsScreen() {
   const insets = useSafeAreaInsets();
   const { language } = useLanguage();
   const { t } = useLanguage();
+  const { user } = useAuth();
   const fr = language === 'fr';
+  const [isAmbassador, setIsAmbassador] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    isUserAmbassador(user.id).then(setIsAmbassador);
+  }, [user?.id]);
   const [refreshing, setRefreshing] = useState(false);
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
   const [ambassadors, setAmbassadors] = useState<Ambassador[]>([]);
@@ -350,6 +358,24 @@ export default function AmbassadorsScreen() {
             </Pressable>
           </Animated.View>
         )}
+
+        {/* Ambassador Portal Button - only for ambassadors */}
+        {isAmbassador ? (
+          <Animated.View entering={FadeInDown.duration(400).delay(550)} style={{ paddingHorizontal: 16, marginBottom: 16 }}>
+            <Pressable
+              style={({ pressed }) => [{
+                flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 10,
+                backgroundColor: '#7C3AED', paddingVertical: 16, borderRadius: 18,
+                ...Platform.select({ ios: { shadowColor: '#7C3AED', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12 }, android: { elevation: 4 }, default: {} }),
+              }, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push('/ambassador-dashboard' as any); }}
+            >
+              <MaterialIcons name="dashboard" size={20} color="#FFF" />
+              <Text style={{ fontSize: 16, fontWeight: '700', color: '#FFF' }}>{fr ? 'Mon Portail Ambassadeur' : 'My Ambassador Portal'}</Text>
+              <MaterialIcons name="chevron-right" size={20} color="rgba(255,255,255,0.7)" />
+            </Pressable>
+          </Animated.View>
+        ) : null}
 
         {/* CTA */}
         <Animated.View entering={FadeInDown.duration(400).delay(600)}>

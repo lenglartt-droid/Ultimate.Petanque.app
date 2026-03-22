@@ -240,15 +240,7 @@ export default function PartnersScreen() {
                   <Text style={styles.heroPillText}>{PARTNER_SLOTS.length} {language === 'fr' ? 'emplacements' : 'slots'}</Text>
                 </View>
               </View>
-              {/* Link to ambassadors page */}
-              <Pressable
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, marginTop: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' }}
-                onPress={() => router.push('/ambassadors' as any)}
-              >
-                <MaterialIcons name="verified" size={16} color="rgba(255,255,255,0.9)" />
-                <Text style={{ fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.9)' }}>{language === 'fr' ? 'Voir nos ambassadeurs' : 'View our ambassadors'}</Text>
-                <MaterialIcons name="chevron-right" size={16} color="rgba(255,255,255,0.7)" />
-              </Pressable>
+
             </View>
           </LinearGradient>
         </Animated.View>

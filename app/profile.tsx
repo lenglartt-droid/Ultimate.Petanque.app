@@ -1840,27 +1840,7 @@ export default function ProfileScreen() {
               )}
             </Pressable>
 
-            {/* Ambassador Dashboard - only for ambassadors */}
-            {isAmbassador ? (
-              <Pressable 
-                style={styles.menuItem}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  router.push('/ambassador-dashboard' as any);
-                }}
-              >
-                <View style={[styles.menuIcon, { backgroundColor: '#7C3AED' + '15' }]}>
-                  <MaterialIcons name="verified" size={20} color="#7C3AED" />
-                </View>
-                <View style={styles.menuItemContent}>
-                  <Text style={styles.menuItemText}>{language === 'fr' ? 'Portail Ambassadeur' : 'Ambassador Portal'}</Text>
-                  <Text style={styles.menuItemSubtext}>{language === 'fr' ? 'Analytics, evenements et profil' : 'Analytics, events and profile'}</Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-              </Pressable>
-            ) : null}
-
-            {/* Ambassadors */}
+            {/* Community Section */}
             <Pressable 
               style={styles.menuItem}
               onPress={() => {
@@ -1878,7 +1858,6 @@ export default function ProfileScreen() {
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </Pressable>
 
-            {/* Partners */}
             <Pressable 
               style={styles.menuItem}
               onPress={() => {
