@@ -217,6 +217,7 @@ export default function NewMatchScreen() {
   const [advancedNotationType, setAdvancedNotationType] = useState<'tir' | 'point'>('tir');
   const [advancedShotRecords, setAdvancedShotRecords] = useState<SimpleShotRecord[]>([]);
   const [notationMode, setNotationMode] = useState<'quick' | 'detailed'>('quick');
+  const [actionHistory, setActionHistory] = useState<Record<string, Array<{type: 'tir' | 'point' | 'carreau', success: boolean}>>>({});
   const [selectedTerrainId, setSelectedTerrainId] = useState<string | null>(() => selfPlayer?.terrainId || null);
   const [showTerrainPicker, setShowTerrainPicker] = useState(false);
   const [terrainSearch, setTerrainSearch] = useState('');
@@ -508,6 +509,38 @@ export default function NewMatchScreen() {
       }
       return { ...p, actions: newActions };
     }));
+    setActionHistory(prev => ({
+      ...prev,
+      [playerId]: [...(prev[playerId] || []), { type: actionType, success }],
+    }));
+  }, []);
+
+  const undoLastAction = useCallback((playerId: string) => {
+    setActionHistory(prev => {
+      const history = prev[playerId];
+      if (!history || history.length === 0) return prev;
+      const lastAction = history[history.length - 1];
+      
+      setPlayerActions(prevActions => prevActions.map(p => {
+        if (p.playerId !== playerId) return p;
+        const newActions = { ...p.actions };
+        if (lastAction.type === 'tir') {
+          newActions.tirs = Math.max(0, newActions.tirs - 1);
+          if (lastAction.success) newActions.tirsSuccess = Math.max(0, newActions.tirsSuccess - 1);
+        } else if (lastAction.type === 'point') {
+          newActions.points = Math.max(0, newActions.points - 1);
+          if (lastAction.success) newActions.pointsSuccess = Math.max(0, newActions.pointsSuccess - 1);
+        } else if (lastAction.type === 'carreau') {
+          newActions.tirs = Math.max(0, newActions.tirs - 1);
+          newActions.tirsSuccess = Math.max(0, newActions.tirsSuccess - 1);
+          newActions.carreaux = Math.max(0, newActions.carreaux - 1);
+        }
+        return { ...p, actions: newActions };
+      }));
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return { ...prev, [playerId]: history.slice(0, -1) };
+    });
   }, []);
 
   const openAdvancedNotation = useCallback((playerId: string, playerName: string, team: 'A' | 'B', actionType: 'tir' | 'point') => {
@@ -534,6 +567,13 @@ export default function NewMatchScreen() {
       
       const detailedShots = p.detailedShots || [];
       return { ...p, actions: newActions, detailedShots: [...detailedShots, record] };
+    }));
+    
+    // Track in action history for undo
+    const historyType = record.carreau ? 'carreau' as const : record.actionType as ('tir' | 'point');
+    setActionHistory(prev => ({
+      ...prev,
+      [record.playerId]: [...(prev[record.playerId] || []), { type: historyType, success: record.success }],
     }));
     
     setShowAdvancedNotation(false);
@@ -1133,6 +1173,15 @@ export default function NewMatchScreen() {
                           <Text style={styles.fsQuickNotationStats}>
                             {stats.tirsSuccess}/{stats.tirs} • {stats.pointsSuccess}/{stats.points}{stats.carreaux > 0 ? ` • C${stats.carreaux}` : ''}
                           </Text>
+                          {(actionHistory[p.playerId]?.length || 0) > 0 ? (
+                            <Pressable
+                              style={styles.fsQuickUndoBtn}
+                              onPress={() => undoLastAction(p.playerId)}
+                              hitSlop={6}
+                            >
+                              <MaterialIcons name="undo" size={14} color="rgba(255,255,255,0.6)" />
+                            </Pressable>
+                          ) : null}
                         </View>
                         {notationMode === 'quick' ? (
                           /* === QUICK MODE: 1 tap = recorded === */
@@ -2722,6 +2771,7 @@ const styles = StyleSheet.create({
   fsQuickNotationDot: { width: 8, height: 8, borderRadius: 4 },
   fsQuickNotationName: { fontSize: 13, fontWeight: '700', color: '#FFF', flex: 1 },
   fsQuickNotationStats: { fontSize: 10, fontWeight: '500', color: 'rgba(255,255,255,0.5)' },
+  fsQuickUndoBtn: { width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center' as const, justifyContent: 'center' as const, marginLeft: 4 },
   fsQuickNotationBtns: { flexDirection: 'row', gap: 8 },
   fsQuickNotationTirBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, backgroundColor: theme.tirColor, borderRadius: 12 },
   fsQuickNotationPointBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, backgroundColor: theme.pointColor, borderRadius: 12 },

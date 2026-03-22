@@ -2640,6 +2640,7 @@ export const translations = {
     qualityStep: { fr: 'Qualité', en: 'Quality' },
     finish: { fr: 'Terminer', en: 'Finish' },
     optionalContinue: { fr: 'Optionnel : préciser le type et l\'impact', en: 'Optional: specify type and impact' },
+    undoLast: { fr: 'Annuler', en: 'Undo' },
     // ---- Advanced Shot Notation: Shot types ----
     auFer: { fr: 'Tir tendu', en: 'Direct shot' },
     auFerDesc: { fr: 'Tir droit, trajectoire rasante', en: 'Straight shot, skimming trajectory' },
