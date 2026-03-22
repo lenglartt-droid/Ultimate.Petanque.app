@@ -44,34 +44,12 @@ export default function AmbassadorsScreen() {
   const scrollViewRef = React.useRef<ScrollView>(null);
   const ambassadorPositions = React.useRef<Record<string, number>>({});
   const [rankingTab, setRankingTab] = useState<'matches' | 'winRate' | 'engagement'>('matches');
-  const [showDiagnostic, setShowDiagnostic] = useState(false);
-  const [diagnosticData, setDiagnosticData] = useState<{ loading: boolean; userId: string | null; records: any[]; error: string | null }>({ loading: false, userId: null, records: [], error: null });
 
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
     return () => sub?.remove();
   }, []);
   const isTablet = screenWidth >= 600;
-
-  const runDiagnostic = useCallback(async () => {
-    setDiagnosticData({ loading: true, userId: user?.id || null, records: [], error: null });
-    setShowDiagnostic(true);
-    try {
-      const supabase = (await import('@/template')).getSupabaseClient();
-      const { data, error } = await supabase
-        .from('ambassadors')
-        .select('id, user_id, display_name, badge_type, is_active, is_featured, created_at')
-        .eq('user_id', user?.id || '')
-        .limit(5);
-      if (error) {
-        setDiagnosticData(prev => ({ ...prev, loading: false, error: error.message }));
-      } else {
-        setDiagnosticData(prev => ({ ...prev, loading: false, records: data || [], error: null }));
-      }
-    } catch (e: any) {
-      setDiagnosticData(prev => ({ ...prev, loading: false, error: e.message || 'Unknown error' }));
-    }
-  }, [user?.id]);
 
   const loadAmbassadors = useCallback(async () => {
     const { ambassadors: data } = await fetchAmbassadors();
@@ -235,26 +213,15 @@ export default function AmbassadorsScreen() {
           <MaterialIcons name="verified" size={18} color="#7C3AED" />
           <Text style={styles.headerTitle}>{fr ? 'Nos Ambassadeurs' : 'Our Ambassadors'}</Text>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          {user?.id ? (
-            <Pressable
-              style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: showDiagnostic ? '#F59E0B20' : '#00000008', alignItems: 'center', justifyContent: 'center' }}
-              onPress={runDiagnostic}
-              hitSlop={4}
-            >
-              <MaterialIcons name="bug-report" size={18} color={showDiagnostic ? '#F59E0B' : theme.textMuted} />
-            </Pressable>
-          ) : null}
-          {isAmbassador ? (
-            <Pressable
-              style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: '#7C3AED15', alignItems: 'center', justifyContent: 'center' }}
-              onPress={() => router.push('/ambassador-dashboard' as any)}
-              hitSlop={4}
-            >
-              <MaterialIcons name="dashboard" size={20} color="#7C3AED" />
-            </Pressable>
-          ) : null}
-        </View>
+        {isAmbassador ? (
+          <Pressable
+            style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: '#7C3AED15', alignItems: 'center', justifyContent: 'center' }}
+            onPress={() => router.push('/ambassador-dashboard' as any)}
+            hitSlop={4}
+          >
+            <MaterialIcons name="dashboard" size={20} color="#7C3AED" />
+          </Pressable>
+        ) : <View style={{ width: 40 }} />}
       </View>
 
       <ScrollView
@@ -264,77 +231,6 @@ export default function AmbassadorsScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#7C3AED" colors={['#7C3AED']} />}
       >
-        {/* Diagnostic Panel */}
-        {showDiagnostic ? (
-          <View style={styles.diagPanel}>
-            <View style={styles.diagHeader}>
-              <MaterialIcons name="bug-report" size={16} color="#F59E0B" />
-              <Text style={styles.diagTitle}>{fr ? 'Diagnostic portail' : 'Portal diagnostic'}</Text>
-              <Pressable onPress={() => setShowDiagnostic(false)} hitSlop={8}>
-                <MaterialIcons name="close" size={18} color={theme.textSecondary} />
-              </Pressable>
-            </View>
-            <View style={styles.diagRow}>
-              <Text style={styles.diagLabel}>user_id :</Text>
-              <Text style={styles.diagValue} selectable numberOfLines={1}>{diagnosticData.userId || 'null (non connecte)'}</Text>
-            </View>
-            <View style={styles.diagRow}>
-              <Text style={styles.diagLabel}>isAmbassador :</Text>
-              <View style={[styles.diagBadge, { backgroundColor: isAmbassador ? '#22C55E15' : '#EF444415' }]}>
-                <Text style={[styles.diagBadgeText, { color: isAmbassador ? '#22C55E' : '#EF4444' }]}>{isAmbassador ? 'true' : 'false'}</Text>
-              </View>
-            </View>
-            {diagnosticData.loading ? (
-              <View style={{ paddingVertical: 12, alignItems: 'center' }}>
-                <ActivityIndicator size="small" color="#F59E0B" />
-              </View>
-            ) : diagnosticData.error ? (
-              <View style={styles.diagRow}>
-                <Text style={[styles.diagValue, { color: '#EF4444' }]}>{diagnosticData.error}</Text>
-              </View>
-            ) : diagnosticData.records.length === 0 ? (
-              <View style={[styles.diagRow, { backgroundColor: '#EF444408' }]}>
-                <MaterialIcons name="error-outline" size={14} color="#EF4444" />
-                <Text style={[styles.diagValue, { color: '#EF4444', flex: 1 }]}>
-                  {fr ? 'Aucun enregistrement ambassadeur pour ce user_id' : 'No ambassador record found for this user_id'}
-                </Text>
-              </View>
-            ) : (
-              diagnosticData.records.map((rec: any, idx: number) => (
-                <View key={idx} style={styles.diagRecord}>
-                  <View style={styles.diagRow}>
-                    <Text style={styles.diagLabel}>id :</Text>
-                    <Text style={styles.diagValue} selectable numberOfLines={1}>{rec.id}</Text>
-                  </View>
-                  <View style={styles.diagRow}>
-                    <Text style={styles.diagLabel}>display_name :</Text>
-                    <Text style={styles.diagValue}>{rec.display_name}</Text>
-                  </View>
-                  <View style={styles.diagRow}>
-                    <Text style={styles.diagLabel}>badge_type :</Text>
-                    <View style={[styles.diagBadge, { backgroundColor: '#7C3AED15' }]}>
-                      <Text style={[styles.diagBadgeText, { color: '#7C3AED' }]}>{rec.badge_type}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.diagRow}>
-                    <Text style={styles.diagLabel}>is_active :</Text>
-                    <View style={[styles.diagBadge, { backgroundColor: rec.is_active ? '#22C55E15' : '#EF444415' }]}>
-                      <Text style={[styles.diagBadgeText, { color: rec.is_active ? '#22C55E' : '#EF4444' }]}>{rec.is_active ? 'true' : 'false'}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.diagRow}>
-                    <Text style={styles.diagLabel}>is_featured :</Text>
-                    <Text style={styles.diagValue}>{rec.is_featured ? 'true' : 'false'}</Text>
-                  </View>
-                </View>
-              ))
-            )}
-            <Text style={styles.diagHint}>
-              {fr ? 'isUserAmbassador() cherche user_id dans la table ambassadors (actifs et inactifs).' : 'isUserAmbassador() looks up user_id in ambassadors table (active and inactive).'}
-            </Text>
-          </View>
-        ) : null}
-
         {/* Hero */}
         <Animated.View entering={FadeInDown.duration(500)}>
           <LinearGradient colors={['#5B21B6', '#7C3AED', '#A855F7']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroGradient}>
@@ -588,15 +484,4 @@ const styles = StyleSheet.create({
   ctaDescription: { fontSize: 13, color: 'rgba(255,255,255,0.75)', textAlign: 'center', lineHeight: 20, marginBottom: 20, maxWidth: 320 },
   ctaButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#FFF', paddingVertical: 16, paddingHorizontal: 32, borderRadius: 16, width: '100%', ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8 }, android: { elevation: 4 }, default: {} }) },
   ctaButtonText: { fontSize: 16, fontWeight: '700', color: '#7C3AED' },
-  // Diagnostic
-  diagPanel: { marginHorizontal: 16, marginTop: 12, marginBottom: 4, backgroundColor: '#FFFBEB', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#F59E0B25' },
-  diagHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 12 },
-  diagTitle: { fontSize: 14, fontWeight: '700' as const, color: '#92400E', flex: 1 },
-  diagRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 8 },
-  diagLabel: { fontSize: 11, fontWeight: '700' as const, color: '#92400E', minWidth: 90 },
-  diagValue: { fontSize: 11, fontWeight: '500' as const, color: '#78350F', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
-  diagBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
-  diagBadgeText: { fontSize: 11, fontWeight: '800' as const },
-  diagRecord: { backgroundColor: '#FFFFFF80', borderRadius: 10, padding: 8, marginTop: 8, borderWidth: 1, borderColor: '#F59E0B15' },
-  diagHint: { fontSize: 10, color: '#92400E80', marginTop: 12, lineHeight: 15, fontStyle: 'italic' as const },
 });
