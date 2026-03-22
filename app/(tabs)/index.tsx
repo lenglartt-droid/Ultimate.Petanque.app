@@ -149,7 +149,11 @@ export default function HomeScreen() {
     });
 
     challenges.slice().sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 3).forEach((c: any) => {
-      const rate = c.totalShots > 0 ? Math.round((c.successCount / c.totalShots) * 100) : 0;
+      const rate = c.type === 'precision'
+        ? (c.maxPoints > 0 ? Math.round(((c.totalPoints || 0) / c.maxPoints) * 100) : 0)
+        : (c.successRate !== undefined && c.successRate !== null)
+          ? Math.round(c.successRate)
+          : (c.totalShots > 0 ? Math.round(((c.successCount || 0) / c.totalShots) * 100) : 0);
       const challengeName = c.type === '10_tirs' ? t('challengeNames', '10_tirs') : c.type === '10_tirs_sautee' ? t('challengeNames', '10_tirs_sautee') : t('challengeNames', 'precision');
       items.push({
         type: 'challenge',
@@ -529,8 +533,8 @@ export default function HomeScreen() {
                       <View style={styles.colMeetupBadge}><Text style={styles.colMeetupBadgeText}>{pendingInviteCount > 9 ? '9+' : pendingInviteCount}</Text></View>
                     </Pressable>
                   ) : null}
-                  <Pressable style={styles.colMeetupActionBtn} onPress={() => setShowJoinMeetupModal(true)}>
-                    <MaterialIcons name="qr-code" size={12} color={theme.accent} />
+                  <Pressable style={[styles.colMeetupActionBtn, styles.colMeetupJoinBtn]} onPress={() => setShowJoinMeetupModal(true)}>
+                    <MaterialIcons name="qr-code" size={16} color="#FFF" />
                   </Pressable>
                   <Pressable style={[styles.colMeetupActionBtn, { backgroundColor: theme.primary }]} onPress={() => router.push('/meetup/new' as any)}>
                     <MaterialIcons name="add" size={14} color="#FFF" />
@@ -967,7 +971,8 @@ const styles = StyleSheet.create({
   colMeetupTitleLeft: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   colMeetupTitle: { fontSize: 14, fontWeight: '700', color: theme.textSecondary },
   colMeetupActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  colMeetupActionBtn: { width: 26, height: 26, borderRadius: 8, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
+  colMeetupActionBtn: { width: 34, height: 34, borderRadius: 10, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
+  colMeetupJoinBtn: { backgroundColor: theme.accent, width: 36, height: 36, borderRadius: 12 },
   colMeetupBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: theme.error, minWidth: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
   colMeetupBadgeText: { fontSize: 8, fontWeight: '800', color: '#FFF' },
   colMeetupList: { flex: 1, gap: 6, backgroundColor: '#F0F9FF', borderRadius: 14, padding: 8 },

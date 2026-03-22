@@ -22,7 +22,7 @@ import theme, { blurhash } from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth, useAlert } from '@/template';
 import { useApp } from '@/contexts/AppContext';
-import { fetchLeaderboard, sortLeaderboard, LeaderboardPlayer, LeaderboardSort } from '@/services/leaderboardService';
+import { fetchLeaderboard, sortLeaderboard, LeaderboardPlayer, LeaderboardSort, LeaderboardPeriod } from '@/services/leaderboardService';
 import { fetchClubLeaderboard, sortClubLeaderboard, LeaderboardClub, ClubLeaderboardSort } from '@/services/clubLeaderboardService';
 import { fetchBoulesLeaderboard, aggregateBoulesData, sortBoulesLeaderboard, LeaderboardBoulesEntry, BoulesLeaderboardSort, BoulesLeaderboardMode } from '@/services/boulesLeaderboardService';
 import { getBrandVisual, getBrandImage } from '@/constants/boulesDatabase';
@@ -203,6 +203,8 @@ export default function LeaderboardScreen() {
   const [showFilters, setShowFilters] = useState(false);
   const [filterSearchText, setFilterSearchText] = useState('');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [periodFilter, setPeriodFilter] = useState<LeaderboardPeriod>('all');
+  const [periodLoading, setPeriodLoading] = useState(false);
 
   // ============ CLUBS STATE ============
   const [allClubs, setAllClubs] = useState<LeaderboardClub[]>([]);
@@ -230,15 +232,25 @@ export default function LeaderboardScreen() {
   const [loadingMeetups, setLoadingMeetups] = useState(false);
   const [invitingToMeetup, setInvitingToMeetup] = useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (period?: LeaderboardPeriod) => {
     setLoading(true);
-    const { players: lbP, error: err } = await fetchLeaderboard();
+    const { players: lbP, error: err } = await fetchLeaderboard(period);
     setAllPlayers(lbP);
     setError(err);
     setLoading(false);
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  const handlePeriodChange = useCallback(async (newPeriod: LeaderboardPeriod) => {
+    Haptics.selectionAsync();
+    setPeriodFilter(newPeriod);
+    setPeriodLoading(true);
+    const { players: lbP, error: err } = await fetchLeaderboard(newPeriod);
+    setAllPlayers(lbP);
+    setError(err);
+    setPeriodLoading(false);
+  }, []);
 
   // Lazy load clubs when tab is selected
   const loadClubs = useCallback(async () => {
@@ -545,6 +557,39 @@ export default function LeaderboardScreen() {
           </ScrollView>
 
           {/* Boules-specific: mode toggle + role filter */}
+          {/* Period filter for players */}
+          {activeTab === 'players' ? (
+            <View style={s.periodFilterSection}>
+              <View style={s.periodLabelRow}>
+                <MaterialIcons name="date-range" size={13} color={theme.textMuted} />
+                <Text style={s.periodLabelText}>{t('leaderboard', 'periodLabel')}</Text>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.sortRow}>
+                {([
+                  { id: 'all' as LeaderboardPeriod, label: t('leaderboard', 'periodAll') },
+                  { id: '7d' as LeaderboardPeriod, label: t('leaderboard', 'period7d') },
+                  { id: '30d' as LeaderboardPeriod, label: t('leaderboard', 'period30d') },
+                  { id: '3m' as LeaderboardPeriod, label: t('leaderboard', 'period3m') },
+                  { id: '6m' as LeaderboardPeriod, label: t('leaderboard', 'period6m') },
+                  { id: '1y' as LeaderboardPeriod, label: t('leaderboard', 'period1y') },
+                  { id: 'season' as LeaderboardPeriod, label: t('leaderboard', 'periodSeason') },
+                  { id: 'lastSeason' as LeaderboardPeriod, label: t('leaderboard', 'periodLastSeason') },
+                ]).map(chip => (
+                  <Pressable
+                    key={chip.id}
+                    style={[s.sortChip, periodFilter === chip.id && s.periodChipActive]}
+                    onPress={() => handlePeriodChange(chip.id)}
+                  >
+                    <Text style={[s.sortChipText, periodFilter === chip.id && s.periodChipTextActive]}>{chip.label}</Text>
+                    {periodLoading && periodFilter === chip.id ? (
+                      <ActivityIndicator size={10} color="#FFF" style={{ marginLeft: 4 }} />
+                    ) : null}
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+
           {activeTab === 'boules' ? (
             <View style={s.boulesExtraFilters}>
               <View style={s.boulesModePills}>
@@ -1323,6 +1368,13 @@ const s = StyleSheet.create({
 
   // Sort
   sortWrapper: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border, gap: 8 },
+
+  // Period filter
+  periodFilterSection: { paddingHorizontal: 0, paddingTop: 4, paddingBottom: 2 },
+  periodLabelRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, marginBottom: 6, paddingHorizontal: 16 },
+  periodLabelText: { fontSize: 11, fontWeight: '700' as const, color: theme.textMuted, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
+  periodChipActive: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
+  periodChipTextActive: { color: '#FFF' },
 
   // Boules extra filters
   boulesExtraFilters: { paddingHorizontal: 16, gap: 8 },

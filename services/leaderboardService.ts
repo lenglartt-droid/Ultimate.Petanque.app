@@ -31,20 +31,136 @@ export interface LeaderboardPlayer {
 
 export type LeaderboardSort = 'winRate' | 'matches' | 'tirRate' | 'pointRate' | 'carreauRate';
 
+export type LeaderboardPeriod = 'all' | '7d' | '30d' | '3m' | '6m' | '1y' | 'season' | 'lastSeason';
+
 export const LEADERBOARD_MIN_MATCHES = 10;
 
-export async function fetchLeaderboard(): Promise<{ players: LeaderboardPlayer[]; error: string | null }> {
+/** Compute date range for a given period */
+export function getPeriodDateRange(period: LeaderboardPeriod): { from: Date | null; to: Date | null; label: string } {
+  if (period === 'all') return { from: null, to: null, label: 'All time' };
+  const now = new Date();
+  const to = new Date();
+  let from = new Date();
+
+  switch (period) {
+    case '7d':
+      from.setDate(now.getDate() - 7);
+      return { from, to, label: '7 days' };
+    case '30d':
+      from.setDate(now.getDate() - 30);
+      return { from, to, label: '30 days' };
+    case '3m':
+      from.setMonth(now.getMonth() - 3);
+      return { from, to, label: '3 months' };
+    case '6m':
+      from.setMonth(now.getMonth() - 6);
+      return { from, to, label: '6 months' };
+    case '1y':
+      from.setFullYear(now.getFullYear() - 1);
+      return { from, to, label: '1 year' };
+    case 'season': {
+      // Season = September 1 to June 30
+      const year = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+      from = new Date(year, 8, 1); // Sept 1
+      const seasonEnd = new Date(year + 1, 5, 30, 23, 59, 59); // June 30
+      return { from, to: seasonEnd < now ? seasonEnd : to, label: `${year}/${year + 1}` };
+    }
+    case 'lastSeason': {
+      const year = now.getMonth() >= 8 ? now.getFullYear() - 1 : now.getFullYear() - 2;
+      from = new Date(year, 8, 1);
+      const seasonEnd = new Date(year + 1, 5, 30, 23, 59, 59);
+      return { from, to: seasonEnd, label: `${year}/${year + 1}` };
+    }
+    default:
+      return { from: null, to: null, label: 'All time' };
+  }
+}
+
+export async function fetchLeaderboard(period?: LeaderboardPeriod): Promise<{ players: LeaderboardPlayer[]; error: string | null }> {
   const supabase = getSupabaseClient();
+  const usePeriod = period && period !== 'all';
 
   try {
-    const { data, error } = await supabase
+    // Always fetch public players
+    const { data: playersData, error: playersError } = await supabase
       .from('players')
       .select('id, user_id, name, nickname, avatar, club, role, level, country, location, stats, boules, terrain_name, created_at')
       .eq('is_public', true);
 
-    if (error) return { players: [], error: error.message };
+    if (playersError) return { players: [], error: playersError.message };
 
-    const filteredData = (data || []).filter((p: any) => {
+    let playerStatsMap: Map<string, { matchesPlayed: number; wins: number; losses: number; winRate: number; tirRate: number; pointRate: number; carreauRate: number }> | null = null;
+
+    // If period filter, fetch matches within the date range and recompute stats
+    if (usePeriod) {
+      const range = getPeriodDateRange(period);
+      if (range.from) {
+        let matchQuery = supabase
+          .from('matches')
+          .select('id, team_a, team_b, winner, player_actions')
+          .gte('date', range.from.toISOString());
+        if (range.to) {
+          matchQuery = matchQuery.lte('date', range.to.toISOString());
+        }
+        const { data: matchesData } = await matchQuery;
+
+        if (matchesData && matchesData.length > 0) {
+          playerStatsMap = new Map();
+          const playerIds = new Set((playersData || []).map((p: any) => p.id));
+
+          for (const m of matchesData) {
+            const teamAPlayers: string[] = m.team_a?.players || [];
+            const teamBPlayers: string[] = m.team_b?.players || [];
+            const allMatchPlayers = [...teamAPlayers, ...teamBPlayers].filter(id => playerIds.has(id));
+
+            for (const pid of allMatchPlayers) {
+              if (!playerStatsMap.has(pid)) {
+                playerStatsMap.set(pid, { matchesPlayed: 0, wins: 0, losses: 0, winRate: 0, tirRate: 0, pointRate: 0, carreauRate: 0 });
+              }
+              const ps = playerStatsMap.get(pid)!;
+              ps.matchesPlayed++;
+              const inA = teamAPlayers.includes(pid);
+              if ((inA && m.winner === 'A') || (!inA && m.winner === 'B')) {
+                ps.wins++;
+              } else {
+                ps.losses++;
+              }
+              // Extract shot stats from player_actions
+              if (m.player_actions) {
+                const pa = (m.player_actions as any[]).find((a: any) => a.playerId === pid);
+                if (pa) {
+                  const prev = (playerStatsMap as any)['_raw_' + pid] || { tirs: 0, tirsSuccess: 0, points: 0, pointsSuccess: 0, carreaux: 0 };
+                  prev.tirs += pa.actions?.tirs || 0;
+                  prev.tirsSuccess += pa.actions?.tirsSuccess || 0;
+                  prev.points += pa.actions?.points || 0;
+                  prev.pointsSuccess += pa.actions?.pointsSuccess || 0;
+                  prev.carreaux += pa.actions?.carreaux || 0;
+                  (playerStatsMap as any)['_raw_' + pid] = prev;
+                }
+              }
+            }
+          }
+
+          // Compute rates
+          for (const [pid, ps] of playerStatsMap.entries()) {
+            if (pid.startsWith('_raw_')) continue;
+            ps.winRate = ps.matchesPlayed > 0 ? Math.round((ps.wins / ps.matchesPlayed) * 1000) / 10 : 0;
+            const raw = (playerStatsMap as any)['_raw_' + pid];
+            if (raw) {
+              ps.tirRate = raw.tirs > 0 ? Math.round((raw.tirsSuccess / raw.tirs) * 1000) / 10 : 0;
+              ps.pointRate = raw.points > 0 ? Math.round((raw.pointsSuccess / raw.points) * 1000) / 10 : 0;
+              ps.carreauRate = raw.tirsSuccess > 0 ? Math.round((raw.carreaux / raw.tirsSuccess) * 1000) / 10 : 0;
+            }
+          }
+        }
+      }
+    }
+
+    const filteredData = (playersData || []).filter((p: any) => {
+      if (playerStatsMap) {
+        const ps = playerStatsMap.get(p.id);
+        return ps && ps.matchesPlayed >= LEADERBOARD_MIN_MATCHES;
+      }
       const stats = p.stats || {};
       return (stats.matchesPlayed || 0) >= LEADERBOARD_MIN_MATCHES;
     });
@@ -79,7 +195,8 @@ export async function fetchLeaderboard(): Promise<{ players: LeaderboardPlayer[]
     }
 
     const players: LeaderboardPlayer[] = filteredData.map((p: any) => {
-        const stats = p.stats || {};
+        const periodStats = playerStatsMap?.get(p.id);
+        const stats = periodStats || p.stats || {};
         return {
           id: p.id,
           userId: p.user_id,
