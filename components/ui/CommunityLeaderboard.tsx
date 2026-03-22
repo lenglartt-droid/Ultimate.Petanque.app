@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, Modal } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
@@ -103,6 +103,8 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
     else { setBoulesLoaded(false); loadBoules(); }
   }, [activeTab, loadPlayers, loadClubs, loadBoules]);
 
+  const [showInfoModal, setShowInfoModal] = useState(false);
+
   return (
     <View style={s.section}>
       <View style={s.sectionHeader}>
@@ -119,6 +121,9 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
             <Text style={s.sectionSubtitle}>{boulesEntries.length} {t('leaderboard', 'publicBoulesCount')}</Text>
           ) : null}
         </View>
+        <Pressable style={s.infoBtn} onPress={() => setShowInfoModal(true)} hitSlop={8}>
+          <MaterialIcons name="info-outline" size={20} color={theme.textMuted} />
+        </Pressable>
       </View>
 
       {/* Tab switcher */}
@@ -210,7 +215,14 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                     onPress={() => router.push(isMe ? '/player/me' : `/player/${p.id}` as any)}
                   >
                     <View style={{ width: 28, alignItems: 'center' }}>
-                      {medalColor ? (
+                      {rank === 1 ? (
+                        <View style={s.crownContainer}>
+                          <Text style={s.crownEmoji}>👑</Text>
+                          <View style={[s.medal, { backgroundColor: '#FFD700' + '20' }]}>
+                            <Text style={[s.medalText, { color: '#FFD700' }]}>1</Text>
+                          </View>
+                        </View>
+                      ) : medalColor ? (
                         <View style={[s.medal, { backgroundColor: medalColor + '20' }]}>
                           <Text style={[s.medalText, { color: medalColor }]}>{rank}</Text>
                         </View>
@@ -336,7 +348,14 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                       onPress={() => router.push({ pathname: `/club-ranking/${club.id}`, params: { name: club.name } } as any)}
                     >
                       <View style={{ width: 28, alignItems: 'center' }}>
-                        {medalColor ? (
+                        {rank === 1 ? (
+                          <View style={s.crownContainer}>
+                            <Text style={s.crownEmoji}>👑</Text>
+                            <View style={[s.medal, { backgroundColor: '#FFD700' + '20' }]}>
+                              <Text style={[s.medalText, { color: '#FFD700' }]}>1</Text>
+                            </View>
+                          </View>
+                        ) : medalColor ? (
                           <View style={[s.medal, { backgroundColor: medalColor + '20' }]}>
                             <Text style={[s.medalText, { color: medalColor }]}>{rank}</Text>
                           </View>
@@ -395,7 +414,14 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                   <Animated.View key={entry.id} entering={FadeIn.duration(200).delay(idx * 60)}>
                     <Pressable style={[s.boulesRow, idx < 2 && { borderBottomWidth: 1, borderBottomColor: theme.border + '40' }]} onPress={() => router.push({ pathname: `/boules-ranking/${encodeURIComponent(entry.id)}`, params: { brand: entry.brand, model: entry.model || '', mode: 'brand' } } as any)}>
                       <View style={{ width: 28, alignItems: 'center' }}>
-                        {medalColor ? (
+                        {rank === 1 ? (
+                          <View style={s.crownContainer}>
+                            <Text style={s.crownEmoji}>👑</Text>
+                            <View style={[s.medal, { backgroundColor: '#FFD700' + '20' }]}>
+                              <Text style={[s.medalText, { color: '#FFD700' }]}>1</Text>
+                            </View>
+                          </View>
+                        ) : medalColor ? (
                           <View style={[s.medal, { backgroundColor: medalColor + '20' }]}>
                             <Text style={[s.medalText, { color: medalColor }]}>{rank}</Text>
                           </View>
@@ -450,6 +476,64 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
           <MaterialIcons name="arrow-forward" size={16} color="#D97706" />
         </Pressable>
       </View>
+
+      {/* Info Modal */}
+      <Modal visible={showInfoModal} animationType="fade" transparent onRequestClose={() => setShowInfoModal(false)}>
+        <Pressable style={s.infoOverlay} onPress={() => setShowInfoModal(false)}>
+          <Pressable style={s.infoContent} onPress={() => {}}>
+            <View style={s.infoHeader}>
+              <View style={s.infoHeaderIcon}>
+                <MaterialIcons name="info" size={22} color="#D97706" />
+              </View>
+              <Text style={s.infoHeaderTitle}>{t('leaderboard', 'infoTitle')}</Text>
+              <Pressable style={s.infoCloseBtn} onPress={() => setShowInfoModal(false)} hitSlop={8}>
+                <MaterialIcons name="close" size={20} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+            <ScrollView style={s.infoScroll} showsVerticalScrollIndicator={false}>
+              {/* Players section */}
+              <View style={s.infoSection}>
+                <View style={s.infoSectionHeader}>
+                  <MaterialIcons name="people" size={16} color={theme.primary} />
+                  <Text style={s.infoSectionTitle}>{t('leaderboard', 'infoPlayersTitle')}</Text>
+                </View>
+                <Text style={s.infoSectionDesc}>{t('leaderboard', 'infoPlayersDesc')}</Text>
+              </View>
+              {/* Clubs section */}
+              <View style={s.infoSection}>
+                <View style={s.infoSectionHeader}>
+                  <MaterialIcons name="home" size={16} color="#D97706" />
+                  <Text style={s.infoSectionTitle}>{t('leaderboard', 'infoClubsTitle')}</Text>
+                </View>
+                <Text style={s.infoSectionDesc}>{t('leaderboard', 'infoClubsDesc')}</Text>
+              </View>
+              {/* Boules section */}
+              <View style={s.infoSection}>
+                <View style={s.infoSectionHeader}>
+                  <MaterialIcons name="sports-baseball" size={16} color={theme.accent} />
+                  <Text style={s.infoSectionTitle}>{t('leaderboard', 'infoBoulesTitle')}</Text>
+                </View>
+                <Text style={s.infoSectionDesc}>{t('leaderboard', 'infoBoulesDesc')}</Text>
+              </View>
+              {/* Key notes */}
+              <View style={s.infoNotes}>
+                <View style={s.infoNoteItem}>
+                  <MaterialIcons name="sports" size={14} color={theme.textMuted} />
+                  <Text style={s.infoNoteText}>{t('leaderboard', 'infoMinMatches')}</Text>
+                </View>
+                <View style={s.infoNoteItem}>
+                  <MaterialIcons name="visibility" size={14} color={theme.textMuted} />
+                  <Text style={s.infoNoteText}>{t('leaderboard', 'infoPublicOnly')}</Text>
+                </View>
+                <View style={s.infoNoteItem}>
+                  <MaterialIcons name="auto-graph" size={14} color={theme.textMuted} />
+                  <Text style={s.infoNoteText}>{t('leaderboard', 'infoAutoCalc')}</Text>
+                </View>
+              </View>
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -536,4 +620,27 @@ const s = StyleSheet.create({
 
   seeFullBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: theme.border },
   seeFullBtnText: { fontSize: 14, fontWeight: '700', color: '#D97706' },
+
+  // Crown badge for #1
+  crownContainer: { alignItems: 'center', position: 'relative' as const },
+  crownEmoji: { fontSize: 12, lineHeight: 14, marginBottom: -2 },
+
+  // Info button
+  infoBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
+
+  // Info Modal
+  infoOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center' as const, paddingHorizontal: 24 },
+  infoContent: { backgroundColor: theme.surface, borderRadius: 20, maxHeight: '80%', overflow: 'hidden' as const },
+  infoHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: theme.border },
+  infoHeaderIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#D97706' + '12', alignItems: 'center' as const, justifyContent: 'center' as const },
+  infoHeaderTitle: { flex: 1, fontSize: 16, fontWeight: '700' as const, color: theme.textPrimary },
+  infoCloseBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: theme.backgroundSecondary, alignItems: 'center' as const, justifyContent: 'center' as const },
+  infoScroll: { paddingHorizontal: 20, paddingVertical: 16 },
+  infoSection: { marginBottom: 18 },
+  infoSectionHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 8 },
+  infoSectionTitle: { fontSize: 14, fontWeight: '700' as const, color: theme.textPrimary },
+  infoSectionDesc: { fontSize: 13, color: theme.textSecondary, lineHeight: 19 },
+  infoNotes: { backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 14, gap: 10, marginBottom: 8 },
+  infoNoteItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  infoNoteText: { fontSize: 12, color: theme.textMuted, flex: 1 },
 });

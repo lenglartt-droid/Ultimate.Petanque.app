@@ -60,7 +60,14 @@ const MemoizedPlayerRow = React.memo(function PlayerRow({
     <Pressable style={[s.row, isMe && s.rowMe]} onPress={onPress}>
       {/* Rank */}
       <View style={s.rankCol}>
-        {medalColor ? (
+        {rank === 1 ? (
+          <View style={s.crownContainer}>
+            <Text style={s.crownEmoji}>👑</Text>
+            <View style={[s.medal, { backgroundColor: '#FFD700' + '20' }]}>
+              <Text style={[s.medalText, { color: '#FFD700' }]}>1</Text>
+            </View>
+          </View>
+        ) : medalColor ? (
           <View style={[s.medal, { backgroundColor: medalColor + '20' }]}>
             <Text style={[s.medalText, { color: medalColor }]}>{rank}</Text>
           </View>
@@ -608,7 +615,14 @@ export default function LeaderboardScreen() {
                   <Pressable style={s.clubRow} onPress={() => router.push({ pathname: `/club-ranking/${club.id}`, params: { name: club.name } } as any)}>
                     <View style={s.clubHeader}>
                       <View style={s.rankCol}>
-                        {medalColor ? (
+                        {rank === 1 ? (
+                          <View style={s.crownContainer}>
+                            <Text style={s.crownEmoji}>👑</Text>
+                            <View style={[s.medal, { backgroundColor: '#FFD700' + '20' }]}>
+                              <Text style={[s.medalText, { color: '#FFD700' }]}>1</Text>
+                            </View>
+                          </View>
+                        ) : medalColor ? (
                           <View style={[s.medal, { backgroundColor: medalColor + '20' }]}>
                             <Text style={[s.medalText, { color: medalColor }]}>{rank}</Text>
                           </View>
@@ -725,7 +739,14 @@ export default function LeaderboardScreen() {
                   <Pressable style={s.boulesRow} onPress={() => router.push({ pathname: `/boules-ranking/${encodeURIComponent(entry.id)}`, params: { brand: entry.brand, model: entry.model || '', mode: boulesMode } } as any)}>
                     <View style={s.boulesHeader}>
                       <View style={s.rankCol}>
-                        {medalColor ? (
+                        {rank === 1 ? (
+                          <View style={s.crownContainer}>
+                            <Text style={s.crownEmoji}>👑</Text>
+                            <View style={[s.medal, { backgroundColor: '#FFD700' + '20' }]}>
+                              <Text style={[s.medalText, { color: '#FFD700' }]}>1</Text>
+                            </View>
+                          </View>
+                        ) : medalColor ? (
                           <View style={[s.medal, { backgroundColor: medalColor + '20' }]}>
                             <Text style={[s.medalText, { color: medalColor }]}>{rank}</Text>
                           </View>
@@ -1428,6 +1449,10 @@ const s = StyleSheet.create({
   mipEmptyText: { fontSize: 15, fontWeight: '600', color: theme.textPrimary, marginTop: 12 },
   mipEmptyDesc: { fontSize: 13, color: theme.textSecondary, textAlign: 'center', marginTop: 4, marginBottom: 16, paddingHorizontal: 16 },
   mipCreateBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
+
+  // Crown badge for #1
+  crownContainer: { alignItems: 'center' as const, position: 'relative' as const },
+  crownEmoji: { fontSize: 14, lineHeight: 16, marginBottom: -2 },
 
   // Club rows
   clubRow: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 14, marginBottom: 10, ...theme.shadows.card },
