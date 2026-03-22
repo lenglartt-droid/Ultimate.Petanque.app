@@ -309,6 +309,7 @@ export default function AdminPromosScreen() {
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsPeriod, setAnalyticsPeriod] = useState<'today' | '7d' | '30d' | 'all'>('all');
   const [ambBadgeFilter, setAmbBadgeFilter] = useState<'all' | 'ambassador' | 'sponsor' | 'partner'>('all');
+  const [ambSortBy, setAmbSortBy] = useState<'name' | 'created' | 'impressions' | 'clicks'>('name');
   const [sparklineData, setSparklineData] = useState<Map<string, number[]>>(new Map());
   const [sponsoredChallengeCounts, setSponsoredChallengeCounts] = useState<Map<string, number>>(new Map());
   const [sponsoredChallengeDaily, setSponsoredChallengeDaily] = useState<Map<string, number[]>>(new Map());
@@ -1288,6 +1289,34 @@ export default function AdminPromosScreen() {
                     })}
                   </View>
 
+                  {/* Sort options */}
+                  <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12, alignItems: 'center' }}>
+                    <MaterialIcons name="sort" size={14} color={theme.textMuted} />
+                    {([
+                      { key: 'name' as const, label: fr ? 'Nom' : 'Name', icon: 'sort-by-alpha' as const },
+                      { key: 'created' as const, label: fr ? 'Date' : 'Date', icon: 'event' as const },
+                      { key: 'impressions' as const, label: 'Impr.', icon: 'visibility' as const },
+                      { key: 'clicks' as const, label: fr ? 'Clics' : 'Clicks', icon: 'touch-app' as const },
+                    ]).map(s => {
+                      const isActive = ambSortBy === s.key;
+                      return (
+                        <Pressable
+                          key={s.key}
+                          style={{
+                            flexDirection: 'row', alignItems: 'center', gap: 5,
+                            paddingHorizontal: 12, paddingVertical: 7, borderRadius: 18,
+                            backgroundColor: isActive ? theme.textPrimary : theme.backgroundSecondary,
+                            borderWidth: 1.5, borderColor: isActive ? theme.textPrimary : theme.border,
+                          }}
+                          onPress={() => { Haptics.selectionAsync(); setAmbSortBy(s.key); }}
+                        >
+                          <MaterialIcons name={s.icon} size={12} color={isActive ? '#FFF' : theme.textSecondary} />
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: isActive ? '#FFF' : theme.textSecondary }}>{s.label}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
                   {ambassadorsLoading ? (
                     <View style={{ alignItems: 'center', paddingVertical: 24 }}>
                       <ActivityIndicator size="large" color="#7C3AED" />
@@ -1308,7 +1337,21 @@ export default function AdminPromosScreen() {
                       </Pressable>
                     </View>
                   ) : (
-                    ambassadors.filter(amb => ambBadgeFilter === 'all' || amb.badge_type === ambBadgeFilter).map((amb) => (
+                    ambassadors.filter(amb => ambBadgeFilter === 'all' || amb.badge_type === ambBadgeFilter).sort((a, b) => {
+                      if (ambSortBy === 'name') return (a.display_name || '').localeCompare(b.display_name || '');
+                      if (ambSortBy === 'created') return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+                      if (ambSortBy === 'impressions') {
+                        const ai = ambassadorAnalytics.get(a.id)?.bannerImpressions || 0;
+                        const bi = ambassadorAnalytics.get(b.id)?.bannerImpressions || 0;
+                        return bi - ai;
+                      }
+                      if (ambSortBy === 'clicks') {
+                        const ac = ambassadorAnalytics.get(a.id)?.socialClicks || 0;
+                        const bc = ambassadorAnalytics.get(b.id)?.socialClicks || 0;
+                        return bc - ac;
+                      }
+                      return 0;
+                    }).map((amb) => (
                       <View key={amb.id} style={[styles.promoCard, { borderLeftWidth: 3, borderLeftColor: '#7C3AED' }]}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 }}>
                           {amb.photo ? (
