@@ -18,11 +18,13 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'expo-image';
 import { getSupabaseClient } from '@/template';
 import { useAuth, useAlert } from '@/template';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
-import theme from '@/constants/theme';
+import theme, { blurhash } from '@/constants/theme';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchAllReports, updateReportStatus, PlayerReport } from '@/services/reportService';
@@ -30,6 +32,8 @@ import { fetchSuspiciousPlayers, updateSuspiciousStatus } from '@/services/trust
 import { getTrustScoreColor } from '@/services/trustScoreService';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { fetchDeviceClusters, getDeviceRegistrationStats, DeviceCluster } from '@/services/multiAccountService';
+import { fetchAmbassadors, invalidateAmbassadorCache, Ambassador } from '@/services/ambassadorService';
+import { uploadImageToStorage } from '@/services/storageService';
 
 interface PromoCode {
   id: string;
@@ -207,6 +211,144 @@ export default function AdminPromosScreen() {
   }, [fr, showAlert]);
 
   const suspiciousFlaggedCount = suspiciousPlayers.filter(p => p.status === 'flagged' || p.status === 'watch').length;
+
+  // ===== AMBASSADORS STATE =====
+  const [showAmbassadorSection, setShowAmbassadorSection] = useState(false);
+  const [ambassadors, setAmbassadors] = useState<any[]>([]);
+  const [ambassadorsLoading, setAmbassadorsLoading] = useState(false);
+  const [ambassadorsLoaded, setAmbassadorsLoaded] = useState(false);
+  const [showAmbassadorModal, setShowAmbassadorModal] = useState(false);
+  const [editingAmbassador, setEditingAmbassador] = useState<any>(null);
+  const [ambForm, setAmbForm] = useState({ displayName: '', bio: '', photo: '', youtubeUrl: '', tiktokUrl: '', instagramHandle: '', twitterHandle: '', websiteUrl: '', isFeatured: false, playerId: '' });
+  const [ambSaving, setAmbSaving] = useState(false);
+  const [ambDeleting, setAmbDeleting] = useState<string | null>(null);
+  const [ambPlayerSearch, setAmbPlayerSearch] = useState('');
+  const [ambPlayerResults, setAmbPlayerResults] = useState<any[]>([]);
+  const [ambSearching, setAmbSearching] = useState(false);
+  const [ambUploadingPhoto, setAmbUploadingPhoto] = useState(false);
+
+  const loadAmbassadors = useCallback(async () => {
+    if (ambassadorsLoaded) return;
+    setAmbassadorsLoading(true);
+    invalidateAmbassadorCache();
+    const { data, error } = await supabase.from('ambassadors').select('*').order('sort_order', { ascending: true });
+    if (!error && data) setAmbassadors(data);
+    setAmbassadorsLoading(false);
+    setAmbassadorsLoaded(true);
+  }, [ambassadorsLoaded, supabase]);
+
+  const handleSearchPlayers = useCallback(async (query: string) => {
+    setAmbPlayerSearch(query);
+    if (query.trim().length < 2) { setAmbPlayerResults([]); return; }
+    setAmbSearching(true);
+    const { data } = await supabase.from('players').select('id, name, user_id, avatar, club, role').ilike('name', `%${query.trim()}%`).limit(10);
+    setAmbPlayerResults(data || []);
+    setAmbSearching(false);
+  }, [supabase]);
+
+  const handlePickAmbassadorPhoto = useCallback(async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') { showAlert(fr ? 'Permission requise' : 'Permission required'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+    if (!result.canceled && result.assets[0]) {
+      setAmbUploadingPhoto(true);
+      const url = await uploadImageToStorage('avatars', `avatars/ambassadors/${Date.now()}`, result.assets[0].uri);
+      setAmbUploadingPhoto(false);
+      if (url) { setAmbForm(prev => ({ ...prev, photo: url })); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }
+      else { showAlert(fr ? 'Erreur upload' : 'Upload error'); }
+    }
+  }, [fr, showAlert]);
+
+  const handleOpenAmbassadorForm = useCallback((amb?: any) => {
+    if (amb) {
+      setEditingAmbassador(amb);
+      setAmbForm({
+        displayName: amb.display_name || '',
+        bio: amb.bio || '',
+        photo: amb.photo || '',
+        youtubeUrl: amb.youtube_url || '',
+        tiktokUrl: amb.tiktok_url || '',
+        instagramHandle: amb.instagram_handle || '',
+        twitterHandle: amb.twitter_handle || '',
+        websiteUrl: amb.website_url || '',
+        isFeatured: amb.is_featured || false,
+        playerId: amb.player_id || '',
+      });
+    } else {
+      setEditingAmbassador(null);
+      setAmbForm({ displayName: '', bio: '', photo: '', youtubeUrl: '', tiktokUrl: '', instagramHandle: '', twitterHandle: '', websiteUrl: '', isFeatured: false, playerId: '' });
+    }
+    setAmbPlayerSearch('');
+    setAmbPlayerResults([]);
+    setShowAmbassadorModal(true);
+  }, []);
+
+  const handleSaveAmbassador = useCallback(async () => {
+    if (!ambForm.displayName.trim()) { showAlert(fr ? 'Nom requis' : 'Name required'); return; }
+    setAmbSaving(true);
+    try {
+      const payload: any = {
+        display_name: ambForm.displayName.trim(),
+        bio: ambForm.bio.trim() || null,
+        photo: ambForm.photo || null,
+        youtube_url: ambForm.youtubeUrl.trim() || null,
+        tiktok_url: ambForm.tiktokUrl.trim() || null,
+        instagram_handle: ambForm.instagramHandle.trim() || null,
+        twitter_handle: ambForm.twitterHandle.trim() || null,
+        website_url: ambForm.websiteUrl.trim() || null,
+        is_featured: ambForm.isFeatured,
+        player_id: ambForm.playerId || null,
+        updated_at: new Date().toISOString(),
+      };
+      if (editingAmbassador) {
+        const { error } = await supabase.from('ambassadors').update(payload).eq('id', editingAmbassador.id);
+        if (error) throw error;
+      } else {
+        // Need a user_id — use the linked player's user_id or current admin
+        let userId = user?.id;
+        if (ambForm.playerId) {
+          const { data: pl } = await supabase.from('players').select('user_id').eq('id', ambForm.playerId).single();
+          if (pl?.user_id) userId = pl.user_id;
+        }
+        payload.user_id = userId;
+        const { error } = await supabase.from('ambassadors').insert(payload);
+        if (error) throw error;
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowAmbassadorModal(false);
+      setAmbassadorsLoaded(false);
+      invalidateAmbassadorCache();
+      loadAmbassadors();
+    } catch (e: any) {
+      showAlert(fr ? 'Erreur' : 'Error', e.message);
+    } finally { setAmbSaving(false); }
+  }, [ambForm, editingAmbassador, supabase, user, fr, showAlert, loadAmbassadors]);
+
+  const handleDeleteAmbassador = useCallback(async (id: string) => {
+    showAlert(
+      fr ? 'Supprimer cet ambassadeur ?' : 'Delete this ambassador?',
+      fr ? 'Cette action est irreversible.' : 'This action cannot be undone.',
+      [
+        { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
+        { text: fr ? 'Supprimer' : 'Delete', style: 'destructive', onPress: async () => {
+          setAmbDeleting(id);
+          const { error } = await supabase.from('ambassadors').delete().eq('id', id);
+          setAmbDeleting(null);
+          if (error) { showAlert(fr ? 'Erreur' : 'Error', error.message); }
+          else { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); setAmbassadors(prev => prev.filter(a => a.id !== id)); invalidateAmbassadorCache(); }
+        }},
+      ]
+    );
+  }, [supabase, fr, showAlert]);
+
+  const handleToggleAmbassadorFeatured = useCallback(async (amb: any) => {
+    Haptics.selectionAsync();
+    const newVal = !amb.is_featured;
+    setAmbassadors(prev => prev.map(a => a.id === amb.id ? { ...a, is_featured: newVal } : a));
+    const { error } = await supabase.from('ambassadors').update({ is_featured: newVal, updated_at: new Date().toISOString() }).eq('id', amb.id);
+    if (error) { setAmbassadors(prev => prev.map(a => a.id === amb.id ? { ...a, is_featured: amb.is_featured } : a)); showAlert(fr ? 'Erreur' : 'Error', error.message); }
+    else { invalidateAmbassadorCache(); }
+  }, [supabase, fr, showAlert]);
 
   // ===== MULTI-ACCOUNT STATE =====
   const [showMultiAccountSection, setShowMultiAccountSection] = React.useState(false);
@@ -642,6 +784,18 @@ export default function AdminPromosScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>{fr ? 'Codes promo' : 'Promo Codes'}</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
+          {/* Ambassador button */}
+          <Pressable
+            style={[styles.bulkBtn, ambassadors.length > 0 && { backgroundColor: '#7C3AED' + '15' }]}
+            onPress={() => { Haptics.selectionAsync(); setShowAmbassadorSection(!showAmbassadorSection); if (!ambassadorsLoaded) { setAmbassadorsLoaded(false); loadAmbassadors(); } }}
+          >
+            <MaterialIcons name="verified" size={20} color={ambassadors.length > 0 ? '#7C3AED' : theme.primary} />
+            {ambassadors.length > 0 ? (
+              <View style={{ position: 'absolute', top: 2, right: 2, backgroundColor: '#7C3AED', width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 9, fontWeight: '800', color: '#FFF' }}>{ambassadors.length}</Text>
+              </View>
+            ) : null}
+          </Pressable>
           {/* Multi-account button */}
           <Pressable
             style={[styles.bulkBtn, multiAccountCount > 0 && { backgroundColor: '#7C3AED' + '15' }]}
@@ -799,6 +953,119 @@ export default function AdminPromosScreen() {
                   </View>
                 )}
               </Animated.View>
+
+              {/* ===== AMBASSADORS SECTION ===== */}
+              {showAmbassadorSection ? (
+                <Animated.View entering={FadeIn.duration(300)} style={{ marginBottom: 20 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: '#7C3AED' + '15', alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialIcons name="verified" size={18} color="#7C3AED" />
+                    </View>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textPrimary, flex: 1 }}>
+                      {fr ? 'AMBASSADEURS' : 'AMBASSADORS'} ({ambassadors.length})
+                    </Text>
+                    <Pressable
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#7C3AED', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 }}
+                      onPress={() => handleOpenAmbassadorForm()}
+                    >
+                      <MaterialIcons name="add" size={14} color="#FFF" />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFF' }}>{fr ? 'Ajouter' : 'Add'}</Text>
+                    </Pressable>
+                    <Pressable onPress={() => setShowAmbassadorSection(false)} hitSlop={8}>
+                      <MaterialIcons name="close" size={20} color={theme.textSecondary} />
+                    </Pressable>
+                  </View>
+
+                  {ambassadorsLoading ? (
+                    <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+                      <ActivityIndicator size="large" color="#7C3AED" />
+                    </View>
+                  ) : ambassadors.length === 0 ? (
+                    <View style={{ alignItems: 'center', paddingVertical: 24, backgroundColor: theme.surface, borderRadius: 16, padding: 20 }}>
+                      <MaterialIcons name="verified" size={40} color={theme.textMuted} />
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginTop: 8 }}>{fr ? 'Aucun ambassadeur' : 'No ambassadors'}</Text>
+                      <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 4, textAlign: 'center' }}>
+                        {fr ? 'Ajoutez votre premier ambassadeur pour le mettre en avant dans l\'app.' : 'Add your first ambassador to feature them in the app.'}
+                      </Text>
+                      <Pressable
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#7C3AED', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, marginTop: 16 }}
+                        onPress={() => handleOpenAmbassadorForm()}
+                      >
+                        <MaterialIcons name="add" size={18} color="#FFF" />
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFF' }}>{fr ? 'Ajouter un ambassadeur' : 'Add an ambassador'}</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    ambassadors.map((amb) => (
+                      <View key={amb.id} style={[styles.promoCard, { borderLeftWidth: 3, borderLeftColor: '#7C3AED' }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+                          {amb.photo ? (
+                            <Image source={{ uri: amb.photo }} style={{ width: 48, height: 48, borderRadius: 16 }} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
+                          ) : (
+                            <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: '#7C3AED' + '20', alignItems: 'center', justifyContent: 'center' }}>
+                              <Text style={{ fontSize: 20, fontWeight: '800', color: '#7C3AED' }}>{(amb.display_name || '?').charAt(0)}</Text>
+                            </View>
+                          )}
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>{amb.display_name}</Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#7C3AED' + '12', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
+                                <MaterialIcons name="verified" size={10} color="#7C3AED" />
+                                <Text style={{ fontSize: 9, fontWeight: '700', color: '#7C3AED' }}>AMB</Text>
+                              </View>
+                            </View>
+                            {amb.bio ? <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 2 }} numberOfLines={1}>{amb.bio}</Text> : null}
+                          </View>
+                          <Switch
+                            value={amb.is_featured}
+                            onValueChange={() => handleToggleAmbassadorFeatured(amb)}
+                            trackColor={{ false: theme.border, true: '#7C3AED' + '60' }}
+                            thumbColor={amb.is_featured ? '#7C3AED' : theme.textMuted}
+                          />
+                        </View>
+
+                        {/* Social links summary */}
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                          {amb.is_featured ? (
+                            <View style={{ backgroundColor: '#7C3AED' + '15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                              <Text style={{ fontSize: 10, fontWeight: '700', color: '#7C3AED' }}>{fr ? 'En vedette' : 'Featured'}</Text>
+                            </View>
+                          ) : (
+                            <View style={{ backgroundColor: theme.textMuted + '15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                              <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textMuted }}>{fr ? 'Standard' : 'Standard'}</Text>
+                            </View>
+                          )}
+                          {amb.youtube_url ? <View style={{ backgroundColor: '#FF0000' + '12', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}><Text style={{ fontSize: 10, fontWeight: '600', color: '#FF0000' }}>YouTube</Text></View> : null}
+                          {amb.tiktok_url ? <View style={{ backgroundColor: '#000' + '08', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}><Text style={{ fontSize: 10, fontWeight: '600', color: '#000' }}>TikTok</Text></View> : null}
+                          {amb.instagram_handle ? <View style={{ backgroundColor: '#E4405F' + '12', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}><Text style={{ fontSize: 10, fontWeight: '600', color: '#E4405F' }}>@{amb.instagram_handle.replace('@', '')}</Text></View> : null}
+                          {amb.twitter_handle ? <View style={{ backgroundColor: '#1DA1F2' + '12', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}><Text style={{ fontSize: 10, fontWeight: '600', color: '#1DA1F2' }}>{amb.twitter_handle}</Text></View> : null}
+                          {amb.website_url ? <View style={{ backgroundColor: theme.primary + '12', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}><Text style={{ fontSize: 10, fontWeight: '600', color: theme.primary }}>Web</Text></View> : null}
+                          {amb.player_id ? <View style={{ backgroundColor: theme.success + '12', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}><Text style={{ fontSize: 10, fontWeight: '600', color: theme.success }}>{fr ? 'Joueur lie' : 'Linked player'}</Text></View> : null}
+                        </View>
+
+                        {/* Actions */}
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <Pressable
+                            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, borderRadius: 10, backgroundColor: '#7C3AED' + '12' }}
+                            onPress={() => handleOpenAmbassadorForm(amb)}
+                          >
+                            <MaterialIcons name="edit" size={14} color="#7C3AED" />
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#7C3AED' }}>{fr ? 'Modifier' : 'Edit'}</Text>
+                          </Pressable>
+                          <Pressable
+                            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, borderRadius: 10, backgroundColor: theme.error + '12' }}
+                            onPress={() => handleDeleteAmbassador(amb.id)}
+                            disabled={ambDeleting === amb.id}
+                          >
+                            {ambDeleting === amb.id ? <ActivityIndicator size="small" color={theme.error} /> : <MaterialIcons name="delete" size={14} color={theme.error} />}
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: theme.error }}>{fr ? 'Supprimer' : 'Delete'}</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    ))
+                  )}
+                </Animated.View>
+              ) : null}
 
               {/* Multi-Account Detection Section */}
               {showMultiAccountSection ? (
@@ -1429,6 +1696,188 @@ export default function AdminPromosScreen() {
                     <Text style={styles.modalCreateText}>
                       {fr ? `Generer ${parseInt(bulkCount) || 0} codes` : `Generate ${parseInt(bulkCount) || 0} codes`}
                     </Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Ambassador Form Modal */}
+      <Modal visible={showAmbassadorModal} animationType="slide" transparent onRequestClose={() => { if (!ambSaving) setShowAmbassadorModal(false); }}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={[styles.modalHeaderIcon, { backgroundColor: '#7C3AED' + '15' }]}>
+                <MaterialIcons name="verified" size={22} color="#7C3AED" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>{editingAmbassador ? (fr ? 'Modifier ambassadeur' : 'Edit Ambassador') : (fr ? 'Nouvel ambassadeur' : 'New Ambassador')}</Text>
+                <Text style={styles.modalSubtitle}>{fr ? 'Profil enrichi visible dans l\'app' : 'Enhanced profile visible in the app'}</Text>
+              </View>
+              <Pressable style={styles.modalCloseBtn} onPress={() => { if (!ambSaving) setShowAmbassadorModal(false); }}>
+                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+
+            <ScrollView style={{ paddingHorizontal: 20 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }} keyboardShouldPersistTaps="handled">
+              {/* Photo */}
+              <View style={{ alignItems: 'center', marginTop: 16, marginBottom: 10 }}>
+                <Pressable onPress={handlePickAmbassadorPhoto} disabled={ambUploadingPhoto}>
+                  {ambUploadingPhoto ? (
+                    <View style={{ width: 80, height: 80, borderRadius: 24, backgroundColor: '#7C3AED' + '15', alignItems: 'center', justifyContent: 'center' }}>
+                      <ActivityIndicator size="large" color="#7C3AED" />
+                    </View>
+                  ) : ambForm.photo ? (
+                    <View style={{ position: 'relative' }}>
+                      <Image source={{ uri: ambForm.photo }} style={{ width: 80, height: 80, borderRadius: 24 }} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
+                      <View style={{ position: 'absolute', bottom: -4, right: -4, width: 24, height: 24, borderRadius: 12, backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: theme.surface }}>
+                        <MaterialIcons name="camera-alt" size={12} color="#FFF" />
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={{ width: 80, height: 80, borderRadius: 24, backgroundColor: '#7C3AED' + '15', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#7C3AED' + '30', borderStyle: 'dashed' as any }}>
+                      <MaterialIcons name="camera-alt" size={28} color="#7C3AED" />
+                    </View>
+                  )}
+                </Pressable>
+                {ambForm.photo ? (
+                  <Pressable onPress={() => setAmbForm(prev => ({ ...prev, photo: '' }))} style={{ marginTop: 6 }}>
+                    <Text style={{ fontSize: 11, color: theme.error, fontWeight: '600' }}>{fr ? 'Supprimer la photo' : 'Remove photo'}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+
+              {/* Display name */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>{fr ? 'Nom affiche' : 'Display name'} *</Text>
+                <TextInput style={styles.formInput} value={ambForm.displayName} onChangeText={(v) => setAmbForm(prev => ({ ...prev, displayName: v }))} placeholder="Ex: Marco Pétanque" placeholderTextColor={theme.textMuted} autoCapitalize="words" />
+              </View>
+
+              {/* Bio */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Bio</Text>
+                <TextInput style={[styles.formInput, { minHeight: 70, textAlignVertical: 'top', paddingTop: 12 }]} value={ambForm.bio} onChangeText={(v) => setAmbForm(prev => ({ ...prev, bio: v }))} placeholder={fr ? 'Courte description...' : 'Short description...'} placeholderTextColor={theme.textMuted} multiline numberOfLines={3} />
+              </View>
+
+              {/* Link to player */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>{fr ? 'Lier a un joueur' : 'Link to player'}</Text>
+                {ambForm.playerId ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.success + '10', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.success + '30' }}>
+                    <MaterialIcons name="person" size={20} color={theme.success} />
+                    <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: theme.textPrimary }}>{ambForm.playerId.slice(0, 8)}...</Text>
+                    <Pressable onPress={() => setAmbForm(prev => ({ ...prev, playerId: '' }))} hitSlop={8}>
+                      <MaterialIcons name="close" size={18} color={theme.textMuted} />
+                    </Pressable>
+                  </View>
+                ) : (
+                  <>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.backgroundSecondary, borderRadius: 12, paddingHorizontal: 12, borderWidth: 1, borderColor: theme.border }}>
+                      <MaterialIcons name="search" size={18} color={theme.textMuted} />
+                      <TextInput
+                        style={{ flex: 1, paddingVertical: 12, fontSize: 14, color: theme.textPrimary }}
+                        value={ambPlayerSearch}
+                        onChangeText={handleSearchPlayers}
+                        placeholder={fr ? 'Rechercher un joueur...' : 'Search a player...'}
+                        placeholderTextColor={theme.textMuted}
+                      />
+                      {ambSearching ? <ActivityIndicator size="small" color={theme.primary} /> : null}
+                    </View>
+                    {ambPlayerResults.length > 0 ? (
+                      <View style={{ backgroundColor: theme.surface, borderRadius: 12, marginTop: 8, borderWidth: 1, borderColor: theme.border, maxHeight: 180 }}>
+                        <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                          {ambPlayerResults.map((pl) => (
+                            <Pressable
+                              key={pl.id}
+                              style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: theme.border + '40' }}
+                              onPress={() => {
+                                setAmbForm(prev => ({ ...prev, playerId: pl.id, displayName: prev.displayName || pl.name }));
+                                setAmbPlayerResults([]);
+                                setAmbPlayerSearch('');
+                                Haptics.selectionAsync();
+                              }}
+                            >
+                              {pl.avatar ? (
+                                <Image source={{ uri: pl.avatar }} style={{ width: 32, height: 32, borderRadius: 10 }} contentFit="cover" cachePolicy="memory-disk" />
+                              ) : (
+                                <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center' }}>
+                                  <Text style={{ fontSize: 12, fontWeight: '700', color: theme.primary }}>{pl.name.charAt(0)}</Text>
+                                </View>
+                              )}
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary }}>{pl.name}</Text>
+                                <Text style={{ fontSize: 11, color: theme.textMuted }}>{pl.role}{pl.club ? ` \u2022 ${pl.club}` : ''}</Text>
+                              </View>
+                              <MaterialIcons name="add-circle-outline" size={20} color={theme.primary} />
+                            </Pressable>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    ) : null}
+                  </>
+                )}
+              </View>
+
+              {/* Social links */}
+              <Text style={[styles.formLabel, { marginTop: 16, marginBottom: 4 }]}>{fr ? 'Reseaux sociaux' : 'Social links'}</Text>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.border, marginTop: 8 }}>
+                <MaterialIcons name="play-arrow" size={20} color="#FF0000" />
+                <TextInput style={{ flex: 1, paddingVertical: 12, fontSize: 14, color: theme.textPrimary }} value={ambForm.youtubeUrl} onChangeText={(v) => setAmbForm(prev => ({ ...prev, youtubeUrl: v }))} placeholder="https://youtube.com/@..." placeholderTextColor={theme.textMuted} autoCapitalize="none" autoCorrect={false} />
+              </View>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.border, marginTop: 8 }}>
+                <MaterialIcons name="music-note" size={20} color="#000" />
+                <TextInput style={{ flex: 1, paddingVertical: 12, fontSize: 14, color: theme.textPrimary }} value={ambForm.tiktokUrl} onChangeText={(v) => setAmbForm(prev => ({ ...prev, tiktokUrl: v }))} placeholder="https://tiktok.com/@..." placeholderTextColor={theme.textMuted} autoCapitalize="none" autoCorrect={false} />
+              </View>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.border, marginTop: 8 }}>
+                <MaterialIcons name="camera-alt" size={20} color="#E4405F" />
+                <TextInput style={{ flex: 1, paddingVertical: 12, fontSize: 14, color: theme.textPrimary }} value={ambForm.instagramHandle} onChangeText={(v) => setAmbForm(prev => ({ ...prev, instagramHandle: v }))} placeholder="@username" placeholderTextColor={theme.textMuted} autoCapitalize="none" autoCorrect={false} />
+              </View>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.border, marginTop: 8 }}>
+                <MaterialIcons name="alternate-email" size={20} color="#1DA1F2" />
+                <TextInput style={{ flex: 1, paddingVertical: 12, fontSize: 14, color: theme.textPrimary }} value={ambForm.twitterHandle} onChangeText={(v) => setAmbForm(prev => ({ ...prev, twitterHandle: v }))} placeholder="@handle" placeholderTextColor={theme.textMuted} autoCapitalize="none" autoCorrect={false} />
+              </View>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.border, marginTop: 8 }}>
+                <MaterialIcons name="language" size={20} color={theme.primary} />
+                <TextInput style={{ flex: 1, paddingVertical: 12, fontSize: 14, color: theme.textPrimary }} value={ambForm.websiteUrl} onChangeText={(v) => setAmbForm(prev => ({ ...prev, websiteUrl: v }))} placeholder="https://..." placeholderTextColor={theme.textMuted} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
+              </View>
+
+              {/* Featured toggle */}
+              <View style={[styles.formToggleRow, { marginTop: 16 }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.formLabel}>{fr ? 'Mettre en vedette' : 'Featured'}</Text>
+                  <Text style={styles.formHint}>{fr ? 'Visible sur la page d\'accueil' : 'Visible on the home page'}</Text>
+                </View>
+                <Switch
+                  value={ambForm.isFeatured}
+                  onValueChange={(v) => setAmbForm(prev => ({ ...prev, isFeatured: v }))}
+                  trackColor={{ false: theme.border, true: '#7C3AED' + '60' }}
+                  thumbColor={ambForm.isFeatured ? '#7C3AED' : theme.textMuted}
+                />
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <Pressable style={styles.modalCancelBtn} onPress={() => { if (!ambSaving) setShowAmbassadorModal(false); }} disabled={ambSaving}>
+                <Text style={[styles.modalCancelText, ambSaving && { opacity: 0.4 }]}>{fr ? 'Annuler' : 'Cancel'}</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalCreateBtn, { backgroundColor: '#7C3AED' }, (!ambForm.displayName.trim() || ambSaving) && { opacity: 0.5 }]}
+                onPress={handleSaveAmbassador}
+                disabled={!ambForm.displayName.trim() || ambSaving}
+              >
+                {ambSaving ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <MaterialIcons name={editingAmbassador ? 'check' : 'add'} size={18} color="#FFF" />
+                    <Text style={styles.modalCreateText}>{editingAmbassador ? (fr ? 'Sauvegarder' : 'Save') : (fr ? 'Ajouter' : 'Add')}</Text>
                   </>
                 )}
               </Pressable>
