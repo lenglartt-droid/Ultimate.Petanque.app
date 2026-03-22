@@ -26,6 +26,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { preloadInterstitial } from '@/services/adService';
 import CommunityLeaderboard from '@/components/ui/CommunityLeaderboard';
 import { getFeaturedAmbassadors, Ambassador } from '@/services/ambassadorService';
+import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { getMyMeetups, getInvitedMeetups, getMeetupResponses, getPendingInvitationsCount, findMeetupByCode, Meetup, MeetupResponse } from '@/services/meetupService';
 import { config } from '@/constants/config';
 import { Share as RNShare, Platform } from 'react-native';
@@ -152,6 +153,18 @@ export default function HomeScreen() {
       }, 5000);
     }
   }, [bannerIndex, featuredAmbassadors.length, screenWidth]);
+
+  // Track banner impressions (deduplicated per session)
+  const trackedBannerImpressions = useRef(new Set<string>());
+  useEffect(() => {
+    if (featuredAmbassadors.length > 0 && bannerIndex >= 0 && bannerIndex < featuredAmbassadors.length) {
+      const amb = featuredAmbassadors[bannerIndex];
+      if (amb && !trackedBannerImpressions.current.has(amb.id)) {
+        trackedBannerImpressions.current.add(amb.id);
+        trackAmbassadorEvent(amb.id, 'banner_impression');
+      }
+    }
+  }, [bannerIndex, featuredAmbassadors]);
 
   // Status priority
   const statusOrder: Record<string, number> = { 'En cours': 0, 'À venir': 1, 'Terminé': 2 };

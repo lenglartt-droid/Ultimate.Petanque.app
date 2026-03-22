@@ -28,6 +28,7 @@ import { useAlert } from '@/template';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup as MeetupType } from '@/services/meetupService';
 import { submitReport, REPORT_REASONS, ReportReason } from '@/services/reportService';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
+import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { computeQuickTrustScore, getTrustScoreColor, getTrustLevelLabel, TrustScoreData } from '@/services/trustScoreService';
 import { LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
 import Svg, { Polygon, Line, Circle as SvgCircle, Text as SvgText, G } from 'react-native-svg';
@@ -453,31 +454,31 @@ export default function PlayerDetailScreen() {
               {ambassadorData && (ambassadorData.youtubeUrl || ambassadorData.tiktokUrl || ambassadorData.instagramHandle || ambassadorData.twitterHandle || ambassadorData.websiteUrl) ? (
                 <View style={s.ambSocialRow}>
                   {ambassadorData.youtubeUrl ? (
-                    <Pressable style={[s.ambSocialBtn, { backgroundColor: '#FF0000' + '12' }]} onPress={() => Linking.openURL(ambassadorData.youtubeUrl!)}>
+                    <Pressable style={[s.ambSocialBtn, { backgroundColor: '#FF0000' + '12' }]} onPress={() => { trackAmbassadorEvent(ambassadorData.id, 'social_click', 'youtube'); Linking.openURL(ambassadorData.youtubeUrl!); }}>
                       <MaterialIcons name="play-arrow" size={16} color="#FF0000" />
                       <Text style={[s.ambSocialText, { color: '#FF0000' }]}>YouTube</Text>
                     </Pressable>
                   ) : null}
                   {ambassadorData.tiktokUrl ? (
-                    <Pressable style={[s.ambSocialBtn, { backgroundColor: '#000' + '08' }]} onPress={() => Linking.openURL(ambassadorData.tiktokUrl!)}>
+                    <Pressable style={[s.ambSocialBtn, { backgroundColor: '#000' + '08' }]} onPress={() => { trackAmbassadorEvent(ambassadorData.id, 'social_click', 'tiktok'); Linking.openURL(ambassadorData.tiktokUrl!); }}>
                       <MaterialIcons name="music-note" size={16} color="#000" />
                       <Text style={[s.ambSocialText, { color: '#000' }]}>TikTok</Text>
                     </Pressable>
                   ) : null}
                   {ambassadorData.instagramHandle ? (
-                    <Pressable style={[s.ambSocialBtn, { backgroundColor: '#E4405F' + '12' }]} onPress={() => { const h = ambassadorData.instagramHandle!.replace('@', ''); Linking.openURL(`https://instagram.com/${h}`); }}>
+                    <Pressable style={[s.ambSocialBtn, { backgroundColor: '#E4405F' + '12' }]} onPress={() => { trackAmbassadorEvent(ambassadorData.id, 'social_click', 'instagram'); const h = ambassadorData.instagramHandle!.replace('@', ''); Linking.openURL(`https://instagram.com/${h}`); }}>
                       <MaterialIcons name="camera-alt" size={16} color="#E4405F" />
                       <Text style={[s.ambSocialText, { color: '#E4405F' }]}>@{ambassadorData.instagramHandle!.replace('@', '')}</Text>
                     </Pressable>
                   ) : null}
                   {ambassadorData.twitterHandle ? (
-                    <Pressable style={[s.ambSocialBtn, { backgroundColor: '#1DA1F2' + '12' }]} onPress={() => { const h = ambassadorData.twitterHandle!.replace('@', ''); Linking.openURL(`https://x.com/${h}`); }}>
+                    <Pressable style={[s.ambSocialBtn, { backgroundColor: '#1DA1F2' + '12' }]} onPress={() => { trackAmbassadorEvent(ambassadorData.id, 'social_click', 'twitter'); const h = ambassadorData.twitterHandle!.replace('@', ''); Linking.openURL(`https://x.com/${h}`); }}>
                       <MaterialIcons name="alternate-email" size={16} color="#1DA1F2" />
                       <Text style={[s.ambSocialText, { color: '#1DA1F2' }]}>{ambassadorData.twitterHandle}</Text>
                     </Pressable>
                   ) : null}
                   {ambassadorData.websiteUrl ? (
-                    <Pressable style={[s.ambSocialBtn, { backgroundColor: theme.primary + '10' }]} onPress={() => { const u = ambassadorData.websiteUrl!.startsWith('http') ? ambassadorData.websiteUrl! : `https://${ambassadorData.websiteUrl}`; Linking.openURL(u); }}>
+                    <Pressable style={[s.ambSocialBtn, { backgroundColor: theme.primary + '10' }]} onPress={() => { trackAmbassadorEvent(ambassadorData.id, 'social_click', 'website'); const u = ambassadorData.websiteUrl!.startsWith('http') ? ambassadorData.websiteUrl! : `https://${ambassadorData.websiteUrl}`; Linking.openURL(u); }}>
                       <MaterialIcons name="language" size={16} color={theme.primary} />
                       <Text style={[s.ambSocialText, { color: theme.primary }]}>Web</Text>
                     </Pressable>

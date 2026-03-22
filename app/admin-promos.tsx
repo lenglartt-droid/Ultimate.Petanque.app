@@ -33,6 +33,7 @@ import { getTrustScoreColor } from '@/services/trustScoreService';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { fetchDeviceClusters, getDeviceRegistrationStats, DeviceCluster } from '@/services/multiAccountService';
 import { fetchAmbassadors, invalidateAmbassadorCache, Ambassador } from '@/services/ambassadorService';
+import { fetchAmbassadorAnalytics, AmbassadorAnalytics } from '@/services/ambassadorAnalyticsService';
 import { uploadImageToStorage } from '@/services/storageService';
 
 interface PromoCode {
@@ -226,6 +227,8 @@ export default function AdminPromosScreen() {
   const [ambPlayerResults, setAmbPlayerResults] = useState<any[]>([]);
   const [ambSearching, setAmbSearching] = useState(false);
   const [ambUploadingPhoto, setAmbUploadingPhoto] = useState(false);
+  const [ambassadorAnalytics, setAmbassadorAnalytics] = useState<Map<string, AmbassadorAnalytics>>(new Map());
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   const loadAmbassadors = useCallback(async () => {
     if (ambassadorsLoaded) return;
@@ -235,6 +238,12 @@ export default function AdminPromosScreen() {
     if (!error && data) setAmbassadors(data);
     setAmbassadorsLoading(false);
     setAmbassadorsLoaded(true);
+    // Load analytics in parallel
+    setAnalyticsLoading(true);
+    fetchAmbassadorAnalytics().then(({ stats }) => {
+      setAmbassadorAnalytics(stats);
+      setAnalyticsLoading(false);
+    });
   }, [ambassadorsLoaded, supabase]);
 
   const handleSearchPlayers = useCallback(async (query: string) => {
@@ -1042,6 +1051,51 @@ export default function AdminPromosScreen() {
                           {amb.website_url ? <View style={{ backgroundColor: theme.primary + '12', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}><Text style={{ fontSize: 10, fontWeight: '600', color: theme.primary }}>Web</Text></View> : null}
                           {amb.player_id ? <View style={{ backgroundColor: theme.success + '12', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}><Text style={{ fontSize: 10, fontWeight: '600', color: theme.success }}>{fr ? 'Joueur lie' : 'Linked player'}</Text></View> : null}
                         </View>
+
+                        {/* Analytics stats */}
+                        {(() => {
+                          const analytics = ambassadorAnalytics.get(amb.id);
+                          return (
+                            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10, backgroundColor: '#7C3AED' + '06', borderRadius: 12, padding: 10, borderWidth: 1, borderColor: '#7C3AED' + '12' }}>
+                              <View style={{ flex: 1, alignItems: 'center' }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 2 }}>
+                                  <MaterialIcons name="visibility" size={12} color="#7C3AED" />
+                                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#7C3AED' }}>{analytics?.bannerImpressions || 0}</Text>
+                                </View>
+                                <Text style={{ fontSize: 8, fontWeight: '600', color: theme.textMuted, textTransform: 'uppercase' }}>Impr.</Text>
+                              </View>
+                              <View style={{ width: 1, backgroundColor: '#7C3AED' + '15', height: 28, alignSelf: 'center' }} />
+                              <View style={{ flex: 1, alignItems: 'center' }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 2 }}>
+                                  <MaterialIcons name="person" size={12} color={theme.primary} />
+                                  <Text style={{ fontSize: 16, fontWeight: '800', color: theme.primary }}>{analytics?.profileViews || 0}</Text>
+                                </View>
+                                <Text style={{ fontSize: 8, fontWeight: '600', color: theme.textMuted, textTransform: 'uppercase' }}>{fr ? 'Vues' : 'Views'}</Text>
+                              </View>
+                              <View style={{ width: 1, backgroundColor: '#7C3AED' + '15', height: 28, alignSelf: 'center' }} />
+                              <View style={{ flex: 1, alignItems: 'center' }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 2 }}>
+                                  <MaterialIcons name="touch-app" size={12} color={theme.success} />
+                                  <Text style={{ fontSize: 16, fontWeight: '800', color: theme.success }}>{analytics?.socialClicks || 0}</Text>
+                                </View>
+                                <Text style={{ fontSize: 8, fontWeight: '600', color: theme.textMuted, textTransform: 'uppercase' }}>{fr ? 'Clics' : 'Clicks'}</Text>
+                              </View>
+                              {analytics && analytics.socialClicks > 0 ? (
+                                <>
+                                  <View style={{ width: 1, backgroundColor: '#7C3AED' + '15', height: 28, alignSelf: 'center' }} />
+                                  <View style={{ flex: 1.5, justifyContent: 'center', paddingLeft: 4 }}>
+                                    {Object.entries(analytics.socialBreakdown).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([platform, count]) => (
+                                      <View key={platform} style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                                        <Text style={{ fontSize: 9, fontWeight: '700', color: theme.textSecondary, textTransform: 'capitalize' }}>{platform}</Text>
+                                        <Text style={{ fontSize: 9, fontWeight: '800', color: theme.textPrimary }}>{count}</Text>
+                                      </View>
+                                    ))}
+                                  </View>
+                                </>
+                              ) : null}
+                            </View>
+                          );
+                        })()}
 
                         {/* Actions */}
                         <View style={{ flexDirection: 'row', gap: 8 }}>
