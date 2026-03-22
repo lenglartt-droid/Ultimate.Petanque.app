@@ -43,6 +43,9 @@ export default function HomeScreen() {
   // Ambassadors state
   const [featuredAmbassadors, setFeaturedAmbassadors] = useState<Ambassador[]>([]);
   const [ambassadorsLoaded, setAmbassadorsLoaded] = useState(false);
+  const [bannerIndex, setBannerIndex] = useState(0);
+  const bannerScrollRef = useRef<ScrollView>(null);
+  const bannerAutoplayRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Meetups state
   const [meetups, setMeetups] = useState<(Meetup & { _source: 'created' | 'invited'; _acceptedCount?: number; _maxParticipants?: number })[]>([]);
@@ -118,6 +121,37 @@ export default function HomeScreen() {
       setAmbassadorsLoaded(true);
     });
   }, []);
+
+  // Auto-rotate ambassador banner
+  useEffect(() => {
+    if (featuredAmbassadors.length <= 1) return;
+    bannerAutoplayRef.current = setInterval(() => {
+      setBannerIndex(prev => {
+        const next = (prev + 1) % featuredAmbassadors.length;
+        bannerScrollRef.current?.scrollTo({ x: next * (screenWidth - 32), animated: true });
+        return next;
+      });
+    }, 5000);
+    return () => { if (bannerAutoplayRef.current) clearInterval(bannerAutoplayRef.current); };
+  }, [featuredAmbassadors.length, screenWidth]);
+
+  const handleBannerScroll = useCallback((e: any) => {
+    const offset = e.nativeEvent.contentOffset.x;
+    const cardW = screenWidth - 32;
+    const idx = Math.round(offset / cardW);
+    if (idx !== bannerIndex && idx >= 0 && idx < featuredAmbassadors.length) {
+      setBannerIndex(idx);
+      // Reset autoplay timer on manual scroll
+      if (bannerAutoplayRef.current) clearInterval(bannerAutoplayRef.current);
+      bannerAutoplayRef.current = setInterval(() => {
+        setBannerIndex(prev => {
+          const next = (prev + 1) % featuredAmbassadors.length;
+          bannerScrollRef.current?.scrollTo({ x: next * (screenWidth - 32), animated: true });
+          return next;
+        });
+      }, 5000);
+    }
+  }, [bannerIndex, featuredAmbassadors.length, screenWidth]);
 
   // Status priority
   const statusOrder: Record<string, number> = { 'En cours': 0, 'À venir': 1, 'Terminé': 2 };
@@ -625,7 +659,7 @@ export default function HomeScreen() {
 
 
 
-        {/* ========== AMBASSADORS TO FOLLOW ========== */}
+        {/* ========== AMBASSADORS ROTATING BANNER ========== */}
         {ambassadorsLoaded && featuredAmbassadors.length > 0 ? (
           <Animated.View entering={FadeIn.duration(400).delay(165)} style={[styles.section, isTablet && styles.sectionTablet]}>
             <View style={styles.ambassadorSectionHeader}>
@@ -640,41 +674,129 @@ export default function HomeScreen() {
                 <MaterialIcons name="chevron-right" size={16} color="#7C3AED" />
               </Pressable>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.ambassadorScroll}>
-              {featuredAmbassadors.map((amb, idx) => (
-                <Pressable
-                  key={amb.id}
-                  style={({ pressed }) => [styles.ambassadorCard, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
-                  onPress={() => amb.playerId ? router.push(`/player/${amb.playerId}` as any) : router.push('/partners' as any)}
-                >
-                  <View style={styles.ambassadorAvatarWrap}>
-                    {amb.photo ? (
-                      <Image source={{ uri: amb.photo }} style={styles.ambassadorAvatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
-                    ) : (
-                      <View style={[styles.ambassadorAvatar, { backgroundColor: '#7C3AED' + '20', alignItems: 'center', justifyContent: 'center' }]}>
-                        <Text style={{ fontSize: 20, fontWeight: '800', color: '#7C3AED' }}>{amb.displayName.charAt(0)}</Text>
+
+            {/* Rotating Banner Carousel */}
+            <View style={styles.bannerCarousel}>
+              <ScrollView
+                ref={bannerScrollRef}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={handleBannerScroll}
+                scrollEventThrottle={16}
+                decelerationRate="fast"
+                snapToInterval={screenWidth - 32}
+                snapToAlignment="start"
+                contentContainerStyle={{ gap: 0 }}
+              >
+                {featuredAmbassadors.map((amb, idx) => (
+                  <Pressable
+                    key={amb.id}
+                    style={[styles.bannerSlide, { width: screenWidth - 32 }]}
+                    onPress={() => amb.playerId ? router.push(`/player/${amb.playerId}` as any) : router.push({ pathname: '/partners', params: { scrollTo: amb.id } } as any)}
+                  >
+                    <LinearGradient
+                      colors={['#7C3AED', '#9333EA', '#A855F7']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.bannerGradient}
+                    >
+                      {/* Sponsor tag */}
+                      <View style={styles.bannerSponsorTag}>
+                        <MaterialIcons name="campaign" size={10} color="rgba(255,255,255,0.7)" />
+                        <Text style={styles.bannerSponsorText}>{language === 'fr' ? 'Ambassadeur' : 'Ambassador'}</Text>
                       </View>
-                    )}
-                    <View style={styles.ambassadorVerifiedBadge}>
-                      <MaterialIcons name="verified" size={12} color="#7C3AED" />
-                    </View>
-                  </View>
-                  <Text style={styles.ambassadorName} numberOfLines={1}>{amb.displayName}</Text>
-                  {amb.role ? <Text style={styles.ambassadorRole}>{t('roles', amb.role)}</Text> : null}
-                  {amb.stats ? (
-                    <View style={styles.ambassadorStatRow}>
-                      <Text style={styles.ambassadorStatValue}>{amb.stats.winRate}%</Text>
-                      <Text style={styles.ambassadorStatLabel}>{language === 'fr' ? 'Victoires' : 'Win rate'}</Text>
-                    </View>
-                  ) : null}
-                  <View style={styles.ambassadorSocialRow}>
-                    {amb.youtubeUrl ? <View style={[styles.ambassadorSocialDot, { backgroundColor: '#FF0000' + '20' }]}><MaterialIcons name="play-arrow" size={10} color="#FF0000" /></View> : null}
-                    {amb.instagramHandle ? <View style={[styles.ambassadorSocialDot, { backgroundColor: '#E4405F' + '20' }]}><MaterialIcons name="camera-alt" size={10} color="#E4405F" /></View> : null}
-                    {amb.tiktokUrl ? <View style={[styles.ambassadorSocialDot, { backgroundColor: '#000' + '15' }]}><MaterialIcons name="music-note" size={10} color="#000" /></View> : null}
-                  </View>
-                </Pressable>
-              ))}
-            </ScrollView>
+
+                      <View style={styles.bannerContent}>
+                        {/* Left: Avatar */}
+                        <View style={styles.bannerAvatarWrap}>
+                          {amb.photo ? (
+                            <Image source={{ uri: amb.photo }} style={styles.bannerAvatar} contentFit="cover" transition={300} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
+                          ) : (
+                            <View style={[styles.bannerAvatar, { backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }]}>
+                              <Text style={{ fontSize: 28, fontWeight: '800', color: '#FFF' }}>{amb.displayName.charAt(0)}</Text>
+                            </View>
+                          )}
+                          <View style={styles.bannerVerifiedIcon}>
+                            <MaterialIcons name="verified" size={16} color="#FFF" />
+                          </View>
+                        </View>
+
+                        {/* Right: Info */}
+                        <View style={styles.bannerInfo}>
+                          <Text style={styles.bannerName} numberOfLines={1}>{amb.displayName}</Text>
+                          {amb.bio ? <Text style={styles.bannerBio} numberOfLines={2}>{amb.bio}</Text> : null}
+                          {!amb.bio && amb.role ? <Text style={styles.bannerBio} numberOfLines={1}>{t('roles', amb.role)}{amb.club ? ` \u2022 ${amb.club}` : ''}</Text> : null}
+
+                          {/* Stats mini bar */}
+                          {amb.stats ? (
+                            <View style={styles.bannerStatsRow}>
+                              <View style={styles.bannerStatItem}>
+                                <Text style={styles.bannerStatVal}>{amb.stats.winRate}%</Text>
+                                <Text style={styles.bannerStatLbl}>{language === 'fr' ? 'Vict.' : 'Win'}</Text>
+                              </View>
+                              <View style={styles.bannerStatDivider} />
+                              <View style={styles.bannerStatItem}>
+                                <Text style={styles.bannerStatVal}>{amb.stats.matchesPlayed}</Text>
+                                <Text style={styles.bannerStatLbl}>{language === 'fr' ? 'Matchs' : 'Matches'}</Text>
+                              </View>
+                              {amb.stats.tirRate > 0 ? (
+                                <>
+                                  <View style={styles.bannerStatDivider} />
+                                  <View style={styles.bannerStatItem}>
+                                    <Text style={styles.bannerStatVal}>{amb.stats.tirRate}%</Text>
+                                    <Text style={styles.bannerStatLbl}>Tir</Text>
+                                  </View>
+                                </>
+                              ) : null}
+                            </View>
+                          ) : null}
+
+                          {/* Social icons row */}
+                          <View style={styles.bannerSocialsRow}>
+                            {amb.youtubeUrl ? <View style={styles.bannerSocialChip}><MaterialIcons name="play-arrow" size={12} color="#FFF" /><Text style={styles.bannerSocialChipText}>YouTube</Text></View> : null}
+                            {amb.instagramHandle ? <View style={styles.bannerSocialChip}><MaterialIcons name="camera-alt" size={12} color="#FFF" /><Text style={styles.bannerSocialChipText}>@{amb.instagramHandle.replace('@', '').substring(0, 12)}</Text></View> : null}
+                            {amb.tiktokUrl ? <View style={styles.bannerSocialChip}><MaterialIcons name="music-note" size={12} color="#FFF" /><Text style={styles.bannerSocialChipText}>TikTok</Text></View> : null}
+                            {amb.twitterHandle ? <View style={styles.bannerSocialChip}><MaterialIcons name="alternate-email" size={12} color="#FFF" /><Text style={styles.bannerSocialChipText}>{amb.twitterHandle}</Text></View> : null}
+                          </View>
+                        </View>
+                      </View>
+
+                      {/* CTA arrow */}
+                      <View style={styles.bannerCta}>
+                        <Text style={styles.bannerCtaText}>{language === 'fr' ? 'Voir le profil' : 'View profile'}</Text>
+                        <MaterialIcons name="arrow-forward" size={14} color="rgba(255,255,255,0.8)" />
+                      </View>
+                    </LinearGradient>
+                  </Pressable>
+                ))}
+              </ScrollView>
+
+              {/* Dot indicators */}
+              {featuredAmbassadors.length > 1 ? (
+                <View style={styles.bannerDots}>
+                  {featuredAmbassadors.map((_, i) => (
+                    <Pressable
+                      key={i}
+                      style={[styles.bannerDot, i === bannerIndex && styles.bannerDotActive]}
+                      onPress={() => {
+                        setBannerIndex(i);
+                        bannerScrollRef.current?.scrollTo({ x: i * (screenWidth - 32), animated: true });
+                        if (bannerAutoplayRef.current) clearInterval(bannerAutoplayRef.current);
+                        bannerAutoplayRef.current = setInterval(() => {
+                          setBannerIndex(prev => {
+                            const next = (prev + 1) % featuredAmbassadors.length;
+                            bannerScrollRef.current?.scrollTo({ x: next * (screenWidth - 32), animated: true });
+                            return next;
+                          });
+                        }, 5000);
+                      }}
+                      hitSlop={8}
+                    />
+                  ))}
+                </View>
+              ) : null}
+            </View>
           </Animated.View>
         ) : null}
 
@@ -1213,18 +1335,33 @@ const styles = StyleSheet.create({
   ambassadorSectionIcon: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#7C3AED' + '15', alignItems: 'center' as const, justifyContent: 'center' as const },
   ambassadorSeeAllBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 2 },
   ambassadorSeeAllText: { fontSize: 13, fontWeight: '600' as const, color: '#7C3AED' },
-  ambassadorScroll: { gap: 12, paddingRight: 16 },
-  ambassadorCard: { width: 140, backgroundColor: theme.surface, borderRadius: 18, padding: 14, alignItems: 'center' as const, borderWidth: 1.5, borderColor: '#7C3AED' + '15', ...theme.shadows.card },
-  ambassadorAvatarWrap: { position: 'relative' as const, marginBottom: 10 },
-  ambassadorAvatar: { width: 60, height: 60, borderRadius: 20, overflow: 'hidden' as const },
-  ambassadorVerifiedBadge: { position: 'absolute' as const, bottom: -3, right: -3, width: 20, height: 20, borderRadius: 10, backgroundColor: '#7C3AED', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 2, borderColor: theme.surface },
-  ambassadorName: { fontSize: 14, fontWeight: '700' as const, color: theme.textPrimary, textAlign: 'center' as const, marginBottom: 2 },
-  ambassadorRole: { fontSize: 11, color: theme.textSecondary, marginBottom: 6 },
-  ambassadorStatRow: { backgroundColor: '#7C3AED' + '08', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, marginBottom: 8 },
-  ambassadorStatValue: { fontSize: 14, fontWeight: '800' as const, color: '#7C3AED', textAlign: 'center' as const },
-  ambassadorStatLabel: { fontSize: 9, color: theme.textMuted, textAlign: 'center' as const },
-  ambassadorSocialRow: { flexDirection: 'row' as const, gap: 4 },
-  ambassadorSocialDot: { width: 22, height: 22, borderRadius: 11, alignItems: 'center' as const, justifyContent: 'center' as const },
+
+  // ========== ROTATING BANNER ==========
+  bannerCarousel: { overflow: 'hidden' as const, borderRadius: 20 },
+  bannerSlide: { borderRadius: 20, overflow: 'hidden' as const },
+  bannerGradient: { borderRadius: 20, padding: 18, position: 'relative' as const },
+  bannerSponsorTag: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: 'rgba(255,255,255,0.12)', alignSelf: 'flex-start' as const, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, marginBottom: 12 },
+  bannerSponsorText: { fontSize: 10, fontWeight: '700' as const, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase' as const, letterSpacing: 0.5 },
+  bannerContent: { flexDirection: 'row' as const, gap: 14, marginBottom: 12 },
+  bannerAvatarWrap: { position: 'relative' as const },
+  bannerAvatar: { width: 72, height: 72, borderRadius: 22, overflow: 'hidden' as const, borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.3)' },
+  bannerVerifiedIcon: { position: 'absolute' as const, bottom: -4, right: -4, width: 26, height: 26, borderRadius: 13, backgroundColor: '#7C3AED', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 2.5, borderColor: '#9333EA' },
+  bannerInfo: { flex: 1, justifyContent: 'center' as const },
+  bannerName: { fontSize: 18, fontWeight: '800' as const, color: '#FFF', marginBottom: 3 },
+  bannerBio: { fontSize: 12, color: 'rgba(255,255,255,0.75)', lineHeight: 17, marginBottom: 8 },
+  bannerStatsRow: { flexDirection: 'row' as const, alignItems: 'center' as const, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 10, paddingVertical: 6, paddingHorizontal: 8, marginBottom: 8, alignSelf: 'flex-start' as const, gap: 0 },
+  bannerStatItem: { alignItems: 'center' as const, paddingHorizontal: 8 },
+  bannerStatVal: { fontSize: 14, fontWeight: '800' as const, color: '#FFF' },
+  bannerStatLbl: { fontSize: 8, fontWeight: '600' as const, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' as const },
+  bannerStatDivider: { width: 1, height: 18, backgroundColor: 'rgba(255,255,255,0.15)' },
+  bannerSocialsRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6 },
+  bannerSocialChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
+  bannerSocialChipText: { fontSize: 10, fontWeight: '600' as const, color: 'rgba(255,255,255,0.85)' },
+  bannerCta: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'flex-end' as const, gap: 4 },
+  bannerCtaText: { fontSize: 12, fontWeight: '600' as const, color: 'rgba(255,255,255,0.8)' },
+  bannerDots: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, paddingTop: 12 },
+  bannerDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#7C3AED' + '25' },
+  bannerDotActive: { width: 24, backgroundColor: '#7C3AED', borderRadius: 4 },
   createTournamentBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.carreauColor, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14 },
   createTournamentBtnText: { fontSize: 15, fontWeight: '600', color: '#FFF' },
 });
