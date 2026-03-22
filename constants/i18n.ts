@@ -2453,6 +2453,23 @@ export const translations = {
     clubActivity: { fr: 'Activité', en: 'Activity' },
     noBoulesPlayers: { fr: 'Aucun joueur pour ces boules', en: 'No players for these boules' },
     noBoulesPlayersDesc: { fr: 'Les joueurs publics utilisant cette marque apparaitront ici', en: 'Public players using this brand will appear here' },
+    // Events leaderboard
+    tabEvents: { fr: 'Evenements', en: 'Events' },
+    noEvents: { fr: 'Aucun evenement termine', en: 'No completed events' },
+    noEventsDesc: { fr: 'Les classements des evenements sponsorises apparaitront ici apres publication des resultats', en: 'Sponsored event rankings will appear here after results are published' },
+    eventParticipations: { fr: 'Participations', en: 'Participations' },
+    eventWins: { fr: 'Victoires', en: 'Wins' },
+    eventPodiums: { fr: 'Podiums', en: 'Podiums' },
+    eventAvgScore: { fr: 'Score moy.', en: 'Avg score' },
+    eventBestScore: { fr: 'Meilleur', en: 'Best' },
+    eventRecentTitle: { fr: 'Evenements recents', en: 'Recent events' },
+    eventGlobalRanking: { fr: 'Classement global', en: 'Global ranking' },
+    publicEventsCount: { fr: 'participant(s) classe(s)', en: 'ranked participant(s)' },
+    seeAllEvents: { fr: 'Voir tous les evenements', en: 'See all events' },
+    sortByWins: { fr: 'Victoires', en: 'Wins' },
+    sortByPodiums: { fr: 'Podiums', en: 'Podiums' },
+    sortByAvgScore: { fr: 'Score moyen', en: 'Avg Score' },
+    sortByParticipations: { fr: 'Participations', en: 'Participations' },
   },
 
   statsExtra: {

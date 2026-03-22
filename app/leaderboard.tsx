@@ -29,8 +29,9 @@ import { getBrandVisual, getBrandImage } from '@/constants/boulesDatabase';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services/meetupService';
 import AdBanner from '@/components/ui/AdBanner';
 import { getTrustScoreColor } from '@/services/trustScoreService';
+import { fetchEventLeaderboard, EventLeaderboardEntry, SponsoredEvent } from '@/services/sponsoredEventService';
 
-type LeaderboardTab = 'players' | 'clubs' | 'boules';
+type LeaderboardTab = 'players' | 'clubs' | 'boules' | 'events';
 
 const PAGE_SIZE = 30;
 
@@ -228,6 +229,15 @@ export default function LeaderboardScreen() {
   const [boulesSearch, setBoulesSearch] = useState('');
   const [boulesLoaded, setBoulesLoaded] = useState(false);
 
+  // ============ EVENTS STATE ============
+  const [eventEntries, setEventEntries] = useState<EventLeaderboardEntry[]>([]);
+  const [recentEvents, setRecentEvents] = useState<SponsoredEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+  const [eventsLoaded, setEventsLoaded] = useState(false);
+  const [eventSortBy, setEventSortBy] = useState<'wins' | 'podiums' | 'avgScore' | 'participations'>('wins');
+  const [eventSearch, setEventSearch] = useState('');
+
   // Meetup invitation
   const [showMeetupPicker, setShowMeetupPicker] = useState(false);
   const [meetupPickerUserId, setMeetupPickerUserId] = useState<string | null>(null);
@@ -289,10 +299,23 @@ export default function LeaderboardScreen() {
     setBoulesLoaded(true);
   }, []);
 
+  // Lazy load events
+  const loadEvents = useCallback(async () => {
+    if (eventsLoaded) return;
+    setEventsLoading(true);
+    const { entries: evts, recentEvents: recEvts, error: err } = await fetchEventLeaderboard();
+    setEventEntries(evts);
+    setRecentEvents(recEvts);
+    setEventsError(err);
+    setEventsLoading(false);
+    setEventsLoaded(true);
+  }, [eventsLoaded]);
+
   useEffect(() => {
     if (activeTab === 'clubs' && !clubsLoaded) loadClubs(periodFilter);
     if (activeTab === 'boules' && !boulesLoaded) loadBoules(periodFilter);
-  }, [activeTab, clubsLoaded, boulesLoaded, loadClubs, loadBoules, periodFilter]);
+    if (activeTab === 'events') loadEvents();
+  }, [activeTab, clubsLoaded, boulesLoaded, loadClubs, loadBoules, loadEvents, periodFilter]);
 
   // ============ CLUBS COMPUTED ============
   const filteredClubs = useMemo(() => {
@@ -314,6 +337,30 @@ export default function LeaderboardScreen() {
     }
     return sortBoulesLeaderboard(result, boulesSortBy);
   }, [boulesRawData, boulesMode, boulesRoleFilter, boulesSearch, boulesSortBy]);
+
+  // ============ EVENTS COMPUTED ============
+  const filteredEvents = useMemo(() => {
+    let result = [...eventEntries];
+    if (eventSearch.trim()) {
+      const q = eventSearch.toLowerCase().trim();
+      result = result.filter(e => e.userName.toLowerCase().includes(q));
+    }
+    // Sort
+    result.sort((a, b) => {
+      if (eventSortBy === 'wins') {
+        if (b.wins !== a.wins) return b.wins - a.wins;
+        if (b.podiums !== a.podiums) return b.podiums - a.podiums;
+        return b.avgScore - a.avgScore;
+      }
+      if (eventSortBy === 'podiums') {
+        if (b.podiums !== a.podiums) return b.podiums - a.podiums;
+        return b.wins - a.wins;
+      }
+      if (eventSortBy === 'avgScore') return b.avgScore - a.avgScore;
+      return b.eventsCompleted - a.eventsCompleted;
+    });
+    return result;
+  }, [eventEntries, eventSearch, eventSortBy]);
 
   // Extract unique cities for filter
   const uniqueCities = useMemo(() => {
@@ -465,7 +512,9 @@ export default function LeaderboardScreen() {
                   ? `${filteredSorted.length} ${t('leaderboard', 'publicPlayersCount')}${myRank ? ` \u2022 #${myRank}` : ''}`
                   : activeTab === 'clubs'
                     ? `${filteredClubs.length} ${t('leaderboard', 'publicClubsCount')}`
-                    : `${boulesEntries.length} ${boulesMode === 'brand' ? t('leaderboard', 'publicBoulesCount') : t('leaderboard', 'publicModelsCount')}`}
+                    : activeTab === 'events'
+                      ? `${filteredEvents.length} ${t('leaderboard', 'publicEventsCount')}`
+                      : `${boulesEntries.length} ${boulesMode === 'brand' ? t('leaderboard', 'publicBoulesCount') : t('leaderboard', 'publicModelsCount')}`}
               </Text>
             </View>
           </View>
@@ -475,6 +524,7 @@ export default function LeaderboardScreen() {
             {([{ id: 'players' as LeaderboardTab, label: t('leaderboard', 'tabPlayers'), icon: 'people' },
               { id: 'clubs' as LeaderboardTab, label: t('leaderboard', 'tabClubs'), icon: 'home' },
               { id: 'boules' as LeaderboardTab, label: t('leaderboard', 'tabBoules'), icon: 'sports-baseball' },
+              { id: 'events' as LeaderboardTab, label: t('leaderboard', 'tabEvents'), icon: 'campaign' },
             ]).map(tab => (
               <Pressable
                 key={tab.id}
@@ -495,14 +545,14 @@ export default function LeaderboardScreen() {
                 style={s.searchInput}
                 placeholder={t('leaderboard', 'searchPlaceholder')}
                 placeholderTextColor="rgba(255,255,255,0.4)"
-                value={activeTab === 'players' ? search : activeTab === 'clubs' ? clubSearch : boulesSearch}
-                onChangeText={activeTab === 'players' ? setSearch : activeTab === 'clubs' ? setClubSearch : setBoulesSearch}
+                value={activeTab === 'players' ? search : activeTab === 'clubs' ? clubSearch : activeTab === 'events' ? eventSearch : boulesSearch}
+                onChangeText={activeTab === 'players' ? setSearch : activeTab === 'clubs' ? setClubSearch : activeTab === 'events' ? setEventSearch : setBoulesSearch}
               />
-              {(activeTab === 'players' ? search : activeTab === 'clubs' ? clubSearch : boulesSearch).length > 0 ? (
-                <Pressable onPress={() => activeTab === 'players' ? setSearch('') : activeTab === 'clubs' ? setClubSearch('') : setBoulesSearch('')} hitSlop={8}>
+              {(activeTab === 'players' ? search : activeTab === 'clubs' ? clubSearch : activeTab === 'events' ? eventSearch : boulesSearch).length > 0 ? (
+                <Pressable onPress={() => activeTab === 'players' ? setSearch('') : activeTab === 'clubs' ? setClubSearch('') : activeTab === 'events' ? setEventSearch('') : setBoulesSearch('')} hitSlop={8}>
                   <MaterialIcons name="close" size={18} color="rgba(255,255,255,0.5)" />
                 </Pressable>
-              ) : null}
+              ) : null}}
             </View>
             {activeTab === 'players' ? (
               <Pressable
@@ -521,9 +571,10 @@ export default function LeaderboardScreen() {
         </LinearGradient>
 
         {/* Sort chips - context-dependent */}
-        <View style={s.sortWrapper}>
+        {activeTab === 'players' ? (
+            <View style={s.sortWrapper}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.sortRow}>
-            {activeTab === 'players' ? ([
+            {([
               { id: 'winRate' as LeaderboardSort, label: t('leaderboard', 'sortByWinRate'), icon: 'emoji-events' },
               { id: 'matches' as LeaderboardSort, label: t('leaderboard', 'sortByMatches'), icon: 'sports' },
               { id: 'tirRate' as LeaderboardSort, label: t('leaderboard', 'sortByTirRate'), icon: 'gps-fixed' },
@@ -639,8 +690,83 @@ export default function LeaderboardScreen() {
         </View>
       </View>
 
-      {/* ============ CLUBS TAB ============ */}
-      {activeTab === 'clubs' ? (
+      {/* ============ EVENTS TAB ============ */}
+      {activeTab === 'events' ? (
+        eventsLoading ? (
+          <View style={s.centerState}>
+            <View style={s.loadingIconBg}><MaterialIcons name="campaign" size={32} color="#7C3AED" /></View>
+            <Text style={s.loadingText}>{t('leaderboard', 'loading')}</Text>
+          </View>
+        ) : eventsError ? (
+          <View style={s.centerState}>
+            <MaterialIcons name="error-outline" size={48} color={theme.error} />
+            <Text style={s.errorText}>{t('leaderboard', 'errorLoading')}</Text>
+          </View>
+        ) : filteredEvents.length === 0 ? (
+          <View style={s.centerState}>
+            <MaterialIcons name="campaign" size={56} color={theme.textMuted} />
+            <Text style={s.emptyTitle}>{t('leaderboard', 'noEvents')}</Text>
+            <Text style={s.emptyDesc}>{t('leaderboard', 'noEventsDesc')}</Text>
+            <Pressable style={[s.resetBtn, { backgroundColor: '#7C3AED12' }]} onPress={() => router.push('/sponsored-event/list' as any)}>
+              <MaterialIcons name="list" size={16} color="#7C3AED" />
+              <Text style={[s.resetBtnText, { color: '#7C3AED' }]}>{t('leaderboard', 'seeAllEvents')}</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredEvents}
+            keyExtractor={(item) => item.userId}
+            contentContainerStyle={[s.listContent, { paddingBottom: insets.bottom + 32 }, isTablet && s.listContentTablet]}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item: entry, index }) => {
+              const rank = index + 1;
+              const medalColors2: Record<number, string> = { 1: '#FFD700', 2: '#A8B4C0', 3: '#CD7F32' };
+              const mc = medalColors2[rank];
+              return (
+                <Animated.View entering={FadeIn.duration(200).delay(Math.min(index * 40, 400))}>
+                  <View style={[s.row, { borderLeftWidth: 3, borderLeftColor: entry.wins > 0 ? '#FFD700' : entry.podiums > 0 ? '#7C3AED' : theme.border }]}>
+                    <View style={s.rankCol}>
+                      {mc ? (
+                        <View style={[s.medal, { backgroundColor: mc + '20' }]}>
+                          <Text style={[s.medalText, { color: mc }]}>{rank}</Text>
+                        </View>
+                      ) : (
+                        <Text style={s.rankText}>{rank}</Text>
+                      )}
+                    </View>
+                    <View style={s.playerCol}>
+                      <View style={s.avatarWrap}>
+                        {entry.userAvatar ? (
+                          <Image source={{ uri: entry.userAvatar }} style={s.avatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
+                        ) : (
+                          <View style={[s.avatar, { backgroundColor: '#7C3AED20', alignItems: 'center', justifyContent: 'center' }]}>
+                            <Text style={{ fontSize: 14, fontWeight: '700', color: '#7C3AED' }}>{entry.userName.charAt(0)}</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.playerName} numberOfLines={1}>{entry.userName}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                          {entry.wins > 0 ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#FFD70015', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}><MaterialIcons name="emoji-events" size={11} color="#D97706" /><Text style={{ fontSize: 11, fontWeight: '800', color: '#D97706' }}>{entry.wins}</Text></View> : null}
+                          {entry.podiums > 0 ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#7C3AED12', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}><MaterialIcons name="military-tech" size={11} color="#7C3AED" /><Text style={{ fontSize: 11, fontWeight: '800', color: '#7C3AED' }}>{entry.podiums}</Text></View> : null}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.textMuted + '10', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6 }}><MaterialIcons name="campaign" size={10} color={theme.textMuted} /><Text style={{ fontSize: 10, fontWeight: '600', color: theme.textMuted }}>{entry.eventsCompleted}</Text></View>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={s.statsCol}>
+                      <View style={s.statBlock}><Text style={[s.statValue, eventSortBy === 'avgScore' && { color: '#7C3AED', fontWeight: '800' }]}>{entry.avgScore}%</Text><Text style={s.statLabel}>{t('leaderboard', 'eventAvgScore')}</Text></View>
+                      <View style={s.statBlock}><Text style={[s.statValue, eventSortBy === 'wins' && { color: '#D97706', fontWeight: '800' }]}>{entry.wins}</Text><Text style={s.statLabel}>{t('leaderboard', 'eventWins')}</Text></View>
+                      <View style={s.statBlock}><Text style={[s.statValue, eventSortBy === 'podiums' && { color: '#7C3AED', fontWeight: '800' }]}>{entry.podiums}</Text><Text style={s.statLabel}>{t('leaderboard', 'eventPodiums')}</Text></View>
+                      <View style={s.statBlock}><Text style={s.statValue}>{entry.bestScore}%</Text><Text style={s.statLabel}>{t('leaderboard', 'eventBestScore')}</Text></View>
+                    </View>
+                  </View>
+                </Animated.View>
+              );
+            }}
+            ListFooterComponent={<Pressable style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16 }} onPress={() => router.push('/sponsored-event/list' as any)}><Text style={{ fontSize: 14, fontWeight: '700', color: '#7C3AED' }}>{t('leaderboard', 'seeAllEvents')}</Text><MaterialIcons name="arrow-forward" size={16} color="#7C3AED" /></Pressable>}
+          />
+        )
+      ) : activeTab === 'clubs' ? (
         clubsLoading ? (
           <View style={s.centerState}>
             <View style={s.loadingIconBg}><MaterialIcons name="home" size={32} color="#D97706" /></View>

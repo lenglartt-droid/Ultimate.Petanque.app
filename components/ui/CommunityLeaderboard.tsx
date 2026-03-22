@@ -14,8 +14,9 @@ import { fetchClubLeaderboard, sortClubLeaderboard, LeaderboardClub } from '@/se
 import { fetchBoulesLeaderboard, aggregateBoulesData, sortBoulesLeaderboard, LeaderboardBoulesEntry } from '@/services/boulesLeaderboardService';
 import { getBrandVisual, getBrandImage } from '@/constants/boulesDatabase';
 import { getTrustScoreColor } from '@/services/trustScoreService';
+import { fetchEventLeaderboard, EventLeaderboardEntry, SponsoredEvent } from '@/services/sponsoredEventService';
 
-type WidgetTab = 'players' | 'clubs' | 'boules';
+type WidgetTab = 'players' | 'clubs' | 'boules' | 'events';
 
 export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersToggled?: (open: boolean) => void }) {
   const { t, language } = useLanguage();
@@ -41,6 +42,13 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
   const [boulesLoading, setBoulesLoading] = useState(false);
   const [boulesError, setBoulesError] = useState<string | null>(null);
   const [boulesLoaded, setBoulesLoaded] = useState(false);
+
+  // Events
+  const [eventEntries, setEventEntries] = useState<EventLeaderboardEntry[]>([]);
+  const [recentEvents, setRecentEvents] = useState<SponsoredEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+  const [eventsLoaded, setEventsLoaded] = useState(false);
 
   // Load players
   const loadPlayers = useCallback(async () => {
@@ -75,10 +83,23 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
     setBoulesLoaded(true);
   }, [boulesLoaded]);
 
+  // Lazy load events
+  const loadEvents = useCallback(async () => {
+    if (eventsLoaded) return;
+    setEventsLoading(true);
+    const { entries: evts, recentEvents: recEvts, error: err } = await fetchEventLeaderboard();
+    setEventEntries(evts);
+    setRecentEvents(recEvts);
+    setEventsError(err);
+    setEventsLoading(false);
+    setEventsLoaded(true);
+  }, [eventsLoaded]);
+
   useEffect(() => {
     if (activeTab === 'clubs') loadClubs();
     if (activeTab === 'boules') loadBoules();
-  }, [activeTab, loadClubs, loadBoules]);
+    if (activeTab === 'events') loadEvents();
+  }, [activeTab, loadClubs, loadBoules, loadEvents]);
 
   // Computed
   const filteredSorted = useMemo(() => sortLeaderboard(players, sortBy), [players, sortBy]);
@@ -94,14 +115,15 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
     return idx >= 0 ? idx + 1 : null;
   }, [filteredSorted, selfPlayer, user]);
 
-  const isLoading = activeTab === 'players' ? playersLoading : activeTab === 'clubs' ? clubsLoading : boulesLoading;
-  const hasError = activeTab === 'players' ? playersError : activeTab === 'clubs' ? clubsError : boulesError;
+  const isLoading = activeTab === 'players' ? playersLoading : activeTab === 'clubs' ? clubsLoading : activeTab === 'boules' ? boulesLoading : eventsLoading;
+  const hasError = activeTab === 'players' ? playersError : activeTab === 'clubs' ? clubsError : activeTab === 'boules' ? boulesError : eventsError;
 
   const retryFn = useCallback(() => {
     if (activeTab === 'players') loadPlayers();
     else if (activeTab === 'clubs') { setClubsLoaded(false); loadClubs(); }
-    else { setBoulesLoaded(false); loadBoules(); }
-  }, [activeTab, loadPlayers, loadClubs, loadBoules]);
+    else if (activeTab === 'boules') { setBoulesLoaded(false); loadBoules(); }
+    else { setEventsLoaded(false); loadEvents(); }
+  }, [activeTab, loadPlayers, loadClubs, loadBoules, loadEvents]);
 
   const [showInfoModal, setShowInfoModal] = useState(false);
 
@@ -132,6 +154,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
           { id: 'players' as WidgetTab, label: t('leaderboard', 'tabPlayers'), icon: 'people' },
           { id: 'clubs' as WidgetTab, label: t('leaderboard', 'tabClubs'), icon: 'home' },
           { id: 'boules' as WidgetTab, label: t('leaderboard', 'tabBoules'), icon: 'sports-baseball' },
+          { id: 'events' as WidgetTab, label: t('leaderboard', 'tabEvents'), icon: 'campaign' },
         ]).map(tab => (
           <Pressable
             key={tab.id}
@@ -404,6 +427,79 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
               })}
             </>
           )
+        ) : activeTab === 'events' ? (
+          /* ============ EVENTS TAB ============ */
+          eventEntries.length === 0 ? (
+            <View style={s.center}>
+              <MaterialIcons name="campaign" size={40} color={theme.textMuted} />
+              <Text style={s.emptyTitle}>{t('leaderboard', 'noEvents')}</Text>
+              <Text style={s.emptyDesc}>{t('leaderboard', 'noEventsDesc')}</Text>
+            </View>
+          ) : (
+            <>
+              {eventEntries.slice(0, 5).map((entry, idx) => {
+                const rank = idx + 1;
+                const medalColors: Record<number, string> = { 1: '#FFD700', 2: '#A8B4C0', 3: '#CD7F32' };
+                const medalColor = medalColors[rank];
+                return (
+                  <Animated.View key={entry.userId} entering={FadeIn.duration(200).delay(idx * 60)}>
+                    <View style={[s.eventRow, idx < 4 && { borderBottomWidth: 1, borderBottomColor: theme.border + '40' }]}>
+                      <View style={{ width: 28, alignItems: 'center' }}>
+                        {rank === 1 ? (
+                          <View style={s.crownContainer}>
+                            <Text style={s.crownEmoji}>{"\u{1F451}"}</Text>
+                            <View style={[s.medal, { backgroundColor: '#FFD700' + '20' }]}>
+                              <Text style={[s.medalText, { color: '#FFD700' }]}>1</Text>
+                            </View>
+                          </View>
+                        ) : medalColor ? (
+                          <View style={[s.medal, { backgroundColor: medalColor + '20' }]}>
+                            <Text style={[s.medalText, { color: medalColor }]}>{rank}</Text>
+                          </View>
+                        ) : (
+                          <Text style={s.rankText}>{rank}</Text>
+                        )}
+                      </View>
+                      <View style={s.avatarWrap}>
+                        {entry.userAvatar ? (
+                          <Image source={{ uri: entry.userAvatar }} style={s.avatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
+                        ) : (
+                          <View style={[s.avatar, { backgroundColor: '#7C3AED' + '20', alignItems: 'center', justifyContent: 'center' }]}>
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#7C3AED' }}>{entry.userName.charAt(0)}</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.playerName} numberOfLines={1}>{entry.userName}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                          {entry.wins > 0 ? (
+                            <View style={s.eventWinBadge}>
+                              <MaterialIcons name="emoji-events" size={9} color="#D97706" />
+                              <Text style={s.eventWinBadgeText}>{entry.wins}</Text>
+                            </View>
+                          ) : null}
+                          {entry.podiums > 0 ? (
+                            <View style={s.eventPodiumBadge}>
+                              <MaterialIcons name="military-tech" size={9} color="#7C3AED" />
+                              <Text style={s.eventPodiumBadgeText}>{entry.podiums}</Text>
+                            </View>
+                          ) : null}
+                          <View style={s.clubMetaChip}>
+                            <MaterialIcons name="campaign" size={10} color={theme.textMuted} />
+                            <Text style={s.clubMetaText}>{entry.eventsCompleted}</Text>
+                          </View>
+                        </View>
+                      </View>
+                      <View style={s.eventScoreCol}>
+                        <Text style={s.eventScoreValue}>{entry.avgScore}%</Text>
+                        <Text style={s.eventScoreLabel}>{t('leaderboard', 'eventAvgScore')}</Text>
+                      </View>
+                    </View>
+                  </Animated.View>
+                );
+              })}
+            </>
+          )
         ) : (
           /* ============ BOULES TAB ============ */
           boulesEntries.length === 0 ? (
@@ -626,6 +722,16 @@ const s = StyleSheet.create({
   boulesStatCol: { alignItems: 'center', minWidth: 36 },
   boulesStatValue: { fontSize: 13, fontWeight: '700', color: theme.textPrimary },
   boulesStatLabel: { fontSize: 8, color: theme.textMuted },
+
+  // Event rows
+  eventRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 10 },
+  eventWinBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#D97706' + '12', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  eventWinBadgeText: { fontSize: 9, fontWeight: '800', color: '#D97706' },
+  eventPodiumBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#7C3AED' + '12', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  eventPodiumBadgeText: { fontSize: 9, fontWeight: '800', color: '#7C3AED' },
+  eventScoreCol: { alignItems: 'center', minWidth: 44 },
+  eventScoreValue: { fontSize: 14, fontWeight: '800', color: '#7C3AED' },
+  eventScoreLabel: { fontSize: 8, color: theme.textMuted },
 
   seeFullBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: theme.border },
   seeFullBtnText: { fontSize: 14, fontWeight: '700', color: '#D97706' },

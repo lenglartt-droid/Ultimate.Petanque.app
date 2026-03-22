@@ -555,6 +555,129 @@ export async function inviteUsersToEvent(eventId: string, userIds: string[]): Pr
   }
 }
 
+// ============ EVENT LEADERBOARD ============
+
+export interface EventLeaderboardEntry {
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  eventsParticipated: number;
+  eventsCompleted: number;
+  totalScore: number;
+  avgScore: number;
+  bestScore: number;
+  podiums: number; // rank <= 3
+  wins: number; // rank === 1
+}
+
+export interface EventLeaderboardResult {
+  entries: EventLeaderboardEntry[];
+  recentEvents: SponsoredEvent[];
+  error: string | null;
+}
+
+/** Fetch global event leaderboard - top performers across all completed events */
+export async function fetchEventLeaderboard(): Promise<EventLeaderboardResult> {
+  try {
+    const supabase = getSupabaseClient();
+
+    // 1. Get all completed events with published results
+    const { data: events, error: evErr } = await supabase
+      .from('sponsored_events')
+      .select('*, ambassadors(display_name, photo, badge_type)')
+      .eq('results_published', true)
+      .order('event_date', { ascending: false })
+      .limit(50);
+
+    if (evErr) return { entries: [], recentEvents: [], error: evErr.message };
+    if (!events || events.length === 0) return { entries: [], recentEvents: [], error: null };
+
+    const eventIds = events.map((e: any) => e.id);
+
+    // 2. Get all completed participants with scores
+    const { data: participants, error: pErr } = await supabase
+      .from('sponsored_event_participants')
+      .select('*, user_profiles:user_id(username, avatar)')
+      .in('event_id', eventIds)
+      .eq('status', 'completed')
+      .not('score_value', 'is', null);
+
+    if (pErr) return { entries: [], recentEvents: [], error: pErr.message };
+
+    // 3. Aggregate by user
+    const userMap = new Map<string, {
+      userId: string;
+      userName: string;
+      userAvatar?: string;
+      scores: number[];
+      ranks: number[];
+      eventsCount: number;
+    }>();
+
+    (participants || []).forEach((p: any) => {
+      const uid = p.user_id;
+      if (!userMap.has(uid)) {
+        userMap.set(uid, {
+          userId: uid,
+          userName: p.user_profiles?.username || 'Joueur',
+          userAvatar: p.user_profiles?.avatar,
+          scores: [],
+          ranks: [],
+          eventsCount: 0,
+        });
+      }
+      const entry = userMap.get(uid)!;
+      entry.eventsCount++;
+      if (p.score_value !== null && p.score_value !== undefined) {
+        entry.scores.push(parseFloat(p.score_value));
+      }
+      if (p.rank) {
+        entry.ranks.push(p.rank);
+      }
+    });
+
+    // 4. Build leaderboard entries
+    const entries: EventLeaderboardEntry[] = Array.from(userMap.values()).map(u => {
+      const totalScore = u.scores.reduce((a, b) => a + b, 0);
+      const avgScore = u.scores.length > 0 ? Math.round(totalScore / u.scores.length * 10) / 10 : 0;
+      const bestScore = u.scores.length > 0 ? Math.max(...u.scores) : 0;
+      const podiums = u.ranks.filter(r => r <= 3).length;
+      const wins = u.ranks.filter(r => r === 1).length;
+      return {
+        userId: u.userId,
+        userName: u.userName,
+        userAvatar: u.userAvatar,
+        eventsParticipated: u.eventsCount,
+        eventsCompleted: u.scores.length,
+        totalScore,
+        avgScore,
+        bestScore,
+        podiums,
+        wins,
+      };
+    });
+
+    // Sort by wins desc, then podiums, then avg score
+    entries.sort((a, b) => {
+      if (b.wins !== a.wins) return b.wins - a.wins;
+      if (b.podiums !== a.podiums) return b.podiums - a.podiums;
+      if (b.avgScore !== a.avgScore) return b.avgScore - a.avgScore;
+      return b.eventsCompleted - a.eventsCompleted;
+    });
+
+    const recentEvents = events.slice(0, 5).map((e: any) => ({
+      ...mapEvent(e),
+      ambassadorName: e.ambassadors?.display_name,
+      ambassadorPhoto: e.ambassadors?.photo,
+      ambassadorBadgeType: e.ambassadors?.badge_type,
+    }));
+
+    return { entries, recentEvents, error: null };
+  } catch (e: any) {
+    return { entries: [], recentEvents: [], error: e.message };
+  }
+}
+
 // ============ HELPERS ============
 
 function mapEvent(e: any): SponsoredEvent {
