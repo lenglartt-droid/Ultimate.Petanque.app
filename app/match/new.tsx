@@ -216,6 +216,7 @@ export default function NewMatchScreen() {
   const [advancedNotationPlayer, setAdvancedNotationPlayer] = useState<{ id: string; name: string; team: 'A' | 'B' } | null>(null);
   const [advancedNotationType, setAdvancedNotationType] = useState<'tir' | 'point'>('tir');
   const [advancedShotRecords, setAdvancedShotRecords] = useState<SimpleShotRecord[]>([]);
+  const [notationMode, setNotationMode] = useState<'quick' | 'detailed'>('quick');
   const [selectedTerrainId, setSelectedTerrainId] = useState<string | null>(() => selfPlayer?.terrainId || null);
   const [showTerrainPicker, setShowTerrainPicker] = useState(false);
   const [terrainSearch, setTerrainSearch] = useState('');
@@ -1090,9 +1091,29 @@ export default function NewMatchScreen() {
               </View>
             </View>
 
-            {/* Quick Shot Notation */}
+            {/* Notation Mode Toggle */}
             {(teamAPlayers.length > 0 || teamBPlayers.length > 0) && (
-              <View style={styles.fsQuickNotationBar}>
+              <View style={styles.fsNotationSection}>
+                <View style={styles.fsNotationModeRow}>
+                  <Text style={styles.fsNotationModeLabel}>{t('notation', 'notationModeLabel')}</Text>
+                  <View style={styles.fsNotationModeToggle}>
+                    <Pressable
+                      style={[styles.fsNotationModeBtn, notationMode === 'quick' && styles.fsNotationModeBtnActive]}
+                      onPress={() => { Haptics.selectionAsync(); setNotationMode('quick'); }}
+                    >
+                      <MaterialIcons name="flash-on" size={14} color={notationMode === 'quick' ? '#FFF' : 'rgba(255,255,255,0.4)'} />
+                      <Text style={[styles.fsNotationModeBtnText, notationMode === 'quick' && styles.fsNotationModeBtnTextActive]}>{t('notation', 'notationModeQuick')}</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.fsNotationModeBtn, notationMode === 'detailed' && styles.fsNotationModeBtnActiveDetailed]}
+                      onPress={() => { Haptics.selectionAsync(); setNotationMode('detailed'); }}
+                    >
+                      <MaterialIcons name="tune" size={14} color={notationMode === 'detailed' ? '#FFF' : 'rgba(255,255,255,0.4)'} />
+                      <Text style={[styles.fsNotationModeBtnText, notationMode === 'detailed' && styles.fsNotationModeBtnTextActive]}>{t('notation', 'notationModeDetailed')}</Text>
+                    </Pressable>
+                  </View>
+                </View>
+
                 <ScrollView 
                   horizontal 
                   showsHorizontalScrollIndicator={false}
@@ -1110,25 +1131,68 @@ export default function NewMatchScreen() {
                           <View style={[styles.fsQuickNotationDot, { backgroundColor: teamColor }]} />
                           <Text style={styles.fsQuickNotationName} numberOfLines={1}>{firstName}</Text>
                           <Text style={styles.fsQuickNotationStats}>
-                            {stats.tirsSuccess}/{stats.tirs} • {stats.pointsSuccess}/{stats.points}
+                            {stats.tirsSuccess}/{stats.tirs} • {stats.pointsSuccess}/{stats.points}{stats.carreaux > 0 ? ` • C${stats.carreaux}` : ''}
                           </Text>
                         </View>
-                        <View style={styles.fsQuickNotationBtns}>
-                          <Pressable
-                            style={styles.fsQuickNotationTirBtn}
-                            onPress={() => openAdvancedNotation(p.playerId, getPlayerName(p.playerId), isTeamA ? 'A' : 'B', 'tir')}
-                          >
-                            <MaterialIcons name="gps-fixed" size={20} color="#FFF" />
-                            <Text style={styles.fsQuickNotationBtnText}>TIR</Text>
-                          </Pressable>
-                          <Pressable
-                            style={styles.fsQuickNotationPointBtn}
-                            onPress={() => openAdvancedNotation(p.playerId, getPlayerName(p.playerId), isTeamA ? 'A' : 'B', 'point')}
-                          >
-                            <MaterialIcons name="adjust" size={20} color="#FFF" />
-                            <Text style={styles.fsQuickNotationBtnText}>POINT</Text>
-                          </Pressable>
-                        </View>
+                        {notationMode === 'quick' ? (
+                          /* === QUICK MODE: 1 tap = recorded === */
+                          <View style={styles.fsQuickModeBtns}>
+                            <View style={styles.fsQuickModeRow}>
+                              <Pressable
+                                style={styles.fsQmTirSuccessBtn}
+                                onPress={() => { recordAction(p.playerId, 'tir', true); }}
+                              >
+                                <MaterialIcons name="gps-fixed" size={16} color="#FFF" />
+                                <MaterialIcons name="check" size={14} color="#FFF" />
+                              </Pressable>
+                              <Pressable
+                                style={styles.fsQmTirFailBtn}
+                                onPress={() => { recordAction(p.playerId, 'tir', false); }}
+                              >
+                                <MaterialIcons name="gps-fixed" size={16} color="#FFF" />
+                                <MaterialIcons name="close" size={14} color="#FFF" />
+                              </Pressable>
+                              <Pressable
+                                style={styles.fsQmPointSuccessBtn}
+                                onPress={() => { recordAction(p.playerId, 'point', true); }}
+                              >
+                                <MaterialIcons name="adjust" size={16} color="#FFF" />
+                                <MaterialIcons name="check" size={14} color="#FFF" />
+                              </Pressable>
+                              <Pressable
+                                style={styles.fsQmPointFailBtn}
+                                onPress={() => { recordAction(p.playerId, 'point', false); }}
+                              >
+                                <MaterialIcons name="adjust" size={16} color="#FFF" />
+                                <MaterialIcons name="close" size={14} color="#FFF" />
+                              </Pressable>
+                              <Pressable
+                                style={styles.fsQmCarreauBtn}
+                                onPress={() => { recordAction(p.playerId, 'carreau', true); }}
+                              >
+                                <MaterialIcons name="stars" size={20} color="#FFF" />
+                              </Pressable>
+                            </View>
+                          </View>
+                        ) : (
+                          /* === DETAILED MODE: opens multi-step modal === */
+                          <View style={styles.fsQuickNotationBtns}>
+                            <Pressable
+                              style={styles.fsQuickNotationTirBtn}
+                              onPress={() => openAdvancedNotation(p.playerId, getPlayerName(p.playerId), isTeamA ? 'A' : 'B', 'tir')}
+                            >
+                              <MaterialIcons name="gps-fixed" size={20} color="#FFF" />
+                              <Text style={styles.fsQuickNotationBtnText}>TIR</Text>
+                            </Pressable>
+                            <Pressable
+                              style={styles.fsQuickNotationPointBtn}
+                              onPress={() => openAdvancedNotation(p.playerId, getPlayerName(p.playerId), isTeamA ? 'A' : 'B', 'point')}
+                            >
+                              <MaterialIcons name="adjust" size={20} color="#FFF" />
+                              <Text style={styles.fsQuickNotationBtnText}>POINT</Text>
+                            </Pressable>
+                          </View>
+                        )}
                       </View>
                     );
                   })}
@@ -2613,7 +2677,22 @@ const styles = StyleSheet.create({
   fsDualTimerLabel: { fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.4)', letterSpacing: 0.5 },
   fsDualTimerValue: { fontSize: 20, fontWeight: '800', color: 'rgba(255,255,255,0.6)', fontVariant: ['tabular-nums'] },
   fsDualTimerValueActive: { color: '#4ADE80' },
-  fsQuickNotationBar: { paddingVertical: 12, backgroundColor: 'rgba(255,255,255,0.03)', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
+  fsNotationSection: { paddingTop: 8, paddingBottom: 12, backgroundColor: 'rgba(255,255,255,0.03)', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
+  fsNotationModeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 10 },
+  fsNotationModeLabel: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.4)', letterSpacing: 0.5, textTransform: 'uppercase' as const },
+  fsNotationModeToggle: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 12, padding: 3 },
+  fsNotationModeBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10 },
+  fsNotationModeBtnActive: { backgroundColor: theme.success },
+  fsNotationModeBtnActiveDetailed: { backgroundColor: theme.primary },
+  fsNotationModeBtnText: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.4)' },
+  fsNotationModeBtnTextActive: { color: '#FFF' },
+  fsQuickModeBtns: { gap: 6 },
+  fsQuickModeRow: { flexDirection: 'row', gap: 5 },
+  fsQmTirSuccessBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, paddingVertical: 12, backgroundColor: 'rgba(34,197,94,0.85)', borderRadius: 10 },
+  fsQmTirFailBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, paddingVertical: 12, backgroundColor: 'rgba(239,68,68,0.7)', borderRadius: 10 },
+  fsQmPointSuccessBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, paddingVertical: 12, backgroundColor: 'rgba(59,130,246,0.75)', borderRadius: 10 },
+  fsQmPointFailBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, paddingVertical: 12, backgroundColor: 'rgba(239,68,68,0.5)', borderRadius: 10 },
+  fsQmCarreauBtn: { flex: 0.7, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, backgroundColor: 'rgba(217,119,6,0.8)', borderRadius: 10 },
   fsQuickNotationScroll: { paddingHorizontal: 12, gap: 12 },
   fsQuickNotationPlayer: { width: 180, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 12 },
   fsQuickNotationNameBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 10, marginBottom: 10 },
