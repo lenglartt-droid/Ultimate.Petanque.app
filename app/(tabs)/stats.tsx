@@ -98,7 +98,7 @@ function filterByTime<T extends { date: string }>(items: T[], filter: TimeFilter
 
 // COMPONENTS
 
-// Progress Ring Component
+// Progress Ring Component - Glassmorphism
 function ProgressRing({ 
   value, 
   size = 80,
@@ -115,36 +115,49 @@ function ProgressRing({
   const radius = (size - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
   const strokeDashoffset = circumference - (Math.min(value, 100) / 100) * circumference;
+  // Outer glow ring
+  const glowRadius = radius + strokeWidth + 4;
 
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={size} height={size}>
+      <Svg width={size + 8} height={size + 8}>
+        {/* Soft outer glow */}
         <Circle
-          cx={size / 2}
-          cy={size / 2}
+          cx={(size + 8) / 2}
+          cy={(size + 8) / 2}
+          r={glowRadius}
+          stroke={color + '12'}
+          strokeWidth={12}
+          fill="none"
+        />
+        {/* Track */}
+        <Circle
+          cx={(size + 8) / 2}
+          cy={(size + 8) / 2}
           r={radius}
-          stroke={theme.border}
+          stroke={color + '15'}
           strokeWidth={strokeWidth}
           fill="none"
         />
+        {/* Progress */}
         <Circle
-          cx={size / 2}
-          cy={size / 2}
+          cx={(size + 8) / 2}
+          cy={(size + 8) / 2}
           r={radius}
           stroke={color}
-          strokeWidth={strokeWidth}
+          strokeWidth={strokeWidth + 1}
           strokeDasharray={circumference}
           strokeDashoffset={strokeDashoffset}
           strokeLinecap="round"
           fill="none"
           rotation="-90"
-          origin={`${size / 2}, ${size / 2}`}
+          origin={`${(size + 8) / 2}, ${(size + 8) / 2}`}
         />
       </Svg>
       <View style={StyleSheet.absoluteFill as any}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={[styles.ringValue, { color, fontSize: size * 0.22 }]}>{value}%</Text>
-          {label && <Text style={[styles.ringLabel, { fontSize: size * 0.11 }]}>{label}</Text>}
+          <Text style={[styles.ringValue, { color, fontSize: size * 0.24 }]}>{value}%</Text>
+          {label && <Text style={[styles.ringLabel, { fontSize: size * 0.10 }]}>{label}</Text>}
         </View>
       </View>
     </View>
@@ -185,29 +198,31 @@ function StatRow({
   );
 }
 
-// Section Header
+// Section Header - Modernized
 function SectionHeader({title, subtitle, icon, color }: { 
   title: string; 
   subtitle?: string;
   icon?: string;
   color?: string;
 }) {
+  const c = color || theme.primary;
   return (
     <View style={styles.sectionHeader}>
       {icon && (
-        <View style={[styles.sectionIcon, { backgroundColor: (color || theme.primary) + '15' }]}>
-          <MaterialIcons name={icon as any} size={18} color={color || theme.primary} />
+        <View style={[styles.sectionIcon, { backgroundColor: c + '10', borderWidth: 1, borderColor: c + '18' }]}>
+          <MaterialIcons name={icon as any} size={17} color={c} />
         </View>
       )}
       <View style={styles.sectionHeaderText}>
         <Text style={styles.sectionTitle}>{title}</Text>
         {subtitle && <Text style={styles.sectionSubtitle}>{subtitle}</Text>}
       </View>
+      <View style={[styles.sectionAccent, { backgroundColor: c + '08' }]} />
     </View>
   );
 }
 
-// Progress Bar
+// Progress Bar - Glassmorphism
 function ProgressBar({ value, color, showValue = true }: { value: number; color: string; showValue?: boolean }) {
   return (
     <View style={styles.progressBarContainer}>
@@ -216,8 +231,14 @@ function ProgressBar({ value, color, showValue = true }: { value: number; color:
           entering={FadeIn.duration(600)}
           style={[styles.progressBarFill, { width: `${Math.min(value, 100)}%`, backgroundColor: color }]} 
         />
+        {/* Glassmorphism shine */}
+        <View style={[styles.progressBarShine, { width: `${Math.min(value, 100)}%` }]} />
       </View>
-      {showValue && <Text style={[styles.progressBarValue, { color }]}>{value}%</Text>}
+      {showValue && (
+        <View style={[styles.progressBarValueBg, { backgroundColor: color + '12' }]}>
+          <Text style={[styles.progressBarValue, { color }]}>{value}%</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -1396,9 +1417,12 @@ export default function StatsScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
-      {/* Header - Gradient Hero */}
+      {/* Header - Glassmorphism Hero */}
       <View style={styles.header}>
-        <LinearGradient colors={['#1E3A8A', '#2563EB', '#3B82F6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerGradient}>
+        <LinearGradient colors={['#0F172A', '#1E3A8A', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerGradient}>
+          {/* Decorative circles for glassmorphism depth */}
+          <View style={styles.headerDecoCircle1} />
+          <View style={styles.headerDecoCircle2} />
           <View style={styles.headerTop}>
             <View style={{ flex: 1 }}>
               <Text style={styles.headerTitle}>{t('stats', 'statistics')}</Text>
@@ -1415,7 +1439,7 @@ export default function StatsScreen() {
             </View>
           </View>
           <View style={styles.headerStatsRow}>
-            {[{ val: `${performanceStats.winRate}%`, lbl: t('stats', 'victoriesLabel') }, { val: `${tirStats.successRate}%`, lbl: t('stats', 'shotShort') }, { val: `${pointStats.successRate}%`, lbl: t('stats', 'pointShort') }, { val: `${tirStats.carreauRate}%`, lbl: t('stats', 'carreauxLabel') }, { val: pointStats.successQualitiesTotal > 0 ? `${Math.round((pointStats.pointDevantBoule / pointStats.successQualitiesTotal) * 100)}%` : '-', lbl: t('leaderboard', 'devantBouleShort') }].map((s, i) => (<React.Fragment key={i}>{i > 0 ? <View style={styles.headerStatDivider} /> : null}<View style={styles.headerStatItem}><Text style={styles.headerStatValue}>{s.val}</Text><Text style={styles.headerStatLabel}>{s.lbl}</Text></View></React.Fragment>))}
+            {[{ val: `${performanceStats.winRate}%`, lbl: t('stats', 'victoriesLabel'), color: '#60A5FA' }, { val: `${tirStats.successRate}%`, lbl: t('stats', 'shotShort'), color: '#93C5FD' }, { val: `${pointStats.successRate}%`, lbl: t('stats', 'pointShort'), color: '#86EFAC' }, { val: `${tirStats.carreauRate}%`, lbl: t('stats', 'carreauxLabel'), color: '#FDE68A' }, { val: pointStats.successQualitiesTotal > 0 ? `${Math.round((pointStats.pointDevantBoule / pointStats.successQualitiesTotal) * 100)}%` : '-', lbl: t('leaderboard', 'devantBouleShort'), color: '#C4B5FD' }].map((s, i) => (<React.Fragment key={i}>{i > 0 ? <View style={styles.headerStatDivider} /> : null}<View style={styles.headerStatItem}><Text style={[styles.headerStatValue, { color: s.color }]}>{s.val}</Text><Text style={styles.headerStatLabel}>{s.lbl}</Text></View></React.Fragment>))}
           </View>
         </LinearGradient>
 
@@ -1527,20 +1551,26 @@ export default function StatsScreen() {
           </View>
         )}
 
-        {/* Category Tabs */}
+        {/* Category Tabs - Glassmorphism */}
         <View style={styles.categoryTabs}>
-          {CATEGORY_TABS.map(tab => (
-            <Pressable
-              key={tab.id}
-              style={[styles.categoryTab, category === tab.id && styles.categoryTabActive]}
-              onPress={() => { Haptics.selectionAsync(); setCategory(tab.id); }}
-            >
-              <MaterialIcons name={tab.icon as any} size={18} color={category === tab.id ? tab.color : theme.textMuted} />
-              <Text style={[styles.categoryTabText, category === tab.id && [styles.categoryTabTextActive, { color: tab.color }]]}>
-                {tab.label}
-              </Text>
-            </Pressable>
-          ))}
+          {CATEGORY_TABS.map(tab => {
+            const isActive = category === tab.id;
+            return (
+              <Pressable
+                key={tab.id}
+                style={[styles.categoryTab, isActive && [styles.categoryTabActive, { backgroundColor: tab.color + '12', borderColor: tab.color + '30' }]]}
+                onPress={() => { Haptics.selectionAsync(); setCategory(tab.id); }}
+              >
+                <View style={[styles.categoryTabIconBg, isActive && { backgroundColor: tab.color + '18' }]}>
+                  <MaterialIcons name={tab.icon as any} size={16} color={isActive ? tab.color : theme.textMuted} />
+                </View>
+                <Text style={[styles.categoryTabText, isActive && [styles.categoryTabTextActive, { color: tab.color }]]}>
+                  {tab.label}
+                </Text>
+                {isActive ? <View style={[styles.categoryTabDot, { backgroundColor: tab.color }]} /> : null}
+              </Pressable>
+            );
+          })}
         </View>
       </View>
 
@@ -3686,22 +3716,24 @@ export default function StatsScreen() {
 
 // STYLES
 const styles = StyleSheet.create({
-  container:{flex:1,backgroundColor:theme.backgroundSecondary},
-  header:{backgroundColor:theme.surface,borderBottomWidth:1,borderBottomColor:theme.border,paddingBottom:12},
-  headerGradient:{paddingTop:16,paddingBottom:24,paddingHorizontal:20,borderBottomLeftRadius:28,borderBottomRightRadius:28},
-  headerTop:{flexDirection:'row',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16},
-  headerTitle:{fontSize:24,fontWeight:'800',color:'#FFF'},
-  headerSubtitle:{fontSize:13,color:'rgba(255,255,255,0.7)',marginTop:2},
-  headerButtons:{flexDirection:'row',alignItems:'center',gap:6},
+  container:{flex:1,backgroundColor:'#F1F5F9'},
+  header:{backgroundColor:theme.surface,borderBottomWidth:0,paddingBottom:12},
+  headerGradient:{paddingTop:16,paddingBottom:28,paddingHorizontal:20,borderBottomLeftRadius:32,borderBottomRightRadius:32,overflow:'hidden' as const,position:'relative' as const},
+  headerDecoCircle1:{position:'absolute' as const,top:-40,right:-30,width:140,height:140,borderRadius:70,backgroundColor:'rgba(255,255,255,0.04)'},
+  headerDecoCircle2:{position:'absolute' as const,bottom:-20,left:-20,width:100,height:100,borderRadius:50,backgroundColor:'rgba(255,255,255,0.03)'},
+  headerTop:{flexDirection:'row',justifyContent:'space-between',alignItems:'flex-start',marginBottom:18},
+  headerTitle:{fontSize:26,fontWeight:'800',color:'#FFF',letterSpacing:-0.3},
+  headerSubtitle:{fontSize:13,color:'rgba(255,255,255,0.6)',marginTop:3,fontWeight:'500'},
+  headerButtons:{flexDirection:'row',alignItems:'center',gap:8},
 
-  progressionButton:{flexDirection:'row',alignItems:'center',gap:6,paddingHorizontal:14,paddingVertical:10,backgroundColor:'rgba(255,255,255,0.15)',borderRadius:9999},
+  progressionButton:{flexDirection:'row',alignItems:'center',gap:6,paddingHorizontal:16,paddingVertical:10,backgroundColor:'rgba(255,255,255,0.12)',borderRadius:9999,borderWidth:1,borderColor:'rgba(255,255,255,0.15)'},
   progressionButtonText:{fontSize:12,fontWeight:'600',color:'#FFF'},
-  historyButton:{width:40,height:40,borderRadius:20,backgroundColor:'rgba(255,255,255,0.1)',alignItems:'center' as const,justifyContent:'center' as const},
-  headerStatsRow:{flexDirection:'row',alignItems:'center',backgroundColor:'rgba(255,255,255,0.12)',borderRadius:14,paddingVertical:12,paddingHorizontal:8},
+  historyButton:{width:42,height:42,borderRadius:21,backgroundColor:'rgba(255,255,255,0.08)',alignItems:'center' as const,justifyContent:'center' as const,borderWidth:1,borderColor:'rgba(255,255,255,0.1)'},
+  headerStatsRow:{flexDirection:'row',alignItems:'center',backgroundColor:'rgba(255,255,255,0.08)',borderRadius:16,paddingVertical:14,paddingHorizontal:10,borderWidth:1,borderColor:'rgba(255,255,255,0.08)'},
   headerStatItem:{flex:1,alignItems:'center' as const},
-  headerStatValue:{fontSize:16,fontWeight:'800',color:'#FFF'},
-  headerStatLabel:{fontSize:9,fontWeight:'600',color:'rgba(255,255,255,0.65)',marginTop:2,textTransform:'uppercase' as const},
-  headerStatDivider:{width:1,height:24,backgroundColor:'rgba(255,255,255,0.15)'},
+  headerStatValue:{fontSize:17,fontWeight:'800',color:'#FFF'},
+  headerStatLabel:{fontSize:8,fontWeight:'700',color:'rgba(255,255,255,0.5)',marginTop:3,textTransform:'uppercase' as const,letterSpacing:0.5},
+  headerStatDivider:{width:1,height:28,backgroundColor:'rgba(255,255,255,0.1)'},
   filterBar:{paddingHorizontal:16,gap:8,marginTop:12,marginBottom:8},
   // Item filter bar
   itemFilterBar: { marginBottom: 8 },
@@ -3740,13 +3772,15 @@ const styles = StyleSheet.create({
   filterPillActive: { backgroundColor: theme.primary },
   filterPillText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
   filterPillTextActive: { color: '#FFF' },
-  categoryTabs:{flexDirection:'row',paddingHorizontal:12,gap:6,marginTop:4},
-  categoryTab:{flex:1,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:5,paddingVertical:11,borderRadius:9999,backgroundColor:theme.backgroundSecondary},
-  categoryTabActive:{backgroundColor:theme.surface,borderWidth:1.5,borderColor:theme.border,...theme.shadows.card},
-  categoryTabText:{fontSize:11,fontWeight:'600',color:theme.textMuted},
-  categoryTabTextActive:{fontWeight:'700'},
+  categoryTabs:{flexDirection:'row',paddingHorizontal:12,gap:6,marginTop:6},
+  categoryTab:{flex:1,flexDirection:'column',alignItems:'center',justifyContent:'center',gap:4,paddingVertical:12,paddingHorizontal:4,borderRadius:16,backgroundColor:'#F1F5F9',borderWidth:1.5,borderColor:'transparent'},
+  categoryTabActive:{...theme.shadows.card},
+  categoryTabIconBg:{width:30,height:30,borderRadius:10,alignItems:'center' as const,justifyContent:'center' as const,backgroundColor:'transparent'},
+  categoryTabText:{fontSize:10,fontWeight:'600',color:theme.textMuted,letterSpacing:0.2},
+  categoryTabTextActive:{fontWeight:'800'},
+  categoryTabDot:{width:4,height:4,borderRadius:2,marginTop:-2},
   scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 20 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
   scrollContentTablet: { maxWidth: 960, alignSelf: 'center' as const, width: '100%', paddingHorizontal: 24 },
   tabletRow: { flexDirection: 'row' as const, gap: 16, marginBottom: 0 },
   tabletHalf: { flex: 1 },
@@ -3754,31 +3788,34 @@ const styles = StyleSheet.create({
   sectionTabletWide: { },
   errorRatesGridTablet: { gap: 20 },
   section: { marginBottom: 16 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 10 },
-  sectionIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10, position: 'relative' as const },
+  sectionIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   sectionHeaderText: { flex: 1 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: theme.textPrimary },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: theme.textPrimary, letterSpacing: -0.1 },
   sectionSubtitle: { fontSize: 11, color: theme.textMuted, marginTop: 1 },
-  card: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, ...theme.shadows.card },
-  heroCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 20, marginBottom: 20, ...theme.shadows.card },
+  sectionAccent: { position: 'absolute' as const, right: 0, top: 4, bottom: 4, width: 3, borderRadius: 2 },
+  card: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 18, ...theme.shadows.card, borderWidth: 1, borderColor: '#F1F5F9' },
+  heroCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 22, marginBottom: 20, ...theme.shadows.cardElevated, borderWidth: 1, borderColor: '#E8EDF2' },
   heroContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' },
-  heroStats: { gap: 16 },
+  heroStats: { gap: 18 },
   heroStatItem: { alignItems: 'center' },
-  heroStatValue: { fontSize: 24, fontWeight: '700', color: theme.textPrimary },
-  heroStatLabel: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
-  ringValue: { fontWeight: '700' },
-  ringLabel: { color: theme.textSecondary, marginTop: -2 },
+  heroStatValue: { fontSize: 26, fontWeight: '800', color: theme.textPrimary, letterSpacing: -0.3 },
+  heroStatLabel: { fontSize: 10, color: theme.textMuted, marginTop: 3, fontWeight: '600', textTransform: 'uppercase' as const, letterSpacing: 0.5 },
+  ringValue: { fontWeight: '800', letterSpacing: -0.5 },
+  ringLabel: { color: theme.textSecondary, marginTop: -1, fontWeight: '600', textTransform: 'uppercase' as const, letterSpacing: 0.5 },
   statsGrid3: { flexDirection: 'row', justifyContent: 'space-around' },
   gridItem: { alignItems: 'center' },
-  gridValue: { fontSize: 28, fontWeight: '700', color: theme.textPrimary },
-  gridLabel: { fontSize: 11, color: theme.textMuted, marginTop: 4 },
+  gridValue: { fontSize: 30, fontWeight: '800', color: theme.textPrimary, letterSpacing: -0.5 },
+  gridLabel: { fontSize: 10, color: theme.textMuted, marginTop: 4, fontWeight: '600', textTransform: 'uppercase' as const },
   modeWinRates: { gap: 16 },
   modeWinRateItem: { gap: 8 },
   modeLabel: { fontSize: 13, fontWeight: '600', color: theme.textPrimary },
   progressBarContainer: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  progressBarTrack: { flex: 1, height: 8, backgroundColor: theme.backgroundSecondary, borderRadius: 4, overflow: 'hidden' },
-  progressBarFill: { height: '100%', borderRadius: 4 },
-  progressBarValue: { fontSize: 14, fontWeight: '700', minWidth: 45, textAlign: 'right' },
+  progressBarTrack: { flex: 1, height: 10, backgroundColor: '#F1F5F9', borderRadius: 5, overflow: 'hidden', position: 'relative' as const },
+  progressBarFill: { height: '100%', borderRadius: 5 },
+  progressBarShine: { position: 'absolute' as const, top: 0, left: 0, height: '45%', backgroundColor: 'rgba(255,255,255,0.35)', borderRadius: 5 },
+  progressBarValueBg: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, minWidth: 50, alignItems: 'center' as const },
+  progressBarValue: { fontSize: 13, fontWeight: '800' },
   formatRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border },
   formatInfo: { width: 100 },
   formatName: { fontSize: 13, fontWeight: '600', color: theme.textPrimary },
@@ -3786,18 +3823,18 @@ const styles = StyleSheet.create({
   formatBarContainer: { flex: 1, marginLeft: 12 },
   scoreComparison: { flexDirection: 'row', alignItems: 'center', paddingBottom: 16 },
   scoreItem: { flex: 1, alignItems: 'center' },
-  scoreValue: { fontSize: 32, fontWeight: '700', marginTop: 8 },
-  scoreLabel: { fontSize: 11, color: theme.textMuted, marginTop: 4 },
+  scoreValue: { fontSize: 34, fontWeight: '800', marginTop: 8, letterSpacing: -0.5 },
+  scoreLabel: { fontSize: 10, color: theme.textMuted, marginTop: 4, fontWeight: '600', textTransform: 'uppercase' as const },
   scoreDiff: { alignItems: 'center', paddingHorizontal: 16 },
-  scoreDiffBadge: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: theme.borderRadius.md, alignItems: 'center' },
-  scoreDiffText: { fontSize: 20, fontWeight: '700' },
-  scoreDiffLabel: { fontSize: 9, color: theme.textMuted, marginTop: 2 },
-  statRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border },
-  statRowIcon: { width: 28, height: 28, borderRadius: 6, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  scoreDiffBadge: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 16, alignItems: 'center' },
+  scoreDiffText: { fontSize: 22, fontWeight: '800', letterSpacing: -0.3 },
+  scoreDiffLabel: { fontSize: 9, color: theme.textMuted, marginTop: 2, fontWeight: '600' },
+  statRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  statRowIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   statRowContent: { flex: 1 },
-  statRowLabel: { fontSize: 13, color: theme.textPrimary },
-  statRowSubValue: { fontSize: 10, color: theme.textMuted },
-  statRowValue: { fontSize: 15, fontWeight: '700', color: theme.textPrimary },
+  statRowLabel: { fontSize: 13, color: theme.textPrimary, fontWeight: '500' },
+  statRowSubValue: { fontSize: 10, color: theme.textMuted, marginTop: 1 },
+  statRowValue: { fontSize: 16, fontWeight: '800', color: theme.textPrimary, letterSpacing: -0.3 },
   statRowValueNA: { color: theme.textMuted, fontWeight: '500', fontStyle: 'italic' },
   breakdownContainer: { gap: 12 },
   breakdownBar: { flexDirection: 'row', height: 12, borderRadius: 6, overflow: 'hidden', backgroundColor: theme.backgroundSecondary },
@@ -3810,11 +3847,11 @@ const styles = StyleSheet.create({
   naPlaceholder: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 8, marginTop: 8, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.sm },
   naText: { fontSize: 11, color: theme.textMuted, flex: 1 },
   divider: { height: 1, backgroundColor: theme.border, marginVertical: 12 },
-  emptyState: { alignItems: 'center', paddingVertical: 48 },
-  emptyTitle: { fontSize: 18, fontWeight: '600', color: theme.textPrimary, marginTop: 16 },
-  emptyText: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginTop: 8, marginBottom: 24, maxWidth: 260 },
-  emptyButton: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.primary, paddingHorizontal: 24, paddingVertical: 14, borderRadius: theme.borderRadius.md },
-  emptyButtonText: { fontSize: 15, fontWeight: '600', color: '#FFF' },
+  emptyState: { alignItems: 'center', paddingVertical: 56 },
+  emptyTitle: { fontSize: 20, fontWeight: '700', color: theme.textPrimary, marginTop: 20 },
+  emptyText: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginTop: 8, marginBottom: 28, maxWidth: 280, lineHeight: 21 },
+  emptyButton: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.primary, paddingHorizontal: 28, paddingVertical: 16, borderRadius: 16 },
+  emptyButtonText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
   durationHero: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   durationMain: { flex: 1, alignItems: 'center' },
   durationMainValue: { fontSize: 32, fontWeight: '700', color: theme.accent, marginTop: 4 },
@@ -3829,8 +3866,8 @@ const styles = StyleSheet.create({
   // Error Analysis Styles
   errorHeroContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' },
   errorHeroMain: { alignItems: 'center' },
-  errorHeroValue: { fontSize: 48, fontWeight: '700', color: theme.error, marginTop: 8 },
-  errorHeroLabel: { fontSize: 12, color: theme.textMuted },
+  errorHeroValue: { fontSize: 52, fontWeight: '800', color: theme.error, marginTop: 8, letterSpacing: -1 },
+  errorHeroLabel: { fontSize: 11, color: theme.textMuted, fontWeight: '600', textTransform: 'uppercase' as const },
   errorHeroBreakdown: { gap: 16 },
   errorHeroItem: { alignItems: 'center' },
   errorHeroItemValue: { fontSize: 20, fontWeight: '700', color: theme.textPrimary, marginTop: 4 },
@@ -3839,11 +3876,11 @@ const styles = StyleSheet.create({
   mostCommonErrorText: { flex: 1, fontSize: 12, color: theme.textSecondary },
   mostCommonErrorHighlight: { fontWeight: '700', color: theme.warning },
   errorRatesGrid: { flexDirection: 'row', gap: 12 },
-  errorRateCard: { flex: 1, alignItems: 'center', padding: 16, borderRadius: theme.borderRadius.md, borderWidth: 2, backgroundColor: theme.backgroundSecondary },
-  errorRateValue: { fontSize: 28, fontWeight: '700', marginTop: 8 },
-  errorRateLabel: { fontSize: 11, color: theme.textMuted, marginTop: 4 },
-  insightBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 12, padding: 12, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, borderLeftWidth: 3, borderLeftColor: theme.warning },
-  insightText: { flex: 1, fontSize: 12, color: theme.textSecondary, lineHeight: 18 },
+  errorRateCard: { flex: 1, alignItems: 'center', padding: 18, borderRadius: 18, borderWidth: 2, backgroundColor: '#FAFAFA' },
+  errorRateValue: { fontSize: 32, fontWeight: '800', marginTop: 8, letterSpacing: -0.5 },
+  errorRateLabel: { fontSize: 11, color: theme.textMuted, marginTop: 4, fontWeight: '600' },
+  insightBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 14, padding: 14, backgroundColor: '#FFFBEB', borderRadius: 14, borderLeftWidth: 3, borderLeftColor: '#F59E0B', borderWidth: 1, borderTopColor: '#FEF3C7', borderRightColor: '#FEF3C7', borderBottomColor: '#FEF3C7' },
+  insightText: { flex: 1, fontSize: 12, color: '#78350F', lineHeight: 18 },
   contextComparison: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingVertical: 8 },
   contextItem: { alignItems: 'center' },
   contextLabel: { fontSize: 12, color: theme.textMuted, marginBottom: 4 },
@@ -3898,7 +3935,7 @@ const styles = StyleSheet.create({
   progressionFilterTextActive: { color: '#FFF' },
   trendCardsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   trendCardsRowTablet: { gap: 16, marginBottom: 24 },
-  trendCard: { flex: 1, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 12, borderLeftWidth: 3, ...theme.shadows.card },
+  trendCard: { flex: 1, backgroundColor: '#FFF', borderRadius: 16, padding: 14, borderLeftWidth: 4, ...theme.shadows.card, borderWidth: 1, borderTopColor: '#F1F5F9', borderRightColor: '#F1F5F9', borderBottomColor: '#F1F5F9' },
   trendCardTablet: { padding: 18, borderLeftWidth: 4 },
   trendCardValueTablet: { fontSize: 28 },
   trendCardLabelTablet: { fontSize: 13 },
@@ -3951,16 +3988,16 @@ const styles = StyleSheet.create({
   challengeProgLegendDot: { width: 10, height: 10, borderRadius: 5 },
   challengeProgLegendText: { fontSize: 12, color: theme.textSecondary, fontWeight: '500' },
   // Cross-reference table styles
-  crossTableHeader: { flexDirection: 'row', alignItems: 'center', paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: theme.border, marginBottom: 4 },
+  crossTableHeader: { flexDirection: 'row', alignItems: 'center', paddingBottom: 10, borderBottomWidth: 2, borderBottomColor: '#E2E8F0', marginBottom: 4 },
   crossTableHeaderLabel: { flex: 1.5, paddingLeft: 4 },
-  crossTableHeaderText: { fontSize: 11, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  crossTableHeaderText: { fontSize: 10, fontWeight: '800', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8 },
   crossTableHeaderCell: { flex: 1, alignItems: 'center', gap: 2 },
-  crossTableHeaderCellText: { fontSize: 9, fontWeight: '600' },
-  crossTableRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border + '50' },
-  crossTableRowAlt: { backgroundColor: theme.backgroundSecondary + '40' },
+  crossTableHeaderCellText: { fontSize: 9, fontWeight: '700' },
+  crossTableRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  crossTableRowAlt: { backgroundColor: '#F8FAFC' },
   crossTableRowLabel: { flex: 1.5, flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 4 },
   crossTableRowLabelText: { fontSize: 12, fontWeight: '600', color: theme.textPrimary },
   crossTableCell: { flex: 1, alignItems: 'center' },
-  crossTableCellValue: { fontSize: 15, fontWeight: '700' },
+  crossTableCellValue: { fontSize: 15, fontWeight: '800', letterSpacing: -0.2 },
   crossTableCellPct: { fontSize: 9, color: theme.textMuted, marginTop: 1 },
 });
