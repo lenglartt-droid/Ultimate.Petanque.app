@@ -571,8 +571,7 @@ export default function LeaderboardScreen() {
         </LinearGradient>
 
         {/* Sort chips - context-dependent */}
-        {activeTab === 'players' ? (
-            <View style={s.sortWrapper}>
+        <View style={s.sortWrapper}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.sortRow}>
             {activeTab === 'players' ? ([
               { id: 'winRate' as LeaderboardSort, label: t('leaderboard', 'sortByWinRate'), icon: 'emoji-events' },
@@ -580,11 +579,11 @@ export default function LeaderboardScreen() {
               { id: 'tirRate' as LeaderboardSort, label: t('leaderboard', 'sortByTirRate'), icon: 'gps-fixed' },
               { id: 'pointRate' as LeaderboardSort, label: t('leaderboard', 'sortByPointRate'), icon: 'adjust' },
               { id: 'carreauRate' as LeaderboardSort, label: t('leaderboard', 'sortByCarreauRate'), icon: 'stars' },
-            ]).map(chip => (
+            ] as { id: string; label: string; icon: string }[]).map(chip => (
               <Pressable
                 key={chip.id}
-                style={[s.sortChip, sortBy === chip.id && s.sortChipActive]}
-                onPress={() => { Haptics.selectionAsync(); setSortBy(chip.id); }}
+                style={[s.sortChip, sortBy === chip.id as LeaderboardSort && s.sortChipActive]}
+                onPress={() => { Haptics.selectionAsync(); setSortBy(chip.id as LeaderboardSort); }}
               >
                 <MaterialIcons name={chip.icon as any} size={14} color={sortBy === chip.id ? '#FFF' : theme.textSecondary} />
                 <Text style={[s.sortChipText, sortBy === chip.id && s.sortChipTextActive]}>{chip.label}</Text>
@@ -595,11 +594,11 @@ export default function LeaderboardScreen() {
               { id: 'totalMatches' as ClubLeaderboardSort, label: t('leaderboard', 'sortByTotalMatches'), icon: 'sports' },
               { id: 'playerCount' as ClubLeaderboardSort, label: t('leaderboard', 'sortByPlayerCount'), icon: 'people' },
               { id: 'avgTirRate' as ClubLeaderboardSort, label: t('leaderboard', 'sortByAvgTirRate'), icon: 'gps-fixed' },
-            ]).map(chip => (
+            ] as { id: string; label: string; icon: string }[]).map(chip => (
               <Pressable
                 key={chip.id}
-                style={[s.sortChip, clubSortBy === chip.id && s.sortChipActive]}
-                onPress={() => { Haptics.selectionAsync(); setClubSortBy(chip.id); }}
+                style={[s.sortChip, clubSortBy === chip.id as ClubLeaderboardSort && s.sortChipActive]}
+                onPress={() => { Haptics.selectionAsync(); setClubSortBy(chip.id as ClubLeaderboardSort); }}
               >
                 <MaterialIcons name={chip.icon as any} size={14} color={clubSortBy === chip.id ? '#FFF' : theme.textSecondary} />
                 <Text style={[s.sortChipText, clubSortBy === chip.id && s.sortChipTextActive]}>{chip.label}</Text>
@@ -609,11 +608,11 @@ export default function LeaderboardScreen() {
               { id: 'podiums' as const, label: t('leaderboard', 'sortByPodiums'), icon: 'military-tech' },
               { id: 'avgScore' as const, label: t('leaderboard', 'sortByAvgScore'), icon: 'stars' },
               { id: 'participations' as const, label: t('leaderboard', 'sortByParticipations'), icon: 'campaign' },
-            ]).map(chip => (
+            ] as { id: string; label: string; icon: string }[]).map(chip => (
               <Pressable
                 key={chip.id}
                 style={[s.sortChip, eventSortBy === chip.id && s.sortChipActive]}
-                onPress={() => { Haptics.selectionAsync(); setEventSortBy(chip.id); }}
+                onPress={() => { Haptics.selectionAsync(); setEventSortBy(chip.id as any); }}
               >
                 <MaterialIcons name={chip.icon as any} size={14} color={eventSortBy === chip.id ? '#FFF' : theme.textSecondary} />
                 <Text style={[s.sortChipText, eventSortBy === chip.id && s.sortChipTextActive]}>{chip.label}</Text>
@@ -624,11 +623,11 @@ export default function LeaderboardScreen() {
               { id: 'totalMatches' as BoulesLeaderboardSort, label: t('leaderboard', 'sortByTotalMatches'), icon: 'sports' },
               { id: 'avgTirRate' as BoulesLeaderboardSort, label: t('leaderboard', 'sortByAvgTirRate'), icon: 'gps-fixed' },
               { id: 'avgCarreauRate' as BoulesLeaderboardSort, label: t('leaderboard', 'sortByAvgCarreauRate'), icon: 'stars' },
-            ]).map(chip => (
+            ] as { id: string; label: string; icon: string }[]).map(chip => (
               <Pressable
                 key={chip.id}
-                style={[s.sortChip, boulesSortBy === chip.id && s.sortChipActive]}
-                onPress={() => { Haptics.selectionAsync(); setBoulesSortBy(chip.id); }}
+                style={[s.sortChip, boulesSortBy === chip.id as BoulesLeaderboardSort && s.sortChipActive]}
+                onPress={() => { Haptics.selectionAsync(); setBoulesSortBy(chip.id as BoulesLeaderboardSort); }}
               >
                 <MaterialIcons name={chip.icon as any} size={14} color={boulesSortBy === chip.id ? '#FFF' : theme.textSecondary} />
                 <Text style={[s.sortChipText, boulesSortBy === chip.id && s.sortChipTextActive]}>{chip.label}</Text>
