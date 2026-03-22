@@ -12,6 +12,7 @@ import {
   Modal,
   TextInput,
   Share,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -251,6 +252,26 @@ export default function NewMatchScreen() {
     if (!selectedBoulesSetId) return null;
     return boulesSets.find(bs => bs.id === selectedBoulesSetId) || null;
   }, [selectedBoulesSetId, boulesSets]);
+
+  // Dynamic notation card layout based on player count
+  const notationCardLayout = useMemo(() => {
+    const total = teamAPlayers.length + teamBPlayers.length;
+    const sw = Dimensions.get('window').width;
+    const padding = 24;
+    if (total <= 2) {
+      const gap = 12;
+      const w = Math.min(220, Math.floor((sw - padding - gap) / 2));
+      return { cardWidth: w, gap: 12, isCompact: false, isUltraCompact: false };
+    } else if (total <= 4) {
+      const gap = 10;
+      const w = Math.floor((sw - padding - gap) / 2);
+      return { cardWidth: w, gap: 10, isCompact: true, isUltraCompact: false };
+    } else {
+      const gap = 8;
+      const w = Math.floor((sw - padding - gap * 2) / 3);
+      return { cardWidth: w, gap: 8, isCompact: true, isUltraCompact: true };
+    }
+  }, [teamAPlayers.length, teamBPlayers.length]);
 
   // Sort terrains by match frequency (most played first)
   const sortedTerrains = useMemo(() => {
@@ -1154,116 +1175,122 @@ export default function NewMatchScreen() {
                   </View>
                 </View>
 
-                <ScrollView 
-                  horizontal 
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.fsQuickNotationScroll}
-                >
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 12, gap: notationCardLayout.gap, justifyContent: 'center' }}>
                   {[...teamAPlayers, ...teamBPlayers].map((p, idx) => {
                     const isTeamA = idx < teamAPlayers.length;
                     const stats = getPlayerActionStats(p.playerId);
                     const teamColor = isTeamA ? theme.primary : theme.accent;
                     const firstName = getPlayerName(p.playerId).split(' ')[0];
+                    const { isCompact, isUltraCompact, cardWidth } = notationCardLayout;
+                    const iconSz = isUltraCompact ? 14 : 18;
                     
                     return (
-                      <View key={p.playerId} style={styles.fsQuickNotationPlayer}>
-                        <View style={[styles.fsQuickNotationNameBadge, { backgroundColor: teamColor + '25' }]}>
+                      <View key={p.playerId} style={[styles.fsQuickNotationPlayer, { width: cardWidth }]}>
+                        <View style={[styles.fsQuickNotationNameBadge, { backgroundColor: teamColor + '25' }, isCompact && { paddingVertical: 4, paddingHorizontal: 8, marginBottom: 6 }]}>
                           <View style={[styles.fsQuickNotationDot, { backgroundColor: teamColor }]} />
-                          <Text style={styles.fsQuickNotationName} numberOfLines={1}>{firstName}</Text>
-                          <Text style={styles.fsQuickNotationStats}>
-                            {stats.tirsSuccess}/{stats.tirs} • {stats.pointsSuccess}/{stats.points}{stats.carreaux > 0 ? ` • C${stats.carreaux}` : ''}
-                          </Text>
+                          <Text style={[styles.fsQuickNotationName, isUltraCompact && { fontSize: 11 }]} numberOfLines={1}>{firstName}</Text>
+                          {!isUltraCompact ? (
+                            <Text style={styles.fsQuickNotationStats}>
+                              {stats.tirsSuccess}/{stats.tirs} • {stats.pointsSuccess}/{stats.points}{stats.carreaux > 0 ? ` • C${stats.carreaux}` : ''}
+                            </Text>
+                          ) : null}
                           {(actionHistory[p.playerId]?.length || 0) > 0 ? (
                             <Pressable
-                              style={styles.fsQuickUndoBtn}
+                              style={[styles.fsQuickUndoBtn, isUltraCompact && { width: 22, height: 22, borderRadius: 11 }]}
                               onPress={() => undoLastAction(p.playerId)}
                               hitSlop={6}
                             >
-                              <MaterialIcons name="undo" size={14} color="rgba(255,255,255,0.6)" />
+                              <MaterialIcons name="undo" size={isUltraCompact ? 12 : 14} color="rgba(255,255,255,0.6)" />
                             </Pressable>
                           ) : null}
                         </View>
                         {notationMode === 'quick' ? (
                           /* === QUICK MODE: 1 tap = recorded === */
-                          <View style={styles.fsQuickModeBtns}>
+                          <View style={[styles.fsQuickModeBtns, isCompact && { gap: 5 }]}>
                             {/* TIR section */}
-                            <View style={styles.fsQmSection}>
-                              <View style={styles.fsQmSectionHeader}>
-                                <MaterialIcons name="gps-fixed" size={12} color="rgba(255,255,255,0.5)" />
-                                <Text style={styles.fsQmSectionLabel}>{t('notation', 'tirShort')}</Text>
-                              </View>
-                              <View style={styles.fsQmSectionBtns}>
+                            <View style={[styles.fsQmSection, isCompact && { gap: 2 }]}>
+                              {!isUltraCompact ? (
+                                <View style={styles.fsQmSectionHeader}>
+                                  <MaterialIcons name="gps-fixed" size={12} color="rgba(255,255,255,0.5)" />
+                                  <Text style={styles.fsQmSectionLabel}>{t('notation', 'tirShort')}</Text>
+                                </View>
+                              ) : null}
+                              <View style={[styles.fsQmSectionBtns, isCompact && { gap: 4 }]}>
                                 <Pressable
-                                  style={styles.fsQmTirSuccessBtn}
+                                  style={[styles.fsQmTirSuccessBtn, isCompact && { paddingVertical: 10, borderRadius: 10 }]}
                                   onPress={() => { recordAction(p.playerId, 'tir', true); }}
                                 >
-                                  <MaterialIcons name="check" size={18} color="#FFF" />
-                                  <Text style={styles.fsQmBtnLabel}>{t('notation', 'okLabel')}</Text>
+                                  <MaterialIcons name="check" size={iconSz} color="#FFF" />
+                                  {!isCompact ? <Text style={styles.fsQmBtnLabel}>{t('notation', 'okLabel')}</Text> : null}
+                                  {isUltraCompact ? null : isCompact ? <Text style={[styles.fsQmBtnLabel, { fontSize: 9 }]}>T</Text> : null}
                                 </Pressable>
                                 <Pressable
-                                  style={styles.fsQmTirFailBtn}
+                                  style={[styles.fsQmTirFailBtn, isCompact && { paddingVertical: 10, borderRadius: 10 }]}
                                   onPress={() => { recordAction(p.playerId, 'tir', false); }}
                                 >
-                                  <MaterialIcons name="close" size={18} color="#FFF" />
-                                  <Text style={styles.fsQmBtnLabel}>{t('notation', 'missShort')}</Text>
+                                  <MaterialIcons name="close" size={iconSz} color="#FFF" />
+                                  {!isCompact ? <Text style={styles.fsQmBtnLabel}>{t('notation', 'missShort')}</Text> : null}
                                 </Pressable>
                               </View>
                             </View>
                             {/* POINT section */}
-                            <View style={styles.fsQmSection}>
-                              <View style={styles.fsQmSectionHeader}>
-                                <MaterialIcons name="adjust" size={12} color="rgba(255,255,255,0.5)" />
-                                <Text style={styles.fsQmSectionLabel}>{t('notation', 'pointShortLabel')}</Text>
-                              </View>
-                              <View style={styles.fsQmSectionBtns}>
+                            <View style={[styles.fsQmSection, isCompact && { gap: 2 }]}>
+                              {!isUltraCompact ? (
+                                <View style={styles.fsQmSectionHeader}>
+                                  <MaterialIcons name="adjust" size={12} color="rgba(255,255,255,0.5)" />
+                                  <Text style={styles.fsQmSectionLabel}>{t('notation', 'pointShortLabel')}</Text>
+                                </View>
+                              ) : null}
+                              <View style={[styles.fsQmSectionBtns, isCompact && { gap: 4 }]}>
                                 <Pressable
-                                  style={styles.fsQmPointSuccessBtn}
+                                  style={[styles.fsQmPointSuccessBtn, isCompact && { paddingVertical: 10, borderRadius: 10 }]}
                                   onPress={() => { recordAction(p.playerId, 'point', true); }}
                                 >
-                                  <MaterialIcons name="check" size={18} color="#FFF" />
-                                  <Text style={styles.fsQmBtnLabel}>{t('notation', 'okLabel')}</Text>
+                                  <MaterialIcons name="check" size={iconSz} color="#FFF" />
+                                  {!isCompact ? <Text style={styles.fsQmBtnLabel}>{t('notation', 'okLabel')}</Text> : null}
+                                  {isUltraCompact ? null : isCompact ? <Text style={[styles.fsQmBtnLabel, { fontSize: 9 }]}>P</Text> : null}
                                 </Pressable>
                                 <Pressable
-                                  style={styles.fsQmPointFailBtn}
+                                  style={[styles.fsQmPointFailBtn, isCompact && { paddingVertical: 10, borderRadius: 10 }]}
                                   onPress={() => { recordAction(p.playerId, 'point', false); }}
                                 >
-                                  <MaterialIcons name="close" size={18} color="#FFF" />
-                                  <Text style={styles.fsQmBtnLabel}>{t('notation', 'missShort')}</Text>
+                                  <MaterialIcons name="close" size={iconSz} color="#FFF" />
+                                  {!isCompact ? <Text style={styles.fsQmBtnLabel}>{t('notation', 'missShort')}</Text> : null}
                                 </Pressable>
                               </View>
                             </View>
                             {/* CARREAU button */}
                             <Pressable
-                              style={styles.fsQmCarreauBtn}
+                              style={[styles.fsQmCarreauBtn, isCompact && { paddingVertical: 8, borderRadius: 10 }]}
                               onPress={() => { recordAction(p.playerId, 'carreau', true); }}
                             >
-                              <MaterialIcons name="stars" size={18} color="#FFF" />
-                              <Text style={styles.fsQmCarreauLabel}>{t('notation', 'carreauLabel')}</Text>
+                              <MaterialIcons name="stars" size={isCompact ? 16 : 18} color="#FFF" />
+                              {!isUltraCompact ? <Text style={[styles.fsQmCarreauLabel, isCompact && { fontSize: 10 }]}>{isCompact ? 'C' : t('notation', 'carreauLabel')}</Text> : null}
                             </Pressable>
                           </View>
                         ) : (
                           /* === DETAILED MODE: opens multi-step modal === */
-                          <View style={styles.fsQuickNotationBtns}>
+                          <View style={[styles.fsQuickNotationBtns, isCompact && { gap: 6 }]}>
                             <Pressable
-                              style={styles.fsQuickNotationTirBtn}
+                              style={[styles.fsQuickNotationTirBtn, isCompact && { paddingVertical: 10, borderRadius: 10 }]}
                               onPress={() => openAdvancedNotation(p.playerId, getPlayerName(p.playerId), isTeamA ? 'A' : 'B', 'tir')}
                             >
-                              <MaterialIcons name="gps-fixed" size={20} color="#FFF" />
-                              <Text style={styles.fsQuickNotationBtnText}>TIR</Text>
+                              <MaterialIcons name="gps-fixed" size={isCompact ? 16 : 20} color="#FFF" />
+                              {!isUltraCompact ? <Text style={[styles.fsQuickNotationBtnText, isCompact && { fontSize: 11 }]}>TIR</Text> : null}
                             </Pressable>
                             <Pressable
-                              style={styles.fsQuickNotationPointBtn}
+                              style={[styles.fsQuickNotationPointBtn, isCompact && { paddingVertical: 10, borderRadius: 10 }]}
                               onPress={() => openAdvancedNotation(p.playerId, getPlayerName(p.playerId), isTeamA ? 'A' : 'B', 'point')}
                             >
-                              <MaterialIcons name="adjust" size={20} color="#FFF" />
-                              <Text style={styles.fsQuickNotationBtnText}>POINT</Text>
+                              <MaterialIcons name="adjust" size={isCompact ? 16 : 20} color="#FFF" />
+                              {!isUltraCompact ? <Text style={[styles.fsQuickNotationBtnText, isCompact && { fontSize: 11 }]}>PT</Text> : null}
                             </Pressable>
                           </View>
                         )}
                       </View>
                     );
                   })}
-                </ScrollView>
+                </View>
               </View>
             )}
 
@@ -2766,7 +2793,7 @@ const styles = StyleSheet.create({
   fsQmCarreauBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, backgroundColor: 'rgba(217,119,6,0.8)', borderRadius: 12 },
   fsQmCarreauLabel: { fontSize: 12, fontWeight: '800', color: '#FFF', letterSpacing: 0.5 },
   fsQuickNotationScroll: { paddingHorizontal: 12, gap: 12 },
-  fsQuickNotationPlayer: { width: 220, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 12 },
+  fsQuickNotationPlayer: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 12 },
   fsQuickNotationNameBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 10, marginBottom: 10 },
   fsQuickNotationDot: { width: 8, height: 8, borderRadius: 4 },
   fsQuickNotationName: { fontSize: 13, fontWeight: '700', color: '#FFF', flex: 1 },
