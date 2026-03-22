@@ -1477,6 +1477,14 @@ export const translations = {
     playerRoles: { fr: 'Rôles des joueurs', en: 'Player roles' },
     tournamentPhase: { fr: 'Phase du tournoi', en: 'Tournament phase' },
     shotResult: { fr: 'Résultat du tir', en: 'Shot result' },
+    sponsoredChallenge: { fr: 'Défi Sponsorisé', en: 'Sponsored Challenge' },
+    sponsoredBy: { fr: 'Sponsorisé par', en: 'Sponsored by' },
+    selectSponsor: { fr: 'Choisir un sponsor', en: 'Choose a sponsor' },
+    noSponsor: { fr: 'Sans sponsor', en: 'No sponsor' },
+    sponsorLabel: { fr: 'Sponsor', en: 'Sponsor' },
+    loadingSponsors: { fr: 'Chargement des sponsors...', en: 'Loading sponsors...' },
+    noSponsorsAvailable: { fr: 'Aucun ambassadeur disponible', en: 'No ambassadors available' },
+    sponsoredBadge: { fr: 'SPONSORISÉ', en: 'SPONSORED' },
   },
 
   // ============================================
@@ -1548,6 +1556,14 @@ export const translations = {
     detailedNotation: { fr: 'Notation détaillée', en: 'Detailed notation' },
     youLabel: { fr: 'Vous', en: 'You' },
     shotResult: { fr: 'Résultat du tir', en: 'Shot result' },
+    sponsoredChallenge: { fr: 'Défi Sponsorisé', en: 'Sponsored Challenge' },
+    sponsoredBy: { fr: 'Sponsorisé par', en: 'Sponsored by' },
+    selectSponsor: { fr: 'Choisir un sponsor', en: 'Choose a sponsor' },
+    noSponsor: { fr: 'Sans sponsor', en: 'No sponsor' },
+    sponsorLabel: { fr: 'Sponsor', en: 'Sponsor' },
+    loadingSponsors: { fr: 'Chargement des sponsors...', en: 'Loading sponsors...' },
+    noSponsorsAvailable: { fr: 'Aucun ambassadeur disponible', en: 'No ambassadors available' },
+    sponsoredBadge: { fr: 'SPONSORISÉ', en: 'SPONSORED' },
   },
 
   // ============================================

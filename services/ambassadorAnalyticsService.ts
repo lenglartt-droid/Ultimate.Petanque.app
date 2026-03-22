@@ -13,7 +13,7 @@ export interface AmbassadorAnalytics {
  */
 export function trackAmbassadorEvent(
   ambassadorId: string,
-  eventType: 'profile_view' | 'social_click' | 'banner_impression',
+  eventType: 'profile_view' | 'social_click' | 'banner_impression' | 'sponsored_challenge',
   socialPlatform?: string
 ) {
   const supabase = getSupabaseClient();

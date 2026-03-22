@@ -31,6 +31,10 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { SimplifiedShotNotation, SimpleShotRecord } from '@/components';
 import ShareModal from '@/components/ui/ShareModal';
 import { showInterstitial } from '@/services/adService';
+import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
+import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
+import { Image } from 'expo-image';
+import { ActivityIndicator } from 'react-native';
 import {
   ChallengeType, 
   ChallengeShot,
@@ -262,6 +266,22 @@ export default function NewChallengeScreen() {
   const [showChallTerrainPicker, setShowChallTerrainPicker] = useState(false);
   const [showChallBoulesSetPicker, setShowChallBoulesSetPicker] = useState(false);
   const [challTerrainSearch, setChallTerrainSearch] = useState('');
+
+  // Sponsor state
+  const [selectedSponsor, setSelectedSponsor] = useState<Ambassador | null>(null);
+  const [showSponsorPicker, setShowSponsorPicker] = useState(false);
+  const [sponsors, setSponsors] = useState<Ambassador[]>([]);
+  const [loadingSponsors, setLoadingSponsors] = useState(false);
+  const [sponsorsLoaded, setSponsorsLoaded] = useState(false);
+
+  const loadSponsors = useCallback(async () => {
+    if (sponsorsLoaded) return;
+    setLoadingSponsors(true);
+    const { ambassadors } = await fetchAmbassadors();
+    setSponsors(ambassadors);
+    setLoadingSponsors(false);
+    setSponsorsLoaded(true);
+  }, [sponsorsLoaded]);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const config = selectedType ? CHALLENGE_CONFIG[selectedType] : null;
@@ -597,6 +617,12 @@ export default function NewChallengeScreen() {
       pointQuality: record.pointQuality,
     }));
 
+    const sponsorFields = selectedSponsor ? {
+      sponsorId: selectedSponsor.id,
+      sponsorName: selectedSponsor.displayName,
+      sponsorPhoto: selectedSponsor.photo || undefined,
+    } : {};
+
     if (selectedType === 'precision') {
       return {
         type: selectedType,
@@ -615,6 +641,7 @@ export default function NewChallengeScreen() {
         duration: elapsedTime,
         boulesSetId: selectedBoulesSetId || undefined,
         terrainId: selectedTerrainId || undefined,
+        ...sponsorFields,
       };
     } else {
       return {
@@ -636,6 +663,7 @@ export default function NewChallengeScreen() {
         detailedShots: detailedShots.length > 0 ? detailedShots : undefined,
         boulesSetId: selectedBoulesSetId || undefined,
         terrainId: selectedTerrainId || undefined,
+        ...sponsorFields,
       };
     }
   }, [selectedType, challengeMode, selectedOpponent, opponentShots, opponentPrecisionShots,
@@ -646,6 +674,7 @@ export default function NewChallengeScreen() {
     const data = buildChallengeData();
     if (!data) return;
     addChallenge(data);
+    if (selectedSponsor) trackAmbassadorEvent(selectedSponsor.id, 'sponsored_challenge');
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     // Show interstitial ad after saving challenge
     showInterstitial().finally(() => {
@@ -658,6 +687,7 @@ export default function NewChallengeScreen() {
     if (!data) return;
     setIsSavingForShare(true);
     const newId = await addChallenge(data);
+    if (selectedSponsor) trackAmbassadorEvent(selectedSponsor.id, 'sponsored_challenge');
     setIsSavingForShare(false);
     if (newId) {
       setSavedChallengeIdForShare(newId);
@@ -986,6 +1016,38 @@ export default function NewChallengeScreen() {
             </View>
           </Animated.View>
 
+          {/* Sponsor Selector */}
+          <Animated.View entering={FadeInDown.duration(300).delay(80)} style={styles.readyPickersSection}>
+            <Pressable style={styles.readyPickerBtn} onPress={() => { loadSponsors(); setShowSponsorPicker(true); }}>
+              <View style={[styles.readyPickerIcon, { backgroundColor: selectedSponsor ? '#F59E0B15' : theme.textMuted + '10' }]}>
+                {selectedSponsor?.photo ? (
+                  <Image source={{ uri: selectedSponsor.photo }} style={{ width: 44, height: 44, borderRadius: 12 }} contentFit="cover" />
+                ) : (
+                  <MaterialIcons name="campaign" size={20} color={selectedSponsor ? '#F59E0B' : theme.textMuted} />
+                )}
+              </View>
+              <View style={styles.readyPickerContent}>
+                <Text style={styles.readyPickerLabel}>{t('challenge', 'sponsorLabel')}</Text>
+                <Text style={[styles.readyPickerValue, !selectedSponsor && styles.readyPickerPlaceholder]} numberOfLines={1}>
+                  {selectedSponsor ? selectedSponsor.displayName : t('challenge', 'selectSponsor')}
+                </Text>
+              </View>
+              {selectedSponsor ? (
+                <View style={styles.sponsoredBadgeSmall}>
+                  <MaterialIcons name="verified" size={10} color="#FFF" />
+                  <Text style={styles.sponsoredBadgeSmallText}>{t('challenge', 'sponsoredBadge')}</Text>
+                </View>
+              ) : null}
+              {selectedSponsor ? (
+                <Pressable onPress={(e) => { e.stopPropagation(); setSelectedSponsor(null); Haptics.selectionAsync(); }} hitSlop={8}>
+                  <MaterialIcons name="close" size={18} color={theme.textMuted} />
+                </Pressable>
+              ) : (
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              )}
+            </Pressable>
+          </Animated.View>
+
           {/* Terrain & Boules Set Selectors */}
           <Animated.View entering={FadeInDown.duration(300).delay(100)} style={styles.readyPickersSection}>
             <Pressable style={styles.readyPickerBtn} onPress={() => { setChallTerrainSearch(''); setShowChallTerrainPicker(true); }}>
@@ -1114,6 +1176,57 @@ export default function NewChallengeScreen() {
           </SafeAreaView>
         </Modal>
 
+        {/* Sponsor Picker Modal */}
+        <Modal visible={showSponsorPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowSponsorPicker(false)}>
+          <SafeAreaView style={styles.pickerModalContainer}>
+            <View style={styles.pickerModalHeader}>
+              <Pressable style={styles.pickerModalCloseBtn} onPress={() => setShowSponsorPicker(false)}>
+                <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+              </Pressable>
+              <Text style={styles.pickerModalTitle}>{t('challenge', 'selectSponsor')}</Text>
+              <View style={{ width: 40 }} />
+            </View>
+            <Pressable style={[styles.pickerModalItem, !selectedSponsor && styles.pickerModalItemActive]} onPress={() => { Haptics.selectionAsync(); setSelectedSponsor(null); setShowSponsorPicker(false); }}>
+              <View style={[styles.pickerModalItemIcon, { backgroundColor: theme.textMuted + '15' }]}><MaterialIcons name="block" size={20} color={theme.textMuted} /></View>
+              <Text style={styles.pickerModalItemName}>{t('challenge', 'noSponsor')}</Text>
+              {!selectedSponsor ? <MaterialIcons name="check-circle" size={20} color={theme.primary} /> : null}
+            </Pressable>
+            {loadingSponsors ? (
+              <View style={styles.pickerModalEmpty}>
+                <ActivityIndicator size="large" color={theme.accent} />
+                <Text style={styles.pickerModalEmptyText}>{t('challenge', 'loadingSponsors')}</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={sponsors}
+                keyExtractor={item => item.id}
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
+                renderItem={({ item: amb }) => (
+                  <Pressable style={[styles.pickerModalItem, { marginHorizontal: 0 }, selectedSponsor?.id === amb.id && styles.pickerModalItemActive]} onPress={() => { Haptics.selectionAsync(); setSelectedSponsor(amb); setShowSponsorPicker(false); }}>
+                    <View style={[styles.sponsorPickerAvatar, selectedSponsor?.id === amb.id && { borderColor: '#F59E0B', borderWidth: 2 }]}>
+                      {amb.photo ? (
+                        <Image source={{ uri: amb.photo }} style={{ width: 40, height: 40, borderRadius: 10 }} contentFit="cover" />
+                      ) : (
+                        <MaterialIcons name="person" size={20} color={theme.accent} />
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.pickerModalItemName}>{amb.displayName}</Text>
+                      <Text style={styles.pickerModalItemSub}>{amb.club || amb.city || 'Ambassador'}</Text>
+                    </View>
+                    <View style={styles.sponsorPickerBadge}>
+                      <MaterialIcons name="verified" size={12} color="#F59E0B" />
+                    </View>
+                    {selectedSponsor?.id === amb.id ? <MaterialIcons name="check-circle" size={20} color="#F59E0B" /> : null}
+                  </Pressable>
+                )}
+                ListEmptyComponent={<View style={styles.pickerModalEmpty}><MaterialIcons name="campaign" size={40} color={theme.textMuted} /><Text style={styles.pickerModalEmptyText}>{t('challenge', 'noSponsorsAvailable')}</Text></View>}
+              />
+            )}
+          </SafeAreaView>
+        </Modal>
+
         {/* Boules Set Picker Modal */}
         <Modal visible={showChallBoulesSetPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowChallBoulesSetPicker(false)}>
           <SafeAreaView style={styles.pickerModalContainer}>
@@ -1175,6 +1288,29 @@ export default function NewChallengeScreen() {
           <Text style={styles.headerTitle}>{t('challenge', 'results')}</Text>
           <View style={styles.headerBtn} />
         </View>
+
+        {/* Sponsor branding banner on results */}
+        {selectedSponsor ? (
+          <View style={styles.sponsorResultBanner}>
+            <View style={styles.sponsorResultBannerInner}>
+              {selectedSponsor.photo ? (
+                <Image source={{ uri: selectedSponsor.photo }} style={styles.sponsorResultPhoto} contentFit="cover" transition={200} />
+              ) : (
+                <View style={[styles.sponsorResultPhoto, { backgroundColor: '#F59E0B15', alignItems: 'center', justifyContent: 'center' }]}>
+                  <MaterialIcons name="campaign" size={18} color="#F59E0B" />
+                </View>
+              )}
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sponsorResultLabel}>{t('challenge', 'sponsoredBy')}</Text>
+                <Text style={styles.sponsorResultName}>{selectedSponsor.displayName}</Text>
+              </View>
+              <View style={styles.sponsoredResultBadge}>
+                <MaterialIcons name="verified" size={12} color="#FFF" />
+                <Text style={styles.sponsoredResultBadgeText}>{t('challenge', 'sponsoredBadge')}</Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
 
         <ScrollView
           style={styles.scrollView}
@@ -1309,6 +1445,20 @@ export default function NewChallengeScreen() {
   // ============================================
 
   if (selectedType === 'precision') {
+    const sponsorBannerPrecision = selectedSponsor ? (
+      <View style={styles.sponsorInProgressBanner}>
+        {selectedSponsor.photo ? (
+          <Image source={{ uri: selectedSponsor.photo }} style={styles.sponsorInProgressPhoto} contentFit="cover" />
+        ) : (
+          <View style={[styles.sponsorInProgressPhoto, { backgroundColor: '#F59E0B15', alignItems: 'center', justifyContent: 'center' }]}>
+            <MaterialIcons name="campaign" size={14} color="#F59E0B" />
+          </View>
+        )}
+        <Text style={styles.sponsorInProgressText}>{t('challenge', 'sponsoredBy')} <Text style={{ fontWeight: '700' }}>{selectedSponsor.displayName}</Text></Text>
+        <MaterialIcons name="verified" size={14} color="#F59E0B" />
+      </View>
+    ) : null;
+
     const isOpponentTurn = currentTurn === 'opponent';
     const displayAtelier = isOpponentTurn ? opponentAtelier : currentAtelier;
     const displayDistance = isOpponentTurn ? opponentDistance : currentDistance;
@@ -1317,6 +1467,7 @@ export default function NewChallengeScreen() {
     
     return (
       <SafeAreaView edges={['top']} style={styles.container}>
+        {sponsorBannerPrecision}
         <View style={styles.header}>
           <Pressable style={styles.cancelHeaderBtn} onPress={cancelChallenge}>
             <Text style={styles.cancelHeaderBtnText}>{t('common', 'cancel')}</Text>
@@ -1444,6 +1595,20 @@ export default function NewChallengeScreen() {
   // RENDER: In Progress - Standard (10 tirs)
   // ============================================
 
+  const sponsorBannerStandard = selectedSponsor ? (
+    <View style={styles.sponsorInProgressBanner}>
+      {selectedSponsor.photo ? (
+        <Image source={{ uri: selectedSponsor.photo }} style={styles.sponsorInProgressPhoto} contentFit="cover" />
+      ) : (
+        <View style={[styles.sponsorInProgressPhoto, { backgroundColor: '#F59E0B15', alignItems: 'center', justifyContent: 'center' }]}>
+          <MaterialIcons name="campaign" size={14} color="#F59E0B" />
+        </View>
+      )}
+      <Text style={styles.sponsorInProgressText}>{t('challenge', 'sponsoredBy')} <Text style={{ fontWeight: '700' }}>{selectedSponsor.displayName}</Text></Text>
+      <MaterialIcons name="verified" size={14} color="#F59E0B" />
+    </View>
+  ) : null;
+
   const isOpponentTurn = currentTurn === 'opponent';
   const displayCurrentShot = isOpponentTurn ? opponentCurrentShot : currentShot;
   const displayShots = isOpponentTurn ? opponentShots : shots;
@@ -1451,6 +1616,7 @@ export default function NewChallengeScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
+      {sponsorBannerStandard}
       <View style={styles.header}>
         <Pressable style={styles.cancelHeaderBtn} onPress={cancelChallenge}>
           <Text style={styles.cancelHeaderBtnText}>{t('common', 'cancel')}</Text>
@@ -1814,4 +1980,19 @@ const styles = StyleSheet.create({
   pickerModalEmpty: { alignItems: 'center', paddingVertical: 40 },
   pickerModalEmptyText: { fontSize: 14, color: theme.textMuted, marginTop: 10 },
   pickerModalPrimaryBadge: { width: 20, height: 20, borderRadius: 10, backgroundColor: theme.carreauColor, alignItems: 'center', justifyContent: 'center', marginRight: 4 },
+  // Sponsor styles
+  sponsoredBadgeSmall: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F59E0B', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginRight: 6 },
+  sponsoredBadgeSmallText: { fontSize: 8, fontWeight: '800', color: '#FFF', letterSpacing: 0.5 },
+  sponsorPickerAvatar: { width: 40, height: 40, borderRadius: 10, backgroundColor: '#F59E0B10', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' as const },
+  sponsorPickerBadge: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#F59E0B15', alignItems: 'center', justifyContent: 'center', marginRight: 6 },
+  sponsorInProgressBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FEF3C7', paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#FDE68A' },
+  sponsorInProgressPhoto: { width: 28, height: 28, borderRadius: 8, overflow: 'hidden' as const },
+  sponsorInProgressText: { flex: 1, fontSize: 12, color: '#92400E', fontWeight: '500' },
+  sponsorResultBanner: { marginHorizontal: 16, marginTop: 12, marginBottom: 4 },
+  sponsorResultBannerInner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFFBEB', borderRadius: 16, padding: 14, borderWidth: 1.5, borderColor: '#FDE68A' },
+  sponsorResultPhoto: { width: 40, height: 40, borderRadius: 12, overflow: 'hidden' as const },
+  sponsorResultLabel: { fontSize: 10, color: '#92400E', fontWeight: '600', letterSpacing: 0.3, textTransform: 'uppercase' as const },
+  sponsorResultName: { fontSize: 15, fontWeight: '700', color: '#78350F', marginTop: 1 },
+  sponsoredResultBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F59E0B', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  sponsoredResultBadgeText: { fontSize: 9, fontWeight: '800', color: '#FFF', letterSpacing: 0.5 },
 });

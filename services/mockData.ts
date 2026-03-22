@@ -459,6 +459,9 @@ export interface Challenge {
   terrainId?: string;
   playerId?: string;
   playerName?: string;
+  sponsorId?: string;
+  sponsorName?: string;
+  sponsorPhoto?: string;
   opponentId?: string;
   opponentName?: string;
   opponentResult?: ChallengePlayerResult;
