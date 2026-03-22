@@ -1137,42 +1137,60 @@ export default function NewMatchScreen() {
                         {notationMode === 'quick' ? (
                           /* === QUICK MODE: 1 tap = recorded === */
                           <View style={styles.fsQuickModeBtns}>
-                            <View style={styles.fsQuickModeRow}>
-                              <Pressable
-                                style={styles.fsQmTirSuccessBtn}
-                                onPress={() => { recordAction(p.playerId, 'tir', true); }}
-                              >
-                                <MaterialIcons name="gps-fixed" size={16} color="#FFF" />
-                                <MaterialIcons name="check" size={14} color="#FFF" />
-                              </Pressable>
-                              <Pressable
-                                style={styles.fsQmTirFailBtn}
-                                onPress={() => { recordAction(p.playerId, 'tir', false); }}
-                              >
-                                <MaterialIcons name="gps-fixed" size={16} color="#FFF" />
-                                <MaterialIcons name="close" size={14} color="#FFF" />
-                              </Pressable>
-                              <Pressable
-                                style={styles.fsQmPointSuccessBtn}
-                                onPress={() => { recordAction(p.playerId, 'point', true); }}
-                              >
-                                <MaterialIcons name="adjust" size={16} color="#FFF" />
-                                <MaterialIcons name="check" size={14} color="#FFF" />
-                              </Pressable>
-                              <Pressable
-                                style={styles.fsQmPointFailBtn}
-                                onPress={() => { recordAction(p.playerId, 'point', false); }}
-                              >
-                                <MaterialIcons name="adjust" size={16} color="#FFF" />
-                                <MaterialIcons name="close" size={14} color="#FFF" />
-                              </Pressable>
-                              <Pressable
-                                style={styles.fsQmCarreauBtn}
-                                onPress={() => { recordAction(p.playerId, 'carreau', true); }}
-                              >
-                                <MaterialIcons name="stars" size={20} color="#FFF" />
-                              </Pressable>
+                            {/* TIR section */}
+                            <View style={styles.fsQmSection}>
+                              <View style={styles.fsQmSectionHeader}>
+                                <MaterialIcons name="gps-fixed" size={12} color="rgba(255,255,255,0.5)" />
+                                <Text style={styles.fsQmSectionLabel}>{t('notation', 'tirShort')}</Text>
+                              </View>
+                              <View style={styles.fsQmSectionBtns}>
+                                <Pressable
+                                  style={styles.fsQmTirSuccessBtn}
+                                  onPress={() => { recordAction(p.playerId, 'tir', true); }}
+                                >
+                                  <MaterialIcons name="check" size={18} color="#FFF" />
+                                  <Text style={styles.fsQmBtnLabel}>{t('notation', 'okLabel')}</Text>
+                                </Pressable>
+                                <Pressable
+                                  style={styles.fsQmTirFailBtn}
+                                  onPress={() => { recordAction(p.playerId, 'tir', false); }}
+                                >
+                                  <MaterialIcons name="close" size={18} color="#FFF" />
+                                  <Text style={styles.fsQmBtnLabel}>{t('notation', 'missShort')}</Text>
+                                </Pressable>
+                              </View>
                             </View>
+                            {/* POINT section */}
+                            <View style={styles.fsQmSection}>
+                              <View style={styles.fsQmSectionHeader}>
+                                <MaterialIcons name="adjust" size={12} color="rgba(255,255,255,0.5)" />
+                                <Text style={styles.fsQmSectionLabel}>{t('notation', 'pointShortLabel')}</Text>
+                              </View>
+                              <View style={styles.fsQmSectionBtns}>
+                                <Pressable
+                                  style={styles.fsQmPointSuccessBtn}
+                                  onPress={() => { recordAction(p.playerId, 'point', true); }}
+                                >
+                                  <MaterialIcons name="check" size={18} color="#FFF" />
+                                  <Text style={styles.fsQmBtnLabel}>{t('notation', 'okLabel')}</Text>
+                                </Pressable>
+                                <Pressable
+                                  style={styles.fsQmPointFailBtn}
+                                  onPress={() => { recordAction(p.playerId, 'point', false); }}
+                                >
+                                  <MaterialIcons name="close" size={18} color="#FFF" />
+                                  <Text style={styles.fsQmBtnLabel}>{t('notation', 'missShort')}</Text>
+                                </Pressable>
+                              </View>
+                            </View>
+                            {/* CARREAU button */}
+                            <Pressable
+                              style={styles.fsQmCarreauBtn}
+                              onPress={() => { recordAction(p.playerId, 'carreau', true); }}
+                            >
+                              <MaterialIcons name="stars" size={18} color="#FFF" />
+                              <Text style={styles.fsQmCarreauLabel}>{t('notation', 'carreauLabel')}</Text>
+                            </Pressable>
                           </View>
                         ) : (
                           /* === DETAILED MODE: opens multi-step modal === */
@@ -2686,15 +2704,20 @@ const styles = StyleSheet.create({
   fsNotationModeBtnActiveDetailed: { backgroundColor: theme.primary },
   fsNotationModeBtnText: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.4)' },
   fsNotationModeBtnTextActive: { color: '#FFF' },
-  fsQuickModeBtns: { gap: 6 },
-  fsQuickModeRow: { flexDirection: 'row', gap: 5 },
-  fsQmTirSuccessBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, paddingVertical: 12, backgroundColor: 'rgba(34,197,94,0.85)', borderRadius: 10 },
-  fsQmTirFailBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, paddingVertical: 12, backgroundColor: 'rgba(239,68,68,0.7)', borderRadius: 10 },
-  fsQmPointSuccessBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, paddingVertical: 12, backgroundColor: 'rgba(59,130,246,0.75)', borderRadius: 10 },
-  fsQmPointFailBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, paddingVertical: 12, backgroundColor: 'rgba(239,68,68,0.5)', borderRadius: 10 },
-  fsQmCarreauBtn: { flex: 0.7, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, backgroundColor: 'rgba(217,119,6,0.8)', borderRadius: 10 },
+  fsQuickModeBtns: { gap: 8 },
+  fsQmSection: { gap: 4 },
+  fsQmSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 2 },
+  fsQmSectionLabel: { fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.45)', letterSpacing: 1, textTransform: 'uppercase' },
+  fsQmSectionBtns: { flexDirection: 'row', gap: 6 },
+  fsQmBtnLabel: { fontSize: 11, fontWeight: '700', color: '#FFF' },
+  fsQmTirSuccessBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 14, backgroundColor: 'rgba(34,197,94,0.85)', borderRadius: 12 },
+  fsQmTirFailBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 14, backgroundColor: 'rgba(239,68,68,0.65)', borderRadius: 12 },
+  fsQmPointSuccessBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 14, backgroundColor: 'rgba(59,130,246,0.75)', borderRadius: 12 },
+  fsQmPointFailBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 14, backgroundColor: 'rgba(239,68,68,0.5)', borderRadius: 12 },
+  fsQmCarreauBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, backgroundColor: 'rgba(217,119,6,0.8)', borderRadius: 12 },
+  fsQmCarreauLabel: { fontSize: 12, fontWeight: '800', color: '#FFF', letterSpacing: 0.5 },
   fsQuickNotationScroll: { paddingHorizontal: 12, gap: 12 },
-  fsQuickNotationPlayer: { width: 180, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 12 },
+  fsQuickNotationPlayer: { width: 220, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 12 },
   fsQuickNotationNameBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 10, marginBottom: 10 },
   fsQuickNotationDot: { width: 8, height: 8, borderRadius: 4 },
   fsQuickNotationName: { fontSize: 13, fontWeight: '700', color: '#FFF', flex: 1 },
