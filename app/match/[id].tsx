@@ -30,7 +30,8 @@ import SharedBadge from '@/components/ui/SharedBadge';
 import EditConflictModal from '@/components/ui/EditConflictModal';
 import { getShareRequestsForItem, MatchShareRequest } from '@/services/matchShareService';
 import { checkEditConflict, computeMatchDiffs, fetchUpdatedAt, DiffEntry } from '@/services/collaborativeEditService';
-import { useAuth } from '@/template';
+import { useAuth, getSupabaseClient } from '@/template';
+import { logModification } from '@/services/modificationLogService';
 
 interface MeneEdit {
   teamAPoints: number;
@@ -535,7 +536,27 @@ export default function EditMatchScreen() {
     };
   };
 
-  const performSave = (payload: any) => {
+  const performSave = async (payload: any) => {
+    // Log modification if this is a shared item (modifier is not owner)
+    if (match && matchIsShared && matchPermission === 'write') {
+      const changes: { field: string; oldValue?: any; newValue?: any }[] = [];
+      if (match.teamA.score !== payload.teamA.score) changes.push({ field: 'teamAScore', oldValue: match.teamA.score, newValue: payload.teamA.score });
+      if (match.teamB.score !== payload.teamB.score) changes.push({ field: 'teamBScore', oldValue: match.teamB.score, newValue: payload.teamB.score });
+      if (match.winner !== payload.winner) changes.push({ field: 'winner', oldValue: match.winner, newValue: payload.winner });
+      if (match.format !== payload.format) changes.push({ field: 'format', oldValue: match.format, newValue: payload.format });
+      if (match.duration !== payload.duration) changes.push({ field: 'duration', oldValue: match.duration, newValue: payload.duration });
+      if (JSON.stringify(match.menes) !== JSON.stringify(payload.menes)) changes.push({ field: 'menes', oldValue: `${match.menes?.length || 0} menes`, newValue: `${payload.menes?.length || 0} menes` });
+      if (JSON.stringify(match.playerActions) !== JSON.stringify(payload.playerActions)) changes.push({ field: 'playerActions', oldValue: `${match.playerActions?.length || 0} actions`, newValue: `${payload.playerActions?.length || 0} actions` });
+      if (changes.length > 0) {
+        try {
+          const sb = getSupabaseClient();
+          const { data: row } = await sb.from('matches').select('user_id').eq('id', id!).single();
+          if (row?.user_id) {
+            await logModification({ itemType: 'match', itemId: id!, ownerId: row.user_id, changes });
+          }
+        } catch { /* silent */ }
+      }
+    }
     updateMatch(id!, payload);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.back();

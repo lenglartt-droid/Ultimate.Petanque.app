@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getModificationLogs, ModificationLog, ModLogItemType } from '@/services/modificationLogService';
@@ -9,7 +10,7 @@ import { getModificationLogs, ModificationLog, ModLogItemType } from '@/services
 interface ModificationLogsSectionProps {
   itemType: ModLogItemType;
   itemId: string;
-  isOwner: boolean; // Only show to the item owner
+  isOwner: boolean;
 }
 
 export default function ModificationLogsSection({ itemType, itemId, isOwner }: ModificationLogsSectionProps) {
@@ -17,6 +18,7 @@ export default function ModificationLogsSection({ itemType, itemId, isOwner }: M
   const [logs, setLogs] = useState<ModificationLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAll, setShowAll] = useState(false);
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
   const loadLogs = useCallback(async () => {
     if (!isOwner || !itemId) {
@@ -33,7 +35,6 @@ export default function ModificationLogsSection({ itemType, itemId, isOwner }: M
     loadLogs();
   }, [loadLogs]);
 
-  // Don't render if not owner or no logs and not loading
   if (!isOwner) return null;
   if (!loading && logs.length === 0) return null;
 
@@ -57,16 +58,42 @@ export default function ModificationLogsSection({ itemType, itemId, isOwner }: M
     });
   };
 
+  const formatFullDate = (dateStr: string): string => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   const getFieldLabel = (field: string): string => {
-    // Try to get a translated label for the field name
     const translated = t('modificationLogs', field);
     return translated !== field ? translated : field;
+  };
+
+  const formatValue = (value: any): string => {
+    if (value === null || value === undefined || value === '') return language === 'fr' ? '(vide)' : '(empty)';
+    if (typeof value === 'boolean') return value ? (language === 'fr' ? 'Oui' : 'Yes') : (language === 'fr' ? 'Non' : 'No');
+    if (typeof value === 'object') {
+      if (Array.isArray(value)) return value.length > 0 ? `[${value.length} ${language === 'fr' ? 'elements' : 'items'}]` : '[]';
+      return JSON.stringify(value).substring(0, 80);
+    }
+    const str = String(value);
+    return str.length > 60 ? str.substring(0, 57) + '...' : str;
+  };
+
+  const handleToggleExpand = (logId: string) => {
+    Haptics.selectionAsync();
+    setExpandedLogId(prev => prev === logId ? null : logId);
   };
 
   if (loading) {
     return (
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t('modificationLogs', 'recentModifications')}</Text>
+        <Text style={styles.sectionTitleText}>{t('modificationLogs', 'recentModifications')}</Text>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color={theme.primary} />
         </View>
@@ -79,7 +106,7 @@ export default function ModificationLogsSection({ itemType, itemId, isOwner }: M
       <View style={styles.sectionHeader}>
         <View style={styles.sectionTitleRow}>
           <MaterialIcons name="history" size={16} color={theme.textSecondary} />
-          <Text style={styles.sectionTitle}>{t('modificationLogs', 'recentModifications')}</Text>
+          <Text style={styles.sectionTitleText}>{t('modificationLogs', 'recentModifications')}</Text>
         </View>
         <View style={styles.logCountBadge}>
           <Text style={styles.logCountText}>{logs.length}</Text>
@@ -89,51 +116,123 @@ export default function ModificationLogsSection({ itemType, itemId, isOwner }: M
       <View style={styles.logsCard}>
         {displayedLogs.map((log, index) => {
           const changesCount = log.changes.length;
+          const isExpanded = expandedLogId === log.id;
           const changesPreview = log.changes
             .slice(0, 3)
             .map(c => getFieldLabel(c.field))
             .join(', ');
 
           return (
-            <View
-              key={log.id}
-              style={[
-                styles.logItem,
-                index < displayedLogs.length - 1 && styles.logItemBorder,
-              ]}
-            >
-              {/* Modifier avatar */}
-              <View style={styles.logAvatar}>
-                <Text style={styles.logAvatarText}>
-                  {(log.modifierName || 'U').charAt(0).toUpperCase()}
-                </Text>
-              </View>
-
-              {/* Log content */}
-              <View style={styles.logContent}>
-                <View style={styles.logHeaderRow}>
-                  <Text style={styles.logModifierName} numberOfLines={1}>
-                    {log.modifierName || t('share', 'userFallback')}
-                  </Text>
-                  <Text style={styles.logTime}>{formatTimeAgo(log.createdAt)}</Text>
-                </View>
-
-                <View style={styles.logChangesRow}>
-                  <MaterialIcons name="edit" size={12} color={theme.textMuted} />
-                  <Text style={styles.logChangesText} numberOfLines={2}>
-                    {changesCount === 1
-                      ? `${t('modificationLogs', 'fieldChanged')} ${changesPreview}`
-                      : `${changesCount} ${t('modificationLogs', 'fieldsChanged')} : ${changesPreview}${changesCount > 3 ? '...' : ''}`}
+            <View key={log.id}>
+              <Pressable
+                style={[
+                  styles.logItem,
+                  index < displayedLogs.length - 1 && !isExpanded && styles.logItemBorder,
+                ]}
+                onPress={() => handleToggleExpand(log.id)}
+              >
+                {/* Modifier avatar */}
+                <View style={styles.logAvatar}>
+                  <Text style={styles.logAvatarText}>
+                    {(log.modifierName || 'U').charAt(0).toUpperCase()}
                   </Text>
                 </View>
-              </View>
+
+                {/* Log content */}
+                <View style={styles.logContent}>
+                  <View style={styles.logHeaderRow}>
+                    <Text style={styles.logModifierName} numberOfLines={1}>
+                      {log.modifierName || t('share', 'userFallback')}
+                    </Text>
+                    <Text style={styles.logTime}>{formatTimeAgo(log.createdAt)}</Text>
+                  </View>
+
+                  <View style={styles.logChangesRow}>
+                    <MaterialIcons name="edit" size={12} color={theme.textMuted} />
+                    <Text style={styles.logChangesText} numberOfLines={isExpanded ? undefined : 2}>
+                      {changesCount === 1
+                        ? `${t('modificationLogs', 'fieldChanged')} ${changesPreview}`
+                        : `${changesCount} ${t('modificationLogs', 'fieldsChanged')} : ${changesPreview}${changesCount > 3 ? '...' : ''}`}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Expand indicator */}
+                <MaterialIcons
+                  name={isExpanded ? 'expand-less' : 'expand-more'}
+                  size={18}
+                  color={theme.textMuted}
+                  style={{ marginLeft: 4 }}
+                />
+              </Pressable>
+
+              {/* Expanded diff view */}
+              {isExpanded ? (
+                <Animated.View entering={FadeIn.duration(200)} style={styles.diffContainer}>
+                  {/* Full date */}
+                  <Text style={styles.diffFullDate}>{formatFullDate(log.createdAt)}</Text>
+
+                  {/* Modifier email */}
+                  {log.modifierEmail ? (
+                    <View style={styles.diffModifierRow}>
+                      <MaterialIcons name="email" size={12} color={theme.textMuted} />
+                      <Text style={styles.diffModifierEmail}>{log.modifierEmail}</Text>
+                    </View>
+                  ) : null}
+
+                  {/* Field diffs */}
+                  {log.changes.map((change, cidx) => (
+                    <View key={cidx} style={styles.diffFieldCard}>
+                      <View style={styles.diffFieldHeader}>
+                        <MaterialIcons name="label" size={12} color={theme.primary} />
+                        <Text style={styles.diffFieldName}>{getFieldLabel(change.field)}</Text>
+                      </View>
+
+                      {/* Old value */}
+                      {change.oldValue !== undefined ? (
+                        <View style={styles.diffOldRow}>
+                          <View style={styles.diffOldIndicator} />
+                          <View style={styles.diffValueBox}>
+                            <Text style={styles.diffOldLabel}>
+                              {language === 'fr' ? 'Avant' : 'Before'}
+                            </Text>
+                            <Text style={styles.diffOldValue} numberOfLines={3}>
+                              {formatValue(change.oldValue)}
+                            </Text>
+                          </View>
+                        </View>
+                      ) : null}
+
+                      {/* New value */}
+                      {change.newValue !== undefined ? (
+                        <View style={styles.diffNewRow}>
+                          <View style={styles.diffNewIndicator} />
+                          <View style={styles.diffValueBox}>
+                            <Text style={styles.diffNewLabel}>
+                              {language === 'fr' ? 'Apres' : 'After'}
+                            </Text>
+                            <Text style={styles.diffNewValue} numberOfLines={3}>
+                              {formatValue(change.newValue)}
+                            </Text>
+                          </View>
+                        </View>
+                      ) : null}
+                    </View>
+                  ))}
+
+                  {/* Divider after expanded section */}
+                  {index < displayedLogs.length - 1 ? (
+                    <View style={styles.diffBottomDivider} />
+                  ) : null}
+                </Animated.View>
+              ) : null}
             </View>
           );
         })}
 
         {/* Show more/less toggle */}
-        {logs.length > 3 && (
-          <Pressable style={styles.toggleBtn} onPress={() => setShowAll(!showAll)}>
+        {logs.length > 3 ? (
+          <Pressable style={styles.toggleBtn} onPress={() => { Haptics.selectionAsync(); setShowAll(!showAll); }}>
             <Text style={styles.toggleBtnText}>
               {showAll ? t('modificationLogs', 'seeLess') : `${t('modificationLogs', 'seeAll')} (${logs.length})`}
             </Text>
@@ -143,7 +242,7 @@ export default function ModificationLogsSection({ itemType, itemId, isOwner }: M
               color={theme.primary}
             />
           </Pressable>
-        )}
+        ) : null}
       </View>
     </Animated.View>
   );
@@ -151,7 +250,8 @@ export default function ModificationLogsSection({ itemType, itemId, isOwner }: M
 
 const styles = StyleSheet.create({
   section: {
-    marginTop: 24,
+    marginTop: 16,
+    marginBottom: 8,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -164,7 +264,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  sectionTitle: {
+  sectionTitleText: {
     fontSize: 12,
     fontWeight: '600',
     color: theme.textSecondary,
@@ -200,6 +300,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 14,
     gap: 12,
+    alignItems: 'center',
   },
   logItemBorder: {
     borderBottomWidth: 1,
@@ -263,5 +364,110 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: theme.primary,
+  },
+
+  // ===== Expanded diff styles =====
+  diffContainer: {
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    paddingTop: 4,
+  },
+  diffFullDate: {
+    fontSize: 11,
+    color: theme.textMuted,
+    marginBottom: 10,
+    fontStyle: 'italic',
+  },
+  diffModifierRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  diffModifierEmail: {
+    fontSize: 11,
+    color: theme.textMuted,
+  },
+  diffFieldCard: {
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.md,
+    padding: 12,
+    marginBottom: 8,
+  },
+  diffFieldHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  diffFieldName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.primary,
+  },
+  diffOldRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    marginBottom: 6,
+  },
+  diffOldIndicator: {
+    width: 3,
+    borderRadius: 2,
+    backgroundColor: theme.error,
+    marginRight: 10,
+  },
+  diffValueBox: {
+    flex: 1,
+  },
+  diffOldLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: theme.error,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  diffOldValue: {
+    fontSize: 13,
+    color: theme.error,
+    fontWeight: '500',
+    backgroundColor: theme.error + '08',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  diffNewRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  diffNewIndicator: {
+    width: 3,
+    borderRadius: 2,
+    backgroundColor: theme.success,
+    marginRight: 10,
+  },
+  diffNewLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: theme.success,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  diffNewValue: {
+    fontSize: 13,
+    color: theme.success,
+    fontWeight: '500',
+    backgroundColor: theme.success + '08',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  diffBottomDivider: {
+    height: 1,
+    backgroundColor: theme.border,
+    marginTop: 6,
   },
 });

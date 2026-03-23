@@ -28,13 +28,16 @@ import ShareRequestModal from '@/components/ui/ShareRequestModal';
 import SharedBadge from '@/components/ui/SharedBadge';
 import { getShareRequestsForItem, MatchShareRequest } from '@/services/matchShareService';
 import { checkEditConflict, computeChallengeDiffs, fetchUpdatedAt, DiffEntry } from '@/services/collaborativeEditService';
+import { logModification } from '@/services/modificationLogService';
+import { getSupabaseClient, useAuth } from '@/template';
 import EditConflictModal from '@/components/ui/EditConflictModal';
 import ShareStatusSection from '@/components/ui/ShareStatusSection';
+import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
 import AdBanner from '@/components/ui/AdBanner';
 import Svg, { Circle, Line, G, Polygon, Text as SvgText } from 'react-native-svg';
 import { Image } from 'expo-image';
 import { getMyMeetups, getInvitedMeetups, getMeetupResponses, Meetup, MeetupResponse } from '@/services/meetupService';
-import { useAuth } from '@/template';
+
 
 // Constants
 const CHALLENGE_CONFIG = {
@@ -1029,11 +1032,32 @@ export default function HistoryScreen() {
 
   const performChallengeSave = useCallback(async (updates: Partial<Challenge>) => {
     if (!editingChallenge) return;
+
+    // Log modification if this is a shared item
+    if (isSharedItem(editingChallenge.id) && getSharedPermission(editingChallenge.id) === 'write') {
+      const changes: { field: string; oldValue?: any; newValue?: any }[] = [];
+      if (updates.successCount !== undefined && updates.successCount !== editingChallenge.successCount) changes.push({ field: 'successCount', oldValue: editingChallenge.successCount, newValue: updates.successCount });
+      if (updates.successRate !== undefined && updates.successRate !== editingChallenge.successRate) changes.push({ field: 'successRate', oldValue: `${editingChallenge.successRate}%`, newValue: `${updates.successRate}%` });
+      if (updates.carreauCount !== undefined && updates.carreauCount !== editingChallenge.carreauCount) changes.push({ field: 'carreauCount', oldValue: editingChallenge.carreauCount, newValue: updates.carreauCount });
+      if (updates.totalPoints !== undefined && updates.totalPoints !== editingChallenge.totalPoints) changes.push({ field: 'totalPoints', oldValue: editingChallenge.totalPoints, newValue: updates.totalPoints });
+      if (updates.duration !== undefined && updates.duration !== editingChallenge.duration) changes.push({ field: 'duration', oldValue: editingChallenge.duration, newValue: updates.duration });
+      if (updates.notes !== undefined && updates.notes !== (editingChallenge.notes || undefined)) changes.push({ field: 'notes', oldValue: editingChallenge.notes || '', newValue: updates.notes || '' });
+      if (changes.length > 0) {
+        try {
+          const sb = getSupabaseClient();
+          const { data: row } = await sb.from('challenges').select('user_id').eq('id', editingChallenge.id).single();
+          if (row?.user_id) {
+            await logModification({ itemType: 'challenge', itemId: editingChallenge.id, ownerId: row.user_id, changes });
+          }
+        } catch { /* silent */ }
+      }
+    }
+
     await updateChallenge(editingChallenge.id, updates);
     setEditingChallenge(prev => prev ? { ...prev, ...updates } : null);
     setIsEditingChallengeFields(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [editingChallenge, updateChallenge]);
+  }, [editingChallenge, updateChallenge, isSharedItem, getSharedPermission]);
 
   const handleSaveChallenge = useCallback(async () => {
     if (!editingChallenge) return;
@@ -2092,6 +2116,15 @@ export default function HistoryScreen() {
                   />
                 ) : null}
 
+                {/* Modification History */}
+                {editingChallenge && !isEditingChallengeFields ? (
+                  <ModificationLogsSection
+                    itemType="challenge"
+                    itemId={editingChallenge.id}
+                    isOwner={!isSharedItem(editingChallenge.id)}
+                  />
+                ) : null}
+
                 {/* Notes */}
               <View style={styles.cdNotesSection}>
                 <View style={styles.cdNotesTitleRow}>
@@ -2445,6 +2478,13 @@ export default function HistoryScreen() {
 
                 {/* Share Status Section (shows shared players for matches) */}
                 <ShareStatusSection
+                  itemType="match"
+                  itemId={m.id}
+                  isOwner={!isSharedItem(m.id)}
+                />
+
+                {/* Modification History */}
+                <ModificationLogsSection
                   itemType="match"
                   itemId={m.id}
                   isOwner={!isSharedItem(m.id)}

@@ -1,6 +1,6 @@
 import { getSupabaseClient } from '@/template';
 
-export type ModLogItemType = 'player' | 'club' | 'terrain' | 'tournament';
+export type ModLogItemType = 'player' | 'club' | 'terrain' | 'tournament' | 'match' | 'challenge';
 
 export interface ModificationLog {
   id: string;
