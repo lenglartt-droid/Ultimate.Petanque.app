@@ -5,6 +5,10 @@
  */
 import { getSupabaseClient } from '@/template';
 
+// ============================================
+// Types
+// ============================================
+
 export interface DiffEntry {
   field: string;
   label: string;
@@ -17,6 +21,10 @@ export interface ConflictResult {
   serverRecord?: any;
   serverUpdatedAt?: string;
 }
+
+// ============================================
+// Conflict Detection
+// ============================================
 
 /**
  * Check if a record has been modified since we last loaded it.
@@ -81,6 +89,34 @@ export async function fetchUpdatedAt(
 // ============================================
 // Match Diff Computation
 // ============================================
+
+/** Format a date string for display in diff view. */
+function formatDiffDate(dateStr: string, isFr: boolean): string {
+  try {
+    return new Date(dateStr).toLocaleString(
+      isFr ? 'fr-FR' : 'en-US',
+      { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }
+    );
+  } catch {
+    return dateStr;
+  }
+}
+
+/** Format menes array into a readable summary string. */
+function formatMenesSummary(menes: any[]): string {
+  if (!menes || menes.length === 0) return '-';
+  return menes.map((m: any, i: number) => `#${i + 1}: ${m.teamAPoints || 0}-${m.teamBPoints || 0}`).join(', ');
+}
+
+/** Format player actions array into a readable summary string. */
+function formatActionsSummary(actions: any[]): string {
+  if (!actions || actions.length === 0) return '-';
+  return actions.map((a: any) => {
+    const tir = `${a.actions?.tirsSuccess || 0}/${a.actions?.tirs || 0}`;
+    const pt = `${a.actions?.pointsSuccess || 0}/${a.actions?.points || 0}`;
+    return `${a.playerName}: T${tir} P${pt}`;
+  }).join('; ');
+}
 
 export function computeMatchDiffs(
   localUpdates: Record<string, any>,
@@ -149,15 +185,11 @@ export function computeMatchDiffs(
 
   // Date
   if (localUpdates.date !== undefined && localUpdates.date !== serverRecord.date) {
-    const fmtDate = (d: string) => {
-      try { return new Date(d).toLocaleString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); }
-      catch { return d; }
-    };
     diffs.push({
       field: 'date',
       label: 'Date',
-      localValue: fmtDate(localUpdates.date),
-      serverValue: fmtDate(serverRecord.date),
+      localValue: formatDiffDate(localUpdates.date, fr),
+      serverValue: formatDiffDate(serverRecord.date, fr),
     });
   }
 
@@ -176,15 +208,11 @@ export function computeMatchDiffs(
     const localMenes = localUpdates.menes || [];
     const serverMenes = serverRecord.menes || [];
     if (JSON.stringify(localMenes) !== JSON.stringify(serverMenes)) {
-      const fmtMenes = (menes: any[]) => {
-        if (!menes || menes.length === 0) return '-';
-        return menes.map((m: any, i: number) => `#${i + 1}: ${m.teamAPoints || 0}-${m.teamBPoints || 0}`).join(', ');
-      };
       diffs.push({
         field: 'menes',
         label: fr ? 'Menes' : 'Ends',
-        localValue: fmtMenes(localMenes),
-        serverValue: fmtMenes(serverMenes),
+        localValue: formatMenesSummary(localMenes),
+        serverValue: formatMenesSummary(serverMenes),
       });
     }
   }
@@ -194,19 +222,11 @@ export function computeMatchDiffs(
     const localActions = localUpdates.playerActions || [];
     const serverActions = serverRecord.player_actions || [];
     if (JSON.stringify(localActions) !== JSON.stringify(serverActions)) {
-      const fmtActions = (actions: any[], isFr: boolean) => {
-        if (!actions || actions.length === 0) return '-';
-        return actions.map((a: any) => {
-          const tir = `${a.actions?.tirsSuccess || 0}/${a.actions?.tirs || 0}`;
-          const pt = `${a.actions?.pointsSuccess || 0}/${a.actions?.points || 0}`;
-          return `${a.playerName}: T${tir} P${pt}`;
-        }).join('; ');
-      };
       diffs.push({
         field: 'playerActions',
         label: fr ? 'Actions joueurs' : 'Player actions',
-        localValue: fmtActions(localActions, fr),
-        serverValue: fmtActions(serverActions, fr),
+        localValue: formatActionsSummary(localActions),
+        serverValue: formatActionsSummary(serverActions),
       });
     }
   }

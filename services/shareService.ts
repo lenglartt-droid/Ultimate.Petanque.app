@@ -1,4 +1,13 @@
+/**
+ * Share Service
+ * Manages public share links (shared_items table), share code generation/redemption,
+ * auto-import of shared items, and share notifications.
+ */
 import { getSupabaseClient } from '@/template';
+
+// ============================================
+// Types
+// ============================================
 
 export type ShareItemType = 'player' | 'club' | 'terrain' | 'tournament' | 'match' | 'challenge';
 export type SharePermission = 'read' | 'write';
@@ -17,6 +26,10 @@ export interface SharedItem {
   associatedItems?: { type: ShareItemType; id: string }[];
 }
 
+// ============================================
+// Helpers
+// ============================================
+
 function generateShareCode(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   let result = '';
@@ -26,10 +39,49 @@ function generateShareCode(): string {
   return result;
 }
 
+/** Map a shared_items DB row to the SharedItem interface. */
+function mapSharedItemRow(s: any): SharedItem {
+  return {
+    id: s.id,
+    ownerId: s.owner_id,
+    sharedWithId: s.shared_with_id,
+    shareCode: s.share_code,
+    itemType: s.item_type,
+    itemId: s.item_id,
+    permission: s.permission,
+    isPublicLink: s.is_public_link,
+    expiresAt: s.expires_at,
+    createdAt: s.created_at,
+    associatedItems: s.associated_items,
+  };
+}
+
+/** Map a share_notifications DB row to the ShareNotification interface. */
+function mapNotificationRow(n: any): ShareNotification {
+  return {
+    id: n.id,
+    ownerId: n.owner_id,
+    accessorId: n.accessor_id,
+    accessorName: n.accessor_name,
+    accessorEmail: n.accessor_email,
+    itemType: n.item_type,
+    itemId: n.item_id,
+    itemName: n.item_name,
+    permission: n.permission,
+    shareCode: n.share_code,
+    isRead: n.is_read,
+    createdAt: n.created_at,
+  };
+}
+
 export interface AssociatedItem {
   type: ShareItemType;
   id: string;
 }
+
+// ============================================
+// Share Link CRUD
+// ============================================
 
 export async function createShareLink(
   itemType: ShareItemType,
@@ -172,6 +224,10 @@ export async function redeemShareCode(shareCode: string): Promise<RedeemResult> 
   return { itemType: data.item_type, itemId: data.item_id, permission: 'read', error: null, autoSavedItems };
 }
 
+// ============================================
+// Shared Items Queries
+// ============================================
+
 export async function getMySharedItems(): Promise<{ items: SharedItem[]; error: string | null }> {
   const supabase = getSupabaseClient();
   const { data: userData } = await supabase.auth.getUser();
@@ -179,11 +235,7 @@ export async function getMySharedItems(): Promise<{ items: SharedItem[]; error: 
   const { data, error } = await supabase.from('shared_items').select('*')
     .eq('owner_id', userData.user.id).eq('is_public_link', true).order('created_at', { ascending: false });
   if (error) return { items: [], error: error.message };
-  return { items: (data || []).map((s: any) => ({
-    id: s.id, ownerId: s.owner_id, sharedWithId: s.shared_with_id, shareCode: s.share_code,
-    itemType: s.item_type, itemId: s.item_id, permission: s.permission, isPublicLink: s.is_public_link,
-    expiresAt: s.expires_at, createdAt: s.created_at, associatedItems: s.associated_items,
-  })), error: null };
+  return { items: (data || []).map(mapSharedItemRow), error: null };
 }
 
 export async function getSharedWithMe(): Promise<{ items: SharedItem[]; error: string | null }> {
@@ -193,18 +245,26 @@ export async function getSharedWithMe(): Promise<{ items: SharedItem[]; error: s
   const { data, error } = await supabase.from('shared_items').select('*')
     .eq('shared_with_id', userData.user.id).order('created_at', { ascending: false });
   if (error) return { items: [], error: error.message };
-  return { items: (data || []).map((s: any) => ({
-    id: s.id, ownerId: s.owner_id, sharedWithId: s.shared_with_id, shareCode: s.share_code,
-    itemType: s.item_type, itemId: s.item_id, permission: s.permission, isPublicLink: s.is_public_link,
-    expiresAt: s.expires_at, createdAt: s.created_at, associatedItems: s.associated_items,
-  })), error: null };
+  return { items: (data || []).map(mapSharedItemRow), error: null };
 }
 
+// ============================================
+// Share Notifications
+// ============================================
+
 export interface ShareNotification {
-  id: string; ownerId: string; accessorId: string; accessorName: string | null;
-  accessorEmail: string | null; itemType: ShareItemType; itemId: string;
-  itemName: string | null; permission: SharePermission; shareCode: string | null;
-  isRead: boolean; createdAt: string;
+  id: string;
+  ownerId: string;
+  accessorId: string;
+  accessorName: string | null;
+  accessorEmail: string | null;
+  itemType: ShareItemType;
+  itemId: string;
+  itemName: string | null;
+  permission: SharePermission;
+  shareCode: string | null;
+  isRead: boolean;
+  createdAt: string;
 }
 
 export async function getShareNotifications(): Promise<{ notifications: ShareNotification[]; error: string | null }> {
@@ -214,11 +274,7 @@ export async function getShareNotifications(): Promise<{ notifications: ShareNot
   const { data, error } = await supabase.from('share_notifications').select('*')
     .eq('owner_id', userData.user.id).order('created_at', { ascending: false });
   if (error) return { notifications: [], error: error.message };
-  return { notifications: (data || []).map((n: any) => ({
-    id: n.id, ownerId: n.owner_id, accessorId: n.accessor_id, accessorName: n.accessor_name,
-    accessorEmail: n.accessor_email, itemType: n.item_type, itemId: n.item_id, itemName: n.item_name,
-    permission: n.permission, shareCode: n.share_code, isRead: n.is_read, createdAt: n.created_at,
-  })), error: null };
+  return { notifications: (data || []).map(mapNotificationRow), error: null };
 }
 
 export async function getUnreadShareNotificationCount(): Promise<number> {
@@ -260,6 +316,10 @@ export async function updateSharePermission(shareId: string, permission: SharePe
   return { error: error?.message || null };
 }
 
+// ============================================
+// Item Name Resolution
+// ============================================
+
 export async function fetchItemName(itemType: ShareItemType, itemId: string): Promise<string> {
   const supabase = getSupabaseClient();
   try {
@@ -288,7 +348,11 @@ export async function isSharedWithMe(itemType: ShareItemType, itemId: string): P
   return !!data;
 }
 
-// Import a shared match with team perspective swapped for the recipient
+// ============================================
+// Shared Item Import (auto-save to recipient)
+// ============================================
+
+/** Import a shared match with team perspective swapped for the recipient. */
 async function importSharedMatch(userId: string, matchId: string): Promise<{ newItemId: string | null; error: string | null }> {
   const supabase = getSupabaseClient();
   try {
@@ -336,7 +400,7 @@ async function importSharedMatch(userId: string, matchId: string): Promise<{ new
   } catch (e: any) { return { newItemId: null, error: e.message || 'Error importing match' }; }
 }
 
-// Import a shared challenge with perspective adapted for the recipient
+/** Import a shared challenge with perspective adapted for the recipient. */
 async function importSharedChallenge(userId: string, challengeId: string): Promise<{ newItemId: string | null; error: string | null }> {
   const supabase = getSupabaseClient();
   try {

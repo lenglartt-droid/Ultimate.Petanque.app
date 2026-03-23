@@ -1,3 +1,8 @@
+/**
+ * Ambassador Analytics Service
+ * Tracks ambassador visibility events (profile views, social clicks, banner impressions)
+ * and provides aggregated analytics for admin dashboards.
+ */
 import { getSupabaseClient } from '@/template';
 
 export interface AmbassadorAnalytics {
@@ -5,6 +10,58 @@ export interface AmbassadorAnalytics {
   socialClicks: number;
   bannerImpressions: number;
   socialBreakdown: Record<string, number>;
+}
+
+// ============================================
+// Helpers
+// ============================================
+
+/** Compute a Date threshold from a period label. Returns epoch 0 for 'all'. */
+function computeThreshold(period?: 'today' | '7d' | '30d' | 'all'): Date {
+  if (!period || period === 'all') return new Date(0);
+  const now = new Date();
+  switch (period) {
+    case 'today':
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    case '7d':
+      return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    case '30d':
+      return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    default:
+      return new Date(0);
+  }
+}
+
+/** Build an array of YYYY-MM-DD strings for the last N days (oldest first). */
+function buildDateKeys(days: number): string[] {
+  const dates: string[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    dates.push(new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+  }
+  return dates;
+}
+
+/**
+ * Group rows by ambassador_id and created_at date, returning a Map of
+ * ambassadorId -> array of daily counts aligned with dateKeys (0-filled).
+ */
+function groupByAmbassadorAndDate(
+  rows: { ambassador_id: string; created_at: string }[],
+  dateKeys: string[]
+): Map<string, number[]> {
+  const grouped = new Map<string, Map<string, number>>();
+  rows.forEach((row: any) => {
+    if (!grouped.has(row.ambassador_id)) grouped.set(row.ambassador_id, new Map());
+    const dateStr = new Date(row.created_at).toISOString().slice(0, 10);
+    const dayMap = grouped.get(row.ambassador_id)!;
+    dayMap.set(dateStr, (dayMap.get(dateStr) || 0) + 1);
+  });
+
+  const result = new Map<string, number[]>();
+  grouped.forEach((dayMap, ambId) => {
+    result.set(ambId, dateKeys.map(date => dayMap.get(date) || 0));
+  });
+  return result;
 }
 
 /**
@@ -45,22 +102,7 @@ export async function fetchAmbassadorAnalytics(period?: 'today' | '7d' | '30d' |
       .select('ambassador_id, event_type, social_platform');
 
     if (period && period !== 'all') {
-      const now = new Date();
-      let threshold: Date;
-      switch (period) {
-        case 'today':
-          threshold = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          break;
-        case '7d':
-          threshold = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          break;
-        case '30d':
-          threshold = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-          break;
-        default:
-          threshold = new Date(0);
-      }
-      query = query.gte('created_at', threshold.toISOString());
+      query = query.gte('created_at', computeThreshold(period).toISOString());
     }
 
     const { data, error } = await query;
@@ -117,22 +159,7 @@ export async function fetchSponsoredChallengeAnalytics(period?: 'today' | '7d' |
       .eq('event_type', 'sponsored_challenge');
 
     if (period && period !== 'all') {
-      const now = new Date();
-      let threshold: Date;
-      switch (period) {
-        case 'today':
-          threshold = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          break;
-        case '7d':
-          threshold = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          break;
-        case '30d':
-          threshold = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-          break;
-        default:
-          threshold = new Date(0);
-      }
-      query = query.gte('created_at', threshold.toISOString());
+      query = query.gte('created_at', computeThreshold(period).toISOString());
     }
 
     const { data, error } = await query;
@@ -168,35 +195,13 @@ export async function fetchDailySponsoredChallengeCounts(days: number = 30): Pro
 
     if (error) return { data: new Map(), error: error.message };
 
-    const allDates: string[] = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
-      allDates.push(d.toISOString().slice(0, 10));
-    }
-
-    const grouped = new Map<string, Map<string, number>>();
-    (data || []).forEach((row: any) => {
-      if (!grouped.has(row.ambassador_id)) grouped.set(row.ambassador_id, new Map());
-      const dateStr = new Date(row.created_at).toISOString().slice(0, 10);
-      const dayMap = grouped.get(row.ambassador_id)!;
-      dayMap.set(dateStr, (dayMap.get(dateStr) || 0) + 1);
-    });
-
-    const result = new Map<string, number[]>();
-    grouped.forEach((dayMap, ambId) => {
-      result.set(ambId, allDates.map(date => dayMap.get(date) || 0));
-    });
-
-    return { data: result, error: null };
+    const allDates = buildDateKeys(days);
+    return { data: groupByAmbassadorAndDate(data || [], allDates), error: null };
   } catch (e: any) {
     return { data: new Map(), error: e.message || 'Failed to fetch daily sponsored challenge counts' };
   }
 }
 
-/**
- * Fetch daily impression counts per ambassador for sparkline display (admin only).
- * Returns a Map of ambassadorId -> array of daily counts (oldest first).
- */
 /**
  * Fetch detailed banner analytics for a specific ambassador.
  * Returns impressions by page, click-through rate, unique reach, and daily evolution.
@@ -240,11 +245,7 @@ export async function fetchDetailedBannerAnalytics(
 
     if (error) return { data: empty, error: error.message };
 
-    // Build date keys
-    const allDates: string[] = [];
-    for (let i = days - 1; i >= 0; i--) {
-      allDates.push(new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
-    }
+    const allDates = buildDateKeys(days);
 
     const impressionsByPage: Record<string, number> = {};
     const clicksByPage: Record<string, number> = {};
@@ -303,29 +304,8 @@ export async function fetchDailyAnalyticsCounts(days: number = 30): Promise<{
 
     if (error) return { data: new Map(), error: error.message };
 
-    // Build all date keys (oldest first)
-    const allDates: string[] = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
-      allDates.push(d.toISOString().slice(0, 10));
-    }
-
-    // Group by ambassador_id and date
-    const grouped = new Map<string, Map<string, number>>();
-    (data || []).forEach((row: any) => {
-      if (!grouped.has(row.ambassador_id)) grouped.set(row.ambassador_id, new Map());
-      const dateStr = new Date(row.created_at).toISOString().slice(0, 10);
-      const dayMap = grouped.get(row.ambassador_id)!;
-      dayMap.set(dateStr, (dayMap.get(dateStr) || 0) + 1);
-    });
-
-    // Build result with 0-filled days
-    const result = new Map<string, number[]>();
-    grouped.forEach((dayMap, ambId) => {
-      result.set(ambId, allDates.map(date => dayMap.get(date) || 0));
-    });
-
-    return { data: result, error: null };
+    const allDates = buildDateKeys(days);
+    return { data: groupByAmbassadorAndDate(data || [], allDates), error: null };
   } catch (e: any) {
     return { data: new Map(), error: e.message || 'Failed to fetch daily analytics' };
   }
