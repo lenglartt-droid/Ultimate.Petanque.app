@@ -166,6 +166,87 @@ export async function revertFieldChange(params: {
 }
 
 /**
+ * Revert ALL revertable field changes from a modification log entry.
+ * Updates the DB record with old values for each revertable field, then deletes the log.
+ */
+export async function revertAllChanges(params: {
+  logId: string;
+  itemType: ModLogItemType;
+  itemId: string;
+  changes: { field: string; oldValue?: any; newValue?: any }[];
+}): Promise<{ error: string | null; revertedCount: number }> {
+  const supabase = getSupabaseClient();
+  const table = TABLE_MAP[params.itemType];
+  const now = new Date().toISOString();
+  let revertedCount = 0;
+  const nonRevertableFields: string[] = [];
+
+  try {
+    // Collect all direct updates into a single object
+    const directUpdates: Record<string, any> = { updated_at: now };
+    const jsonbUpdates: { kind: string; col: string; value: any }[] = [];
+
+    for (const change of params.changes) {
+      if (change.oldValue === undefined) continue;
+      const mapping = REVERTABLE[params.itemType]?.[change.field];
+      if (!mapping) {
+        nonRevertableFields.push(change.field);
+        continue;
+      }
+
+      if (mapping.kind === 'direct') {
+        directUpdates[mapping.col] = change.oldValue;
+        revertedCount++;
+      } else if (mapping.kind === 'jsonb_team_a_score' || mapping.kind === 'jsonb_team_b_score') {
+        jsonbUpdates.push({ kind: mapping.kind, col: mapping.kind === 'jsonb_team_a_score' ? 'team_a' : 'team_b', value: change.oldValue });
+        revertedCount++;
+      }
+    }
+
+    // Apply direct updates in one call
+    if (Object.keys(directUpdates).length > 1) {
+      const { error } = await supabase.from(table).update(directUpdates).eq('id', params.itemId);
+      if (error) return { error: error.message, revertedCount: 0 };
+    }
+
+    // Recalculate successRate if successCount was reverted on a challenge
+    if (params.itemType === 'challenge' && directUpdates['success_count'] !== undefined) {
+      const { data: row } = await supabase.from(table).select('total_shots').eq('id', params.itemId).single();
+      const totalShots = row?.total_shots || 10;
+      const newRate = Math.round(((directUpdates['success_count'] as number) / totalShots) * 1000) / 10;
+      await supabase.from(table).update({ success_rate: newRate, updated_at: now }).eq('id', params.itemId);
+    }
+
+    // Apply JSONB updates one by one
+    for (const ju of jsonbUpdates) {
+      const { data: row, error: fetchErr } = await supabase.from(table).select(ju.col).eq('id', params.itemId).single();
+      if (fetchErr || !row) continue;
+      const teamData = { ...(row as any)[ju.col], score: ju.value };
+      await supabase.from(table).update({ [ju.col]: teamData, updated_at: now }).eq('id', params.itemId);
+    }
+
+    // Clean up log: if all fields were reverted, delete the log; otherwise keep non-revertable fields
+    if (nonRevertableFields.length === 0) {
+      await supabase.from('modification_logs').delete().eq('id', params.logId);
+    } else {
+      const { data: log } = await supabase.from('modification_logs').select('changes').eq('id', params.logId).single();
+      if (log) {
+        const remaining = (log.changes as any[]).filter((c: any) => nonRevertableFields.includes(c.field));
+        if (remaining.length === 0) {
+          await supabase.from('modification_logs').delete().eq('id', params.logId);
+        } else {
+          await supabase.from('modification_logs').update({ changes: remaining }).eq('id', params.logId);
+        }
+      }
+    }
+
+    return { error: null, revertedCount };
+  } catch (e: any) {
+    return { error: e.message || 'Unknown error', revertedCount: 0 };
+  }
+}
+
+/**
  * Fetch modification logs for a specific item.
  * Only the owner can see logs (enforced by RLS).
  */

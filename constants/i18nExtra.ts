@@ -73,6 +73,12 @@ export const extraTranslations = {
     seeLess: { fr: 'Voir moins', en: 'See less' },
     seeAll: { fr: 'Voir tout', en: 'See all' },
     fieldChanged: { fr: 'Champ modifie :', en: 'Field changed:' },
+    revertAll: { fr: 'Tout annuler', en: 'Undo all' },
+    revertAllConfirmTitle: { fr: 'Annuler toutes les modifications ?', en: 'Undo all changes?' },
+    revertAllConfirmMsg: { fr: 'Restaurer toutes les anciennes valeurs de cette modification ? Les champs non-revertables seront ignores.', en: 'Restore all previous values from this modification? Non-revertable fields will be skipped.' },
+    revertingAll: { fr: 'Annulation...', en: 'Reverting...' },
+    revertAllSuccess: { fr: 'modifications annulees', en: 'changes reverted' },
+    revertAllError: { fr: 'Erreur lors de l\'annulation groupee', en: 'Error reverting changes' },
   },
 
   matchSharing: {

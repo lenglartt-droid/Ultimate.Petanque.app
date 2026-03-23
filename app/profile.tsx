@@ -1500,7 +1500,7 @@ export default function ProfileScreen() {
 
         {/* Account Section */}
         {!isEditing && (
-          <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
+          <View style={styles.section}>
             {/* ===== SECTION: COMPTE (always visible) ===== */}
             <View style={[styles.accordionHeader, { marginTop: 0 }]}>
               <Text style={styles.accordionTitle}>{language === 'fr' ? 'COMPTE' : 'ACCOUNT'}</Text>
@@ -1716,12 +1716,12 @@ export default function ProfileScreen() {
                 </Pressable>
               </>
             ) : null}
-          </Animated.View>
+          </View>
         )}
 
         {/* Logout & Delete Account */}
         {!isEditing && (
-          <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.logoutSection}>
+          <View style={styles.logoutSection}>
             <Pressable 
               style={styles.logoutButton}
               onPress={handleLogout}
@@ -1744,7 +1744,7 @@ export default function ProfileScreen() {
               <MaterialIcons name="delete-forever" size={18} color={theme.textMuted} />
               <Text style={styles.deleteAccountButtonText}>{t('profile', 'deleteAccount')}</Text>
             </Pressable>
-          </Animated.View>
+          </View>
         )}
 
         {/* App Version */}

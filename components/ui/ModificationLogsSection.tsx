@@ -5,7 +5,7 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
-import { getModificationLogs, ModificationLog, ModLogItemType, isFieldRevertable, revertFieldChange } from '@/services/modificationLogService';
+import { getModificationLogs, ModificationLog, ModLogItemType, isFieldRevertable, revertFieldChange, revertAllChanges } from '@/services/modificationLogService';
 
 interface ModificationLogsSectionProps {
   itemType: ModLogItemType;
@@ -21,6 +21,7 @@ export default function ModificationLogsSection({ itemType, itemId, isOwner, onR
   const [showAll, setShowAll] = useState(false);
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [revertingField, setRevertingField] = useState<string | null>(null);
+  const [revertingAllLogId, setRevertingAllLogId] = useState<string | null>(null);
 
   const loadLogs = useCallback(async () => {
     if (!isOwner || !itemId) {
@@ -266,6 +267,60 @@ export default function ModificationLogsSection({ itemType, itemId, isOwner, onR
                       ) : null}
                     </View>
                   ))}
+
+                  {/* Revert All button */}
+                  {(() => {
+                    const revertableCount = log.changes.filter(c => c.oldValue !== undefined && isFieldRevertable(itemType, c.field)).length;
+                    if (revertableCount < 2) return null;
+                    const isRevertingThis = revertingAllLogId === log.id;
+                    return (
+                      <Pressable
+                        style={[styles.revertAllBtn, isRevertingThis && { opacity: 0.5 }]}
+                        disabled={revertingField !== null || revertingAllLogId !== null}
+                        onPress={() => {
+                          Haptics.selectionAsync();
+                          Alert.alert(
+                            t('modificationLogs', 'revertAllConfirmTitle'),
+                            t('modificationLogs', 'revertAllConfirmMsg'),
+                            [
+                              { text: t('common', 'cancel'), style: 'cancel' },
+                              {
+                                text: t('modificationLogs', 'revertAll'),
+                                style: 'destructive',
+                                onPress: async () => {
+                                  setRevertingAllLogId(log.id);
+                                  const { error, revertedCount } = await revertAllChanges({
+                                    logId: log.id,
+                                    itemType,
+                                    itemId,
+                                    changes: log.changes,
+                                  });
+                                  setRevertingAllLogId(null);
+                                  if (error) {
+                                    Alert.alert(t('modificationLogs', 'revertAllError'), error);
+                                  } else {
+                                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                    Alert.alert(
+                                      t('modificationLogs', 'revertSuccess'),
+                                      `${revertedCount} ${t('modificationLogs', 'revertAllSuccess')}`
+                                    );
+                                    setExpandedLogId(null);
+                                    await loadLogs();
+                                    onReverted?.();
+                                  }
+                                },
+                              },
+                            ]
+                          );
+                        }}
+                      >
+                        <MaterialIcons name="undo" size={15} color={theme.error} />
+                        <Text style={styles.revertAllBtnText}>
+                          {isRevertingThis ? t('modificationLogs', 'revertingAll') : `${t('modificationLogs', 'revertAll')} (${revertableCount})`}
+                        </Text>
+                      </Pressable>
+                    );
+                  })()}
 
                   {/* Divider after expanded section */}
                   {index < displayedLogs.length - 1 ? (
@@ -535,5 +590,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: theme.warning,
+  },
+  revertAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    backgroundColor: theme.error + '10',
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1.5,
+    borderColor: theme.error + '30',
+  },
+  revertAllBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.error,
   },
 });
