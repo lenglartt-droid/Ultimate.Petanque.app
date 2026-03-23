@@ -27,7 +27,9 @@ import { PlayerAction, DetailedShotRecord } from '@/services/mockData';
 import { SimplifiedShotNotation, SimpleShotRecord } from '@/components/ui/SimplifiedShotNotation';
 import ShareModal from '@/components/ui/ShareModal';
 import SharedBadge from '@/components/ui/SharedBadge';
+import EditConflictModal from '@/components/ui/EditConflictModal';
 import { getShareRequestsForItem, MatchShareRequest } from '@/services/matchShareService';
+import { checkEditConflict, computeMatchDiffs, fetchUpdatedAt, DiffEntry } from '@/services/collaborativeEditService';
 import { useAuth } from '@/template';
 
 interface MeneEdit {
@@ -39,7 +41,7 @@ interface MeneEdit {
 export default function EditMatchScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getMatchById, updateMatch, deleteMatch, players, matches, terrains, tournaments, boulesSets, loading: appLoading, isSharedItem, getSharedPermission } = useApp();
+  const { getMatchById, updateMatch, deleteMatch, players, matches, terrains, tournaments, boulesSets, loading: appLoading, isSharedItem, getSharedPermission, refreshData } = useApp();
   const { user } = useAuth();
   const { t, language } = useLanguage();
 
@@ -99,6 +101,13 @@ export default function EditMatchScreen() {
   const matchIsShared = match ? isSharedItem(match.id) : false;
   const matchPermission = match ? getSharedPermission(match.id) : null;
 
+  // Collaborative conflict detection
+  const [serverUpdatedAt, setServerUpdatedAt] = useState<string | null>(null);
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  const [conflictDiffs, setConflictDiffs] = useState<DiffEntry[]>([]);
+  const [pendingSaveData, setPendingSaveData] = useState<any>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
   const maxScore = config.game.maxScore;
   const locale = language === 'en' ? 'en-US' : 'fr-FR';
   const isReadOnly = matchIsShared && matchPermission === 'read';
@@ -116,6 +125,14 @@ export default function EditMatchScreen() {
       setShareRequests(requests);
     });
   }, [id]);
+
+  // Fetch server updated_at for conflict detection on shared writable matches
+  useEffect(() => {
+    if (!id || !matchIsShared || matchPermission !== 'write') return;
+    fetchUpdatedAt('matches', id).then(ts => {
+      if (ts) setServerUpdatedAt(ts);
+    });
+  }, [id, matchIsShared, matchPermission]);
 
   useEffect(() => {
     if (match) {
@@ -493,7 +510,7 @@ export default function EditMatchScreen() {
     Haptics.selectionAsync();
   };
 
-  const handleSave = () => {
+  const buildSavePayload = () => {
     let finalTeamAScore = teamAScore;
     let finalTeamBScore = teamBScore;
     if (menes.length > 0) {
@@ -501,8 +518,7 @@ export default function EditMatchScreen() {
       finalTeamBScore = menes.reduce((sum, m) => sum + m.teamBPoints, 0);
     }
     const winner: 'A' | 'B' = finalTeamAScore > finalTeamBScore ? 'A' : 'B';
-
-    updateMatch(id!, {
+    return {
       date: matchDate.toISOString(),
       mode,
       format,
@@ -516,10 +532,61 @@ export default function EditMatchScreen() {
       terrainId: selectedTerrainId || undefined,
       terrainType: selectedTerrain?.type || undefined,
       playerActions: playerActions.length > 0 ? playerActions : undefined,
-    });
+    };
+  };
 
+  const performSave = (payload: any) => {
+    updateMatch(id!, payload);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.back();
+  };
+
+  const handleSave = async () => {
+    const payload = buildSavePayload();
+
+    // Check for collaborative conflicts on shared writable items
+    if (matchIsShared && matchPermission === 'write' && serverUpdatedAt) {
+      setIsSaving(true);
+      try {
+        const conflict = await checkEditConflict('matches', id!, serverUpdatedAt);
+        if (conflict.hasConflict && conflict.serverRecord) {
+          const diffs = computeMatchDiffs(payload, conflict.serverRecord, language);
+          if (diffs.length > 0) {
+            setConflictDiffs(diffs);
+            setPendingSaveData(payload);
+            setShowConflictModal(true);
+            setIsSaving(false);
+            return;
+          }
+        }
+      } catch (e) {
+        console.log('Conflict check error, saving anyway:', e);
+      }
+      setIsSaving(false);
+    }
+
+    performSave(payload);
+  };
+
+  const handleConflictKeepMine = () => {
+    setShowConflictModal(false);
+    if (pendingSaveData) {
+      performSave(pendingSaveData);
+    }
+  };
+
+  const handleConflictKeepTheirs = async () => {
+    setShowConflictModal(false);
+    // Reload latest data from server
+    await refreshData();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    router.back();
+  };
+
+  const handleConflictCancel = () => {
+    setShowConflictModal(false);
+    setPendingSaveData(null);
+    setConflictDiffs([]);
   };
 
   const handleDelete = () => {
@@ -1074,9 +1141,13 @@ export default function EditMatchScreen() {
               </Text>
             </View>
           ) : (
-            <Pressable style={styles.saveButton} onPress={handleSave}>
-              <MaterialIcons name="check" size={24} color="#FFF" />
-              <Text style={styles.saveButtonText}>{t('match', 'saveChangesBtn')}</Text>
+            <Pressable style={[styles.saveButton, isSaving && { opacity: 0.6 }]} onPress={handleSave} disabled={isSaving}>
+              {isSaving ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <MaterialIcons name="check" size={24} color="#FFF" />
+              )}
+              <Text style={styles.saveButtonText}>{isSaving ? (language === 'fr' ? 'Verification...' : 'Checking...') : t('match', 'saveChangesBtn')}</Text>
             </Pressable>
           )}
         </View>
@@ -1296,6 +1367,16 @@ export default function EditMatchScreen() {
           />
         </SafeAreaView>
       </Modal>
+
+      {/* Collaborative Conflict Modal */}
+      <EditConflictModal
+        visible={showConflictModal}
+        diffs={conflictDiffs}
+        language={language}
+        onKeepMine={handleConflictKeepMine}
+        onKeepTheirs={handleConflictKeepTheirs}
+        onCancel={handleConflictCancel}
+      />
 
       {/* Detailed Shot Notation Modal */}
       {editingActionPlayer && (

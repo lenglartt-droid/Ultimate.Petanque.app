@@ -26,6 +26,8 @@ import { useLanguage } from '@/hooks/useLanguage';
 import ShareModal from '@/components/ui/ShareModal';
 import SharedBadge from '@/components/ui/SharedBadge';
 import { getShareRequestsForItem, MatchShareRequest } from '@/services/matchShareService';
+import { checkEditConflict, computeChallengeDiffs, fetchUpdatedAt, DiffEntry } from '@/services/collaborativeEditService';
+import EditConflictModal from '@/components/ui/EditConflictModal';
 import AdBanner from '@/components/ui/AdBanner';
 import Svg, { Circle, Line, G, Polygon, Text as SvgText } from 'react-native-svg';
 import { Image } from 'expo-image';
@@ -578,6 +580,7 @@ const MeetupCard = React.memo(({ meetup, onPress, t, language }: { meetup: Meetu
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
   const { matches, challenges, deleteChallenge, updateChallenge, deleteMatch, refreshData, boulesSets, terrains, isSharedItem, getSharedPermission, sharedMatchIds, sharedChallengeIds } = useApp();
+  // refreshData is used for conflict resolution (keep theirs → reload)
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const params = useLocalSearchParams<{ openChallengeId?: string; openMatchId?: string }>();
@@ -603,6 +606,12 @@ export default function HistoryScreen() {
   const [showMatchShare, setShowMatchShare] = useState(false);
   const [initialOpenHandled, setInitialOpenHandled] = useState(false);
   const [challengeShareRequests, setChallengeShareRequests] = useState<MatchShareRequest[]>([]);
+
+  // Collaborative conflict detection for challenges
+  const [challengeServerUpdatedAt, setChallengeServerUpdatedAt] = useState<string | null>(null);
+  const [showChallengeConflict, setShowChallengeConflict] = useState(false);
+  const [challengeConflictDiffs, setChallengeConflictDiffs] = useState<DiffEntry[]>([]);
+  const [pendingChallengeSave, setPendingChallengeSave] = useState<Partial<Challenge> | null>(null);
 
   // Meetup state
   const [allMeetups, setAllMeetups] = useState<(Meetup & { _source: 'created' | 'invited'; _acceptedCount?: number })[]>([]);
@@ -668,15 +677,22 @@ export default function HistoryScreen() {
     }
   }, [params.openChallengeId, params.openMatchId, challenges, matches, initialOpenHandled]);
 
-  // Load share request info for edited challenge
+  // Load share request info and updated_at for edited challenge
   useEffect(() => {
     if (!editingChallenge) {
       setChallengeShareRequests([]);
+      setChallengeServerUpdatedAt(null);
       return;
     }
     getShareRequestsForItem('challenge', editingChallenge.id).then(({ requests }) => {
       setChallengeShareRequests(requests);
     });
+    // Fetch updated_at for conflict detection on shared writable challenges
+    if (isSharedItem(editingChallenge.id) && getSharedPermission(editingChallenge.id) === 'write') {
+      fetchUpdatedAt('challenges', editingChallenge.id).then(ts => {
+        if (ts) setChallengeServerUpdatedAt(ts);
+      });
+    }
   }, [editingChallenge?.id]);
 
   const handleRefresh = useCallback(async () => {
@@ -980,47 +996,104 @@ export default function HistoryScreen() {
     );
   }, [editingChallenge, deleteChallenge, t, language]);
 
+  const buildChallengeUpdates = useCallback((): Partial<Challenge> => {
+    if (!editingChallenge) return {};
+    const updates: Partial<Challenge> = {
+      notes: editNotes.trim() || undefined,
+    };
+    const parsedDuration = parseInt(editDuration, 10);
+    if (!isNaN(parsedDuration) && parsedDuration >= 0) {
+      updates.duration = parsedDuration;
+    }
+    if (editingChallenge.type !== 'precision') {
+      const sc = parseInt(editSuccessCount, 10);
+      const cc = parseInt(editCarreauCount, 10);
+      const totalShots = editingChallenge.totalShots || 10;
+      if (!isNaN(sc) && sc >= 0 && sc <= totalShots) {
+        updates.successCount = sc;
+        updates.successRate = Math.round((sc / totalShots) * 1000) / 10;
+      }
+      if (!isNaN(cc) && cc >= 0) {
+        updates.carreauCount = cc;
+      }
+    } else {
+      const tp = parseInt(editTotalPoints, 10);
+      if (!isNaN(tp) && tp >= 0) {
+        updates.totalPoints = tp;
+      }
+    }
+    return updates;
+  }, [editingChallenge, editNotes, editDuration, editSuccessCount, editCarreauCount, editTotalPoints]);
+
+  const performChallengeSave = useCallback(async (updates: Partial<Challenge>) => {
+    if (!editingChallenge) return;
+    await updateChallenge(editingChallenge.id, updates);
+    setEditingChallenge(prev => prev ? { ...prev, ...updates } : null);
+    setIsEditingChallengeFields(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [editingChallenge, updateChallenge]);
+
   const handleSaveChallenge = useCallback(async () => {
     if (!editingChallenge) return;
     setSavingChallenge(true);
     try {
-      const updates: Partial<Challenge> = {
-        notes: editNotes.trim() || undefined,
-      };
+      const updates = buildChallengeUpdates();
 
-      const parsedDuration = parseInt(editDuration, 10);
-      if (!isNaN(parsedDuration) && parsedDuration >= 0) {
-        updates.duration = parsedDuration;
-      }
-
-      if (editingChallenge.type !== 'precision') {
-        const sc = parseInt(editSuccessCount, 10);
-        const cc = parseInt(editCarreauCount, 10);
-        const totalShots = editingChallenge.totalShots || 10;
-        if (!isNaN(sc) && sc >= 0 && sc <= totalShots) {
-          updates.successCount = sc;
-          updates.successRate = Math.round((sc / totalShots) * 1000) / 10;
-        }
-        if (!isNaN(cc) && cc >= 0) {
-          updates.carreauCount = cc;
-        }
-      } else {
-        const tp = parseInt(editTotalPoints, 10);
-        if (!isNaN(tp) && tp >= 0) {
-          updates.totalPoints = tp;
+      // Check for collaborative conflicts on shared writable challenges
+      if (isSharedItem(editingChallenge.id) && getSharedPermission(editingChallenge.id) === 'write' && challengeServerUpdatedAt) {
+        try {
+          const conflict = await checkEditConflict('challenges', editingChallenge.id, challengeServerUpdatedAt);
+          if (conflict.hasConflict && conflict.serverRecord) {
+            const diffs = computeChallengeDiffs(updates as Record<string, any>, conflict.serverRecord, language);
+            if (diffs.length > 0) {
+              setChallengeConflictDiffs(diffs);
+              setPendingChallengeSave(updates);
+              setShowChallengeConflict(true);
+              setSavingChallenge(false);
+              return;
+            }
+          }
+        } catch (e) {
+          console.log('Challenge conflict check error, saving anyway:', e);
         }
       }
 
-      await updateChallenge(editingChallenge.id, updates);
-      setEditingChallenge(prev => prev ? { ...prev, ...updates } : null);
-      setIsEditingChallengeFields(false);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await performChallengeSave(updates);
     } catch (e) {
       console.log('Error saving challenge:', e);
     } finally {
       setSavingChallenge(false);
     }
-  }, [editingChallenge, editNotes, editDuration, editSuccessCount, editCarreauCount, editTotalPoints, updateChallenge]);
+  }, [editingChallenge, buildChallengeUpdates, performChallengeSave, isSharedItem, getSharedPermission, challengeServerUpdatedAt, language]);
+
+  const handleChallengeConflictKeepMine = useCallback(async () => {
+    setShowChallengeConflict(false);
+    if (pendingChallengeSave) {
+      setSavingChallenge(true);
+      try {
+        await performChallengeSave(pendingChallengeSave);
+      } finally {
+        setSavingChallenge(false);
+        setPendingChallengeSave(null);
+      }
+    }
+  }, [pendingChallengeSave, performChallengeSave]);
+
+  const handleChallengeConflictKeepTheirs = useCallback(async () => {
+    setShowChallengeConflict(false);
+    setPendingChallengeSave(null);
+    // Reload data and close editing
+    await refreshData();
+    setEditingChallenge(null);
+    setIsEditingChallengeFields(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [refreshData]);
+
+  const handleChallengeConflictCancel = useCallback(() => {
+    setShowChallengeConflict(false);
+    setPendingChallengeSave(null);
+    setChallengeConflictDiffs([]);
+  }, []);
 
   const handleToggleChallengeShot = useCallback(async (shotIndex: number) => {
     if (!editingChallenge || !editingChallenge.shots) return;
@@ -2400,6 +2473,16 @@ export default function HistoryScreen() {
           })()}
         </SafeAreaView>
       </Modal>
+
+      {/* Challenge Collaborative Conflict Modal */}
+      <EditConflictModal
+        visible={showChallengeConflict}
+        diffs={challengeConflictDiffs}
+        language={language}
+        onKeepMine={handleChallengeConflictKeepMine}
+        onKeepTheirs={handleChallengeConflictKeepTheirs}
+        onCancel={handleChallengeConflictCancel}
+      />
 
       {/* Challenge Share Modal */}
       {editingChallenge ? (
