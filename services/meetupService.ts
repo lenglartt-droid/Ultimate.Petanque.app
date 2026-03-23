@@ -480,23 +480,21 @@ export async function inviteUsersToMeetup(
     if (error) return { invited: 0, error: error.message };
 
     // Trigger server-side push for each invited user (fire-and-forget)
-    import('./pushTokenService').then(({ triggerServerPush }) => {
-      // Fetch meetup details for the notification
-      supabase.from('terrain_meetups').select('title, date').eq('id', meetupId).maybeSingle().then(({ data: meetupData }) => {
-        supabase.auth.getUser().then(({ data: userData }) => {
-          const inviterName = userData?.user?.user_metadata?.username || 'Un joueur';
-          for (const uid of newUserIds) {
-            triggerServerPush('meetup_invitation', {
-              meetupId,
-              meetupTitle: meetupData?.title || 'RDV Petanque',
-              invitedUserId: uid,
-              inviterName,
-              meetupDate: meetupData?.date,
-            }).catch(() => {});
-          }
-        });
-      });
-    }).catch(() => {});
+    const _pushModule = await import('./pushTokenService').catch(() => null);
+    if (_pushModule) {
+      const meetupData = (await supabase.from('terrain_meetups').select('title, date').eq('id', meetupId).maybeSingle()).data;
+      const inviterProfile = (await supabase.from('user_profiles').select('username').eq('id', (await supabase.auth.getUser()).data?.user?.id || '').maybeSingle()).data;
+      const inviterName = inviterProfile?.username || 'Un joueur';
+      for (const uid of newUserIds) {
+        _pushModule.triggerServerPush('meetup_invitation', {
+          meetupId,
+          meetupTitle: meetupData?.title || 'RDV Petanque',
+          invitedUserId: uid,
+          inviterName,
+          meetupDate: meetupData?.date,
+        }).catch(() => {});
+      }
+    }
 
     return { invited: newUserIds.length, error: null };
   } catch (e: any) {

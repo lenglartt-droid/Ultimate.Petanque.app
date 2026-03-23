@@ -144,7 +144,7 @@ export async function createSponsoredEvent(data: {
 
     // Trigger server-side push to nearby users (fire-and-forget)
     if (event) {
-      import('../pushTokenService').then(({ triggerServerPush }) => {
+      import('./pushTokenService').then(({ triggerServerPush }) => {
         triggerServerPush('event_created', {
           eventId: event.id,
           eventTitle: data.title,
