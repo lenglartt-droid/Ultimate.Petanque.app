@@ -27,6 +27,7 @@ import { Platform } from 'react-native';
 import { useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { uploadPlayerAvatar } from '@/services/storageService';
+import { deactivatePushToken } from '@/services/pushTokenService';
 import theme from '@/constants/theme';
 import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
@@ -791,6 +792,7 @@ export default function ProfileScreen() {
           text: t('profile', 'logoutConfirm'),
           style: 'destructive',
           onPress: async () => {
+            await deactivatePushToken();
             const { error } = await logout();
             if (error) {
               showAlert(t('common', 'error'), error);

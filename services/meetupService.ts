@@ -478,6 +478,26 @@ export async function inviteUsersToMeetup(
       .insert(rows);
 
     if (error) return { invited: 0, error: error.message };
+
+    // Trigger server-side push for each invited user (fire-and-forget)
+    import('./pushTokenService').then(({ triggerServerPush }) => {
+      // Fetch meetup details for the notification
+      supabase.from('terrain_meetups').select('title, date').eq('id', meetupId).maybeSingle().then(({ data: meetupData }) => {
+        supabase.auth.getUser().then(({ data: userData }) => {
+          const inviterName = userData?.user?.user_metadata?.username || 'Un joueur';
+          for (const uid of newUserIds) {
+            triggerServerPush('meetup_invitation', {
+              meetupId,
+              meetupTitle: meetupData?.title || 'RDV Petanque',
+              invitedUserId: uid,
+              inviterName,
+              meetupDate: meetupData?.date,
+            }).catch(() => {});
+          }
+        });
+      });
+    }).catch(() => {});
+
     return { invited: newUserIds.length, error: null };
   } catch (e: any) {
     return { invited: 0, error: e.message };

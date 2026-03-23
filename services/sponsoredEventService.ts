@@ -141,6 +141,23 @@ export async function createSponsoredEvent(data: {
       .single();
 
     if (error) return { event: null, error: error.message };
+
+    // Trigger server-side push to nearby users (fire-and-forget)
+    if (event) {
+      import('../pushTokenService').then(({ triggerServerPush }) => {
+        triggerServerPush('event_created', {
+          eventId: event.id,
+          eventTitle: data.title,
+          city: data.city || null,
+          country: data.country || 'France',
+          latitude: null, // Will be resolved from terrain if available
+          longitude: null,
+          challengeType: data.challengeType,
+          ambassadorName: null, // Resolved server-side if needed
+        }).catch(() => {});
+      }).catch(() => {});
+    }
+
     return { event: mapEvent(event), error: null };
   } catch (e: any) {
     return { event: null, error: e.message };

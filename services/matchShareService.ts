@@ -5,6 +5,7 @@
  */
 import { getSupabaseClient } from '@/template';
 import { sendShareRequestNotification } from '@/services/notificationService';
+import { triggerServerPush } from '@/services/pushTokenService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const LAST_SEEN_SHARE_REQUESTS_KEY = '@lastSeenShareRequestIds';
@@ -119,6 +120,18 @@ export async function createShareRequests(params: {
       .eq('id', itemId);
 
     const requests: MatchShareRequest[] = (data || []).map(mapRow);
+
+    // Trigger server-side push for each recipient (fire-and-forget)
+    for (const r of recipients) {
+      triggerServerPush('share_request', {
+        recipientUserId: r.userId,
+        senderName,
+        itemType,
+        permission: r.permission,
+        itemSummary,
+      }).catch(() => {});
+    }
+
     return { requests, error: null };
   } catch (e: any) {
     return { requests: [], error: e.message };

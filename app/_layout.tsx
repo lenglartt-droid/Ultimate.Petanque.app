@@ -13,6 +13,7 @@ import { useApp } from '@/contexts/AppContext';
 import TrackingConsentModal from '@/components/ui/TrackingConsentModal';
 import { isATTPromptNeeded } from '@/services/trackingService';
 import { addNotificationResponseListener } from '@/services/notificationService';
+import { registerPushToken } from '@/services/pushTokenService';
 import { router } from 'expo-router';
 
 export default function RootLayout() {
@@ -43,16 +44,38 @@ function LayoutInner() {
     });
   }, []);
 
+  // Register push token for server-side notifications
+  React.useEffect(() => {
+    registerPushToken();
+  }, []);
+
   // Navigate to match-invitations when user taps a share request notification
   React.useEffect(() => {
     const sub = addNotificationResponseListener((response: any) => {
       const data = response?.notification?.request?.content?.data;
-      if (data?.type === 'share_request') {
-        // Small delay to ensure navigation stack is ready
-        setTimeout(() => {
-          router.push('/match-invitations');
-        }, 300);
-      }
+      if (!data?.type) return;
+      // Small delay to ensure navigation stack is ready
+      setTimeout(() => {
+        switch (data.type) {
+          case 'share_request':
+            router.push('/match-invitations');
+            break;
+          case 'event_created':
+          case 'event_reminder':
+            if (data.eventId) router.push(`/sponsored-event/${data.eventId}` as any);
+            else router.push('/sponsored-event/list' as any);
+            break;
+          case 'meetup_invitation':
+            if (data.meetupId) router.push(`/meetup/${data.meetupId}` as any);
+            else router.push('/meetup/invitations' as any);
+            break;
+          case 'ranking_changed':
+            router.push('/leaderboard' as any);
+            break;
+          default:
+            break;
+        }
+      }, 300);
     });
     return () => sub.remove();
   }, []);
