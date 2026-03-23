@@ -24,6 +24,8 @@ import { useApp } from '@/contexts/AppContext';
 import { Match, Challenge, SeriesInfo } from '@/services/mockData';
 import { useLanguage } from '@/hooks/useLanguage';
 import ShareModal from '@/components/ui/ShareModal';
+import SharedBadge from '@/components/ui/SharedBadge';
+import { getShareRequestsForItem, MatchShareRequest } from '@/services/matchShareService';
 import AdBanner from '@/components/ui/AdBanner';
 import Svg, { Circle, Line, G, Polygon, Text as SvgText } from 'react-native-svg';
 import { Image } from 'expo-image';
@@ -599,6 +601,7 @@ export default function HistoryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showMatchShare, setShowMatchShare] = useState(false);
   const [initialOpenHandled, setInitialOpenHandled] = useState(false);
+  const [challengeShareRequests, setChallengeShareRequests] = useState<MatchShareRequest[]>([]);
 
   // Meetup state
   const [allMeetups, setAllMeetups] = useState<(Meetup & { _source: 'created' | 'invited'; _acceptedCount?: number })[]>([]);
@@ -663,6 +666,17 @@ export default function HistoryScreen() {
       setInitialOpenHandled(true);
     }
   }, [params.openChallengeId, params.openMatchId, challenges, matches, initialOpenHandled]);
+
+  // Load share request info for edited challenge
+  useEffect(() => {
+    if (!editingChallenge) {
+      setChallengeShareRequests([]);
+      return;
+    }
+    getShareRequestsForItem('challenge', editingChallenge.id).then(({ requests }) => {
+      setChallengeShareRequests(requests);
+    });
+  }, [editingChallenge?.id]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -1365,21 +1379,61 @@ export default function HistoryScreen() {
             ) : (
               <View style={{ width: 36 }} />
             )}
-            <Text style={styles.modalTitle}>{t('history', 'challengeDetails')}</Text>
+            <View style={{ alignItems: 'center' }}>
+              <Text style={styles.modalTitle}>{t('history', 'challengeDetails')}</Text>
+              {editingChallenge && isSharedItem(editingChallenge.id) ? (
+                <View style={{ marginTop: 2 }}>
+                  <SharedBadge permission={getSharedPermission(editingChallenge.id) || 'read'} size="small" />
+                </View>
+              ) : null}
+            </View>
             {isEditingChallengeFields ? (
-              <Pressable
-                style={styles.cdSaveHeaderBtn}
-                onPress={handleSaveChallenge}
-                disabled={savingChallenge}
-              >
-                <Text style={styles.cdSaveHeaderBtnText}>{savingChallenge ? '...' : t('common', 'save')}</Text>
-              </Pressable>
+              editingChallenge && isSharedItem(editingChallenge.id) && getSharedPermission(editingChallenge.id) === 'read' ? (
+                <View style={{ width: 36 }} />
+              ) : (
+                <Pressable
+                  style={styles.cdSaveHeaderBtn}
+                  onPress={handleSaveChallenge}
+                  disabled={savingChallenge}
+                >
+                  <Text style={styles.cdSaveHeaderBtnText}>{savingChallenge ? '...' : t('common', 'save')}</Text>
+                </Pressable>
+              )
             ) : (
               <Pressable style={styles.modalClose} onPress={() => { setEditingChallenge(null); setIsEditingChallengeFields(false); }}>
                 <MaterialIcons name="close" size={24} color={theme.textPrimary} />
               </Pressable>
             )}
           </View>
+
+          {/* Shared challenge banner */}
+          {editingChallenge && isSharedItem(editingChallenge.id) ? (
+            <View style={styles.sharedChallBanner}>
+              <View style={styles.sharedChallBannerIcon}>
+                <MaterialIcons name="group" size={18} color={theme.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sharedChallBannerTitle}>
+                  {language === 'fr' ? 'Defi partage' : 'Shared challenge'}
+                </Text>
+                <Text style={styles.sharedChallBannerSub}>
+                  {(() => {
+                    const senderReq = challengeShareRequests.find(r => r.recipientUserId === user?.id);
+                    if (senderReq?.senderName) {
+                      return (language === 'fr' ? `Partage par ${senderReq.senderName}` : `Shared by ${senderReq.senderName}`);
+                    }
+                    return (language === 'fr' ? 'Partage avec vous' : 'Shared with you');
+                  })()}
+                </Text>
+              </View>
+              <View style={[styles.sharedChallPermBadge, { backgroundColor: (getSharedPermission(editingChallenge.id) === 'write' ? theme.accent : theme.primary) + '15' }]}>
+                <MaterialIcons name={getSharedPermission(editingChallenge.id) === 'write' ? 'edit' : 'visibility'} size={12} color={getSharedPermission(editingChallenge.id) === 'write' ? theme.accent : theme.primary} />
+                <Text style={[styles.sharedChallPermText, { color: getSharedPermission(editingChallenge.id) === 'write' ? theme.accent : theme.primary }]}>
+                  {getSharedPermission(editingChallenge.id) === 'write' ? (language === 'fr' ? 'Modification' : 'Edit') : (language === 'fr' ? 'Lecture' : 'Read only')}
+                </Text>
+              </View>
+            </View>
+          ) : null}
           
           {editingChallenge && (() => {
             const scrollContent = (
@@ -1959,45 +2013,74 @@ export default function HistoryScreen() {
               </View>
 
               {/* Actions */}
-              {isEditingChallengeFields ? (
-                <View style={styles.detailActions}>
-                  <Pressable
-                    style={[styles.closeBtn, { flex: 1 }]}
-                    onPress={handleSaveChallenge}
-                    disabled={savingChallenge}
-                  >
-                    <Text style={styles.closeBtnText}>
-                      {savingChallenge ? '...' : t('common', 'save')}
-                    </Text>
-                  </Pressable>
-                </View>
-              ) : (
-                <>
-                  <Pressable
-                    style={styles.shareParticipantsBtn}
-                    onPress={() => {
-                      Haptics.selectionAsync();
-                      setShowChallengeShare(true);
-                    }}
-                  >
-                    <MaterialIcons name="share" size={18} color={theme.primary} />
-                    <Text style={styles.shareParticipantsBtnText}>{t('matchEdit', 'shareWithParticipants')}</Text>
-                  </Pressable>
-                  <View style={styles.detailActions}>
-                    <Pressable style={styles.deleteBtn} onPress={handleDeleteChallenge}>
-                      <MaterialIcons name="delete" size={18} color={theme.error} />
-                      <Text style={styles.deleteBtnText}>{t('common', 'delete')}</Text>
+              {(() => {
+                const challShared = isSharedItem(editingChallenge.id);
+                const challPerm = getSharedPermission(editingChallenge.id);
+                const isReadOnly = challShared && challPerm === 'read';
+
+                if (isEditingChallengeFields) {
+                  if (isReadOnly) {
+                    return (
+                      <View style={styles.challReadOnlyBanner}>
+                        <MaterialIcons name="lock" size={18} color={theme.textMuted} />
+                        <Text style={styles.challReadOnlyBannerText}>
+                          {language === 'fr' ? 'Lecture seule — vous ne pouvez pas modifier ce defi' : 'Read only — you cannot modify this challenge'}
+                        </Text>
+                      </View>
+                    );
+                  }
+                  return (
+                    <View style={styles.detailActions}>
+                      <Pressable
+                        style={[styles.closeBtn, { flex: 1 }]}
+                        onPress={handleSaveChallenge}
+                        disabled={savingChallenge}
+                      >
+                        <Text style={styles.closeBtnText}>
+                          {savingChallenge ? '...' : t('common', 'save')}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  );
+                }
+
+                return (
+                  <>
+                    <Pressable
+                      style={styles.shareParticipantsBtn}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setShowChallengeShare(true);
+                      }}
+                    >
+                      <MaterialIcons name="share" size={18} color={theme.primary} />
+                      <Text style={styles.shareParticipantsBtnText}>{t('matchEdit', 'shareWithParticipants')}</Text>
                     </Pressable>
-                    <Pressable style={styles.closeBtn} onPress={() => {
-                      Haptics.selectionAsync();
-                      setIsEditingChallengeFields(true);
-                    }}>
-                      <MaterialIcons name="edit" size={18} color="#FFF" />
-                      <Text style={styles.closeBtnText}>{t('match', 'editMatch')}</Text>
-                    </Pressable>
-                  </View>
-                </>
-              )}
+                    {isReadOnly ? (
+                      <View style={styles.challReadOnlyBanner}>
+                        <MaterialIcons name="lock" size={18} color={theme.textMuted} />
+                        <Text style={styles.challReadOnlyBannerText}>
+                          {language === 'fr' ? 'Lecture seule — vous ne pouvez pas modifier ce defi' : 'Read only — you cannot modify this challenge'}
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={styles.detailActions}>
+                        <Pressable style={styles.deleteBtn} onPress={handleDeleteChallenge}>
+                          <MaterialIcons name="delete" size={18} color={theme.error} />
+                          <Text style={styles.deleteBtnText}>{t('common', 'delete')}</Text>
+                        </Pressable>
+                        <Pressable style={styles.closeBtn} onPress={() => {
+                          Haptics.selectionAsync();
+                          setIsEditingChallengeFields(true);
+                        }}>
+                          <MaterialIcons name="edit" size={18} color="#FFF" />
+                          <Text style={styles.closeBtnText}>{t('match', 'editMatch')}</Text>
+                        </Pressable>
+                      </View>
+                    )}
+                  </>
+                );
+              })()}
             </ScrollView>
             );
 
@@ -2469,6 +2552,64 @@ const styles = StyleSheet.create({
   sharedInlineBadgeText: {
     fontSize: 10,
     fontWeight: '700',
+  },
+  // Shared challenge banner in detail modal
+  sharedChallBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: theme.primary + '08',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.primary + '20',
+  },
+  sharedChallBannerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: theme.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sharedChallBannerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.primary,
+  },
+  sharedChallBannerSub: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 1,
+  },
+  sharedChallPermBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
+  sharedChallPermText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  challReadOnlyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.border,
+    marginTop: 12,
+  },
+  challReadOnlyBannerText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.textMuted,
   },
   
   // Match Detail Modal
