@@ -88,15 +88,6 @@ L'utilisateur s'inscrit via OTP email + mot de passe, crée son profil joueur au
 |---|---|---|---|
 | 1 | **Google OAuth** | Code client prêt (`signInWithGoogle` dans template auth) | Activer Google Provider dans OnSpace Cloud Dashboard, configurer Client ID/Secret OAuth, tester sur appareil réel |
 | 2 | **AdMob** | IDs de test configurés (`ca-app-pub-3940256099942544`) | Remplacer par IDs de production, tester sur builds EAS |
-| 3 | **Mode sombre** | Non implémenté | Créer ThemeContext, palettes light/dark, toggle dans profil |
-
-### 2.3 Fonctionnalités à implémenter
-
-| # | Fonctionnalité | Description | Complexité |
-|---|---|---|---|
-| 1 | **Mode sombre** | Détection système + toggle manuel, palettes complètes light/dark | Moyenne |
-| 2 | **Calendrier événements** | Vue mensuel dans l'onglet Défis avec pastilles couleur par type | Moyenne |
-| 3 | **Export CSV avancé** | Sélection des colonnes, formatage dates FR/EN, partage via Share API | Faible |
 
 ---
 
@@ -252,10 +243,9 @@ services/
 
 ### 4.3 Ce qui est manquant
 
-- Mode sombre (ThemeContext)
-- Vue calendrier pour les événements
 - Tests sur appareils réels (IAP, notifications, deep links)
 - Configuration EAS Build pour production
+- Configuration Google Maps API Key pour la carte (Android)
 - Assets App Store / Play Store (screenshots, descriptions)
 - IDs AdMob de production
 
@@ -274,7 +264,7 @@ services/
 | 5 | **Keystore Android** | Générer le keystore de signature | — | EAS gère automatiquement ou générer manuellement via `keytool` | Haute | 1h |
 | 6 | **Notifications Push** | Configurer les credentials push | Dashboard OnSpace → Cloud → Secrets (si APNs key nécessaire) | Apple Developer : créer APNs Key (.p8), Google : Firebase Cloud Messaging (optionnel avec Expo) | Moyenne | 2-3h |
 | 7 | **Deep Linking prod** | Configurer les associated domains | — | Apple Developer : configurer Associated Domains, héberger `apple-app-site-association` ; Google : Digital Asset Links | Moyenne | 2-3h |
-| 8 | **Mode sombre** | Implémenter ThemeContext avec palettes | Développement dans le code | — | Moyenne | 8-12h |
+| 8 | **Google Maps API (Carte)** | Configurer la clé API Google Maps pour la carte interactive Android | Ajouter la clé dans `app.json` sous `android.config.googleMaps.apiKey` | Google Cloud Console : activer "Maps SDK for Android" et "Maps SDK for iOS", créer une clé API restreinte par plateforme, ajouter restrictions de bundle/package | Haute | 2-3h |
 | 9 | **Tests réels IAP** | Tester les achats in-app | — | App Store Connect : créer In-App Purchase (€5.99), configurer sandbox testers ; Google Play Console : créer produit, licence testing | Haute | 4-6h |
 | 10 | **Tests appareils** | Tester sur iOS et Android physiques | Télécharger APK via bouton Download d'OnSpace, utiliser QR code OnSpace App pour iOS | — | Haute | 8-12h |
 | 11 | **Performance** | Profiler et optimiser | — | React DevTools, Flipper, analyser bundle size | Basse | 4-6h |
@@ -284,12 +274,12 @@ services/
 
 | Phase | Heures estimées |
 |---|---|
-| Configuration (OAuth, AdMob, EAS, certificats) | 12-17h |
-| Développement restant (mode sombre, calendrier) | 10-16h |
+| Configuration (OAuth, AdMob, EAS, certificats, carte) | 14-20h |
 | Tests sur appareils réels | 8-12h |
 | Préparation publication (assets, descriptions, screenshots) | 8-12h |
 | Publication App Store + Play Store | 4-8h |
-| **TOTAL** | **42-65h** |
+| Bug fixes et polish post-tests | 4-8h |
+| **TOTAL** | **38-60h** |
 
 ---
 
@@ -396,26 +386,25 @@ services/
 
 | Catégorie | Heures |
 |---|---|
-| Configuration infrastructure (OAuth, AdMob, EAS, certificats, push) | 12-17h |
-| Développement features manquantes (mode sombre) | 8-12h |
+| Configuration infrastructure (OAuth, AdMob, EAS, certificats, push, carte) | 14-20h |
 | Tests complets sur appareils | 8-12h |
 | Préparation assets stores (screenshots, descriptions, vidéo) | 8-12h |
 | Publication et soumission (iOS + Android) | 4-8h |
 | Bug fixes et polish post-tests | 4-8h |
-| **TOTAL ESTIMÉ** | **44-69h** |
+| **TOTAL ESTIMÉ** | **38-60h** |
 
 ### 7.2 Calendrier suggéré
 
 | Semaine | Activité |
 |---|---|
-| S1 | Configuration EAS, certificats, OAuth Google, AdMob production |
-| S2 | Mode sombre, tests IAP sandbox, tests appareils |
+| S1 | Configuration EAS, certificats, OAuth Google, AdMob production, Google Maps API |
+| S2 | Tests IAP sandbox, tests appareils (iOS + Android) |
 | S3 | Bug fixes, préparation assets stores, screenshots |
 | S4 | Soumission iOS + Android, monitoring post-launch |
 
 ### 7.3 Niveau de difficulté global
 
-**Moyen-Élevé** — L'application est fonctionnellement très complète (30+ features majeures). Le code est bien structuré (services extraits, tests en place, i18n complet). Le travail restant est principalement de la **configuration d'infrastructure** et du **polish pour production**.
+**Moyen** — L'application est fonctionnellement très complète (30+ features majeures). Le code est bien structuré (services extraits, tests en place, i18n complet). Le travail restant est principalement de la **configuration d'infrastructure** et du **polish pour production**. Aucun développement de fonctionnalité majeure n'est requis.
 
 ---
 
@@ -495,6 +484,101 @@ npx depcheck
 ## ANNEXE C — COMPTES DE TEST
 
 Pour tester l'application en développement, créer un compte via l'écran de login avec n'importe quel email valide. Le système OTP enverra un code à 4 chiffres. Mot de passe minimum : 6 caractères.
+
+---
+
+## 9. SUIVI POST-PUBLICATION ET ROADMAP V2
+
+### 9.1 Actions post-publication immédiates (Semaine 1-2)
+
+| # | Action | Description | Priorité |
+|---|---|---|---|
+| 1 | **Monitoring crashs** | Vérifier quotidiennement Sentry/Crashlytics, corriger les crashs critiques dans les 24h | Critique |
+| 2 | **Feedback utilisateurs** | Surveiller les avis App Store/Play Store, répondre sous 48h, identifier les patterns récurrents | Haute |
+| 3 | **Métriques de lancement** | Suivre : téléchargements, rétention J1/J7/J30, taux de crash, temps de session moyen | Haute |
+| 4 | **Performance API** | Vérifier les temps de réponse Supabase, identifier les requêtes lentes via les logs | Haute |
+| 5 | **Hotfix process** | Préparer un profil EAS `hotfix` pour déployer des correctifs urgents rapidement | Moyenne |
+
+### 9.2 Actions post-publication à moyen terme (Mois 1-3)
+
+| # | Action | Description | Priorité |
+|---|---|---|---|
+| 1 | **ASO (App Store Optimization)** | Optimiser titre, mots-clés, screenshots basé sur les données réelles de recherche | Haute |
+| 2 | **Analyse de rétention** | Identifier les points de décrochage (onboarding, première partie, etc.) et optimiser | Haute |
+| 3 | **A/B testing store** | Tester différentes icônes, screenshots, descriptions pour améliorer le taux de conversion | Moyenne |
+| 4 | **Backup DB** | Mettre en place un export régulier des données critiques (hebdomadaire minimum) | Haute |
+| 5 | **Localisation étendue** | Analyser la demande pour d'autres langues (espagnol, italien, portugais — pays de pétanque) | Basse |
+
+### 9.3 Roadmap fonctionnelle V2 (suggestions)
+
+Basé sur l'architecture actuelle et les tendances du marché :
+
+| # | Fonctionnalité V2 | Description | Complexité | Impact utilisateur |
+|---|---|---|---|---|
+| 1 | **Mode sombre** | Détection système + toggle manuel, palettes complètes light/dark dans un ThemeContext | Moyenne | Élevé (demande fréquente) |
+| 2 | **Calendrier événements** | Vue mensuel dans l'onglet Défis de l'annuaire avec pastilles couleur par type d'événement | Moyenne | Moyen |
+| 3 | **Export CSV avancé** | Sélection des colonnes à exporter, formatage dates FR/EN, partage via Share API natif | Faible | Moyen |
+| 4 | **Notifications push serveur** | Edge Function déclenchant des push via Expo Push API (événements ambassadeur, résultats tournoi) | Élevée | Élevé |
+| 5 | **Chat entre joueurs** | Messagerie intégrée entre joueurs connectés, canaux par meetup/tournoi | Très élevée | Élevé |
+| 6 | **Vidéo replay** | Enregistrement court (15s) des tirs marquants, stockage Supabase Storage | Élevée | Moyen |
+| 7 | **Widget iOS/Android** | Widget affichant les prochains matchs/meetups et le classement actuel | Moyenne | Moyen |
+| 8 | **Système d'abonnement** | Plan premium mensuel/annuel (au lieu du one-time) avec fonctionnalités exclusives | Moyenne | Business |
+| 9 | **Intelligence artificielle** | Analyse prédictive des performances, suggestions d'entraînement personnalisées via OnSpace AI | Élevée | Élevé |
+| 10 | **Marketplace sponsors** | Espace pour les marques de boules avec offres spéciales, codes promo, et tracking des conversions | Élevée | Business |
+
+### 9.4 Processus de mise à jour (V1.x → V2)
+
+#### Workflow de release
+
+1. **Brancher** : Créer une branche `release/vX.Y.Z` depuis `main`
+2. **Versionner** : Mettre à jour `app.json` (`version` et `buildNumber`/`versionCode`)
+3. **Tester** : Build de preview (`eas build --profile preview`), tester sur appareils réels
+4. **Builder** : Build de production (`eas build --profile production`)
+5. **Soumettre** : `eas submit --platform ios` et `eas submit --platform android`
+6. **Documenter** : Rédiger les release notes (changelog) pour chaque store
+
+#### Versioning recommandé
+
+| Type | Format | Exemple | Quand |
+|---|---|---|---|
+| Patch | `1.0.X` | 1.0.1 → 1.0.2 | Bug fixes, correctifs mineurs |
+| Mineur | `1.X.0` | 1.1.0 → 1.2.0 | Nouvelles fonctionnalités, améliorations UX |
+| Majeur | `X.0.0` | 1.x → 2.0.0 | Refonte majeure, breaking changes |
+
+#### Over-The-Air Updates (OTA)
+
+Pour les correctifs urgents qui ne modifient pas le code natif :
+```bash
+# Mise à jour JS sans passer par les stores
+eas update --branch production --message "Fix: correction du calcul de stats"
+```
+⚠️ Les OTA ne peuvent pas modifier `app.json`, les plugins natifs, ou les assets binaires.
+
+#### Checklist avant chaque release
+
+- [ ] Tests unitaires passent (`npx jest`)
+- [ ] Test manuel sur iOS (simulateur + appareil réel)
+- [ ] Test manuel sur Android (émulateur + appareil réel)
+- [ ] Vérifier la taille du bundle (< 50MB recommandé)
+- [ ] Mettre à jour les screenshots store si l'UI a changé
+- [ ] Rédiger les release notes en FR et EN
+- [ ] Incrémenter `buildNumber` (iOS) et `versionCode` (Android)
+- [ ] Vérifier que les IDs AdMob sont ceux de production
+- [ ] Vérifier que les Edge Functions sont à jour
+- [ ] Tester le flux complet : inscription → match → stats → partage
+
+### 9.5 KPIs à surveiller
+
+| KPI | Objectif V1 (3 mois) | Outil de mesure |
+|---|---|---|
+| Téléchargements | 1000+ | App Store Connect / Google Play Console |
+| Rétention J7 | > 30% | Analytics intégrées |
+| Rétention J30 | > 15% | Analytics intégrées |
+| Taux de crash | < 1% | Sentry |
+| Note moyenne store | > 4.0/5 | App Store / Play Store |
+| Matchs créés/jour | 50+ | Requête SQL sur table `matches` |
+| Taux conversion premium | > 3% | Supabase `user_profiles.is_premium` |
+| Ambassadeurs actifs | 5+ | Table `ambassadors` |
 
 ---
 
