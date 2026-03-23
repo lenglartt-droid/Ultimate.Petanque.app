@@ -63,6 +63,16 @@ export const extraTranslations = {
     opponentResult: { fr: 'Resultat adversaire', en: 'Opponent result' },
     terrainId: { fr: 'Terrain', en: 'Court' },
     boulesSetId: { fr: 'Jeu de boules', en: 'Boules set' },
+    revertField: { fr: 'Annuler', en: 'Undo' },
+    revertConfirmTitle: { fr: 'Annuler cette modification ?', en: 'Undo this change?' },
+    revertConfirmMsg: { fr: 'Restaurer la valeur precedente de ce champ ?', en: 'Restore the previous value of this field?' },
+    revertSuccess: { fr: 'Modification annulee', en: 'Change reverted' },
+    revertError: { fr: 'Erreur lors de l\'annulation', en: 'Error reverting change' },
+    reverting: { fr: 'Annulation...', en: 'Reverting...' },
+    fieldNotRevertable: { fr: 'Ce champ ne peut pas etre annule automatiquement', en: 'This field cannot be reverted automatically' },
+    seeLess: { fr: 'Voir moins', en: 'See less' },
+    seeAll: { fr: 'Voir tout', en: 'See all' },
+    fieldChanged: { fr: 'Champ modifie :', en: 'Field changed:' },
   },
 
   matchSharing: {

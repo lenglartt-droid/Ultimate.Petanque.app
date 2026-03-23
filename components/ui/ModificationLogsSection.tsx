@@ -1,24 +1,26 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
-import { getModificationLogs, ModificationLog, ModLogItemType } from '@/services/modificationLogService';
+import { getModificationLogs, ModificationLog, ModLogItemType, isFieldRevertable, revertFieldChange } from '@/services/modificationLogService';
 
 interface ModificationLogsSectionProps {
   itemType: ModLogItemType;
   itemId: string;
   isOwner: boolean;
+  onReverted?: () => void;
 }
 
-export default function ModificationLogsSection({ itemType, itemId, isOwner }: ModificationLogsSectionProps) {
+export default function ModificationLogsSection({ itemType, itemId, isOwner, onReverted }: ModificationLogsSectionProps) {
   const { t, language } = useLanguage();
   const [logs, setLogs] = useState<ModificationLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAll, setShowAll] = useState(false);
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [revertingField, setRevertingField] = useState<string | null>(null);
 
   const loadLogs = useCallback(async () => {
     if (!isOwner || !itemId) {
@@ -216,6 +218,51 @@ export default function ModificationLogsSection({ itemType, itemId, isOwner }: M
                             </Text>
                           </View>
                         </View>
+                      ) : null}
+
+                      {/* Undo button */}
+                      {change.oldValue !== undefined && isFieldRevertable(itemType, change.field) ? (
+                        <Pressable
+                          style={[styles.revertBtn, revertingField === `${log.id}-${change.field}` && { opacity: 0.5 }]}
+                          disabled={revertingField !== null}
+                          onPress={() => {
+                            Haptics.selectionAsync();
+                            Alert.alert(
+                              t('modificationLogs', 'revertConfirmTitle'),
+                              t('modificationLogs', 'revertConfirmMsg'),
+                              [
+                                { text: t('common', 'cancel'), style: 'cancel' },
+                                {
+                                  text: t('modificationLogs', 'revertField'),
+                                  style: 'destructive',
+                                  onPress: async () => {
+                                    setRevertingField(`${log.id}-${change.field}`);
+                                    const { error } = await revertFieldChange({
+                                      logId: log.id,
+                                      itemType,
+                                      itemId,
+                                      fieldName: change.field,
+                                      oldValue: change.oldValue,
+                                    });
+                                    setRevertingField(null);
+                                    if (error) {
+                                      Alert.alert(t('modificationLogs', 'revertError'), error);
+                                    } else {
+                                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                      await loadLogs();
+                                      onReverted?.();
+                                    }
+                                  },
+                                },
+                              ]
+                            );
+                          }}
+                        >
+                          <MaterialIcons name="undo" size={13} color={theme.warning} />
+                          <Text style={styles.revertBtnText}>
+                            {revertingField === `${log.id}-${change.field}` ? t('modificationLogs', 'reverting') : t('modificationLogs', 'revertField')}
+                          </Text>
+                        </Pressable>
                       ) : null}
                     </View>
                   ))}
@@ -469,5 +516,24 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: theme.border,
     marginTop: 6,
+  },
+  revertBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: theme.warning + '10',
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.warning + '25',
+    alignSelf: 'flex-start',
+  },
+  revertBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.warning,
   },
 });

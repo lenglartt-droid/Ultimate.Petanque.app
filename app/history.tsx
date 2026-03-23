@@ -2122,6 +2122,11 @@ export default function HistoryScreen() {
                     itemType="challenge"
                     itemId={editingChallenge.id}
                     isOwner={!isSharedItem(editingChallenge.id)}
+                    onReverted={async () => {
+                      await refreshData();
+                      const updated = challenges.find(c => c.id === editingChallenge?.id);
+                      if (updated) setEditingChallenge(updated);
+                    }}
                   />
                 ) : null}
 
@@ -2488,6 +2493,9 @@ export default function HistoryScreen() {
                   itemType="match"
                   itemId={m.id}
                   isOwner={!isSharedItem(m.id)}
+                  onReverted={async () => {
+                    await refreshData();
+                  }}
                 />
 
                 {/* Share with players button */}
