@@ -29,6 +29,7 @@ import SharedBadge from '@/components/ui/SharedBadge';
 import { getShareRequestsForItem, MatchShareRequest } from '@/services/matchShareService';
 import { checkEditConflict, computeChallengeDiffs, fetchUpdatedAt, DiffEntry } from '@/services/collaborativeEditService';
 import EditConflictModal from '@/components/ui/EditConflictModal';
+import ShareStatusSection from '@/components/ui/ShareStatusSection';
 import AdBanner from '@/components/ui/AdBanner';
 import Svg, { Circle, Line, G, Polygon, Text as SvgText } from 'react-native-svg';
 import { Image } from 'expo-image';
@@ -2082,7 +2083,16 @@ export default function HistoryScreen() {
                 </View>
               ) : null}
 
-              {/* Notes */}
+                {/* Share Status Section (shows shared players for challenges) */}
+                {editingChallenge && !isEditingChallengeFields ? (
+                  <ShareStatusSection
+                    itemType="challenge"
+                    itemId={editingChallenge.id}
+                    isOwner={!isSharedItem(editingChallenge.id)}
+                  />
+                ) : null}
+
+                {/* Notes */}
               <View style={styles.cdNotesSection}>
                 <View style={styles.cdNotesTitleRow}>
                   <MaterialIcons name="notes" size={16} color={theme.textSecondary} />
@@ -2432,6 +2442,13 @@ export default function HistoryScreen() {
                     <Text style={styles.mdPhaseText}>{t('tournamentPhases', m.tournamentPhase)}</Text>
                   </View>
                 ) : null}
+
+                {/* Share Status Section (shows shared players for matches) */}
+                <ShareStatusSection
+                  itemType="match"
+                  itemId={m.id}
+                  isOwner={!isSharedItem(m.id)}
+                />
 
                 {/* Share with players button */}
                 <Pressable

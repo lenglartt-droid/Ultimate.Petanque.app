@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Language, t as translate } from '@/constants/i18n';
+import { Language, t as translate, translations } from '@/constants/i18n';
+import { extraTranslations } from '@/constants/i18nExtra';
 
 const STORAGE_KEY = 'app_language';
 
@@ -39,6 +40,11 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const t = useCallback((section: string, key: string): string => {
+    // Check extra translations first (overflow from main i18n)
+    const extra = (extraTranslations as any)[section];
+    if (extra && extra[key]) {
+      return extra[key][language] || extra[key]['fr'] || key;
+    }
     return translate(section, key, language);
   }, [language]);
 

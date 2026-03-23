@@ -419,163 +419,185 @@ export default function PlayerDetailScreen() {
                 <View style={{ marginBottom: 8 }}><SharedBadge permission={sharedPermission} /></View>
               ) : null}
 
-              {/* Avatar */}
-              <View style={s.avatarContainer}>
-                <View style={s.avatar}>
-                  {player.avatar ? (
-                    <Image source={{ uri: player.avatar }} style={s.avatarImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
-                  ) : (
-                    <Text style={s.avatarText}>{player.name.split(' ').map(n => n[0]).join('')}</Text>
-                  )}
-                </View>
-                <View style={[s.roleBadgeOnAvatar, { backgroundColor: getRoleColor(player.role) }]}>
-                  <MaterialIcons name={getRoleIcon(player.role)} size={14} color="#FFF" />
-                </View>
-              </View>
-
-              {/* Name & Nickname */}
-              <View style={s.heroNameRow}>
-                <Text style={s.heroName}>{player.name}</Text>
-                {ambassadorData ? (
-                  <View style={s.ambassadorBadge}>
-                    <MaterialIcons name="verified" size={12} color="#7C3AED" />
-                    <Text style={s.ambassadorBadgeText}>{language === 'fr' ? 'Ambassadeur' : 'Ambassador'}</Text>
-                  </View>
-                ) : isSelf && isPremium ? (
-                  <View style={s.premiumBadge}>
-                    <MaterialIcons name="star" size={12} color="#C0C0C0" />
-                    <Text style={s.premiumBadgeText}>Premium</Text>
-                  </View>
-                ) : null}
-              </View>
-              {player.nickname ? <Text style={s.heroNickname}>"{player.nickname}"</Text> : null}
-
-              {/* Ambassador social links */}
-              {ambassadorData && (ambassadorData.youtubeUrl || ambassadorData.tiktokUrl || ambassadorData.instagramHandle || ambassadorData.twitterHandle || ambassadorData.websiteUrl) ? (
-                <View style={s.ambSocialRow}>
-                  {ambassadorData.youtubeUrl ? (
-                    <Pressable style={[s.ambSocialBtn, { backgroundColor: '#FF0000' + '12' }]} onPress={() => { trackAmbassadorEvent(ambassadorData.id, 'social_click', 'youtube'); Linking.openURL(ambassadorData.youtubeUrl!); }}>
-                      <MaterialIcons name="play-arrow" size={16} color="#FF0000" />
-                      <Text style={[s.ambSocialText, { color: '#FF0000' }]}>YouTube</Text>
-                    </Pressable>
-                  ) : null}
-                  {ambassadorData.tiktokUrl ? (
-                    <Pressable style={[s.ambSocialBtn, { backgroundColor: '#000' + '08' }]} onPress={() => { trackAmbassadorEvent(ambassadorData.id, 'social_click', 'tiktok'); Linking.openURL(ambassadorData.tiktokUrl!); }}>
-                      <MaterialIcons name="music-note" size={16} color="#000" />
-                      <Text style={[s.ambSocialText, { color: '#000' }]}>TikTok</Text>
-                    </Pressable>
-                  ) : null}
-                  {ambassadorData.instagramHandle ? (
-                    <Pressable style={[s.ambSocialBtn, { backgroundColor: '#E4405F' + '12' }]} onPress={() => { trackAmbassadorEvent(ambassadorData.id, 'social_click', 'instagram'); const h = ambassadorData.instagramHandle!.replace('@', ''); Linking.openURL(`https://instagram.com/${h}`); }}>
-                      <MaterialIcons name="camera-alt" size={16} color="#E4405F" />
-                      <Text style={[s.ambSocialText, { color: '#E4405F' }]}>@{ambassadorData.instagramHandle!.replace('@', '')}</Text>
-                    </Pressable>
-                  ) : null}
-                  {ambassadorData.twitterHandle ? (
-                    <Pressable style={[s.ambSocialBtn, { backgroundColor: '#1DA1F2' + '12' }]} onPress={() => { trackAmbassadorEvent(ambassadorData.id, 'social_click', 'twitter'); const h = ambassadorData.twitterHandle!.replace('@', ''); Linking.openURL(`https://x.com/${h}`); }}>
-                      <MaterialIcons name="alternate-email" size={16} color="#1DA1F2" />
-                      <Text style={[s.ambSocialText, { color: '#1DA1F2' }]}>{ambassadorData.twitterHandle}</Text>
-                    </Pressable>
-                  ) : null}
-                  {ambassadorData.websiteUrl ? (
-                    <Pressable style={[s.ambSocialBtn, { backgroundColor: theme.primary + '10' }]} onPress={() => { trackAmbassadorEvent(ambassadorData.id, 'social_click', 'website'); const u = ambassadorData.websiteUrl!.startsWith('http') ? ambassadorData.websiteUrl! : `https://${ambassadorData.websiteUrl}`; Linking.openURL(u); }}>
-                      <MaterialIcons name="language" size={16} color={theme.primary} />
-                      <Text style={[s.ambSocialText, { color: theme.primary }]}>Web</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              ) : null}
-              {/* View ambassador page button */}
-              {ambassadorData ? (
-                <Pressable
-                  style={s.ambPageBtn}
-                  onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/ambassadors', params: { scrollTo: ambassadorData.id } } as any); }}
-                >
-                  <MaterialIcons name="verified" size={16} color="#7C3AED" />
-                  <Text style={s.ambPageBtnText}>{language === 'fr' ? 'Voir la page ambassadeur' : 'View ambassador page'}</Text>
-                  <MaterialIcons name="chevron-right" size={16} color="#7C3AED" />
-                </Pressable>
-              ) : null}
-
-              {/* Badges Row */}
-              <View style={s.badgesRow}>
-                <View style={[s.pillBadge, { backgroundColor: getRoleColor(player.role) + '15' }]}>
-                  <MaterialIcons name={getRoleIcon(player.role)} size={14} color={getRoleColor(player.role)} />
-                  <Text style={[s.pillBadgeText, { color: getRoleColor(player.role) }]}>{t('roles', player.role)}</Text>
-                </View>
-                <View style={[s.pillBadge, { backgroundColor: theme.accent + '15' }]}>
-                  <MaterialIcons name="trending-up" size={14} color={theme.accent} />
-                  <Text style={[s.pillBadgeText, { color: theme.accent }]}>{t('levels', player.level)}</Text>
-                </View>
-                {player.handedness ? (
-                  <View style={[s.pillBadge, { backgroundColor: '#6366F1' + '15' }]}>
-                    <MaterialIcons name={player.handedness === 'left' ? 'front-hand' : player.handedness === 'ambidextrous' ? 'swap-horiz' : 'back-hand'} size={14} color="#6366F1" />
-                    <Text style={[s.pillBadgeText, { color: '#6366F1' }]}>
-                      {player.handedness === 'right' ? t('player', 'rightHanded') : player.handedness === 'left' ? t('player', 'leftHanded') : t('player', 'ambidextrous')}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-
-              {/* Club & Terrain pills */}
-              {(clubDisplayName || terrainDisplayName) ? (
-                <View style={s.infoPillsRow}>
-                  {clubDisplayName ? (
-                    clubEntity ? (
-                      <Pressable style={[s.infoPill, { backgroundColor: theme.carreauColor + '12' }]} onPress={() => router.push(`/club/${clubEntity.id}`)}>
-                        <MaterialIcons name="location-city" size={14} color={theme.carreauColor} />
-                        <Text style={[s.infoPillText, { color: theme.carreauColor }]}>{clubDisplayName}</Text>
-                        <MaterialIcons name="chevron-right" size={14} color={theme.carreauColor} />
-                      </Pressable>
+              {/* ── BLOC 1: IDENTITE ── */}
+              <View style={s.heroIdentityBlock}>
+                {/* Avatar */}
+                <View style={s.avatarContainer}>
+                  <View style={s.avatar}>
+                    {player.avatar ? (
+                      <Image source={{ uri: player.avatar }} style={s.avatarImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                     ) : (
-                      <View style={[s.infoPill, { backgroundColor: theme.carreauColor + '12' }]}>
-                        <MaterialIcons name="location-city" size={14} color={theme.carreauColor} />
-                        <Text style={[s.infoPillText, { color: theme.carreauColor }]}>{clubDisplayName}</Text>
-                      </View>
-                    )
+                      <Text style={s.avatarText}>{player.name.split(' ').map(n => n[0]).join('')}</Text>
+                    )}
+                  </View>
+                  <View style={[s.roleBadgeOnAvatar, { backgroundColor: getRoleColor(player.role) }]}>
+                    <MaterialIcons name={getRoleIcon(player.role)} size={14} color="#FFF" />
+                  </View>
+                </View>
+
+                {/* Name & Nickname */}
+                <View style={s.heroNameRow}>
+                  <Text style={s.heroName}>{player.name}</Text>
+                  {ambassadorData ? (
+                    <View style={s.ambassadorBadge}>
+                      <MaterialIcons name="verified" size={12} color="#7C3AED" />
+                      <Text style={s.ambassadorBadgeText}>{language === 'fr' ? 'Ambassadeur' : 'Ambassador'}</Text>
+                    </View>
+                  ) : isSelf && isPremium ? (
+                    <View style={s.premiumBadge}>
+                      <MaterialIcons name="star" size={12} color="#C0C0C0" />
+                      <Text style={s.premiumBadgeText}>Premium</Text>
+                    </View>
                   ) : null}
-                  {terrainDisplayName ? (
-                    terrainEntity ? (
-                      <Pressable style={[s.infoPill, { backgroundColor: theme.success + '12' }]} onPress={() => router.push(`/terrain/${terrainEntity.id}`)}>
-                        <MaterialIcons name="sports-soccer" size={14} color={theme.success} />
-                        <Text style={[s.infoPillText, { color: theme.success }]}>{terrainDisplayName}</Text>
-                        <MaterialIcons name="chevron-right" size={14} color={theme.success} />
-                      </Pressable>
-                    ) : (
-                      <View style={[s.infoPill, { backgroundColor: theme.success + '12' }]}>
-                        <MaterialIcons name="sports-soccer" size={14} color={theme.success} />
-                        <Text style={[s.infoPillText, { color: theme.success }]}>{terrainDisplayName}</Text>
-                      </View>
-                    )
+                </View>
+                {player.nickname ? <Text style={s.heroNickname}>"{player.nickname}"</Text> : null}
+              </View>
+
+              {/* ── BLOC 2: JEU ── */}
+              <View style={s.heroSectionBlock}>
+                <View style={s.heroSectionBlockHeader}>
+                  <MaterialIcons name="sports" size={12} color={theme.textMuted} />
+                  <Text style={s.heroSectionBlockLabel}>{language === 'fr' ? 'JEU' : 'GAME'}</Text>
+                </View>
+                <View style={s.badgesRow}>
+                  <View style={[s.pillBadge, { backgroundColor: getRoleColor(player.role) + '15' }]}>
+                    <MaterialIcons name={getRoleIcon(player.role)} size={14} color={getRoleColor(player.role)} />
+                    <Text style={[s.pillBadgeText, { color: getRoleColor(player.role) }]}>{t('roles', player.role)}</Text>
+                  </View>
+                  <View style={[s.pillBadge, { backgroundColor: theme.accent + '15' }]}>
+                    <MaterialIcons name="trending-up" size={14} color={theme.accent} />
+                    <Text style={[s.pillBadgeText, { color: theme.accent }]}>{t('levels', player.level)}</Text>
+                  </View>
+                  {player.handedness ? (
+                    <View style={[s.pillBadge, { backgroundColor: '#6366F1' + '15' }]}>
+                      <MaterialIcons name={player.handedness === 'left' ? 'front-hand' : player.handedness === 'ambidextrous' ? 'swap-horiz' : 'back-hand'} size={14} color="#6366F1" />
+                      <Text style={[s.pillBadgeText, { color: '#6366F1' }]}>
+                        {player.handedness === 'right' ? t('player', 'rightHanded') : player.handedness === 'left' ? t('player', 'leftHanded') : t('player', 'ambidextrous')}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+
+              {/* ── BLOC 3: LIEU ── */}
+              {(clubDisplayName || terrainDisplayName || player.location?.city || player.country) ? (
+                <View style={s.heroSectionBlock}>
+                  <View style={s.heroSectionBlockHeader}>
+                    <MaterialIcons name="place" size={12} color={theme.textMuted} />
+                    <Text style={s.heroSectionBlockLabel}>{language === 'fr' ? 'LIEU' : 'LOCATION'}</Text>
+                  </View>
+                  {(clubDisplayName || terrainDisplayName) ? (
+                    <View style={s.infoPillsRow}>
+                      {clubDisplayName ? (
+                        clubEntity ? (
+                          <Pressable style={[s.infoPill, { backgroundColor: theme.carreauColor + '12' }]} onPress={() => router.push(`/club/${clubEntity.id}`)}>
+                            <MaterialIcons name="location-city" size={14} color={theme.carreauColor} />
+                            <Text style={[s.infoPillText, { color: theme.carreauColor }]}>{clubDisplayName}</Text>
+                            <MaterialIcons name="chevron-right" size={14} color={theme.carreauColor} />
+                          </Pressable>
+                        ) : (
+                          <View style={[s.infoPill, { backgroundColor: theme.carreauColor + '12' }]}>
+                            <MaterialIcons name="location-city" size={14} color={theme.carreauColor} />
+                            <Text style={[s.infoPillText, { color: theme.carreauColor }]}>{clubDisplayName}</Text>
+                          </View>
+                        )
+                      ) : null}
+                      {terrainDisplayName ? (
+                        terrainEntity ? (
+                          <Pressable style={[s.infoPill, { backgroundColor: theme.success + '12' }]} onPress={() => router.push(`/terrain/${terrainEntity.id}`)}>
+                            <MaterialIcons name="sports-soccer" size={14} color={theme.success} />
+                            <Text style={[s.infoPillText, { color: theme.success }]}>{terrainDisplayName}</Text>
+                            <MaterialIcons name="chevron-right" size={14} color={theme.success} />
+                          </Pressable>
+                        ) : (
+                          <View style={[s.infoPill, { backgroundColor: theme.success + '12' }]}>
+                            <MaterialIcons name="sports-soccer" size={14} color={theme.success} />
+                            <Text style={[s.infoPillText, { color: theme.success }]}>{terrainDisplayName}</Text>
+                          </View>
+                        )
+                      ) : null}
+                    </View>
+                  ) : null}
+                  {(player.location?.city || player.country) ? (
+                    <View style={s.locationPill}>
+                      <MaterialIcons name="place" size={14} color={theme.textSecondary} />
+                      <Text style={s.locationPillText}>{[player.location?.city, player.country].filter(Boolean).join(', ')}</Text>
+                    </View>
                   ) : null}
                 </View>
               ) : null}
 
-              {/* Contact pills */}
-              {(player.phone || player.email) && (
-                isSharedItem ? (player.showContactPublic === true) : (player.showContactPublic !== false || !player.isPublic)
-              ) ? (
-                <View style={s.contactPillsRow}>
-                  {player.phone ? (
-                    <Pressable style={s.contactPill} onPress={() => Linking.openURL(`tel:${player.phone}`)}>
-                      <MaterialIcons name="phone" size={14} color={theme.primary} />
-                      <Text style={s.contactPillText}>{player.phone}</Text>
+              {/* ── BLOC 4: CONTACT & SOCIAL ── */}
+              {((player.phone || player.email) && (isSharedItem ? (player.showContactPublic === true) : (player.showContactPublic !== false || !player.isPublic))) || (ambassadorData && (ambassadorData.youtubeUrl || ambassadorData.tiktokUrl || ambassadorData.instagramHandle || ambassadorData.twitterHandle || ambassadorData.websiteUrl)) ? (
+                <View style={s.heroSectionBlock}>
+                  <View style={s.heroSectionBlockHeader}>
+                    <MaterialIcons name="contact-phone" size={12} color={theme.textMuted} />
+                    <Text style={s.heroSectionBlockLabel}>{language === 'fr' ? 'CONTACT' : 'CONTACT'}</Text>
+                  </View>
+                  {/* Ambassador social links */}
+                  {ambassadorData && (ambassadorData.youtubeUrl || ambassadorData.tiktokUrl || ambassadorData.instagramHandle || ambassadorData.twitterHandle || ambassadorData.websiteUrl) ? (
+                    <View style={s.ambSocialRow}>
+                      {ambassadorData.youtubeUrl ? (
+                        <Pressable style={[s.ambSocialBtn, { backgroundColor: '#FF0000' + '12' }]} onPress={() => { trackAmbassadorEvent(ambassadorData.id, 'social_click', 'youtube'); Linking.openURL(ambassadorData.youtubeUrl!); }}>
+                          <MaterialIcons name="play-arrow" size={16} color="#FF0000" />
+                          <Text style={[s.ambSocialText, { color: '#FF0000' }]}>YouTube</Text>
+                        </Pressable>
+                      ) : null}
+                      {ambassadorData.tiktokUrl ? (
+                        <Pressable style={[s.ambSocialBtn, { backgroundColor: '#000' + '08' }]} onPress={() => { trackAmbassadorEvent(ambassadorData.id, 'social_click', 'tiktok'); Linking.openURL(ambassadorData.tiktokUrl!); }}>
+                          <MaterialIcons name="music-note" size={16} color="#000" />
+                          <Text style={[s.ambSocialText, { color: '#000' }]}>TikTok</Text>
+                        </Pressable>
+                      ) : null}
+                      {ambassadorData.instagramHandle ? (
+                        <Pressable style={[s.ambSocialBtn, { backgroundColor: '#E4405F' + '12' }]} onPress={() => { trackAmbassadorEvent(ambassadorData.id, 'social_click', 'instagram'); const h = ambassadorData.instagramHandle!.replace('@', ''); Linking.openURL(`https://instagram.com/${h}`); }}>
+                          <MaterialIcons name="camera-alt" size={16} color="#E4405F" />
+                          <Text style={[s.ambSocialText, { color: '#E4405F' }]}>@{ambassadorData.instagramHandle!.replace('@', '')}</Text>
+                        </Pressable>
+                      ) : null}
+                      {ambassadorData.twitterHandle ? (
+                        <Pressable style={[s.ambSocialBtn, { backgroundColor: '#1DA1F2' + '12' }]} onPress={() => { trackAmbassadorEvent(ambassadorData.id, 'social_click', 'twitter'); const h = ambassadorData.twitterHandle!.replace('@', ''); Linking.openURL(`https://x.com/${h}`); }}>
+                          <MaterialIcons name="alternate-email" size={16} color="#1DA1F2" />
+                          <Text style={[s.ambSocialText, { color: '#1DA1F2' }]}>{ambassadorData.twitterHandle}</Text>
+                        </Pressable>
+                      ) : null}
+                      {ambassadorData.websiteUrl ? (
+                        <Pressable style={[s.ambSocialBtn, { backgroundColor: theme.primary + '10' }]} onPress={() => { trackAmbassadorEvent(ambassadorData.id, 'social_click', 'website'); const u = ambassadorData.websiteUrl!.startsWith('http') ? ambassadorData.websiteUrl! : `https://${ambassadorData.websiteUrl}`; Linking.openURL(u); }}>
+                          <MaterialIcons name="language" size={16} color={theme.primary} />
+                          <Text style={[s.ambSocialText, { color: theme.primary }]}>Web</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  ) : null}
+                  {/* View ambassador page button */}
+                  {ambassadorData ? (
+                    <Pressable
+                      style={s.ambPageBtn}
+                      onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/ambassadors', params: { scrollTo: ambassadorData.id } } as any); }}
+                    >
+                      <MaterialIcons name="verified" size={16} color="#7C3AED" />
+                      <Text style={s.ambPageBtnText}>{language === 'fr' ? 'Voir la page ambassadeur' : 'View ambassador page'}</Text>
+                      <MaterialIcons name="chevron-right" size={16} color="#7C3AED" />
                     </Pressable>
                   ) : null}
-                  {player.email ? (
-                    <Pressable style={s.contactPill} onPress={() => Linking.openURL(`mailto:${player.email}`)}>
-                      <MaterialIcons name="email" size={14} color={theme.primary} />
-                      <Text style={s.contactPillText}>{player.email}</Text>
-                    </Pressable>
+                  {(player.phone || player.email) && (
+                    isSharedItem ? (player.showContactPublic === true) : (player.showContactPublic !== false || !player.isPublic)
+                  ) ? (
+                    <View style={s.contactPillsRow}>
+                      {player.phone ? (
+                        <Pressable style={s.contactPill} onPress={() => Linking.openURL(`tel:${player.phone}`)}>
+                          <MaterialIcons name="phone" size={14} color={theme.primary} />
+                          <Text style={s.contactPillText}>{player.phone}</Text>
+                        </Pressable>
+                      ) : null}
+                      {player.email ? (
+                        <Pressable style={s.contactPill} onPress={() => Linking.openURL(`mailto:${player.email}`)}>
+                          <MaterialIcons name="email" size={14} color={theme.primary} />
+                          <Text style={s.contactPillText}>{player.email}</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
                   ) : null}
-                </View>
-              ) : null}
-
-              {/* Location pill */}
-              {(player.location?.city || player.country) ? (
-                <View style={s.locationPill}>
-                  <MaterialIcons name="place" size={14} color={theme.textSecondary} />
-                  <Text style={s.locationPillText}>{[player.location?.city, player.country].filter(Boolean).join(', ')}</Text>
                 </View>
               ) : null}
 
@@ -1266,6 +1288,12 @@ const s = StyleSheet.create({
   ambPageBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: '#7C3AED' + '10', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, marginBottom: 8, borderWidth: 1, borderColor: '#7C3AED' + '25' },
   ambPageBtnText: { fontSize: 13, fontWeight: '700' as const, color: '#7C3AED' },
   heroNickname: { fontSize: 15, fontStyle: 'italic' as const, color: theme.textSecondary, marginBottom: 8 },
+
+  // Hero card section blocks
+  heroIdentityBlock: { alignItems: 'center' as const, marginBottom: 4 },
+  heroSectionBlock: { width: '100%' as const, paddingTop: 10, marginTop: 6, borderTopWidth: 1, borderTopColor: theme.border + '40' },
+  heroSectionBlockHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, marginBottom: 8 },
+  heroSectionBlockLabel: { fontSize: 9, fontWeight: '800' as const, color: theme.textMuted, letterSpacing: 1.2, textTransform: 'uppercase' as const },
 
   // Badges
   badgesRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginBottom: 12, marginTop: 4 },
