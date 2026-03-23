@@ -19,7 +19,7 @@ const EFFECTIVE_DATE = '2026-03-20';
 
 export default function TermsScreen() {
   const insets = useSafeAreaInsets();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const sections = [
     {

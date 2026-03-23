@@ -36,7 +36,7 @@ function getQuickActions(t: (s: string, k: string) => string) {
 // ============================================
 // FAQ Data
 // ============================================
-function getFaqData(t: (s: string, k: string) => string) {
+function getFaqData(t: (s: string, k: string) => string, language: string) {
   return [
     { id: 'getting_started', category: t('faq', 'gettingStarted'), icon: 'play-circle-filled', color: theme.primary, questions: [
       { id: 'gs1', q: t('faq', 'gs1Q'), a: t('faq', 'gs1A') },
@@ -224,7 +224,7 @@ export default function FAQScreen() {
   const isTablet = screenW >= 600;
 
   const QUICK_ACTIONS = useMemo(() => getQuickActions(t), [t]);
-  const FAQ_DATA = useMemo(() => getFaqData(t), [t]);
+  const FAQ_DATA = useMemo(() => getFaqData(t, language), [t, language]);
   const TIPS = useMemo(() => getTips(t), [t]);
 
   const filtered = useMemo(() => {
