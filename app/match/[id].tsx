@@ -101,6 +101,7 @@ export default function EditMatchScreen() {
 
   const maxScore = config.game.maxScore;
   const locale = language === 'en' ? 'en-US' : 'fr-FR';
+  const isReadOnly = matchIsShared && matchPermission === 'read';
 
   const ROLE_CONFIG: Record<PlayerRole, { icon: string; color: string; labelKey: string }> = {
     'Pointeur': { icon: 'radio-button-on', color: '#3B82F6', labelKey: 'pointeur' },
@@ -443,6 +444,7 @@ export default function EditMatchScreen() {
   }
 
   const handleScoreChange = (team: 'A' | 'B', delta: number) => {
+    if (isReadOnly) return;
     Haptics.selectionAsync();
     if (team === 'A') setTeamAScore(prev => Math.max(0, Math.min(maxScore, prev + delta)));
     else setTeamBScore(prev => Math.max(0, Math.min(maxScore, prev + delta)));
@@ -459,10 +461,11 @@ export default function EditMatchScreen() {
   };
 
   const handleMeneEdit = (index: number, field: 'teamAPoints' | 'teamBPoints', value: number) => {
+    if (isReadOnly) return;
     setMenes(prev => prev.map((mene, i) => i === index ? { ...mene, [field]: Math.max(0, Math.min(6, value)) } : mene));
   };
 
-  const handleAddMene = () => { setMenes(prev => [...prev, { teamAPoints: 0, teamBPoints: 0, duration: 0 }]); };
+  const handleAddMene = () => { if (isReadOnly) return; setMenes(prev => [...prev, { teamAPoints: 0, teamBPoints: 0, duration: 0 }]); };
 
   const handleDeleteMene = (index: number) => {
     Alert.alert(t('common', 'delete'), t('match', 'deleteThisMene'), [
@@ -530,9 +533,10 @@ export default function EditMatchScreen() {
     const pa = getPlayerAction(player.id);
     const actions = pa?.actions || { tirs: 0, tirsSuccess: 0, points: 0, pointsSuccess: 0, carreaux: 0 };
     const detailedCount = pa?.detailedShots?.length || 0;
+    const counterDisabled = isReadOnly;
 
     return (
-      <View key={player.id} style={styles.playerActionCard}>
+      <View key={player.id} style={[styles.playerActionCard, isReadOnly && { opacity: 0.7 }]}>
         <View style={styles.playerActionHeader}>
           <View style={[styles.playerActionDot, { backgroundColor: player.team === 'A' ? theme.primary : theme.accent }]} />
           <Text style={styles.playerActionName} numberOfLines={1}>{player.name}</Text>
@@ -552,21 +556,21 @@ export default function EditMatchScreen() {
           </View>
           <View style={styles.actionCounters}>
             <View style={styles.counterGroup}>
-              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'tirs', -1)}>
+              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'tirs', -1)} disabled={counterDisabled}>
                 <MaterialIcons name="remove" size={14} color={theme.textMuted} />
               </Pressable>
               <Text style={styles.counterValue}>{actions.tirs}</Text>
-              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'tirs', 1)}>
+              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'tirs', 1)} disabled={counterDisabled}>
                 <MaterialIcons name="add" size={14} color={theme.primary} />
               </Pressable>
             </View>
             <View style={styles.counterSep}><Text style={styles.counterSepText}>/</Text></View>
             <View style={styles.counterGroup}>
-              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'tirsSuccess', -1)}>
+              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'tirsSuccess', -1)} disabled={counterDisabled}>
                 <MaterialIcons name="remove" size={14} color={theme.textMuted} />
               </Pressable>
               <Text style={[styles.counterValue, { color: theme.success }]}>{actions.tirsSuccess}</Text>
-              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'tirsSuccess', 1)}>
+              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'tirsSuccess', 1)} disabled={counterDisabled}>
                 <MaterialIcons name="add" size={14} color={theme.success} />
               </Pressable>
             </View>
@@ -581,21 +585,21 @@ export default function EditMatchScreen() {
           </View>
           <View style={styles.actionCounters}>
             <View style={styles.counterGroup}>
-              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'points', -1)}>
+              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'points', -1)} disabled={counterDisabled}>
                 <MaterialIcons name="remove" size={14} color={theme.textMuted} />
               </Pressable>
               <Text style={styles.counterValue}>{actions.points}</Text>
-              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'points', 1)}>
+              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'points', 1)} disabled={counterDisabled}>
                 <MaterialIcons name="add" size={14} color={theme.primary} />
               </Pressable>
             </View>
             <View style={styles.counterSep}><Text style={styles.counterSepText}>/</Text></View>
             <View style={styles.counterGroup}>
-              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'pointsSuccess', -1)}>
+              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'pointsSuccess', -1)} disabled={counterDisabled}>
                 <MaterialIcons name="remove" size={14} color={theme.textMuted} />
               </Pressable>
               <Text style={[styles.counterValue, { color: theme.success }]}>{actions.pointsSuccess}</Text>
-              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'pointsSuccess', 1)}>
+              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'pointsSuccess', 1)} disabled={counterDisabled}>
                 <MaterialIcons name="add" size={14} color={theme.success} />
               </Pressable>
             </View>
@@ -610,11 +614,11 @@ export default function EditMatchScreen() {
           </View>
           <View style={styles.actionCounters}>
             <View style={styles.counterGroup}>
-              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'carreaux', -1)}>
+              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'carreaux', -1)} disabled={counterDisabled}>
                 <MaterialIcons name="remove" size={14} color={theme.textMuted} />
               </Pressable>
               <Text style={[styles.counterValue, { color: theme.carreauColor }]}>{actions.carreaux}</Text>
-              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'carreaux', 1)}>
+              <Pressable style={styles.counterBtn} onPress={() => updatePlayerActionCount(player.id, player.name, player.team, 'carreaux', 1)} disabled={counterDisabled}>
                 <MaterialIcons name="add" size={14} color={theme.carreauColor} />
               </Pressable>
             </View>
@@ -622,6 +626,7 @@ export default function EditMatchScreen() {
         </View>
 
         {/* Detailed notation buttons */}
+        {!isReadOnly ? (
         <View style={styles.detailedBtnRow}>
           <Pressable style={[styles.detailedBtn, { borderColor: theme.tirColor + '40' }]} onPress={() => openDetailedNotation(player.id, player.name, player.team, 'tir')}>
             <MaterialIcons name="gps-fixed" size={14} color={theme.tirColor} />
@@ -632,6 +637,7 @@ export default function EditMatchScreen() {
             <Text style={[styles.detailedBtnText, { color: theme.pointColor }]}>+ {t('match', 'point')}</Text>
           </Pressable>
         </View>
+        ) : null}
 
         {/* Detailed shots list */}
         {detailedCount > 0 && (
@@ -896,8 +902,8 @@ export default function EditMatchScreen() {
             <Text style={styles.sectionTitle}>{t('match', 'formatLabel')}</Text>
             <View style={styles.formatContainer}>
               {config.game.formats.map(f => (
-                <Pressable key={f} style={[styles.formatChip, format === f && styles.formatChipActive]}
-                  onPress={() => { Haptics.selectionAsync(); setFormat(f); }}>
+                <Pressable key={f} style={[styles.formatChip, format === f && styles.formatChipActive, isReadOnly && { opacity: 0.6 }]}
+                  onPress={() => { if (!isReadOnly) { Haptics.selectionAsync(); setFormat(f); } }} disabled={isReadOnly}>
                   <Text style={[styles.formatChipText, format === f && styles.formatChipTextActive]}>{t('formats', f)}</Text>
                 </Pressable>
               ))}
@@ -926,7 +932,7 @@ export default function EditMatchScreen() {
                       </Pressable>
                     </View>
                   ))}
-                  {teamAPlayers.length < maxPlayersPerTeam ? (
+                  {teamAPlayers.length < maxPlayersPerTeam && !isReadOnly ? (
                     <Pressable style={styles.addPlayerChip} onPress={() => { setPickingForTeam('A'); setPlayerSearch(''); setShowPlayerPicker(true); }}>
                       <MaterialIcons name="person-add" size={18} color={theme.primary} />
                       <Text style={styles.addPlayerChipText}>{t('match', 'addPlayers')}</Text>
@@ -953,7 +959,7 @@ export default function EditMatchScreen() {
                       </Pressable>
                     </View>
                   ))}
-                  {teamBPlayers.length < maxPlayersPerTeam ? (
+                  {teamBPlayers.length < maxPlayersPerTeam && !isReadOnly ? (
                     <Pressable style={styles.addPlayerChip} onPress={() => { setPickingForTeam('B'); setPlayerSearch(''); setShowPlayerPicker(true); }}>
                       <MaterialIcons name="person-add" size={18} color={theme.accent} />
                       <Text style={[styles.addPlayerChipText, { color: theme.accent }]}>{t('match', 'addPlayers')}</Text>
@@ -971,18 +977,18 @@ export default function EditMatchScreen() {
               <View style={styles.teamScore}>
                 <Text style={styles.scoreLabel}>{t('match', 'myTeam')}</Text>
                 <View style={styles.scoreControls}>
-                  <Pressable style={styles.scoreButton} onPress={() => handleScoreChange('A', -1)}><MaterialIcons name="remove" size={24} color={theme.textSecondary} /></Pressable>
+                  <Pressable style={[styles.scoreButton, isReadOnly && { opacity: 0.4 }]} onPress={() => handleScoreChange('A', -1)} disabled={isReadOnly}><MaterialIcons name="remove" size={24} color={theme.textSecondary} /></Pressable>
                   <Text style={[styles.scoreValue, teamAScore > teamBScore && styles.scoreValueWin]}>{teamAScore}</Text>
-                  <Pressable style={styles.scoreButton} onPress={() => handleScoreChange('A', 1)}><MaterialIcons name="add" size={24} color={theme.primary} /></Pressable>
+                  <Pressable style={[styles.scoreButton, isReadOnly && { opacity: 0.4 }]} onPress={() => handleScoreChange('A', 1)} disabled={isReadOnly}><MaterialIcons name="add" size={24} color={theme.primary} /></Pressable>
                 </View>
               </View>
               <View style={styles.vsContainer}><Text style={styles.vsText}>-</Text></View>
               <View style={styles.teamScore}>
                 <Text style={styles.scoreLabel}>{t('match', 'opponent')}</Text>
                 <View style={styles.scoreControls}>
-                  <Pressable style={styles.scoreButton} onPress={() => handleScoreChange('B', -1)}><MaterialIcons name="remove" size={24} color={theme.textSecondary} /></Pressable>
+                  <Pressable style={[styles.scoreButton, isReadOnly && { opacity: 0.4 }]} onPress={() => handleScoreChange('B', -1)} disabled={isReadOnly}><MaterialIcons name="remove" size={24} color={theme.textSecondary} /></Pressable>
                   <Text style={[styles.scoreValue, teamBScore > teamAScore && styles.scoreValueWin]}>{teamBScore}</Text>
-                  <Pressable style={styles.scoreButton} onPress={() => handleScoreChange('B', 1)}><MaterialIcons name="add" size={24} color={theme.primary} /></Pressable>
+                  <Pressable style={[styles.scoreButton, isReadOnly && { opacity: 0.4 }]} onPress={() => handleScoreChange('B', 1)} disabled={isReadOnly}><MaterialIcons name="add" size={24} color={theme.primary} /></Pressable>
                 </View>
               </View>
             </View>
@@ -992,9 +998,9 @@ export default function EditMatchScreen() {
           <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
             <Text style={styles.sectionTitle}>{t('match', 'durationMinutes')}</Text>
             <View style={styles.durationContainer}>
-              <Pressable style={styles.durationButton} onPress={() => setDuration(prev => Math.max(0, prev - 5))}><MaterialIcons name="remove" size={24} color={theme.textSecondary} /></Pressable>
-              <TextInput style={styles.durationInput} value={duration.toString()} onChangeText={(text) => setDuration(parseInt(text) || 0)} keyboardType="number-pad" />
-              <Pressable style={styles.durationButton} onPress={() => setDuration(prev => prev + 5)}><MaterialIcons name="add" size={24} color={theme.primary} /></Pressable>
+              <Pressable style={[styles.durationButton, isReadOnly && { opacity: 0.4 }]} onPress={() => { if (!isReadOnly) setDuration(prev => Math.max(0, prev - 5)); }} disabled={isReadOnly}><MaterialIcons name="remove" size={24} color={theme.textSecondary} /></Pressable>
+              <TextInput style={styles.durationInput} value={duration.toString()} onChangeText={(text) => { if (!isReadOnly) setDuration(parseInt(text) || 0); }} keyboardType="number-pad" editable={!isReadOnly} />
+              <Pressable style={[styles.durationButton, isReadOnly && { opacity: 0.4 }]} onPress={() => { if (!isReadOnly) setDuration(prev => prev + 5); }} disabled={isReadOnly}><MaterialIcons name="add" size={24} color={theme.primary} /></Pressable>
             </View>
           </Animated.View>
 
@@ -1020,10 +1026,12 @@ export default function EditMatchScreen() {
           <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>{t('match', 'menesCount')} ({menes.length})</Text>
-              <Pressable style={styles.addMeneBtn} onPress={handleAddMene}>
-                <MaterialIcons name="add" size={18} color={theme.primary} />
-                <Text style={styles.addMeneBtnText}>{t('match', 'addLabel')}</Text>
-              </Pressable>
+              {!isReadOnly ? (
+                <Pressable style={styles.addMeneBtn} onPress={handleAddMene}>
+                  <MaterialIcons name="add" size={18} color={theme.primary} />
+                  <Text style={styles.addMeneBtnText}>{t('match', 'addLabel')}</Text>
+                </Pressable>
+              ) : null}
             </View>
             {menes.length > 0 ? (
               <View style={styles.menesCard}>
