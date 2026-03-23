@@ -20,6 +20,7 @@ import {
   getReceivedShareRequests,
   acceptShareRequest,
   declineShareRequest,
+  markShareRequestsSeen,
   MatchShareRequest,
 } from '@/services/matchShareService';
 
@@ -37,6 +38,10 @@ export default function MatchInvitationsScreen() {
   const loadRequests = useCallback(async () => {
     const { requests: data } = await getReceivedShareRequests();
     setRequests(data);
+    // Mark all loaded requests as seen so we don't re-notify
+    if (data.length > 0) {
+      markShareRequestsSeen(data.map(r => r.id));
+    }
   }, []);
 
   useEffect(() => {

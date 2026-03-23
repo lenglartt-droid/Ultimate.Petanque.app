@@ -4,6 +4,10 @@
  * accepting/declining, and fetching shared items.
  */
 import { getSupabaseClient } from '@/template';
+import { sendShareRequestNotification } from '@/services/notificationService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const LAST_SEEN_SHARE_REQUESTS_KEY = '@lastSeenShareRequestIds';
 
 export interface MatchShareRequest {
   id: string;
@@ -335,6 +339,77 @@ export async function getShareRequestsForItem(
   } catch (e: any) {
     return { requests: [], error: e.message };
   }
+}
+
+// ============================================
+// Background polling: detect new requests & notify
+// ============================================
+
+let _pollingInterval: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Start polling for new share requests and fire local push notifications.
+ * Call once after login; stops automatically on cleanup.
+ */
+export function startShareRequestPolling(intervalMs: number = 30000): void {
+  stopShareRequestPolling();
+  // Initial check immediately
+  _checkForNewShareRequests();
+  _pollingInterval = setInterval(_checkForNewShareRequests, intervalMs);
+}
+
+export function stopShareRequestPolling(): void {
+  if (_pollingInterval) {
+    clearInterval(_pollingInterval);
+    _pollingInterval = null;
+  }
+}
+
+async function _checkForNewShareRequests(): Promise<void> {
+  try {
+    const { requests } = await getReceivedShareRequests('pending');
+    if (requests.length === 0) return;
+
+    // Load previously seen request IDs
+    const raw = await AsyncStorage.getItem(LAST_SEEN_SHARE_REQUESTS_KEY);
+    const seenIds: Set<string> = new Set(raw ? JSON.parse(raw) : []);
+
+    const newRequests = requests.filter(r => !seenIds.has(r.id));
+    if (newRequests.length === 0) return;
+
+    // Fire a local notification for each new request
+    for (const req of newRequests) {
+      await sendShareRequestNotification({
+        senderName: req.senderName || 'Un joueur',
+        itemType: req.itemType,
+        permission: req.permission as 'read' | 'write',
+        itemSummary: req.itemSummary,
+        requestId: req.id,
+      });
+      seenIds.add(req.id);
+    }
+
+    // Persist updated seen set (keep last 200 to avoid unbounded growth)
+    const trimmed = [...seenIds].slice(-200);
+    await AsyncStorage.setItem(LAST_SEEN_SHARE_REQUESTS_KEY, JSON.stringify(trimmed));
+    console.log(`Notified ${newRequests.length} new share request(s)`);
+  } catch (e) {
+    // Silent — background task
+    console.log('Share request polling error:', e);
+  }
+}
+
+/**
+ * Mark a list of request IDs as already seen (e.g., after user views invitations page).
+ */
+export async function markShareRequestsSeen(ids: string[]): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(LAST_SEEN_SHARE_REQUESTS_KEY);
+    const seenIds: Set<string> = new Set(raw ? JSON.parse(raw) : []);
+    ids.forEach(id => seenIds.add(id));
+    const trimmed = [...seenIds].slice(-200);
+    await AsyncStorage.setItem(LAST_SEEN_SHARE_REQUESTS_KEY, JSON.stringify(trimmed));
+  } catch { /* silent */ }
 }
 
 // ============================================

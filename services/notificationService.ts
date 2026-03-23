@@ -55,6 +55,15 @@ export async function requestNotificationPermissions(): Promise<boolean> {
         lightColor: '#FF6B35',
         sound: 'default',
       });
+
+      await Notifications.setNotificationChannelAsync('share-requests', {
+        name: 'Partages de matchs',
+        description: 'Notifications de demandes de partage de matchs et defis',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 200, 100, 200],
+        lightColor: '#3B82F6',
+        sound: 'default',
+      });
     }
 
     return true;
@@ -240,6 +249,44 @@ export async function sendTestNotification(): Promise<void> {
     });
   } catch (error) {
     console.log('Error sending test notification:', error);
+  }
+}
+
+/**
+ * Send immediate notification for a new match/challenge share request.
+ */
+export async function sendShareRequestNotification(params: {
+  senderName: string;
+  itemType: 'match' | 'challenge';
+  permission: 'read' | 'write';
+  itemSummary?: string;
+  requestId: string;
+}): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    const { senderName, itemType, permission, itemSummary, requestId } = params;
+    const isMatch = itemType === 'match';
+    const icon = isMatch ? '\u{1F3AF}' : '\u{1F3C6}';
+    const typeLabel = isMatch ? 'match' : 'defi';
+    const permLabel = permission === 'write' ? 'modification' : 'lecture seule';
+    const title = `${icon} ${senderName} vous partage un ${typeLabel}`;
+    const body = itemSummary
+      ? `${itemSummary} (${permLabel})`
+      : `Nouvelle demande de partage en ${permLabel}`;
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        data: { type: 'share_request', requestId, itemType },
+        sound: 'default',
+        badge: 1,
+        ...(Platform.OS === 'android' && { channelId: 'share-requests' }),
+      },
+      trigger: null, // immediate
+    });
+  } catch (error) {
+    console.log('Error sending share request notification:', error);
   }
 }
 

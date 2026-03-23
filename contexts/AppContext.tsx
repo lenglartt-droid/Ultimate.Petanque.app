@@ -24,7 +24,7 @@ import { addSyncHistoryEntry } from '@/services/syncHistoryService';
 import { prefetchImages, startPeriodicCacheCleanup, stopPeriodicCacheCleanup, clearAllImageCache } from '@/services/imageCacheService';
 import { loadSyncConfig, getSyncConfig, onSyncConfigChange, setBatterySaverMode, DELTA_SELECT, SyncConfig } from '@/services/syncConfigService';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
-import { getSharedMatchIds, getSharedChallengeIds, getReceivedShareRequests } from '@/services/matchShareService';
+import { getSharedMatchIds, getSharedChallengeIds, getReceivedShareRequests, startShareRequestPolling, stopShareRequestPolling } from '@/services/matchShareService';
 import {
   mockPlayers,
   mockClubs,
@@ -769,6 +769,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       secondaryLoadDone.current = true;
       console.log('Secondary data loaded successfully');
 
+      // Start polling for new share requests (fires local push notifications)
+      startShareRequestPolling(30000);
+
       // Prefetch boules set photos after secondary load
       if (boulesSetsRes.data) {
         const dbSetsForPrefetch = boulesSetsRes.data.filter((s: any) => s.photo).map((s: any) => ({ photo: s.photo }));
@@ -1128,6 +1131,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       secondaryLoadDone.current = false;
       setCacheLoaded(false);
       setIsOfflineMode(false);
+      stopShareRequestPolling();
       if (secondaryLoadTimerRef.current) {
         clearTimeout(secondaryLoadTimerRef.current);
         secondaryLoadTimerRef.current = null;
