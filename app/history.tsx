@@ -24,6 +24,7 @@ import { useApp } from '@/contexts/AppContext';
 import { Match, Challenge, SeriesInfo } from '@/services/mockData';
 import { useLanguage } from '@/hooks/useLanguage';
 import ShareModal from '@/components/ui/ShareModal';
+import ShareRequestModal from '@/components/ui/ShareRequestModal';
 import SharedBadge from '@/components/ui/SharedBadge';
 import { getShareRequestsForItem, MatchShareRequest } from '@/services/matchShareService';
 import { checkEditConflict, computeChallengeDiffs, fetchUpdatedAt, DiffEntry } from '@/services/collaborativeEditService';
@@ -594,7 +595,7 @@ export default function HistoryScreen() {
   const [showPeriodModal, setShowPeriodModal] = useState(false);
   const [viewingMatch, setViewingMatch] = useState<Match | null>(null);
   const [editingChallenge, setEditingChallenge] = useState<Challenge | null>(null);
-  const [showChallengeShare, setShowChallengeShare] = useState(false);
+  const [showChallengeShareRequest, setShowChallengeShareRequest] = useState(false);
   const [isEditingChallengeFields, setIsEditingChallengeFields] = useState(false);
   const [editNotes, setEditNotes] = useState('');
   const [editDuration, setEditDuration] = useState('');
@@ -603,7 +604,7 @@ export default function HistoryScreen() {
   const [editTotalPoints, setEditTotalPoints] = useState('');
   const [savingChallenge, setSavingChallenge] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [showMatchShare, setShowMatchShare] = useState(false);
+  const [showMatchShareRequest, setShowMatchShareRequest] = useState(false);
   const [initialOpenHandled, setInitialOpenHandled] = useState(false);
   const [challengeShareRequests, setChallengeShareRequests] = useState<MatchShareRequest[]>([]);
 
@@ -2143,11 +2144,11 @@ export default function HistoryScreen() {
                       style={styles.shareParticipantsBtn}
                       onPress={() => {
                         Haptics.selectionAsync();
-                        setShowChallengeShare(true);
+                        setShowChallengeShareRequest(true);
                       }}
                     >
-                      <MaterialIcons name="share" size={18} color={theme.primary} />
-                      <Text style={styles.shareParticipantsBtnText}>{t('matchEdit', 'shareWithParticipants')}</Text>
+                      <MaterialIcons name="group-add" size={18} color={theme.primary} />
+                      <Text style={styles.shareParticipantsBtnText}>{language === 'fr' ? 'Partager avec les joueurs' : 'Share with players'}</Text>
                     </Pressable>
                     {isReadOnly ? (
                       <View style={styles.challReadOnlyBanner}>
@@ -2432,16 +2433,16 @@ export default function HistoryScreen() {
                   </View>
                 ) : null}
 
-                {/* Share button */}
+                {/* Share with players button */}
                 <Pressable
                   style={styles.shareParticipantsBtn}
                   onPress={() => {
                     Haptics.selectionAsync();
-                    setShowMatchShare(true);
+                    setShowMatchShareRequest(true);
                   }}
                 >
-                  <MaterialIcons name="share" size={18} color={theme.primary} />
-                  <Text style={styles.shareParticipantsBtnText}>{t('matchEdit', 'shareWithParticipants')}</Text>
+                  <MaterialIcons name="group-add" size={18} color={theme.primary} />
+                  <Text style={styles.shareParticipantsBtnText}>{language === 'fr' ? 'Partager avec les joueurs' : 'Share with players'}</Text>
                 </Pressable>
 
                 {/* Actions */}
@@ -2484,25 +2485,34 @@ export default function HistoryScreen() {
         onCancel={handleChallengeConflictCancel}
       />
 
-      {/* Challenge Share Modal */}
+      {/* Challenge Share Request Modal (cross-player sharing) */}
       {editingChallenge ? (
-        <ShareModal
-          visible={showChallengeShare}
-          onClose={() => setShowChallengeShare(false)}
+        <ShareRequestModal
+          visible={showChallengeShareRequest}
+          onClose={() => setShowChallengeShareRequest(false)}
           itemType="challenge"
           itemId={editingChallenge.id}
-          itemName={`${t('challenge', CHALLENGE_CONFIG[editingChallenge.type].nameKey)} - ${editingChallenge.playerName || ''}`}
+          playerIds={[
+            ...(editingChallenge.playerId ? [editingChallenge.playerId] : []),
+            ...(editingChallenge.opponentId ? [editingChallenge.opponentId] : []),
+          ]}
+          senderName={user?.username || user?.email || 'Joueur'}
+          itemSummary={`${t('challenge', CHALLENGE_CONFIG[editingChallenge.type].nameKey)} - ${editingChallenge.playerName || ''}`}
+          language={language}
         />
       ) : null}
 
-      {/* Match Share Modal */}
+      {/* Match Share Request Modal (cross-player sharing) */}
       {viewingMatch ? (
-        <ShareModal
-          visible={showMatchShare}
-          onClose={() => setShowMatchShare(false)}
+        <ShareRequestModal
+          visible={showMatchShareRequest}
+          onClose={() => setShowMatchShareRequest(false)}
           itemType="match"
           itemId={viewingMatch.id}
-          itemName={`${viewingMatch.teamA.playerNames.join(', ')} vs ${viewingMatch.teamB.playerNames.join(', ')}`}
+          playerIds={[...viewingMatch.teamA.players, ...viewingMatch.teamB.players]}
+          senderName={user?.username || user?.email || 'Joueur'}
+          itemSummary={`${viewingMatch.teamA.playerNames.join(', ')} vs ${viewingMatch.teamB.playerNames.join(', ')}`}
+          language={language}
         />
       ) : null}
     </SafeAreaView>
