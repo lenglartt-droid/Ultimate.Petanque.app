@@ -26,6 +26,9 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { PlayerAction, DetailedShotRecord } from '@/services/mockData';
 import { SimplifiedShotNotation, SimpleShotRecord } from '@/components/ui/SimplifiedShotNotation';
 import ShareModal from '@/components/ui/ShareModal';
+import SharedBadge from '@/components/ui/SharedBadge';
+import { getShareRequestsForItem, MatchShareRequest } from '@/services/matchShareService';
+import { useAuth } from '@/template';
 
 interface MeneEdit {
   teamAPoints: number;
@@ -36,7 +39,8 @@ interface MeneEdit {
 export default function EditMatchScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getMatchById, updateMatch, deleteMatch, players, matches, terrains, tournaments, boulesSets, loading: appLoading } = useApp();
+  const { getMatchById, updateMatch, deleteMatch, players, matches, terrains, tournaments, boulesSets, loading: appLoading, isSharedItem, getSharedPermission } = useApp();
+  const { user } = useAuth();
   const { t, language } = useLanguage();
 
   const match = getMatchById(id!);
@@ -91,6 +95,9 @@ export default function EditMatchScreen() {
   const [editingShotRecord, setEditingShotRecord] = useState<any>(null);
   const [expandedPlayerShots, setExpandedPlayerShots] = useState<Set<string>>(new Set());
   const [showShareModal, setShowShareModal] = useState(false);
+  const [shareRequests, setShareRequests] = useState<MatchShareRequest[]>([]);
+  const matchIsShared = match ? isSharedItem(match.id) : false;
+  const matchPermission = match ? getSharedPermission(match.id) : null;
 
   const maxScore = config.game.maxScore;
   const locale = language === 'en' ? 'en-US' : 'fr-FR';
@@ -100,6 +107,14 @@ export default function EditMatchScreen() {
     'Milieu': { icon: 'swap-horiz', color: '#8B5CF6', labelKey: 'milieu' },
     'Tireur': { icon: 'gps-fixed', color: '#F97316', labelKey: 'tireur' },
   };
+
+  // Load share request info for this match
+  useEffect(() => {
+    if (!id) return;
+    getShareRequestsForItem('match', id).then(({ requests }) => {
+      setShareRequests(requests);
+    });
+  }, [id]);
 
   useEffect(() => {
     if (match) {
@@ -672,16 +687,54 @@ export default function EditMatchScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="close" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>{t('match', 'editMatch')}</Text>
+        <View style={{ alignItems: 'center' }}>
+          <Text style={styles.headerTitle}>{t('match', 'editMatch')}</Text>
+          {matchIsShared ? (
+            <View style={{ marginTop: 2 }}>
+              <SharedBadge permission={matchPermission || 'read'} size="small" />
+            </View>
+          ) : null}
+        </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <Pressable style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }} onPress={() => setShowShareModal(true)}>
             <MaterialIcons name="share" size={22} color={theme.primary} />
           </Pressable>
-          <Pressable style={styles.deleteButton} onPress={handleDelete}>
-            <MaterialIcons name="delete" size={24} color={theme.error} />
-          </Pressable>
+          {!matchIsShared || matchPermission === 'write' ? (
+            <Pressable style={styles.deleteButton} onPress={handleDelete}>
+              <MaterialIcons name="delete" size={24} color={theme.error} />
+            </Pressable>
+          ) : <View style={{ width: 40 }} />}
         </View>
       </View>
+
+      {/* Shared match banner */}
+      {matchIsShared ? (
+        <View style={styles.sharedBanner}>
+          <View style={styles.sharedBannerIcon}>
+            <MaterialIcons name="group" size={18} color={theme.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.sharedBannerTitle}>
+              {language === 'fr' ? 'Match partagé' : 'Shared match'}
+            </Text>
+            <Text style={styles.sharedBannerSub}>
+              {(() => {
+                const senderReq = shareRequests.find(r => r.recipientUserId === user?.id);
+                if (senderReq?.senderName) {
+                  return (language === 'fr' ? `Partagé par ${senderReq.senderName}` : `Shared by ${senderReq.senderName}`);
+                }
+                return (language === 'fr' ? 'Partagé avec vous' : 'Shared with you');
+              })()}
+            </Text>
+          </View>
+          <View style={[styles.sharedBannerPermBadge, { backgroundColor: (matchPermission === 'write' ? theme.accent : theme.primary) + '15' }]}>
+            <MaterialIcons name={matchPermission === 'write' ? 'edit' : 'visibility'} size={12} color={matchPermission === 'write' ? theme.accent : theme.primary} />
+            <Text style={[styles.sharedBannerPermText, { color: matchPermission === 'write' ? theme.accent : theme.primary }]}>
+              {matchPermission === 'write' ? (language === 'fr' ? 'Modification' : 'Edit') : (language === 'fr' ? 'Lecture' : 'Read only')}
+            </Text>
+          </View>
+        </View>
+      ) : null}
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView style={styles.scrollView} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -1005,10 +1058,19 @@ export default function EditMatchScreen() {
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-          <Pressable style={styles.saveButton} onPress={handleSave}>
-            <MaterialIcons name="check" size={24} color="#FFF" />
-            <Text style={styles.saveButtonText}>{t('match', 'saveChangesBtn')}</Text>
-          </Pressable>
+          {matchIsShared && matchPermission === 'read' ? (
+            <View style={styles.readOnlyBanner}>
+              <MaterialIcons name="lock" size={18} color={theme.textMuted} />
+              <Text style={styles.readOnlyBannerText}>
+                {language === 'fr' ? 'Lecture seule — vous ne pouvez pas modifier ce match' : 'Read only — you cannot modify this match'}
+              </Text>
+            </View>
+          ) : (
+            <Pressable style={styles.saveButton} onPress={handleSave}>
+              <MaterialIcons name="check" size={24} color="#FFF" />
+              <Text style={styles.saveButtonText}>{t('match', 'saveChangesBtn')}</Text>
+            </Pressable>
+          )}
         </View>
       </KeyboardAvoidingView>
 
@@ -1413,6 +1475,63 @@ const styles = StyleSheet.create({
   footer: { paddingHorizontal: 16, paddingTop: 16, backgroundColor: theme.backgroundSecondary, borderTopWidth: 1, borderTopColor: theme.border },
   saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.primary, paddingVertical: 18, borderRadius: theme.borderRadius.md },
   saveButtonText: { fontSize: 17, fontWeight: '600', color: '#FFF' },
+  // Shared match styles
+  sharedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: theme.primary + '08',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.primary + '20',
+  },
+  sharedBannerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: theme.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sharedBannerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.primary,
+  },
+  sharedBannerSub: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 1,
+  },
+  sharedBannerPermBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
+  sharedBannerPermText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  readOnlyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  readOnlyBannerText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.textMuted,
+  },
   // Modal
   modalContainer: { flex: 1, backgroundColor: theme.backgroundSecondary },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },

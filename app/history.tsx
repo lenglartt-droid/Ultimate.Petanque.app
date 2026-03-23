@@ -123,7 +123,7 @@ const filterByPeriod = <T extends { date: string }>(items: T[], days: number): T
 };
 
 // Components
-const MatchCard = React.memo(({ match, onPress, compact = false, t, language }: { match: Match; onPress: () => void; compact?: boolean; t: (s: string, k: string) => string; language: 'fr' | 'en' }) => {
+const MatchCard = React.memo(({ match, onPress, compact = false, t, language, isShared, sharedPermission }: { match: Match; onPress: () => void; compact?: boolean; t: (s: string, k: string) => string; language: 'fr' | 'en'; isShared?: boolean; sharedPermission?: 'read' | 'write' | null }) => {
   const isWin = match.winner === 'A';
   const isTournament = match.mode === 'Tournoi';
 
@@ -203,6 +203,14 @@ const MatchCard = React.memo(({ match, onPress, compact = false, t, language }: 
               {isWin ? t('history', 'victory') : t('history', 'defeat')}
             </Text>
           </View>
+          {isShared ? (
+            <View style={styles.sharedInlineBadge}>
+              <MaterialIcons name={sharedPermission === 'write' ? 'edit' : 'visibility'} size={10} color={sharedPermission === 'write' ? theme.accent : theme.primary} />
+              <Text style={[styles.sharedInlineBadgeText, { color: sharedPermission === 'write' ? theme.accent : theme.primary }]}>
+                {language === 'fr' ? 'Partagé' : 'Shared'}
+              </Text>
+            </View>
+          ) : null}
           <Text style={styles.formatText}>{t('formats', match.format)}</Text>
         </View>
       </View>
@@ -320,7 +328,7 @@ const SeriesCard = React.memo(({ series, onMatchPress, t, language }: { series: 
 });
 
 // Challenge Card Component - Improved design
-const ChallengeCard = React.memo(({ challenge, onPress, t, language }: { challenge: Challenge; onPress: () => void; t: (s: string, k: string) => string; language: 'fr' | 'en' }) => {
+const ChallengeCard = React.memo(({ challenge, onPress, t, language, isShared, sharedPermission }: { challenge: Challenge; onPress: () => void; t: (s: string, k: string) => string; language: 'fr' | 'en'; isShared?: boolean; sharedPermission?: 'read' | 'write' | null }) => {
   const config = CHALLENGE_CONFIG[challenge.type];
   const challengeName = t('challenge', config.nameKey);
   const score = challenge.type === 'precision' ? challenge.totalPoints || 0 : challenge.successRate || 0;
@@ -379,6 +387,14 @@ const ChallengeCard = React.memo(({ challenge, onPress, t, language }: { challen
         ) : null}
 
         <View style={styles.challengeFooter}>
+          {isShared ? (
+            <View style={styles.sharedInlineBadge}>
+              <MaterialIcons name={sharedPermission === 'write' ? 'edit' : 'visibility'} size={10} color={sharedPermission === 'write' ? theme.accent : theme.primary} />
+              <Text style={[styles.sharedInlineBadgeText, { color: sharedPermission === 'write' ? theme.accent : theme.primary }]}>
+                {language === 'fr' ? 'Partagé' : 'Shared'}
+              </Text>
+            </View>
+          ) : null}
           {is1v1 && challenge.winner && (
             <View style={[
               styles.challengeWinnerBadge,
@@ -558,7 +574,7 @@ const MeetupCard = React.memo(({ meetup, onPress, t, language }: { meetup: Meetu
 
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
-  const { matches, challenges, deleteChallenge, updateChallenge, deleteMatch, refreshData, boulesSets, terrains } = useApp();
+  const { matches, challenges, deleteChallenge, updateChallenge, deleteMatch, refreshData, boulesSets, terrains, isSharedItem, getSharedPermission } = useApp();
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const params = useLocalSearchParams<{ openChallengeId?: string; openMatchId?: string }>();
@@ -1070,16 +1086,22 @@ export default function HistoryScreen() {
     }
     
     if (item.type === 'match') {
+      const matchData = item.data as Match;
+      const matchIsShared = isSharedItem(matchData.id);
+      const matchPerm = getSharedPermission(matchData.id);
       return (
         <Animated.View entering={FadeIn.duration(200).delay(Math.min(index * 20, 100))}>
-          <MatchCard match={item.data as Match} onPress={() => handleMatchPress(item.data as Match)} t={t} language={language} />
+          <MatchCard match={matchData} onPress={() => handleMatchPress(matchData)} t={t} language={language} isShared={matchIsShared} sharedPermission={matchPerm} />
         </Animated.View>
       );
     }
     
+    const challengeData = item.data as Challenge;
+    const challIsShared = isSharedItem(challengeData.id);
+    const challPerm = getSharedPermission(challengeData.id);
     return (
       <Animated.View entering={FadeIn.duration(200).delay(Math.min(index * 20, 100))}>
-        <ChallengeCard challenge={item.data as Challenge} onPress={() => handleChallengePress(item.data as Challenge)} t={t} language={language} />
+        <ChallengeCard challenge={challengeData} onPress={() => handleChallengePress(challengeData)} t={t} language={language} isShared={challIsShared} sharedPermission={challPerm} />
       </Animated.View>
     );
   }, [handleMatchPress, handleChallengePress, t]);
@@ -2432,6 +2454,22 @@ const styles = StyleSheet.create({
   },
   resultText: { fontSize: 11, fontWeight: '600' },
   formatText: { fontSize: 11, color: theme.textMuted },
+  // Shared badge inline
+  sharedInlineBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.primary + '10',
+    borderWidth: 1,
+    borderColor: theme.primary + '20',
+  },
+  sharedInlineBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
   
   // Match Detail Modal
   mdScoreRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
