@@ -67,7 +67,8 @@ The user registers via email OTP + password, their player profile is created aut
 | 14 | **Modification History** | Field-by-field logs with colored diff (red→green), per-field and bulk undo, automatic log cleanup | High |
 | 15 | **Ambassador Program** | Ambassador profiles with bio/social media, rotating banner on home, analytics (impressions, clicks, CTR, 7d/30d sparklines) | High |
 | 16 | **Sponsored Challenges** | Event creation by ambassadors, participant registration, witness attestation, leaderboard | High |
-| 17 | **Notifications** | Local push (tournament reminders, share requests, attestations), dedicated Android channels, tap navigation | Medium |
+| 17 | **Server Push Notifications** | Edge Function `send-push` via Expo Push API with 5 trigger types (ambassador events with 200km proximity, meetup invitations, ranking changes, share requests, reminders), `push_tokens` table, auto-registration, per-type preferences | High |
+| 17b | **Local Notifications** | Local push (tournament reminders, share requests, attestations), dedicated Android channels, tap navigation | Medium |
 | 18 | **Meetup System** | Meetup creation, invitations by code, responses, confirmed participant counter | Medium |
 | 19 | **Community Leaderboards** | Player ranking (min 5 matches), club ranking, boules brand ranking, "in front of ball" rate | Medium |
 | 20 | **Equipment (Boules)** | CRUD boules sets with photo, brand, diameter, weight, hardness, price, primary set synced to profile | Medium |
@@ -81,6 +82,8 @@ The user registers via email OTP + password, their player profile is created aut
 | 28 | **Deep Linking** | `ultimatepetanque://` scheme, Android intent filters, iOS associated domains, navigation from notifications | Medium |
 | 29 | **Sharing System** | Unique share codes, public links, shared items with permissions, share notifications | Medium |
 | 30 | **Data Export** | CSV export of matches and challenges | Low |
+| 31 | **Ranking Change Detection** | Leaderboard rank snapshot before match save, comparison after, server push notification to players whose rank changed | Medium |
+| 32 | **Notification Preferences** | Per-type toggles in profile (events, meetups, ranking, shares, reminders), JSONB in `user_preferences`, respected server-side | Medium |
 
 ### 2.2 Partially Implemented Features
 
@@ -104,7 +107,7 @@ The user registers via email OTP + password, their player profile is created aut
 | **Database** | PostgreSQL (via OnSpace Cloud) |
 | **Auth** | Supabase Auth (email OTP + password) |
 | **Storage** | Supabase Storage (5 buckets: avatars, boules-photos, club-cards, federation-cards, terrain-photos) |
-| **Edge Functions** | Deno (5 functions: delete-account, detect-suspicious, record-purchase, validate-promo-code, validate-receipt) |
+| **Edge Functions** | Deno (6 functions: delete-account, detect-suspicious, record-purchase, send-push, validate-promo-code, validate-receipt) |
 | **State Management** | React Context API (AppContext) |
 | **Cache** | AsyncStorage |
 | **Images** | expo-image |
@@ -138,7 +141,8 @@ soft_deletes           → Soft deletes (for delta sync)
 merge_logs             → Merge history
 terrain_meetups        → Terrain meetups (share_code unique)
 terrain_meetup_responses → Meetup responses
-user_preferences       → Preferences (favorite terrains/clubs JSONB)
+user_preferences       → Preferences (favorite terrains/clubs JSONB, notification_preferences JSONB)
+push_tokens            → Expo push tokens (user_id, token, platform, active)
 device_registrations   → Device registrations (anti-fraud)
 promo_codes / promo_code_redemptions → Promo codes
 purchase_receipts      → Purchase receipts
@@ -190,6 +194,9 @@ services/
 ├── collaborativeEditService.ts ← Conflict detection, diff calculation
 ├── modificationLogService.ts   ← Modification logs, per-field/bulk revert
 ├── shareService.ts             ← Code sharing, shared items
+├── rankingChangeService.ts     ← Ranking change detection, snapshot/comparison
+├── notificationPreferencesService.ts ← Push notification preferences per type
+├── pushTokenService.ts         ← Push token registration, server push triggering
 ├── offlineQueueService.ts      ← Offline queue, replay, conflicts
 ├── cacheService.ts             ← AsyncStorage cache
 ├── syncConfigService.ts        ← Sync configuration, battery mode
@@ -444,8 +451,8 @@ services/
 
 - The **AdMob IDs in `app.json`** are currently Google test IDs. **Do not publish with these IDs** — they will generate no revenue.
 - The **deep linking scheme** (`ultimatepetanque://`) works but **iOS Universal Links** require a server hosting `apple-app-site-association`.
-- The **push notification system** uses local notifications (no push server). For server push notifications (e.g., alert when an ambassador creates an event), a push service will need to be implemented via Edge Functions.
-- The **5 existing Edge Functions** are deployed but the `validate-receipt` file is not referenced in the project — verify it is functional or remove it.
+- The **push notification system** combines local notifications (tournament reminders) and server-side notifications via the `send-push` Edge Function (5 types: ambassador events with 200km proximity, meetup invitations, ranking changes, shares, reminders). User per-type preferences are respected server-side via `user_preferences.notification_preferences`.
+- The **6 existing Edge Functions** are deployed. The `validate-receipt` file is not referenced in the project — verify it is functional or remove it.
 - The **interactive map** uses `react-native-maps` which requires a **Google Maps API Key** for Android. Without it, the map will not render on Android devices. iOS uses Apple Maps by default and works without additional configuration.
 
 ---
@@ -481,7 +488,7 @@ Based on current architecture and market trends:
 | 1 | **Dark Mode** | System detection + manual toggle, complete light/dark palettes in ThemeContext | Medium | High (frequent request) |
 | 2 | **Event Calendar** | Monthly view in the Directory Challenges tab with color-coded event dots | Medium | Medium |
 | 3 | **Advanced CSV Export** | Column selection for export, FR/EN date formatting, sharing via native Share API | Low | Medium |
-| 4 | **Server Push Notifications** | Edge Function triggering push via Expo Push API (ambassador events, tournament results) | High | High |
+| 4 | ~~**Server Push Notifications**~~ | **IMPLEMENTED**: Edge Function `send-push` with 5 triggers, ranking detection, per-type preferences | — | — |
 | 5 | **Player Chat** | Built-in messaging between connected players, channels per meetup/tournament | Very High | High |
 | 6 | **Video Replay** | Short recording (15s) of notable shots, Supabase Storage | High | Medium |
 | 7 | **iOS/Android Widget** | Widget displaying upcoming matches/meetups and current ranking | Medium | Medium |

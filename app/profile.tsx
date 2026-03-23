@@ -39,6 +39,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 import AdBanner from '@/components/ui/AdBanner';
 import { Switch } from 'react-native';
+import { NotificationPreferences, DEFAULT_NOTIFICATION_PREFERENCES, loadNotificationPreferences, saveNotificationPreferences } from '@/services/notificationPreferencesService';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -124,6 +125,10 @@ export default function ProfileScreen() {
   const [pendingMatchInviteCount, setPendingMatchInviteCount] = useState(0);
   const [isAmbassador, setIsAmbassador] = useState(false);
   
+  // Notification preferences
+  const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>({ ...DEFAULT_NOTIFICATION_PREFERENCES });
+  const [notifPrefsLoaded, setNotifPrefsLoaded] = useState(false);
+
   // Expandable settings sections
   const [showNotifSection, setShowNotifSection] = useState(false);
   const [showShareSection, setShowShareSection] = useState(false);
@@ -164,6 +169,22 @@ export default function ProfileScreen() {
     const interval = setInterval(loadCount, 30000);
     return () => clearInterval(interval);
   }, [user?.id]);
+
+  // Load notification preferences
+  useEffect(() => {
+    if (!user?.id) return;
+    loadNotificationPreferences().then(prefs => {
+      setNotifPrefs(prefs);
+      setNotifPrefsLoaded(true);
+    });
+  }, [user?.id]);
+
+  const handleToggleNotifPref = (key: keyof NotificationPreferences) => {
+    Haptics.selectionAsync();
+    const updated = { ...notifPrefs, [key]: !notifPrefs[key] };
+    setNotifPrefs(updated);
+    saveNotificationPreferences(updated).catch(() => {});
+  };
 
   // Check ambassador status
   useEffect(() => {
@@ -1546,6 +1567,37 @@ export default function ProfileScreen() {
 
             {expandedSections.notifications ? (
             <View style={styles.compactMenuGroup}>
+              {/* Push notification preference toggles */}
+              {notifPrefsLoaded ? (
+                <>
+                  {([
+                    { key: 'event_created' as const, icon: 'campaign', color: '#7C3AED', labelFr: 'Defis ambassadeurs proches', labelEn: 'Nearby ambassador challenges' },
+                    { key: 'meetup_invitation' as const, icon: 'event', color: theme.success, labelFr: 'Invitations RDV', labelEn: 'Meetup invitations' },
+                    { key: 'ranking_changed' as const, icon: 'leaderboard', color: theme.carreauColor, labelFr: 'Changements de classement', labelEn: 'Ranking changes' },
+                    { key: 'share_request' as const, icon: 'share', color: theme.primary, labelFr: 'Demandes de partage', labelEn: 'Share requests' },
+                    { key: 'event_reminder' as const, icon: 'alarm', color: theme.warning, labelFr: 'Rappels evenements', labelEn: 'Event reminders' },
+                  ]).map((item, idx) => (
+                    <React.Fragment key={item.key}>
+                      <View style={[styles.compactMenuItem, { paddingVertical: 10 }]}>
+                        <View style={[styles.compactMenuIcon, { backgroundColor: item.color + '15' }]}>
+                          <MaterialIcons name={item.icon as any} size={16} color={item.color} />
+                        </View>
+                        <Text style={[styles.compactMenuText, { flex: 1 }]}>
+                          {language === 'fr' ? item.labelFr : item.labelEn}
+                        </Text>
+                        <Switch
+                          value={notifPrefs[item.key]}
+                          onValueChange={() => handleToggleNotifPref(item.key)}
+                          trackColor={{ false: theme.border, true: item.color + '60' }}
+                          thumbColor={notifPrefs[item.key] ? item.color : theme.textMuted}
+                        />
+                      </View>
+                      {idx < 4 ? <View style={styles.compactMenuDivider} /> : null}
+                    </React.Fragment>
+                  ))}
+                  <View style={[styles.compactMenuDivider, { marginLeft: 0 }]} />
+                </>
+              ) : null}
               <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); setPendingMatchInviteCount(0); router.push('/match-invitations'); }}>
                 <View style={[styles.compactMenuIcon, { backgroundColor: theme.primary + '15' }]}><MaterialIcons name="mail" size={16} color={theme.primary} />
                   {pendingMatchInviteCount > 0 ? <View style={styles.shareNotifBadge}><Text style={styles.shareNotifBadgeText}>{pendingMatchInviteCount > 9 ? '9+' : pendingMatchInviteCount}</Text></View> : null}

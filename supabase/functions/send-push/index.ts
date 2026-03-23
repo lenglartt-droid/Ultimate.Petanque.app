@@ -4,10 +4,10 @@
  * Server-side push notification dispatcher.
  * Receives a notification trigger type + context data,
  * determines recipients, and sends via Expo Push API.
+ * Respects user notification preferences stored in user_preferences.notification_preferences.
  *
  * Trigger types:
  * - event_created       : Ambassador created a sponsored event → notify nearby users
- * - meetup_created       : User created a meetup → notify invited users
  * - meetup_invitation    : User invited to a meetup → notify that user
  * - ranking_changed      : Leaderboard ranking changed → notify affected users
  * - share_request        : Match/challenge share request → notify recipient
@@ -64,6 +64,55 @@ Deno.serve(async (req: Request) => {
     let sent = 0;
     let errors = 0;
 
+    // ---- Helper: check if a user has a specific notification type enabled ----
+    // Caches results for the duration of this request to avoid repeated queries
+    const _prefCache = new Map<string, Record<string, boolean>>();
+    const isNotifEnabled = async (userId: string, notifType: string): Promise<boolean> => {
+      if (_prefCache.has(userId)) {
+        const prefs = _prefCache.get(userId)!;
+        return prefs[notifType] !== false;
+      }
+      try {
+        const { data } = await supabaseAdmin
+          .from('user_preferences')
+          .select('notification_preferences')
+          .eq('user_id', userId)
+          .single();
+        const prefs = data?.notification_preferences || {};
+        _prefCache.set(userId, prefs);
+        return prefs[notifType] !== false; // Default: enabled
+      } catch {
+        return true;
+      }
+    };
+
+    // Batch check: filter a set of user IDs by notification preference
+    const filterByNotifPref = async (userIds: Set<string>, notifType: string): Promise<Set<string>> => {
+      // Batch fetch all preferences at once for efficiency
+      const uidArray = [...userIds];
+      if (uidArray.length === 0) return new Set();
+      const { data: prefsData } = await supabaseAdmin
+        .from('user_preferences')
+        .select('user_id, notification_preferences')
+        .in('user_id', uidArray);
+
+      const prefMap = new Map<string, Record<string, boolean>>();
+      (prefsData || []).forEach((p: any) => {
+        prefMap.set(p.user_id, p.notification_preferences || {});
+        _prefCache.set(p.user_id, p.notification_preferences || {});
+      });
+
+      const filtered = new Set<string>();
+      for (const uid of uidArray) {
+        const prefs = prefMap.get(uid);
+        // If no preferences row exists, default is all enabled
+        if (!prefs || prefs[notifType] !== false) {
+          filtered.add(uid);
+        }
+      }
+      return filtered;
+    };
+
     // ============================================================
     // EVENT_CREATED: Ambassador created a sponsored event
     // Notify users within 200km of event location or same city
@@ -76,7 +125,6 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // Get all users with push tokens (excluding the creator)
       const { data: tokens } = await supabaseAdmin
         .from('push_tokens')
         .select('user_id, token')
@@ -89,10 +137,8 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // Get unique user IDs
       const userIds = [...new Set(tokens.map(t => t.user_id))];
 
-      // Get player profiles with location for proximity check
       const { data: players } = await supabaseAdmin
         .from('players')
         .select('user_id, location, name')
@@ -104,33 +150,22 @@ Deno.serve(async (req: Request) => {
       });
 
       // Determine recipients: city match OR within 200km
-      const recipientUserIds = new Set<string>();
+      const matchedUserIds = new Set<string>();
 
       for (const uid of userIds) {
         const player = playerMap.get(uid);
         if (!player?.location) {
-          // No location data → include if same city name match
           if (city) {
-            // Check user's terrains or clubs for city match
             const { data: userTerrains } = await supabaseAdmin
-              .from('terrains')
-              .select('city')
-              .eq('user_id', uid)
-              .limit(5);
-
+              .from('terrains').select('city').eq('user_id', uid).limit(5);
             const { data: userClubs } = await supabaseAdmin
-              .from('clubs')
-              .select('city')
-              .eq('user_id', uid)
-              .limit(5);
-
+              .from('clubs').select('city').eq('user_id', uid).limit(5);
             const userCities = [
               ...(userTerrains || []).map(t => t.city?.toLowerCase()),
               ...(userClubs || []).map(c => c.city?.toLowerCase()),
             ].filter(Boolean);
-
             if (userCities.includes(city.toLowerCase())) {
-              recipientUserIds.add(uid);
+              matchedUserIds.add(uid);
             }
           }
           continue;
@@ -139,24 +174,23 @@ Deno.serve(async (req: Request) => {
         const playerLat = player.location.latitude;
         const playerLng = player.location.longitude;
 
-        // City match (case-insensitive)
         if (city && player.location.city?.toLowerCase() === city.toLowerCase()) {
-          recipientUserIds.add(uid);
+          matchedUserIds.add(uid);
           continue;
         }
 
-        // Proximity check
         if (latitude && longitude && playerLat && playerLng) {
           const dist = haversineDistance(latitude, longitude, playerLat, playerLng);
           if (dist <= PROXIMITY_RADIUS_KM) {
-            recipientUserIds.add(uid);
+            matchedUserIds.add(uid);
           }
         }
       }
 
-      console.log(`[send-push] event_created: ${recipientUserIds.size} recipients within ${PROXIMITY_RADIUS_KM}km or city "${city}"`);
+      // Filter by notification preference
+      const recipientUserIds = await filterByNotifPref(matchedUserIds, 'event_created');
+      console.log(`[send-push] event_created: ${recipientUserIds.size} recipients (${matchedUserIds.size} geo-matched, filtered by prefs) within ${PROXIMITY_RADIUS_KM}km or city "${city}"`);
 
-      // Build messages
       const challengeLabel = challengeType === '10_tirs' ? '10 Tirs' : challengeType === '10_tirs_sautee' ? '10 Tirs sautes' : 'Precision';
       const messages = tokens
         .filter(t => recipientUserIds.has(t.user_id))
@@ -172,7 +206,6 @@ Deno.serve(async (req: Request) => {
       sent = tickets.filter(t => t.status === 'ok').length;
       errors = tickets.filter(t => t.status === 'error').length;
 
-      // Deactivate invalid tokens
       for (let i = 0; i < tickets.length; i++) {
         if (tickets[i].details?.error === 'DeviceNotRegistered') {
           const invalidToken = messages[i]?.to;
@@ -192,6 +225,14 @@ Deno.serve(async (req: Request) => {
       if (!meetupId || !invitedUserId) {
         return new Response(JSON.stringify({ error: 'Missing meetupId/invitedUserId' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Check notification preference
+      const enabled = await isNotifEnabled(invitedUserId, 'meetup_invitation');
+      if (!enabled) {
+        return new Response(JSON.stringify({ sent: 0, errors: 0, reason: 'user_disabled' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
@@ -222,18 +263,28 @@ Deno.serve(async (req: Request) => {
     // ============================================================
     else if (type === 'ranking_changed') {
       const { changes } = payload || {};
-      // changes: Array<{ userId, oldRank, newRank, direction: 'up'|'down' }>
       if (!changes || !Array.isArray(changes) || changes.length === 0) {
         return new Response(JSON.stringify({ sent: 0, errors: 0 }), {
           status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      const userIds = changes.map((c: any) => c.userId);
+      // Filter by notification preference in batch
+      const allUserIds = new Set<string>(changes.map((c: any) => c.userId));
+      const enabledUserIds = await filterByNotifPref(allUserIds, 'ranking_changed');
+
+      const filteredChanges = changes.filter((c: any) => enabledUserIds.has(c.userId));
+      if (filteredChanges.length === 0) {
+        return new Response(JSON.stringify({ sent: 0, errors: 0, reason: 'all_disabled' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const userIdsList = filteredChanges.map((c: any) => c.userId);
       const { data: tokens } = await supabaseAdmin
         .from('push_tokens')
         .select('user_id, token')
-        .in('user_id', userIds)
+        .in('user_id', userIdsList)
         .eq('active', true);
 
       if (tokens && tokens.length > 0) {
@@ -244,7 +295,7 @@ Deno.serve(async (req: Request) => {
         });
 
         const messages: any[] = [];
-        for (const change of changes) {
+        for (const change of filteredChanges) {
           const userTokens = tokensByUser.get(change.userId) || [];
           const isUp = change.direction === 'up';
           const icon = isUp ? '\u{1F4C8}' : '\u{1F4C9}';
@@ -279,6 +330,14 @@ Deno.serve(async (req: Request) => {
         });
       }
 
+      // Check notification preference
+      const enabled = await isNotifEnabled(recipientUserId, 'share_request');
+      if (!enabled) {
+        return new Response(JSON.stringify({ sent: 0, errors: 0, reason: 'user_disabled' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       const { data: tokens } = await supabaseAdmin
         .from('push_tokens')
         .select('token')
@@ -291,7 +350,7 @@ Deno.serve(async (req: Request) => {
         const messages = tokens.map(t => buildPushMessage(
           t.token,
           `\u{1F3AF} ${senderName || 'Un joueur'} vous partage un ${typeLabel}`,
-          `${itemSummary || `Nouvelle demande de partage`} (${permLabel})`,
+          `${itemSummary || 'Nouvelle demande de partage'} (${permLabel})`,
           { type: 'share_request', itemType },
           { channelId: 'share-requests', priority: 'high' }
         ));
@@ -313,7 +372,6 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // Get all accepted participants
       const { data: participants } = await supabaseAdmin
         .from('sponsored_event_participants')
         .select('user_id')
@@ -326,11 +384,14 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const participantIds = participants.map(p => p.user_id);
+      // Filter by notification preference in batch
+      const participantIds = new Set<string>(participants.map(p => p.user_id));
+      const enabledIds = await filterByNotifPref(participantIds, 'event_reminder');
+
       const { data: tokens } = await supabaseAdmin
         .from('push_tokens')
         .select('user_id, token')
-        .in('user_id', participantIds)
+        .in('user_id', [...enabledIds])
         .eq('active', true);
 
       if (tokens && tokens.length > 0) {

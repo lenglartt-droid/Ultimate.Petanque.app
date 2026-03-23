@@ -6,6 +6,7 @@
 import { Match } from '@/services/mockData';
 import { enqueueOperation, buildMatchDbPayload, buildUpdateDbPayload } from '@/services/offlineQueueService';
 import { mapMatchFromDb } from '@/services/dbMappers';
+import { snapshotRankings, detectAndNotifyRankingChanges } from '@/services/rankingChangeService';
 
 interface MatchCrudDeps {
   supabase: any;
@@ -36,6 +37,9 @@ export async function addMatchOp(
     setMatches(prev => [newMatch, ...prev]);
     return tempId;
   }
+
+  // Snapshot rankings BEFORE the match is saved (fire-and-forget)
+  snapshotRankings().catch(() => {});
 
   try {
     const { data, error } = await supabase.from('matches').insert({
@@ -69,6 +73,8 @@ export async function addMatchOp(
       const updatedMatches = [newMatch, ...matches];
       const affectedPlayers = [...new Set([...newMatch.teamA.players, ...newMatch.teamB.players])];
       persistPlayerStats(updatedMatches, affectedPlayers);
+      // Detect and notify ranking changes after match save (fire-and-forget)
+      setTimeout(() => detectAndNotifyRankingChanges().catch(() => {}), 2000);
       return data.id;
     }
     return null;

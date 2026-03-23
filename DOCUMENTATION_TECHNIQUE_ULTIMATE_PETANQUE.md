@@ -67,7 +67,8 @@ L'utilisateur s'inscrit via OTP email + mot de passe, crée son profil joueur au
 | 14 | **Historique des modifications** | Logs champ par champ avec diff coloré (rouge→vert), annulation par champ et en bloc, nettoyage automatique des logs | Élevée |
 | 15 | **Programme ambassadeur** | Profils ambassadeurs avec bio/réseaux sociaux, bannière rotative sur l'accueil, analytics (impressions, clics, CTR, sparklines 7j/30j) | Élevée |
 | 16 | **Défis sponsorisés** | Création d'événements par ambassadeurs, inscription participants, attestation par témoins, classement | Élevée |
-| 17 | **Notifications** | Push locales (rappels tournois, demandes de partage, attestations), canaux Android dédiés, navigation par tap | Moyenne |
+| 17 | **Notifications push serveur** | Edge Function `send-push` via Expo Push API avec 5 types de déclencheurs (événements ambassadeurs avec proximité 200km, invitations meetup, changements de classement, demandes de partage, rappels), table `push_tokens`, enregistrement automatique, préférences par type | Élevée |
+| 17b | **Notifications locales** | Push locales (rappels tournois, demandes de partage, attestations), canaux Android dédiés, navigation par tap | Moyenne |
 | 18 | **Système de rendez-vous (Meetups)** | Création de meetups, invitations par code, réponses, compteur de participants confirmés | Moyenne |
 | 19 | **Classements communautaires** | Classement joueurs (min 5 matchs), classement clubs, classement marques de boules, taux "devant boule" | Moyenne |
 | 20 | **Équipement (Boules)** | CRUD jeux de boules avec photo, marque, diamètre, poids, dureté, prix, jeu principal synchronisé au profil | Moyenne |
@@ -81,6 +82,8 @@ L'utilisateur s'inscrit via OTP email + mot de passe, crée son profil joueur au
 | 28 | **Deep Linking** | Scheme `ultimatepetanque://`, intent filters Android, associated domains iOS, navigation depuis notifications | Moyenne |
 | 29 | **Système de partage** | Codes de partage uniques, liens publics, items partagés avec permissions, notifications de partage | Moyenne |
 | 30 | **Export de données** | Export CSV des matchs et défis | Faible |
+| 31 | **Détection changement de classement** | Snapshot des rangs avant sauvegarde de match, comparaison après, notification push serveur aux joueurs dont le rang a changé | Moyenne |
+| 32 | **Préférences de notifications** | Toggles par type dans le profil (événements, meetups, classement, partages, rappels), JSONB dans `user_preferences`, respectées côté serveur | Moyenne |
 
 ### 2.2 Fonctionnalités partiellement implémentées
 
@@ -104,7 +107,7 @@ L'utilisateur s'inscrit via OTP email + mot de passe, crée son profil joueur au
 | **Base de données** | PostgreSQL (via OnSpace Cloud) |
 | **Auth** | Supabase Auth (OTP email + mot de passe) |
 | **Storage** | Supabase Storage (5 buckets : avatars, boules-photos, club-cards, federation-cards, terrain-photos) |
-| **Edge Functions** | Deno (5 fonctions : delete-account, detect-suspicious, record-purchase, validate-promo-code, validate-receipt) |
+| **Edge Functions** | Deno (6 fonctions : delete-account, detect-suspicious, record-purchase, send-push, validate-promo-code, validate-receipt) |
 | **State Management** | React Context API (AppContext) |
 | **Cache** | AsyncStorage |
 | **Images** | expo-image |
@@ -138,7 +141,8 @@ soft_deletes           → Suppressions douces (pour delta sync)
 merge_logs             → Historique des fusions
 terrain_meetups        → Rendez-vous sur terrains (share_code unique)
 terrain_meetup_responses → Réponses aux rendez-vous
-user_preferences       → Préférences (favoris terrains/clubs JSONB)
+user_preferences       → Préférences (favoris terrains/clubs JSONB, notification_preferences JSONB)
+push_tokens            → Jetons push Expo (user_id, token, platform, active)
 device_registrations   → Enregistrements d'appareils (anti-fraude)
 promo_codes / promo_code_redemptions → Codes promo
 purchase_receipts      → Preuves d'achat
@@ -190,6 +194,9 @@ services/
 ├── collaborativeEditService.ts ← Détection conflits, calcul diffs
 ├── modificationLogService.ts   ← Logs modifications, revert par champ/bloc
 ├── shareService.ts             ← Partage par code, items partagés
+├── rankingChangeService.ts     ← Détection changement de classement, snapshot/comparaison
+├── notificationPreferencesService.ts ← Préférences notifications push par type
+├── pushTokenService.ts         ← Enregistrement tokens push, déclenchement push serveur
 ├── offlineQueueService.ts      ← Queue offline, replay, conflits
 ├── cacheService.ts             ← Cache AsyncStorage
 ├── syncConfigService.ts        ← Configuration sync, mode batterie
@@ -444,8 +451,8 @@ services/
 
 - Les **IDs AdMob dans `app.json`** sont actuellement des IDs de test Google. **Ne pas publier avec ces IDs** — ils ne génèreront aucun revenu.
 - Le **scheme de deep linking** (`ultimatepetanque://`) fonctionne mais les **Universal Links iOS** nécessitent un serveur hébergeant `apple-app-site-association`.
-- Le **système de notifications push** utilise les notifications locales (pas de serveur push). Pour des notifications push serveur (ex: alerte quand un ambassadeur crée un événement), il faudra implémenter un service push côté Edge Functions.
-- Les **5 Edge Functions** existantes sont déployées mais le fichier `validate-receipt` n'est pas référencé dans le projet — vérifier qu'il est fonctionnel ou le retirer.
+- Le **système de notifications push** combine notifications locales (rappels tournois) et notifications serveur via l'Edge Function `send-push` (5 types : événements ambassadeur avec proximité 200km, invitations meetup, changements de classement, partages, rappels). Les préférences utilisateur par type sont respectées côté serveur via `user_preferences.notification_preferences`.
+- Les **6 Edge Functions** existantes sont déployées. Le fichier `validate-receipt` n'est pas référencé dans le projet — vérifier qu'il est fonctionnel ou le retirer.
 
 ---
 
@@ -518,7 +525,7 @@ Basé sur l'architecture actuelle et les tendances du marché :
 | 1 | **Mode sombre** | Détection système + toggle manuel, palettes complètes light/dark dans un ThemeContext | Moyenne | Élevé (demande fréquente) |
 | 2 | **Calendrier événements** | Vue mensuel dans l'onglet Défis de l'annuaire avec pastilles couleur par type d'événement | Moyenne | Moyen |
 | 3 | **Export CSV avancé** | Sélection des colonnes à exporter, formatage dates FR/EN, partage via Share API natif | Faible | Moyen |
-| 4 | **Notifications push serveur** | Edge Function déclenchant des push via Expo Push API (événements ambassadeur, résultats tournoi) | Élevée | Élevé |
+| 4 | ~~**Notifications push serveur**~~ | **IMPLÉMENTÉ** : Edge Function `send-push` avec 5 triggers, détection de classement, préférences par type | — | — |
 | 5 | **Chat entre joueurs** | Messagerie intégrée entre joueurs connectés, canaux par meetup/tournoi | Très élevée | Élevé |
 | 6 | **Vidéo replay** | Enregistrement court (15s) des tirs marquants, stockage Supabase Storage | Élevée | Moyen |
 | 7 | **Widget iOS/Android** | Widget affichant les prochains matchs/meetups et le classement actuel | Moyenne | Moyen |
