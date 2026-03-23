@@ -24,6 +24,7 @@ import { addSyncHistoryEntry } from '@/services/syncHistoryService';
 import { prefetchImages, startPeriodicCacheCleanup, stopPeriodicCacheCleanup, clearAllImageCache } from '@/services/imageCacheService';
 import { loadSyncConfig, getSyncConfig, onSyncConfigChange, setBatterySaverMode, DELTA_SELECT, SyncConfig } from '@/services/syncConfigService';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { getSharedMatchIds, getSharedChallengeIds, getReceivedShareRequests } from '@/services/matchShareService';
 import {
   mockPlayers,
   mockClubs,
@@ -109,6 +110,9 @@ interface AppContextType {
   
   // Shared items permissions
   getSharedPermission: (itemId: string) => 'read' | 'write' | null;
+  isSharedItem: (itemId: string) => boolean;
+  sharedMatchIds: string[];
+  sharedChallengeIds: string[];
   
   // Getters
   getPlayerById: (id: string) => Player | undefined;
@@ -335,6 +339,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [favoriteClubIds, setFavoriteClubIds] = useState<string[]>([]);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [sharedItemPermissions, setSharedItemPermissions] = useState<Record<string, 'read' | 'write'>>({});
+  const [sharedMatchIds, setSharedMatchIds] = useState<string[]>([]);
+  const [sharedChallengeIds, setSharedChallengeIds] = useState<string[]>([]);
+  const [sharedMatchPermissions, setSharedMatchPermissions] = useState<Record<string, 'read' | 'write'>>({});
   const [tournamentNotifications, setTournamentNotifications] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [isPremium, setIsPremiumState] = useState(false);
@@ -396,22 +403,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [clubs, playersWithStats]);
 
   // Calculate user stats from actual data
+  // For shared matches, determine team by checking if user's player ID is in team A or B
   const userStats = React.useMemo(() => {
-    const userMatches = matches.filter(m => m.teamA.players.includes('self') || m.winner);
-    const totalMatches = matches.length;
-    const wins = matches.filter(m => m.winner === 'A').length;
-    const losses = totalMatches - wins;
-    
-    // Calculate shot stats from player actions
+    const userId = user?.id;
+    const sharedSet = new Set(sharedMatchIds);
+    let totalMatches = 0;
+    let wins = 0;
+    let losses = 0;
     let totalTirs = 0;
     let totalTirsSuccess = 0;
     let totalPoints = 0;
     let totalPointsSuccess = 0;
     let totalCarreaux = 0;
+    let totalDuration = 0;
+    const tournamentIds = new Set<string>();
 
     matches.forEach(m => {
+      const isShared = sharedSet.has(m.id);
+      // For shared matches, detect which team the user is on
+      const userInA = userId ? m.teamA.players.includes(userId) : false;
+      const userInB = userId ? m.teamB.players.includes(userId) : false;
+      
+      // For own matches (not shared), assume team A is user's team (legacy behavior)
+      // For shared matches, only count if user is actually a participant
+      if (isShared && !userInA && !userInB) return; // Skip shared matches where user is not a participant player
+      
+      totalMatches++;
+      totalDuration += m.duration || 0;
+      
+      const userTeam = isShared ? (userInA ? 'A' : 'B') : 'A';
+      if (m.winner === userTeam) wins++;
+      else losses++;
+
+      if (m.mode === 'Tournoi' && m.tournamentId) {
+        tournamentIds.add(m.tournamentId);
+      }
+
       if (m.playerActions) {
-        m.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
+        // For own matches, count team A actions (legacy); for shared, count user's team
+        const targetTeam = userTeam;
+        m.playerActions.filter(pa => pa.team === targetTeam).forEach(pa => {
           totalTirs += pa.actions.tirs;
           totalTirsSuccess += pa.actions.tirsSuccess;
           totalPoints += pa.actions.points;
@@ -421,11 +452,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    const tournamentMatches = matches.filter(m => m.mode === 'Tournoi');
-    const tournamentWins = tournamentMatches.filter(m => m.winner === 'A').length;
-
     return {
-      playerId: user?.id || '1',
+      playerId: userId || '1',
       playerName: user?.username || 'Utilisateur',
       totalMatches,
       wins,
@@ -436,13 +464,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       tirSuccessRate: totalTirs > 0 ? Math.round((totalTirsSuccess / totalTirs) * 100 * 10) / 10 : 0,
       pointSuccessRate: totalPoints > 0 ? Math.round((totalPointsSuccess / totalPoints) * 100 * 10) / 10 : 0,
       carreauRate: totalTirsSuccess > 0 ? Math.round((totalCarreaux / totalTirsSuccess) * 100 * 10) / 10 : 0,
-      avgMatchDuration: totalMatches > 0 ? Math.round(matches.reduce((sum, m) => sum + m.duration, 0) / totalMatches) : 0,
+      avgMatchDuration: totalMatches > 0 ? Math.round(totalDuration / totalMatches) : 0,
       tournamentsWon: 0,
-      tournamentsPlayed: new Set(tournamentMatches.map(m => m.tournamentId)).size,
+      tournamentsPlayed: tournamentIds.size,
       weeklyProgress: [],
       recentOpponents: [],
     };
-  }, [matches, user]);
+  }, [matches, user, sharedMatchIds]);
 
   // Calculate challenge stats
   const challengeStats: ChallengeStats = React.useMemo(() => {
@@ -677,6 +705,65 @@ export function AppProvider({ children }: { children: ReactNode }) {
           purchasePrice: s.purchase_price ? parseFloat(s.purchase_price) : undefined,
         }));
         setBoulesSets(dbSets);
+      }
+
+      // === Phase 3: Load shared matches & challenges (cross-player sharing) ===
+      try {
+        const [sharedMatchRes, sharedChallengeRes, receivedRequests] = await Promise.all([
+          getSharedMatchIds(),
+          getSharedChallengeIds(),
+          getReceivedShareRequests('accepted'),
+        ]);
+
+        // Build permission map for shared matches/challenges
+        const matchChallPermissions: Record<string, 'read' | 'write'> = {};
+        if (receivedRequests.requests) {
+          receivedRequests.requests.forEach(req => {
+            matchChallPermissions[req.itemId] = req.permission as 'read' | 'write';
+          });
+        }
+        setSharedMatchPermissions(matchChallPermissions);
+
+        const newSharedMatchIds = sharedMatchRes.matchIds || [];
+        const newSharedChallengeIds = sharedChallengeRes.challengeIds || [];
+        setSharedMatchIds(newSharedMatchIds);
+        setSharedChallengeIds(newSharedChallengeIds);
+
+        // Fetch shared matches not already loaded
+        if (newSharedMatchIds.length > 0) {
+          const { data: sharedMatchData } = await supabase
+            .from('matches')
+            .select('*')
+            .in('id', newSharedMatchIds);
+          if (sharedMatchData && sharedMatchData.length > 0) {
+            const sharedMatches = sharedMatchData.map(mapMatchFromDb);
+            setMatches(prev => {
+              const existingIds = new Set(prev.map(m => m.id));
+              const newOnes = sharedMatches.filter(m => !existingIds.has(m.id));
+              return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
+            });
+            console.log(`Loaded ${sharedMatchData.length} shared matches`);
+          }
+        }
+
+        // Fetch shared challenges not already loaded
+        if (newSharedChallengeIds.length > 0) {
+          const { data: sharedChallengeData } = await supabase
+            .from('challenges')
+            .select('*')
+            .in('id', newSharedChallengeIds);
+          if (sharedChallengeData && sharedChallengeData.length > 0) {
+            const sharedChallenges = sharedChallengeData.map(mapChallengeFromDb);
+            setChallenges(prev => {
+              const existingIds = new Set(prev.map(c => c.id));
+              const newOnes = sharedChallenges.filter(c => !existingIds.has(c.id));
+              return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
+            });
+            console.log(`Loaded ${sharedChallengeData.length} shared challenges`);
+          }
+        }
+      } catch (shareError) {
+        console.log('Error loading shared matches/challenges:', shareError);
       }
 
       secondaryLoadDone.current = true;
@@ -2197,10 +2284,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return tournamentNotifications.includes(tournamentId);
   };
 
-  // Shared permission getter
+  // Shared permission getter (includes both regular shared items and match/challenge shares)
   const getSharedPermission = useCallback((itemId: string): 'read' | 'write' | null => {
-    return sharedItemPermissions[itemId] || null;
-  }, [sharedItemPermissions]);
+    return sharedItemPermissions[itemId] || sharedMatchPermissions[itemId] || null;
+  }, [sharedItemPermissions, sharedMatchPermissions]);
+
+  // Check if a match or challenge is a shared item (not owned by user)
+  const isSharedItem = useCallback((itemId: string): boolean => {
+    return sharedMatchIds.includes(itemId) || sharedChallengeIds.includes(itemId) || !!sharedItemPermissions[itemId];
+  }, [sharedMatchIds, sharedChallengeIds, sharedItemPermissions]);
 
   // Toggle public/private in local state (DB is already updated by the caller)
   const setItemPublic = useCallback((type: 'players' | 'clubs' | 'terrains' | 'tournaments', itemId: string, isPublic: boolean) => {
@@ -2366,6 +2458,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toggleTournamentNotification,
         isTournamentNotificationEnabled,
         getSharedPermission,
+        isSharedItem,
+        sharedMatchIds,
+        sharedChallengeIds,
         getPlayerById,
         getClubById,
         getTournamentById,
