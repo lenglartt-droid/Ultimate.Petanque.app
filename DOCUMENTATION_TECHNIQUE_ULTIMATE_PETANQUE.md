@@ -81,11 +81,14 @@ L'utilisateur s'inscrit via OTP email + mot de passe, crée son profil joueur au
 | 27 | **Publicités AdMob** | Bannières inline et interstitiels, suppression via achat premium | Faible |
 | 28 | **Deep Linking** | Scheme `ultimatepetanque://`, intent filters Android, associated domains iOS, navigation depuis notifications | Moyenne |
 | 29 | **Système de partage** | Codes de partage uniques, liens publics, items partagés avec permissions, notifications de partage | Moyenne |
-| 30 | **Export de données** | Export CSV des matchs et défis | Faible |
+| 30 | **Export de données** | Export CSV/PDF avec assistant 3 étapes, 7 préréglages (standard, par match, défi, joueur, tournoi, saison, comparatif), **sélecteur de colonnes CSV**, aperçu des données, graphiques SVG en PDF | Moyenne |
 | 31 | **Détection changement de classement** | Snapshot des rangs avant sauvegarde de match, comparaison après, notification push serveur aux joueurs dont le rang a changé | Moyenne |
 | 32 | **Préférences de notifications** | Toggles par type dans le profil (événements, meetups, classement, partages, rappels), JSONB dans `user_preferences`, respectées côté serveur | Moyenne |
 | 33 | **Monitoring Sentry** | Service `sentryService.ts` intégré au lancement de l'app, capture des exceptions/messages, breadcrumbs de navigation, contexte utilisateur anonymisé (IP supprimée) | Moyenne |
 | 34 | **Rate Limiting Edge Functions** | Protection anti-abus sur `validate-promo-code` (5 req/min) et `record-purchase` (3 req/min) avec réponses 429, détection de transactions dupliquées | Moyenne |
+| 35 | **Page préférences notifications** | Page dédiée extraite du profil avec descriptions détaillées, compteur d'actifs, toggle par type de notification push | Faible |
+| 36 | **i18n extraction (pages légales)** | 30+ chaînes hardcodées extraites de faq.tsx, terms.tsx et privacy-policy.tsx vers i18nExtra.ts (section pushNotifs), nouvelles catégories FAQ (Ambassadeurs, Partage cross-joueur) | Faible |
+| 37 | **Export CSV avancé** | Sélecteur de colonnes dans l'assistant d'export CSV, choix tout/défaut, compteur de colonnes sélectionnées, colonnes par défaut vs optionnelles | Faible |
 
 ### 2.2 Fonctionnalités partiellement implémentées
 
@@ -249,7 +252,7 @@ services/
 
 - **Google OAuth** : code client prêt mais provider non activé côté serveur
 - **AdMob** : fonctionne en mode test, nécessite IDs de production
-- **Export CSV** : fonctionnel mais limité (pas de sélection de colonnes)
+- **Export CSV** : fonctionnel avec sélecteur de colonnes, 7 préréglages, graphiques PDF
 
 ### 4.3 Ce qui est manquant
 
@@ -276,7 +279,8 @@ services/
 | 7 | **Deep Linking prod** | Configurer les associated domains | — | Apple Developer : configurer Associated Domains, héberger `apple-app-site-association` ; Google : Digital Asset Links | Moyenne | 2-3h |
 | 8 | **Google Maps API (Carte)** | Configurer la clé API Google Maps pour la carte interactive Android | Ajouter la clé dans `app.json` sous `android.config.googleMaps.apiKey` | Google Cloud Console : activer "Maps SDK for Android" et "Maps SDK for iOS", créer une clé API restreinte par plateforme, ajouter restrictions de bundle/package | Haute | 2-3h |
 | 9 | **Tests réels IAP** | Tester les achats in-app | — | App Store Connect : créer In-App Purchase (€5.99), configurer sandbox testers ; Google Play Console : créer produit, licence testing | Haute | 4-6h |
-| 10 | **Tests appareils** | Tester sur iOS et Android physiques | Télécharger APK via bouton Download d'OnSpace, utiliser QR code OnSpace App pour iOS | — | Haute | 8-12h |
+| 10 | **QR Code & liens de téléchargement** | Configurer les liens QR Code pour télécharger et installer l'application | Générer QR codes pointant vers App Store / Play Store, intégrer dans matériaux marketing, site web, réseaux sociaux | Créer une page de redirection (smart link) qui détecte iOS/Android et redirige vers le bon store | Moyenne | 1-2h |
+| 11 | **Tests appareils** | Tester sur iOS et Android physiques | Télécharger APK via bouton Download d'OnSpace, utiliser QR code OnSpace App pour iOS | — | Haute | 8-12h |
 | 11 | **Performance** | Profiler et optimiser | — | React DevTools, Flipper, analyser bundle size | Basse | 4-6h |
 | 12 | **Monitoring** | Configurer Sentry/Crashlytics | Ajouter clé API dans Secrets si nécessaire | Sentry : créer projet, installer `@sentry/react-native` | Moyenne | 3-4h |
 
@@ -456,7 +460,9 @@ services/
 - Le **scheme de deep linking** (`ultimatepetanque://`) fonctionne mais les **Universal Links iOS** nécessitent un serveur hébergeant `apple-app-site-association`.
 - Le **système de notifications push** combine notifications locales (rappels tournois) et notifications serveur via l'Edge Function `send-push` (5 types : événements ambassadeur avec proximité 200km, invitations meetup, changements de classement, partages, rappels). Les préférences utilisateur par type sont respectées côté serveur via `user_preferences.notification_preferences`.
 - La **politique de confidentialité** et les **conditions d'utilisation** ont été mises à jour avec les sections sur les notifications push, le monitoring Sentry et la protection rate limiting.
-- La **FAQ** inclut désormais 2 nouvelles catégories : "Notifications Push" (4 questions) et "Sécurité & Confidentialité" (2 questions).
+- La **FAQ** inclut désormais 4 nouvelles catégories : "Notifications Push" (4 questions), "Sécurité & Confidentialité" (2 questions), "Ambassadeurs & Partenaires" (3 questions), "Partage cross-joueur" (3 questions).
+- L'**export CSV** offre un sélecteur de colonnes permettant aux utilisateurs de choisir les champs à exporter (colonnes par défaut vs optionnelles comme Mènes, Terrain, Points, Durée).
+- La page **Préférences de notifications** est une page dédiée extraite du profil avec descriptions détaillées et compteur d'actifs.
 - Les **6 Edge Functions** existantes sont déployées avec rate limiting sur les fonctions sensibles (validate-promo-code : 5 req/min, record-purchase : 3 req/min avec détection de transactions dupliquées). Le fichier `validate-receipt` n'est pas référencé dans le projet — vérifier qu'il est fonctionnel ou le retirer.
 
 ---

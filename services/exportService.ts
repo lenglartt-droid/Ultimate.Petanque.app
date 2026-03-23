@@ -5,6 +5,8 @@ export type ExportFormat = 'csv' | 'pdf';
 export type ExportDataType = 'matches' | 'challenges' | 'statistics';
 export type ExportPeriod = 'all' | '7d' | '30d' | '3m' | '6m' | '1y';
 export type ExportPreset = 'none' | 'tournament' | 'season' | 'comparative' | 'match' | 'player' | 'challenge';
+export type CsvEncoding = 'utf8' | 'utf8bom' | 'iso8859';
+export type CsvSeparator = ',' | ';' | '\t';
 
 interface ExportOptions {
   format: ExportFormat;
@@ -23,6 +25,8 @@ interface ExportOptions {
   playerName?: string;
   challengeId?: string;
   selectedColumns?: string[];
+  csvEncoding?: CsvEncoding;
+  csvSeparator?: CsvSeparator;
 }
 
 // ============================================
@@ -133,10 +137,10 @@ function filterMatchesByPlayer(matches: Match[], playerId: string): Match[] {
   );
 }
 
-function escapeCsv(val: any): string {
+function escapeCsv(val: any, sep: string = ','): string {
   if (val === null || val === undefined) return '';
   const str = String(val);
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+  if (str.includes(sep) || str.includes('"') || str.includes('\n') || str.includes(',')) {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
@@ -370,7 +374,7 @@ export function generatePreview(
 // CSV EXPORTS
 // ============================================
 
-export function matchesToCsv(matches: Match[], lang: 'fr' | 'en', selectedColumns?: string[]): string {
+export function matchesToCsv(matches: Match[], lang: 'fr' | 'en', selectedColumns?: string[], sep: string = ','): string {
   const allCols = MATCH_COLUMNS;
   const activeCols = selectedColumns
     ? allCols.filter(c => selectedColumns.includes(c.id))
@@ -394,10 +398,10 @@ export function matchesToCsv(matches: Match[], lang: 'fr' | 'en', selectedColumn
   };
 
   const rows = matches.map(m => activeCols.map(c => colValueMap[c.id] ? colValueMap[c.id](m) : ''));
-  return [headers.map(escapeCsv).join(','), ...rows.map(r => r.map(escapeCsv).join(','))].join('\n');
+  return [headers.map(h => escapeCsv(h, sep)).join(sep), ...rows.map(r => r.map(v => escapeCsv(v, sep)).join(sep))].join('\n');
 }
 
-function singleMatchToCsv(m: Match, lang: 'fr' | 'en'): string {
+function singleMatchToCsv(m: Match, lang: 'fr' | 'en', sep: string = ','): string {
   const lbl = (fr: string, en: string) => lang === 'fr' ? fr : en;
   const rows: string[][] = [
     [lbl('Info', 'Info'), lbl('Valeur', 'Value')],
@@ -426,10 +430,10 @@ function singleMatchToCsv(m: Match, lang: 'fr' | 'en'): string {
       rows.push([pa.playerName, pa.team, String(pa.actions.tirs), String(pa.actions.tirsSuccess), String(pa.actions.points), String(pa.actions.pointsSuccess), String(pa.actions.carreaux)]);
     });
   }
-  return rows.map(r => r.map(escapeCsv).join(',')).join('\n');
+  return rows.map(r => r.map(v => escapeCsv(v, sep)).join(sep)).join('\n');
 }
 
-function singleChallengeToCsv(c: Challenge, lang: 'fr' | 'en'): string {
+function singleChallengeToCsv(c: Challenge, lang: 'fr' | 'en', sep: string = ','): string {
   const lbl = (fr: string, en: string) => lang === 'fr' ? fr : en;
   const typeLabels: Record<string, Record<string, string>> = {
     '10_tirs': { fr: '10 Tirs', en: '10 Shots' },
@@ -467,10 +471,10 @@ function singleChallengeToCsv(c: Challenge, lang: 'fr' | 'en'): string {
       rows.push([atelierConfig?.name || ps.atelier, String(ps.distance), String(ps.points), String(ps.timeUsed)]);
     });
   }
-  return rows.map(r => r.map(escapeCsv).join(',')).join('\n');
+  return rows.map(r => r.map(v => escapeCsv(v, sep)).join(sep)).join('\n');
 }
 
-export function challengesToCsv(challenges: Challenge[], lang: 'fr' | 'en', selectedColumns?: string[]): string {
+export function challengesToCsv(challenges: Challenge[], lang: 'fr' | 'en', selectedColumns?: string[], sep: string = ','): string {
   const typeLabels: Record<string, Record<string, string>> = {
     '10_tirs': { fr: '10 Tirs', en: '10 Shots' },
     '10_tirs_sautee': { fr: '10 Tirs sautee', en: '10 Lob Shots' },
@@ -498,10 +502,10 @@ export function challengesToCsv(challenges: Challenge[], lang: 'fr' | 'en', sele
   };
 
   const rows = challenges.map(c => activeCols.map(col => colValueMap[col.id] ? colValueMap[col.id](c) : ''));
-  return [headers.map(escapeCsv).join(','), ...rows.map(r => r.map(escapeCsv).join(','))].join('\n');
+  return [headers.map(h => escapeCsv(h, sep)).join(sep), ...rows.map(r => r.map(v => escapeCsv(v, sep)).join(sep))].join('\n');
 }
 
-export function statisticsToCsv(matches: Match[], challenges: Challenge[], tournaments: Tournament[], userStats: any, lang: 'fr' | 'en'): string {
+export function statisticsToCsv(matches: Match[], challenges: Challenge[], tournaments: Tournament[], userStats: any, lang: 'fr' | 'en', sep: string = ','): string {
   const lbl = (fr: string, en: string) => lang === 'fr' ? fr : en;
   const stats = computePeriodStats(matches, challenges, '');
   const completedTournaments = tournaments.filter(t => t.status === 'Termine' || t.status === 'Terminé').length;
@@ -522,10 +526,10 @@ export function statisticsToCsv(matches: Match[], challenges: Challenge[], tourn
     [lbl('Tournois termines', 'Tournaments completed'), completedTournaments],
     [lbl('Duree moyenne (min)', 'Avg duration (min)'), stats.avgDuration],
   ];
-  return rows.map(r => r.map(escapeCsv).join(',')).join('\n');
+  return rows.map(r => r.map(v => escapeCsv(v, sep)).join(sep)).join('\n');
 }
 
-function comparativeToCsv(statsA: PeriodStats, statsB: PeriodStats, lang: 'fr' | 'en'): string {
+function comparativeToCsv(statsA: PeriodStats, statsB: PeriodStats, lang: 'fr' | 'en', sep: string = ','): string {
   const lbl = (fr: string, en: string) => lang === 'fr' ? fr : en;
   const delta = (a: number, b: number) => { const d = a - b; return d > 0 ? `+${d}` : `${d}`; };
   const deltaPct = (a: number, b: number) => { const d = a - b; return d > 0 ? `+${d}%` : `${d}%`; };
@@ -540,7 +544,7 @@ function comparativeToCsv(statsA: PeriodStats, statsB: PeriodStats, lang: 'fr' |
     [lbl('Defis', 'Challenges'), statsA.totalChallenges, statsB.totalChallenges, delta(statsA.totalChallenges, statsB.totalChallenges)],
     [lbl('Duree moy.', 'Avg duration'), `${statsA.avgDuration} min`, `${statsB.avgDuration} min`, `${delta(statsA.avgDuration, statsB.avgDuration)} min`],
   ];
-  return [headers.map(escapeCsv).join(','), ...rows.map(r => r.map(escapeCsv).join(','))].join('\n');
+  return [headers.map(h => escapeCsv(h, sep)).join(sep), ...rows.map(r => r.map(v => escapeCsv(v, sep)).join(sep))].join('\n');
 }
 
 // ============================================
@@ -950,14 +954,14 @@ export async function exportData(
   userStats: any,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { format, dataType, period, language, username, preset, tournamentId, tournamentName, seasonYear, comparePeriod, compareSeasonYear, matchId, playerId, playerName, challengeId } = options;
+    const { format, dataType, period, language, username, preset, tournamentId, tournamentName, seasonYear, comparePeriod, compareSeasonYear, matchId, playerId, playerName, challengeId, csvEncoding = 'utf8bom', csvSeparator: sep = ',' } = options;
     const dateStr = new Date().toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US');
 
     if (preset === 'match' && matchId) {
       const m = matches.find(mt => mt.id === matchId);
       if (!m) return { success: false, error: language === 'fr' ? 'Match introuvable' : 'Match not found' };
       const title = language === 'fr' ? `Match du ${new Date(m.date).toLocaleDateString('fr-FR')}` : `Match ${new Date(m.date).toLocaleDateString('en-US')}`;
-      if (format === 'csv') { return await shareFile(singleMatchToCsv(m, language), `match_${new Date(m.date).toISOString().slice(0, 10)}.csv`, 'text/csv', language); }
+      if (format === 'csv') { return await shareFile(singleMatchToCsv(m, language, sep), `match_${new Date(m.date).toISOString().slice(0, 10)}.csv`, 'text/csv', language, csvEncoding); }
       else { return await sharePdf(generatePdfHtml(title, singleMatchToHtml(m, language), username, dateStr), `match_${new Date(m.date).toISOString().slice(0, 10)}.pdf`, language); }
     }
 
@@ -966,7 +970,7 @@ export async function exportData(
       if (!c) return { success: false, error: language === 'fr' ? 'Defi introuvable' : 'Challenge not found' };
       const typeLabels: Record<string, Record<string, string>> = { '10_tirs': { fr: '10 Tirs', en: '10 Shots' }, '10_tirs_sautee': { fr: '10 Tirs sautee', en: '10 Lob Shots' }, 'precision': { fr: 'Precision', en: 'Precision' } };
       const title = `${typeLabels[c.type]?.[language] || c.type} - ${new Date(c.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')}`;
-      if (format === 'csv') { return await shareFile(singleChallengeToCsv(c, language), `defi_${new Date(c.date).toISOString().slice(0, 10)}.csv`, 'text/csv', language); }
+      if (format === 'csv') { return await shareFile(singleChallengeToCsv(c, language, sep), `defi_${new Date(c.date).toISOString().slice(0, 10)}.csv`, 'text/csv', language, csvEncoding); }
       else { return await sharePdf(generatePdfHtml(title, singleChallengeToHtml(c, language), username, dateStr), `defi_${new Date(c.date).toISOString().slice(0, 10)}.pdf`, language); }
     }
 
@@ -976,11 +980,11 @@ export async function exportData(
       const name = playerName || 'Joueur';
       if (dataType === 'matches') {
         const title = language === 'fr' ? `Matchs de ${name}` : `Matches of ${name}`;
-        if (format === 'csv') { return await shareFile(matchesToCsv(playerMatches, language), `matchs_${name.replace(/\s+/g, '_').slice(0, 20)}_${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv', language); }
+        if (format === 'csv') { return await shareFile(matchesToCsv(playerMatches, language, undefined, sep), `matchs_${name.replace(/\s+/g, '_').slice(0, 20)}_${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv', language, csvEncoding); }
         else { return await sharePdf(generatePdfHtml(title, matchesToHtml(playerMatches, language), username, dateStr), `matchs_${name.replace(/\s+/g, '_').slice(0, 20)}_${new Date().toISOString().slice(0, 10)}.pdf`, language); }
       } else {
         const title = language === 'fr' ? `Stats de ${name}` : `Stats of ${name}`;
-        if (format === 'csv') { return await shareFile(statisticsToCsv(playerMatches, playerChallenges, tournaments, userStats, language), `stats_${name.replace(/\s+/g, '_').slice(0, 20)}_${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv', language); }
+        if (format === 'csv') { return await shareFile(statisticsToCsv(playerMatches, playerChallenges, tournaments, userStats, language, sep), `stats_${name.replace(/\s+/g, '_').slice(0, 20)}_${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv', language, csvEncoding); }
         else { return await sharePdf(generatePdfHtml(title, statisticsToHtml(playerMatches, playerChallenges, tournaments, language), username, dateStr), `stats_${name.replace(/\s+/g, '_').slice(0, 20)}_${new Date().toISOString().slice(0, 10)}.pdf`, language); }
       }
     }
@@ -1000,7 +1004,7 @@ export async function exportData(
       }
       const statsA = computePeriodStats(matchesA, challengesA, labelA);
       const statsB = computePeriodStats(matchesB, challengesB, labelB);
-      if (format === 'csv') { return await shareFile(comparativeToCsv(statsA, statsB, language), `comparatif_${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv', language); }
+      if (format === 'csv') { return await shareFile(comparativeToCsv(statsA, statsB, language, sep), `comparatif_${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv', language, csvEncoding); }
       else { const title = language === 'fr' ? `Comparatif : ${statsA.label} vs ${statsB.label}` : `Comparative: ${statsA.label} vs ${statsB.label}`; return await sharePdf(generatePdfHtml(title, comparativeToHtml(statsA, statsB, language), username, dateStr), `comparatif_${new Date().toISOString().slice(0, 10)}.pdf`, language); }
     }
 
@@ -1013,13 +1017,13 @@ export async function exportData(
       let csvContent = '', fileName = '';
       const cols = options.selectedColumns;
       switch (dataType) {
-        case 'matches': csvContent = matchesToCsv(filteredMatches, language, cols); fileName = `matchs_${new Date().toISOString().slice(0, 10)}.csv`; break;
-        case 'challenges': csvContent = challengesToCsv(filteredChallenges, language, cols); fileName = `defis_${new Date().toISOString().slice(0, 10)}.csv`; break;
-        case 'statistics': csvContent = statisticsToCsv(filteredMatches, filteredChallenges, tournaments, userStats, language); fileName = `statistiques_${new Date().toISOString().slice(0, 10)}.csv`; break;
+        case 'matches': csvContent = matchesToCsv(filteredMatches, language, cols, sep); fileName = `matchs_${new Date().toISOString().slice(0, 10)}.csv`; break;
+        case 'challenges': csvContent = challengesToCsv(filteredChallenges, language, cols, sep); fileName = `defis_${new Date().toISOString().slice(0, 10)}.csv`; break;
+        case 'statistics': csvContent = statisticsToCsv(filteredMatches, filteredChallenges, tournaments, userStats, language, sep); fileName = `statistiques_${new Date().toISOString().slice(0, 10)}.csv`; break;
       }
       if (preset === 'tournament' && tournamentName) fileName = `tournoi_${tournamentName.replace(/\s+/g, '_').slice(0, 20)}_${new Date().toISOString().slice(0, 10)}.csv`;
       else if (preset === 'season' && seasonYear) fileName = `saison_${seasonYear}-${seasonYear + 1}_${new Date().toISOString().slice(0, 10)}.csv`;
-      return await shareFile(csvContent, fileName, 'text/csv', language);
+      return await shareFile(csvContent, fileName, 'text/csv', language, csvEncoding);
     } else {
       let htmlContent = '', title = '';
       switch (dataType) {
@@ -1054,12 +1058,25 @@ export async function exportData(
 // FILE SHARING HELPERS
 // ============================================
 
-async function shareFile(content: string, fileName: string, mimeType: string, language: string): Promise<{ success: boolean; error?: string }> {
+async function shareFile(content: string, fileName: string, mimeType: string, language: string, encoding: CsvEncoding = 'utf8bom'): Promise<{ success: boolean; error?: string }> {
+  const bom = encoding === 'utf8bom' ? '\ufeff' : '';
   if (Platform.OS === 'web') {
-    const blob = new Blob(['\ufeff' + content], { type: `${mimeType};charset=utf-8;` });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a'); link.href = url; link.download = fileName; link.click();
-    URL.revokeObjectURL(url);
+    if (encoding === 'iso8859') {
+      // ISO-8859-1: encode each char as single byte
+      const bytes = new Uint8Array(content.length);
+      for (let i = 0; i < content.length; i++) {
+        bytes[i] = content.charCodeAt(i) & 0xff;
+      }
+      const blob = new Blob([bytes], { type: `${mimeType};charset=iso-8859-1;` });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a'); link.href = url; link.download = fileName; link.click();
+      URL.revokeObjectURL(url);
+    } else {
+      const blob = new Blob([bom + content], { type: `${mimeType};charset=utf-8;` });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a'); link.href = url; link.download = fileName; link.click();
+      URL.revokeObjectURL(url);
+    }
     return { success: true };
   }
   const ExpoFS = require('expo-file-system');
@@ -1067,7 +1084,9 @@ async function shareFile(content: string, fileName: string, mimeType: string, la
   const { writeAsStringAsync, cacheDirectory, EncodingType } = ExpoFS;
   const { isAvailableAsync, shareAsync } = ExpoSharing;
   const fileUri = `${cacheDirectory}${fileName}`;
-  await writeAsStringAsync(fileUri, '\ufeff' + content, { encoding: EncodingType.UTF8 });
+  // Mobile: always write as UTF-8 (with or without BOM); ISO-8859-1 falls back to UTF-8 BOM for compatibility
+  const prefix = encoding === 'utf8' ? '' : '\ufeff';
+  await writeAsStringAsync(fileUri, prefix + content, { encoding: EncodingType.UTF8 });
   if (await isAvailableAsync()) await shareAsync(fileUri, { mimeType, dialogTitle: fileName });
   return { success: true };
 }

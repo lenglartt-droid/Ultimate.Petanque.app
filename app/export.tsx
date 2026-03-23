@@ -26,6 +26,8 @@ import {
   ExportDataType,
   ExportPeriod,
   ExportPreset,
+  CsvEncoding,
+  CsvSeparator,
   PreviewData,
   computePeriodStats,
   generatePreview,
@@ -71,6 +73,10 @@ export default function ExportScreen() {
 
   // Column selection for CSV
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
+
+  // CSV encoding & separator
+  const [csvEncoding, setCsvEncoding] = useState<CsvEncoding>('utf8bom');
+  const [csvSeparator, setCsvSeparator] = useState<CsvSeparator>(language === 'fr' ? ';' : ',');
 
   const lbl = useCallback((fr: string, en: string) => language === 'fr' ? fr : en, [language]);
 
@@ -166,6 +172,8 @@ export default function ExportScreen() {
       seasonYear: selectedSeason ?? undefined, comparePeriod: preset === 'comparative' ? comparePeriod : undefined,
       matchId: selectedMatch?.id, playerId: selectedPlayer?.id, playerName: selectedPlayer?.name, challengeId: selectedChallenge?.id,
       selectedColumns: format === 'csv' ? selectedColumns : undefined,
+      csvEncoding: format === 'csv' ? csvEncoding : undefined,
+      csvSeparator: format === 'csv' ? csvSeparator : undefined,
     }, matches, challenges, tournaments, userStats);
     setExporting(false);
     if (result.success) {
@@ -423,6 +431,39 @@ export default function ExportScreen() {
         </>
       ) : null}
 
+      {/* CSV Separator & Encoding */}
+      {format === 'csv' ? (
+        <>
+          <Text style={s.configLabel}>{lbl('SEPARATEUR', 'SEPARATOR')}</Text>
+          <View style={s.formatRow}>
+            {[
+              { id: ',' as CsvSeparator, label: lbl('Virgule (,)', 'Comma (,)'), desc: lbl('Standard EN', 'Standard EN') },
+              { id: ';' as CsvSeparator, label: lbl('Point-virgule (;)', 'Semicolon (;)'), desc: lbl('Excel FR', 'Excel FR') },
+              { id: '\t' as CsvSeparator, label: lbl('Tabulation', 'Tab'), desc: lbl('Universel', 'Universal') },
+            ].map(sp => (
+              <Pressable key={sp.id} style={[s.formatCard, csvSeparator === sp.id && s.formatCardActive, { paddingVertical: 12, paddingHorizontal: 10 }]} onPress={() => { Haptics.selectionAsync(); setCsvSeparator(sp.id); }}>
+                <Text style={[s.formatLabel, { fontSize: 13 }, csvSeparator === sp.id && { color: theme.primary, fontWeight: '700' }]}>{sp.label}</Text>
+                <Text style={s.formatDesc}>{sp.desc}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Text style={s.configLabel}>{lbl('ENCODAGE', 'ENCODING')}</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+            {[
+              { id: 'utf8bom' as CsvEncoding, label: 'UTF-8 BOM', desc: lbl('Excel moderne', 'Modern Excel') },
+              { id: 'utf8' as CsvEncoding, label: 'UTF-8', desc: lbl('Standard web', 'Web standard') },
+              { id: 'iso8859' as CsvEncoding, label: 'ISO-8859-1', desc: lbl('Ancien Excel', 'Legacy Excel') },
+            ].map(enc => (
+              <Pressable key={enc.id} style={[s.periodChip, csvEncoding === enc.id && s.periodChipActive, { paddingHorizontal: 14 }]} onPress={() => { Haptics.selectionAsync(); setCsvEncoding(enc.id); }}>
+                <Text style={[s.periodChipText, csvEncoding === enc.id && s.periodChipTextActive]}>{enc.label}</Text>
+                <Text style={{ fontSize: 10, color: csvEncoding === enc.id ? theme.primary : theme.textMuted, marginTop: 1 }}>{enc.desc}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </>
+      ) : null}
+
       {/* CSV Column Selector */}
       {format === 'csv' && availableColumns.length > 0 && showDataTypeInConfig && !['comparative', 'match', 'challenge'].includes(preset) ? (
         <>
@@ -504,6 +545,7 @@ export default function ExportScreen() {
         <View style={s.summaryRow}>
           <View style={s.summaryChip}><MaterialIcons name="auto-awesome" size={12} color={theme.primary} /><Text style={s.summaryChipText}>{getSummaryText()}</Text></View>
           <View style={s.summaryChip}><MaterialIcons name={format === 'pdf' ? 'picture-as-pdf' : 'table-chart'} size={12} color={theme.accent} /><Text style={s.summaryChipText}>{format.toUpperCase()}</Text></View>
+          {format === 'csv' ? <View style={s.summaryChip}><Text style={s.summaryChipText}>{csvSeparator === ',' ? lbl('Virgule', 'Comma') : csvSeparator === ';' ? lbl('Pt-virgule', 'Semicolon') : 'Tab'} • {csvEncoding === 'utf8bom' ? 'UTF-8 BOM' : csvEncoding === 'utf8' ? 'UTF-8' : 'ISO-8859-1'}</Text></View> : null}
           {showDataTypeInConfig ? <View style={s.summaryChip}><Text style={s.summaryChipText}>{getDataTypeLabel(dataType)}</Text></View> : null}
         </View>
       </View>
