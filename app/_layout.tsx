@@ -12,6 +12,8 @@ import ConflictResolutionModal from '@/components/ui/ConflictResolutionModal';
 import { useApp } from '@/contexts/AppContext';
 import TrackingConsentModal from '@/components/ui/TrackingConsentModal';
 import { isATTPromptNeeded } from '@/services/trackingService';
+import { addNotificationResponseListener } from '@/services/notificationService';
+import { router } from 'expo-router';
 
 export default function RootLayout() {
   return (
@@ -39,6 +41,20 @@ function LayoutInner() {
     isATTPromptNeeded().then(needed => {
       if (needed) setShowATT(true);
     });
+  }, []);
+
+  // Navigate to match-invitations when user taps a share request notification
+  React.useEffect(() => {
+    const sub = addNotificationResponseListener((response: any) => {
+      const data = response?.notification?.request?.content?.data;
+      if (data?.type === 'share_request') {
+        // Small delay to ensure navigation stack is ready
+        setTimeout(() => {
+          router.push('/match-invitations');
+        }, 300);
+      }
+    });
+    return () => sub.remove();
   }, []);
   return (
             <View style={{ flex: 1 }}>
