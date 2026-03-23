@@ -357,11 +357,11 @@ export default function HomeScreen() {
               </View>
               <View style={s.heroTopActions}>
                 <Pressable style={s.heroIconBtn} onPress={() => setShowQRModal(true)}>
-                  <MaterialIcons name="qr-code-2" size={20} color={theme.textSecondary} />
+                  <MaterialIcons name="qr-code-2" size={20} color="rgba(255,255,255,0.7)" />
                 </Pressable>
                 {pendingInviteCount > 0 ? (
                   <Pressable style={s.heroIconBtn} onPress={() => router.push('/meetup/invitations' as any)}>
-                    <MaterialIcons name="mail" size={20} color={theme.primary} />
+                    <MaterialIcons name="mail" size={20} color="#60A5FA" />
                     <View style={s.heroBadge}><Text style={s.heroBadgeText}>{pendingInviteCount > 9 ? '9+' : pendingInviteCount}</Text></View>
                   </Pressable>
                 ) : null}
@@ -369,7 +369,7 @@ export default function HomeScreen() {
                   {selfPlayer?.avatar ? (
                     <Image source={{ uri: selfPlayer.avatar }} style={s.heroAvatarImg} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                   ) : (
-                    <LinearGradient colors={['#2563EB', '#3B82F6']} style={s.heroAvatarFallback}>
+                    <LinearGradient colors={['#3B82F6', '#60A5FA']} style={s.heroAvatarFallback}>
                       <Text style={s.heroAvatarLetter}>{displayName.charAt(0).toUpperCase()}</Text>
                     </LinearGradient>
                   )}
@@ -837,27 +837,27 @@ const s = StyleSheet.create({
   seeAllText: { fontSize: 13, fontWeight: '600', color: theme.primary },
 
   // ===== HERO =====
-  heroWrap: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20, marginBottom: 20, backgroundColor: '#FFF', borderBottomLeftRadius: 24, borderBottomRightRadius: 24, ...Platform.select({ ios: { shadowColor: '#0F172A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 12 }, android: { elevation: 2 }, default: {} }) },
+  heroWrap: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20, marginBottom: 20, backgroundColor: '#0F172A', borderBottomLeftRadius: 24, borderBottomRightRadius: 24, ...Platform.select({ ios: { shadowColor: '#0F172A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 16 }, android: { elevation: 4 }, default: {} }) },
   heroWrapTablet: { paddingTop: 16, paddingBottom: 24, paddingHorizontal: 28 },
   heroTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  heroGreeting: { fontSize: 14, fontWeight: '500', color: theme.textSecondary },
-  heroName: { fontSize: 24, fontWeight: '800', color: theme.textPrimary, marginTop: 2 },
+  heroGreeting: { fontSize: 14, fontWeight: '500', color: 'rgba(255,255,255,0.6)' },
+  heroName: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', marginTop: 2 },
   heroTopActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  heroIconBtn: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', position: 'relative' as const },
-  heroBadge: { position: 'absolute' as const, top: -3, right: -3, backgroundColor: theme.error, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: '#FFF' },
+  heroIconBtn: { width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center', position: 'relative' as const },
+  heroBadge: { position: 'absolute' as const, top: -3, right: -3, backgroundColor: theme.error, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: '#0F172A' },
   heroBadgeText: { fontSize: 10, fontWeight: '800', color: '#FFF' },
-  heroAvatarBtn: { width: 48, height: 48, borderRadius: 16, overflow: 'hidden', borderWidth: 2.5, borderColor: theme.primary + '20' },
-  heroAvatarImg: { width: 48, height: 48, borderRadius: 16 },
-  heroAvatarFallback: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  heroAvatarLetter: { fontSize: 20, fontWeight: '700', color: '#FFF' },
-  avatarNotifBadge: { position: 'absolute' as const, top: -4, right: -4, backgroundColor: '#7C3AED', minWidth: 20, height: 20, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const, paddingHorizontal: 4, borderWidth: 2.5, borderColor: '#FFF' },
+  heroAvatarBtn: { width: 56, height: 56, borderRadius: 18, overflow: 'hidden', borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.3)' },
+  heroAvatarImg: { width: 56, height: 56, borderRadius: 18 },
+  heroAvatarFallback: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  heroAvatarLetter: { fontSize: 22, fontWeight: '700', color: '#FFF' },
+  avatarNotifBadge: { position: 'absolute' as const, top: -4, right: -4, backgroundColor: '#7C3AED', minWidth: 20, height: 20, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const, paddingHorizontal: 4, borderWidth: 2.5, borderColor: '#0F172A' },
   avatarNotifBadgeText: { fontSize: 10, fontWeight: '800' as const, color: '#FFF' },
 
   // Stats chips
   statsChipRow: { flexDirection: 'row', gap: 8 },
-  statsChip: { flex: 1, backgroundColor: '#F8FAFC', borderRadius: 14, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
+  statsChip: { flex: 1, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 14, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   statsChipValue: { fontSize: 20, fontWeight: '800' },
-  statsChipLabel: { fontSize: 10, fontWeight: '600', color: theme.textMuted, marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.3 },
+  statsChipLabel: { fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.5)', marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.3 },
 
   // ===== ACTIONS =====
   actionsRow: { flexDirection: 'row', gap: 10 },
