@@ -32,6 +32,7 @@ import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { Club, Terrain } from '@/services/mockData';
 import { getUnreadShareNotificationCount } from '@/services/shareService';
+import { getPendingShareRequestCount } from '@/services/matchShareService';
 import { isUserAmbassador } from '@/services/ambassadorService';
 import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
@@ -119,6 +120,7 @@ export default function ProfileScreen() {
   
   // Share notifications count
   const [unreadShareCount, setUnreadShareCount] = useState(0);
+  const [pendingMatchInviteCount, setPendingMatchInviteCount] = useState(0);
   const [isAmbassador, setIsAmbassador] = useState(false);
   
   // Expandable settings sections
@@ -154,6 +156,8 @@ export default function ProfileScreen() {
     const loadCount = async () => {
       const count = await getUnreadShareNotificationCount();
       setUnreadShareCount(count);
+      const matchInviteCount = await getPendingShareRequestCount();
+      setPendingMatchInviteCount(matchInviteCount);
     };
     loadCount();
     const interval = setInterval(loadCount, 30000);
@@ -1543,6 +1547,14 @@ export default function ProfileScreen() {
 
             {expandedSections.notifications ? (
             <View style={styles.compactMenuGroup}>
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); setPendingMatchInviteCount(0); router.push('/match-invitations'); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: theme.primary + '15' }]}><MaterialIcons name="mail" size={16} color={theme.primary} />
+                  {pendingMatchInviteCount > 0 ? <View style={styles.shareNotifBadge}><Text style={styles.shareNotifBadgeText}>{pendingMatchInviteCount > 9 ? '9+' : pendingMatchInviteCount}</Text></View> : null}
+                </View>
+                <Text style={styles.compactMenuText}>{language === 'fr' ? 'Invitations matchs & defis' : 'Match & challenge invitations'}</Text>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
+              <View style={styles.compactMenuDivider} />
               <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); setUnreadShareCount(0); router.push('/share-notifications'); }}>
                 <View style={[styles.compactMenuIcon, { backgroundColor: theme.warning + '15' }]}><MaterialIcons name="share" size={16} color={theme.warning} />
                   {unreadShareCount > 0 ? <View style={styles.shareNotifBadge}><Text style={styles.shareNotifBadgeText}>{unreadShareCount > 9 ? '9+' : unreadShareCount}</Text></View> : null}

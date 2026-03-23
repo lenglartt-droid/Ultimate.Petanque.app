@@ -340,6 +340,13 @@ function LayoutInner() {
                 }} 
               />
               <Stack.Screen 
+                name="match-invitations" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="sync-history" 
                 options={{ 
                   presentation: 'card',
