@@ -29,6 +29,8 @@ import {
   PreviewData,
   computePeriodStats,
   generatePreview,
+  getColumnsForDataType,
+  ColumnDef,
 } from '@/services/exportService';
 import { Tournament, Match, Challenge, Player } from '@/services/mockData';
 
@@ -66,6 +68,9 @@ export default function ExportScreen() {
   const [showPlayerPicker, setShowPlayerPicker] = useState(false);
   const [showChallengePicker, setShowChallengePicker] = useState(false);
   const [pickerSearch, setPickerSearch] = useState('');
+
+  // Column selection for CSV
+  const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
 
   const lbl = useCallback((fr: string, en: string) => language === 'fr' ? fr : en, [language]);
 
@@ -160,6 +165,7 @@ export default function ExportScreen() {
       preset, tournamentId: selectedTournament?.id, tournamentName: selectedTournament?.name,
       seasonYear: selectedSeason ?? undefined, comparePeriod: preset === 'comparative' ? comparePeriod : undefined,
       matchId: selectedMatch?.id, playerId: selectedPlayer?.id, playerName: selectedPlayer?.name, challengeId: selectedChallenge?.id,
+      selectedColumns: format === 'csv' ? selectedColumns : undefined,
     }, matches, challenges, tournaments, userStats);
     setExporting(false);
     if (result.success) {
@@ -169,6 +175,32 @@ export default function ExportScreen() {
       showAlert(lbl('Erreur', 'Error'), result.error || lbl("Erreur lors de l'export", 'Export error'));
     }
   }, [format, dataType, period, language, user, matches, challenges, tournaments, userStats, showAlert, preset, selectedTournament, selectedSeason, comparePeriod, selectedMatch, selectedPlayer, selectedChallenge, lbl]);
+
+  // Initialize selected columns when data type changes
+  const availableColumns = useMemo(() => getColumnsForDataType(dataType), [dataType]);
+  React.useEffect(() => {
+    setSelectedColumns(availableColumns.filter(c => c.default).map(c => c.id));
+  }, [dataType]);
+
+  const handleToggleColumn = useCallback((colId: string) => {
+    Haptics.selectionAsync();
+    setSelectedColumns(prev => {
+      if (prev.includes(colId)) {
+        if (prev.length <= 1) return prev; // At least 1 column
+        return prev.filter(c => c !== colId);
+      }
+      return [...prev, colId];
+    });
+  }, []);
+
+  const handleToggleAllColumns = useCallback(() => {
+    Haptics.selectionAsync();
+    if (selectedColumns.length === availableColumns.length) {
+      setSelectedColumns(availableColumns.filter(c => c.default).map(c => c.id));
+    } else {
+      setSelectedColumns(availableColumns.map(c => c.id));
+    }
+  }, [selectedColumns, availableColumns]);
 
   const handleSelectPreset = (id: ExportPreset) => {
     Haptics.selectionAsync();
@@ -388,6 +420,37 @@ export default function ExportScreen() {
               </Pressable>
             ))}
           </ScrollView>
+        </>
+      ) : null}
+
+      {/* CSV Column Selector */}
+      {format === 'csv' && availableColumns.length > 0 && showDataTypeInConfig && !['comparative', 'match', 'challenge'].includes(preset) ? (
+        <>
+          <View style={s.configLabelRow}>
+            <Text style={s.configLabel}>{lbl('COLONNES', 'COLUMNS')}</Text>
+            <Pressable style={s.toggleAllBtn} onPress={handleToggleAllColumns}>
+              <MaterialIcons name={selectedColumns.length === availableColumns.length ? 'deselect' : 'select-all'} size={14} color={theme.primary} />
+              <Text style={s.toggleAllBtnText}>{selectedColumns.length === availableColumns.length ? lbl('Par defaut', 'Default') : lbl('Tout', 'All')}</Text>
+            </Pressable>
+          </View>
+          <View style={s.colGrid}>
+            {availableColumns.map(col => {
+              const active = selectedColumns.includes(col.id);
+              return (
+                <Pressable
+                  key={col.id}
+                  style={[s.colChip, active && s.colChipActive]}
+                  onPress={() => handleToggleColumn(col.id)}
+                >
+                  <MaterialIcons name={active ? 'check-box' : 'check-box-outline-blank'} size={16} color={active ? theme.primary : theme.textMuted} />
+                  <Text style={[s.colChipText, active && s.colChipTextActive]} numberOfLines={1}>
+                    {language === 'fr' ? col.labelFr : col.labelEn}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={s.colHint}>{selectedColumns.length}/{availableColumns.length} {lbl('colonnes selectionnees', 'columns selected')}</Text>
         </>
       ) : null}
 
@@ -613,6 +676,15 @@ const s = StyleSheet.create({
   dataTypeBtnActive: { borderColor: theme.primary, backgroundColor: theme.primary + '08' },
   dataTypeBtnText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
   dataTypeBtnCount: { fontSize: 10, fontWeight: '700', color: theme.textMuted, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 6 },
+  configLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 20, marginBottom: 10 },
+  toggleAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: theme.primary + '12', borderRadius: 12 },
+  toggleAllBtnText: { fontSize: 11, fontWeight: '600', color: theme.primary },
+  colGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  colChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: theme.surface, borderRadius: 10, borderWidth: 1.5, borderColor: theme.border },
+  colChipActive: { borderColor: theme.primary, backgroundColor: theme.primary + '08' },
+  colChipText: { fontSize: 12, fontWeight: '600', color: theme.textMuted },
+  colChipTextActive: { color: theme.primary },
+  colHint: { fontSize: 11, color: theme.textMuted, fontStyle: 'italic', marginTop: 8, paddingLeft: 2 },
   periodChip: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20, backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border },
   periodChipActive: { backgroundColor: theme.primary + '12', borderColor: theme.primary },
   periodChipText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },

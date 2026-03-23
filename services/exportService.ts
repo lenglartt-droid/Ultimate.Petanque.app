@@ -22,6 +22,53 @@ interface ExportOptions {
   playerId?: string;
   playerName?: string;
   challengeId?: string;
+  selectedColumns?: string[];
+}
+
+// ============================================
+// COLUMN DEFINITIONS
+// ============================================
+
+export interface ColumnDef {
+  id: string;
+  labelFr: string;
+  labelEn: string;
+  default: boolean;
+}
+
+export const MATCH_COLUMNS: ColumnDef[] = [
+  { id: 'date', labelFr: 'Date', labelEn: 'Date', default: true },
+  { id: 'mode', labelFr: 'Mode', labelEn: 'Mode', default: true },
+  { id: 'format', labelFr: 'Format', labelEn: 'Format', default: true },
+  { id: 'tournament', labelFr: 'Tournoi', labelEn: 'Tournament', default: true },
+  { id: 'teamA', labelFr: 'Equipe A', labelEn: 'Team A', default: true },
+  { id: 'scoreA', labelFr: 'Score A', labelEn: 'Score A', default: true },
+  { id: 'teamB', labelFr: 'Equipe B', labelEn: 'Team B', default: true },
+  { id: 'scoreB', labelFr: 'Score B', labelEn: 'Score B', default: true },
+  { id: 'winner', labelFr: 'Vainqueur', labelEn: 'Winner', default: true },
+  { id: 'duration', labelFr: 'Duree (min)', labelEn: 'Duration (min)', default: true },
+  { id: 'menes', labelFr: 'Menes', labelEn: 'Ends', default: false },
+  { id: 'terrain', labelFr: 'Terrain', labelEn: 'Terrain', default: false },
+];
+
+export const CHALLENGE_COLUMNS: ColumnDef[] = [
+  { id: 'date', labelFr: 'Date', labelEn: 'Date', default: true },
+  { id: 'type', labelFr: 'Type', labelEn: 'Type', default: true },
+  { id: 'mode', labelFr: 'Mode', labelEn: 'Mode', default: true },
+  { id: 'opponent', labelFr: 'Adversaire', labelEn: 'Opponent', default: true },
+  { id: 'success', labelFr: 'Reussite', labelEn: 'Success', default: true },
+  { id: 'totalShots', labelFr: 'Total tirs', labelEn: 'Total shots', default: true },
+  { id: 'carreaux', labelFr: 'Carreaux', labelEn: 'Carreaux', default: true },
+  { id: 'rate', labelFr: 'Taux (%)', labelEn: 'Rate (%)', default: true },
+  { id: 'points', labelFr: 'Points', labelEn: 'Points', default: false },
+  { id: 'duration', labelFr: 'Duree (s)', labelEn: 'Duration (s)', default: false },
+  { id: 'result', labelFr: 'Resultat', labelEn: 'Result', default: true },
+];
+
+export function getColumnsForDataType(dataType: ExportDataType): ColumnDef[] {
+  if (dataType === 'matches') return MATCH_COLUMNS;
+  if (dataType === 'challenges') return CHALLENGE_COLUMNS;
+  return []; // statistics has no column selection
 }
 
 export interface PeriodStats {
@@ -323,19 +370,30 @@ export function generatePreview(
 // CSV EXPORTS
 // ============================================
 
-export function matchesToCsv(matches: Match[], lang: 'fr' | 'en'): string {
-  const headers = lang === 'fr'
-    ? ['Date', 'Mode', 'Format', 'Tournoi', 'Equipe A', 'Score A', 'Equipe B', 'Score B', 'Vainqueur', 'Duree (min)', 'Menes', 'Terrain']
-    : ['Date', 'Mode', 'Format', 'Tournament', 'Team A', 'Score A', 'Team B', 'Score B', 'Winner', 'Duration (min)', 'Ends', 'Terrain'];
+export function matchesToCsv(matches: Match[], lang: 'fr' | 'en', selectedColumns?: string[]): string {
+  const allCols = MATCH_COLUMNS;
+  const activeCols = selectedColumns
+    ? allCols.filter(c => selectedColumns.includes(c.id))
+    : allCols.filter(c => c.default);
 
-  const rows = matches.map(m => [
-    new Date(m.date).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US'),
-    m.mode, m.format, m.tournamentName || '',
-    m.teamA.playerNames.join(' + '), m.teamA.score,
-    m.teamB.playerNames.join(' + '), m.teamB.score,
-    m.winner === 'A' ? m.teamA.playerNames.join(' + ') : m.teamB.playerNames.join(' + '),
-    m.duration || '', m.menes?.length || 0, m.terrainType || '',
-  ]);
+  const headers = activeCols.map(c => lang === 'fr' ? c.labelFr : c.labelEn);
+
+  const colValueMap: Record<string, (m: Match) => any> = {
+    date: m => new Date(m.date).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US'),
+    mode: m => m.mode,
+    format: m => m.format,
+    tournament: m => m.tournamentName || '',
+    teamA: m => m.teamA.playerNames.join(' + '),
+    scoreA: m => m.teamA.score,
+    teamB: m => m.teamB.playerNames.join(' + '),
+    scoreB: m => m.teamB.score,
+    winner: m => m.winner === 'A' ? m.teamA.playerNames.join(' + ') : m.teamB.playerNames.join(' + '),
+    duration: m => m.duration || '',
+    menes: m => m.menes?.length || 0,
+    terrain: m => m.terrainType || '',
+  };
+
+  const rows = matches.map(m => activeCols.map(c => colValueMap[c.id] ? colValueMap[c.id](m) : ''));
   return [headers.map(escapeCsv).join(','), ...rows.map(r => r.map(escapeCsv).join(','))].join('\n');
 }
 
@@ -412,23 +470,34 @@ function singleChallengeToCsv(c: Challenge, lang: 'fr' | 'en'): string {
   return rows.map(r => r.map(escapeCsv).join(',')).join('\n');
 }
 
-export function challengesToCsv(challenges: Challenge[], lang: 'fr' | 'en'): string {
-  const headers = lang === 'fr'
-    ? ['Date', 'Type', 'Mode', 'Adversaire', 'Reussite', 'Total tirs', 'Carreaux', 'Taux (%)', 'Points', 'Duree (s)', 'Resultat']
-    : ['Date', 'Type', 'Mode', 'Opponent', 'Success', 'Total shots', 'Carreaux', 'Rate (%)', 'Points', 'Duration (s)', 'Result'];
+export function challengesToCsv(challenges: Challenge[], lang: 'fr' | 'en', selectedColumns?: string[]): string {
   const typeLabels: Record<string, Record<string, string>> = {
     '10_tirs': { fr: '10 Tirs', en: '10 Shots' },
     '10_tirs_sautee': { fr: '10 Tirs sautee', en: '10 Lob Shots' },
     'precision': { fr: 'Precision', en: 'Precision' },
   };
-  const rows = challenges.map(c => [
-    new Date(c.date).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US'),
-    typeLabels[c.type]?.[lang] || c.type, c.mode === 'solo' ? 'Solo' : '1v1',
-    c.opponentName || '', c.successCount ?? '', c.totalShots ?? '',
-    c.carreauCount ?? '', c.successRate != null ? Math.round(c.successRate) : (c.totalPoints ?? ''),
-    c.totalPoints ?? '', c.duration ?? '',
-    c.winner === 'player' ? (lang === 'fr' ? 'Victoire' : 'Win') : c.winner === 'opponent' ? (lang === 'fr' ? 'Defaite' : 'Loss') : c.winner === 'draw' ? (lang === 'fr' ? 'Egalite' : 'Draw') : '',
-  ]);
+  const allCols = CHALLENGE_COLUMNS;
+  const activeCols = selectedColumns
+    ? allCols.filter(c => selectedColumns.includes(c.id))
+    : allCols.filter(c => c.default);
+
+  const headers = activeCols.map(c => lang === 'fr' ? c.labelFr : c.labelEn);
+
+  const colValueMap: Record<string, (c: Challenge) => any> = {
+    date: c => new Date(c.date).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US'),
+    type: c => typeLabels[c.type]?.[lang] || c.type,
+    mode: c => c.mode === 'solo' ? 'Solo' : '1v1',
+    opponent: c => c.opponentName || '',
+    success: c => c.successCount ?? '',
+    totalShots: c => c.totalShots ?? '',
+    carreaux: c => c.carreauCount ?? '',
+    rate: c => c.successRate != null ? Math.round(c.successRate) : (c.totalPoints ?? ''),
+    points: c => c.totalPoints ?? '',
+    duration: c => c.duration ?? '',
+    result: c => c.winner === 'player' ? (lang === 'fr' ? 'Victoire' : 'Win') : c.winner === 'opponent' ? (lang === 'fr' ? 'Defaite' : 'Loss') : c.winner === 'draw' ? (lang === 'fr' ? 'Egalite' : 'Draw') : '',
+  };
+
+  const rows = challenges.map(c => activeCols.map(col => colValueMap[col.id] ? colValueMap[col.id](c) : ''));
   return [headers.map(escapeCsv).join(','), ...rows.map(r => r.map(escapeCsv).join(','))].join('\n');
 }
 
@@ -942,9 +1011,10 @@ export async function exportData(
 
     if (format === 'csv') {
       let csvContent = '', fileName = '';
+      const cols = options.selectedColumns;
       switch (dataType) {
-        case 'matches': csvContent = matchesToCsv(filteredMatches, language); fileName = `matchs_${new Date().toISOString().slice(0, 10)}.csv`; break;
-        case 'challenges': csvContent = challengesToCsv(filteredChallenges, language); fileName = `defis_${new Date().toISOString().slice(0, 10)}.csv`; break;
+        case 'matches': csvContent = matchesToCsv(filteredMatches, language, cols); fileName = `matchs_${new Date().toISOString().slice(0, 10)}.csv`; break;
+        case 'challenges': csvContent = challengesToCsv(filteredChallenges, language, cols); fileName = `defis_${new Date().toISOString().slice(0, 10)}.csv`; break;
         case 'statistics': csvContent = statisticsToCsv(filteredMatches, filteredChallenges, tournaments, userStats, language); fileName = `statistiques_${new Date().toISOString().slice(0, 10)}.csv`; break;
       }
       if (preset === 'tournament' && tournamentName) fileName = `tournoi_${tournamentName.replace(/\s+/g, '_').slice(0, 20)}_${new Date().toISOString().slice(0, 10)}.csv`;

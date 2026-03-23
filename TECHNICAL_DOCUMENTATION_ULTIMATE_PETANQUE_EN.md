@@ -81,11 +81,14 @@ The user registers via email OTP + password, their player profile is created aut
 | 27 | **AdMob Ads** | Inline banners and interstitials, removal via premium purchase | Low |
 | 28 | **Deep Linking** | `ultimatepetanque://` scheme, Android intent filters, iOS associated domains, navigation from notifications | Medium |
 | 29 | **Sharing System** | Unique share codes, public links, shared items with permissions, share notifications | Medium |
-| 30 | **Data Export** | CSV export of matches and challenges | Low |
+| 30 | **Data Export** | CSV/PDF export with 3-step wizard, 7 presets (standard, by match, challenge, player, tournament, season, comparative), **CSV column selector**, data preview, SVG charts in PDF | Medium |
 | 31 | **Ranking Change Detection** | Leaderboard rank snapshot before match save, comparison after, server push notification to players whose rank changed | Medium |
 | 32 | **Notification Preferences** | Per-type toggles in profile (events, meetups, ranking, shares, reminders), JSONB in `user_preferences`, respected server-side | Medium |
 | 33 | **Sentry Monitoring** | `sentryService.ts` integrated at app launch, exception/message capture, navigation breadcrumbs, anonymized user context (IP stripped) | Medium |
 | 34 | **Rate Limiting Edge Functions** | Anti-abuse protection on `validate-promo-code` (5 req/min) and `record-purchase` (3 req/min) with 429 responses, duplicate transaction detection | Medium |
+| 35 | **Notification Preferences Page** | Dedicated page extracted from profile with detailed descriptions, active count badge, per-type push notification toggles | Low |
+| 36 | **i18n Extraction (Legal Pages)** | 30+ hardcoded strings extracted from faq.tsx, terms.tsx and privacy-policy.tsx into i18nExtra.ts (pushNotifs section), new FAQ categories (Ambassadors, Cross-player sharing) | Low |
+| 37 | **Advanced CSV Export** | Column selector in CSV export wizard, select all/default toggle, selected column counter, default vs optional columns | Low |
 
 ### 2.2 Partially Implemented Features
 
@@ -249,7 +252,7 @@ services/
 
 - **Google OAuth**: client code ready but provider not enabled server-side
 - **AdMob**: works in test mode, requires production IDs
-- **CSV Export**: functional but limited (no column selection)
+- **CSV Export**: functional with column selector, 7 presets, PDF charts
 
 ### 4.3 What Is Missing
 
@@ -276,7 +279,8 @@ services/
 | 7 | **Deep Linking prod** | Configure associated domains | — | Apple Developer: configure Associated Domains, host `apple-app-site-association`; Google: Digital Asset Links | Medium | 2-3h |
 | 8 | **Google Maps API (Map)** | Configure Google Maps API key for Android interactive map | Add key in `app.json` under `android.config.googleMaps.apiKey` | Google Cloud Console: enable "Maps SDK for Android" and "Maps SDK for iOS", create API key restricted by platform, add bundle/package restrictions | High | 2-3h |
 | 9 | **IAP Real Testing** | Test in-app purchases | — | App Store Connect: create In-App Purchase (€5.99), configure sandbox testers; Google Play Console: create product, license testing | High | 4-6h |
-| 10 | **Device Testing** | Test on physical iOS and Android | Download APK via OnSpace Download button, use OnSpace App QR code for iOS | — | High | 8-12h |
+| 10 | **QR Code & Download Links** | Configure QR Code links to download and install the application | Generate QR codes pointing to App Store / Play Store, integrate in marketing materials, website, social media | Create a redirect page (smart link) that detects iOS/Android and redirects to the correct store | Medium | 1-2h |
+| 11 | **Device Testing** | Test on physical iOS and Android | Download APK via OnSpace Download button, use OnSpace App QR code for iOS | — | High | 8-12h |
 | 11 | **Performance** | Profile and optimize | — | React DevTools, Flipper, analyze bundle size | Low | 4-6h |
 | 12 | **Monitoring** | Configure Sentry/Crashlytics | Add API key in Secrets if needed | Sentry: create project, install `@sentry/react-native` | Medium | 3-4h |
 
@@ -456,7 +460,9 @@ services/
 - The **deep linking scheme** (`ultimatepetanque://`) works but **iOS Universal Links** require a server hosting `apple-app-site-association`.
 - The **push notification system** combines local notifications (tournament reminders) and server-side notifications via the `send-push` Edge Function (5 types: ambassador events with 200km proximity, meetup invitations, ranking changes, shares, reminders). User per-type preferences are respected server-side via `user_preferences.notification_preferences`.
 - The **privacy policy** and **terms of service** have been updated with sections on push notifications, Sentry monitoring, and rate limiting protection.
-- The **FAQ** now includes 2 new categories: "Push Notifications" (4 questions) and "Security & Privacy" (2 questions).
+- The **FAQ** now includes 4 new categories: "Push Notifications" (4 questions), "Security & Privacy" (2 questions), "Ambassadors & Partners" (3 questions), "Cross-Player Sharing" (3 questions).
+- The **CSV export** offers a column selector allowing users to choose which fields to export (default vs optional columns like Ends, Terrain, Points, Duration).
+- The **Notification Preferences** page is a dedicated page extracted from the profile with detailed descriptions and an active count badge.
 - The **6 existing Edge Functions** are deployed with rate limiting on sensitive functions (validate-promo-code: 5 req/min, record-purchase: 3 req/min with duplicate transaction detection). The `validate-receipt` file is not referenced in the project — verify it is functional or remove it.
 - The **interactive map** uses `react-native-maps` which requires a **Google Maps API Key** for Android. Without it, the map will not render on Android devices. iOS uses Apple Maps by default and works without additional configuration.
 
