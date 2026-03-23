@@ -84,6 +84,8 @@ The user registers via email OTP + password, their player profile is created aut
 | 30 | **Data Export** | CSV export of matches and challenges | Low |
 | 31 | **Ranking Change Detection** | Leaderboard rank snapshot before match save, comparison after, server push notification to players whose rank changed | Medium |
 | 32 | **Notification Preferences** | Per-type toggles in profile (events, meetups, ranking, shares, reminders), JSONB in `user_preferences`, respected server-side | Medium |
+| 33 | **Sentry Monitoring** | `sentryService.ts` integrated at app launch, exception/message capture, navigation breadcrumbs, anonymized user context (IP stripped) | Medium |
+| 34 | **Rate Limiting Edge Functions** | Anti-abuse protection on `validate-promo-code` (5 req/min) and `record-purchase` (3 req/min) with 429 responses, duplicate transaction detection | Medium |
 
 ### 2.2 Partially Implemented Features
 
@@ -194,6 +196,7 @@ services/
 ├── collaborativeEditService.ts ← Conflict detection, diff calculation
 ├── modificationLogService.ts   ← Modification logs, per-field/bulk revert
 ├── shareService.ts             ← Code sharing, shared items
+├── sentryService.ts             ← Sentry crash reporting (init, capture, breadcrumbs, user context)
 ├── rankingChangeService.ts     ← Ranking change detection, snapshot/comparison
 ├── notificationPreferencesService.ts ← Push notification preferences per type
 ├── pushTokenService.ts         ← Push token registration, server push triggering
@@ -419,9 +422,9 @@ services/
 
 ### 8.1 Priority Improvements
 
-1. **Production Monitoring**: Integrate Sentry for crash reporting (`@sentry/react-native`). Errors are currently logged via `console.log` — insufficient for production.
+1. **Production Monitoring**: Sentry is integrated via `services/sentryService.ts` with initialization at launch, exception capture, breadcrumbs, and user context. **Remaining action**: configure the Sentry DSN in `sentryService.ts` and install `@sentry/react-native` (`npx expo install @sentry/react-native`).
 
-2. **Rate Limiting**: Edge Functions have no explicit rate limiting. Add abuse protection (validate-promo-code, record-purchase).
+2. **Rate Limiting**: Edge Functions `validate-promo-code` (5 req/60s) and `record-purchase` (3 req/60s) now have in-memory rate limiters with 429 responses and `Retry-After` headers. `record-purchase` also detects duplicate transactions (409 Conflict). For persistent cross-invocation rate limiting, consider a `rate_limits` DB table.
 
 3. **Data Validation**: Add server-side validation (Edge Functions) for critical data (scores, statistics). Currently, validation is primarily client-side.
 
@@ -452,7 +455,9 @@ services/
 - The **AdMob IDs in `app.json`** are currently Google test IDs. **Do not publish with these IDs** — they will generate no revenue.
 - The **deep linking scheme** (`ultimatepetanque://`) works but **iOS Universal Links** require a server hosting `apple-app-site-association`.
 - The **push notification system** combines local notifications (tournament reminders) and server-side notifications via the `send-push` Edge Function (5 types: ambassador events with 200km proximity, meetup invitations, ranking changes, shares, reminders). User per-type preferences are respected server-side via `user_preferences.notification_preferences`.
-- The **6 existing Edge Functions** are deployed. The `validate-receipt` file is not referenced in the project — verify it is functional or remove it.
+- The **privacy policy** and **terms of service** have been updated with sections on push notifications, Sentry monitoring, and rate limiting protection.
+- The **FAQ** now includes 2 new categories: "Push Notifications" (4 questions) and "Security & Privacy" (2 questions).
+- The **6 existing Edge Functions** are deployed with rate limiting on sensitive functions (validate-promo-code: 5 req/min, record-purchase: 3 req/min with duplicate transaction detection). The `validate-receipt` file is not referenced in the project — verify it is functional or remove it.
 - The **interactive map** uses `react-native-maps` which requires a **Google Maps API Key** for Android. Without it, the map will not render on Android devices. iOS uses Apple Maps by default and works without additional configuration.
 
 ---

@@ -1,5 +1,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
+import { checkRateLimit, rateLimitResponse } from '../_shared/rateLimiter.ts';
+
+// Rate limit: 5 attempts per 60 seconds per user
+const RATE_LIMIT_MAX = 5;
+const RATE_LIMIT_WINDOW_MS = 60_000;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -28,6 +33,13 @@ Deno.serve(async (req) => {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+
+    // Rate limiting: prevent brute-force code guessing
+    const rlResult = checkRateLimit(`promo:${user.id}`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+    if (!rlResult.allowed) {
+      console.log(`[validate-promo-code] Rate limited user ${user.id}`);
+      return rateLimitResponse(rlResult, corsHeaders);
     }
 
     const { code } = await req.json();
@@ -126,6 +138,8 @@ Deno.serve(async (req) => {
     await supabaseClient.from('user_profiles').update({
       is_premium: true,
     }).eq('id', user.id);
+
+    console.log(`[validate-promo-code] User ${user.id} redeemed code "${trimmedCode}"`);
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,

@@ -12,6 +12,7 @@ import ConflictResolutionModal from '@/components/ui/ConflictResolutionModal';
 import { useApp } from '@/contexts/AppContext';
 import TrackingConsentModal from '@/components/ui/TrackingConsentModal';
 import { isATTPromptNeeded } from '@/services/trackingService';
+import { initSentry, setUser as setSentryUser, setRoute as setSentryRoute } from '@/services/sentryService';
 import { addNotificationResponseListener } from '@/services/notificationService';
 import { registerPushToken } from '@/services/pushTokenService';
 import { router } from 'expo-router';
@@ -37,6 +38,11 @@ export default function RootLayout() {
 function LayoutInner() {
   const { currentConflict, conflictRemaining, resolveConflict } = useApp();
   const [showATT, setShowATT] = React.useState(false);
+
+  // Initialize Sentry crash reporting
+  React.useEffect(() => {
+    initSentry();
+  }, []);
 
   React.useEffect(() => {
     isATTPromptNeeded().then(needed => {

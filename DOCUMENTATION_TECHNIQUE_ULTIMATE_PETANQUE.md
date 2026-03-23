@@ -84,6 +84,8 @@ L'utilisateur s'inscrit via OTP email + mot de passe, crée son profil joueur au
 | 30 | **Export de données** | Export CSV des matchs et défis | Faible |
 | 31 | **Détection changement de classement** | Snapshot des rangs avant sauvegarde de match, comparaison après, notification push serveur aux joueurs dont le rang a changé | Moyenne |
 | 32 | **Préférences de notifications** | Toggles par type dans le profil (événements, meetups, classement, partages, rappels), JSONB dans `user_preferences`, respectées côté serveur | Moyenne |
+| 33 | **Monitoring Sentry** | Service `sentryService.ts` intégré au lancement de l'app, capture des exceptions/messages, breadcrumbs de navigation, contexte utilisateur anonymisé (IP supprimée) | Moyenne |
+| 34 | **Rate Limiting Edge Functions** | Protection anti-abus sur `validate-promo-code` (5 req/min) et `record-purchase` (3 req/min) avec réponses 429, détection de transactions dupliquées | Moyenne |
 
 ### 2.2 Fonctionnalités partiellement implémentées
 
@@ -194,6 +196,7 @@ services/
 ├── collaborativeEditService.ts ← Détection conflits, calcul diffs
 ├── modificationLogService.ts   ← Logs modifications, revert par champ/bloc
 ├── shareService.ts             ← Partage par code, items partagés
+├── sentryService.ts             ← Crash reporting Sentry (init, capture, breadcrumbs, user context)
 ├── rankingChangeService.ts     ← Détection changement de classement, snapshot/comparaison
 ├── notificationPreferencesService.ts ← Préférences notifications push par type
 ├── pushTokenService.ts         ← Enregistrement tokens push, déclenchement push serveur
@@ -419,9 +422,9 @@ services/
 
 ### 8.1 Améliorations prioritaires
 
-1. **Monitoring en production** : Intégrer Sentry pour le crash reporting (`@sentry/react-native`). Les erreurs sont actuellement loguées en `console.log` — insuffisant pour la production.
+1. **Monitoring en production** : Sentry est intégré via `services/sentryService.ts` avec initialisation au lancement, capture d'exceptions, breadcrumbs et contexte utilisateur. **Action restante** : configurer le DSN Sentry dans `sentryService.ts` et installer `@sentry/react-native` (`npx expo install @sentry/react-native`).
 
-2. **Rate limiting** : Les Edge Functions n'ont pas de rate limiting explicite. Ajouter une protection contre les abus (validate-promo-code, record-purchase).
+2. **Rate limiting** : Les Edge Functions `validate-promo-code` (5 req/60s) et `record-purchase` (3 req/60s) disposent maintenant d'un rate limiter en mémoire avec réponses 429 et header `Retry-After`. `record-purchase` détecte aussi les transactions dupliquées (409 Conflict). Pour un rate limiting persistant cross-invocations, envisager une table `rate_limits` en DB.
 
 3. **Validation des données** : Ajouter une validation côté serveur (Edge Functions) pour les données critiques (scores, statistiques). Actuellement, la validation est principalement côté client.
 
@@ -452,7 +455,9 @@ services/
 - Les **IDs AdMob dans `app.json`** sont actuellement des IDs de test Google. **Ne pas publier avec ces IDs** — ils ne génèreront aucun revenu.
 - Le **scheme de deep linking** (`ultimatepetanque://`) fonctionne mais les **Universal Links iOS** nécessitent un serveur hébergeant `apple-app-site-association`.
 - Le **système de notifications push** combine notifications locales (rappels tournois) et notifications serveur via l'Edge Function `send-push` (5 types : événements ambassadeur avec proximité 200km, invitations meetup, changements de classement, partages, rappels). Les préférences utilisateur par type sont respectées côté serveur via `user_preferences.notification_preferences`.
-- Les **6 Edge Functions** existantes sont déployées. Le fichier `validate-receipt` n'est pas référencé dans le projet — vérifier qu'il est fonctionnel ou le retirer.
+- La **politique de confidentialité** et les **conditions d'utilisation** ont été mises à jour avec les sections sur les notifications push, le monitoring Sentry et la protection rate limiting.
+- La **FAQ** inclut désormais 2 nouvelles catégories : "Notifications Push" (4 questions) et "Sécurité & Confidentialité" (2 questions).
+- Les **6 Edge Functions** existantes sont déployées avec rate limiting sur les fonctions sensibles (validate-promo-code : 5 req/min, record-purchase : 3 req/min avec détection de transactions dupliquées). Le fichier `validate-receipt` n'est pas référencé dans le projet — vérifier qu'il est fonctionnel ou le retirer.
 
 ---
 

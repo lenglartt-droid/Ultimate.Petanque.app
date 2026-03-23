@@ -89,6 +89,22 @@ export default function PrivacyPolicyScreen() {
       content: t('privacyExtra', 'leaderboardContent'),
     },
     {
+      icon: 'notifications-active',
+      color: '#7C3AED',
+      title: language === 'fr' ? 'Notifications push' : 'Push Notifications',
+      content: language === 'fr'
+        ? "L'application peut envoyer des notifications push pour vous alerter sur des evenements proches (dans un rayon de 200km), des invitations a des rendez-vous, des changements de classement, et des demandes de partage. Vous pouvez controler precisement quels types de notifications vous souhaitez recevoir depuis votre profil (section Notifications). Vos preferences sont stockees de maniere securisee et respectees cote serveur. Le token push de votre appareil est enregistre dans notre base de donnees et desactive automatiquement a la deconnexion."
+        : 'The application may send push notifications to alert you about nearby events (within 200km radius), meetup invitations, ranking changes, and share requests. You can precisely control which notification types you want to receive from your profile (Notifications section). Your preferences are stored securely and respected server-side. Your device push token is registered in our database and automatically deactivated on logout.',
+    },
+    {
+      icon: 'bug-report',
+      color: '#EF4444',
+      title: language === 'fr' ? 'Rapports de crash et monitoring' : 'Crash Reports & Monitoring',
+      content: language === 'fr'
+        ? "L'application utilise Sentry pour collecter automatiquement les rapports de crash et erreurs techniques. Ces rapports contiennent des informations techniques (type d'appareil, version OS, stack trace) mais aucune donnee personnelle identifiable. Votre adresse IP est automatiquement supprimee des rapports. Ces donnees sont utilisees exclusivement pour ameliorer la stabilite de l'application."
+        : 'The application uses Sentry to automatically collect crash reports and technical errors. These reports contain technical information (device type, OS version, stack trace) but no personally identifiable data. Your IP address is automatically stripped from reports. This data is used exclusively to improve application stability.',
+    },
+    {
       icon: 'campaign',
       color: theme.error,
       title: t('privacy', 'advertisingTitle'),
