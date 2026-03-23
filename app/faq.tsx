@@ -125,15 +125,25 @@ function getFaqData(t: (s: string, k: string) => string, language: string) {
       { id: 'a3', q: t('faq', 'a3Q'), a: t('faq', 'a3A') },
       { id: 'a4', q: t('faq', 'a4Q'), a: t('faq', 'a4A') },
     ]},
-    { id: 'push_notifs', category: language === 'fr' ? 'Notifications Push' : 'Push Notifications', icon: 'notifications-active', color: '#7C3AED', questions: [
-      { id: 'pn1', q: language === 'fr' ? 'Quels types de notifications push puis-je recevoir ?' : 'What types of push notifications can I receive?', a: language === 'fr' ? 'Il y a 5 types : evenements ambassadeurs proches (rayon 200km), invitations a des rendez-vous, changements de classement, demandes de partage de matchs/defis, et rappels d\'evenements. Chaque type peut etre active ou desactive individuellement.' : 'There are 5 types: nearby ambassador events (200km radius), meetup invitations, ranking changes, match/challenge share requests, and event reminders. Each type can be enabled or disabled individually.' },
-      { id: 'pn2', q: language === 'fr' ? 'Comment gerer mes preferences de notifications ?' : 'How do I manage my notification preferences?', a: language === 'fr' ? 'Allez dans Profil > section "Notifications & Partage" > utilisez les toggles pour activer/desactiver chaque type. Vos preferences sont sauvegardees automatiquement et respectees cote serveur.' : 'Go to Profile > "Notifications & Sharing" section > use the toggles to enable/disable each type. Your preferences are saved automatically and respected server-side.' },
-      { id: 'pn3', q: language === 'fr' ? 'Pourquoi je recois des notifications pour des evenements lointains ?' : 'Why do I receive notifications for distant events?', a: language === 'fr' ? 'Les notifications d\'evenements ambassadeurs sont envoyees aux joueurs dans un rayon de 200km ou dans la meme ville. Si votre profil n\'a pas de localisation renseignee, le systeme utilise vos terrains et clubs pour determiner votre zone.' : 'Ambassador event notifications are sent to players within a 200km radius or in the same city. If your profile has no location set, the system uses your terrains and clubs to determine your area.' },
-      { id: 'pn4', q: language === 'fr' ? 'Mes notifications sont-elles desactivees quand je me deconnecte ?' : 'Are my notifications disabled when I log out?', a: language === 'fr' ? 'Oui, votre token push est automatiquement desactive lors de la deconnexion. Vous ne recevrez plus de notifications jusqu\'a la prochaine connexion.' : 'Yes, your push token is automatically deactivated on logout. You will not receive notifications until your next login.' },
+    { id: 'push_notifs', category: t('pushNotifs', 'faqPushCategory'), icon: 'notifications-active', color: '#7C3AED', questions: [
+      { id: 'pn1', q: t('pushNotifs', 'faqPn1Q'), a: t('pushNotifs', 'faqPn1A') },
+      { id: 'pn2', q: t('pushNotifs', 'faqPn2Q'), a: t('pushNotifs', 'faqPn2A') },
+      { id: 'pn3', q: t('pushNotifs', 'faqPn3Q'), a: t('pushNotifs', 'faqPn3A') },
+      { id: 'pn4', q: t('pushNotifs', 'faqPn4Q'), a: t('pushNotifs', 'faqPn4A') },
     ]},
-    { id: 'security', category: language === 'fr' ? 'Securite & Confidentialite' : 'Security & Privacy', icon: 'security', color: '#EF4444', questions: [
-      { id: 'sec1', q: language === 'fr' ? 'Quelles donnees sont collectees pour les rapports de crash ?' : 'What data is collected for crash reports?', a: language === 'fr' ? 'Seules des informations techniques anonymes sont collectees : type d\'appareil, version OS, stack trace de l\'erreur. Aucune donnee personnelle identifiable (nom, email, scores) n\'est incluse. Votre adresse IP est automatiquement supprimee.' : 'Only anonymous technical information is collected: device type, OS version, error stack trace. No personally identifiable data (name, email, scores) is included. Your IP address is automatically stripped.' },
-      { id: 'sec2', q: language === 'fr' ? 'Pourquoi certaines actions sont temporairement bloquees ?' : 'Why are some actions temporarily blocked?', a: language === 'fr' ? 'Pour proteger contre les abus, les fonctions sensibles (validation de codes promo, achats) limitent le nombre de tentatives par minute. Si vous etes bloque, attendez quelques secondes puis reessayez.' : 'To protect against abuse, sensitive functions (promo code validation, purchases) limit the number of attempts per minute. If you are blocked, wait a few seconds and try again.' },
+    { id: 'ambassadors', category: t('pushNotifs', 'faqAmbassadorsCategory'), icon: 'campaign', color: '#D97706', questions: [
+      { id: 'amb1', q: t('pushNotifs', 'faqAmb1Q'), a: t('pushNotifs', 'faqAmb1A') },
+      { id: 'amb2', q: t('pushNotifs', 'faqAmb2Q'), a: t('pushNotifs', 'faqAmb2A') },
+      { id: 'amb3', q: t('pushNotifs', 'faqAmb3Q'), a: t('pushNotifs', 'faqAmb3A') },
+    ]},
+    { id: 'cross_sharing', category: t('pushNotifs', 'faqCrossSharingCategory'), icon: 'sync-alt', color: '#6366F1', questions: [
+      { id: 'cs1', q: t('pushNotifs', 'faqCs1Q'), a: t('pushNotifs', 'faqCs1A') },
+      { id: 'cs2', q: t('pushNotifs', 'faqCs2Q'), a: t('pushNotifs', 'faqCs2A') },
+      { id: 'cs3', q: t('pushNotifs', 'faqCs3Q'), a: t('pushNotifs', 'faqCs3A') },
+    ]},
+    { id: 'security', category: t('pushNotifs', 'faqSecurityCategory'), icon: 'security', color: '#EF4444', questions: [
+      { id: 'sec1', q: t('pushNotifs', 'faqSec1Q'), a: t('pushNotifs', 'faqSec1A') },
+      { id: 'sec2', q: t('pushNotifs', 'faqSec2Q'), a: t('pushNotifs', 'faqSec2A') },
     ]},
   ];
 }

@@ -151,18 +151,14 @@ export default function TermsScreen() {
     {
       icon: 'notifications-active',
       color: '#7C3AED',
-      title: language === 'fr' ? 'Notifications push' : 'Push Notifications',
-      content: language === 'fr'
-        ? "L'application envoie des notifications push serveur pour les evenements ambassadeurs proches (rayon de 200km), les invitations meetup, les changements de classement, les demandes de partage et les rappels d'evenements. L'utilisateur peut activer ou desactiver chaque type de notification individuellement depuis son profil. Les notifications sont envoyees via l'API Expo Push. Les tokens push sont stockes dans notre base de donnees et automatiquement desactives a la deconnexion. L'utilisateur accepte de recevoir des notifications par defaut lors de l'inscription et peut modifier ses preferences a tout moment."
-        : 'The application sends server-side push notifications for nearby ambassador events (200km radius), meetup invitations, ranking changes, share requests, and event reminders. Users can enable or disable each notification type individually from their profile. Notifications are sent via the Expo Push API. Push tokens are stored in our database and automatically deactivated on logout. Users accept receiving notifications by default upon registration and can modify their preferences at any time.',
+      title: t('pushNotifs', 'termsPushTitle'),
+      content: t('pushNotifs', 'termsPushContent'),
     },
     {
       icon: 'speed',
       color: theme.warning,
-      title: language === 'fr' ? 'Protection contre les abus' : 'Abuse Protection',
-      content: language === 'fr'
-        ? "Les fonctions sensibles de l'application (validation de codes promo, enregistrement d'achats) sont protegees par un systeme de limitation de requetes (rate limiting). Les tentatives excessives (plus de 5 validations de code promo ou 3 enregistrements d'achat par minute) seront temporairement bloquees. Cette mesure protege contre les attaques par force brute et les abus. L'utilisateur bloque recevra un message d'erreur et pourra reessayer apres un court delai."
-        : 'Sensitive application functions (promo code validation, purchase recording) are protected by a rate limiting system. Excessive attempts (more than 5 promo code validations or 3 purchase recordings per minute) will be temporarily blocked. This measure protects against brute force attacks and abuse. Blocked users will receive an error message and can retry after a short delay.',
+      title: t('pushNotifs', 'termsAbuseTitle'),
+      content: t('pushNotifs', 'termsAbuseContent'),
     },
     {
       icon: 'email',

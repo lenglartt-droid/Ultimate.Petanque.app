@@ -81,6 +81,102 @@ export const extraTranslations = {
     revertAllError: { fr: 'Erreur lors de l\'annulation groupee', en: 'Error reverting changes' },
   },
 
+  // ============================================
+  // PUSH NOTIFICATIONS & SECURITY (extracted from hardcoded strings)
+  // ============================================
+  pushNotifs: {
+    // Terms section
+    termsPushTitle: { fr: 'Notifications push', en: 'Push Notifications' },
+    termsPushContent: {
+      fr: "L'application envoie des notifications push serveur pour les evenements ambassadeurs proches (rayon de 200km), les invitations meetup, les changements de classement, les demandes de partage de matchs/defis, et les rappels d'evenements. L'utilisateur peut activer ou desactiver chaque type de notification individuellement depuis son profil. Les notifications sont envoyees via l'API Expo Push. Les tokens push sont stockes dans notre base de donnees et automatiquement desactives a la deconnexion. L'utilisateur accepte de recevoir des notifications par defaut lors de l'inscription et peut modifier ses preferences a tout moment.",
+      en: 'The application sends server-side push notifications for nearby ambassador events (200km radius), meetup invitations, ranking changes, match/challenge share requests, and event reminders. Users can enable or disable each notification type individually from their profile. Notifications are sent via the Expo Push API. Push tokens are stored in our database and automatically deactivated on logout. Users accept receiving notifications by default upon registration and can modify their preferences at any time.',
+    },
+    termsAbuseTitle: { fr: 'Protection contre les abus', en: 'Abuse Protection' },
+    termsAbuseContent: {
+      fr: "Les fonctions sensibles de l'application (validation de codes promo, enregistrement d'achats) sont protegees par un systeme de limitation de requetes (rate limiting). Les tentatives excessives (plus de 5 validations de code promo ou 3 enregistrements d'achat par minute) seront temporairement bloquees. Cette mesure protege contre les attaques par force brute et les abus. L'utilisateur bloque recevra un message d'erreur et pourra reessayer apres un court delai.",
+      en: 'Sensitive application functions (promo code validation, purchase recording) are protected by a rate limiting system. Excessive attempts (more than 5 promo code validations or 3 purchase recordings per minute) will be temporarily blocked. This measure protects against brute force attacks and abuse. Blocked users will receive an error message and can retry after a short delay.',
+    },
+    // Privacy section
+    privacyPushTitle: { fr: 'Notifications push', en: 'Push Notifications' },
+    privacyPushContent: {
+      fr: "L'application peut envoyer des notifications push pour vous alerter sur des evenements proches (dans un rayon de 200km), des invitations a des rendez-vous, des changements de classement, et des demandes de partage. Vous pouvez controler precisement quels types de notifications vous souhaitez recevoir depuis votre profil (section Notifications). Vos preferences sont stockees de maniere securisee et respectees cote serveur. Le token push de votre appareil est enregistre dans notre base de donnees et desactive automatiquement a la deconnexion.",
+      en: 'The application may send push notifications to alert you about nearby events (within 200km radius), meetup invitations, ranking changes, and share requests. You can precisely control which notification types you want to receive from your profile (Notifications section). Your preferences are stored securely and respected server-side. Your device push token is registered in our database and automatically deactivated on logout.',
+    },
+    privacyCrashTitle: { fr: 'Rapports de crash et monitoring', en: 'Crash Reports & Monitoring' },
+    privacyCrashContent: {
+      fr: "L'application utilise Sentry pour collecter automatiquement les rapports de crash et erreurs techniques. Ces rapports contiennent des informations techniques (type d'appareil, version OS, stack trace) mais aucune donnee personnelle identifiable. Votre adresse IP est automatiquement supprimee des rapports. Ces donnees sont utilisees exclusivement pour ameliorer la stabilite de l'application.",
+      en: 'The application uses Sentry to automatically collect crash reports and technical errors. These reports contain technical information (device type, OS version, stack trace) but no personally identifiable data. Your IP address is automatically stripped from reports. This data is used exclusively to improve application stability.',
+    },
+    // FAQ sections
+    faqPushCategory: { fr: 'Notifications Push', en: 'Push Notifications' },
+    faqPn1Q: { fr: 'Quels types de notifications push puis-je recevoir ?', en: 'What types of push notifications can I receive?' },
+    faqPn1A: {
+      fr: "Il y a 5 types : evenements ambassadeurs proches (rayon 200km), invitations a des rendez-vous, changements de classement, demandes de partage de matchs/defis, et rappels d'evenements. Chaque type peut etre active ou desactive individuellement.",
+      en: 'There are 5 types: nearby ambassador events (200km radius), meetup invitations, ranking changes, match/challenge share requests, and event reminders. Each type can be enabled or disabled individually.',
+    },
+    faqPn2Q: { fr: 'Comment gerer mes preferences de notifications ?', en: 'How do I manage my notification preferences?' },
+    faqPn2A: {
+      fr: 'Allez dans Profil > section "Notifications & Partage" > utilisez les toggles pour activer/desactiver chaque type. Vos preferences sont sauvegardees automatiquement et respectees cote serveur.',
+      en: 'Go to Profile > "Notifications & Sharing" section > use the toggles to enable/disable each type. Your preferences are saved automatically and respected server-side.',
+    },
+    faqPn3Q: { fr: 'Pourquoi je recois des notifications pour des evenements lointains ?', en: 'Why do I receive notifications for distant events?' },
+    faqPn3A: {
+      fr: "Les notifications d'evenements ambassadeurs sont envoyees aux joueurs dans un rayon de 200km ou dans la meme ville. Si votre profil n'a pas de localisation renseignee, le systeme utilise vos terrains et clubs pour determiner votre zone.",
+      en: 'Ambassador event notifications are sent to players within a 200km radius or in the same city. If your profile has no location set, the system uses your terrains and clubs to determine your area.',
+    },
+    faqPn4Q: { fr: 'Mes notifications sont-elles desactivees quand je me deconnecte ?', en: 'Are my notifications disabled when I log out?' },
+    faqPn4A: {
+      fr: 'Oui, votre token push est automatiquement desactive lors de la deconnexion. Vous ne recevrez plus de notifications jusqu\'a la prochaine connexion.',
+      en: 'Yes, your push token is automatically deactivated on logout. You will not receive notifications until your next login.',
+    },
+    // FAQ Security section
+    faqSecurityCategory: { fr: 'Securite & Confidentialite', en: 'Security & Privacy' },
+    faqSec1Q: { fr: 'Quelles donnees sont collectees pour les rapports de crash ?', en: 'What data is collected for crash reports?' },
+    faqSec1A: {
+      fr: "Seules des informations techniques anonymes sont collectees : type d'appareil, version OS, stack trace de l'erreur. Aucune donnee personnelle identifiable (nom, email, scores) n'est incluse. Votre adresse IP est automatiquement supprimee.",
+      en: 'Only anonymous technical information is collected: device type, OS version, error stack trace. No personally identifiable data (name, email, scores) is included. Your IP address is automatically stripped.',
+    },
+    faqSec2Q: { fr: 'Pourquoi certaines actions sont temporairement bloquees ?', en: 'Why are some actions temporarily blocked?' },
+    faqSec2A: {
+      fr: 'Pour proteger contre les abus, les fonctions sensibles (validation de codes promo, achats) limitent le nombre de tentatives par minute. Si vous etes bloque, attendez quelques secondes puis reessayez.',
+      en: 'To protect against abuse, sensitive functions (promo code validation, purchases) limit the number of attempts per minute. If you are blocked, wait a few seconds and try again.',
+    },
+    // FAQ Ambassadors & Partners
+    faqAmbassadorsCategory: { fr: 'Ambassadeurs & Partenaires', en: 'Ambassadors & Partners' },
+    faqAmb1Q: { fr: 'Que sont les ambassadeurs ?', en: 'What are ambassadors?' },
+    faqAmb1A: {
+      fr: "Les ambassadeurs sont des joueurs mis en avant dans l'application. Ils disposent d'un profil public enrichi avec reseaux sociaux, d'un tableau de bord avec analytics (impressions, clics, CTR), et peuvent creer des evenements sponsorises avec classements et temoins.",
+      en: 'Ambassadors are featured players within the app. They have an enhanced public profile with social media links, a dashboard with analytics (impressions, clicks, CTR), and can create sponsored events with rankings and witnesses.',
+    },
+    faqAmb2Q: { fr: 'Comment fonctionnent les evenements sponsorises ?', en: 'How do sponsored events work?' },
+    faqAmb2A: {
+      fr: "Un ambassadeur cree un evenement (defi, tournoi) avec date, lieu, type et nombre max de participants. Les joueurs proches recoivent une notification push. Ils s'inscrivent, completent le defi, et des temoins attestent les resultats. Un classement final est publie.",
+      en: 'An ambassador creates an event (challenge, tournament) with date, location, type and max participants. Nearby players receive a push notification. They register, complete the challenge, and witnesses attest results. A final ranking is published.',
+    },
+    faqAmb3Q: { fr: 'Comment devenir partenaire de l\'application ?', en: 'How do I become an app partner?' },
+    faqAmb3A: {
+      fr: "La page Partenaires affiche les partenaires officiels (Gold, Silver, Bronze). Pour devenir partenaire, contactez-nous par email a ultimate.petanque.app@gmail.com.",
+      en: 'The Partners page displays official partners (Gold, Silver, Bronze). To become a partner, contact us by email at ultimate.petanque.app@gmail.com.',
+    },
+    // FAQ Cross-Player Sharing
+    faqCrossSharingCategory: { fr: 'Partage cross-joueur', en: 'Cross-Player Sharing' },
+    faqCs1Q: { fr: 'Comment partager un match avec un co-equipier ?', en: 'How do I share a match with a teammate?' },
+    faqCs1A: {
+      fr: "Apres un match, l'application detecte les joueurs lies (inscrits dans l'app). Vous pouvez envoyer une demande de partage en lecture ou modification. Le destinataire recoit une notification et peut accepter ou refuser depuis la page Invitations.",
+      en: 'After a match, the app detects linked players (registered in the app). You can send a share request with read or edit permissions. The recipient receives a notification and can accept or decline from the Invitations page.',
+    },
+    faqCs2Q: { fr: 'Comment fonctionne l\'edition collaborative avec detection de conflit ?', en: 'How does collaborative editing with conflict detection work?' },
+    faqCs2A: {
+      fr: "Si deux joueurs modifient la meme fiche, un conflit est detecte via les timestamps. Un modal affiche les differences champ par champ (diff colore rouge/vert) avec 3 options : garder ma version, garder la version serveur, ou annuler.",
+      en: 'If two players edit the same card, a conflict is detected via timestamps. A modal shows field-by-field differences (red/green color diff) with 3 options: keep my version, keep the server version, or cancel.',
+    },
+    faqCs3Q: { fr: 'Puis-je annuler les modifications faites par un autre joueur ?', en: 'Can I undo changes made by another player?' },
+    faqCs3A: {
+      fr: "Oui, l'historique des modifications montre qui a modifie quoi et quand, avec un diff colore. Vous pouvez annuler chaque champ individuellement ou tout annuler en un clic depuis la section Historique des modifications.",
+      en: 'Yes, the modification history shows who changed what and when, with a colored diff. You can undo each field individually or undo all in one click from the Modification History section.',
+    },
+  },
+
   matchSharing: {
     shareStatusTitle: { fr: 'Partages en cours', en: 'Active shares' },
     noShares: { fr: 'Aucun partage', en: 'No shares' },
