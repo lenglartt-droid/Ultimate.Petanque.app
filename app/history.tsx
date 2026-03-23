@@ -39,7 +39,7 @@ const CHALLENGE_CONFIG = {
   'precision': { nameKey: 'precision', icon: 'stars' as const, color: '#F59E0B' },
 } as const;
 
-type ContentFilter = 'all' | 'training' | 'tournament' | 'meetups';
+type ContentFilter = 'all' | 'training' | 'tournament' | 'meetups' | 'shared';
 type TrainingSubFilter = 'all' | 'matches' | 'challenges' | 'series';
 type PeriodOption = 'all' | 'week' | '2weeks' | 'month' | '3months' | '6months' | 'year';
 
@@ -71,6 +71,7 @@ const CONTENT_FILTERS: ContentFilterDef[] = [
   { id: 'training', labelKey: 'trainings', icon: 'fitness-center' },
   { id: 'tournament', labelKey: 'tournaments', icon: 'emoji-events' },
   { id: 'meetups', labelKey: 'meetups', icon: 'event' },
+  { id: 'shared', labelKey: 'sharedReceived', icon: 'group' },
 ];
 
 type TrainingSubFilterDef = { id: TrainingSubFilter; labelKey: string; icon: keyof typeof MaterialIcons.glyphMap };
@@ -576,7 +577,7 @@ const MeetupCard = React.memo(({ meetup, onPress, t, language }: { meetup: Meetu
 
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
-  const { matches, challenges, deleteChallenge, updateChallenge, deleteMatch, refreshData, boulesSets, terrains, isSharedItem, getSharedPermission } = useApp();
+  const { matches, challenges, deleteChallenge, updateChallenge, deleteMatch, refreshData, boulesSets, terrains, isSharedItem, getSharedPermission, sharedMatchIds, sharedChallengeIds } = useApp();
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const params = useLocalSearchParams<{ openChallengeId?: string; openMatchId?: string }>();
@@ -801,6 +802,18 @@ export default function HistoryScreen() {
       tournamentMatches.forEach(m => {
         items.push({ type: 'match', data: m, date: m.date });
       });
+    } else if (contentFilter === 'shared') {
+      // Show only shared matches and challenges
+      const sharedMatchSet = new Set(sharedMatchIds);
+      const sharedChallengeSet = new Set(sharedChallengeIds);
+      const sharedMatches = filteredMatches.filter(m => sharedMatchSet.has(m.id));
+      const sharedChallengesData = filteredChallengesData.filter(c => sharedChallengeSet.has(c.id));
+      sharedMatches.forEach(m => {
+        items.push({ type: 'match', data: m, date: m.date });
+      });
+      sharedChallengesData.forEach(c => {
+        items.push({ type: 'challenge', data: c, date: c.date });
+      });
     } else if (contentFilter === 'meetups') {
       // Meetups are handled separately below
     }
@@ -838,12 +851,18 @@ export default function HistoryScreen() {
       }
     });
 
+    // Count shared items
+    const sharedMatchSet = new Set(sharedMatchIds);
+    const sharedChallengeSet = new Set(sharedChallengeIds);
+    const sharedCount = filteredMatches.filter(m => sharedMatchSet.has(m.id)).length + filteredChallengesData.filter(c => sharedChallengeSet.has(c.id)).length;
+
     return {
       listData,
       stats: {
         trainingCount: trainingMatches.length + filteredChallengesData.length,
         tournamentCount: tournamentMatches.length,
         meetupCount: periodFilteredMeetups.length,
+        sharedCount,
         total: trainingMatches.length + tournamentMatches.length + filteredChallengesData.length + periodFilteredMeetups.length
       },
       filteredChallenges: filteredChallengesData,
@@ -853,7 +872,7 @@ export default function HistoryScreen() {
         challengesCount: filteredChallengesData.length,
       },
     };
-  }, [matches, challenges, contentFilter, trainingSubFilter, selectedPeriod, groupMatchesBySeries, language, allMeetups]);
+  }, [matches, challenges, contentFilter, trainingSubFilter, selectedPeriod, groupMatchesBySeries, language, allMeetups, sharedMatchIds, sharedChallengeIds]);
 
   // Meetup sub-filter stats
   const meetupSubStats = useMemo(() => {
@@ -1170,6 +1189,7 @@ export default function HistoryScreen() {
             const count = filter.id === 'all' ? stats.total
               : filter.id === 'training' ? stats.trainingCount
               : filter.id === 'tournament' ? stats.tournamentCount
+              : filter.id === 'shared' ? stats.sharedCount
               : stats.meetupCount;
 
             return (

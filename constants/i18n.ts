@@ -1615,6 +1615,7 @@ export const translations = {
     carreauSingular: { fr: 'carreau', en: 'carreau' },
     challengeSummary: { fr: 'Résumé des défis', en: 'Challenge summary' },
      meetups: { fr: 'RDV', en: 'Meetings' },
+     sharedReceived: { fr: 'Partages reçus', en: 'Shared received' },
      noMeetups: { fr: 'Aucun rendez-vous trouvé', en: 'No meetings found' },
      meetupCreator: { fr: 'Organisateur', en: 'Organizer' },
      meetupInvited: { fr: 'Invité', en: 'Invited' },
