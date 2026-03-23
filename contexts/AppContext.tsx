@@ -1,3 +1,10 @@
+/**
+ * AppContext — Global application state provider.
+ *
+ * CRUD operations are delegated to dedicated services under services/*CrudService.ts.
+ * DB row mappers live in services/dbMappers.ts.
+ * This file retains: state declarations, data loading, sync logic, computed values, and provider wiring.
+ */
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { getSupabaseClient } from '@/template';
 import { useAuth } from '@/template';
@@ -46,6 +53,32 @@ import {
   TournamentNotification,
   BoulesSet,
 } from '@/services/mockData';
+
+// ============================================
+// Extracted services & mappers
+// ============================================
+import {
+  mapPlayerFromDb,
+  mapClubFromDb,
+  mapTerrainFromDb,
+  mapTournamentFromDb,
+  mapMatchFromDb,
+  mapChallengeFromDb,
+  mapBoulesSetFromDb,
+  mergeRecords,
+  calculatePlayerStatsFromMatches,
+} from '@/services/dbMappers';
+import { addMatchOp, updateMatchOp, deleteMatchOp } from '@/services/matchCrudService';
+import { addPlayerOp, updatePlayerOp, deletePlayerOp } from '@/services/playerCrudService';
+import { addClubOp, updateClubOp, deleteClubOp } from '@/services/clubCrudService';
+import { addTournamentOp, updateTournamentOp, updateBracketMatchOp, deleteTournamentOp } from '@/services/tournamentCrudService';
+import { addTerrainOp, updateTerrainOp, deleteTerrainOp } from '@/services/terrainCrudService';
+import { addChallengeOp, updateChallengeOp, deleteChallengeOp } from '@/services/challengeCrudService';
+import { addBoulesSetOp, updateBoulesSetOp, deleteBoulesSetOp, setPrimaryBoulesSetOp } from '@/services/boulesSetCrudService';
+
+// ============================================
+// Context type
+// ============================================
 
 interface AppContextType {
   // Data
@@ -157,162 +190,11 @@ interface AppContextType {
   setBatterySaver: (enabled: boolean) => Promise<void>;
 }
 
-// Module-level helper: calculate stats for a single player from matches
-function calculatePlayerStatsFromMatches(allMatches: Match[], playerId: string, existingStats: any) {
-  const playerMatches = allMatches.filter(m =>
-    m.teamA.players.includes(playerId) || m.teamB.players.includes(playerId)
-  );
-  if (playerMatches.length === 0) return existingStats;
-
-  const totalMatches = playerMatches.length;
-  const wins = playerMatches.filter(m => {
-    const inA = m.teamA.players.includes(playerId);
-    return (inA && m.winner === 'A') || (!inA && m.winner === 'B');
-  }).length;
-  const losses = totalMatches - wins;
-
-  let totalTirs = 0, totalTirsSuccess = 0, totalPoints = 0, totalPointsSuccess = 0, totalCarreaux = 0;
-  let totalScoreFor = 0, totalScoreAgainst = 0;
-
-  playerMatches.forEach(m => {
-    const inA = m.teamA.players.includes(playerId);
-    totalScoreFor += inA ? m.teamA.score : m.teamB.score;
-    totalScoreAgainst += inA ? m.teamB.score : m.teamA.score;
-    if (m.playerActions) {
-      const pa = m.playerActions.find(a => a.playerId === playerId);
-      if (pa) {
-        totalTirs += pa.actions.tirs;
-        totalTirsSuccess += pa.actions.tirsSuccess;
-        totalPoints += pa.actions.points;
-        totalPointsSuccess += pa.actions.pointsSuccess;
-        totalCarreaux += pa.actions.carreaux;
-      }
-    }
-  });
-
-  return {
-    ...existingStats,
-    matchesPlayed: totalMatches,
-    wins,
-    losses,
-    winRate: totalMatches > 0 ? Math.round((wins / totalMatches) * 1000) / 10 : 0,
-    tirRate: totalTirs > 0 ? Math.round((totalTirsSuccess / totalTirs) * 1000) / 10 : existingStats.tirRate || 0,
-    pointRate: totalPoints > 0 ? Math.round((totalPointsSuccess / totalPoints) * 1000) / 10 : existingStats.pointRate || 0,
-    carreauRate: totalTirsSuccess > 0 ? Math.round((totalCarreaux / totalTirsSuccess) * 1000) / 10 : existingStats.carreauRate || 0,
-    avgPointsScored: totalMatches > 0 ? Math.round((totalScoreFor / totalMatches) * 10) / 10 : 0,
-    avgPointsConceded: totalMatches > 0 ? Math.round((totalScoreAgainst / totalMatches) * 10) / 10 : 0,
-  };
-}
-
-// Module-level DB row mappers (pure functions, reusable in full & delta sync)
-function mapClubFromDb(c: any): Club {
-  return {
-    id: c.id, name: c.name, logo: c.logo, address: c.address, city: c.city,
-    country: c.country || 'France', location: c.location || { latitude: 0, longitude: 0 },
-    membersCount: c.members_count || 0, foundedYear: c.founded_year,
-    description: c.description, facilities: c.facilities || [],
-    contactEmail: c.contact_email, contactPhone: c.contact_phone,
-    terrainId: c.terrain_id, terrainName: c.terrain_name,
-    membershipCost: c.membership_cost ? parseFloat(c.membership_cost) : undefined,
-    isPublic: c.is_public ?? false, showContactPublic: c.show_contact_public ?? false,
-    clubCardUrl: c.club_card_url || undefined,
-    website: c.website || undefined,
-    facebookUrl: c.facebook_url || undefined,
-    instagramHandle: c.instagram_handle || undefined,
-  };
-}
-
-function mapTerrainFromDb(t: any): Terrain {
-  return {
-    id: t.id, name: t.name, address: t.address, city: t.city,
-    location: t.location || { latitude: 0, longitude: 0 }, type: t.type,
-    description: t.description, facilities: t.facilities || [], photos: t.photos || [],
-    clubId: t.club_id, clubName: t.club_name, isPublic: t.is_public ?? true,
-    publicAccess: t.public_access ?? true, courtsCount: t.courts_count || 1,
-    lighting: t.lighting ?? false, covered: t.covered ?? false,
-    environment: t.environment || 'outdoor', createdAt: t.created_at,
-  };
-}
-
-function mapTournamentFromDb(t: any): Tournament {
-  return {
-    id: t.id, name: t.name, date: t.date, endDate: t.end_date,
-    type: t.type, format: t.format, location: t.location,
-    terrainId: t.terrain_id, terrainName: t.terrain_name, terrainType: t.terrain_type,
-    clubId: t.club_id, clubName: t.club_name, status: t.status,
-    participants: t.participants || 0, maxParticipants: t.max_participants || 32,
-    prize: t.prize, description: t.description, teams: t.teams, phases: t.phases,
-    currentPhaseId: t.current_phase_id, tournamentLevel: t.tournament_level,
-    tournamentCategory: t.tournament_category, registrationType: t.registration_type,
-    tournamentScope: t.tournament_scope,
-    registrationCost: t.registration_cost ? parseFloat(t.registration_cost) : undefined,
-    prizeWon: t.prize_won ? parseFloat(t.prize_won) : undefined,
-    finalResult: t.final_result, isPublic: t.is_public ?? false,
-  };
-}
-
-function mapMatchFromDb(m: any): Match {
-  return {
-    id: m.id, date: m.date, mode: m.mode, format: m.format,
-    tournamentId: m.tournament_id, tournamentName: m.tournament_name,
-    tournamentPhase: m.tournament_phase, tournamentBracket: m.tournament_bracket,
-    bracketMatchId: m.bracket_match_id, terrainId: m.terrain_id, terrainType: m.terrain_type,
-    boulesSetId: m.boules_set_id,
-    teamA: m.team_a, teamB: m.team_b, winner: m.winner,
-    duration: m.duration || 0, menes: m.menes || [],
-    playerActions: m.player_actions, seriesInfo: m.series_info,
-  };
-}
-
-function mapChallengeFromDb(c: any): Challenge {
-  return {
-    id: c.id, type: c.type, mode: c.mode || 'solo', date: c.date,
-    boulesSetId: c.boules_set_id, terrainId: c.terrain_id,
-    playerId: c.player_id, playerName: c.player_name,
-    sponsorId: c.sponsor_id || undefined,
-    sponsorName: c.sponsor_name || undefined,
-    sponsorPhoto: c.sponsor_photo || undefined,
-    opponentId: c.opponent_id, opponentName: c.opponent_name,
-    opponentResult: c.opponent_result, winner: c.winner,
-    shots: c.shots, successCount: c.success_count, totalShots: c.total_shots,
-    carreauCount: c.carreau_count,
-    successRate: c.success_rate ? parseFloat(c.success_rate) : undefined,
-    precisionShots: c.precision_shots, totalPoints: c.total_points,
-    maxPoints: c.max_points, atelierScores: c.atelier_scores,
-    duration: c.duration, notes: c.notes, detailedShots: c.detailed_shots,
-  };
-}
-
-function mapPlayerFromDb(p: any): Player {
-  return {
-    id: p.id, name: p.name, nickname: p.nickname, avatar: p.avatar,
-    club: p.club, clubId: p.club_id, role: p.role, level: p.level,
-    location: p.location, phone: p.phone, email: p.email, country: p.country,
-    boules: p.boules, handedness: p.handedness, terrainId: p.terrain_id,
-    terrainName: p.terrain_name, isPublic: p.is_public ?? false,
-    showContactPublic: p.show_contact_public ?? false,
-    stats: p.stats || {
-      matchesPlayed: 0, wins: 0, losses: 0, winRate: 0,
-      tirRate: 0, pointRate: 0, carreauRate: 0,
-      avgPointsScored: 0, avgPointsConceded: 0,
-    },
-    createdAt: p.created_at,
-  };
-}
-
-// Merge delta records into existing array (upsert by id)
-function mergeRecords<T extends { id: string }>(existing: T[], delta: T[]): T[] {
-  if (delta.length === 0) return existing;
-  const deltaMap = new Map(delta.map(item => [item.id, item]));
-  const merged = existing.map(item => deltaMap.has(item.id) ? deltaMap.get(item.id)! : item);
-  const existingIds = new Set(existing.map(item => item.id));
-  delta.forEach(item => {
-    if (!existingIds.has(item.id)) merged.push(item);
-  });
-  return merged;
-}
-
 const AppContext = createContext<AppContextType | undefined>(undefined);
+
+// ============================================
+// Provider
+// ============================================
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -328,6 +210,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [syncConfig, setSyncConfigState] = useState<SyncConfig>(getSyncConfig());
   const syncConfigRef = useRef(syncConfig);
   
+  // ===== Core data state =====
   const [players, setPlayers] = useState<Player[]>([]);
   const [clubs, setClubs] = useState<Club[]>([]);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
@@ -352,7 +235,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [conflictRemaining, setConflictRemaining] = useState(0);
   const conflictResolverRef = useRef<((choice: 'local' | 'server' | 'skip') => void) | null>(null);
 
-  // Premium setter that also persists to DB
+  // ===== Premium & conflict helpers =====
   const setIsPremium = useCallback((val: boolean) => {
     setIsPremiumState(val);
     if (user?.id) {
@@ -360,7 +243,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.id, supabase]);
 
-  // Resolve conflict from UI
   const resolveConflict = useCallback((choice: 'local' | 'server' | 'skip') => {
     if (conflictResolverRef.current) {
       conflictResolverRef.current(choice);
@@ -369,16 +251,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Conflict handler that pauses replay and waits for user decision
   const handleConflict: ConflictResolver = useCallback(async (conflict: ConflictInfo) => {
     return new Promise<'local' | 'server' | 'skip'>((resolve) => {
       conflictResolverRef.current = resolve;
       setCurrentConflict(conflict);
-      // remaining is calculated from replayProgress
     });
   }, []);
-  
-  // Recalculate player stats from actual match data
+
+  // ===== Computed: player stats from matches =====
   const playersWithStats = React.useMemo(() => {
     if (matches.length === 0) return players;
     return players.map(player => {
@@ -388,13 +268,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, [players, matches]);
 
-  // Self player (current user's player card) - use recalculated stats
   const selfPlayer = React.useMemo(() => {
     if (!user?.id) return null;
     return playersWithStats.find(p => p.id === user.id) || null;
   }, [playersWithStats, user?.id]);
 
-  // Recalculate club membersCount from players referencing each club
   const clubsWithMemberCount = React.useMemo(() => {
     return clubs.map(club => {
       const memberCount = playersWithStats.filter(p => p.clubId === club.id).length;
@@ -402,8 +280,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, [clubs, playersWithStats]);
 
-  // Calculate user stats from actual data
-  // For shared matches, determine team by checking if user's player ID is in team A or B
+  // ===== Computed: user stats =====
   const userStats = React.useMemo(() => {
     const userId = user?.id;
     const sharedSet = new Set(sharedMatchIds);
@@ -420,13 +297,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     matches.forEach(m => {
       const isShared = sharedSet.has(m.id);
-      // For shared matches, detect which team the user is on
       const userInA = userId ? m.teamA.players.includes(userId) : false;
       const userInB = userId ? m.teamB.players.includes(userId) : false;
       
-      // For own matches (not shared), assume team A is user's team (legacy behavior)
-      // For shared matches, only count if user is actually a participant
-      if (isShared && !userInA && !userInB) return; // Skip shared matches where user is not a participant player
+      if (isShared && !userInA && !userInB) return;
       
       totalMatches++;
       totalDuration += m.duration || 0;
@@ -440,7 +314,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       if (m.playerActions) {
-        // For own matches, count team A actions (legacy); for shared, count user's team
         const targetTeam = userTeam;
         m.playerActions.filter(pa => pa.team === targetTeam).forEach(pa => {
           totalTirs += pa.actions.tirs;
@@ -472,7 +345,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [matches, user, sharedMatchIds]);
 
-  // Calculate challenge stats
+  // ===== Computed: challenge stats =====
   const challengeStats: ChallengeStats = React.useMemo(() => {
     const byType = {
       '10_tirs': { count: 0, avgSuccess: 0, bestScore: 0, totalSuccess: 0 },
@@ -520,10 +393,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [challenges]);
 
-  // Helper to transform a raw player DB row (reusable across loadData and addPlayer)
-  const mapPlayer = useCallback((p: any): Player => mapPlayerFromDb(p), []);
-
-  // Load sync config on mount
+  // ===== Sync config =====
   useEffect(() => {
     loadSyncConfig().then(cfg => {
       setSyncConfigState(cfg);
@@ -536,7 +406,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return unsub;
   }, []);
 
-  // Battery saver toggle
   const setBatterySaver = useCallback(async (enabled: boolean) => {
     const cfg = await setBatterySaverMode(enabled);
     setSyncConfigState(cfg);
@@ -551,14 +420,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [isConnected]);
 
-  // Load from local cache on first mount (before network fetch)
+  // ===== Cache loading =====
   useEffect(() => {
     if (!user?.id || cacheLoaded) return;
     const loadCache = async () => {
       try {
         const cached = await loadFromCache();
         if (cached) {
-          // Only apply cache if we have not yet loaded from network
           if (!initialLoadDone.current) {
             if (cached.players.length > 0) setPlayers(cached.players);
             if (cached.clubs.length > 0) setClubs(cached.clubs);
@@ -578,8 +446,118 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadCache();
   }, [user?.id, cacheLoaded]);
 
-  // Replay offline queue then delta sync when network returns
-  // Note: loadDeltaData is declared later but referenced here via loadDeltaDataRef
+  // ===== Persist player stats helper =====
+  const persistPlayerStats = useCallback(async (allMatches: Match[], playerIds: string[]) => {
+    if (!user?.id) return;
+    const uniqueIds = [...new Set(playerIds)];
+    for (const playerId of uniqueIds) {
+      const player = players.find(p => p.id === playerId);
+      const baseStats = player?.stats || {
+        matchesPlayed: 0, wins: 0, losses: 0, winRate: 0,
+        tirRate: 0, pointRate: 0, carreauRate: 0,
+        avgPointsScored: 0, avgPointsConceded: 0,
+      };
+      const newStats = calculatePlayerStatsFromMatches(allMatches, playerId, baseStats);
+      try {
+        await supabase.from('players').update({
+          stats: newStats,
+          updated_at: new Date().toISOString(),
+        }).eq('id', playerId);
+      } catch (e) {
+        console.log('Error persisting stats for player:', playerId, e);
+      }
+    }
+  }, [user?.id, supabase, players]);
+
+  // ===== Sync primary boules to player profile =====
+  const syncPrimaryBoulesToPlayer = useCallback((set: Partial<BoulesSet>) => {
+    if (!user?.id) return;
+    const boulesData = {
+      name: set.name || undefined,
+      brand: set.brand || undefined,
+      diameter: set.diameter || undefined,
+      weight: set.weight || undefined,
+      serialNumber: set.serialNumber || undefined,
+      hardness: set.hardness || undefined,
+    };
+    // Delegate to player CRUD service
+    updatePlayerOp(user.id, { boules: boulesData }, {
+      supabase, userId: user.id, isConnected: isConnectedRef.current,
+      setPlayers, sharedItemPermissions, players,
+    });
+  }, [user?.id, supabase, sharedItemPermissions, players]);
+
+  // ===== CRUD wrappers (delegate to extracted services) =====
+  const addMatch = async (match: Omit<Match, 'id'>) =>
+    addMatchOp(match, { supabase, userId: user?.id, isConnected: isConnectedRef.current, matches, setMatches, persistPlayerStats });
+
+  const addPlayer = async (player: Omit<Player, 'id'>) =>
+    addPlayerOp(player, { supabase, userId: user?.id, isConnected: isConnectedRef.current, setPlayers, sharedItemPermissions, players });
+
+  const addClub = async (club: Omit<Club, 'id'>) =>
+    addClubOp(club, { supabase, userId: user?.id, isConnected: isConnectedRef.current, clubs, setClubs, setTerrains, sharedItemPermissions });
+
+  const addTournament = async (tournament: Omit<Tournament, 'id'>) =>
+    addTournamentOp(tournament, { supabase, userId: user?.id, isConnected: isConnectedRef.current, tournaments, setTournaments, setMatches, sharedItemPermissions });
+
+  const addChallenge = async (challenge: Omit<Challenge, 'id'>) =>
+    addChallengeOp(challenge, { supabase, userId: user?.id, isConnected: isConnectedRef.current, setChallenges });
+
+  const addTerrain = async (terrain: Omit<Terrain, 'id'>) =>
+    addTerrainOp(terrain, { supabase, userId: user?.id, isConnected: isConnectedRef.current, terrains, setTerrains, setFavoriteTerrainIds, sharedItemPermissions });
+
+  const updateMatch = async (id: string, updates: Partial<Match>) =>
+    updateMatchOp(id, updates, { supabase, userId: user?.id, isConnected: isConnectedRef.current, matches, setMatches, persistPlayerStats });
+
+  const updatePlayer = async (id: string, updates: Partial<Player>) =>
+    updatePlayerOp(id, updates, { supabase, userId: user?.id, isConnected: isConnectedRef.current, setPlayers, sharedItemPermissions, players });
+
+  const updateClub = async (id: string, updates: Partial<Club>) =>
+    updateClubOp(id, updates, { supabase, userId: user?.id, isConnected: isConnectedRef.current, clubs, setClubs, setTerrains, sharedItemPermissions });
+
+  const updateTournament = async (id: string, updates: Partial<Tournament>) =>
+    updateTournamentOp(id, updates, { supabase, userId: user?.id, isConnected: isConnectedRef.current, tournaments, setTournaments, setMatches, sharedItemPermissions });
+
+  const updateTerrain = async (id: string, updates: Partial<Terrain>) =>
+    updateTerrainOp(id, updates, { supabase, userId: user?.id, isConnected: isConnectedRef.current, terrains, setTerrains, setFavoriteTerrainIds, sharedItemPermissions });
+
+  const updateChallenge = async (id: string, updates: Partial<Challenge>) =>
+    updateChallengeOp(id, updates, { supabase, userId: user?.id, isConnected: isConnectedRef.current, setChallenges });
+
+  const updateBracketMatch = (tournamentId: string, bracketMatchId: string, updates: Partial<BracketMatch>) =>
+    updateBracketMatchOp(tournamentId, bracketMatchId, updates, setTournaments);
+
+  const deleteMatch = async (id: string) =>
+    deleteMatchOp(id, { supabase, userId: user?.id, isConnected: isConnectedRef.current, matches, setMatches, persistPlayerStats });
+
+  const deletePlayer = async (id: string) =>
+    deletePlayerOp(id, { supabase, userId: user?.id, isConnected: isConnectedRef.current, setPlayers });
+
+  const deleteChallenge = async (id: string) =>
+    deleteChallengeOp(id, { supabase, userId: user?.id, isConnected: isConnectedRef.current, setChallenges });
+
+  const deleteClub = async (id: string) =>
+    deleteClubOp(id, { supabase, userId: user?.id, isConnected: isConnectedRef.current, setClubs, setTerrains });
+
+  const deleteTournament = async (id: string) =>
+    deleteTournamentOp(id, { supabase, userId: user?.id, isConnected: isConnectedRef.current, setTournaments, setMatches });
+
+  const deleteTerrain = async (id: string) =>
+    deleteTerrainOp(id, { supabase, userId: user?.id, isConnected: isConnectedRef.current, setTerrains, setFavoriteTerrainIds });
+
+  const addBoulesSet = async (set: Omit<BoulesSet, 'id'>) =>
+    addBoulesSetOp(set, { supabase, userId: user?.id, boulesSets, setBoulesSets, syncPrimaryBoulesToPlayer });
+
+  const updateBoulesSet = async (id: string, updates: Partial<BoulesSet>) =>
+    updateBoulesSetOp(id, updates, { supabase, userId: user?.id, boulesSets, setBoulesSets, syncPrimaryBoulesToPlayer });
+
+  const deleteBoulesSet = async (id: string) =>
+    deleteBoulesSetOp(id, { supabase, userId: user?.id, setBoulesSets });
+
+  const setPrimaryBoulesSet = async (id: string) =>
+    setPrimaryBoulesSetOp(id, { supabase, userId: user?.id, boulesSets, setBoulesSets, syncPrimaryBoulesToPlayer });
+
+  // ===== Replay offline queue on reconnection =====
   const loadDeltaDataRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
   useEffect(() => {
@@ -601,7 +579,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setIsReplayingQueue(false);
           setReplayProgress({ current: 0, total: 0 });
           setCurrentConflict(null);
-          // Log sync history
           await addSyncHistoryEntry({
             date: new Date().toISOString(),
             total: result.total,
@@ -612,7 +589,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             errors: result.errors,
             duration,
           });
-          // After replay, do a full sync to reconcile temp IDs with real ones
           await loadData();
         } else {
           await loadDeltaDataRef.current();
@@ -621,8 +597,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [justReconnected, user?.id, loadData, supabase, handleConflict]);
 
-  // ===== SECONDARY DATA LOADER (shared items, boules sets, preferences) =====
-  // Deferred after primary load to reduce startup time
+  // ===== Secondary data loader (shared items, boules sets, preferences) =====
   const loadSecondaryData = useCallback(async () => {
     if (!user?.id || !isConnectedRef.current) return;
     console.log('Loading secondary data (shared items, boules sets, preferences)...');
@@ -632,7 +607,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         supabase.from('boules_sets').select('*').order('created_at', { ascending: false }),
       ]);
 
-      // Build permissions map and group shared IDs
       const sharedIds: Record<string, string[]> = { player: [], club: [], terrain: [], tournament: [] };
       const permissionsMap: Record<string, 'read' | 'write'> = {};
       if (sharedWithMeRes.data) {
@@ -645,7 +619,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       setSharedItemPermissions(permissionsMap);
 
-      // Fetch shared records in parallel
       const [sharedPlayersRes, sharedClubsRes, sharedTerrainsRes, sharedTournamentsRes] = await Promise.all([
         sharedIds.player.length > 0
           ? supabase.from('players').select('*').in('id', sharedIds.player)
@@ -661,53 +634,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
           : Promise.resolve({ data: [] as any[] }),
       ]);
 
-      // Merge shared players into existing state (append only new ones)
       if (sharedPlayersRes.data && sharedPlayersRes.data.length > 0) {
         const sharedPlayers = sharedPlayersRes.data.map(mapPlayerFromDb);
-        setPlayers(prev => {
-          const existingIds = new Set(prev.map(p => p.id));
-          const newShared = sharedPlayers.filter(p => !existingIds.has(p.id));
-          return newShared.length > 0 ? [...prev, ...newShared] : prev;
-        });
+        setPlayers(prev => { const existingIds = new Set(prev.map(p => p.id)); const newShared = sharedPlayers.filter(p => !existingIds.has(p.id)); return newShared.length > 0 ? [...prev, ...newShared] : prev; });
       }
       if (sharedClubsRes.data && sharedClubsRes.data.length > 0) {
         const sharedClubs = sharedClubsRes.data.map(mapClubFromDb);
-        setClubs(prev => {
-          const existingIds = new Set(prev.map(c => c.id));
-          const newShared = sharedClubs.filter(c => !existingIds.has(c.id));
-          return newShared.length > 0 ? [...prev, ...newShared] : prev;
-        });
+        setClubs(prev => { const existingIds = new Set(prev.map(c => c.id)); const newShared = sharedClubs.filter(c => !existingIds.has(c.id)); return newShared.length > 0 ? [...prev, ...newShared] : prev; });
       }
       if (sharedTerrainsRes.data && sharedTerrainsRes.data.length > 0) {
         const sharedTerrains = sharedTerrainsRes.data.map(mapTerrainFromDb);
-        setTerrains(prev => {
-          const existingIds = new Set(prev.map(t => t.id));
-          const newShared = sharedTerrains.filter(t => !existingIds.has(t.id));
-          return newShared.length > 0 ? [...prev, ...newShared] : prev;
-        });
+        setTerrains(prev => { const existingIds = new Set(prev.map(t => t.id)); const newShared = sharedTerrains.filter(t => !existingIds.has(t.id)); return newShared.length > 0 ? [...prev, ...newShared] : prev; });
       }
       if (sharedTournamentsRes.data && sharedTournamentsRes.data.length > 0) {
         const sharedTournaments = sharedTournamentsRes.data.map(mapTournamentFromDb);
-        setTournaments(prev => {
-          const existingIds = new Set(prev.map(t => t.id));
-          const newShared = sharedTournaments.filter(t => !existingIds.has(t.id));
-          return newShared.length > 0 ? [...prev, ...newShared] : prev;
-        });
+        setTournaments(prev => { const existingIds = new Set(prev.map(t => t.id)); const newShared = sharedTournaments.filter(t => !existingIds.has(t.id)); return newShared.length > 0 ? [...prev, ...newShared] : prev; });
       }
 
-      // Boules sets
       if (boulesSetsRes.data) {
-        const dbSets: BoulesSet[] = boulesSetsRes.data.map((s: any) => ({
-          id: s.id, name: s.name, brand: s.brand,
-          diameter: s.diameter ? parseFloat(s.diameter) : undefined,
-          weight: s.weight || undefined, serialNumber: s.serial_number,
-          hardness: s.hardness, isPrimary: s.is_primary, notes: s.notes, photo: s.photo,
-          purchasePrice: s.purchase_price ? parseFloat(s.purchase_price) : undefined,
-        }));
-        setBoulesSets(dbSets);
+        setBoulesSets(boulesSetsRes.data.map(mapBoulesSetFromDb));
       }
 
-      // === Phase 3: Load shared matches & challenges (cross-player sharing) ===
+      // Phase 3: Load shared matches & challenges (cross-player sharing)
       try {
         const [sharedMatchRes, sharedChallengeRes, receivedRequests] = await Promise.all([
           getSharedMatchIds(),
@@ -715,7 +663,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           getReceivedShareRequests('accepted'),
         ]);
 
-        // Build permission map for shared matches/challenges
         const matchChallPermissions: Record<string, 'read' | 'write'> = {};
         if (receivedRequests.requests) {
           receivedRequests.requests.forEach(req => {
@@ -729,36 +676,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setSharedMatchIds(newSharedMatchIds);
         setSharedChallengeIds(newSharedChallengeIds);
 
-        // Fetch shared matches not already loaded
         if (newSharedMatchIds.length > 0) {
-          const { data: sharedMatchData } = await supabase
-            .from('matches')
-            .select('*')
-            .in('id', newSharedMatchIds);
+          const { data: sharedMatchData } = await supabase.from('matches').select('*').in('id', newSharedMatchIds);
           if (sharedMatchData && sharedMatchData.length > 0) {
             const sharedMatches = sharedMatchData.map(mapMatchFromDb);
-            setMatches(prev => {
-              const existingIds = new Set(prev.map(m => m.id));
-              const newOnes = sharedMatches.filter(m => !existingIds.has(m.id));
-              return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
-            });
+            setMatches(prev => { const existingIds = new Set(prev.map(m => m.id)); const newOnes = sharedMatches.filter(m => !existingIds.has(m.id)); return newOnes.length > 0 ? [...prev, ...newOnes] : prev; });
             console.log(`Loaded ${sharedMatchData.length} shared matches`);
           }
         }
 
-        // Fetch shared challenges not already loaded
         if (newSharedChallengeIds.length > 0) {
-          const { data: sharedChallengeData } = await supabase
-            .from('challenges')
-            .select('*')
-            .in('id', newSharedChallengeIds);
+          const { data: sharedChallengeData } = await supabase.from('challenges').select('*').in('id', newSharedChallengeIds);
           if (sharedChallengeData && sharedChallengeData.length > 0) {
             const sharedChallenges = sharedChallengeData.map(mapChallengeFromDb);
-            setChallenges(prev => {
-              const existingIds = new Set(prev.map(c => c.id));
-              const newOnes = sharedChallenges.filter(c => !existingIds.has(c.id));
-              return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
-            });
+            setChallenges(prev => { const existingIds = new Set(prev.map(c => c.id)); const newOnes = sharedChallenges.filter(c => !existingIds.has(c.id)); return newOnes.length > 0 ? [...prev, ...newOnes] : prev; });
             console.log(`Loaded ${sharedChallengeData.length} shared challenges`);
           }
         }
@@ -768,11 +699,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       secondaryLoadDone.current = true;
       console.log('Secondary data loaded successfully');
-
-      // Start polling for new share requests (fires local push notifications)
       startShareRequestPolling(30000);
 
-      // Prefetch boules set photos after secondary load
       if (boulesSetsRes.data) {
         const dbSetsForPrefetch = boulesSetsRes.data.filter((s: any) => s.photo).map((s: any) => ({ photo: s.photo }));
         if (dbSetsForPrefetch.length > 0) {
@@ -791,7 +719,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.id, supabase]);
 
-  // Schedule secondary data loading after primary load completes
   const scheduleSecondaryLoad = useCallback(() => {
     if (secondaryLoadTimerRef.current) clearTimeout(secondaryLoadTimerRef.current);
     const delay = syncConfigRef.current.secondaryLoadDelayMs;
@@ -800,17 +727,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, delay);
   }, [loadSecondaryData]);
 
-  // Cleanup secondary load timer on unmount
   useEffect(() => {
     return () => {
       if (secondaryLoadTimerRef.current) clearTimeout(secondaryLoadTimerRef.current);
     };
   }, []);
 
-  // Load data from Supabase - Phase 1: Core data only (fast startup)
+  // ===== Primary data loader =====
   const loadData = useCallback(async () => {
     if (!user?.id) {
-      // Not logged in - use mock data for demo
       setPlayers(mockPlayers);
       setClubs(mockClubs);
       setTournaments(mockTournaments);
@@ -821,7 +746,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // If offline, skip network fetch (use cached data)
     if (!isConnectedRef.current) {
       setIsOfflineMode(true);
       setLoading(false);
@@ -830,7 +754,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     setLoading(true);
     try {
-      // Phase 1: Fetch only core user data (no shared items, no boules sets)
       const [playersRes, clubsRes, tournamentsRes, matchesRes, challengesRes, terrainsRes, profileRes] = await Promise.all([
         supabase.from('players').select('*').order('created_at', { ascending: false }),
         supabase.from('clubs').select('*').order('created_at', { ascending: false }),
@@ -841,7 +764,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         supabase.from('user_profiles').select('*').eq('id', user.id).single(),
       ]);
 
-      // Load premium & admin status from profile
       if (profileRes.data) {
         setIsPremiumState(profileRes.data.is_premium ?? false);
         setIsAdmin(profileRes.data.is_admin ?? false);
@@ -849,13 +771,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       let dbPlayers: Player[] = [];
       if (playersRes.data) {
-        dbPlayers = playersRes.data.map(mapPlayer);
+        dbPlayers = playersRes.data.map(mapPlayerFromDb);
       }
 
-      // Check if selfPlayer exists, if not create it from user_profiles
+      // Check if selfPlayer exists, if not create it
       const selfPlayerExists = dbPlayers.some(p => p.id === user.id);
       if (!selfPlayerExists && profileRes.data) {
-        // Create player entry for current user
         const profile = profileRes.data;
         const { data: newPlayerData, error: createError } = await supabase.from('players').insert({
           id: user.id,
@@ -873,47 +794,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }).select().single();
 
         if (!createError && newPlayerData) {
-          dbPlayers.push(mapPlayer(newPlayerData));
+          dbPlayers.push(mapPlayerFromDb(newPlayerData));
         }
       }
 
       setPlayers(dbPlayers.length > 0 ? dbPlayers : mockPlayers);
 
       if (clubsRes.data) {
-        const dbClubs: Club[] = clubsRes.data.map(mapClubFromDb);
+        const dbClubs = clubsRes.data.map(mapClubFromDb);
         setClubs(dbClubs.length > 0 ? dbClubs : mockClubs);
       }
-
       if (terrainsRes.data) {
-        const dbTerrains: Terrain[] = terrainsRes.data.map(mapTerrainFromDb);
+        const dbTerrains = terrainsRes.data.map(mapTerrainFromDb);
         setTerrains(dbTerrains.length > 0 ? dbTerrains : mockTerrains);
       }
-
       if (tournamentsRes.data) {
-        const dbTournaments: Tournament[] = tournamentsRes.data.map(mapTournamentFromDb);
+        const dbTournaments = tournamentsRes.data.map(mapTournamentFromDb);
         setTournaments(dbTournaments.length > 0 ? dbTournaments : mockTournaments);
       }
-
       if (matchesRes.data) {
-        const dbMatches: Match[] = matchesRes.data.map(mapMatchFromDb);
+        const dbMatches = matchesRes.data.map(mapMatchFromDb);
         setMatches(dbMatches.length > 0 ? dbMatches : mockMatches);
       }
-
       if (challengesRes.data) {
-        const dbChallenges: Challenge[] = challengesRes.data.map(mapChallengeFromDb);
+        const dbChallenges = challengesRes.data.map(mapChallengeFromDb);
         setChallenges(dbChallenges.length > 0 ? dbChallenges : mockChallenges);
       }
 
-      // Mark primary load as complete and save sync timestamp
       initialLoadDone.current = true;
       setIsOfflineMode(false);
       await setLastSyncTimestamp(new Date().toISOString());
-
-      // Phase 2: Schedule secondary data loading (shared items, boules sets)
-      // This runs after the UI has rendered with core data
       scheduleSecondaryLoad();
 
-      // Phase 2b: Prefetch critical images (avatars, terrain photos) in background
       if (!syncConfigRef.current.skipImagePrefetch) {
         setTimeout(() => {
           prefetchImages({
@@ -922,10 +834,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           });
         }, 1200);
       }
-
     } catch (error) {
       console.log('Error loading data from cloud:', error);
-      // If we have cached data, keep using it instead of mock data
       if (!initialLoadDone.current) {
         const cached = await loadFromCache();
         if (cached && (cached.players.length > 0 || cached.matches.length > 0)) {
@@ -948,24 +858,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, supabase, mapPlayer, scheduleSecondaryLoad]);
+  }, [user?.id, supabase, scheduleSecondaryLoad]);
 
-  // Delta sync: only fetch records changed since last sync timestamp
-  // Keep ref in sync for reconnection effect
+  // ===== Delta sync =====
   const loadDeltaData = useCallback(async () => {
     if (!user?.id || !isConnectedRef.current || !initialLoadDone.current) return;
 
     const lastSync = await getLastSyncTimestamp();
     if (!lastSync) {
-      // No previous sync timestamp, fall back to full sync
       return loadData();
     }
 
     const syncTimestamp = new Date().toISOString();
 
     try {
-      // Fetch updated records AND soft_deletes since last sync in parallel
-      // Use selective columns to reduce payload size
       const [playersRes, clubsRes, tournamentsRes, matchesRes, challengesRes, terrainsRes, softDeletesRes] = await Promise.all([
         supabase.from('players').select(DELTA_SELECT.players).gt('updated_at', lastSync),
         supabase.from('clubs').select(DELTA_SELECT.clubs).gt('updated_at', lastSync),
@@ -977,23 +883,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ]);
 
       const totalChanges =
-        (playersRes.data?.length || 0) +
-        (clubsRes.data?.length || 0) +
-        (tournamentsRes.data?.length || 0) +
-        (matchesRes.data?.length || 0) +
-        (challengesRes.data?.length || 0) +
-        (terrainsRes.data?.length || 0);
+        (playersRes.data?.length || 0) + (clubsRes.data?.length || 0) +
+        (tournamentsRes.data?.length || 0) + (matchesRes.data?.length || 0) +
+        (challengesRes.data?.length || 0) + (terrainsRes.data?.length || 0);
       const totalDeletions = softDeletesRes.data?.length || 0;
 
       if (totalChanges === 0 && totalDeletions === 0) {
-        // No changes since last sync
         await setLastSyncTimestamp(syncTimestamp);
         return;
       }
 
       console.log(`Delta sync: ${totalChanges} records changed, ${totalDeletions} deletions since last sync`);
 
-      // Process deletions first: group by table, then remove from local state
+      // Process deletions
       if (softDeletesRes.data && softDeletesRes.data.length > 0) {
         const deletedByTable: Record<string, Set<string>> = {};
         softDeletesRes.data.forEach((sd: any) => {
@@ -1009,31 +911,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (deletedByTable['boules_sets']) setBoulesSets(prev => prev.filter(b => !deletedByTable['boules_sets']!.has(b.id)));
       }
 
-      // Merge updated records into existing state
-      if (playersRes.data && playersRes.data.length > 0) {
-        const deltaPlayers = playersRes.data.map(mapPlayerFromDb);
-        setPlayers(prev => mergeRecords(prev, deltaPlayers));
-      }
-      if (clubsRes.data && clubsRes.data.length > 0) {
-        const deltaClubs = clubsRes.data.map(mapClubFromDb);
-        setClubs(prev => mergeRecords(prev, deltaClubs));
-      }
-      if (terrainsRes.data && terrainsRes.data.length > 0) {
-        const deltaTerrains = terrainsRes.data.map(mapTerrainFromDb);
-        setTerrains(prev => mergeRecords(prev, deltaTerrains));
-      }
-      if (tournamentsRes.data && tournamentsRes.data.length > 0) {
-        const deltaTournaments = tournamentsRes.data.map(mapTournamentFromDb);
-        setTournaments(prev => mergeRecords(prev, deltaTournaments));
-      }
-      if (matchesRes.data && matchesRes.data.length > 0) {
-        const deltaMatches = matchesRes.data.map(mapMatchFromDb);
-        setMatches(prev => mergeRecords(prev, deltaMatches));
-      }
-      if (challengesRes.data && challengesRes.data.length > 0) {
-        const deltaChallenges = challengesRes.data.map(mapChallengeFromDb);
-        setChallenges(prev => mergeRecords(prev, deltaChallenges));
-      }
+      // Merge updates
+      if (playersRes.data && playersRes.data.length > 0) setPlayers(prev => mergeRecords(prev, playersRes.data!.map(mapPlayerFromDb)));
+      if (clubsRes.data && clubsRes.data.length > 0) setClubs(prev => mergeRecords(prev, clubsRes.data!.map(mapClubFromDb)));
+      if (terrainsRes.data && terrainsRes.data.length > 0) setTerrains(prev => mergeRecords(prev, terrainsRes.data!.map(mapTerrainFromDb)));
+      if (tournamentsRes.data && tournamentsRes.data.length > 0) setTournaments(prev => mergeRecords(prev, tournamentsRes.data!.map(mapTournamentFromDb)));
+      if (matchesRes.data && matchesRes.data.length > 0) setMatches(prev => mergeRecords(prev, matchesRes.data!.map(mapMatchFromDb)));
+      if (challengesRes.data && challengesRes.data.length > 0) setChallenges(prev => mergeRecords(prev, challengesRes.data!.map(mapChallengeFromDb)));
 
       await setLastSyncTimestamp(syncTimestamp);
     } catch (error) {
@@ -1042,12 +926,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.id, supabase, loadData]);
 
-  // Keep delta ref in sync
   useEffect(() => {
     loadDeltaDataRef.current = loadDeltaData;
   }, [loadDeltaData]);
 
-  // Persist data to cache whenever critical state changes (debounced)
+  // Persist cache on state changes
   useEffect(() => {
     if (!user?.id || !initialLoadDone.current) return;
     const timeout = setTimeout(() => {
@@ -1056,7 +939,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timeout);
   }, [players, clubs, tournaments, matches, challenges, terrains, user?.id]);
 
-  // Load user preferences (favorites) from database
+  // ===== Preferences =====
   const loadPreferences = useCallback(async () => {
     if (!user?.id) {
       setFavoriteTerrainIds([]);
@@ -1072,7 +955,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .single();
 
       if (error && error.code !== 'PGRST116') {
-        // PGRST116 = no rows found, which is fine for new users
         console.log('Error loading preferences:', error);
       }
 
@@ -1087,7 +969,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.id, supabase]);
 
-  // Save preferences to database (debounced via caller)
   const savePreferences = useCallback(async (terrainIds: string[], clubIds: string[]) => {
     if (!user?.id) return;
     try {
@@ -1106,25 +987,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.id, supabase]);
 
-  // Defer preferences loading until after primary data is loaded
   useEffect(() => {
     if (!user?.id) {
       loadPreferences();
       return;
     }
-    // Delay preferences by 800ms so core UI renders first
-    const timer = setTimeout(() => {
-      loadPreferences();
-    }, 800);
+    const timer = setTimeout(() => { loadPreferences(); }, 800);
     return () => clearTimeout(timer);
   }, [loadPreferences, user?.id]);
 
   // Load data when user changes
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData]);
 
-  // Clear cache on logout
+  // Clear on logout
   useEffect(() => {
     if (!user?.id) {
       initialLoadDone.current = false;
@@ -1141,7 +1016,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.id]);
 
-  // Start periodic image memory cache cleanup
+  // Periodic image cache cleanup
   useEffect(() => {
     if (!user?.id) return;
     startPeriodicCacheCleanup();
@@ -1149,12 +1024,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [user?.id]);
 
   // Auto-refresh: delta sync normally, full sync every Nth cycle
-  // Interval controlled by syncConfig (0 = disabled for battery saver)
   useEffect(() => {
     if (!user?.id) return;
     const intervalMs = syncConfigRef.current.syncIntervalMs;
     if (intervalMs <= 0) {
-      // Battery saver mode: no automatic sync
       console.log('Battery saver mode: automatic sync disabled');
       return;
     }
@@ -1207,1072 +1080,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.id, supabase, loadData]);
 
-  // Refresh data function (manual pull-to-refresh always does full sync)
   const refreshData = useCallback(async () => {
     syncCountRef.current = 0;
     await loadData();
   }, [loadData]);
 
-  // Persist recalculated stats for affected players to the database
-  const persistPlayerStats = useCallback(async (allMatches: Match[], playerIds: string[]) => {
-    if (!user?.id) return;
-    const uniqueIds = [...new Set(playerIds)];
-    for (const playerId of uniqueIds) {
-      const player = players.find(p => p.id === playerId);
-      const baseStats = player?.stats || {
-        matchesPlayed: 0, wins: 0, losses: 0, winRate: 0,
-        tirRate: 0, pointRate: 0, carreauRate: 0,
-        avgPointsScored: 0, avgPointsConceded: 0,
-      };
-      const newStats = calculatePlayerStatsFromMatches(allMatches, playerId, baseStats);
-      try {
-        await supabase.from('players').update({
-          stats: newStats,
-          updated_at: new Date().toISOString(),
-        }).eq('id', playerId);
-      } catch (e) {
-        console.log('Error persisting stats for player:', playerId, e);
-      }
-    }
-  }, [user?.id, supabase, players]);
-
-  // Add functions with cloud sync
-  const addMatch = async (match: Omit<Match, 'id'>): Promise<string | null> => {
-    if (!user?.id) {
-      const tempId = Date.now().toString();
-      const newMatch: Match = { ...match, id: tempId };
-      setMatches(prev => [newMatch, ...prev]);
-      return tempId;
-    }
-
-    // Queue if offline
-    if (!isConnectedRef.current) {
-      const tempId = `temp_${Date.now()}`;
-      enqueueOperation({ type: 'insert', table: 'matches', dbPayload: buildMatchDbPayload(match), tempId });
-      const newMatch: Match = { ...match, id: tempId };
-      setMatches(prev => [newMatch, ...prev]);
-      return tempId;
-    }
-
-    try {
-      const { data, error } = await supabase.from('matches').insert({
-        user_id: user.id,
-        date: match.date,
-        mode: match.mode,
-        format: match.format,
-        tournament_id: match.tournamentId,
-        tournament_name: match.tournamentName,
-        tournament_phase: match.tournamentPhase,
-        tournament_bracket: match.tournamentBracket,
-        bracket_match_id: match.bracketMatchId,
-        terrain_id: match.terrainId,
-        terrain_type: match.terrainType,
-        boules_set_id: match.boulesSetId || null,
-        team_a: match.teamA,
-        team_b: match.teamB,
-        winner: match.winner,
-        duration: match.duration,
-        menes: match.menes,
-        player_actions: match.playerActions,
-        series_info: match.seriesInfo,
-      }).select().single();
-
-      if (error) throw error;
-
-      if (data) {
-        const newMatch: Match = {
-          id: data.id,
-          date: data.date,
-          mode: data.mode,
-          format: data.format,
-          tournamentId: data.tournament_id,
-          tournamentName: data.tournament_name,
-          tournamentPhase: data.tournament_phase,
-          tournamentBracket: data.tournament_bracket,
-          bracketMatchId: data.bracket_match_id,
-          terrainId: data.terrain_id,
-          terrainType: data.terrain_type,
-          boulesSetId: data.boules_set_id,
-          teamA: data.team_a,
-          teamB: data.team_b,
-          winner: data.winner,
-          duration: data.duration || 0,
-          menes: data.menes || [],
-          playerActions: data.player_actions,
-          seriesInfo: data.series_info,
-        };
-        setMatches(prev => [newMatch, ...prev]);
-        // Persist recalculated stats for all players in this match
-        const updatedMatches = [newMatch, ...matches];
-        const affectedPlayers = [...new Set([...newMatch.teamA.players, ...newMatch.teamB.players])];
-        persistPlayerStats(updatedMatches, affectedPlayers);
-        return data.id;
-      }
-      return null;
-    } catch (error) {
-      console.log('Error adding match:', error);
-      // Fallback to local
-      const tempId = Date.now().toString();
-      const newMatch: Match = { ...match, id: tempId };
-      setMatches(prev => [newMatch, ...prev]);
-      return tempId;
-    }
-  };
-
-  const addPlayer = async (player: Omit<Player, 'id'>) => {
-    if (!user?.id) {
-      const newPlayer: Player = { ...player, id: Date.now().toString() };
-      setPlayers(prev => [...prev, newPlayer]);
-      return;
-    }
-
-    if (!isConnectedRef.current) {
-      const tempId = `temp_${Date.now()}`;
-      enqueueOperation({ type: 'insert', table: 'players', dbPayload: buildPlayerDbPayload(player), tempId });
-      setPlayers(prev => [...prev, { ...player, id: tempId } as Player]);
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase.from('players').insert({
-        user_id: user.id,
-        name: player.name,
-        nickname: player.nickname,
-        avatar: player.avatar,
-        club: player.club,
-        club_id: player.clubId,
-        role: player.role,
-        level: player.level,
-        location: player.location,
-        phone: player.phone,
-        email: player.email,
-        country: player.country,
-        boules: player.boules,
-        handedness: player.handedness,
-        terrain_id: player.terrainId,
-        terrain_name: player.terrainName,
-        is_public: player.isPublic ?? false,
-        show_contact_public: player.showContactPublic ?? false,
-        stats: player.stats,
-      }).select().single();
-
-      if (error) throw error;
-
-      if (data) {
-        const newPlayer: Player = mapPlayer(data);
-        setPlayers(prev => [...prev, newPlayer]);
-      }
-    } catch (error) {
-      console.log('Error adding player:', error);
-      const newPlayer: Player = { ...player, id: Date.now().toString() };
-      setPlayers(prev => [...prev, newPlayer]);
-    }
-  };
-
-  const addClub = async (club: Omit<Club, 'id'>) => {
-    if (!user?.id) {
-      const newClub: Club = { ...club, id: Date.now().toString() };
-      setClubs(prev => [...prev, newClub]);
-      return;
-    }
-
-    if (!isConnectedRef.current) {
-      const tempId = `temp_${Date.now()}`;
-      enqueueOperation({ type: 'insert', table: 'clubs', dbPayload: buildClubDbPayload(club), tempId });
-      setClubs(prev => [...prev, { ...club, id: tempId }]);
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase.from('clubs').insert({
-        user_id: user.id,
-        name: club.name,
-        logo: club.logo,
-        address: club.address,
-        city: club.city,
-        country: club.country || 'France',
-        location: club.location,
-        members_count: club.membersCount,
-        founded_year: club.foundedYear,
-        description: club.description,
-        facilities: club.facilities,
-        contact_email: club.contactEmail,
-        contact_phone: club.contactPhone,
-        terrain_id: club.terrainId,
-        terrain_name: club.terrainName,
-        membership_cost: club.membershipCost,
-        club_card_url: club.clubCardUrl || null,
-        website: club.website || null,
-        facebook_url: club.facebookUrl || null,
-        instagram_handle: club.instagramHandle || null,
-      }).select().single();
-
-      if (error) throw error;
-
-      if (data) {
-        const newClub: Club = {
-          id: data.id,
-          name: data.name,
-          logo: data.logo,
-          address: data.address,
-          city: data.city,
-          country: data.country || 'France',
-          location: data.location,
-          membersCount: data.members_count,
-          foundedYear: data.founded_year,
-          description: data.description,
-          facilities: data.facilities,
-          contactEmail: data.contact_email,
-          contactPhone: data.contact_phone,
-          terrainId: data.terrain_id,
-          terrainName: data.terrain_name,
-          membershipCost: data.membership_cost ? parseFloat(data.membership_cost) : undefined,
-          isPublic: data.is_public ?? false,
-          showContactPublic: data.show_contact_public ?? false,
-          clubCardUrl: data.club_card_url || undefined,
-          website: data.website || undefined,
-          facebookUrl: data.facebook_url || undefined,
-          instagramHandle: data.instagram_handle || undefined,
-        };
-        setClubs(prev => [...prev, newClub]);
-      }
-    } catch (error) {
-      console.log('Error adding club:', error);
-      const newClub: Club = { ...club, id: Date.now().toString() };
-      setClubs(prev => [...prev, newClub]);
-    }
-  };
-
-  const addTournament = async (tournament: Omit<Tournament, 'id'>) => {
-    if (!user?.id) {
-      const newTournament: Tournament = { ...tournament, id: Date.now().toString() };
-      setTournaments(prev => [...prev, newTournament]);
-      return;
-    }
-
-    if (!isConnectedRef.current) {
-      const tempId = `temp_${Date.now()}`;
-      enqueueOperation({ type: 'insert', table: 'tournaments', dbPayload: buildTournamentDbPayload(tournament), tempId });
-      setTournaments(prev => [...prev, { ...tournament, id: tempId }]);
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase.from('tournaments').insert({
-        user_id: user.id,
-        name: tournament.name,
-        date: tournament.date,
-        end_date: tournament.endDate,
-        type: tournament.type,
-        format: tournament.format,
-        location: tournament.location,
-        terrain_id: tournament.terrainId,
-        terrain_name: tournament.terrainName,
-        terrain_type: tournament.terrainType,
-        club_id: tournament.clubId,
-        club_name: tournament.clubName,
-        status: tournament.status,
-        participants: tournament.participants,
-        max_participants: tournament.maxParticipants,
-        prize: tournament.prize,
-        description: tournament.description,
-        teams: tournament.teams,
-        phases: tournament.phases,
-        current_phase_id: tournament.currentPhaseId,
-        tournament_level: tournament.tournamentLevel,
-        tournament_category: tournament.tournamentCategory,
-        registration_type: tournament.registrationType,
-        tournament_scope: tournament.tournamentScope,
-        registration_cost: tournament.registrationCost,
-        prize_won: tournament.prizeWon,
-      }).select().single();
-
-      if (error) throw error;
-
-      if (data) {
-        const newTournament: Tournament = {
-          id: data.id,
-          name: data.name,
-          date: data.date,
-          endDate: data.end_date,
-          type: data.type,
-          format: data.format,
-          location: data.location,
-          terrainId: data.terrain_id,
-          terrainName: data.terrain_name,
-          terrainType: data.terrain_type,
-          clubId: data.club_id,
-          clubName: data.club_name,
-          status: data.status,
-          participants: data.participants,
-          maxParticipants: data.max_participants,
-          prize: data.prize,
-          description: data.description,
-          teams: data.teams,
-          phases: data.phases,
-          currentPhaseId: data.current_phase_id,
-          tournamentLevel: data.tournament_level,
-          tournamentCategory: data.tournament_category,
-          registrationType: data.registration_type,
-          tournamentScope: data.tournament_scope,
-          registrationCost: data.registration_cost ? parseFloat(data.registration_cost) : tournament.registrationCost,
-          prizeWon: data.prize_won ? parseFloat(data.prize_won) : tournament.prizeWon,
-        };
-        setTournaments(prev => [...prev, newTournament]);
-      }
-    } catch (error) {
-      console.log('Error adding tournament:', error);
-      const newTournament: Tournament = { ...tournament, id: Date.now().toString() };
-      setTournaments(prev => [...prev, newTournament]);
-    }
-  };
-
-  const addTerrain = async (terrain: Omit<Terrain, 'id'>) => {
-    if (!user?.id) {
-      const newTerrain: Terrain = { ...terrain, id: Date.now().toString() };
-      setTerrains(prev => [...prev, newTerrain]);
-      return;
-    }
-
-    if (!isConnectedRef.current) {
-      const tempId = `temp_${Date.now()}`;
-      enqueueOperation({ type: 'insert', table: 'terrains', dbPayload: buildTerrainDbPayload(terrain), tempId });
-      setTerrains(prev => [...prev, { ...terrain, id: tempId }]);
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase.from('terrains').insert({
-        user_id: user.id,
-        name: terrain.name,
-        address: terrain.address,
-        city: terrain.city,
-        location: terrain.location,
-        type: terrain.type,
-        description: terrain.description,
-        facilities: terrain.facilities,
-        photos: terrain.photos,
-        club_id: terrain.clubId,
-        club_name: terrain.clubName,
-        is_public: terrain.isPublic,
-        public_access: terrain.publicAccess ?? true,
-        courts_count: terrain.courtsCount,
-        lighting: terrain.lighting,
-        covered: terrain.covered,
-        environment: terrain.environment || 'outdoor',
-      }).select().single();
-
-      if (error) throw error;
-
-      if (data) {
-        const newTerrain: Terrain = {
-          id: data.id,
-          name: data.name,
-          address: data.address,
-          city: data.city,
-          location: data.location,
-          type: data.type,
-          description: data.description,
-          facilities: data.facilities,
-          photos: data.photos,
-          clubId: data.club_id,
-          clubName: data.club_name,
-          isPublic: data.is_public,
-          publicAccess: data.public_access ?? true,
-          courtsCount: data.courts_count,
-          lighting: data.lighting,
-          covered: data.covered,
-          environment: data.environment || 'outdoor',
-          createdAt: data.created_at,
-        };
-        setTerrains(prev => [...prev, newTerrain]);
-      }
-    } catch (error) {
-      console.log('Error adding terrain:', error);
-      const newTerrain: Terrain = { ...terrain, id: Date.now().toString() };
-      setTerrains(prev => [...prev, newTerrain]);
-    }
-  };
-
-  const addChallenge = async (challenge: Omit<Challenge, 'id'>): Promise<string | null> => {
-    if (!user?.id) {
-      const tempId = Date.now().toString();
-      const newChallenge: Challenge = { ...challenge, id: tempId };
-      setChallenges(prev => [newChallenge, ...prev]);
-      return tempId;
-    }
-
-    if (!isConnectedRef.current) {
-      const tempId = `temp_${Date.now()}`;
-      enqueueOperation({ type: 'insert', table: 'challenges', dbPayload: buildChallengeDbPayload(challenge), tempId });
-      setChallenges(prev => [{ ...challenge, id: tempId }, ...prev]);
-      return tempId;
-    }
-
-    try {
-      const { data, error } = await supabase.from('challenges').insert({
-        user_id: user.id,
-        type: challenge.type,
-        mode: challenge.mode,
-        date: challenge.date,
-        player_id: challenge.playerId,
-        player_name: challenge.playerName,
-        sponsor_id: challenge.sponsorId || null,
-        sponsor_name: challenge.sponsorName || null,
-        sponsor_photo: challenge.sponsorPhoto || null,
-        opponent_id: challenge.opponentId,
-        opponent_name: challenge.opponentName,
-        opponent_result: challenge.opponentResult,
-        winner: challenge.winner,
-        shots: challenge.shots,
-        success_count: challenge.successCount,
-        total_shots: challenge.totalShots,
-        carreau_count: challenge.carreauCount,
-        success_rate: challenge.successRate,
-        precision_shots: challenge.precisionShots,
-        total_points: challenge.totalPoints,
-        max_points: challenge.maxPoints,
-        atelier_scores: challenge.atelierScores,
-        duration: challenge.duration,
-        notes: challenge.notes,
-        detailed_shots: challenge.detailedShots,
-        boules_set_id: challenge.boulesSetId || null,
-        terrain_id: challenge.terrainId || null,
-      }).select().single();
-
-      if (error) throw error;
-
-      if (data) {
-        const newChallenge: Challenge = {
-          id: data.id,
-          type: data.type,
-          mode: data.mode || challenge.mode,
-          date: data.date,
-          playerId: data.player_id,
-          playerName: data.player_name,
-          sponsorId: data.sponsor_id || challenge.sponsorId,
-          sponsorName: data.sponsor_name || challenge.sponsorName,
-          sponsorPhoto: data.sponsor_photo || challenge.sponsorPhoto,
-          opponentId: data.opponent_id || challenge.opponentId,
-          opponentName: data.opponent_name || challenge.opponentName,
-          opponentResult: data.opponent_result || challenge.opponentResult,
-          winner: data.winner || challenge.winner,
-          shots: data.shots,
-          successCount: data.success_count,
-          totalShots: data.total_shots,
-          carreauCount: data.carreau_count,
-          successRate: data.success_rate ? parseFloat(data.success_rate) : undefined,
-          precisionShots: data.precision_shots,
-          totalPoints: data.total_points,
-          maxPoints: data.max_points,
-          atelierScores: data.atelier_scores,
-          duration: data.duration,
-          notes: data.notes,
-          detailedShots: data.detailed_shots,
-          boulesSetId: data.boules_set_id,
-          terrainId: data.terrain_id,
-        };
-        setChallenges(prev => [newChallenge, ...prev]);
-        return data.id;
-      }
-      return null;
-    } catch (error) {
-      console.log('Error adding challenge:', error);
-      const tempId = Date.now().toString();
-      const newChallenge: Challenge = { ...challenge, id: tempId };
-      setChallenges(prev => [newChallenge, ...prev]);
-      return tempId;
-    }
-  };
-
-  // Update functions with cloud sync
-  const updateMatch = async (id: string, updates: Partial<Match>) => {
-    const existingMatch = matches.find(m => m.id === id);
-    // Update local state immediately
-    setMatches(prev => prev.map(match => 
-      match.id === id ? { ...match, ...updates } : match
-    ));
-
-    // Persist recalculated stats if score/winner/actions changed
-    if (user?.id && existingMatch && (updates.winner !== undefined || updates.playerActions !== undefined || updates.teamA !== undefined || updates.teamB !== undefined)) {
-      const updatedMatch = { ...existingMatch, ...updates } as Match;
-      const updatedMatches = matches.map(m => m.id === id ? updatedMatch : m);
-      const affectedPlayers = [...new Set([
-        ...updatedMatch.teamA.players,
-        ...updatedMatch.teamB.players,
-        ...(existingMatch.teamA.players || []),
-        ...(existingMatch.teamB.players || []),
-      ])];
-      persistPlayerStats(updatedMatches, affectedPlayers);
-    }
-
-    if (!user?.id) return;
-
-    if (!isConnectedRef.current) {
-      enqueueOperation({ type: 'update', table: 'matches', itemId: id, dbPayload: buildUpdateDbPayload('matches', updates) });
-      return;
-    }
-
-    try {
-      const dbUpdates: any = {};
-      if (updates.date !== undefined) dbUpdates.date = updates.date;
-      if (updates.mode !== undefined) dbUpdates.mode = updates.mode;
-      if (updates.format !== undefined) dbUpdates.format = updates.format;
-      if (updates.tournamentId !== undefined) dbUpdates.tournament_id = updates.tournamentId;
-      if (updates.tournamentName !== undefined) dbUpdates.tournament_name = updates.tournamentName;
-      if (updates.tournamentPhase !== undefined) dbUpdates.tournament_phase = updates.tournamentPhase;
-      if (updates.tournamentBracket !== undefined) dbUpdates.tournament_bracket = updates.tournamentBracket;
-      if (updates.teamA !== undefined) dbUpdates.team_a = updates.teamA;
-      if (updates.teamB !== undefined) dbUpdates.team_b = updates.teamB;
-      if (updates.winner !== undefined) dbUpdates.winner = updates.winner;
-      if (updates.duration !== undefined) dbUpdates.duration = updates.duration;
-      if (updates.menes !== undefined) dbUpdates.menes = updates.menes;
-      if (updates.playerActions !== undefined) dbUpdates.player_actions = updates.playerActions;
-      if (updates.terrainId !== undefined) dbUpdates.terrain_id = updates.terrainId;
-      if (updates.terrainType !== undefined) dbUpdates.terrain_type = updates.terrainType;
-      dbUpdates.updated_at = new Date().toISOString();
-
-      await supabase.from('matches').update(dbUpdates).eq('id', id);
-    } catch (error) {
-      console.log('Error updating match:', error);
-    }
-  };
-
-  const updatePlayer = async (id: string, updates: Partial<Player>) => {
-    const oldPlayer = players.find(p => p.id === id);
-    setPlayers(prev => prev.map(player => 
-      player.id === id ? { ...player, ...updates } : player
-    ));
-
-    if (!user?.id) return;
-
-    if (!isConnectedRef.current) {
-      enqueueOperation({ type: 'update', table: 'players', itemId: id, dbPayload: buildUpdateDbPayload('players', updates) });
-      return;
-    }
-
-    try {
-      const dbUpdates: any = {};
-      if (updates.name !== undefined) dbUpdates.name = updates.name;
-      if (updates.nickname !== undefined) dbUpdates.nickname = updates.nickname;
-      if (updates.avatar !== undefined) dbUpdates.avatar = updates.avatar;
-      if (updates.club !== undefined) dbUpdates.club = updates.club || null;
-      if (updates.clubId !== undefined) dbUpdates.club_id = updates.clubId || null;
-      if (updates.role !== undefined) dbUpdates.role = updates.role;
-      if (updates.level !== undefined) dbUpdates.level = updates.level;
-      if (updates.location !== undefined) dbUpdates.location = updates.location;
-      if (updates.country !== undefined) dbUpdates.country = updates.country;
-      if (updates.boules !== undefined) dbUpdates.boules = updates.boules;
-      if (updates.handedness !== undefined) dbUpdates.handedness = updates.handedness || null;
-      if (updates.terrainId !== undefined) dbUpdates.terrain_id = updates.terrainId || null;
-      if (updates.terrainName !== undefined) dbUpdates.terrain_name = updates.terrainName || null;
-      if (updates.phone !== undefined) dbUpdates.phone = updates.phone || null;
-      if (updates.email !== undefined) dbUpdates.email = updates.email || null;
-      if (updates.isPublic !== undefined) dbUpdates.is_public = updates.isPublic;
-      if (updates.showContactPublic !== undefined) dbUpdates.show_contact_public = updates.showContactPublic;
-      if (updates.stats !== undefined) dbUpdates.stats = updates.stats;
-      dbUpdates.updated_at = new Date().toISOString();
-
-      await supabase.from('players').update(dbUpdates).eq('id', id);
-
-      // Log modification for shared items
-      if (sharedItemPermissions[id] === 'write' && oldPlayer) {
-        const { data: row } = await supabase.from('players').select('user_id').eq('id', id).single();
-        if (row?.user_id) {
-          const changes = Object.keys(updates).filter(k => k !== 'stats' && (oldPlayer as any)[k] !== (updates as any)[k]).map(k => ({ field: k, oldValue: (oldPlayer as any)[k], newValue: (updates as any)[k] }));
-          logModification({ itemType: 'player', itemId: id, ownerId: row.user_id, changes }).catch(() => {});
-        }
-      }
-    } catch (error) {
-      console.log('Error updating player:', error);
-    }
-  };
-
-  const updateClub = async (id: string, updates: Partial<Club>) => {
-    const oldClub = clubs.find(c => c.id === id);
-    setClubs(prev => prev.map(club => 
-      club.id === id ? { ...club, ...updates } : club
-    ));
-
-    if (!user?.id) return;
-
-    if (!isConnectedRef.current) {
-      enqueueOperation({ type: 'update', table: 'clubs', itemId: id, dbPayload: buildUpdateDbPayload('clubs', updates) });
-      return;
-    }
-
-    try {
-      const dbUpdates: any = {};
-      if (updates.name !== undefined) dbUpdates.name = updates.name;
-      if (updates.logo !== undefined) dbUpdates.logo = updates.logo;
-      if (updates.address !== undefined) dbUpdates.address = updates.address;
-      if (updates.city !== undefined) dbUpdates.city = updates.city;
-      if (updates.country !== undefined) dbUpdates.country = updates.country;
-      if (updates.location !== undefined) dbUpdates.location = updates.location;
-      if (updates.membersCount !== undefined) dbUpdates.members_count = updates.membersCount;
-      if (updates.foundedYear !== undefined) dbUpdates.founded_year = updates.foundedYear;
-      if (updates.description !== undefined) dbUpdates.description = updates.description || null;
-      if (updates.facilities !== undefined) dbUpdates.facilities = updates.facilities;
-      if (updates.contactEmail !== undefined) dbUpdates.contact_email = updates.contactEmail || null;
-      if (updates.contactPhone !== undefined) dbUpdates.contact_phone = updates.contactPhone || null;
-      if (updates.terrainId !== undefined) dbUpdates.terrain_id = updates.terrainId;
-      if (updates.terrainName !== undefined) dbUpdates.terrain_name = updates.terrainName;
-      if (updates.membershipCost !== undefined) dbUpdates.membership_cost = updates.membershipCost;
-      if (updates.showContactPublic !== undefined) dbUpdates.show_contact_public = updates.showContactPublic;
-      if ((updates as any).clubCardUrl !== undefined) dbUpdates.club_card_url = (updates as any).clubCardUrl || null;
-      if (updates.website !== undefined) dbUpdates.website = updates.website || null;
-      if (updates.facebookUrl !== undefined) dbUpdates.facebook_url = updates.facebookUrl || null;
-      if (updates.instagramHandle !== undefined) dbUpdates.instagram_handle = updates.instagramHandle || null;
-      dbUpdates.updated_at = new Date().toISOString();
-
-      await supabase.from('clubs').update(dbUpdates).eq('id', id);
-
-      // Log modification for shared items
-      if (sharedItemPermissions[id] === 'write' && oldClub) {
-        const { data: row } = await supabase.from('clubs').select('user_id').eq('id', id).single();
-        if (row?.user_id) {
-          const changes = Object.keys(updates).filter(k => (oldClub as any)[k] !== (updates as any)[k]).map(k => ({ field: k, oldValue: (oldClub as any)[k], newValue: (updates as any)[k] }));
-          logModification({ itemType: 'club', itemId: id, ownerId: row.user_id, changes }).catch(() => {});
-        }
-      }
-    } catch (error) {
-      console.log('Error updating club:', error);
-    }
-  };
-
-  const updateTournament = async (id: string, updates: Partial<Tournament>) => {
-    const oldTournament = tournaments.find(t => t.id === id);
-    setTournaments(prev => prev.map(tournament => 
-      tournament.id === id ? { ...tournament, ...updates } : tournament
-    ));
-
-    if (!user?.id) return;
-
-    if (!isConnectedRef.current) {
-      enqueueOperation({ type: 'update', table: 'tournaments', itemId: id, dbPayload: buildUpdateDbPayload('tournaments', updates) });
-      return;
-    }
-
-    try {
-      const dbUpdates: any = {};
-      if (updates.name !== undefined) dbUpdates.name = updates.name;
-      if (updates.date !== undefined) dbUpdates.date = updates.date;
-      if (updates.endDate !== undefined) dbUpdates.end_date = updates.endDate;
-      if (updates.type !== undefined) dbUpdates.type = updates.type;
-      if (updates.format !== undefined) dbUpdates.format = updates.format;
-      if (updates.location !== undefined) dbUpdates.location = updates.location;
-      if (updates.terrainId !== undefined) dbUpdates.terrain_id = updates.terrainId;
-      if (updates.terrainName !== undefined) dbUpdates.terrain_name = updates.terrainName;
-      if (updates.terrainType !== undefined) dbUpdates.terrain_type = updates.terrainType;
-      if (updates.clubId !== undefined) dbUpdates.club_id = updates.clubId;
-      if (updates.clubName !== undefined) dbUpdates.club_name = updates.clubName;
-      if (updates.status !== undefined) dbUpdates.status = updates.status;
-      if (updates.participants !== undefined) dbUpdates.participants = updates.participants;
-      if (updates.maxParticipants !== undefined) dbUpdates.max_participants = updates.maxParticipants;
-      if (updates.prize !== undefined) dbUpdates.prize = updates.prize;
-      if (updates.description !== undefined) dbUpdates.description = updates.description;
-      if (updates.teams !== undefined) dbUpdates.teams = updates.teams;
-      if (updates.phases !== undefined) dbUpdates.phases = updates.phases;
-      if (updates.currentPhaseId !== undefined) dbUpdates.current_phase_id = updates.currentPhaseId;
-      if (updates.tournamentLevel !== undefined) dbUpdates.tournament_level = updates.tournamentLevel;
-      if (updates.tournamentCategory !== undefined) dbUpdates.tournament_category = updates.tournamentCategory;
-      if (updates.registrationType !== undefined) dbUpdates.registration_type = updates.registrationType;
-      if (updates.tournamentScope !== undefined) dbUpdates.tournament_scope = updates.tournamentScope;
-      if (updates.registrationCost !== undefined) dbUpdates.registration_cost = updates.registrationCost;
-      if (updates.prizeWon !== undefined) dbUpdates.prize_won = updates.prizeWon;
-      if (updates.finalResult !== undefined) dbUpdates.final_result = updates.finalResult;
-      dbUpdates.updated_at = new Date().toISOString();
-
-      await supabase.from('tournaments').update(dbUpdates).eq('id', id);
-
-      // Log modification for shared items
-      if (sharedItemPermissions[id] === 'write' && oldTournament) {
-        const { data: row } = await supabase.from('tournaments').select('user_id').eq('id', id).single();
-        if (row?.user_id) {
-          const ignoreFields = ['teams', 'phases', 'currentPhaseId'];
-          const changes = Object.keys(updates).filter(k => !ignoreFields.includes(k) && (oldTournament as any)[k] !== (updates as any)[k]).map(k => ({ field: k, oldValue: (oldTournament as any)[k], newValue: (updates as any)[k] }));
-          logModification({ itemType: 'tournament', itemId: id, ownerId: row.user_id, changes }).catch(() => {});
-        }
-      }
-    } catch (error) {
-      console.log('Error updating tournament:', error);
-    }
-  };
-
-  const updateTerrain = async (id: string, updates: Partial<Terrain>) => {
-    const oldTerrain = terrains.find(t => t.id === id);
-    setTerrains(prev => prev.map(terrain => 
-      terrain.id === id ? { ...terrain, ...updates } : terrain
-    ));
-
-    if (!user?.id) return;
-
-    if (!isConnectedRef.current) {
-      enqueueOperation({ type: 'update', table: 'terrains', itemId: id, dbPayload: buildUpdateDbPayload('terrains', updates) });
-      return;
-    }
-
-    try {
-      const dbUpdates: any = {};
-      if (updates.name !== undefined) dbUpdates.name = updates.name;
-      if (updates.address !== undefined) dbUpdates.address = updates.address;
-      if (updates.city !== undefined) dbUpdates.city = updates.city;
-      if (updates.location !== undefined) dbUpdates.location = updates.location;
-      if (updates.type !== undefined) dbUpdates.type = updates.type;
-      if (updates.description !== undefined) dbUpdates.description = updates.description;
-      if (updates.facilities !== undefined) dbUpdates.facilities = updates.facilities;
-      if (updates.photos !== undefined) dbUpdates.photos = updates.photos;
-      if (updates.clubId !== undefined) dbUpdates.club_id = updates.clubId;
-      if (updates.clubName !== undefined) dbUpdates.club_name = updates.clubName;
-      if (updates.isPublic !== undefined) dbUpdates.is_public = updates.isPublic;
-      if (updates.publicAccess !== undefined) dbUpdates.public_access = updates.publicAccess;
-      if (updates.courtsCount !== undefined) dbUpdates.courts_count = updates.courtsCount;
-      if (updates.lighting !== undefined) dbUpdates.lighting = updates.lighting;
-      if (updates.covered !== undefined) dbUpdates.covered = updates.covered;
-      if (updates.environment !== undefined) dbUpdates.environment = updates.environment;
-      dbUpdates.updated_at = new Date().toISOString();
-
-      await supabase.from('terrains').update(dbUpdates).eq('id', id);
-
-      // Log modification for shared items
-      if (sharedItemPermissions[id] === 'write' && oldTerrain) {
-        const { data: row } = await supabase.from('terrains').select('user_id').eq('id', id).single();
-        if (row?.user_id) {
-          const changes = Object.keys(updates).filter(k => k !== 'location' && (oldTerrain as any)[k] !== (updates as any)[k]).map(k => ({ field: k, oldValue: (oldTerrain as any)[k], newValue: (updates as any)[k] }));
-          logModification({ itemType: 'terrain', itemId: id, ownerId: row.user_id, changes }).catch(() => {});
-        }
-      }
-    } catch (error) {
-      console.log('Error updating terrain:', error);
-    }
-  };
-
-  const updateChallenge = async (id: string, updates: Partial<Challenge>) => {
-    setChallenges(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
-
-    if (!user?.id) return;
-
-    if (!isConnectedRef.current) {
-      enqueueOperation({ type: 'update', table: 'challenges', itemId: id, dbPayload: buildUpdateDbPayload('challenges', updates) });
-      return;
-    }
-
-    try {
-      const dbUpdates: any = {};
-      if (updates.type !== undefined) dbUpdates.type = updates.type;
-      if (updates.mode !== undefined) dbUpdates.mode = updates.mode;
-      if (updates.date !== undefined) dbUpdates.date = updates.date;
-      if (updates.playerId !== undefined) dbUpdates.player_id = updates.playerId;
-      if (updates.playerName !== undefined) dbUpdates.player_name = updates.playerName;
-      if (updates.opponentId !== undefined) dbUpdates.opponent_id = updates.opponentId;
-      if (updates.opponentName !== undefined) dbUpdates.opponent_name = updates.opponentName;
-      if (updates.opponentResult !== undefined) dbUpdates.opponent_result = updates.opponentResult;
-      if (updates.winner !== undefined) dbUpdates.winner = updates.winner;
-      if (updates.shots !== undefined) dbUpdates.shots = updates.shots;
-      if (updates.successCount !== undefined) dbUpdates.success_count = updates.successCount;
-      if (updates.totalShots !== undefined) dbUpdates.total_shots = updates.totalShots;
-      if (updates.carreauCount !== undefined) dbUpdates.carreau_count = updates.carreauCount;
-      if (updates.successRate !== undefined) dbUpdates.success_rate = updates.successRate;
-      if (updates.precisionShots !== undefined) dbUpdates.precision_shots = updates.precisionShots;
-      if (updates.totalPoints !== undefined) dbUpdates.total_points = updates.totalPoints;
-      if (updates.maxPoints !== undefined) dbUpdates.max_points = updates.maxPoints;
-      if (updates.atelierScores !== undefined) dbUpdates.atelier_scores = updates.atelierScores;
-      if (updates.duration !== undefined) dbUpdates.duration = updates.duration;
-      if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
-      if (updates.detailedShots !== undefined) dbUpdates.detailed_shots = updates.detailedShots;
-      if (updates.terrainId !== undefined) dbUpdates.terrain_id = updates.terrainId || null;
-      if (updates.sponsorId !== undefined) dbUpdates.sponsor_id = updates.sponsorId || null;
-      if (updates.sponsorName !== undefined) dbUpdates.sponsor_name = updates.sponsorName || null;
-      if (updates.sponsorPhoto !== undefined) dbUpdates.sponsor_photo = updates.sponsorPhoto || null;
-      dbUpdates.updated_at = new Date().toISOString();
-
-      await supabase.from('challenges').update(dbUpdates).eq('id', id);
-    } catch (error) {
-      console.log('Error updating challenge:', error);
-    }
-  };
-
-  const updateBracketMatch = (tournamentId: string, bracketMatchId: string, updates: Partial<BracketMatch>) => {
-    setTournaments(prev => prev.map(tournament => {
-      if (tournament.id !== tournamentId || !tournament.phases) return tournament;
-      
-      const updatedPhases = tournament.phases.map(phase => ({
-        ...phase,
-        matches: phase.matches.map(match => 
-          match.id === bracketMatchId ? { ...match, ...updates } : match
-        ),
-      }));
-
-      return { ...tournament, phases: updatedPhases };
-    }));
-  };
-
-  // Delete functions with cloud sync
-  const deleteMatch = async (id: string) => {
-    const matchToDelete = matches.find(m => m.id === id);
-    setMatches(prev => prev.filter(match => match.id !== id));
-
-    if (matchToDelete && user?.id) {
-      const updatedMatches = matches.filter(m => m.id !== id);
-      const affectedPlayers = [...new Set([...matchToDelete.teamA.players, ...matchToDelete.teamB.players])];
-      persistPlayerStats(updatedMatches, affectedPlayers);
-    }
-
-    if (!user?.id) return;
-
-    if (!isConnectedRef.current) {
-      enqueueOperation({ type: 'delete', table: 'matches', itemId: id });
-      return;
-    }
-
-    try {
-      await supabase.from('matches').delete().eq('id', id);
-    } catch (error) {
-      console.log('Error deleting match:', error);
-    }
-  };
-
-  const deletePlayer = async (id: string) => {
-    setPlayers(prev => prev.filter(player => player.id !== id));
-
-    if (!user?.id) return;
-
-    if (!isConnectedRef.current) {
-      enqueueOperation({ type: 'delete', table: 'players', itemId: id });
-      return;
-    }
-
-    try {
-      await supabase.from('players').delete().eq('id', id);
-    } catch (error) {
-      console.log('Error deleting player:', error);
-    }
-  };
-
-  const deleteChallenge = async (id: string) => {
-    setChallenges(prev => prev.filter(challenge => challenge.id !== id));
-
-    if (!user?.id) return;
-
-    if (!isConnectedRef.current) {
-      enqueueOperation({ type: 'delete', table: 'challenges', itemId: id });
-      return;
-    }
-
-    try {
-      await supabase.from('challenges').delete().eq('id', id);
-    } catch (error) {
-      console.log('Error deleting challenge:', error);
-    }
-  };
-
-  const deleteClub = async (id: string) => {
-    setClubs(prev => prev.filter(club => club.id !== id));
-    setTerrains(prev => prev.map(t => 
-      t.clubId === id ? { ...t, clubId: undefined, clubName: undefined } : t
-    ));
-
-    if (!user?.id) return;
-
-    if (!isConnectedRef.current) {
-      enqueueOperation({ type: 'delete', table: 'clubs', itemId: id });
-      return;
-    }
-
-    try {
-      await supabase.from('clubs').delete().eq('id', id);
-    } catch (error) {
-      console.log('Error deleting club:', error);
-    }
-  };
-
-  const deleteTournament = async (id: string) => {
-    const tournamentToDelete = tournaments.find(t => t.id === id);
-    setTournaments(prev => prev.filter(tournament => tournament.id !== id));
-    setMatches(prev => prev.map(m =>
-      m.tournamentId === id ? { ...m, tournamentId: undefined, tournamentName: undefined } : m
-    ));
-
-    if (!user?.id) return;
-
-    if (!isConnectedRef.current) {
-      enqueueOperation({ type: 'delete', table: 'tournaments', itemId: id });
-      return;
-    }
-
-    try {
-      // Unlink matches from this tournament in DB
-      await supabase.from('matches').update({
-        tournament_id: null,
-        tournament_name: null,
-        updated_at: new Date().toISOString(),
-      }).eq('tournament_id', id);
-      // Delete the tournament
-      await supabase.from('tournaments').delete().eq('id', id);
-    } catch (error) {
-      console.log('Error deleting tournament:', error);
-    }
-  };
-
-  const deleteTerrain = async (id: string) => {
-    setTerrains(prev => prev.filter(terrain => terrain.id !== id));
-    setFavoriteTerrainIds(prev => prev.filter(fid => fid !== id));
-
-    if (!user?.id) return;
-
-    if (!isConnectedRef.current) {
-      enqueueOperation({ type: 'delete', table: 'terrains', itemId: id });
-      return;
-    }
-
-    try {
-      await supabase.from('terrains').delete().eq('id', id);
-    } catch (error) {
-      console.log('Error deleting terrain:', error);
-    }
-  };
-
-  // Boules Sets CRUD
-  const addBoulesSet = async (set: Omit<BoulesSet, 'id'>) => {
-    if (!user?.id) return;
-    try {
-      const { data, error } = await supabase.from('boules_sets').insert({
-        user_id: user.id,
-        name: set.name,
-        brand: set.brand || null,
-        diameter: set.diameter || null,
-        weight: set.weight || null,
-        serial_number: set.serialNumber || null,
-        hardness: set.hardness || null,
-        is_primary: set.isPrimary || false,
-        notes: set.notes || null,
-        photo: set.photo || null,
-        purchase_price: set.purchasePrice || null,
-      }).select().single();
-      if (error) throw error;
-      if (data) {
-        const newSet: BoulesSet = {
-          id: data.id, name: data.name, brand: data.brand,
-          diameter: data.diameter ? parseFloat(data.diameter) : undefined,
-          weight: data.weight || undefined, serialNumber: data.serial_number,
-          hardness: data.hardness, isPrimary: data.is_primary, notes: data.notes,
-          purchasePrice: data.purchase_price ? parseFloat(data.purchase_price) : undefined,
-        };
-        // If this is primary, unset others
-        if (newSet.isPrimary) {
-          setBoulesSets(prev => [...prev.map(s => ({ ...s, isPrimary: false })), newSet]);
-          // Sync primary boules to selfPlayer
-          syncPrimaryBoulesToPlayer(newSet);
-        } else {
-          setBoulesSets(prev => [...prev, newSet]);
-        }
-      }
-    } catch (error) {
-      console.log('Error adding boules set:', error);
-    }
-  };
-
-  const updateBoulesSet = async (id: string, updates: Partial<BoulesSet>) => {
-    if (!user?.id) return;
-    setBoulesSets(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
-    try {
-      const dbUpdates: any = {};
-      if (updates.name !== undefined) dbUpdates.name = updates.name;
-      if (updates.brand !== undefined) dbUpdates.brand = updates.brand || null;
-      if (updates.diameter !== undefined) dbUpdates.diameter = updates.diameter || null;
-      if (updates.weight !== undefined) dbUpdates.weight = updates.weight || null;
-      if (updates.serialNumber !== undefined) dbUpdates.serial_number = updates.serialNumber || null;
-      if (updates.hardness !== undefined) dbUpdates.hardness = updates.hardness || null;
-      if (updates.isPrimary !== undefined) dbUpdates.is_primary = updates.isPrimary;
-      if (updates.notes !== undefined) dbUpdates.notes = updates.notes || null;
-      if (updates.photo !== undefined) dbUpdates.photo = updates.photo || null;
-      if (updates.purchasePrice !== undefined) dbUpdates.purchase_price = updates.purchasePrice || null;
-      dbUpdates.updated_at = new Date().toISOString();
-      await supabase.from('boules_sets').update(dbUpdates).eq('id', id);
-      // If updated set is primary, sync to player
-      const updatedSet = boulesSets.find(s => s.id === id);
-      if (updatedSet && (updatedSet.isPrimary || updates.isPrimary)) {
-        syncPrimaryBoulesToPlayer({ ...updatedSet, ...updates });
-      }
-    } catch (error) {
-      console.log('Error updating boules set:', error);
-    }
-  };
-
-  const deleteBoulesSet = async (id: string) => {
-    setBoulesSets(prev => prev.filter(s => s.id !== id));
-    if (!user?.id) return;
-    try {
-      await supabase.from('boules_sets').delete().eq('id', id);
-    } catch (error) {
-      console.log('Error deleting boules set:', error);
-    }
-  };
-
-  const setPrimaryBoulesSet = async (id: string) => {
-    if (!user?.id) return;
-    // Unset all, set the chosen one
-    setBoulesSets(prev => prev.map(s => ({ ...s, isPrimary: s.id === id })));
-    try {
-      // Unset all primary
-      await supabase.from('boules_sets').update({ is_primary: false, updated_at: new Date().toISOString() }).eq('user_id', user.id);
-      // Set new primary
-      await supabase.from('boules_sets').update({ is_primary: true, updated_at: new Date().toISOString() }).eq('id', id);
-      // Sync to player profile
-      const primarySet = boulesSets.find(s => s.id === id);
-      if (primarySet) syncPrimaryBoulesToPlayer(primarySet);
-    } catch (error) {
-      console.log('Error setting primary boules set:', error);
-    }
-  };
-
-  // Sync primary boules set data to selfPlayer.boules
-  const syncPrimaryBoulesToPlayer = useCallback((set: Partial<BoulesSet>) => {
-    if (!user?.id) return;
-    const boulesData = {
-      name: set.name || undefined,
-      brand: set.brand || undefined,
-      diameter: set.diameter || undefined,
-      weight: set.weight || undefined,
-      serialNumber: set.serialNumber || undefined,
-      hardness: set.hardness || undefined,
-    };
-    updatePlayer(user.id, { boules: boulesData });
-  }, [user?.id, updatePlayer]);
-
-  // Favorites functions
+  // ===== Favorites =====
   const toggleFavoriteTerrain = (terrainId: string) => {
     setFavoriteTerrainIds(prev => {
       const updated = prev.includes(terrainId)
         ? prev.filter(id => id !== terrainId)
         : [...prev, terrainId];
-      // Persist to database
       savePreferences(updated, favoriteClubIds);
       return updated;
     });
   };
 
-  const isFavoriteTerrain = (terrainId: string) => {
-    return favoriteTerrainIds.includes(terrainId);
-  };
+  const isFavoriteTerrain = (terrainId: string) => favoriteTerrainIds.includes(terrainId);
 
-  // Club favorites
   const toggleFavoriteClub = (clubId: string) => {
     setFavoriteClubIds(prev => {
       const updated = prev.includes(clubId)
         ? prev.filter(id => id !== clubId)
         : [...prev, clubId];
-      // Persist to database
       savePreferences(favoriteTerrainIds, updated);
       return updated;
     });
   };
 
-  const isFavoriteClub = (clubId: string) => {
-    return favoriteClubIds.includes(clubId);
-  };
+  const isFavoriteClub = (clubId: string) => favoriteClubIds.includes(clubId);
 
-  // Tournament notification functions
+  // Tournament notifications
   const toggleTournamentNotification = (tournamentId: string) => {
     setTournamentNotifications(prev => {
       if (prev.includes(tournamentId)) {
@@ -2281,42 +1119,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return [...prev, tournamentId];
       }
     });
-    // TODO: Persist to user preferences in database and schedule notifications
   };
 
-  const isTournamentNotificationEnabled = (tournamentId: string) => {
-    return tournamentNotifications.includes(tournamentId);
-  };
+  const isTournamentNotificationEnabled = (tournamentId: string) => tournamentNotifications.includes(tournamentId);
 
-  // Shared permission getter (includes both regular shared items and match/challenge shares)
+  // ===== Shared permission helpers =====
   const getSharedPermission = useCallback((itemId: string): 'read' | 'write' | null => {
     return sharedItemPermissions[itemId] || sharedMatchPermissions[itemId] || null;
   }, [sharedItemPermissions, sharedMatchPermissions]);
 
-  // Check if a match or challenge is a shared item (not owned by user)
   const isSharedItem = useCallback((itemId: string): boolean => {
     return sharedMatchIds.includes(itemId) || sharedChallengeIds.includes(itemId) || !!sharedItemPermissions[itemId];
   }, [sharedMatchIds, sharedChallengeIds, sharedItemPermissions]);
 
-  // Toggle public/private in local state (DB is already updated by the caller)
+  // Toggle public/private
   const setItemPublic = useCallback((type: 'players' | 'clubs' | 'terrains' | 'tournaments', itemId: string, isPublic: boolean) => {
     switch (type) {
-      case 'players':
-        setPlayers(prev => prev.map(p => p.id === itemId ? { ...p, isPublic } : p));
-        break;
-      case 'clubs':
-        setClubs(prev => prev.map(c => c.id === itemId ? { ...c, isPublic } : c));
-        break;
-      case 'terrains':
-        setTerrains(prev => prev.map(t => t.id === itemId ? { ...t, isPublic } : t));
-        break;
-      case 'tournaments':
-        setTournaments(prev => prev.map(t => t.id === itemId ? { ...t, isPublic } : t));
-        break;
+      case 'players': setPlayers(prev => prev.map(p => p.id === itemId ? { ...p, isPublic } : p)); break;
+      case 'clubs': setClubs(prev => prev.map(c => c.id === itemId ? { ...c, isPublic } : c)); break;
+      case 'terrains': setTerrains(prev => prev.map(t => t.id === itemId ? { ...t, isPublic } : t)); break;
+      case 'tournaments': setTournaments(prev => prev.map(t => t.id === itemId ? { ...t, isPublic } : t)); break;
     }
   }, []);
 
-  // Getters
+  // ===== Getters =====
   const getPlayerById = (id: string) => playersWithStats.find(p => p.id === id);
   const getClubById = (id: string) => clubsWithMemberCount.find(c => c.id === id);
   const getTournamentById = (id: string) => tournaments.find(t => t.id === id);
@@ -2324,21 +1150,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const getTerrainById = (id: string) => terrains.find(t => t.id === id);
   
   const getMatchesByPlayer = (playerId: string) => 
-    matches.filter(m => 
-      m.teamA.players.includes(playerId) || m.teamB.players.includes(playerId)
-    );
+    matches.filter(m => m.teamA.players.includes(playerId) || m.teamB.players.includes(playerId));
   
   const getMatchesByTournament = (tournamentId: string) =>
     matches.filter(m => m.tournamentId === tournamentId);
 
-  // Head-to-head comparison function
+  // ===== Head-to-head =====
   const getHeadToHead = (player1Id: string, player2Id: string): HeadToHead => {
     const h2hMatches = matches.filter(m => {
       const player1InA = m.teamA.players.includes(player1Id);
       const player1InB = m.teamB.players.includes(player1Id);
       const player2InA = m.teamA.players.includes(player2Id);
       const player2InB = m.teamB.players.includes(player2Id);
-      
       return (player1InA && player2InB) || (player1InB && player2InA);
     });
 
@@ -2346,7 +1169,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const player1InA = m.teamA.players.includes(player1Id);
       const player1Team: 'A' | 'B' = player1InA ? 'A' : 'B';
       const player1Won = m.winner === player1Team;
-      
       return {
         id: m.id,
         date: m.date,
@@ -2362,12 +1184,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const totalMatches = matchDetails.length;
     const player1Wins = matchDetails.filter(m => m.player1Won).length;
     const player2Wins = totalMatches - player1Wins;
-    const player1AvgScore = totalMatches > 0 
-      ? matchDetails.reduce((sum, m) => sum + m.scoreFor, 0) / totalMatches 
-      : 0;
-    const player2AvgScore = totalMatches > 0 
-      ? matchDetails.reduce((sum, m) => sum + m.scoreAgainst, 0) / totalMatches 
-      : 0;
+    const player1AvgScore = totalMatches > 0 ? matchDetails.reduce((sum, m) => sum + m.scoreFor, 0) / totalMatches : 0;
+    const player2AvgScore = totalMatches > 0 ? matchDetails.reduce((sum, m) => sum + m.scoreAgainst, 0) / totalMatches : 0;
 
     return {
       player1Id,
@@ -2387,7 +1205,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   };
 
-  // Get common opponents between two players
   const getCommonOpponents = (player1Id: string, player2Id: string): string[] => {
     const player1Opponents = new Set<string>();
     const player2Opponents = new Set<string>();
@@ -2416,6 +1233,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return common;
   };
 
+  // ===== Provider =====
   return (
     <AppContext.Provider
       value={{
