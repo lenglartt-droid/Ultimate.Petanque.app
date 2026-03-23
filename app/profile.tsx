@@ -1567,37 +1567,13 @@ export default function ProfileScreen() {
 
             {expandedSections.notifications ? (
             <View style={styles.compactMenuGroup}>
-              {/* Push notification preference toggles */}
-              {notifPrefsLoaded ? (
-                <>
-                  {([
-                    { key: 'event_created' as const, icon: 'campaign', color: '#7C3AED', labelFr: 'Defis ambassadeurs proches', labelEn: 'Nearby ambassador challenges' },
-                    { key: 'meetup_invitation' as const, icon: 'event', color: theme.success, labelFr: 'Invitations RDV', labelEn: 'Meetup invitations' },
-                    { key: 'ranking_changed' as const, icon: 'leaderboard', color: theme.carreauColor, labelFr: 'Changements de classement', labelEn: 'Ranking changes' },
-                    { key: 'share_request' as const, icon: 'share', color: theme.primary, labelFr: 'Demandes de partage', labelEn: 'Share requests' },
-                    { key: 'event_reminder' as const, icon: 'alarm', color: theme.warning, labelFr: 'Rappels evenements', labelEn: 'Event reminders' },
-                  ]).map((item, idx) => (
-                    <React.Fragment key={item.key}>
-                      <View style={[styles.compactMenuItem, { paddingVertical: 10 }]}>
-                        <View style={[styles.compactMenuIcon, { backgroundColor: item.color + '15' }]}>
-                          <MaterialIcons name={item.icon as any} size={16} color={item.color} />
-                        </View>
-                        <Text style={[styles.compactMenuText, { flex: 1 }]}>
-                          {language === 'fr' ? item.labelFr : item.labelEn}
-                        </Text>
-                        <Switch
-                          value={notifPrefs[item.key]}
-                          onValueChange={() => handleToggleNotifPref(item.key)}
-                          trackColor={{ false: theme.border, true: item.color + '60' }}
-                          thumbColor={notifPrefs[item.key] ? item.color : theme.textMuted}
-                        />
-                      </View>
-                      {idx < 4 ? <View style={styles.compactMenuDivider} /> : null}
-                    </React.Fragment>
-                  ))}
-                  <View style={[styles.compactMenuDivider, { marginLeft: 0 }]} />
-                </>
-              ) : null}
+              {/* Notification preferences page link */}
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/notification-preferences' as any); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="notifications-active" size={16} color="#7C3AED" /></View>
+                <Text style={styles.compactMenuText}>{language === 'fr' ? 'Preferences de notifications' : 'Notification Preferences'}</Text>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
+              <View style={styles.compactMenuDivider} />
               <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); setPendingMatchInviteCount(0); router.push('/match-invitations'); }}>
                 <View style={[styles.compactMenuIcon, { backgroundColor: theme.primary + '15' }]}><MaterialIcons name="mail" size={16} color={theme.primary} />
                   {pendingMatchInviteCount > 0 ? <View style={styles.shareNotifBadge}><Text style={styles.shareNotifBadgeText}>{pendingMatchInviteCount > 9 ? '9+' : pendingMatchInviteCount}</Text></View> : null}

@@ -468,6 +468,13 @@ function LayoutInner() {
                   animation: 'slide_from_right',
                 }} 
               />
+              <Stack.Screen 
+                name="notification-preferences" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
             </Stack>
             </View>
   );
