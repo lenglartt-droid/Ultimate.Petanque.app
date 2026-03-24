@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, RefreshControl, TextInput, FlatList, Modal } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, RefreshControl, TextInput, FlatList, Modal, Platform } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -11,6 +11,7 @@ import theme, { blurhash } from '@/constants/theme';
 import { useAuth, useAlert } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getSponsoredEvents, registerForEvent, findEventByCode, SponsoredEvent } from '@/services/sponsoredEventService';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 
 type StatusFilter = 'all' | 'upcoming' | 'active' | 'completed';
 type TypeFilter = 'all' | '10_tirs' | '10_tirs_sautee' | 'precision';
@@ -35,6 +36,9 @@ export default function SponsoredEventListScreen() {
   const [joinCode, setJoinCode] = useState('');
   const [joinLoading, setJoinLoading] = useState(false);
   const [registeringId, setRegisteringId] = useState<string | null>(null);
+  const [showScanner, setShowScanner] = useState(false);
+  const [scanned, setScanned] = useState(false);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   // Auto-fill join code from deep link params
   useEffect(() => {
@@ -98,6 +102,56 @@ export default function SponsoredEventListScreen() {
       showAlert(fr ? 'Code introuvable' : 'Code not found');
     }
   };
+
+  // QR Scanner handlers
+  const handleOpenScanner = async () => {
+    if (Platform.OS === 'web') {
+      setShowJoinModal(true);
+      return;
+    }
+    if (!cameraPermission?.granted) {
+      const { granted } = await requestCameraPermission();
+      if (!granted) {
+        showAlert(fr ? 'Permission requise' : 'Permission required', fr ? 'Autorisez la camera pour scanner les QR codes' : 'Allow camera access to scan QR codes');
+        setShowJoinModal(true);
+        return;
+      }
+    }
+    setScanned(false);
+    setShowScanner(true);
+  };
+
+  const handleBarCodeScanned = useCallback(async ({ data }: { data: string }) => {
+    if (scanned) return;
+    setScanned(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    // Extract event code from URL or raw code
+    let code = data;
+    const eventMatch = data.match(/[?&]event=([A-Z0-9-]+)/i);
+    if (eventMatch) {
+      code = eventMatch[1].toUpperCase();
+    } else {
+      // Try matching EVT-XXXXXX pattern
+      const evtMatch = data.match(/(EVT-[A-Z0-9]{4,8})/i);
+      if (evtMatch) {
+        code = evtMatch[1].toUpperCase();
+      } else {
+        code = data.replace(/[^A-Z0-9-]/gi, '').toUpperCase();
+      }
+    }
+
+    setShowScanner(false);
+
+    const { event } = await findEventByCode(code);
+    if (event) {
+      router.push(`/sponsored-event/${event.id}` as any);
+    } else {
+      setJoinCode(code);
+      setShowJoinModal(true);
+      showAlert(fr ? 'Code non trouve' : 'Code not found', fr ? 'Verifiez le code et reessayez' : 'Check the code and try again');
+    }
+  }, [scanned, fr]);
 
   const challengeName = (type: string) => type === '10_tirs' ? '10 Tirs' : type === '10_tirs_sautee' ? (fr ? '10 Tirs sautee' : '10 Lob Shots') : (fr ? 'Precision' : 'Precision');
   const scopeName = (s: string) => s === 'terrain' ? (fr ? 'Terrain' : 'Court') : s === 'city' ? (fr ? 'Ville' : 'City') : s === 'country' ? (fr ? 'Pays' : 'Country') : (fr ? 'Mondial' : 'World');
@@ -209,8 +263,8 @@ export default function SponsoredEventListScreen() {
             <Text style={s.headerTitle}>{fr ? 'Defis Ambassadeurs' : 'Ambassador Challenges'}</Text>
             <Text style={s.headerSubtitle}>{filtered.length} {fr ? 'evenement(s)' : 'event(s)'}</Text>
           </View>
-          <Pressable style={s.joinBtn} onPress={() => setShowJoinModal(true)}>
-            <MaterialIcons name="qr-code" size={20} color="#FFF" />
+          <Pressable style={s.joinBtn} onPress={handleOpenScanner}>
+            <MaterialIcons name="qr-code-scanner" size={20} color="#FFF" />
           </Pressable>
           <Pressable style={s.createBtn} onPress={() => router.push('/sponsored-event/new' as any)}>
             <MaterialIcons name="add" size={22} color="#FFF" />
@@ -294,6 +348,63 @@ export default function SponsoredEventListScreen() {
           </View>
         </View>
       </Modal>
+      {/* QR Scanner Modal */}
+      <Modal visible={showScanner} animationType="slide" onRequestClose={() => setShowScanner(false)}>
+        <View style={s.scannerContainer}>
+          <SafeAreaView style={{ flex: 1 }}>
+            {/* Scanner Header */}
+            <View style={s.scannerHeader}>
+              <Pressable style={s.scannerCloseBtn} onPress={() => setShowScanner(false)}>
+                <MaterialIcons name="close" size={24} color="#FFF" />
+              </Pressable>
+              <Text style={s.scannerTitle}>{fr ? 'Scanner un QR code' : 'Scan QR Code'}</Text>
+              <View style={{ width: 40 }} />
+            </View>
+
+            {/* Camera */}
+            <View style={s.scannerCameraWrap}>
+              <CameraView
+                style={StyleSheet.absoluteFillObject}
+                facing="back"
+                barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+                onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+              />
+
+              {/* Scanning overlay */}
+              <View style={s.scannerOverlay}>
+                <View style={s.scannerOverlayTop} />
+                <View style={s.scannerOverlayMiddle}>
+                  <View style={s.scannerOverlaySide} />
+                  <View style={s.scannerFrame}>
+                    <View style={[s.scannerCorner, { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3 }]} />
+                    <View style={[s.scannerCorner, { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3 }]} />
+                    <View style={[s.scannerCorner, { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3 }]} />
+                    <View style={[s.scannerCorner, { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3 }]} />
+                  </View>
+                  <View style={s.scannerOverlaySide} />
+                </View>
+                <View style={s.scannerOverlayBottom}>
+                  <Text style={s.scannerHintText}>{fr ? 'Placez le QR code dans le cadre' : 'Place QR code in the frame'}</Text>
+                  {scanned ? (
+                    <View style={s.scannerProcessing}>
+                      <ActivityIndicator size="small" color="#FFF" />
+                      <Text style={s.scannerProcessingText}>{fr ? 'Recherche...' : 'Searching...'}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            </View>
+
+            {/* Manual code entry fallback */}
+            <View style={s.scannerFallback}>
+              <Pressable style={s.scannerFallbackBtn} onPress={() => { setShowScanner(false); setShowJoinModal(true); }}>
+                <MaterialIcons name="keyboard" size={18} color="#FFF" />
+                <Text style={s.scannerFallbackText}>{fr ? 'Entrer le code manuellement' : 'Enter code manually'}</Text>
+              </Pressable>
+            </View>
+          </SafeAreaView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -354,4 +465,23 @@ const s = StyleSheet.create({
   joinInput: { backgroundColor: '#F8FAFC', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 18, fontWeight: '700', color: theme.textPrimary, textAlign: 'center', letterSpacing: 2, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 16 },
   joinSubmitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#7C3AED', paddingVertical: 16, borderRadius: 16 },
   joinSubmitText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
+  // QR Scanner
+  scannerContainer: { flex: 1, backgroundColor: '#000' },
+  scannerHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: 'rgba(0,0,0,0.8)' },
+  scannerCloseBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center' as const, justifyContent: 'center' as const },
+  scannerTitle: { fontSize: 17, fontWeight: '700' as const, color: '#FFF' },
+  scannerCameraWrap: { flex: 1, position: 'relative' as const },
+  scannerOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center' as const, alignItems: 'center' as const },
+  scannerOverlayTop: { flex: 1, width: '100%', backgroundColor: 'rgba(0,0,0,0.55)' },
+  scannerOverlayMiddle: { flexDirection: 'row' as const, height: 260 },
+  scannerOverlaySide: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' },
+  scannerFrame: { width: 260, height: 260, position: 'relative' as const },
+  scannerCorner: { position: 'absolute' as const, width: 32, height: 32, borderColor: '#7C3AED' },
+  scannerOverlayBottom: { flex: 1, width: '100%', backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center' as const, paddingTop: 32, gap: 16 },
+  scannerHintText: { fontSize: 15, fontWeight: '600' as const, color: 'rgba(255,255,255,0.8)' },
+  scannerProcessing: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, backgroundColor: 'rgba(124,58,237,0.3)', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 14 },
+  scannerProcessingText: { fontSize: 14, fontWeight: '600' as const, color: '#FFF' },
+  scannerFallback: { paddingHorizontal: 20, paddingVertical: 16, backgroundColor: 'rgba(0,0,0,0.85)' },
+  scannerFallbackBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 10, backgroundColor: 'rgba(255,255,255,0.12)', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
+  scannerFallbackText: { fontSize: 15, fontWeight: '600' as const, color: '#FFF' },
 });

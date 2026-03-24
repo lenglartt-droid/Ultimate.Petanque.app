@@ -651,6 +651,46 @@ export async function inviteUsersToEvent(eventId: string, userIds: string[]): Pr
   }
 }
 
+/** Re-invite a declined user by resetting their status to pending */
+export async function reinviteUser(eventId: string, userId: string): Promise<{ error: string | null }> {
+  try {
+    const supabase = getSupabaseClient();
+    const { error } = await supabase
+      .from('sponsored_event_participants')
+      .update({
+        status: 'pending',
+        responded_at: null,
+      })
+      .eq('event_id', eventId)
+      .eq('user_id', userId);
+
+    if (error) return { error: error.message };
+
+    // Send push notification to re-invited user
+    try {
+      const { data: evData } = await supabase.from('sponsored_events').select('title, challenge_type, city').eq('id', eventId).maybeSingle();
+      const { data: userData } = await supabase.auth.getUser();
+      const { data: profile } = await supabase.from('user_profiles').select('username').eq('id', userData?.user?.id || '').maybeSingle();
+      await supabase.functions.invoke('send-push', {
+        body: {
+          type: 'event_created',
+          payload: {
+            eventId,
+            eventTitle: evData?.title || 'Evenement',
+            city: evData?.city,
+            challengeType: evData?.challenge_type,
+            ambassadorName: profile?.username || 'Ambassadeur',
+          },
+        },
+      });
+    } catch { /* silent */ }
+
+    return { error: null };
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
 // ============ EVENT LEADERBOARD ============
 
 export interface EventLeaderboardEntry {
