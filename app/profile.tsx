@@ -1803,6 +1803,12 @@ export default function ProfileScreen() {
                 <Text style={styles.compactMenuText}>{t('creatorNote', 'title')}</Text>
                 <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
               </Pressable>
+              <View style={styles.compactMenuDivider} />
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/trust-score' as any); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: '#3B82F6' + '15' }]}><MaterialIcons name="verified-user" size={16} color="#3B82F6" /></View>
+                <Text style={styles.compactMenuText}>{(extraTranslations.trustScore?.viewTrustScore as any)?.[language] || 'View my trust score'}</Text>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
             </View>
 
             ) : null}
@@ -1869,6 +1875,13 @@ export default function ProfileScreen() {
                   <View style={[styles.menuIcon, { backgroundColor: theme.carreauColor + '15' }]}><MaterialIcons name="admin-panel-settings" size={20} color={theme.carreauColor} /></View>
                   <View style={styles.menuItemContent}>
                     <Text style={styles.menuItemText}>{language === 'fr' ? 'Gestion codes promo' : 'Promo Code Management'}</Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                </Pressable>
+                <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/admin-anticheat' as any); }}>
+                  <View style={[styles.menuIcon, { backgroundColor: '#EF4444' + '15' }]}><MaterialIcons name="security" size={20} color="#EF4444" /></View>
+                  <View style={styles.menuItemContent}>
+                    <Text style={styles.menuItemText}>{language === 'fr' ? 'Anti-triche & Trust Score' : 'Anti-cheat & Trust Score'}</Text>
                   </View>
                   <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
                 </Pressable>
