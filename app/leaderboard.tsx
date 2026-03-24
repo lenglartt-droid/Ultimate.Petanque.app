@@ -29,13 +29,13 @@ import { fetchBoulesLeaderboard, aggregateBoulesData, sortBoulesLeaderboard, Lea
 import { getBrandVisual, getBrandImage } from '@/constants/boulesDatabase';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services/meetupService';
 import AdBanner from '@/components/ui/AdBanner';
-import { getTrustScoreColor, getTrustScoreIcon } from '@/services/trustScoreService';
+import { getTrustScoreColor, getTrustScoreIcon, getTrustLevelLabel, getLevelFromScore, fetchSuspiciousPlayers } from '@/services/trustScoreService';
 import { fetchEventLeaderboard, EventLeaderboardEntry, SponsoredEvent } from '@/services/sponsoredEventService';
 import { fetchWeeklyLeaderboard, getSubRankings, saveWeeklySnapshot, checkAndTriggerWeeklyReset, getLastWeekSummary, WeeklyRankChange, SubRanking, getCurrentWeekStart, formatDateISO } from '@/services/weeklyLeaderboardService';
 import { extraTranslations } from '@/constants/i18nExtra';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 
-type LeaderboardTab = 'players' | 'clubs' | 'boules' | 'events';
+type LeaderboardTab = 'players' | 'clubs' | 'boules' | 'events' | 'trust';
 
 const PAGE_SIZE = 30;
 
@@ -322,6 +322,7 @@ export default function LeaderboardScreen() {
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState<string>('all');
   const [filterLevel, setFilterLevel] = useState<string>('all');
+  const [filterTrustLevel, setFilterTrustLevel] = useState<string>('all');
   const [filterCity, setFilterCity] = useState<string>('all');
   const [filterCountry, setFilterCountry] = useState<string>('all');
   const [filterClub, setFilterClub] = useState<string>('all');
@@ -360,6 +361,14 @@ export default function LeaderboardScreen() {
   const [eventSortBy, setEventSortBy] = useState<'wins' | 'podiums' | 'avgScore' | 'participations'>('wins');
   const [eventSearch, setEventSearch] = useState('');
 
+  // ============ TRUST TAB STATE ============
+  const [trustPlayers, setTrustPlayers] = useState<any[]>([]);
+  const [trustLoading, setTrustLoading] = useState(false);
+  const [trustError, setTrustError] = useState<string | null>(null);
+  const [trustLoaded, setTrustLoaded] = useState(false);
+  const [trustSortBy, setTrustSortBy] = useState<'score' | 'flags' | 'improvement'>('score');
+  const [trustSearch, setTrustSearch] = useState('');
+
   // Meetup invitation
   const [showMeetupPicker, setShowMeetupPicker] = useState(false);
   const [meetupPickerUserId, setMeetupPickerUserId] = useState<string | null>(null);
@@ -367,6 +376,18 @@ export default function LeaderboardScreen() {
   const [activeMeetups, setActiveMeetups] = useState<Meetup[]>([]);
   const [loadingMeetups, setLoadingMeetups] = useState(false);
   const [invitingToMeetup, setInvitingToMeetup] = useState<string | null>(null);
+
+  // Lazy load trust score leaderboard
+  const loadTrust = useCallback(async () => {
+    if (trustLoaded) return;
+    setTrustLoading(true);
+    const { players: tp, error: err } = await fetchSuspiciousPlayers();
+    const sorted = tp.filter(p => p.status !== 'banned').sort((a, b) => b.trustScore - a.trustScore);
+    setTrustPlayers(sorted);
+    setTrustError(err);
+    setTrustLoading(false);
+    setTrustLoaded(true);
+  }, [trustLoaded]);
 
   const loadData = useCallback(async (period?: LeaderboardPeriod) => {
     setLoading(true);
@@ -503,7 +524,8 @@ export default function LeaderboardScreen() {
     if (activeTab === 'clubs' && !clubsLoaded) loadClubs(periodFilter);
     if (activeTab === 'boules' && !boulesLoaded) loadBoules(periodFilter);
     if (activeTab === 'events') loadEvents();
-  }, [activeTab, clubsLoaded, boulesLoaded, loadClubs, loadBoules, loadEvents, periodFilter]);
+    if (activeTab === 'trust') loadTrust();
+  }, [activeTab, clubsLoaded, boulesLoaded, loadClubs, loadBoules, loadEvents, periodFilter, loadTrust]);
 
   // ============ CLUBS COMPUTED ============
   const filteredClubs = useMemo(() => {
@@ -550,6 +572,24 @@ export default function LeaderboardScreen() {
     return result;
   }, [eventEntries, eventSearch, eventSortBy]);
 
+  // ============ TRUST COMPUTED ============
+  const trustStats = useMemo(() => {
+    if (trustPlayers.length === 0) return { avg: 0, verified: 0, trusted: 0, standard: 0, total: 0 };
+    const total = trustPlayers.length;
+    const avg = Math.round(trustPlayers.reduce((sum, p) => sum + p.trustScore, 0) / total);
+    let verified = 0, trusted = 0, standard = 0;
+    trustPlayers.forEach(p => { if (p.trustScore >= 80) verified++; else if (p.trustScore >= 65) trusted++; else standard++; });
+    return { avg, verified, trusted, standard, total };
+  }, [trustPlayers]);
+
+  const filteredTrust = useMemo(() => {
+    let result = trustPlayers;
+    if (trustSearch.trim()) { const q = trustSearch.toLowerCase(); result = result.filter(p => (p.playerName || '').toLowerCase().includes(q)); }
+    if (trustSortBy === 'flags') result = [...result].sort((a, b) => b.flags.length - a.flags.length || b.trustScore - a.trustScore);
+    else if (trustSortBy === 'improvement') result = [...result].sort((a, b) => a.flags.length - b.flags.length || b.trustScore - a.trustScore);
+    return result;
+  }, [trustPlayers, trustSearch, trustSortBy]);
+
   // Extract unique cities for filter
   const uniqueCities = useMemo(() => {
     const cities = allPlayers.map(p => p.city).filter(Boolean) as string[];
@@ -578,8 +618,28 @@ export default function LeaderboardScreen() {
 
   // Active filter count
   const activeFilterCount = useMemo(() => {
-    return [filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand, filterTerrain].filter(f => f !== 'all').length;
-  }, [filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand, filterTerrain]);
+    return [filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand, filterTerrain, filterTrustLevel].filter(f => f !== 'all').length;
+  }, [filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand, filterTerrain, filterTrustLevel]);
+
+  // Trust level distribution stats
+  const trustLevelStats = useMemo(() => {
+    const total = allPlayers.length;
+    if (total === 0) return { verified: 0, trusted: 0, standard: 0, unknown: 0 };
+    let verified = 0, trusted = 0, standard = 0, unknown = 0;
+    allPlayers.forEach(p => {
+      const ts = p.trustScore;
+      if (ts === undefined) { unknown++; return; }
+      if (ts >= 80) verified++;
+      else if (ts >= 65) trusted++;
+      else standard++;
+    });
+    return {
+      verified: Math.round((verified / total) * 100),
+      trusted: Math.round((trusted / total) * 100),
+      standard: Math.round((standard / total) * 100),
+      unknown: Math.round((unknown / total) * 100),
+    };
+  }, [allPlayers]);
 
   // Filtered, sorted, paginated data
   const filteredSorted = useMemo(() => {
@@ -599,6 +659,17 @@ export default function LeaderboardScreen() {
     // Filters
     if (filterRole !== 'all') result = result.filter(p => p.role === filterRole);
     if (filterLevel !== 'all') result = result.filter(p => p.level === filterLevel);
+    // Trust level filter
+    if (filterTrustLevel !== 'all') {
+      result = result.filter(p => {
+        const ts = p.trustScore;
+        if (ts === undefined) return filterTrustLevel === 'unknown';
+        if (filterTrustLevel === 'verified') return ts >= 80;
+        if (filterTrustLevel === 'trusted') return ts >= 65 && ts < 80;
+        if (filterTrustLevel === 'standard') return ts >= 45 && ts < 65;
+        return false;
+      });
+    }
     if (filterCity !== 'all') result = result.filter(p => p.city === filterCity);
     if (filterCountry !== 'all') result = result.filter(p => p.country === filterCountry);
     if (filterClub !== 'all') result = result.filter(p => p.club === filterClub);
@@ -612,7 +683,7 @@ export default function LeaderboardScreen() {
   const hasMore = filteredSorted.length > visibleCount;
 
   // Reset pagination on filter/search change
-  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [search, filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand, filterTerrain, sortBy]);
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [search, filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand, filterTerrain, filterTrustLevel, sortBy]);
 
   const handleLoadMore = useCallback(() => {
     if (hasMore) setVisibleCount(prev => prev + PAGE_SIZE);
@@ -633,6 +704,7 @@ export default function LeaderboardScreen() {
     setFilterClub('all');
     setFilterBrand('all');
     setFilterTerrain('all');
+    setFilterTrustLevel('all');
     setSearch('');
     setFilterSearchText('');
   };
@@ -702,7 +774,9 @@ export default function LeaderboardScreen() {
                     ? `${filteredClubs.length} ${t('leaderboard', 'publicClubsCount')}`
                     : activeTab === 'events'
                       ? `${filteredEvents.length} ${t('leaderboard', 'publicEventsCount')}`
-                      : `${boulesEntries.length} ${boulesMode === 'brand' ? t('leaderboard', 'publicBoulesCount') : t('leaderboard', 'publicModelsCount')}`}
+                      : activeTab === 'trust'
+                        ? `${filteredTrust.length} ${language === 'fr' ? 'joueurs' : 'players'}`
+                        : `${boulesEntries.length} ${boulesMode === 'brand' ? t('leaderboard', 'publicBoulesCount') : t('leaderboard', 'publicModelsCount')}`}
               </Text>
             </View>
           </View>
@@ -713,6 +787,7 @@ export default function LeaderboardScreen() {
               { id: 'clubs' as LeaderboardTab, label: t('leaderboard', 'tabClubs'), icon: 'home' },
               { id: 'boules' as LeaderboardTab, label: t('leaderboard', 'tabBoules'), icon: 'sports-baseball' },
               { id: 'events' as LeaderboardTab, label: t('leaderboard', 'tabEvents'), icon: 'campaign' },
+              { id: 'trust' as LeaderboardTab, label: language === 'fr' ? 'Confiance' : 'Trust', icon: 'shield' },
             ]).map(tab => (
               <Pressable
                 key={tab.id}
@@ -724,6 +799,34 @@ export default function LeaderboardScreen() {
               </Pressable>
             ))}
           </View>
+
+          {/* Trust Level Filter Chips (players tab, all-time mode) */}
+          {activeTab === 'players' && weeklyMode === 'alltime' ? (
+            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+              {[
+                { id: 'all', label: language === 'fr' ? 'Tous' : 'All', icon: 'people', pct: null },
+                { id: 'verified', label: language === 'fr' ? 'Verifie' : 'Verified', icon: 'verified-user', pct: trustLevelStats.verified },
+                { id: 'trusted', label: language === 'fr' ? 'Fiable' : 'Trusted', icon: 'shield', pct: trustLevelStats.trusted },
+                { id: 'standard', label: 'Standard', icon: 'shield', pct: trustLevelStats.standard },
+              ].map(chip => {
+                const isActive = filterTrustLevel === chip.id;
+                const chipColor = chip.id === 'verified' ? '#22C55E' : chip.id === 'trusted' ? '#3B82F6' : chip.id === 'standard' ? '#D97706' : 'rgba(255,255,255,0.5)';
+                return (
+                  <Pressable
+                    key={chip.id}
+                    style={[s.tabBtn, { flex: 0, paddingHorizontal: 14 }, isActive && { backgroundColor: chip.id === 'all' ? 'rgba(255,255,255,0.22)' : chipColor + '40' }]}
+                    onPress={() => { Haptics.selectionAsync(); setFilterTrustLevel(chip.id); }}
+                  >
+                    <MaterialIcons name={chip.icon as any} size={13} color={isActive ? '#FFF' : 'rgba(255,255,255,0.5)'} />
+                    <Text style={[s.tabBtnText, isActive && s.tabBtnTextActive]}>{chip.label}</Text>
+                    {chip.pct !== null ? (
+                      <Text style={{ fontSize: 9, fontWeight: '700', color: isActive ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.35)' }}>{chip.pct}%</Text>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
 
           {/* Search bar */}
           {/* Weekly / All-time toggle for players tab */}
@@ -757,11 +860,11 @@ export default function LeaderboardScreen() {
                 style={s.searchInput}
                 placeholder={t('leaderboard', 'searchPlaceholder')}
                 placeholderTextColor="rgba(255,255,255,0.4)"
-                value={activeTab === 'players' ? search : activeTab === 'clubs' ? clubSearch : activeTab === 'events' ? eventSearch : boulesSearch}
-                onChangeText={activeTab === 'players' ? setSearch : activeTab === 'clubs' ? setClubSearch : activeTab === 'events' ? setEventSearch : setBoulesSearch}
+                value={activeTab === 'players' ? search : activeTab === 'clubs' ? clubSearch : activeTab === 'events' ? eventSearch : activeTab === 'trust' ? trustSearch : boulesSearch}
+                onChangeText={activeTab === 'players' ? setSearch : activeTab === 'clubs' ? setClubSearch : activeTab === 'events' ? setEventSearch : activeTab === 'trust' ? setTrustSearch : setBoulesSearch}
               />
-              {(activeTab === 'players' ? search : activeTab === 'clubs' ? clubSearch : activeTab === 'events' ? eventSearch : boulesSearch).length > 0 ? (
-                <Pressable onPress={() => activeTab === 'players' ? setSearch('') : activeTab === 'clubs' ? setClubSearch('') : activeTab === 'events' ? setEventSearch('') : setBoulesSearch('')} hitSlop={8}>
+              {(activeTab === 'players' ? search : activeTab === 'clubs' ? clubSearch : activeTab === 'events' ? eventSearch : activeTab === 'trust' ? trustSearch : boulesSearch).length > 0 ? (
+                <Pressable onPress={() => activeTab === 'players' ? setSearch('') : activeTab === 'clubs' ? setClubSearch('') : activeTab === 'events' ? setEventSearch('') : activeTab === 'trust' ? setTrustSearch('') : setBoulesSearch('')} hitSlop={8}>
                   <MaterialIcons name="close" size={18} color="rgba(255,255,255,0.5)" />
                 </Pressable>
               ) : null}
@@ -915,8 +1018,136 @@ export default function LeaderboardScreen() {
         </View>
       </View>
 
-      {/* ============ EVENTS TAB ============ */}
-      {activeTab === 'events' ? (
+      {/* ============ TRUST TAB ============ */}
+      {activeTab === 'trust' ? (
+        trustLoading ? (
+          <View style={s.centerState}>
+            <View style={s.loadingIconBg}><MaterialIcons name="shield" size={32} color="#3B82F6" /></View>
+            <Text style={s.loadingText}>{t('leaderboard', 'loading')}</Text>
+          </View>
+        ) : trustError ? (
+          <View style={s.centerState}>
+            <MaterialIcons name="error-outline" size={48} color={theme.error} />
+            <Text style={s.errorText}>{t('leaderboard', 'errorLoading')}</Text>
+            <Pressable style={s.retryBtn} onPress={() => { setTrustLoaded(false); loadTrust(); }}>
+              <Text style={s.retryBtnText}>{t('leaderboard', 'retry')}</Text>
+            </Pressable>
+          </View>
+        ) : filteredTrust.length === 0 ? (
+          <View style={s.centerState}>
+            <MaterialIcons name="shield" size={56} color={theme.textMuted} />
+            <Text style={s.emptyTitle}>{language === 'fr' ? 'Aucun joueur analyse' : 'No players analyzed'}</Text>
+            <Text style={s.emptyDesc}>{language === 'fr' ? 'Les scores sont calcules automatiquement.' : 'Scores are computed automatically.'}</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredTrust}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={[s.listContent, { paddingBottom: insets.bottom + 32 }, isTablet && s.listContentTablet]}
+            showsVerticalScrollIndicator={false}
+            ListHeaderComponent={
+              <View>
+                {/* Community Trust Health */}
+                <View style={{ backgroundColor: theme.surface, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#3B82F620' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <MaterialIcons name="health-and-safety" size={18} color="#3B82F6" />
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textPrimary }}>{language === 'fr' ? 'Sante de la communaute' : 'Community Health'}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+                    {[
+                      { label: language === 'fr' ? 'Score moyen' : 'Avg Score', value: trustStats.avg, color: trustStats.avg >= 65 ? '#22C55E' : trustStats.avg >= 45 ? '#D97706' : '#EF4444' },
+                      { label: language === 'fr' ? 'Verifies' : 'Verified', value: trustStats.verified, color: '#22C55E' },
+                      { label: language === 'fr' ? 'Fiables' : 'Trusted', value: trustStats.trusted, color: '#3B82F6' },
+                      { label: 'Standard', value: trustStats.standard, color: '#D97706' },
+                    ].map((stat, i) => (
+                      <View key={i} style={{ flex: 1, alignItems: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: 10, paddingVertical: 8 }}>
+                        <Text style={{ fontSize: 18, fontWeight: '900', color: stat.color }}>{stat.value}</Text>
+                        <Text style={{ fontSize: 9, color: theme.textMuted, marginTop: 2 }}>{stat.label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <View style={{ flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: theme.backgroundSecondary }}>
+                    {trustStats.total > 0 ? (
+                      <>
+                        <View style={{ flex: Math.max(trustStats.verified, 0.1), backgroundColor: '#22C55E', borderRadius: 4 }} />
+                        <View style={{ flex: Math.max(trustStats.trusted, 0.1), backgroundColor: '#3B82F6' }} />
+                        <View style={{ flex: Math.max(trustStats.standard, 0.1), backgroundColor: '#D97706', borderRadius: 4 }} />
+                      </>
+                    ) : null}
+                  </View>
+                </View>
+                {/* Sort chips */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginBottom: 12 }}>
+                  {[
+                    { id: 'score' as const, label: 'Score', icon: 'shield' },
+                    { id: 'flags' as const, label: language === 'fr' ? 'Alertes' : 'Flags', icon: 'flag' },
+                    { id: 'improvement' as const, label: language === 'fr' ? 'Meilleurs' : 'Cleanest', icon: 'check-circle' },
+                  ].map(chip => (
+                    <Pressable
+                      key={chip.id}
+                      style={[s.sortChip, trustSortBy === chip.id && { backgroundColor: '#3B82F6', borderColor: '#3B82F6' }]}
+                      onPress={() => { Haptics.selectionAsync(); setTrustSortBy(chip.id); }}
+                    >
+                      <MaterialIcons name={chip.icon as any} size={14} color={trustSortBy === chip.id ? '#FFF' : theme.textSecondary} />
+                      <Text style={[s.sortChipText, trustSortBy === chip.id && { color: '#FFF' }]}>{chip.label}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+                <Text style={s.listHeaderText}>{filteredTrust.length} {language === 'fr' ? 'joueurs' : 'players'}</Text>
+              </View>
+            }
+            renderItem={({ item: p, index }) => {
+              const rank = index + 1;
+              const scoreColor = getTrustScoreColor(p.trustScore);
+              const level = getLevelFromScore(p.trustScore);
+              const mc2: Record<number, string> = { 1: '#22C55E', 2: '#3B82F6', 3: '#D97706' };
+              const mc = mc2[rank];
+              return (
+                <Animated.View entering={FadeIn.duration(200).delay(Math.min(index * 30, 300))}>
+                  <Pressable style={[s.row, { borderLeftWidth: 3, borderLeftColor: scoreColor }]} onPress={() => router.push(`/player/${p.playerId}` as any)}>
+                    <View style={s.rankCol}>
+                      {mc ? (
+                        <View style={[s.medal, { backgroundColor: mc + '20' }]}><Text style={[s.medalText, { color: mc }]}>{rank}</Text></View>
+                      ) : (
+                        <Text style={s.rankText}>{rank}</Text>
+                      )}
+                    </View>
+                    <View style={s.playerCol}>
+                      <View style={[s.avatar, { backgroundColor: scoreColor + '20', alignItems: 'center', justifyContent: 'center' }]}>
+                        <MaterialIcons name={getTrustScoreIcon(p.trustScore) as any} size={18} color={scoreColor} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.playerName} numberOfLines={1}>{p.playerName || p.playerId.substring(0, 8)}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                          <View style={[s.trustBadgeRow, { position: 'relative', top: 0, left: 0, backgroundColor: scoreColor + '12', borderColor: scoreColor + '30' }]}>
+                            <MaterialIcons name={getTrustScoreIcon(p.trustScore) as any} size={9} color={scoreColor} />
+                            <Text style={[s.trustBadgeText, { color: scoreColor }]}>{getTrustLevelLabel(level, language === 'fr')}</Text>
+                          </View>
+                          {p.flags.length > 0 ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#EF444412', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
+                              <MaterialIcons name="flag" size={10} color="#EF4444" />
+                              <Text style={{ fontSize: 10, fontWeight: '700', color: '#EF4444' }}>{p.flags.length}</Text>
+                            </View>
+                          ) : (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#22C55E12', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
+                              <MaterialIcons name="check-circle" size={10} color="#22C55E" />
+                              <Text style={{ fontSize: 10, fontWeight: '700', color: '#22C55E' }}>{language === 'fr' ? 'Ok' : 'Clean'}</Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 24, fontWeight: '900', color: scoreColor }}>{p.trustScore}</Text>
+                      <Text style={{ fontSize: 9, color: theme.textMuted }}>/100</Text>
+                    </View>
+                  </Pressable>
+                </Animated.View>
+              );
+            }}
+          />
+        )
+      ) : activeTab === 'events' ? (
         eventsLoading ? (
           <View style={s.centerState}>
             <View style={s.loadingIconBg}><MaterialIcons name="campaign" size={32} color="#7C3AED" /></View>
@@ -1643,6 +1874,16 @@ export default function LeaderboardScreen() {
                       <Pressable style={s.activeFilterPill} onPress={() => setFilterBrand('all')}>
                         <MaterialIcons name="sports-baseball" size={12} color="#D97706" />
                         <Text style={s.activeFilterPillText}>{filterBrand}</Text>
+                        <MaterialIcons name="close" size={14} color="#D97706" />
+                      </Pressable>
+                    ) : null}
+                    {filterTrustLevel !== 'all' ? (
+                      <Pressable style={s.activeFilterPill} onPress={() => setFilterTrustLevel('all')}>
+                        <MaterialIcons name="shield" size={12} color="#D97706" />
+                        <Text style={s.activeFilterPillText}>
+                          {filterTrustLevel === 'verified' ? (language === 'fr' ? 'Verifie' : 'Verified') :
+                           filterTrustLevel === 'trusted' ? (language === 'fr' ? 'Fiable' : 'Trusted') : 'Standard'}
+                        </Text>
                         <MaterialIcons name="close" size={14} color="#D97706" />
                       </Pressable>
                     ) : null}

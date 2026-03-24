@@ -32,6 +32,7 @@ export interface BadgeContext {
   leaderboardRank: number | null;
   consecutiveDaysPlayed: number;
   isAmbassador: boolean;
+  trustScore: number | null;
 }
 
 // ============================================
@@ -157,6 +158,20 @@ export const BADGES: BadgeDefinition[] = [
     xpReward: 100,
     condition: (ctx) => ctx.isAmbassador,
   },
+  {
+    id: 'fiable',
+    icon: 'shield',
+    color: '#3B82F6',
+    xpReward: 30,
+    condition: (ctx) => ctx.trustScore !== null && ctx.trustScore >= 65,
+  },
+  {
+    id: 'verifie',
+    icon: 'verified-user',
+    color: '#22C55E',
+    xpReward: 50,
+    condition: (ctx) => ctx.trustScore !== null && ctx.trustScore >= 80,
+  },
 ];
 
 // ============================================
@@ -174,6 +189,8 @@ export function getBadgeName(badgeId: string, lang: 'fr' | 'en'): string {
     classe: { fr: 'Classé', en: 'Ranked' },
     en_feu: { fr: 'En Feu', en: 'On Fire' },
     ambassadeur: { fr: 'Ambassadeur', en: 'Ambassador' },
+    fiable: { fr: 'Fiable', en: 'Trusted' },
+    verifie: { fr: 'Verifie', en: 'Verified' },
   };
   return names[badgeId]?.[lang] || badgeId;
 }
@@ -190,6 +207,8 @@ export function getBadgeDescription(badgeId: string, lang: 'fr' | 'en'): string 
     classe: { fr: 'Entrer dans le top 100', en: 'Enter the top 100' },
     en_feu: { fr: '7 jours consécutifs avec un match', en: '7 consecutive days with a match' },
     ambassadeur: { fr: 'Devenir ambassadeur officiel', en: 'Become official ambassador' },
+    fiable: { fr: 'Score de confiance 65+ (Fiable)', en: 'Trust score 65+ (Trusted)' },
+    verifie: { fr: 'Score de confiance 80+ (Verifie)', en: 'Trust score 80+ (Verified)' },
   };
   return descs[badgeId]?.[lang] || '';
 }
@@ -290,6 +309,7 @@ export function buildBadgeContext(params: {
     leaderboardRank,
     consecutiveDaysPlayed: consecutiveDays,
     isAmbassador,
+    trustScore: null, // Will be set by caller if available
   };
 }
 

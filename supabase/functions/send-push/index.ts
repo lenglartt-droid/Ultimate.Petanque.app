@@ -564,6 +564,68 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // ============================================================
+    // WITNESS_REQUEST: Notify witness user about attestation request
+    // ============================================================
+    else if (type === 'witness_request') {
+      const { witnessUserId, requesterName, matchId, matchSummary } = payload || {};
+      if (!witnessUserId || !matchId) {
+        return new Response(JSON.stringify({ error: 'Missing witnessUserId/matchId' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', witnessUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          `\u{1F441} Demande d'attestation de match`,
+          `${requesterName || 'Un joueur'} vous demande d'attester un match${matchSummary ? ` (${matchSummary})` : ''}. Acceptez pour valider le match a 2x.`,
+          { type: 'witness_request', matchId, action: 'view' },
+          { channelId: 'share-requests', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
+    // ============================================================
+    // WITNESS_ATTESTED: Notify requester that witness attested match
+    // ============================================================
+    else if (type === 'witness_attested') {
+      const { requesterUserId, witnessName, matchId } = payload || {};
+      if (!requesterUserId || !matchId) {
+        return new Response(JSON.stringify({ error: 'Missing requesterUserId/matchId' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', requesterUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          `\u2705 Match atteste !`,
+          `${witnessName || 'Un temoin'} a atteste votre match. Le poids de validation passe a 2.0x dans le classement.`,
+          { type: 'witness_attested', matchId },
+          { channelId: 'share-requests' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
     else {
       return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },

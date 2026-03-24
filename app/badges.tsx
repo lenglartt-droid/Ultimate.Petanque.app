@@ -30,6 +30,7 @@ import {
   buildBadgeContext,
 } from '@/services/badgeService';
 import { isUserAmbassador } from '@/services/ambassadorService';
+import { fetchTrustScore } from '@/services/trustScoreService';
 import XPBar from '@/components/ui/XPBar';
 import theme from '@/constants/theme';
 
@@ -145,6 +146,24 @@ function getBadgeProgress(
           ? (lang === 'fr' ? 'Ambassadeur actif' : 'Active ambassador')
           : (lang === 'fr' ? 'Devenir ambassadeur' : 'Become ambassador'),
       };
+    case 'fiable': {
+      const ts = ctx.trustScore ?? 0;
+      return {
+        current: Math.min(ts, 65),
+        target: 65,
+        percent: Math.min(100, Math.round((ts / 65) * 100)),
+        label: `${ts}/65 ${lang === 'fr' ? 'score de confiance' : 'trust score'}`,
+      };
+    }
+    case 'verifie': {
+      const ts2 = ctx.trustScore ?? 0;
+      return {
+        current: Math.min(ts2, 80),
+        target: 80,
+        percent: Math.min(100, Math.round((ts2 / 80) * 100)),
+        label: `${ts2}/80 ${lang === 'fr' ? 'score de confiance' : 'trust score'}`,
+      };
+    }
     default:
       return { current: 0, target: 1, percent: 0, label: '' };
   }
@@ -208,8 +227,32 @@ export default function BadgesScreen() {
       leaderboardRank: null as number | null,
       consecutiveDaysPlayed: consecutiveDays,
       isAmbassador: false,
+      trustScore: null as number | null,
     };
   }, [matches, userStats, sharedMatchIds, user?.id]);
+
+  // Load trust score for trust badges progress
+  const [trustScoreValue, setTrustScoreValue] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    if (!user?.id) return;
+    const loadTs = async () => {
+      try {
+        const supabase = (await import('@/template')).getSupabaseClient();
+        const { data: playerData } = await supabase
+          .from('players')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('is_public', true)
+          .limit(1)
+          .single();
+        if (playerData?.id) {
+          const ts = await fetchTrustScore(playerData.id);
+          if (ts) setTrustScoreValue(ts.score);
+        }
+      } catch { /* silent */ }
+    };
+    loadTs();
+  }, [user?.id]);
 
   // XP breakdown
   const xpBreakdown = useMemo(() => {
@@ -376,8 +419,9 @@ export default function BadgesScreen() {
 
           {BADGES.map((badge, index) => {
             const unlocked = userBadges.find(b => b.badgeId === badge.id);
-            const prog = badgeContext
-              ? getBadgeProgress(badge.id, badgeContext, language)
+            const ctxWithTrust = badgeContext ? { ...badgeContext, trustScore: trustScoreValue } : null;
+            const prog = ctxWithTrust
+              ? getBadgeProgress(badge.id, ctxWithTrust, language)
               : { current: 0, target: 1, percent: 0, label: '' };
             const isComplete = !!unlocked;
 

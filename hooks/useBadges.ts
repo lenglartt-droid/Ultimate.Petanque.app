@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/template';
 import { useApp } from '@/contexts/AppContext';
 import { isUserAmbassador } from '@/services/ambassadorService';
+import { fetchTrustScore } from '@/services/trustScoreService';
 import {
   loadUserBadges,
   buildBadgeContext,
@@ -56,6 +57,26 @@ export function useBadges() {
         }
       });
 
+      // Fetch trust score for trust badges
+      let trustScore: number | null = null;
+      try {
+        const { selfPlayer } = require('@/contexts/AppContext');
+      } catch {}
+      // Attempt to get trust score from DB
+      try {
+        const { data: playerData } = await (await import('@/template')).getSupabaseClient()
+          .from('players')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('is_public', true)
+          .limit(1)
+          .single();
+        if (playerData?.id) {
+          const ts = await fetchTrustScore(playerData.id);
+          if (ts) trustScore = ts.score;
+        }
+      } catch { /* no trust score available */ }
+
       const context = buildBadgeContext({
         matches,
         challenges,
@@ -63,8 +84,9 @@ export function useBadges() {
         sharedMatchIds,
         userId: user.id,
         isAmbassador: isAmb,
-        leaderboardRank: null, // Would need leaderboard data
+        leaderboardRank: null,
       });
+      context.trustScore = trustScore;
 
       const newBadgeIds = await checkAndAwardBadges(user.id, context, badges);
 
