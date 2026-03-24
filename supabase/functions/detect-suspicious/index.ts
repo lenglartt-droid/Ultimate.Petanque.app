@@ -461,9 +461,51 @@ Deno.serve(async (req: Request) => {
     console.log(`[detect-suspicious] Analyzed ${players.length} players, ${results.filter(r => r.flags.length > 0).length} with flags`);
 
     // ============================================
-    // UPSERT RESULTS
+    // UPSERT RESULTS + DETECT THRESHOLD CROSSINGS
     // ============================================
+    // Fetch previous scores for threshold crossing detection
+    const prevScoreMap = new Map<string, number>();
+    if (results.length > 0) {
+      const pids = results.map(r => r.player_id);
+      try {
+        const { data: prevData } = await supabaseClient
+          .from('suspicious_players')
+          .select('player_id, trust_score')
+          .in('player_id', pids);
+        (prevData || []).forEach((pd: any) => prevScoreMap.set(pd.player_id, pd.trust_score));
+      } catch { /* no previous data is ok */ }
+    }
+
+    const thresholdCrossings: Array<{ userId: string; playerId: string; newScore: number; newLevel: string; previousScore: number }> = [];
+    const lowScoreUsers: Array<{ userId: string; score: number }> = [];
+
+    const getLevelStr = (s: number) => s >= 80 ? 'verified' : s >= 65 ? 'high' : s >= 45 ? 'medium' : s >= 25 ? 'low' : 'suspicious';
+
     for (const r of results) {
+      const prevScore = prevScoreMap.get(r.player_id);
+      const newLevel = getLevelStr(r.trust_score);
+
+      // Detect upward threshold crossings (notify user)
+      if (prevScore !== undefined && prevScore < r.trust_score) {
+        const prevLevel = getLevelStr(prevScore);
+        // Notify when crossing into 'high' (65+) or 'verified' (80+)
+        if ((newLevel === 'high' && prevLevel !== 'high' && prevLevel !== 'verified') ||
+            (newLevel === 'verified' && prevLevel !== 'verified')) {
+          thresholdCrossings.push({
+            userId: r.user_id,
+            playerId: r.player_id,
+            newScore: r.trust_score,
+            newLevel,
+            previousScore: prevScore,
+          });
+        }
+      }
+
+      // Collect users with score < 50 for weekly tips
+      if (r.trust_score < 50) {
+        lowScoreUsers.push({ userId: r.user_id, score: r.trust_score });
+      }
+
       const { error: upsertError } = await supabaseClient
         .from('suspicious_players')
         .upsert({
@@ -479,6 +521,42 @@ Deno.serve(async (req: Request) => {
 
       if (upsertError) {
         console.error(`[detect-suspicious] Upsert error for ${r.player_id}:`, upsertError.message);
+      }
+    }
+
+    // Send push notifications for threshold crossings
+    if (thresholdCrossings.length > 0) {
+      console.log(`[detect-suspicious] ${thresholdCrossings.length} threshold crossing(s) detected`);
+      for (const tc of thresholdCrossings) {
+        try {
+          const supabaseAnon = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY') ?? '');
+          // Use service role to invoke send-push internally
+          const { data: tokens } = await supabaseClient
+            .from('push_tokens')
+            .select('token')
+            .eq('user_id', tc.userId)
+            .eq('active', true);
+
+          if (tokens && tokens.length > 0) {
+            const levelLabels: Record<string, string> = { verified: 'Verifie', high: 'Fiable', medium: 'Standard' };
+            const label = levelLabels[tc.newLevel] || tc.newLevel;
+            // Import push helpers - use inline fetch to Expo Push API
+            const pushMessages = tokens.map((t: any) => ({
+              to: t.token,
+              title: '\u{1F6E1}\uFE0F Score de confiance ameliore !',
+              body: `Votre score est passe a ${tc.newScore}/100 (${label}). Bravo !`,
+              data: { type: 'trust_score_improved', newScore: tc.newScore, newLevel: tc.newLevel },
+              channelId: 'tournament-reminders',
+            }));
+            await fetch('https://exp.host/--/api/v2/push/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+              body: JSON.stringify(pushMessages),
+            });
+          }
+        } catch (e) {
+          console.error(`[detect-suspicious] Error sending trust score notification:`, e);
+        }
       }
     }
 

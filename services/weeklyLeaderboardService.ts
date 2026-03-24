@@ -7,6 +7,7 @@
  */
 import { getSupabaseClient } from '@/template';
 import { LeaderboardPlayer, sortLeaderboard, LeaderboardSort, LEADERBOARD_MIN_MATCHES } from './leaderboardService';
+import { getMatchValidationWeight } from './trustScoreService';
 
 // ============================================
 // TYPES
@@ -116,26 +117,29 @@ export async function fetchWeeklyLeaderboard(): Promise<{
     // 3. Compute weekly stats per player
     // ANTI-CHEAT: Only count matches with 2+ real app users
     const playerIds = new Set((playersData || []).map((p: any) => p.id));
-    const weeklyStatsMap = new Map<string, { matchesPlayed: number; wins: number; losses: number; tirSuccess: number; tirTotal: number; carreaux: number }>();
+    const weeklyStatsMap = new Map<string, { matchesPlayed: number; wins: number; losses: number; tirSuccess: number; tirTotal: number; carreaux: number; weightedWins: number; totalWeight: number }>();
 
     for (const m of weekMatches) {
       // ANTI-CHEAT: Skip matches without 2+ real app users
       const participantIds: string[] = (m as any).participant_user_ids || [];
       if (participantIds.length < 2) continue;
 
+      const matchWeight = getMatchValidationWeight(participantIds.length);
       const teamAPlayers: string[] = m.team_a?.players || [];
       const teamBPlayers: string[] = m.team_b?.players || [];
       const allMatchPlayers = [...teamAPlayers, ...teamBPlayers].filter(id => playerIds.has(id));
 
       for (const pid of allMatchPlayers) {
         if (!weeklyStatsMap.has(pid)) {
-          weeklyStatsMap.set(pid, { matchesPlayed: 0, wins: 0, losses: 0, tirSuccess: 0, tirTotal: 0, carreaux: 0 });
+          weeklyStatsMap.set(pid, { matchesPlayed: 0, wins: 0, losses: 0, tirSuccess: 0, tirTotal: 0, carreaux: 0, weightedWins: 0, totalWeight: 0 });
         }
         const ws = weeklyStatsMap.get(pid)!;
         ws.matchesPlayed++;
+        ws.totalWeight += matchWeight;
         const inA = teamAPlayers.includes(pid);
         if ((inA && m.winner === 'A') || (!inA && m.winner === 'B')) {
           ws.wins++;
+          ws.weightedWins += matchWeight;
         } else {
           ws.losses++;
         }
@@ -193,7 +197,8 @@ export async function fetchWeeklyLeaderboard(): Promise<{
     // 5. Build player entries
     const players: Array<LeaderboardPlayer & { weeklyMatches: number; weeklyWins: number; weeklyWinRate: number; rankChange: WeeklyRankChange; trustScore?: number }> = visiblePlayersData.map((p: any) => {
       const ws = weeklyStatsMap.get(p.id)!;
-      const winRate = ws.matchesPlayed > 0 ? Math.round((ws.wins / ws.matchesPlayed) * 1000) / 10 : 0;
+      // Use weighted win rate for fairer ranking
+      const winRate = ws.totalWeight > 0 ? Math.round((ws.weightedWins / ws.totalWeight) * 1000) / 10 : 0;
       const tirRate = ws.tirTotal > 0 ? Math.round((ws.tirSuccess / ws.tirTotal) * 1000) / 10 : 0;
 
       return {

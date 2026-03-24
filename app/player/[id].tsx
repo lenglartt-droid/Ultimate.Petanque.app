@@ -168,6 +168,7 @@ export default function PlayerDetailScreen() {
     };
     loadScore();
   }, [player?.id, player?.stats?.matchesPlayed]);
+  const isSelfPlayer = selfPlayer && player?.id === selfPlayer.id;
   const { showAlert } = useAlert();
 
   // Load ambassador data for this player
@@ -614,7 +615,10 @@ export default function PlayerDetailScreen() {
 
               {/* Trust Score Badge */}
               {trustScore ? (
-                <View style={[s.trustScoreBadge, { borderColor: getTrustScoreColor(trustScore.level) + '25', backgroundColor: getTrustScoreColor(trustScore.level) + '06' }]}>
+                <Pressable
+                  style={[s.trustScoreBadge, { borderColor: getTrustScoreColor(trustScore.level) + '25', backgroundColor: getTrustScoreColor(trustScore.level) + '06' }]}
+                  onPress={isSelfPlayer ? () => router.push('/trust-score' as any) : undefined}
+                >
                   <View style={[s.trustScoreIconBg, { backgroundColor: getTrustScoreColor(trustScore.level) + '15' }]}>
                     <MaterialIcons name={getTrustScoreIcon(trustScore.level) as any} size={16} color={getTrustScoreColor(trustScore.level)} />
                   </View>
@@ -634,7 +638,10 @@ export default function PlayerDetailScreen() {
                       {getTrustBadgeDescription(trustScore.level, language === 'fr')}
                     </Text>
                   </View>
-                </View>
+                  {isSelfPlayer ? (
+                    <MaterialIcons name="chevron-right" size={18} color={getTrustScoreColor(trustScore.level)} style={{ marginLeft: 'auto', marginTop: 2 }} />
+                  ) : null}
+                </Pressable>
               ) : null}
 
               {/* Leaderboard progress bar (public players below threshold) */}

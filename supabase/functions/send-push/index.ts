@@ -481,6 +481,89 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // ============================================================
+    // TRUST_SCORE_IMPROVED: Notify user when trust score improves past threshold
+    // ============================================================
+    else if (type === 'trust_score_improved') {
+      const { targetUserId, newScore, newLevel, previousScore } = payload || {};
+      if (!targetUserId || newScore === undefined) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId/newScore' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const levelLabels: Record<string, { fr: string; en: string }> = {
+          verified: { fr: 'Verifie', en: 'Verified' },
+          high: { fr: 'Fiable', en: 'Trusted' },
+          medium: { fr: 'Standard', en: 'Standard' },
+        };
+        const levelLabel = levelLabels[newLevel]?.fr || newLevel;
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          `\u{1F6E1} Score de confiance ameliore !`,
+          `Votre score est passe a ${newScore}/100 (${levelLabel}). Continuez a jouer avec d'autres joueurs !`,
+          { type: 'trust_score_improved', newScore, newLevel },
+          { channelId: 'tournament-reminders' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
+    // ============================================================
+    // TRUST_WEEKLY_TIP: Weekly tip for users with low trust score
+    // ============================================================
+    else if (type === 'trust_weekly_tip') {
+      const { targets } = payload || {};
+      // targets: Array<{ userId: string; score: number }>
+      if (!targets || !Array.isArray(targets) || targets.length === 0) {
+        return new Response(JSON.stringify({ sent: 0, errors: 0 }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const userIdsList = targets.map((t: any) => t.userId);
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('user_id, token')
+        .in('user_id', userIdsList)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const tokensByUser = new Map<string, string[]>();
+        tokens.forEach((t: any) => {
+          if (!tokensByUser.has(t.user_id)) tokensByUser.set(t.user_id, []);
+          tokensByUser.get(t.user_id)!.push(t.token);
+        });
+
+        const messages: any[] = [];
+        for (const target of targets) {
+          const userTokens = tokensByUser.get(target.userId) || [];
+          for (const tk of userTokens) {
+            messages.push(buildPushMessage(
+              tk,
+              `\u{1F4AA} Ameliorez votre fiabilite`,
+              `Jouez des matchs avec d'autres utilisateurs pour augmenter votre score (${target.score}/100).`,
+              { type: 'trust_score_improved' },
+              { channelId: 'tournament-reminders' }
+            ));
+          }
+        }
+
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
     else {
       return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },

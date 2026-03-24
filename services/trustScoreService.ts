@@ -331,3 +331,88 @@ export async function updateSuspiciousStatus(
     return { error: e.message };
   }
 }
+
+/**
+ * Update trust score directly (admin action)
+ */
+export async function updateTrustScore(
+  id: string,
+  trustScore: number
+): Promise<{ error: string | null }> {
+  const supabase = getSupabaseClient();
+  try {
+    const { error } = await supabase
+      .from('suspicious_players')
+      .update({ trust_score: trustScore, updated_at: new Date().toISOString() })
+      .eq('id', id);
+    return { error: error?.message || null };
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+// ============================================
+// MATCH VALIDATION WEIGHT
+// ============================================
+
+export type MatchValidationLevel = 'solo' | 'shared_2' | 'shared_3plus' | 'witnessed';
+
+/**
+ * Get the validation weight multiplier for a match based on participant count.
+ * - solo (0-1 participant_user_ids): 0.3x
+ * - shared_2 (2 participants): 1.0x
+ * - shared_3plus (3-4 participants): 1.5x
+ * - witnessed (sponsored event with witnesses): 2.0x
+ */
+export function getMatchValidationWeight(participantCount: number, isWitnessedEvent?: boolean): number {
+  if (isWitnessedEvent) return 2.0;
+  if (participantCount >= 3) return 1.5;
+  if (participantCount >= 2) return 1.0;
+  return 0.3;
+}
+
+/**
+ * Get the validation level label and color for display
+ */
+export function getMatchValidationLevel(participantCount: number, isWitnessedEvent?: boolean): MatchValidationLevel {
+  if (isWitnessedEvent) return 'witnessed';
+  if (participantCount >= 3) return 'shared_3plus';
+  if (participantCount >= 2) return 'shared_2';
+  return 'solo';
+}
+
+export function getValidationColor(level: MatchValidationLevel): string {
+  switch (level) {
+    case 'witnessed': return '#7C3AED';
+    case 'shared_3plus': return '#22C55E';
+    case 'shared_2': return '#3B82F6';
+    case 'solo': return '#9CA3AF';
+  }
+}
+
+export function getValidationIcon(level: MatchValidationLevel): string {
+  switch (level) {
+    case 'witnessed': return 'visibility';
+    case 'shared_3plus': return 'groups';
+    case 'shared_2': return 'people';
+    case 'solo': return 'person';
+  }
+}
+
+export function getValidationLabel(level: MatchValidationLevel, fr: boolean): string {
+  switch (level) {
+    case 'witnessed': return fr ? 'Atteste (2.0x)' : 'Witnessed (2.0x)';
+    case 'shared_3plus': return fr ? '3+ joueurs (1.5x)' : '3+ players (1.5x)';
+    case 'shared_2': return fr ? '2 joueurs (1.0x)' : '2 players (1.0x)';
+    case 'solo': return fr ? 'Solo (0.3x)' : 'Solo (0.3x)';
+  }
+}
+
+export function getValidationWeightFromLevel(level: MatchValidationLevel): number {
+  switch (level) {
+    case 'witnessed': return 2.0;
+    case 'shared_3plus': return 1.5;
+    case 'shared_2': return 1.0;
+    case 'solo': return 0.3;
+  }
+}

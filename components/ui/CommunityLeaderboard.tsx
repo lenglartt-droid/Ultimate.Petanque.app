@@ -13,7 +13,7 @@ import { fetchLeaderboard, sortLeaderboard, LeaderboardPlayer, LeaderboardSort }
 import { fetchClubLeaderboard, sortClubLeaderboard, LeaderboardClub } from '@/services/clubLeaderboardService';
 import { fetchBoulesLeaderboard, aggregateBoulesData, sortBoulesLeaderboard, LeaderboardBoulesEntry } from '@/services/boulesLeaderboardService';
 import { getBrandVisual, getBrandImage } from '@/constants/boulesDatabase';
-import { getTrustScoreColor } from '@/services/trustScoreService';
+import { getTrustScoreColor, getTrustScoreIcon, getTrustLevelLabel } from '@/services/trustScoreService';
 import { fetchEventLeaderboard, EventLeaderboardEntry, SponsoredEvent } from '@/services/sponsoredEventService';
 
 type WidgetTab = 'players' | 'clubs' | 'boules' | 'events';
@@ -282,10 +282,9 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                         {p.club ? <Text style={s.playerClub} numberOfLines={1}>{p.club}</Text> : null}
                       </View>
                     </View>
-                    {p.trustScore !== undefined && p.trustScore < 75 ? (
-                      <View style={s.trustBadge}>
-                        <MaterialIcons name="shield" size={8} color={getTrustScoreColor(p.trustScore)} />
-                        <Text style={[s.trustBadgeText, { color: getTrustScoreColor(p.trustScore) }]}>{p.trustScore}</Text>
+                    {p.trustScore !== undefined ? (
+                      <View style={[s.trustBadge, { backgroundColor: getTrustScoreColor(p.trustScore) + '10', borderColor: getTrustScoreColor(p.trustScore) + '30' }]}>
+                        <MaterialIcons name={getTrustScoreIcon(p.trustScore) as any} size={8} color={getTrustScoreColor(p.trustScore)} />
                       </View>
                     ) : null}
                     <Text style={s.statCell}>{p.stats.matchesPlayed}</Text>
@@ -691,7 +690,7 @@ const s = StyleSheet.create({
   premiumBadge: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#A8B4C0' + '20', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#A8B4C0' + '40' },
   ambassadorBadge: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#7C3AED' + '20', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#7C3AED' + '40' },
   statCell: { width: 34, fontSize: 12, fontWeight: '500', color: theme.textPrimary, textAlign: 'center' },
-  trustBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 2, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 6, backgroundColor: theme.backgroundSecondary },
+  trustBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 2, paddingHorizontal: 4, paddingVertical: 3, borderRadius: 6, borderWidth: 1, marginRight: 2 },
   trustBadgeText: { fontSize: 8, fontWeight: '800' as const },
   separator: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 6 },
   separatorDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: theme.textMuted },

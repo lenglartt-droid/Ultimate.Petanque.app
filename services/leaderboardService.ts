@@ -1,5 +1,6 @@
 import { getSupabaseClient } from '@/template';
 import { getAmbassadorUserIds } from '@/services/ambassadorService';
+import { getMatchValidationWeight } from '@/services/trustScoreService';
 
 export interface LeaderboardPlayer {
   id: string;
@@ -123,6 +124,9 @@ export async function fetchLeaderboard(period?: LeaderboardPeriod): Promise<{ pl
             const teamBPlayers: string[] = m.team_b?.players || [];
             const allMatchPlayers = [...teamAPlayers, ...teamBPlayers].filter(id => playerIds.has(id));
 
+            // Weighted match validation
+            const matchWeight = getMatchValidationWeight(participantIds.length);
+
             for (const pid of allMatchPlayers) {
               if (!playerStatsMap.has(pid)) {
                 playerStatsMap.set(pid, { matchesPlayed: 0, wins: 0, losses: 0, winRate: 0, tirRate: 0, pointRate: 0, carreauRate: 0 });
@@ -135,26 +139,31 @@ export async function fetchLeaderboard(period?: LeaderboardPeriod): Promise<{ pl
               } else {
                 ps.losses++;
               }
-              // Extract shot stats from player_actions
+              const rawKey = '_raw_' + pid;
+              const prev = (playerStatsMap as any)[rawKey] || { tirs: 0, tirsSuccess: 0, points: 0, pointsSuccess: 0, carreaux: 0, weightedWins: 0, totalWeight: 0 };
+              prev.totalWeight += matchWeight;
+              if ((inA && m.winner === 'A') || (!inA && m.winner === 'B')) {
+                prev.weightedWins += matchWeight;
+              }
               if (m.player_actions) {
                 const pa = (m.player_actions as any[]).find((a: any) => a.playerId === pid);
                 if (pa) {
-                  const prev = (playerStatsMap as any)['_raw_' + pid] || { tirs: 0, tirsSuccess: 0, points: 0, pointsSuccess: 0, carreaux: 0 };
                   prev.tirs += pa.actions?.tirs || 0;
                   prev.tirsSuccess += pa.actions?.tirsSuccess || 0;
                   prev.points += pa.actions?.points || 0;
                   prev.pointsSuccess += pa.actions?.pointsSuccess || 0;
                   prev.carreaux += pa.actions?.carreaux || 0;
-                  (playerStatsMap as any)['_raw_' + pid] = prev;
                 }
               }
+              (playerStatsMap as any)[rawKey] = prev;
             }
           }
 
-          // Compute rates
+          // Compute rates (weighted win rate)
           for (const [pid, ps] of playerStatsMap.entries()) {
             if (pid.startsWith('_raw_')) continue;
-            ps.winRate = ps.matchesPlayed > 0 ? Math.round((ps.wins / ps.matchesPlayed) * 1000) / 10 : 0;
+            const raw = (playerStatsMap as any)['_raw_' + pid];
+            ps.winRate = (raw && raw.totalWeight > 0) ? Math.round((raw.weightedWins / raw.totalWeight) * 1000) / 10 : (ps.matchesPlayed > 0 ? Math.round((ps.wins / ps.matchesPlayed) * 1000) / 10 : 0);
             const raw = (playerStatsMap as any)['_raw_' + pid];
             if (raw) {
               ps.tirRate = raw.tirs > 0 ? Math.round((raw.tirsSuccess / raw.tirs) * 1000) / 10 : 0;
@@ -187,6 +196,8 @@ export async function fetchLeaderboard(period?: LeaderboardPeriod): Promise<{ pl
           const teamBPlayers: string[] = m.team_b?.players || [];
           const allMatchPlayers = [...teamAPlayers, ...teamBPlayers].filter(id => playerIdsSet.has(id));
 
+          const matchWeight2 = getMatchValidationWeight(participantIds.length);
+
           for (const pid of allMatchPlayers) {
             if (!playerStatsMap.has(pid)) {
               playerStatsMap.set(pid, { matchesPlayed: 0, wins: 0, losses: 0, winRate: 0, tirRate: 0, pointRate: 0, carreauRate: 0 });
@@ -199,25 +210,31 @@ export async function fetchLeaderboard(period?: LeaderboardPeriod): Promise<{ pl
             } else {
               ps.losses++;
             }
+            const rawKey2 = '_raw_' + pid;
+            const prev2 = (playerStatsMap as any)[rawKey2] || { tirs: 0, tirsSuccess: 0, points: 0, pointsSuccess: 0, carreaux: 0, weightedWins: 0, totalWeight: 0 };
+            prev2.totalWeight += matchWeight2;
+            if ((inA && m.winner === 'A') || (!inA && m.winner === 'B')) {
+              prev2.weightedWins += matchWeight2;
+            }
             if (m.player_actions) {
               const pa = (m.player_actions as any[]).find((a: any) => a.playerId === pid);
               if (pa) {
-                const prev = (playerStatsMap as any)['_raw_' + pid] || { tirs: 0, tirsSuccess: 0, points: 0, pointsSuccess: 0, carreaux: 0 };
-                prev.tirs += pa.actions?.tirs || 0;
-                prev.tirsSuccess += pa.actions?.tirsSuccess || 0;
-                prev.points += pa.actions?.points || 0;
-                prev.pointsSuccess += pa.actions?.pointsSuccess || 0;
-                prev.carreaux += pa.actions?.carreaux || 0;
-                (playerStatsMap as any)['_raw_' + pid] = prev;
+                prev2.tirs += pa.actions?.tirs || 0;
+                prev2.tirsSuccess += pa.actions?.tirsSuccess || 0;
+                prev2.points += pa.actions?.points || 0;
+                prev2.pointsSuccess += pa.actions?.pointsSuccess || 0;
+                prev2.carreaux += pa.actions?.carreaux || 0;
               }
             }
+            (playerStatsMap as any)[rawKey2] = prev2;
           }
         }
 
-        // Compute rates for the all-time anti-cheat stats
+        // Compute rates (weighted)
         for (const [pid, ps] of playerStatsMap.entries()) {
           if (pid.startsWith('_raw_')) continue;
-          ps.winRate = ps.matchesPlayed > 0 ? Math.round((ps.wins / ps.matchesPlayed) * 1000) / 10 : 0;
+          const raw2 = (playerStatsMap as any)['_raw_' + pid];
+          ps.winRate = (raw2 && raw2.totalWeight > 0) ? Math.round((raw2.weightedWins / raw2.totalWeight) * 1000) / 10 : (ps.matchesPlayed > 0 ? Math.round((ps.wins / ps.matchesPlayed) * 1000) / 10 : 0);
           const raw = (playerStatsMap as any)['_raw_' + pid];
           if (raw) {
             ps.tirRate = raw.tirs > 0 ? Math.round((raw.tirsSuccess / raw.tirs) * 1000) / 10 : 0;
@@ -273,7 +290,24 @@ export async function fetchLeaderboard(period?: LeaderboardPeriod): Promise<{ pl
       } catch { /* silent */ }
     }
 
-    const players: LeaderboardPlayer[] = filteredData.map((p: any) => {
+    // Get current user ID for shadow ban exemption
+    let currentUserId: string | null = null;
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      currentUserId = authUser?.id || null;
+    } catch { /* silent */ }
+
+    const players: LeaderboardPlayer[] = filteredData
+      .filter((p: any) => {
+        // SHADOW BAN: Hide players with trust score < 25 from other users
+        // But the player can always see themselves
+        const ts = trustScoreMap.get(p.id)?.score;
+        if (ts !== undefined && ts < 25 && p.user_id !== currentUserId) {
+          return false; // Hidden from others
+        }
+        return true;
+      })
+      .map((p: any) => {
         const periodStats = playerStatsMap?.get(p.id);
         const stats = periodStats || p.stats || {};
         return {
@@ -296,8 +330,9 @@ export async function fetchLeaderboard(period?: LeaderboardPeriod): Promise<{ pl
           trustLevel: (() => {
             const ts = trustScoreMap.get(p.id)?.score;
             if (ts === undefined) return undefined;
-            if (ts >= 75) return 'high' as const;
-            if (ts >= 50) return 'medium' as const;
+            if (ts >= 80) return 'verified' as const;
+            if (ts >= 65) return 'high' as const;
+            if (ts >= 45) return 'medium' as const;
             if (ts >= 25) return 'low' as const;
             return 'suspicious' as const;
           })(),

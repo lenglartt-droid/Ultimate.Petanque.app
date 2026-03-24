@@ -32,6 +32,7 @@ import { getMyMeetups, getInvitedMeetups, getMeetupResponses, getPendingInvitati
 import { config } from '@/constants/config';
 import { Share as RNShare } from 'react-native';
 import { LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
+import { getMatchValidationLevel, getValidationColor, getValidationIcon, getValidationLabel } from '@/services/trustScoreService';
 import { fetchWeeklyLeaderboard, getCurrentWeekStart, formatDateISO } from '@/services/weeklyLeaderboardService';
 import { extraTranslations } from '@/constants/i18nExtra';
 import { getPendingWitnessRequests, getUnreadEventNotificationCount, markEventNotificationRead, EventNotification } from '@/services/eventNotificationService';
@@ -695,7 +696,21 @@ export default function HomeScreen() {
                     </View>
                     <View style={s.hcInfo}>
                       <Text style={s.hcTitle} numberOfLines={1}>{item.title}</Text>
-                      <Text style={s.hcSub} numberOfLines={1}>{item.subtitle} {' \u2022 '} {d.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                        <Text style={s.hcSub} numberOfLines={1}>{item.subtitle} {' \u2022 '} {d.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
+                        {item.type === 'match' ? (() => {
+                          const match = matches.find((m: any) => m.id === item.id);
+                          const pIds = (match as any)?.participantUserIds || [];
+                          const vLevel = getMatchValidationLevel(Array.isArray(pIds) ? pIds.length : 0);
+                          const vColor = getValidationColor(vLevel);
+                          return (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: vColor + '12', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 6 }}>
+                              <MaterialIcons name={getValidationIcon(vLevel) as any} size={9} color={vColor} />
+                              <Text style={{ fontSize: 8, fontWeight: '700', color: vColor }}>{vLevel === 'solo' ? '0.3x' : vLevel === 'shared_2' ? '1x' : vLevel === 'shared_3plus' ? '1.5x' : '2x'}</Text>
+                            </View>
+                          );
+                        })() : null}
+                      </View>
                     </View>
                     <Text style={[s.hcScore, { color: resultColor(item.result) }]}>{item.score}</Text>
                     <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />

@@ -29,7 +29,7 @@ import { fetchBoulesLeaderboard, aggregateBoulesData, sortBoulesLeaderboard, Lea
 import { getBrandVisual, getBrandImage } from '@/constants/boulesDatabase';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services/meetupService';
 import AdBanner from '@/components/ui/AdBanner';
-import { getTrustScoreColor } from '@/services/trustScoreService';
+import { getTrustScoreColor, getTrustScoreIcon } from '@/services/trustScoreService';
 import { fetchEventLeaderboard, EventLeaderboardEntry, SponsoredEvent } from '@/services/sponsoredEventService';
 import { fetchWeeklyLeaderboard, getSubRankings, saveWeeklySnapshot, checkAndTriggerWeeklyReset, getLastWeekSummary, WeeklyRankChange, SubRanking, getCurrentWeekStart, formatDateISO } from '@/services/weeklyLeaderboardService';
 import { extraTranslations } from '@/constants/i18nExtra';
@@ -85,9 +85,16 @@ const WeeklyPlayerRow = React.memo(function WeeklyPlayerRow({
           {isMe ? <View style={s.meBadge}><MaterialIcons name="star" size={8} color="#FFF" /></View> : null}
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[s.playerName, isMe && { color: theme.primary }]} numberOfLines={1}>
-            {player.name}{isMe ? ` (${t('leaderboard', 'you')})` : ''}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Text style={[s.playerName, isMe && { color: theme.primary }]} numberOfLines={1}>
+              {player.name}{isMe ? ` (${t('leaderboard', 'you')})` : ''}
+            </Text>
+            {player.trustScore !== undefined ? (
+              <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: getTrustScoreColor(player.trustScore) + '15', alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialIcons name={getTrustScoreIcon(player.trustScore) as any} size={9} color={getTrustScoreColor(player.trustScore)} />
+              </View>
+            ) : null}
+          </View>
           <View style={s.playerMeta}>
             {player.club ? <Text style={s.playerClub} numberOfLines={1}>{player.club}</Text> : null}
             {player.city ? (
@@ -238,9 +245,9 @@ const MemoizedPlayerRow = React.memo(function PlayerRow({
 
       {/* Stats */}
       <View style={s.statsCol}>
-        {player.trustScore !== undefined && player.trustScore < 75 ? (
-          <View style={[s.trustBadgeRow, { borderColor: getTrustScoreColor(player.trustScore) + '30' }]}>
-            <MaterialIcons name="shield" size={10} color={getTrustScoreColor(player.trustScore)} />
+        {player.trustScore !== undefined ? (
+          <View style={[s.trustBadgeRow, { borderColor: getTrustScoreColor(player.trustScore) + '30', backgroundColor: getTrustScoreColor(player.trustScore) + '08' }]}>
+            <MaterialIcons name={getTrustScoreIcon(player.trustScore) as any} size={10} color={getTrustScoreColor(player.trustScore)} />
             <Text style={[s.trustBadgeText, { color: getTrustScoreColor(player.trustScore) }]}>{player.trustScore}</Text>
           </View>
         ) : null}
