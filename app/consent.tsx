@@ -16,6 +16,7 @@ import { useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
+import { clearTempDataExpiry, updateRetentionForRegisteredUser } from '@/services/retentionNotificationService';
 
 export default function ConsentScreen() {
   const { user } = useAuth();
@@ -45,6 +46,14 @@ export default function ConsentScreen() {
       if (error) throw error;
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // Clear temp data expiry and update retention notifications for registered user
+      clearTempDataExpiry().catch(() => {});
+      updateRetentionForRegisteredUser({
+        language: t('common', 'version').includes('Version') ? 'fr' : 'en',
+        matchStats: { successRate: 0, carreaux: 0, matchCount: 0, wins: 0, tirRate: 0 },
+      }).catch(() => {});
+
       router.replace('/(tabs)');
     } catch (err: any) {
       console.log('Consent save error:', err);

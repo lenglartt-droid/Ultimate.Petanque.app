@@ -20,6 +20,7 @@ import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { isDisposableEmail } from '@/services/emailValidationService';
 import { canCreateAccount, recordAccountCreation } from '@/services/deviceFingerprintService';
+import { clearTempDataExpiry } from '@/services/retentionNotificationService';
 
 type AuthMode = 'login' | 'register';
 type RegisterStep = 'email' | 'otp';
@@ -131,6 +132,8 @@ export default function LoginScreen() {
     } else {
       // Record successful account creation for device fingerprint tracking
       recordAccountCreation(email.trim()).catch(() => {});
+      // Clear 7-day temp data expiry since user is now registered
+      clearTempDataExpiry().catch(() => {});
     }
   };
 

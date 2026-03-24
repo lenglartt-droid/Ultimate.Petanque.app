@@ -16,6 +16,8 @@ import { initSentry, setUser as setSentryUser, setRoute as setSentryRoute } from
 import { addNotificationResponseListener } from '@/services/notificationService';
 import { registerPushToken } from '@/services/pushTokenService';
 import { router } from 'expo-router';
+import { checkTempDataExpiry } from '@/services/retentionNotificationService';
+import { updateRetentionForRegisteredUser } from '@/services/retentionNotificationService';
 
 export default function RootLayout() {
   return (
@@ -55,6 +57,15 @@ function LayoutInner() {
     registerPushToken();
   }, []);
 
+  // Check temp data expiry for non-registered users & update retention on login
+  React.useEffect(() => {
+    checkTempDataExpiry().then(({ expired }) => {
+      if (expired) {
+        console.log('[Retention] Temporary onboarding data expired and cleaned up');
+      }
+    });
+  }, []);
+
   // Navigate to match-invitations when user taps a share request notification
   React.useEffect(() => {
     const sub = addNotificationResponseListener((response: any) => {
@@ -63,6 +74,18 @@ function LayoutInner() {
       // Small delay to ensure navigation stack is ready
       setTimeout(() => {
         switch (data.type) {
+          case 'retention':
+            // Handle retention notification taps
+            if (data.action === 'play_match') {
+              router.push('/match/new' as any);
+            } else if (data.action === 'register' || data.action === 'register_urgent') {
+              router.push('/login' as any);
+            } else if (data.action === 'view_stats') {
+              router.push('/(tabs)/stats' as any);
+            } else if (data.action === 'invite_partner') {
+              router.push('/share' as any);
+            }
+            break;
           case 'share_request':
             router.push('/match-invitations');
             break;

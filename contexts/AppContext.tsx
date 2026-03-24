@@ -75,6 +75,7 @@ import { addTournamentOp, updateTournamentOp, updateBracketMatchOp, deleteTourna
 import { addTerrainOp, updateTerrainOp, deleteTerrainOp } from '@/services/terrainCrudService';
 import { addChallengeOp, updateChallengeOp, deleteChallengeOp } from '@/services/challengeCrudService';
 import { addBoulesSetOp, updateBoulesSetOp, deleteBoulesSetOp, setPrimaryBoulesSetOp } from '@/services/boulesSetCrudService';
+import { updateRetentionStats } from '@/services/retentionNotificationService';
 
 // ============================================
 // Context type
@@ -392,6 +393,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
       overallSuccessRate: totalShots > 0 ? Math.round((totalSuccess / totalShots) * 100) : 0,
     };
   }, [challenges]);
+
+  // ===== Update retention notification stats when matches change =====
+  const prevMatchCountRef = useRef(0);
+  useEffect(() => {
+    if (!user?.id || matches.length === 0) return;
+    // Only update when match count actually changes (not on initial load)
+    if (prevMatchCountRef.current > 0 && prevMatchCountRef.current !== matches.length) {
+      // Compute total carreaux
+      let totalCarreaux = 0;
+      matches.forEach((m: any) => {
+        if (m.playerActions) {
+          m.playerActions.filter((pa: any) => pa.team === 'A').forEach((pa: any) => {
+            totalCarreaux += pa.actions?.carreaux || 0;
+          });
+        }
+      });
+
+      updateRetentionStats({
+        language: 'fr', // Will be overridden by stored state
+        isRegistered: true, // User is logged in at this point
+        matchStats: {
+          successRate: userStats.tirSuccessRate || 0,
+          carreaux: totalCarreaux,
+          matchCount: matches.length,
+          wins: userStats.wins || 0,
+          tirRate: userStats.tirSuccessRate || 0,
+        },
+      }).catch(() => {});
+    }
+    prevMatchCountRef.current = matches.length;
+  }, [matches.length, user?.id]);
 
   // ===== Sync config =====
   useEffect(() => {
