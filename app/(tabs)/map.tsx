@@ -30,13 +30,14 @@ import {
   fetchPublicPlayers, fetchPublicClubs, fetchPublicTerrains, fetchPublicTournaments,
   toggleItemPublic, importPublicItemToDirectory, getMyPublicableItems,
 } from '@/services/publicItemsService';
+import { getSponsoredEvents, SponsoredEvent } from '@/services/sponsoredEventService';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup as MeetupType } from '@/services/meetupService';
 import AdBanner from '@/components/ui/AdBanner';
 import SponsorBanner from '@/components/ui/SponsorBanner';
 import { useToast } from '@/components/ui/Toast';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 
-type MarkerType = 'all' | 'terrains' | 'clubs' | 'tournaments' | 'players';
+type MarkerType = 'all' | 'terrains' | 'clubs' | 'tournaments' | 'players' | 'events';
 type MapMode = 'all' | 'public';
 
 let MapViewComponent: React.ComponentType<any> | null = null;
@@ -335,11 +336,16 @@ export default function MapScreen() {
     }
   }, [meetupPickerUserId, showAlert, showToast, t]);
 
+  // Sponsored events state
+  const [sponsoredEvents, setSponsoredEvents] = useState<SponsoredEvent[]>([]);
+  const [sponsoredEventsLoaded, setSponsoredEventsLoaded] = useState(false);
+
   const MARKER_CONFIG = useMemo(() => ({
     terrains: { label: t('map', 'terrains'), singular: t('map', 'terrainSingular'), icon: 'sports-soccer', color: theme.success },
     clubs: { label: t('map', 'clubs'), singular: t('map', 'clubSingular'), icon: 'home', color: theme.accent },
     tournaments: { label: t('map', 'tournaments'), singular: t('map', 'tournamentSingular'), icon: 'emoji-events', color: theme.carreauColor },
     players: { label: t('map', 'players'), singular: t('map', 'playerSingular'), icon: 'person', color: theme.primary },
+    events: { label: language === 'fr' ? 'Defis' : 'Challenges', singular: language === 'fr' ? 'Defi' : 'Challenge', icon: 'campaign', color: '#7C3AED' },
   }), [language]);
 
   // Dynamic gradient based on active filter
@@ -350,6 +356,7 @@ export default function MapScreen() {
       clubs: ['#451A03', '#92400E', '#D97706'],
       tournaments: ['#451A03', '#78350F', '#B45309'],
       players: ['#0F172A', '#1E3A8A', '#2563EB'],
+      events: ['#2E1065', '#5B21B6', '#7C3AED'],
     };
     return gradients[filter];
   }, [filter]);
@@ -361,6 +368,7 @@ export default function MapScreen() {
       clubs: theme.accent,
       tournaments: theme.carreauColor,
       players: theme.primary,
+      events: '#7C3AED',
     };
     return colors[filter];
   }, [filter]);
@@ -388,6 +396,15 @@ export default function MapScreen() {
     const timer = setTimeout(loadPublicItems, 800);
     return () => clearTimeout(timer);
   }, [user?.id]);
+
+  // Load sponsored events for map markers
+  useEffect(() => {
+    if (sponsoredEventsLoaded) return;
+    getSponsoredEvents().then(({ events }) => {
+      setSponsoredEvents(events);
+      setSponsoredEventsLoaded(true);
+    });
+  }, [sponsoredEventsLoaded]);
 
   // Helper: check if a location has valid coordinates (not 0,0)
   const hasValidLocation = useCallback((item: any) => {
@@ -471,6 +488,15 @@ export default function MapScreen() {
       if (showOwn) addItems(ownData.players, 'players', false);
       if (showPublic) addItems(pubData.players, 'players', true);
     }
+    if (filter === 'all' || filter === 'events') {
+      sponsoredEvents.forEach(evt => {
+        const terrain = terrains.find(tr => tr.id === evt.terrainId);
+        const loc = terrain?.location;
+        if (loc && (loc.latitude || loc.longitude)) {
+          items.push({ ...evt, name: evt.title, location: loc, itemType: 'events', _isPublic: true });
+        }
+      });
+    }
 
     // Deduplicate by id
     const seen = new Set<string>();
@@ -526,6 +552,7 @@ export default function MapScreen() {
       clubs: countType('clubs'),
       players: countType('players'),
       tournaments: countType('tournaments'),
+      events: countType('events'),
       total: results.length,
       publicTotal: results.filter(r => r._isPublic).length,
     };
@@ -564,6 +591,11 @@ export default function MapScreen() {
 
   const handleNavigate = useCallback(() => {
     if (!selected) return;
+    if (selected.itemType === 'events') {
+      router.push(`/sponsored-event/${selected.id}` as any);
+      setSelected(null);
+      return;
+    }
     if (selected._isPublic) return;
     const routes: Record<string, string> = {
       clubs: `/club/${selected.id}`, terrains: `/terrain/${selected.id}`,
@@ -1033,10 +1065,20 @@ export default function MapScreen() {
                 {selected.itemType === 'tournaments' ? (
                   <View style={styles.tag}><Text style={styles.tagText}>{t('formats', selected.format)}</Text></View>
                 ) : null}
+                {selected.itemType === 'events' ? (
+                  <View style={styles.tag}><Text style={styles.tagText}>{selected.challengeType === '10_tirs' ? '10 Tirs' : selected.challengeType === '10_tirs_sautee' ? '10 Tirs sautee' : 'Precision'}</Text></View>
+                ) : null}
+                {selected.itemType === 'events' && selected.status ? (
+                  <View style={[styles.tag, { backgroundColor: selected.status === 'active' ? '#22C55E15' : '#F59E0B15' }]}><Text style={[styles.tagText, { color: selected.status === 'active' ? '#22C55E' : '#F59E0B' }]}>{selected.status === 'active' ? (language === 'fr' ? 'En cours' : 'Active') : (language === 'fr' ? 'A venir' : 'Upcoming')}</Text></View>
+                ) : null}
               </View>
             </View>
             <View style={{ alignItems: 'center', gap: 6 }}>
-              {selected._isPublic ? (
+              {selected.itemType === 'events' ? (
+                <Pressable style={[styles.selectedArrow, { backgroundColor: '#7C3AED15' }]} onPress={handleNavigate}>
+                  <MaterialIcons name="arrow-forward" size={18} color="#7C3AED" />
+                </Pressable>
+              ) : selected._isPublic ? (
                 <Pressable style={styles.importBtn} onPress={() => handleImportPublicItem(selected)}>
                   <MaterialIcons name="add-circle" size={24} color={theme.primary} />
                 </Pressable>

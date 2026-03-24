@@ -11,10 +11,12 @@ import { useLanguage } from '@/hooks/useLanguage';
 import {
   getSponsoredEvent, getEventParticipants, getMyParticipationStatus,
   registerForEvent, declineEvent, attestAsWitness, publishResults,
-  cancelSponsoredEvent, SponsoredEvent, SponsoredEventParticipant,
+  cancelSponsoredEvent, inviteUsersToEvent, SponsoredEvent, SponsoredEventParticipant,
 } from '@/services/sponsoredEventService';
-import { Dimensions, Modal } from 'react-native';
+import { getSupabaseClient } from '@/template';
+import { Dimensions, Modal, FlatList, TextInput } from 'react-native';
 import { config } from '@/constants/config';
+import QRCode from 'react-native-qrcode-svg';
 import {
   scheduleEventReminders, cancelEventReminders, getScheduledEventReminders,
   markAllEventNotificationsRead, EventReminderSettings,
@@ -200,6 +202,12 @@ export default function SponsoredEventDetailScreen() {
   };
 
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showPlayerPicker, setShowPlayerPicker] = useState(false);
+  const [playerPickerSearch, setPlayerPickerSearch] = useState('');
+  const [myPlayers, setMyPlayers] = useState<any[]>([]);
+  const [loadingPlayers, setLoadingPlayers] = useState(false);
+  const [invitingPlayerIds, setInvitingPlayerIds] = useState<Set<string>>(new Set());
+  const [invitedPlayerIds, setInvitedPlayerIds] = useState<Set<string>>(new Set());
 
   const handleShare = async () => {
     setShowShareModal(true);
@@ -238,6 +246,92 @@ export default function SponsoredEventDetailScreen() {
       try { await RNShare.share({ message: shareMsg }); } catch {}
     }
   };
+
+  // Load players for invitation picker
+  const loadPlayersForInvite = useCallback(async () => {
+    if (!user?.id) return;
+    setLoadingPlayers(true);
+    const supabase = getSupabaseClient();
+    try {
+      // Get user's players that have user accounts (user_id linked)
+      const { data: allPlayers } = await supabase
+        .from('players')
+        .select('id, name, user_id, avatar, club, role')
+        .eq('user_id', user.id)
+        .order('name');
+
+      // Also get public players from community
+      const { data: publicPlayers } = await supabase
+        .from('players')
+        .select('id, name, user_id, avatar, club, role')
+        .eq('is_public', true)
+        .neq('user_id', user.id)
+        .not('user_id', 'is', null)
+        .limit(100);
+
+      const combined = [...(allPlayers || []), ...(publicPlayers || [])];
+      // Deduplicate by user_id
+      const seen = new Set<string>();
+      const unique = combined.filter(p => {
+        if (!p.user_id || seen.has(p.user_id)) return false;
+        seen.add(p.user_id);
+        return p.user_id !== user.id;
+      });
+      setMyPlayers(unique);
+
+      // Mark already-invited participants
+      if (id) {
+        const { data: existingParts } = await supabase
+          .from('sponsored_event_participants')
+          .select('user_id')
+          .eq('event_id', id);
+        const existingSet = new Set((existingParts || []).map((p: any) => p.user_id));
+        setInvitedPlayerIds(existingSet);
+      }
+    } catch { /* silent */ }
+    setLoadingPlayers(false);
+  }, [user?.id, id]);
+
+  const handleInvitePlayer = useCallback(async (targetUserId: string, playerName: string) => {
+    if (!id || !event) return;
+    setInvitingPlayerIds(prev => new Set([...prev, targetUserId]));
+    const { invited, error: invErr } = await inviteUsersToEvent(id, [targetUserId]);
+    setInvitingPlayerIds(prev => { const next = new Set(prev); next.delete(targetUserId); return next; });
+    if (invErr) {
+      showAlert(language === 'fr' ? 'Erreur' : 'Error', invErr);
+      return;
+    }
+    if (invited === 0) {
+      showAlert(language === 'fr' ? 'Deja inscrit' : 'Already registered');
+    } else {
+      setInvitedPlayerIds(prev => new Set([...prev, targetUserId]));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // Send push notification
+      try {
+        const supabase = getSupabaseClient();
+        const { data: profile } = await supabase.from('user_profiles').select('username').eq('id', user?.id).maybeSingle();
+        await supabase.functions.invoke('send-push', {
+          body: {
+            type: 'event_created',
+            payload: {
+              eventId: id,
+              eventTitle: event.title,
+              city: event.city,
+              challengeType: event.challengeType,
+              ambassadorName: profile?.username || 'Ambassadeur',
+            },
+          },
+        });
+      } catch { /* silent */ }
+    }
+    loadData();
+  }, [id, event, user?.id, language]);
+
+  const filteredPlayers = useMemo(() => {
+    if (!playerPickerSearch.trim()) return myPlayers;
+    const q = playerPickerSearch.toLowerCase();
+    return myPlayers.filter(p => p.name.toLowerCase().includes(q) || (p.club || '').toLowerCase().includes(q));
+  }, [myPlayers, playerPickerSearch]);
 
   const challengeName = (type: string) => type === '10_tirs' ? '10 Tirs' : type === '10_tirs_sautee' ? '10 Tirs sautee' : 'Precision';
 
@@ -607,6 +701,33 @@ export default function SponsoredEventDetailScreen() {
                 </View>
                 <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
               </Pressable>
+
+              {isCreator ? (
+                <Pressable style={({ pressed }) => [s.shareOption, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]} onPress={() => { setShowShareModal(false); loadPlayersForInvite(); setShowPlayerPicker(true); }}>
+                  <View style={[s.shareOptionIcon, { backgroundColor: '#2563EB15' }]}>
+                    <MaterialIcons name="person-add" size={22} color="#2563EB" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.shareOptionTitle}>{language === 'fr' ? 'Inviter des joueurs' : 'Invite players'}</Text>
+                    <Text style={s.shareOptionDesc}>{language === 'fr' ? 'Envoyer des notifications directes' : 'Send direct push notifications'}</Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                </Pressable>
+              ) : null}
+            </View>
+
+            {/* QR Code */}
+            <View style={s.shareQRSection}>
+              <Text style={s.shareQRLabel}>{language === 'fr' ? 'QR Code de l\'evenement' : 'Event QR Code'}</Text>
+              <View style={s.shareQRWrap}>
+                <QRCode
+                  value={`${config.appDownloadUrl}?event=${event?.shareCode || ''}`}
+                  size={160}
+                  color="#7C3AED"
+                  backgroundColor="#FFFFFF"
+                />
+              </View>
+              <Text style={s.shareQRHint}>{language === 'fr' ? 'Scannez pour rejoindre' : 'Scan to join'}</Text>
             </View>
 
             {/* Tip */}
@@ -620,6 +741,87 @@ export default function SponsoredEventDetailScreen() {
             </View>
           </View>
         </View>
+      </Modal>
+      {/* Player Picker Modal */}
+      <Modal visible={showPlayerPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowPlayerPicker(false)}>
+        <SafeAreaView style={s.container}>
+          <View style={s.ppHeader}>
+            <Pressable style={s.ppCloseBtn} onPress={() => setShowPlayerPicker(false)}>
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+            <View style={{ flex: 1 }}>
+              <Text style={s.ppTitle}>{language === 'fr' ? 'Inviter des joueurs' : 'Invite players'}</Text>
+              <Text style={s.ppSubtitle}>{invitedPlayerIds.size} {language === 'fr' ? 'deja inscrit(s)' : 'already registered'}</Text>
+            </View>
+          </View>
+          <View style={s.ppSearchBar}>
+            <MaterialIcons name="search" size={20} color={theme.textMuted} />
+            <TextInput
+              style={s.ppSearchInput}
+              value={playerPickerSearch}
+              onChangeText={setPlayerPickerSearch}
+              placeholder={language === 'fr' ? 'Rechercher un joueur...' : 'Search player...'}
+              placeholderTextColor={theme.textMuted}
+            />
+            {playerPickerSearch.length > 0 ? (
+              <Pressable onPress={() => setPlayerPickerSearch('')}>
+                <MaterialIcons name="close" size={18} color={theme.textMuted} />
+              </Pressable>
+            ) : null}
+          </View>
+          {loadingPlayers ? (
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+              <ActivityIndicator size="large" color={theme.primary} />
+            </View>
+          ) : (
+            <FlatList
+              data={filteredPlayers}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item: p }) => {
+                const alreadyInvited = invitedPlayerIds.has(p.user_id);
+                const isInviting = invitingPlayerIds.has(p.user_id);
+                return (
+                  <View style={s.ppPlayerRow}>
+                    <View style={s.ppPlayerAvatar}>
+                      {p.avatar ? (
+                        <Image source={{ uri: p.avatar }} style={{ width: 40, height: 40, borderRadius: 12 }} contentFit="cover" cachePolicy="memory-disk" />
+                      ) : (
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: theme.primary }}>{p.name.charAt(0)}</Text>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.ppPlayerName} numberOfLines={1}>{p.name}</Text>
+                      {p.club ? <Text style={s.ppPlayerClub} numberOfLines={1}>{p.club}</Text> : null}
+                    </View>
+                    {alreadyInvited ? (
+                      <View style={s.ppInvitedBadge}>
+                        <MaterialIcons name="check-circle" size={14} color={theme.success} />
+                        <Text style={s.ppInvitedText}>{language === 'fr' ? 'Inscrit' : 'Joined'}</Text>
+                      </View>
+                    ) : isInviting ? (
+                      <ActivityIndicator size="small" color="#7C3AED" />
+                    ) : (
+                      <Pressable style={s.ppInviteBtn} onPress={() => handleInvitePlayer(p.user_id, p.name)}>
+                        <MaterialIcons name="person-add" size={16} color="#FFF" />
+                        <Text style={s.ppInviteBtnText}>{language === 'fr' ? 'Inviter' : 'Invite'}</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                );
+              }}
+              ListEmptyComponent={
+                <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                  <MaterialIcons name="person-search" size={48} color={theme.textMuted} />
+                  <Text style={{ fontSize: 15, color: theme.textMuted, marginTop: 12 }}>
+                    {language === 'fr' ? 'Aucun joueur trouve' : 'No players found'}
+                  </Text>
+                </View>
+              }
+            />
+          )}
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
@@ -747,4 +949,24 @@ const s = StyleSheet.create({
   shareOptionDesc: { fontSize: 12, color: theme.textMuted, marginTop: 1 },
   shareTip: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 8, marginHorizontal: 20, marginTop: 16, padding: 12, backgroundColor: '#FEF3C7', borderRadius: 12, borderWidth: 1, borderColor: '#FDE68A' },
   shareTipText: { flex: 1, fontSize: 12, color: '#92400E', lineHeight: 17 },
+  // QR Code section
+  shareQRSection: { alignItems: 'center' as const, paddingVertical: 16, paddingHorizontal: 20, borderTopWidth: 1, borderTopColor: '#E2E8F0', marginTop: 16 },
+  shareQRLabel: { fontSize: 12, fontWeight: '700' as const, color: theme.textSecondary, textTransform: 'uppercase' as const, letterSpacing: 0.5, marginBottom: 14 },
+  shareQRWrap: { padding: 16, backgroundColor: '#FFF', borderRadius: 16, borderWidth: 2, borderColor: '#7C3AED20', ...theme.shadows.card },
+  shareQRHint: { fontSize: 12, color: theme.textMuted, marginTop: 10 },
+  // Player picker
+  ppHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  ppCloseBtn: { width: 40, height: 40, alignItems: 'center' as const, justifyContent: 'center' as const },
+  ppTitle: { fontSize: 17, fontWeight: '700' as const, color: theme.textPrimary },
+  ppSubtitle: { fontSize: 11, color: theme.textMuted, marginTop: 1 },
+  ppSearchBar: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginHorizontal: 16, marginVertical: 10, backgroundColor: '#F8FAFC', borderRadius: 12, paddingHorizontal: 14, height: 44, borderWidth: 1, borderColor: '#E2E8F0' },
+  ppSearchInput: { flex: 1, fontSize: 15, color: theme.textPrimary },
+  ppPlayerRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, backgroundColor: theme.surface, borderRadius: 14, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#F1F5F9' },
+  ppPlayerAvatar: { width: 40, height: 40, borderRadius: 12, backgroundColor: theme.primary + '12', alignItems: 'center' as const, justifyContent: 'center' as const, overflow: 'hidden' as const },
+  ppPlayerName: { fontSize: 15, fontWeight: '600' as const, color: theme.textPrimary },
+  ppPlayerClub: { fontSize: 12, color: theme.textMuted, marginTop: 1 },
+  ppInviteBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, backgroundColor: '#7C3AED', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+  ppInviteBtnText: { fontSize: 13, fontWeight: '700' as const, color: '#FFF' },
+  ppInvitedBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: theme.success + '12', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  ppInvitedText: { fontSize: 12, fontWeight: '600' as const, color: theme.success },
 });

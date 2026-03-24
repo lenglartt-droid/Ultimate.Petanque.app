@@ -102,6 +102,12 @@ function LayoutInner() {
           case 'ranking_changed':
             router.push('/leaderboard' as any);
             break;
+          case 'witness_request':
+            router.push('/witness-invitations' as any);
+            break;
+          case 'witness_attested':
+            if (data.matchId) router.push(`/match/${data.matchId}` as any);
+            break;
           default:
             break;
         }
@@ -522,6 +528,13 @@ function LayoutInner() {
               />
               <Stack.Screen 
                 name="admin-anticheat" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
+                name="witness-invitations" 
                 options={{ 
                   presentation: 'card',
                   animation: 'slide_from_right',
