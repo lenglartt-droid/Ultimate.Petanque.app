@@ -23,6 +23,8 @@ import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/template';
 import { useAlert } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
+import QRCode from 'react-native-qrcode-svg';
+import { config } from '@/constants/config';
 import {
   Meetup,
   MeetupResponse,
@@ -413,7 +415,7 @@ export default function MeetupDetailScreen() {
           ) : null}
         </Animated.View>
 
-        {/* Share Code */}
+        {/* Share Code + QR */}
         <Animated.View entering={FadeInDown.duration(400).delay(100)}>
           <Pressable style={styles.shareCodeCard} onPress={handleCopyCode}>
             <View style={styles.shareCodeLeft}>
@@ -424,6 +426,24 @@ export default function MeetupDetailScreen() {
               <MaterialIcons name="content-copy" size={20} color={theme.primary} />
             </View>
           </Pressable>
+          {/* QR Code */}
+          <View style={styles.qrCard}>
+            <View style={styles.qrCardHeader}>
+              <MaterialIcons name="qr-code-2" size={18} color={theme.primary} />
+              <Text style={styles.qrCardTitle}>{language === 'fr' ? 'QR Code du meetup' : 'Meetup QR Code'}</Text>
+            </View>
+            <View style={styles.qrCardBody}>
+              <View style={styles.qrWrap}>
+                <QRCode
+                  value={`${config.appDownloadUrl}?meetup=${meetup.share_code}`}
+                  size={130}
+                  color={theme.primary}
+                  backgroundColor="#FFFFFF"
+                />
+              </View>
+              <Text style={styles.qrHintText}>{language === 'fr' ? 'Scannez pour rejoindre' : 'Scan to join'}</Text>
+            </View>
+          </View>
         </Animated.View>
 
         {/* Reminders Section */}
@@ -704,6 +724,13 @@ const styles = StyleSheet.create({
   shareCodeLabel: { fontSize: 11, fontWeight: '700', color: theme.textMuted, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4 },
   shareCodeValue: { fontSize: 22, fontWeight: '900', color: theme.primary, letterSpacing: 2 },
   shareCodeCopy: { width: 44, height: 44, borderRadius: 12, backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center' },
+  // QR Code
+  qrCard: { backgroundColor: theme.surface, borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: theme.border, ...theme.shadows.card },
+  qrCardHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 14 },
+  qrCardTitle: { fontSize: 13, fontWeight: '700' as const, color: theme.textPrimary },
+  qrCardBody: { alignItems: 'center' as const },
+  qrWrap: { padding: 12, backgroundColor: '#FFF', borderRadius: 14, borderWidth: 2, borderColor: theme.primary + '15' },
+  qrHintText: { fontSize: 11, color: theme.textMuted, marginTop: 8 },
   // Participants
   participantsCard: { backgroundColor: theme.surface, borderRadius: 20, padding: 20, marginBottom: 16, ...theme.shadows.card, borderWidth: 1, borderColor: theme.border },
   sectionTitle: { fontSize: 14, fontWeight: '700', color: theme.textPrimary, marginBottom: 16 },

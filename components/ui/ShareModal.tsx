@@ -400,8 +400,27 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                 </View>
               </Animated.View>
 
+              {/* QR Code — integrated in preview */}
+              <Animated.View entering={FadeInDown.duration(300).delay(120)} style={styles.qrInlineSection}>
+                <View style={styles.qrInlineHeader}>
+                  <MaterialIcons name="qr-code-2" size={18} color={typeConfig.color} />
+                  <Text style={styles.qrInlineTitle}>{t('shareModal', 'qrCodeLabel') || (language === 'fr' ? 'QR Code de partage' : 'Share QR Code')}</Text>
+                </View>
+                <View style={styles.qrInlineBody}>
+                  <View style={styles.qrInlineWrapper}>
+                    <QRCode
+                      value={`${config.appDownloadUrl}?share=${shareCode}`}
+                      size={130}
+                      color={typeConfig.color}
+                      backgroundColor="#FFFFFF"
+                    />
+                  </View>
+                  <Text style={styles.qrInlineHint}>{t('shareModal', 'qrHint') || (language === 'fr' ? 'Scannez pour acceder a la fiche' : 'Scan to access the card')}</Text>
+                </View>
+              </Animated.View>
+
               {/* Share actions */}
-              <Animated.View entering={FadeInDown.duration(300).delay(150)} style={styles.shareActions}>
+              <Animated.View entering={FadeInDown.duration(300).delay(160)} style={styles.shareActions}>
                 <Pressable style={styles.shareActionBtn} onPress={handleShare}>
                   <MaterialIcons name="share" size={24} color={theme.primary} />
                   <Text style={styles.shareActionBtnText}>{t('shareModal', 'shareBtn')}</Text>
@@ -410,20 +429,6 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                   <MaterialIcons name="content-copy" size={24} color={theme.accent} />
                   <Text style={styles.shareActionBtnText}>{t('shareModal', 'copyCode')}</Text>
                 </Pressable>
-              </Animated.View>
-
-              {/* QR Code */}
-              <Animated.View entering={FadeInDown.duration(300).delay(200)} style={styles.qrSection}>
-                <Text style={styles.qrSectionLabel}>{t('shareModal', 'qrCodeLabel') || (language === 'fr' ? 'QR Code de partage' : 'Share QR Code')}</Text>
-                <View style={styles.qrWrapper}>
-                  <QRCode
-                    value={`${config.appDownloadUrl}?share=${shareCode}`}
-                    size={140}
-                    color={config.color || theme.primary}
-                    backgroundColor="#FFFFFF"
-                  />
-                </View>
-                <Text style={styles.qrHint}>{t('shareModal', 'qrHint') || (language === 'fr' ? 'Scannez pour acceder a la fiche' : 'Scan to access the card')}</Text>
               </Animated.View>
 
               <View style={styles.infoBox}>
@@ -448,7 +453,7 @@ const styles = StyleSheet.create({
   closeBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
   content: { flex: 1 },
-  contentInner: { padding: 16, paddingBottom: 40 },
+  contentInner: { padding: 16, paddingBottom: 80 },
   itemPreview: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 20, gap: 14,
@@ -520,11 +525,13 @@ const styles = StyleSheet.create({
     padding: 14, borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.border,
   },
   infoText: { flex: 1, fontSize: 12, color: theme.textMuted, lineHeight: 18 },
-  // QR Code
-  qrSection: { alignItems: 'center' as const, marginBottom: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: theme.border },
-  qrSectionLabel: { fontSize: 12, fontWeight: '700' as const, color: theme.textSecondary, textTransform: 'uppercase' as const, letterSpacing: 0.5, marginBottom: 14 },
-  qrWrapper: { padding: 16, backgroundColor: '#FFF', borderRadius: 16, borderWidth: 2, borderColor: theme.primary + '20', ...theme.shadows.card },
-  qrHint: { fontSize: 12, color: theme.textMuted, marginTop: 10 },
+  // QR Code — inline in preview
+  qrInlineSection: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: theme.border, ...theme.shadows.card },
+  qrInlineHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 14 },
+  qrInlineTitle: { fontSize: 13, fontWeight: '700' as const, color: theme.textPrimary },
+  qrInlineBody: { alignItems: 'center' as const },
+  qrInlineWrapper: { padding: 14, backgroundColor: '#FFF', borderRadius: 14, borderWidth: 2, borderColor: theme.primary + '15', ...theme.shadows.card },
+  qrInlineHint: { fontSize: 11, color: theme.textMuted, marginTop: 10 },
   // Associated items prompt
   associatedSection: {
     backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg,
