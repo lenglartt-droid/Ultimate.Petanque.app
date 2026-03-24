@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -49,8 +49,8 @@ interface ShareModalProps {
 }
 
 export default function ShareModal({ visible, onClose, itemType, itemId, itemName, forceReadOnly = false }: ShareModalProps) {
-  const { t } = useLanguage();
-  const { getPlayerById, getClubById, getTerrainById } = useApp();
+  const { t, language } = useLanguage();
+  const { getPlayerById, getClubById, getTerrainById, getTournamentById, getMatchById, challenges } = useApp();
   const [isGenerating, setIsGenerating] = useState(false);
   const [shareCode, setShareCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +68,87 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
   const typeConfig = TYPE_CONFIG[itemType];
   const typeLabel = t('shareModal', typeConfig.labelKey);
   const typeLabelLower = t('shareModal', TYPE_LOWER_KEY[itemType]);
+  const fr = language === 'fr';
+
+  // Build preview data for the shared item
+  const previewData = useMemo(() => {
+    const rows: { icon: string; label: string; value: string; color?: string }[] = [];
+    if (itemType === 'player') {
+      const p = getPlayerById(itemId);
+      if (p) {
+        if (p.role) rows.push({ icon: 'sports', label: fr ? 'Role' : 'Role', value: t('roles', p.role) || p.role });
+        if (p.level) rows.push({ icon: 'signal-cellular-alt', label: fr ? 'Niveau' : 'Level', value: t('levels', p.level) || p.level });
+        if (p.club) rows.push({ icon: 'home', label: 'Club', value: p.club });
+        const stats = p.stats as any;
+        if (stats) {
+          if (stats.matchesPlayed > 0) rows.push({ icon: 'bar-chart', label: fr ? 'Matchs' : 'Matches', value: `${stats.matchesPlayed}`, color: theme.primary });
+          if (stats.winRate > 0) rows.push({ icon: 'emoji-events', label: fr ? 'Victoires' : 'Win rate', value: `${stats.winRate}%`, color: theme.success });
+          if (stats.tirRate > 0) rows.push({ icon: 'gps-fixed', label: fr ? 'Taux tir' : 'Shooting', value: `${stats.tirRate}%`, color: theme.tirColor });
+        }
+        if (p.country) rows.push({ icon: 'flag', label: fr ? 'Pays' : 'Country', value: p.country });
+      }
+    } else if (itemType === 'club') {
+      const c = getClubById(itemId);
+      if (c) {
+        if (c.city) rows.push({ icon: 'location-city', label: fr ? 'Ville' : 'City', value: c.city });
+        if (c.country) rows.push({ icon: 'flag', label: fr ? 'Pays' : 'Country', value: c.country });
+        if (c.membersCount) rows.push({ icon: 'group', label: fr ? 'Membres' : 'Members', value: `${c.membersCount}`, color: theme.primary });
+        if (c.foundedYear) rows.push({ icon: 'history', label: fr ? 'Fonde' : 'Founded', value: `${c.foundedYear}` });
+        if (c.facilities && c.facilities.length > 0) rows.push({ icon: 'sports-soccer', label: fr ? 'Equipements' : 'Facilities', value: c.facilities.slice(0, 3).join(', ') });
+        if (c.website) rows.push({ icon: 'language', label: 'Web', value: c.website.replace(/^https?:\/\//, '').substring(0, 30) });
+      }
+    } else if (itemType === 'terrain') {
+      const tr = getTerrainById(itemId);
+      if (tr) {
+        if (tr.type) rows.push({ icon: 'terrain', label: 'Type', value: tr.type });
+        if (tr.city) rows.push({ icon: 'location-city', label: fr ? 'Ville' : 'City', value: tr.city });
+        if (tr.courtsCount) rows.push({ icon: 'dashboard', label: fr ? 'Terrains' : 'Courts', value: `${tr.courtsCount}`, color: theme.primary });
+        if (tr.lighting) rows.push({ icon: 'lightbulb', label: fr ? 'Eclairage' : 'Lighting', value: fr ? 'Oui' : 'Yes', color: theme.success });
+        if (tr.covered) rows.push({ icon: 'roofing', label: fr ? 'Couvert' : 'Covered', value: fr ? 'Oui' : 'Yes', color: theme.success });
+        if (tr.environment) rows.push({ icon: 'nature', label: fr ? 'Env.' : 'Env.', value: tr.environment === 'indoor' ? (fr ? 'Interieur' : 'Indoor') : (fr ? 'Exterieur' : 'Outdoor') });
+        if (tr.clubName) rows.push({ icon: 'home', label: 'Club', value: tr.clubName });
+      }
+    } else if (itemType === 'tournament') {
+      const to = getTournamentById(itemId);
+      if (to) {
+        if (to.format) rows.push({ icon: 'group', label: 'Format', value: t('formats', to.format) || to.format });
+        if (to.type) rows.push({ icon: 'category', label: 'Type', value: to.type });
+        if (to.date) rows.push({ icon: 'event', label: 'Date', value: new Date(to.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' }) });
+        if (to.location?.city) rows.push({ icon: 'place', label: fr ? 'Lieu' : 'Location', value: to.location.city });
+        if (to.status) rows.push({ icon: 'info', label: 'Status', value: to.status === 'A venir' ? t('tournamentStatus', 'upcoming') : to.status === 'En cours' ? t('tournamentStatus', 'inProgress') : t('tournamentStatus', 'completed'), color: to.status === 'En cours' ? theme.warning : to.status === 'Termine' ? theme.success : theme.primary });
+        if (to.participants) rows.push({ icon: 'people', label: fr ? 'Participants' : 'Participants', value: `${to.participants}/${to.maxParticipants || '-'}` });
+        if (to.prize) rows.push({ icon: 'card-giftcard', label: fr ? 'Dotation' : 'Prize', value: to.prize });
+      }
+    } else if (itemType === 'match') {
+      const m = getMatchById(itemId) as any;
+      if (m) {
+        if (m.format) rows.push({ icon: 'group', label: 'Format', value: t('formats', m.format) || m.format });
+        if (m.mode) rows.push({ icon: 'flag', label: 'Mode', value: m.mode });
+        const scoreA = m.teamA?.score ?? 0;
+        const scoreB = m.teamB?.score ?? 0;
+        rows.push({ icon: 'scoreboard', label: 'Score', value: `${scoreA} - ${scoreB}`, color: m.winner === 'A' ? theme.success : m.winner === 'B' ? theme.error : theme.warning });
+        if (m.date) rows.push({ icon: 'event', label: 'Date', value: new Date(m.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' }) });
+        if (m.menes?.length) rows.push({ icon: 'format-list-numbered', label: fr ? 'Menes' : 'Ends', value: `${m.menes.length}` });
+        if (m.duration) rows.push({ icon: 'schedule', label: fr ? 'Duree' : 'Duration', value: `${m.duration} min` });
+      }
+    } else if (itemType === 'challenge') {
+      const ch = challenges.find((c: any) => c.id === itemId) as any;
+      if (ch) {
+        const cTypeName = ch.type === '10_tirs' ? '10 Tirs' : ch.type === '10_tirs_sautee' ? (fr ? '10 Tirs sautee' : '10 Lob Shots') : (fr ? 'Precision' : 'Precision');
+        rows.push({ icon: 'track-changes', label: 'Type', value: cTypeName });
+        rows.push({ icon: 'person', label: 'Mode', value: ch.mode === 'duel' ? 'Duel' : 'Solo' });
+        const rate = ch.type === 'precision'
+          ? (ch.maxPoints > 0 ? Math.round(((ch.totalPoints || 0) / ch.maxPoints) * 100) : 0)
+          : (ch.successRate !== undefined && ch.successRate !== null)
+            ? Math.round(ch.successRate)
+            : (ch.totalShots > 0 ? Math.round(((ch.successCount || 0) / ch.totalShots) * 100) : 0);
+        rows.push({ icon: 'stars', label: fr ? 'Taux reussite' : 'Success rate', value: `${rate}%`, color: rate >= 60 ? theme.success : rate >= 40 ? theme.warning : theme.error });
+        if (ch.date) rows.push({ icon: 'event', label: 'Date', value: new Date(ch.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' }) });
+        if (ch.mode === 'duel' && ch.opponent_name) rows.push({ icon: 'person-outline', label: fr ? 'Adversaire' : 'Opponent', value: ch.opponent_name });
+      }
+    }
+    return rows;
+  }, [itemType, itemId, fr, getPlayerById, getClubById, getTerrainById, getTournamentById, getMatchById, challenges, t]);
 
   // Reset state when modal opens
   React.useEffect(() => {
@@ -243,6 +324,33 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
             </View>
           </Animated.View>
 
+          {/* Visual Summary Card — what the recipient will see */}
+          {previewData.length > 0 ? (
+            <Animated.View entering={FadeInDown.duration(300).delay(30)} style={styles.summaryCard}>
+              <View style={styles.summaryHeader}>
+                <MaterialIcons name="preview" size={16} color={typeConfig.color} />
+                <Text style={styles.summaryHeaderText}>{fr ? 'Apercu du contenu partage' : 'Shared content preview'}</Text>
+              </View>
+              <View style={styles.summaryGrid}>
+                {previewData.map((row, idx) => (
+                  <View key={idx} style={styles.summaryRow}>
+                    <View style={[styles.summaryRowIcon, { backgroundColor: (row.color || typeConfig.color) + '10' }]}>
+                      <MaterialIcons name={row.icon as any} size={14} color={row.color || typeConfig.color} />
+                    </View>
+                    <Text style={styles.summaryRowLabel}>{row.label}</Text>
+                    <Text style={[styles.summaryRowValue, row.color ? { color: row.color } : null]} numberOfLines={1}>{row.value}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.summaryFooter}>
+                <MaterialIcons name="info-outline" size={12} color={theme.textMuted} />
+                <Text style={styles.summaryFooterText}>
+                  {fr ? 'Le destinataire verra ces informations en lecture seule' : 'The recipient will see this information as read-only'}
+                </Text>
+              </View>
+            </Animated.View>
+          ) : null}
+
           {/* Associated items prompt — shown BEFORE code generation */}
           {showAssociatedPrompt ? (
             <Animated.View entering={FadeInDown.duration(300)}>
@@ -404,7 +512,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
               <Animated.View entering={FadeInDown.duration(300).delay(120)} style={styles.qrInlineSection}>
                 <View style={styles.qrInlineHeader}>
                   <MaterialIcons name="qr-code-2" size={18} color={typeConfig.color} />
-                  <Text style={styles.qrInlineTitle}>{t('shareModal', 'qrCodeLabel') || (language === 'fr' ? 'QR Code de partage' : 'Share QR Code')}</Text>
+                  <Text style={styles.qrInlineTitle}>{t('shareModal', 'qrCodeLabel') || (fr ? 'QR Code de partage' : 'Share QR Code')}</Text>
                 </View>
                 <View style={styles.qrInlineBody}>
                   <View style={styles.qrInlineWrapper}>
@@ -415,7 +523,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                       backgroundColor="#FFFFFF"
                     />
                   </View>
-                  <Text style={styles.qrInlineHint}>{t('shareModal', 'qrHint') || (language === 'fr' ? 'Scannez pour acceder a la fiche' : 'Scan to access the card')}</Text>
+                  <Text style={styles.qrInlineHint}>{t('shareModal', 'qrHint') || (fr ? 'Scannez pour acceder a la fiche' : 'Scan to access the card')}</Text>
                 </View>
               </Animated.View>
 
@@ -525,6 +633,17 @@ const styles = StyleSheet.create({
     padding: 14, borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.border,
   },
   infoText: { flex: 1, fontSize: 12, color: theme.textMuted, lineHeight: 18 },
+  // Summary card
+  summaryCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: theme.border, ...theme.shadows.card },
+  summaryHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 14, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: theme.border },
+  summaryHeaderText: { fontSize: 13, fontWeight: '700' as const, color: theme.textPrimary, flex: 1 },
+  summaryGrid: { gap: 8 },
+  summaryRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
+  summaryRowIcon: { width: 28, height: 28, borderRadius: 7, alignItems: 'center' as const, justifyContent: 'center' as const },
+  summaryRowLabel: { fontSize: 12, fontWeight: '600' as const, color: theme.textMuted, width: 80 },
+  summaryRowValue: { flex: 1, fontSize: 14, fontWeight: '600' as const, color: theme.textPrimary, textAlign: 'right' as const },
+  summaryFooter: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border },
+  summaryFooterText: { flex: 1, fontSize: 11, color: theme.textMuted, lineHeight: 15 },
   // QR Code — inline in preview
   qrInlineSection: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: theme.border, ...theme.shadows.card },
   qrInlineHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 14 },
