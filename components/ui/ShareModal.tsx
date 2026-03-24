@@ -18,6 +18,8 @@ import theme from '@/constants/theme';
 import { createShareLink, ShareItemType, AssociatedItem } from '@/services/shareService';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useApp } from '@/contexts/AppContext';
+import QRCode from 'react-native-qrcode-svg';
+import { config } from '@/constants/config';
 
 const TYPE_CONFIG: Record<ShareItemType, { labelKey: string; icon: string; color: string }> = {
   player: { labelKey: 'playerLabelUpper', icon: 'person', color: theme.primary },
@@ -63,8 +65,8 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
   // Track what was included in the final share
   const [sharedAssociatedItems, setSharedAssociatedItems] = useState<AssociatedItem[]>([]);
 
-  const config = TYPE_CONFIG[itemType];
-  const typeLabel = t('shareModal', config.labelKey);
+  const typeConfig = TYPE_CONFIG[itemType];
+  const typeLabel = t('shareModal', typeConfig.labelKey);
   const typeLabelLower = t('shareModal', TYPE_LOWER_KEY[itemType]);
 
   // Reset state when modal opens
@@ -232,8 +234,8 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
         <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {/* Item preview */}
           <Animated.View entering={FadeInDown.duration(300)} style={styles.itemPreview}>
-            <View style={[styles.itemIcon, { backgroundColor: config.color + '15' }]}>
-              <MaterialIcons name={config.icon as any} size={28} color={config.color} />
+            <View style={[styles.itemIcon, { backgroundColor: typeConfig.color + '15' }]}>
+              <MaterialIcons name={typeConfig.icon as any} size={28} color={typeConfig.color} />
             </View>
             <View style={styles.itemInfo}>
               <Text style={styles.itemName} numberOfLines={1}>{itemName}</Text>
@@ -368,7 +370,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                 {/* What's included */}
                 <View style={styles.includedSection}>
                   <View style={styles.includedItem}>
-                    <MaterialIcons name={config.icon as any} size={16} color={config.color} />
+                    <MaterialIcons name={typeConfig.icon as any} size={16} color={typeConfig.color} />
                     <Text style={styles.includedItemText}>{itemName}</Text>
                   </View>
                   {sharedAssociatedItems.map((ai) => {
@@ -408,6 +410,20 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                   <MaterialIcons name="content-copy" size={24} color={theme.accent} />
                   <Text style={styles.shareActionBtnText}>{t('shareModal', 'copyCode')}</Text>
                 </Pressable>
+              </Animated.View>
+
+              {/* QR Code */}
+              <Animated.View entering={FadeInDown.duration(300).delay(200)} style={styles.qrSection}>
+                <Text style={styles.qrSectionLabel}>{t('shareModal', 'qrCodeLabel') || (language === 'fr' ? 'QR Code de partage' : 'Share QR Code')}</Text>
+                <View style={styles.qrWrapper}>
+                  <QRCode
+                    value={`${config.appDownloadUrl}?share=${shareCode}`}
+                    size={140}
+                    color={config.color || theme.primary}
+                    backgroundColor="#FFFFFF"
+                  />
+                </View>
+                <Text style={styles.qrHint}>{t('shareModal', 'qrHint') || (language === 'fr' ? 'Scannez pour acceder a la fiche' : 'Scan to access the card')}</Text>
               </Animated.View>
 
               <View style={styles.infoBox}>
@@ -504,6 +520,11 @@ const styles = StyleSheet.create({
     padding: 14, borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.border,
   },
   infoText: { flex: 1, fontSize: 12, color: theme.textMuted, lineHeight: 18 },
+  // QR Code
+  qrSection: { alignItems: 'center' as const, marginBottom: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: theme.border },
+  qrSectionLabel: { fontSize: 12, fontWeight: '700' as const, color: theme.textSecondary, textTransform: 'uppercase' as const, letterSpacing: 0.5, marginBottom: 14 },
+  qrWrapper: { padding: 16, backgroundColor: '#FFF', borderRadius: 16, borderWidth: 2, borderColor: theme.primary + '20', ...theme.shadows.card },
+  qrHint: { fontSize: 12, color: theme.textMuted, marginTop: 10 },
   // Associated items prompt
   associatedSection: {
     backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg,

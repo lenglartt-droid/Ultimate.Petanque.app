@@ -16,6 +16,14 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 type StatusFilter = 'all' | 'upcoming' | 'active' | 'completed';
 type TypeFilter = 'all' | '10_tirs' | '10_tirs_sautee' | 'precision';
 type ScopeFilter = 'all' | 'terrain' | 'city' | 'country' | 'world';
+type ViewMode = 'list' | 'cities';
+
+interface CityGroup {
+  city: string;
+  events: SponsoredEvent[];
+  activeCount: number;
+  upcomingCount: number;
+}
 
 export default function SponsoredEventListScreen() {
   const insets = useSafeAreaInsets();
@@ -39,6 +47,8 @@ export default function SponsoredEventListScreen() {
   const [showScanner, setShowScanner] = useState(false);
   const [scanned, setScanned] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [expandedCity, setExpandedCity] = useState<string | null>(null);
 
   // Auto-fill join code from deep link params
   useEffect(() => {
@@ -78,6 +88,24 @@ export default function SponsoredEventListScreen() {
     }
     return result;
   }, [events, typeFilter, scopeFilter, search]);
+
+  // City-based grouping for discovery view
+  const cityGroups: CityGroup[] = useMemo(() => {
+    const groups = new Map<string, SponsoredEvent[]>();
+    filtered.forEach(ev => {
+      const city = ev.city || ev.terrainName || (fr ? 'Lieu non specifie' : 'Location not specified');
+      if (!groups.has(city)) groups.set(city, []);
+      groups.get(city)!.push(ev);
+    });
+    return Array.from(groups.entries())
+      .map(([city, evts]) => ({
+        city,
+        events: evts.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()),
+        activeCount: evts.filter(e => e.status === 'active' || (e.status === 'upcoming' && new Date() >= new Date(e.startTime) && new Date() <= new Date(e.endTime))).length,
+        upcomingCount: evts.filter(e => e.status === 'upcoming' && new Date() < new Date(e.startTime)).length,
+      }))
+      .sort((a, b) => (b.activeCount + b.upcomingCount) - (a.activeCount + a.upcomingCount) || b.events.length - a.events.length);
+  }, [filtered, fr]);
 
   const handleQuickRegister = async (eventId: string) => {
     setRegisteringId(eventId);
@@ -266,6 +294,9 @@ export default function SponsoredEventListScreen() {
           <Pressable style={s.joinBtn} onPress={handleOpenScanner}>
             <MaterialIcons name="qr-code-scanner" size={20} color="#FFF" />
           </Pressable>
+          <Pressable style={[s.joinBtn, viewMode === 'cities' && { backgroundColor: 'rgba(255,255,255,0.35)' }]} onPress={() => setViewMode(viewMode === 'list' ? 'cities' : 'list')}>
+            <MaterialIcons name={viewMode === 'cities' ? 'view-list' : 'location-city'} size={20} color="#FFF" />
+          </Pressable>
           <Pressable style={s.createBtn} onPress={() => router.push('/sponsored-event/new' as any)}>
             <MaterialIcons name="add" size={22} color="#FFF" />
           </Pressable>
@@ -306,9 +337,112 @@ export default function SponsoredEventListScreen() {
         </ScrollView>
       </View>
 
-      {/* List */}
+      {/* List or City View */}
       {loading ? (
         <View style={s.centerState}><ActivityIndicator size="large" color="#7C3AED" /></View>
+      ) : viewMode === 'cities' ? (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={[s.listContent, { paddingBottom: insets.bottom + 32 }]}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#7C3AED" />}
+        >
+          {/* City Discovery Header */}
+          <View style={s.cityDiscoveryHeader}>
+            <MaterialIcons name="location-city" size={18} color="#7C3AED" />
+            <Text style={s.cityDiscoveryTitle}>{fr ? 'Explorer par ville' : 'Explore by City'}</Text>
+            <View style={s.cityDiscoveryCount}>
+              <Text style={s.cityDiscoveryCountText}>{cityGroups.length} {fr ? 'ville(s)' : 'city(ies)'}</Text>
+            </View>
+          </View>
+
+          {cityGroups.length === 0 ? (
+            <View style={s.emptyState}>
+              <MaterialIcons name="campaign" size={56} color={theme.textMuted} />
+              <Text style={s.emptyTitle}>{fr ? 'Aucun evenement' : 'No events'}</Text>
+              <Text style={s.emptyDesc}>{fr ? 'Les defis ambassadeurs apparaitront ici.' : 'Ambassador challenges will appear here.'}</Text>
+            </View>
+          ) : (
+            cityGroups.map((group) => {
+              const isExpanded = expandedCity === group.city;
+              return (
+                <Animated.View key={group.city} entering={FadeInDown.duration(250)}>
+                  <Pressable
+                    style={({ pressed }) => [s.cityGroupCard, pressed && { opacity: 0.92 }]}
+                    onPress={() => { Haptics.selectionAsync(); setExpandedCity(isExpanded ? null : group.city); }}
+                  >
+                    <View style={s.cityGroupIcon}>
+                      <MaterialIcons name="location-city" size={22} color="#7C3AED" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.cityGroupName}>{group.city}</Text>
+                      <View style={s.cityGroupMeta}>
+                        <Text style={s.cityGroupCount}>{group.events.length} {fr ? 'defi(s)' : 'challenge(s)'}</Text>
+                        {group.activeCount > 0 ? (
+                          <View style={s.cityGroupLiveBadge}>
+                            <View style={s.cityGroupLiveDot} />
+                            <Text style={s.cityGroupLiveText}>{group.activeCount} LIVE</Text>
+                          </View>
+                        ) : null}
+                        {group.upcomingCount > 0 ? (
+                          <View style={s.cityGroupUpcomingBadge}>
+                            <Text style={s.cityGroupUpcomingText}>{group.upcomingCount} {fr ? 'a venir' : 'upcoming'}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
+                    <MaterialIcons name={isExpanded ? 'expand-less' : 'expand-more'} size={22} color={theme.textMuted} />
+                  </Pressable>
+
+                  {isExpanded ? (
+                    <View style={s.cityGroupEvents}>
+                      {group.events.map((ev) => {
+                        const evDate = new Date(ev.startTime);
+                        const endDate = new Date(ev.endTime);
+                        const isActive = ev.status === 'active' || (ev.status === 'upcoming' && new Date() >= evDate && new Date() <= endDate);
+                        return (
+                          <Pressable
+                            key={ev.id}
+                            style={({ pressed }) => [s.cityEventRow, pressed && { opacity: 0.85 }]}
+                            onPress={() => router.push(`/sponsored-event/${ev.id}` as any)}
+                          >
+                            <View style={[s.cityEventTypeDot, { backgroundColor: typeColor[ev.challengeType] || '#7C3AED' }]} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={s.cityEventTitle} numberOfLines={1}>{ev.title}</Text>
+                              <View style={s.cityEventMetaRow}>
+                                <Text style={s.cityEventDate}>
+                                  {evDate.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
+                                </Text>
+                                <Text style={s.cityEventTime}>
+                                  {evDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </Text>
+                                <Text style={[s.cityEventType, { color: typeColor[ev.challengeType] || '#7C3AED' }]}>
+                                  {challengeName(ev.challengeType)}
+                                </Text>
+                              </View>
+                            </View>
+                            {isActive ? (
+                              <View style={s.cityEventLive}>
+                                <MaterialIcons name="play-arrow" size={10} color="#FFF" />
+                                <Text style={s.cityEventLiveText}>LIVE</Text>
+                              </View>
+                            ) : (
+                              <View style={s.cityEventMaxBadge}>
+                                <MaterialIcons name="group" size={11} color={theme.textMuted} />
+                                <Text style={s.cityEventMaxText}>{ev.maxParticipants}</Text>
+                              </View>
+                            )}
+                            <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+                </Animated.View>
+              );
+            })
+          )}
+        </ScrollView>
       ) : (
         <FlatList
           data={filtered}
@@ -484,4 +618,31 @@ const s = StyleSheet.create({
   scannerFallback: { paddingHorizontal: 20, paddingVertical: 16, backgroundColor: 'rgba(0,0,0,0.85)' },
   scannerFallbackBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 10, backgroundColor: 'rgba(255,255,255,0.12)', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
   scannerFallbackText: { fontSize: 15, fontWeight: '600' as const, color: '#FFF' },
+  // City Discovery
+  cityDiscoveryHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 14 },
+  cityDiscoveryTitle: { fontSize: 16, fontWeight: '700' as const, color: theme.textPrimary, flex: 1 },
+  cityDiscoveryCount: { backgroundColor: '#7C3AED15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
+  cityDiscoveryCountText: { fontSize: 12, fontWeight: '700' as const, color: '#7C3AED' },
+  cityGroupCard: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0', ...theme.shadows.card },
+  cityGroupIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#7C3AED12', alignItems: 'center' as const, justifyContent: 'center' as const },
+  cityGroupName: { fontSize: 16, fontWeight: '700' as const, color: theme.textPrimary, marginBottom: 4 },
+  cityGroupMeta: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, flexWrap: 'wrap' as const },
+  cityGroupCount: { fontSize: 12, fontWeight: '600' as const, color: theme.textSecondary },
+  cityGroupLiveBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: '#22C55E15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  cityGroupLiveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#22C55E' },
+  cityGroupLiveText: { fontSize: 9, fontWeight: '800' as const, color: '#22C55E' },
+  cityGroupUpcomingBadge: { backgroundColor: '#F59E0B15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  cityGroupUpcomingText: { fontSize: 10, fontWeight: '700' as const, color: '#F59E0B' },
+  cityGroupEvents: { backgroundColor: '#F8FAFC', borderRadius: 14, marginBottom: 10, marginTop: -4, paddingHorizontal: 8, paddingVertical: 8, borderWidth: 1, borderColor: '#E2E8F0' },
+  cityEventRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, backgroundColor: '#FFF', borderRadius: 12, padding: 12, marginBottom: 6 },
+  cityEventTypeDot: { width: 10, height: 10, borderRadius: 5 },
+  cityEventTitle: { fontSize: 14, fontWeight: '600' as const, color: theme.textPrimary, marginBottom: 3 },
+  cityEventMetaRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  cityEventDate: { fontSize: 11, fontWeight: '600' as const, color: theme.textSecondary },
+  cityEventTime: { fontSize: 11, color: theme.textMuted },
+  cityEventType: { fontSize: 10, fontWeight: '700' as const },
+  cityEventLive: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 2, backgroundColor: '#22C55E', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  cityEventLiveText: { fontSize: 8, fontWeight: '800' as const, color: '#FFF' },
+  cityEventMaxBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  cityEventMaxText: { fontSize: 11, fontWeight: '600' as const, color: theme.textMuted },
 });
