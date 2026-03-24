@@ -208,6 +208,8 @@ export default function SponsoredEventDetailScreen() {
   const [loadingPlayers, setLoadingPlayers] = useState(false);
   const [invitingPlayerIds, setInvitingPlayerIds] = useState<Set<string>>(new Set());
   const [invitedPlayerIds, setInvitedPlayerIds] = useState<Set<string>>(new Set());
+  const [selectedForBatch, setSelectedForBatch] = useState<Set<string>>(new Set());
+  const [batchInviting, setBatchInviting] = useState(false);
 
   const handleShare = async () => {
     setShowShareModal(true);
@@ -332,6 +334,72 @@ export default function SponsoredEventDetailScreen() {
     const q = playerPickerSearch.toLowerCase();
     return myPlayers.filter(p => p.name.toLowerCase().includes(q) || (p.club || '').toLowerCase().includes(q));
   }, [myPlayers, playerPickerSearch]);
+
+  const selectablePlayers = useMemo(() => {
+    return filteredPlayers.filter(p => !invitedPlayerIds.has(p.user_id));
+  }, [filteredPlayers, invitedPlayerIds]);
+
+  const toggleSelectPlayer = useCallback((userId: string) => {
+    setSelectedForBatch(prev => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    if (selectedForBatch.size === selectablePlayers.length) {
+      setSelectedForBatch(new Set());
+    } else {
+      setSelectedForBatch(new Set(selectablePlayers.map(p => p.user_id)));
+    }
+  }, [selectablePlayers, selectedForBatch.size]);
+
+  const handleBatchInvite = useCallback(async () => {
+    if (!id || !event || selectedForBatch.size === 0) return;
+    setBatchInviting(true);
+    const userIds = Array.from(selectedForBatch);
+    const { invited, error: invErr } = await inviteUsersToEvent(id, userIds);
+    setBatchInviting(false);
+    if (invErr) {
+      showAlert(language === 'fr' ? 'Erreur' : 'Error', invErr);
+      return;
+    }
+    if (invited === 0) {
+      showAlert(language === 'fr' ? 'Tous deja inscrits' : 'All already registered');
+    } else {
+      setInvitedPlayerIds(prev => {
+        const next = new Set(prev);
+        userIds.forEach(uid => next.add(uid));
+        return next;
+      });
+      setSelectedForBatch(new Set());
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showAlert(
+        language === 'fr' ? 'Invitations envoyees' : 'Invitations sent',
+        language === 'fr' ? `${invited} joueur(s) invite(s) avec succes` : `${invited} player(s) invited successfully`
+      );
+      // Send batch push notification
+      try {
+        const supabase = getSupabaseClient();
+        const { data: profile } = await supabase.from('user_profiles').select('username').eq('id', user?.id).maybeSingle();
+        await supabase.functions.invoke('send-push', {
+          body: {
+            type: 'event_created',
+            payload: {
+              eventId: id,
+              eventTitle: event.title,
+              city: event.city,
+              challengeType: event.challengeType,
+              ambassadorName: profile?.username || 'Ambassadeur',
+            },
+          },
+        });
+      } catch { /* silent */ }
+    }
+    loadData();
+  }, [id, event, selectedForBatch, user?.id, language]);
 
   const challengeName = (type: string) => type === '10_tirs' ? '10 Tirs' : type === '10_tirs_sautee' ? '10 Tirs sautee' : 'Precision';
 
@@ -754,6 +822,22 @@ export default function SponsoredEventDetailScreen() {
               <Text style={s.ppSubtitle}>{invitedPlayerIds.size} {language === 'fr' ? 'deja inscrit(s)' : 'already registered'}</Text>
             </View>
           </View>
+          {/* Select All / Batch Header */}
+          <View style={s.ppBatchHeader}>
+            <Pressable style={s.ppSelectAllBtn} onPress={handleSelectAll}>
+              <MaterialIcons name={selectedForBatch.size === selectablePlayers.length && selectablePlayers.length > 0 ? 'check-box' : 'check-box-outline-blank'} size={20} color={theme.primary} />
+              <Text style={s.ppSelectAllText}>
+                {selectedForBatch.size === selectablePlayers.length && selectablePlayers.length > 0
+                  ? (language === 'fr' ? 'Tout deselecter' : 'Deselect all')
+                  : (language === 'fr' ? 'Tout selectionner' : 'Select all')}
+              </Text>
+            </Pressable>
+            {selectedForBatch.size > 0 ? (
+              <View style={s.ppSelectedCount}>
+                <Text style={s.ppSelectedCountText}>{selectedForBatch.size}</Text>
+              </View>
+            ) : null}
+          </View>
           <View style={s.ppSearchBar}>
             <MaterialIcons name="search" size={20} color={theme.textMuted} />
             <TextInput
@@ -782,8 +866,14 @@ export default function SponsoredEventDetailScreen() {
               renderItem={({ item: p }) => {
                 const alreadyInvited = invitedPlayerIds.has(p.user_id);
                 const isInviting = invitingPlayerIds.has(p.user_id);
+                const isSelected = selectedForBatch.has(p.user_id);
                 return (
-                  <View style={s.ppPlayerRow}>
+                  <Pressable style={[s.ppPlayerRow, isSelected && { borderColor: '#7C3AED40', backgroundColor: '#7C3AED08' }]} onPress={() => { if (!alreadyInvited) toggleSelectPlayer(p.user_id); }}>
+                    {!alreadyInvited ? (
+                      <View style={[s.ppCheckbox, isSelected && s.ppCheckboxActive]}>
+                        {isSelected ? <MaterialIcons name="check" size={14} color="#FFF" /> : null}
+                      </View>
+                    ) : null}
                     <View style={s.ppPlayerAvatar}>
                       {p.avatar ? (
                         <Image source={{ uri: p.avatar }} style={{ width: 40, height: 40, borderRadius: 12 }} contentFit="cover" cachePolicy="memory-disk" />
@@ -803,12 +893,12 @@ export default function SponsoredEventDetailScreen() {
                     ) : isInviting ? (
                       <ActivityIndicator size="small" color="#7C3AED" />
                     ) : (
-                      <Pressable style={s.ppInviteBtn} onPress={() => handleInvitePlayer(p.user_id, p.name)}>
+                      <Pressable style={s.ppInviteBtn} onPress={(e) => { e.stopPropagation?.(); handleInvitePlayer(p.user_id, p.name); }}>
                         <MaterialIcons name="person-add" size={16} color="#FFF" />
                         <Text style={s.ppInviteBtnText}>{language === 'fr' ? 'Inviter' : 'Invite'}</Text>
                       </Pressable>
                     )}
-                  </View>
+                  </Pressable>
                 );
               }}
               ListEmptyComponent={
@@ -821,6 +911,27 @@ export default function SponsoredEventDetailScreen() {
               }
             />
           )}
+          {/* Batch Invite Floating Button */}
+          {selectedForBatch.size > 0 ? (
+            <View style={s.ppBatchBar}>
+              <Pressable
+                style={[s.ppBatchInviteBtn, batchInviting && { opacity: 0.6 }]}
+                onPress={handleBatchInvite}
+                disabled={batchInviting}
+              >
+                {batchInviting ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <MaterialIcons name="send" size={18} color="#FFF" />
+                )}
+                <Text style={s.ppBatchInviteBtnText}>
+                  {language === 'fr'
+                    ? `Inviter ${selectedForBatch.size} joueur${selectedForBatch.size > 1 ? 's' : ''}`
+                    : `Invite ${selectedForBatch.size} player${selectedForBatch.size > 1 ? 's' : ''}`}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -969,4 +1080,15 @@ const s = StyleSheet.create({
   ppInviteBtnText: { fontSize: 13, fontWeight: '700' as const, color: '#FFF' },
   ppInvitedBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: theme.success + '12', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
   ppInvitedText: { fontSize: 12, fontWeight: '600' as const, color: theme.success },
+  // Batch invite styles
+  ppBatchHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 },
+  ppSelectAllBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: theme.primary + '08', borderRadius: 10 },
+  ppSelectAllText: { fontSize: 14, fontWeight: '600' as const, color: theme.primary },
+  ppSelectedCount: { backgroundColor: '#7C3AED', minWidth: 28, height: 28, borderRadius: 14, alignItems: 'center' as const, justifyContent: 'center' as const, paddingHorizontal: 6 },
+  ppSelectedCountText: { fontSize: 13, fontWeight: '800' as const, color: '#FFF' },
+  ppCheckbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: theme.border, alignItems: 'center' as const, justifyContent: 'center' as const },
+  ppCheckboxActive: { backgroundColor: '#7C3AED', borderColor: '#7C3AED' },
+  ppBatchBar: { position: 'absolute' as const, bottom: 0, left: 0, right: 0, padding: 16, paddingBottom: 32, backgroundColor: 'rgba(255,255,255,0.97)', borderTopWidth: 1, borderTopColor: theme.border },
+  ppBatchInviteBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 10, backgroundColor: '#7C3AED', paddingVertical: 16, borderRadius: 16 },
+  ppBatchInviteBtnText: { fontSize: 16, fontWeight: '700' as const, color: '#FFF' },
 });

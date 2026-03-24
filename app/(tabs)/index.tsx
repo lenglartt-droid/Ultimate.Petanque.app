@@ -21,7 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import theme, { blurhash } from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
-import { useAuth, useAlert } from '@/template';
+import { useAuth, useAlert, getSupabaseClient } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import { preloadInterstitial } from '@/services/adService';
 import CommunityLeaderboard from '@/components/ui/CommunityLeaderboard';
@@ -88,6 +88,9 @@ export default function HomeScreen() {
   }, []);
 
   // Load pending witness requests
+  // Pending witness count from match_witness_requests table
+  const [pendingWitnessMatchCount, setPendingWitnessMatchCount] = useState(0);
+
   const loadWitnessRequests = useCallback(async () => {
     const [{ requests }, count] = await Promise.all([
       getPendingWitnessRequests(),
@@ -95,6 +98,19 @@ export default function HomeScreen() {
     ]);
     setWitnessRequests(requests);
     setEventNotifCount(count);
+    // Also count match witness requests
+    try {
+      const sb = getSupabaseClient();
+      const { data: uid } = await sb.auth.getUser();
+      if (uid?.user?.id) {
+        const { data: wData } = await sb
+          .from('match_witness_requests')
+          .select('id')
+          .eq('witness_user_id', uid.user.id)
+          .eq('status', 'pending');
+        setPendingWitnessMatchCount(wData?.length || 0);
+      }
+    } catch { /* silent */ }
   }, []);
 
   useEffect(() => {
@@ -402,8 +418,8 @@ export default function HomeScreen() {
                       <Text style={s.heroAvatarLetter}>{displayName.charAt(0).toUpperCase()}</Text>
                     </LinearGradient>
                   )}
-                  {eventNotifCount > 0 ? (
-                    <View style={s.avatarNotifBadge}><Text style={s.avatarNotifBadgeText}>{eventNotifCount > 9 ? '9+' : eventNotifCount}</Text></View>
+                  {(eventNotifCount + pendingWitnessMatchCount) > 0 ? (
+                    <View style={s.avatarNotifBadge}><Text style={s.avatarNotifBadgeText}>{(eventNotifCount + pendingWitnessMatchCount) > 9 ? '9+' : (eventNotifCount + pendingWitnessMatchCount)}</Text></View>
                   ) : null}
                 </Pressable>
               </View>
@@ -738,7 +754,7 @@ export default function HomeScreen() {
 
         {/* ========== AMBASSADORS ROTATING BANNER ========== */}
         {ambassadorsLoaded && featuredAmbassadors.length > 0 ? (
-          <Animated.View entering={FadeIn.duration(400).delay(300)} style={[s.section, isTablet && s.sectionTablet, { marginTop: 8 }]}>
+          <Animated.View entering={FadeIn.duration(400).delay(300)} style={[s.section, isTablet && s.sectionTablet, { marginTop: 20 }]}>
             <View style={s.sectionHeaderRow}>
               <View style={s.ambassadorIcon}><MaterialIcons name="verified" size={16} color="#7C3AED" /></View>
               <Text style={s.sectionTitle}>{language === 'fr' ? 'Ambassadeurs' : 'Ambassadors'}</Text>

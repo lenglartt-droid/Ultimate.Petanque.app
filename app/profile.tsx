@@ -1757,6 +1757,14 @@ export default function ProfileScreen() {
               ) : <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />}
             </Pressable>
 
+            <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/creator-note'); }}>
+              <View style={[styles.menuIcon, { backgroundColor: theme.error + '15' }]}><MaterialIcons name="favorite" size={20} color={theme.error} /></View>
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuItemText}>{t('creatorNote', 'title')}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+            </Pressable>
+
             </>
 
             {/* ===== SECTION: NOTIFICATIONS & PARTAGE ===== */}
@@ -1875,12 +1883,6 @@ export default function ProfileScreen() {
               <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/partners' as any); }}>
                 <View style={[styles.compactMenuIcon, { backgroundColor: '#FFD700' + '15' }]}><MaterialIcons name="handshake" size={16} color="#FFD700" /></View>
                 <Text style={styles.compactMenuText}>{language === 'fr' ? 'Nos Partenaires' : 'Our Partners'}</Text>
-                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
-              </Pressable>
-              <View style={styles.compactMenuDivider} />
-              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/creator-note'); }}>
-                <View style={[styles.compactMenuIcon, { backgroundColor: theme.error + '15' }]}><MaterialIcons name="favorite" size={16} color={theme.error} /></View>
-                <Text style={styles.compactMenuText}>{t('creatorNote', 'title')}</Text>
                 <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
               </Pressable>
               <View style={styles.compactMenuDivider} />

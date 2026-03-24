@@ -19,6 +19,8 @@ import { router } from 'expo-router';
 import { checkTempDataExpiry } from '@/services/retentionNotificationService';
 import { updateRetentionForRegisteredUser } from '@/services/retentionNotificationService';
 import { checkAndTriggerWeeklyReset } from '@/services/weeklyLeaderboardService';
+import * as Linking from 'expo-linking';
+import { findEventByCode } from '@/services/sponsoredEventService';
 
 export default function RootLayout() {
   return (
@@ -65,6 +67,36 @@ function LayoutInner() {
         console.log('[Retention] Temporary onboarding data expired and cleaned up');
       }
     });
+  }, []);
+
+  // Handle deep links for event QR codes (?event=CODE)
+  React.useEffect(() => {
+    const handleDeepLinkUrl = async (url: string) => {
+      if (!url) return;
+      const eventMatch = url.match(/[?&]event=([A-Z0-9-]+)/i);
+      if (eventMatch) {
+        const code = eventMatch[1].toUpperCase();
+        setTimeout(async () => {
+          try {
+            const { event } = await findEventByCode(code);
+            if (event) {
+              router.push(`/sponsored-event/${event.id}` as any);
+            } else {
+              router.push({ pathname: '/sponsored-event/list', params: { joinCode: code } } as any);
+            }
+          } catch {
+            router.push({ pathname: '/sponsored-event/list', params: { joinCode: code } } as any);
+          }
+        }, 500);
+      }
+    };
+
+    Linking.getInitialURL().then(url => {
+      if (url) handleDeepLinkUrl(url);
+    });
+
+    const sub = Linking.addEventListener('url', ({ url }) => handleDeepLinkUrl(url));
+    return () => sub.remove();
   }, []);
 
   // Navigate to match-invitations when user taps a share request notification

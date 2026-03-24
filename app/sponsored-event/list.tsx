@@ -3,7 +3,7 @@ import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Refre
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -21,6 +21,7 @@ export default function SponsoredEventListScreen() {
   const { user } = useAuth();
   const { showAlert } = useAlert();
   const { language } = useLanguage();
+  const params = useLocalSearchParams<{ joinCode?: string }>();
   const fr = language === 'fr';
 
   const [events, setEvents] = useState<SponsoredEvent[]>([]);
@@ -34,6 +35,24 @@ export default function SponsoredEventListScreen() {
   const [joinCode, setJoinCode] = useState('');
   const [joinLoading, setJoinLoading] = useState(false);
   const [registeringId, setRegisteringId] = useState<string | null>(null);
+
+  // Auto-fill join code from deep link params
+  useEffect(() => {
+    if (params.joinCode) {
+      setJoinCode(params.joinCode);
+      setShowJoinModal(true);
+      // Auto-search after a short delay
+      const timer = setTimeout(async () => {
+        const { event } = await findEventByCode(params.joinCode!);
+        if (event) {
+          setShowJoinModal(false);
+          setJoinCode('');
+          router.push(`/sponsored-event/${event.id}` as any);
+        }
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [params.joinCode]);
 
   const loadEvents = useCallback(async () => {
     const { events: evts } = await getSponsoredEvents(statusFilter === 'all' ? undefined : statusFilter);
