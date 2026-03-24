@@ -627,10 +627,12 @@ export async function fetchLowTrustUsers(threshold: number = 50): Promise<Array<
 
 /**
  * Request witness attestation for a match.
+ * Sends push notification to the witness user.
  */
 export async function requestWitnessAttestation(
   matchId: string,
-  witnessUserId: string
+  witnessUserId: string,
+  matchSummary?: string
 ): Promise<{ error: string | null }> {
   const supabase = getSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -644,7 +646,29 @@ export async function requestWitnessAttestation(
         witness_user_id: witnessUserId,
         status: 'pending',
       });
-    return { error: error?.message || null };
+    if (error) return { error: error.message };
+
+    // Send push notification to the witness
+    try {
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('username')
+        .eq('id', user.id)
+        .single();
+      await supabase.functions.invoke('send-push', {
+        body: {
+          type: 'witness_request',
+          payload: {
+            witnessUserId,
+            requesterName: profile?.username || user.email?.split('@')[0] || 'Un joueur',
+            matchId,
+            matchSummary,
+          },
+        },
+      });
+    } catch { /* push failure is non-blocking */ }
+
+    return { error: null };
   } catch (e: any) {
     return { error: e.message };
   }
@@ -652,19 +676,51 @@ export async function requestWitnessAttestation(
 
 /**
  * Respond to a witness attestation request.
+ * When attested, sends push to requester.
  */
 export async function respondToWitnessRequest(
   requestId: string,
-  status: 'attested' | 'declined'
+  responseStatus: 'attested' | 'declined'
 ): Promise<{ error: string | null }> {
   const supabase = getSupabaseClient();
   try {
-    const updateData: any = { status, responded_at: new Date().toISOString() };
+    // Fetch the request details first
+    const { data: reqData } = await supabase
+      .from('match_witness_requests')
+      .select('match_id, requester_user_id, witness_user_id')
+      .eq('id', requestId)
+      .single();
+
+    const updateData: any = { status: responseStatus, responded_at: new Date().toISOString() };
     const { error } = await supabase
       .from('match_witness_requests')
       .update(updateData)
       .eq('id', requestId);
-    return { error: error?.message || null };
+    if (error) return { error: error.message };
+
+    // If attested, notify the requester
+    if (responseStatus === 'attested' && reqData) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data: witnessProfile } = await supabase
+          .from('user_profiles')
+          .select('username')
+          .eq('id', reqData.witness_user_id)
+          .single();
+        await supabase.functions.invoke('send-push', {
+          body: {
+            type: 'witness_attested',
+            payload: {
+              requesterUserId: reqData.requester_user_id,
+              witnessName: witnessProfile?.username || 'Un temoin',
+              matchId: reqData.match_id,
+            },
+          },
+        });
+      } catch { /* push failure is non-blocking */ }
+    }
+
+    return { error: null };
   } catch (e: any) {
     return { error: e.message };
   }

@@ -1072,7 +1072,7 @@ export default function ProfileScreen() {
               );
             })()}
 
-            {/* Badges Grid */}
+            {/* Badge Showcase - Horizontal Scrollable */}
             <View style={styles.badgesSection}>
               <Pressable style={styles.badgesSectionHeader} onPress={() => router.push('/badges' as any)}>
                 <Text style={styles.badgesSectionTitle}>
@@ -1085,34 +1085,95 @@ export default function ProfileScreen() {
                   <MaterialIcons name="chevron-right" size={16} color={theme.primary} />
                 </View>
               </Pressable>
-              <Pressable style={styles.badgesGrid} onPress={() => router.push('/badges' as any)}>
-                {BADGES.map(badge => {
-                  const unlocked = userBadges.find(b => b.badgeId === badge.id);
-                  return (
-                    <View key={badge.id} style={[styles.badgeItem, !unlocked && styles.badgeItemLocked]}>
-                      <View style={[
-                        styles.badgeIcon,
-                        { backgroundColor: unlocked ? badge.color + '20' : theme.backgroundSecondary },
-                      ]}>
-                        <MaterialIcons
-                          name={badge.icon as any}
-                          size={22}
-                          color={unlocked ? badge.color : theme.textMuted + '60'}
-                        />
+
+              {/* Horizontal showcase of earned badges */}
+              {userBadges.length > 0 ? (
+                <View>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 10, paddingRight: 4 }}
+                  >
+                    {(() => {
+                      // Sort: latest unlocked first
+                      const sorted = [...userBadges].sort(
+                        (a, b) => new Date(b.unlockedAt).getTime() - new Date(a.unlockedAt).getTime()
+                      );
+                      return sorted.map((ub, idx) => {
+                        const badge = BADGES.find(b => b.id === ub.badgeId);
+                        if (!badge) return null;
+                        const isLatest = idx === 0;
+                        return (
+                          <Pressable
+                            key={badge.id}
+                            style={[
+                              showcaseStyles.badgeChip,
+                              isLatest && { borderColor: badge.color + '50', backgroundColor: badge.color + '10' },
+                            ]}
+                            onPress={() => router.push('/badges' as any)}
+                          >
+                            <View style={[
+                              showcaseStyles.badgeChipIcon,
+                              { backgroundColor: badge.color + '20' },
+                              isLatest && { backgroundColor: badge.color + '30' },
+                            ]}>
+                              <MaterialIcons name={badge.icon as any} size={20} color={badge.color} />
+                              {isLatest ? (
+                                <View style={[showcaseStyles.newDot, { backgroundColor: badge.color }]} />
+                              ) : null}
+                            </View>
+                            <Text
+                              style={[
+                                showcaseStyles.badgeChipName,
+                                isLatest && { color: badge.color, fontWeight: '700' },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {getBadgeName(badge.id, language)}
+                            </Text>
+                          </Pressable>
+                        );
+                      });
+                    })()}
+                  </ScrollView>
+
+                  {/* Locked badges preview (compact) */}
+                  <View style={showcaseStyles.lockedRow}>
+                    {BADGES.filter(b => !userBadges.find(ub => ub.badgeId === b.id)).slice(0, 5).map(badge => (
+                      <View key={badge.id} style={showcaseStyles.lockedDot}>
+                        <MaterialIcons name={badge.icon as any} size={14} color={theme.textMuted + '50'} />
                       </View>
-                      <Text
-                        style={[styles.badgeLabel, !unlocked && styles.badgeLabelLocked]}
-                        numberOfLines={1}
-                      >
-                        {getBadgeName(badge.id, language)}
+                    ))}
+                    {BADGES.filter(b => !userBadges.find(ub => ub.badgeId === b.id)).length > 5 ? (
+                      <Text style={showcaseStyles.lockedMore}>
+                        +{BADGES.filter(b => !userBadges.find(ub => ub.badgeId === b.id)).length - 5}
                       </Text>
-                      {unlocked ? (
-                        <MaterialIcons name="check-circle" size={12} color={badge.color} style={{ marginTop: 2 }} />
-                      ) : null}
-                    </View>
-                  );
-                })}
-              </Pressable>
+                    ) : null}
+                    <Pressable
+                      style={showcaseStyles.viewAllBtn}
+                      onPress={() => router.push('/badges' as any)}
+                    >
+                      <Text style={showcaseStyles.viewAllText}>
+                        {language === 'fr' ? 'Voir tout' : 'View all'}
+                      </Text>
+                      <MaterialIcons name="chevron-right" size={14} color={theme.primary} />
+                    </Pressable>
+                  </View>
+                </View>
+              ) : (
+                <Pressable style={showcaseStyles.emptyBadges} onPress={() => router.push('/badges' as any)}>
+                  <MaterialIcons name="military-tech" size={28} color={theme.textMuted} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={showcaseStyles.emptyBadgesTitle}>
+                      {language === 'fr' ? 'Aucun badge debloque' : 'No badges unlocked'}
+                    </Text>
+                    <Text style={showcaseStyles.emptyBadgesDesc}>
+                      {language === 'fr' ? 'Jouez des matchs pour debloquer des badges' : 'Play matches to unlock badges'}
+                    </Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                </Pressable>
+              )}
             </View>
           </Animated.View>
         )}
@@ -1721,6 +1782,12 @@ export default function ProfileScreen() {
               <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/notifications'); }}>
                 <View style={[styles.compactMenuIcon, { backgroundColor: theme.success + '15' }]}><MaterialIcons name="event" size={16} color={theme.success} /></View>
                 <Text style={styles.compactMenuText}>{t('profile', 'tournamentNotifications')}</Text>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
+              <View style={styles.compactMenuDivider} />
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/witness-invitations' as any); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="visibility" size={16} color="#7C3AED" /></View>
+                <Text style={styles.compactMenuText}>{language === 'fr' ? 'Attestations de temoin' : 'Witness Attestations'}</Text>
                 <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
               </Pressable>
               <View style={styles.compactMenuDivider} />
@@ -3659,6 +3726,100 @@ const styles = StyleSheet.create({
     backgroundColor: theme.primary + '15',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+});
+
+const showcaseStyles = StyleSheet.create({
+  badgeChip: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingRight: 14,
+    borderWidth: 1.5,
+    borderColor: theme.border,
+  },
+  badgeChipIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    position: 'relative' as const,
+  },
+  newDot: {
+    position: 'absolute' as const,
+    top: -2,
+    right: -2,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: theme.surface,
+  },
+  badgeChipName: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: theme.textPrimary,
+    maxWidth: 100,
+  },
+  lockedRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: theme.border + '40',
+  },
+  lockedDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  lockedMore: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: theme.textMuted,
+  },
+  viewAllBtn: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    marginLeft: 'auto' as any,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: theme.primary + '10',
+    borderRadius: 10,
+  },
+  viewAllText: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: theme.primary,
+  },
+  emptyBadges: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: 12,
+    padding: 14,
+  },
+  emptyBadgesTitle: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: theme.textSecondary,
+  },
+  emptyBadgesDesc: {
+    fontSize: 12,
+    color: theme.textMuted,
+    marginTop: 2,
   },
 });
 
