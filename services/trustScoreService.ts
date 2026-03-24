@@ -620,3 +620,101 @@ export async function fetchLowTrustUsers(threshold: number = 50): Promise<Array<
     return [];
   }
 }
+
+// ============================================
+// WITNESS ATTESTATION
+// ============================================
+
+/**
+ * Request witness attestation for a match.
+ */
+export async function requestWitnessAttestation(
+  matchId: string,
+  witnessUserId: string
+): Promise<{ error: string | null }> {
+  const supabase = getSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Not authenticated' };
+  try {
+    const { error } = await supabase
+      .from('match_witness_requests')
+      .insert({
+        match_id: matchId,
+        requester_user_id: user.id,
+        witness_user_id: witnessUserId,
+        status: 'pending',
+      });
+    return { error: error?.message || null };
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+/**
+ * Respond to a witness attestation request.
+ */
+export async function respondToWitnessRequest(
+  requestId: string,
+  status: 'attested' | 'declined'
+): Promise<{ error: string | null }> {
+  const supabase = getSupabaseClient();
+  try {
+    const updateData: any = { status, responded_at: new Date().toISOString() };
+    const { error } = await supabase
+      .from('match_witness_requests')
+      .update(updateData)
+      .eq('id', requestId);
+    return { error: error?.message || null };
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+/**
+ * Fetch witness requests for a match.
+ */
+export async function fetchMatchWitnessRequests(matchId: string): Promise<Array<{
+  id: string;
+  matchId: string;
+  requesterUserId: string;
+  witnessUserId: string;
+  status: string;
+  respondedAt?: string;
+}>> {
+  const supabase = getSupabaseClient();
+  try {
+    const { data, error } = await supabase
+      .from('match_witness_requests')
+      .select('*')
+      .eq('match_id', matchId);
+    if (error || !data) return [];
+    return data.map((d: any) => ({
+      id: d.id,
+      matchId: d.match_id,
+      requesterUserId: d.requester_user_id,
+      witnessUserId: d.witness_user_id,
+      status: d.status,
+      respondedAt: d.responded_at,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Check if a match has been witnessed (attested).
+ */
+export async function isMatchWitnessed(matchId: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  try {
+    const { data } = await supabase
+      .from('match_witness_requests')
+      .select('id')
+      .eq('match_id', matchId)
+      .eq('status', 'attested')
+      .limit(1);
+    return (data && data.length > 0) || false;
+  } catch {
+    return false;
+  }
+}

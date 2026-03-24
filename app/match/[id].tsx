@@ -32,7 +32,7 @@ import { getShareRequestsForItem, MatchShareRequest } from '@/services/matchShar
 import { checkEditConflict, computeMatchDiffs, fetchUpdatedAt, DiffEntry } from '@/services/collaborativeEditService';
 import { useAuth, getSupabaseClient } from '@/template';
 import { logModification } from '@/services/modificationLogService';
-import { getMatchValidationLevel, getValidationColor, getValidationIcon, getValidationLabel, getMatchValidationWeight } from '@/services/trustScoreService';
+import { getMatchValidationLevel, getValidationColor, getValidationIcon, getValidationLabel, getMatchValidationWeight, requestWitnessAttestation, fetchMatchWitnessRequests } from '@/services/trustScoreService';
 import { extraTranslations } from '@/constants/i18nExtra';
 
 interface MeneEdit {
@@ -111,6 +111,11 @@ export default function EditMatchScreen() {
   const [pendingSaveData, setPendingSaveData] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Witness attestation state
+  const [witnessRequests, setWitnessRequests] = useState<any[]>([]);
+  const [showWitnessPicker, setShowWitnessPicker] = useState(false);
+  const [witnessSearch, setWitnessSearch] = useState('');
+
   const maxScore = config.game.maxScore;
   const locale = language === 'en' ? 'en-US' : 'fr-FR';
   const isReadOnly = matchIsShared && matchPermission === 'read';
@@ -122,6 +127,12 @@ export default function EditMatchScreen() {
   };
 
   // Load share request info for this match
+  // Load witness requests for this match
+  useEffect(() => {
+    if (!id) return;
+    fetchMatchWitnessRequests(id).then(reqs => setWitnessRequests(reqs));
+  }, [id]);
+
   useEffect(() => {
     if (!id) return;
     getShareRequestsForItem('match', id).then(({ requests }) => {
@@ -130,12 +141,24 @@ export default function EditMatchScreen() {
   }, [id]);
 
   // Fetch server updated_at for conflict detection on shared writable matches
+  // Load witness requests for this match
+  useEffect(() => {
+    if (!id) return;
+    fetchMatchWitnessRequests(id).then(reqs => setWitnessRequests(reqs));
+  }, [id]);
+
   useEffect(() => {
     if (!id || !matchIsShared || matchPermission !== 'write') return;
     fetchUpdatedAt('matches', id).then(ts => {
       if (ts) setServerUpdatedAt(ts);
     });
   }, [id, matchIsShared, matchPermission]);
+
+  // Load witness requests for this match
+  useEffect(() => {
+    if (!id) return;
+    fetchMatchWitnessRequests(id).then(reqs => setWitnessRequests(reqs));
+  }, [id]);
 
   useEffect(() => {
     if (match) {
@@ -835,6 +858,73 @@ export default function EditMatchScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView style={styles.scrollView} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           
+          {/* Witness Attestation Section */}
+          {(() => {
+            const pIds: string[] = (match as any)?.participantUserIds || [];
+            const isWitnessed = witnessRequests.some(r => r.status === 'attested');
+            const canRequestWitness = Array.isArray(pIds) && pIds.length >= 3 && !isWitnessed && !isReadOnly;
+            const isFr2 = language === 'fr';
+            if (!canRequestWitness && witnessRequests.length === 0) return null;
+            return (
+              <Animated.View entering={FadeInDown.duration(400)} style={[styles.section, { marginBottom: 16 }]}>
+                <View style={[validationStyles.card, { borderColor: '#7C3AED30', backgroundColor: '#7C3AED06' }]}>
+                  <View style={validationStyles.cardTop}>
+                    <View style={[validationStyles.iconBg, { backgroundColor: '#7C3AED15' }]}>
+                      <MaterialIcons name="visibility" size={22} color="#7C3AED" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[validationStyles.levelLabel, { color: '#7C3AED' }]}>
+                        {isFr2 ? 'Attestation de temoin' : 'Witness Attestation'}
+                      </Text>
+                      <Text style={validationStyles.weightBadge}>
+                        {isWitnessed
+                          ? (isFr2 ? 'Match atteste - poids 2.0x' : 'Match attested - weight 2.0x')
+                          : (isFr2 ? 'Invitez un temoin pour valider (poids 2x)' : 'Invite a witness to validate (2x weight)')}
+                      </Text>
+                    </View>
+                    {isWitnessed ? (
+                      <View style={{ backgroundColor: '#7C3AED', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFF' }}>2.0x</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  {/* Existing requests */}
+                  {witnessRequests.length > 0 ? (
+                    <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border + '40', gap: 6 }}>
+                      {witnessRequests.map(wr => (
+                        <View key={wr.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.backgroundSecondary, borderRadius: 10, padding: 10 }}>
+                          <MaterialIcons
+                            name={wr.status === 'attested' ? 'check-circle' : wr.status === 'declined' ? 'cancel' : 'schedule'}
+                            size={16}
+                            color={wr.status === 'attested' ? '#22C55E' : wr.status === 'declined' ? '#EF4444' : '#D97706'}
+                          />
+                          <Text style={{ flex: 1, fontSize: 13, color: theme.textPrimary, fontWeight: '500' }}>
+                            {wr.witnessUserId.substring(0, 8)}...
+                          </Text>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: wr.status === 'attested' ? '#22C55E' : wr.status === 'declined' ? '#EF4444' : '#D97706' }}>
+                            {wr.status === 'attested' ? (isFr2 ? 'Atteste' : 'Attested') : wr.status === 'declined' ? (isFr2 ? 'Refuse' : 'Declined') : (isFr2 ? 'En attente' : 'Pending')}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                  {/* Request button */}
+                  {canRequestWitness ? (
+                    <Pressable
+                      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#7C3AED', borderRadius: 12, paddingVertical: 12, marginTop: 10 }}
+                      onPress={() => setShowWitnessPicker(true)}
+                    >
+                      <MaterialIcons name="person-add" size={18} color="#FFF" />
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFF' }}>
+                        {isFr2 ? 'Inviter un temoin' : 'Invite a witness'}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </Animated.View>
+            );
+          })()}
+
           {/* Match Validation Badge */}
           {(() => {
             const pIds: string[] = (match as any)?.participantUserIds || [];

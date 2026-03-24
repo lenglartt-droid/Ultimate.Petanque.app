@@ -441,6 +441,31 @@ Deno.serve(async (req: Request) => {
         }
       }
 
+      // ================================================
+      // FACTOR 11: Inactivity Decay (-5 pts per month inactive, floor 30)
+      // ================================================
+      const sortedMatchDates = playerMatches
+        .map((m: any) => new Date(m.date || m.created_at).getTime())
+        .sort((a: number, b: number) => b - a);
+      const lastPlayedTs = sortedMatchDates.length > 0 ? sortedMatchDates[0] : new Date(player.created_at).getTime();
+      const daysSinceLastPlay = Math.floor((now - lastPlayedTs) / (1000 * 60 * 60 * 24));
+      details.daysSinceLastPlay = daysSinceLastPlay;
+      details.lastPlayedDate = new Date(lastPlayedTs).toISOString();
+
+      if (daysSinceLastPlay >= 30) {
+        const monthsInactive = Math.floor(daysSinceLastPlay / 30);
+        const decayAmount = monthsInactive * 5;
+        // Apply decay but ensure score does not drop below 30 from decay alone
+        const preDecayScore = score;
+        score = Math.max(30, score - decayAmount);
+        details.inactivityDecay = { monthsInactive, decayApplied: preDecayScore - score };
+        if (daysSinceLastPlay >= 60) {
+          flags.push('inactive_2months');
+        } else {
+          flags.push('inactive_1month');
+        }
+      }
+
       // Clamp
       score = Math.max(0, Math.min(100, score));
       details.matchesPlayed = matchesPlayed;

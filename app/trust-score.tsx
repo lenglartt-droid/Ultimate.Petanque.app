@@ -109,6 +109,8 @@ const FLAG_LABELS: Record<string, { fr: string; en: string; icon: string; color:
   new_account: { fr: 'Compte recent', en: 'New account', icon: 'new-releases', color: '#D97706' },
   low_match_count: { fr: 'Peu de matchs joues', en: 'Few matches played', icon: 'sports', color: '#D97706' },
   many_very_short_matches: { fr: 'Matchs tres courts suspects', en: 'Suspicious very short matches', icon: 'timer', color: '#F97316' },
+  inactive_1month: { fr: 'Inactif depuis 1 mois', en: 'Inactive for 1 month', icon: 'hourglass-empty', color: '#D97706' },
+  inactive_2months: { fr: 'Inactif depuis 2+ mois', en: 'Inactive for 2+ months', icon: 'hourglass-disabled', color: '#EF4444' },
   multi_account_device: { fr: 'Multi-compte detecte', en: 'Multi-account detected', icon: 'devices', color: '#F97316' },
   multi_account_device_3plus: { fr: 'Multi-comptes detectes (3+)', en: 'Multi-accounts detected (3+)', icon: 'devices', color: '#EF4444' },
   multiple_reports: { fr: 'Signalements multiples', en: 'Multiple reports', icon: 'flag', color: '#EF4444' },
@@ -477,6 +479,37 @@ export default function TrustScoreScreen() {
                 </View>
               )}
             </Animated.View>
+
+            {/* Inactivity Warning */}
+            {trustData && trustData.details?.daysSinceLastPlay >= 14 ? (
+              <Animated.View entering={FadeInDown.duration(400).delay(200)} style={[st.sectionCard, { borderWidth: 1, borderColor: '#F97316' + '30', backgroundColor: '#F97316' + '04' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#F97316' + '15', alignItems: 'center', justifyContent: 'center' }}>
+                    <MaterialIcons name="hourglass-empty" size={22} color="#F97316" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: '#F97316', marginBottom: 4 }}>
+                      {isFr ? 'Inactivite detectee' : 'Inactivity detected'}
+                    </Text>
+                    <Text style={{ fontSize: 13, color: theme.textSecondary, lineHeight: 19 }}>
+                      {isFr
+                        ? `Vous n'avez pas joue depuis ${trustData.details.daysSinceLastPlay} jours. Votre score diminue de 5 points par mois d'inactivite (plancher : 30). Jouez un match pour stopper la baisse !`
+                        : `You have not played for ${trustData.details.daysSinceLastPlay} days. Your score decreases by 5 points per month of inactivity (floor: 30). Play a match to stop the decline!`}
+                    </Text>
+                    {trustData.details.inactivityDecay ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                        <View style={{ backgroundColor: '#F97316' + '15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#F97316' }}>-{trustData.details.inactivityDecay.decayApplied} pts</Text>
+                        </View>
+                        <Text style={{ fontSize: 11, color: theme.textMuted }}>
+                          ({trustData.details.inactivityDecay.monthsInactive} {isFr ? 'mois' : 'months'})
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+              </Animated.View>
+            ) : null}
 
             {/* Tips */}
             <Animated.View entering={FadeInDown.duration(400).delay(200)} style={st.sectionCard}>

@@ -56,6 +56,41 @@ export default function AdminAntiCheatScreen() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // Summary statistics
+  const summaryStats = React.useMemo(() => {
+    if (players.length === 0) return { total: 0, avg: 0, verified: 0, high: 0, medium: 0, low: 0, suspicious: 0, weeklyFlagged: 0 };
+    const total = players.length;
+    const avg = Math.round(players.reduce((s, p) => s + p.trustScore, 0) / total);
+    let verified = 0, high = 0, medium = 0, low = 0, suspicious = 0;
+    players.forEach(p => {
+      const ts = p.trustScore;
+      if (ts >= 80) verified++;
+      else if (ts >= 65) high++;
+      else if (ts >= 45) medium++;
+      else if (ts >= 25) low++;
+      else suspicious++;
+    });
+    // Weekly flagged: players analyzed in the last 7 days with flags
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const weeklyFlagged = players.filter(p => {
+      if (p.flags.length === 0) return false;
+      return p.analyzedAt ? new Date(p.analyzedAt) > oneWeekAgo : false;
+    }).length;
+    return { total, avg, verified, high, medium, low, suspicious, weeklyFlagged };
+  }, [players]);
+
+  const handleBatchDismissOk = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const okPlayers = players.filter(p => p.status === 'ok' && p.flags.length === 0);
+    if (okPlayers.length === 0) return;
+    for (const p of okPlayers) {
+      await updateSuspiciousStatus(p.id, 'dismissed');
+    }
+    setPlayers(prev => prev.map(p => (p.status === 'ok' && p.flags.length === 0) ? { ...p, status: 'dismissed' } : p));
+    showAlert(isFr ? `${okPlayers.length} joueurs ignores` : `${okPlayers.length} players dismissed`);
+  };
+
   const handleRefresh = async () => {
     setRefreshing(true);
     await loadData();
@@ -191,6 +226,59 @@ export default function AdminAntiCheatScreen() {
           <Text style={st.scanBtnText}>{scanning ? ((et.adminScanning as any)?.[language] || 'Scanning...') : ((et.adminRunFullScan as any)?.[language] || 'Scan')}</Text>
         </Pressable>
       </View>
+
+      {/* Summary Statistics Dashboard */}
+      {!loading && players.length > 0 ? (
+        <View style={st.summarySection}>
+          {/* Top stats row */}
+          <View style={st.summaryRow}>
+            <View style={st.summaryCard}>
+              <Text style={st.summaryValue}>{summaryStats.total}</Text>
+              <Text style={st.summaryLabel}>{isFr ? 'Analyses' : 'Analyzed'}</Text>
+            </View>
+            <View style={st.summaryCard}>
+              <Text style={[st.summaryValue, { color: summaryStats.avg >= 65 ? '#22C55E' : summaryStats.avg >= 45 ? '#D97706' : '#EF4444' }]}>{summaryStats.avg}</Text>
+              <Text style={st.summaryLabel}>{isFr ? 'Score moyen' : 'Avg score'}</Text>
+            </View>
+            <View style={st.summaryCard}>
+              <Text style={[st.summaryValue, { color: '#EF4444' }]}>{summaryStats.weeklyFlagged}</Text>
+              <Text style={st.summaryLabel}>{isFr ? 'Signales 7j' : 'Flagged 7d'}</Text>
+            </View>
+          </View>
+          {/* Pie chart (simplified bar distribution) */}
+          <View style={st.distRow}>
+            {[
+              { label: isFr ? 'Verifie' : 'Verified', count: summaryStats.verified, color: '#22C55E' },
+              { label: isFr ? 'Fiable' : 'Trusted', count: summaryStats.high, color: '#3B82F6' },
+              { label: 'Standard', count: summaryStats.medium, color: '#D97706' },
+              { label: isFr ? 'A surveiller' : 'Watch', count: summaryStats.low, color: '#F97316' },
+              { label: isFr ? 'Suspect' : 'Suspicious', count: summaryStats.suspicious, color: '#EF4444' },
+            ].map(d => {
+              const pct = summaryStats.total > 0 ? Math.round((d.count / summaryStats.total) * 100) : 0;
+              return (
+                <View key={d.label} style={st.distItem}>
+                  <View style={st.distBarTrack}>
+                    <View style={[st.distBarFill, { height: `${Math.max(pct, 4)}%`, backgroundColor: d.color }]} />
+                  </View>
+                  <Text style={[st.distPct, { color: d.color }]}>{pct}%</Text>
+                  <Text style={st.distLabel} numberOfLines={1}>{d.label}</Text>
+                  <Text style={st.distCount}>{d.count}</Text>
+                </View>
+              );
+            })}
+          </View>
+          {/* Batch dismiss button */}
+          {summaryStats.total > 0 ? (
+            <Pressable style={st.batchDismissBtn} onPress={handleBatchDismissOk}>
+              <MaterialIcons name="check-circle" size={16} color="#22C55E" />
+              <Text style={st.batchDismissBtnText}>
+                {isFr ? 'Ignorer tous les OK sans alertes' : 'Dismiss all OK with no flags'}
+                {' '}({players.filter(p => p.status === 'ok' && p.flags.length === 0).length})
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
 
       {/* Status filter chips */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.filterRow}>
@@ -535,4 +623,20 @@ const st = StyleSheet.create({
   adjustCancelText: { fontSize: 15, fontWeight: '600', color: theme.textSecondary },
   adjustConfirm: { flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 12, backgroundColor: theme.primary },
   adjustConfirmText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
+
+  // Summary dashboard
+  summarySection: { marginHorizontal: 16, marginBottom: 10 },
+  summaryRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  summaryCard: { flex: 1, backgroundColor: theme.surface, borderRadius: 14, padding: 12, alignItems: 'center', ...theme.shadows.card },
+  summaryValue: { fontSize: 22, fontWeight: '900', color: theme.textPrimary },
+  summaryLabel: { fontSize: 10, color: theme.textMuted, marginTop: 2, textAlign: 'center', fontWeight: '600' },
+  distRow: { flexDirection: 'row', backgroundColor: theme.surface, borderRadius: 14, padding: 14, gap: 6, marginBottom: 10, ...theme.shadows.card },
+  distItem: { flex: 1, alignItems: 'center', gap: 4 },
+  distBarTrack: { width: '100%', height: 50, backgroundColor: theme.backgroundSecondary, borderRadius: 6, overflow: 'hidden', justifyContent: 'flex-end' },
+  distBarFill: { width: '100%', borderRadius: 6 },
+  distPct: { fontSize: 11, fontWeight: '800' },
+  distLabel: { fontSize: 8, color: theme.textMuted, fontWeight: '600', textAlign: 'center' },
+  distCount: { fontSize: 10, fontWeight: '700', color: theme.textSecondary },
+  batchDismissBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#22C55E12', borderRadius: 12, paddingVertical: 12, borderWidth: 1, borderColor: '#22C55E30' },
+  batchDismissBtnText: { fontSize: 13, fontWeight: '600', color: '#22C55E' },
 });
