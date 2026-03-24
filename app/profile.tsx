@@ -38,6 +38,10 @@ import { isUserAmbassador } from '@/services/ambassadorService';
 import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 import AdBanner from '@/components/ui/AdBanner';
+import XPBar from '@/components/ui/XPBar';
+import BadgeUnlockModal from '@/components/ui/BadgeUnlockModal';
+import { BADGES, getBadgeName, getBadgeDescription } from '@/services/badgeService';
+import { useBadges } from '@/hooks/useBadges';
 import { Switch } from 'react-native';
 import { NotificationPreferences, DEFAULT_NOTIFICATION_PREFERENCES, loadNotificationPreferences, saveNotificationPreferences } from '@/services/notificationPreferencesService';
 
@@ -128,6 +132,9 @@ export default function ProfileScreen() {
   // Notification preferences
   const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>({ ...DEFAULT_NOTIFICATION_PREFERENCES });
   const [notifPrefsLoaded, setNotifPrefsLoaded] = useState(false);
+
+  // Badges & XP
+  const { badges: userBadges, xp: userXp, loading: badgesLoading, currentUnlock, dismissUnlock, totalBadges } = useBadges();
 
   // Expandable settings sections
   const [showNotifSection, setShowNotifSection] = useState(false);
@@ -987,6 +994,53 @@ export default function ProfileScreen() {
             </View>
           </View>
         </Animated.View>
+
+        {/* XP Bar & Badges */}
+        {!isEditing && (
+          <Animated.View entering={FadeInDown.duration(400).delay(50)} style={{ marginBottom: 20 }}>
+            <XPBar xp={userXp} language={language} />
+            
+            {/* Badges Grid */}
+            <View style={styles.badgesSection}>
+              <View style={styles.badgesSectionHeader}>
+                <Text style={styles.badgesSectionTitle}>
+                  {language === 'fr' ? 'BADGES' : 'BADGES'}
+                </Text>
+                <Text style={styles.badgesSectionCount}>
+                  {userBadges.length}/{totalBadges}
+                </Text>
+              </View>
+              <View style={styles.badgesGrid}>
+                {BADGES.map(badge => {
+                  const unlocked = userBadges.find(b => b.badgeId === badge.id);
+                  return (
+                    <View key={badge.id} style={[styles.badgeItem, !unlocked && styles.badgeItemLocked]}>
+                      <View style={[
+                        styles.badgeIcon,
+                        { backgroundColor: unlocked ? badge.color + '20' : theme.backgroundSecondary },
+                      ]}>
+                        <MaterialIcons
+                          name={badge.icon as any}
+                          size={22}
+                          color={unlocked ? badge.color : theme.textMuted + '60'}
+                        />
+                      </View>
+                      <Text
+                        style={[styles.badgeLabel, !unlocked && styles.badgeLabelLocked]}
+                        numberOfLines={1}
+                      >
+                        {getBadgeName(badge.id, language)}
+                      </Text>
+                      {unlocked ? (
+                        <MaterialIcons name="check-circle" size={12} color={badge.color} style={{ marginTop: 2 }} />
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          </Animated.View>
+        )}
 
         {/* Edit Mode Fields */}
         {isEditing && (
@@ -2042,6 +2096,14 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
+      {/* Badge Unlock Modal */}
+      <BadgeUnlockModal
+        visible={currentUnlock !== null}
+        badgeId={currentUnlock}
+        language={language}
+        onClose={dismissUnlock}
+      />
+
       {/* Club Picker Modal */}
       <Modal
         visible={showClubPicker}
@@ -2818,6 +2880,61 @@ const styles = StyleSheet.create({
     color: theme.textMuted,
     textAlign: 'center',
     marginTop: 24,
+  },
+  // Badges
+  badgesSection: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    marginTop: 12,
+    ...theme.shadows.card,
+  },
+  badgesSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  badgesSectionTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.textSecondary,
+    letterSpacing: 1,
+  },
+  badgesSectionCount: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.primary,
+  },
+  badgesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  badgeItem: {
+    width: '18%',
+    minWidth: 58,
+    alignItems: 'center',
+    gap: 4,
+  },
+  badgeItemLocked: {
+    opacity: 0.4,
+  },
+  badgeIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: theme.textPrimary,
+    textAlign: 'center',
+  },
+  badgeLabelLocked: {
+    color: theme.textMuted,
   },
   // Financial button
   financialButton: {

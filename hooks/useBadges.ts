@@ -1,0 +1,118 @@
+/**
+ * useBadges — Hook that loads badges, checks for new unlocks, and provides badge state.
+ */
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useAuth } from '@/template';
+import { useApp } from '@/contexts/AppContext';
+import { isUserAmbassador } from '@/services/ambassadorService';
+import {
+  loadUserBadges,
+  buildBadgeContext,
+  checkAndAwardBadges,
+  calculateTotalXp,
+  syncXpToDb,
+  UserBadge,
+  BADGES,
+} from '@/services/badgeService';
+
+export function useBadges() {
+  const { user } = useAuth();
+  const { matches, challenges, userStats, sharedMatchIds } = useApp();
+
+  const [badges, setBadges] = useState<UserBadge[]>([]);
+  const [xp, setXp] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [newlyUnlockedQueue, setNewlyUnlockedQueue] = useState<string[]>([]);
+  const [currentUnlock, setCurrentUnlock] = useState<string | null>(null);
+  const hasChecked = useRef(false);
+
+  // Load badges on mount
+  useEffect(() => {
+    if (!user?.id) return;
+    const load = async () => {
+      setLoading(true);
+      const result = await loadUserBadges(user.id);
+      setBadges(result.badges);
+      setXp(result.xp);
+      setLoading(false);
+    };
+    load();
+  }, [user?.id]);
+
+  // Check for new badges when data changes
+  useEffect(() => {
+    if (!user?.id || loading || matches.length === 0) return;
+
+    const checkBadges = async () => {
+      const isAmb = await isUserAmbassador(user.id);
+
+      // Count total carreaux
+      let totalCarreaux = 0;
+      matches.forEach((m: any) => {
+        if (m.playerActions) {
+          m.playerActions.forEach((pa: any) => {
+            totalCarreaux += pa.actions?.carreaux || 0;
+          });
+        }
+      });
+
+      const context = buildBadgeContext({
+        matches,
+        challenges,
+        userStats,
+        sharedMatchIds,
+        userId: user.id,
+        isAmbassador: isAmb,
+        leaderboardRank: null, // Would need leaderboard data
+      });
+
+      const newBadgeIds = await checkAndAwardBadges(user.id, context, badges);
+
+      if (newBadgeIds.length > 0) {
+        // Reload badges to get fresh data
+        const updated = await loadUserBadges(user.id);
+        setBadges(updated.badges);
+        setXp(updated.xp);
+        setNewlyUnlockedQueue(prev => [...prev, ...newBadgeIds]);
+      }
+
+      // Sync XP
+      const calculatedXp = calculateTotalXp({
+        matchCount: matches.length,
+        totalCarreaux,
+        sharedAcceptedCount: sharedMatchIds.length,
+        badgeCount: badges.length + newBadgeIds.length,
+      });
+
+      if (calculatedXp !== xp) {
+        setXp(calculatedXp);
+        await syncXpToDb(user.id, calculatedXp);
+      }
+    };
+
+    // Debounce check
+    const timer = setTimeout(checkBadges, 2000);
+    return () => clearTimeout(timer);
+  }, [user?.id, matches.length, challenges.length, sharedMatchIds.length, loading]);
+
+  // Process unlock queue one at a time
+  useEffect(() => {
+    if (newlyUnlockedQueue.length > 0 && !currentUnlock) {
+      setCurrentUnlock(newlyUnlockedQueue[0]);
+      setNewlyUnlockedQueue(prev => prev.slice(1));
+    }
+  }, [newlyUnlockedQueue, currentUnlock]);
+
+  const dismissUnlock = useCallback(() => {
+    setCurrentUnlock(null);
+  }, []);
+
+  return {
+    badges,
+    xp,
+    loading,
+    currentUnlock,
+    dismissUnlock,
+    totalBadges: BADGES.length,
+  };
+}
