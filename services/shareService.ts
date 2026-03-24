@@ -344,6 +344,177 @@ export async function fetchItemName(itemType: ShareItemType, itemId: string): Pr
   return 'Unknown';
 }
 
+// ============================================
+// Share Access Tracking
+// ============================================
+
+export interface ShareAccessLog {
+  id: string;
+  sharedItemId: string;
+  ownerId: string;
+  viewerId: string;
+  viewerName?: string;
+  viewerEmail?: string;
+  itemType: ShareItemType;
+  itemId: string;
+  sourcePage?: string;
+  viewedAt: string;
+}
+
+/**
+ * Record a view on a shared item. Increments view_count and updates last_viewed_at.
+ * Also sends a notification to the owner on first view by this viewer.
+ */
+export async function recordShareView(
+  itemType: ShareItemType,
+  itemId: string,
+  sourcePage?: string,
+): Promise<{ error: string | null }> {
+  const supabase = getSupabaseClient();
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData?.user) return { error: null }; // silent fail for anonymous
+
+  try {
+    // Find shared_items entries where this user is the recipient
+    const { data: sharedEntries } = await supabase.from('shared_items').select('id, owner_id')
+      .eq('item_type', itemType).eq('item_id', itemId)
+      .eq('shared_with_id', userData.user.id);
+
+    if (!sharedEntries || sharedEntries.length === 0) return { error: null };
+
+    for (const entry of sharedEntries) {
+      // Check if this is the first view by this viewer for this shared item
+      const { data: existingView } = await supabase.from('share_access_logs').select('id')
+        .eq('shared_item_id', entry.id).eq('viewer_id', userData.user.id).limit(1).maybeSingle();
+
+      const isFirstView = !existingView;
+
+      // Insert access log
+      await supabase.from('share_access_logs').insert({
+        shared_item_id: entry.id,
+        owner_id: entry.owner_id,
+        viewer_id: userData.user.id,
+        item_type: itemType,
+        item_id: itemId,
+        source_page: sourcePage || null,
+      });
+
+      // Update shared_items counters
+      const updateData: any = {
+        view_count: (await supabase.from('share_access_logs').select('id', { count: 'exact', head: true }).eq('shared_item_id', entry.id)).count || 0,
+        last_viewed_at: new Date().toISOString(),
+      };
+      if (isFirstView) {
+        // Set first_viewed_at only if not already set
+        const { data: current } = await supabase.from('shared_items').select('first_viewed_at').eq('id', entry.id).single();
+        if (!current?.first_viewed_at) {
+          updateData.first_viewed_at = new Date().toISOString();
+        }
+      }
+      await supabase.from('shared_items').update(updateData).eq('id', entry.id);
+
+      // Send notification to owner on first view by this viewer
+      if (isFirstView && entry.owner_id !== userData.user.id) {
+        const { data: viewerProfile } = await supabase.from('user_profiles')
+          .select('username, email').eq('id', userData.user.id).single();
+
+        let itemName: string | null = null;
+        try { itemName = await fetchItemName(itemType, itemId); } catch { /* ignore */ }
+
+        await supabase.from('share_notifications').insert({
+          owner_id: entry.owner_id,
+          accessor_id: userData.user.id,
+          accessor_name: viewerProfile?.username || userData.user.email?.split('@')[0] || 'User',
+          accessor_email: viewerProfile?.email || userData.user.email,
+          item_type: itemType,
+          item_id: itemId,
+          item_name: itemName,
+          permission: 'read',
+          share_code: null,
+          is_read: false,
+        });
+      }
+    }
+    return { error: null };
+  } catch (e: any) {
+    console.log('Error recording share view:', e);
+    return { error: e.message || 'Error recording view' };
+  }
+}
+
+/**
+ * Get access logs for a specific shared item (owner only).
+ */
+export async function getShareAccessLogs(sharedItemId: string): Promise<{ logs: ShareAccessLog[]; error: string | null }> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.from('share_access_logs').select('*')
+    .eq('shared_item_id', sharedItemId).order('viewed_at', { ascending: false }).limit(50);
+  if (error) return { logs: [], error: error.message };
+
+  // Enrich with viewer names
+  const viewerIds = [...new Set((data || []).map((d: any) => d.viewer_id))];
+  const viewerMap: Record<string, { name: string; email: string }> = {};
+  if (viewerIds.length > 0) {
+    const { data: profiles } = await supabase.from('user_profiles').select('id, username, email').in('id', viewerIds);
+    (profiles || []).forEach((p: any) => { viewerMap[p.id] = { name: p.username || p.email?.split('@')[0] || 'User', email: p.email }; });
+  }
+
+  const logs: ShareAccessLog[] = (data || []).map((d: any) => ({
+    id: d.id,
+    sharedItemId: d.shared_item_id,
+    ownerId: d.owner_id,
+    viewerId: d.viewer_id,
+    viewerName: viewerMap[d.viewer_id]?.name,
+    viewerEmail: viewerMap[d.viewer_id]?.email,
+    itemType: d.item_type,
+    itemId: d.item_id,
+    sourcePage: d.source_page,
+    viewedAt: d.viewed_at,
+  }));
+  return { logs, error: null };
+}
+
+/**
+ * Get view stats for all of the current user's shared items.
+ * Returns a map of sharedItemId -> { viewCount, lastViewedAt, firstViewedAt, uniqueViewers }.
+ */
+export interface ShareViewStats {
+  viewCount: number;
+  lastViewedAt: string | null;
+  firstViewedAt: string | null;
+  uniqueViewers: number;
+}
+
+export async function getMyShareViewStats(): Promise<{ stats: Record<string, ShareViewStats>; error: string | null }> {
+  const supabase = getSupabaseClient();
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData?.user) return { stats: {}, error: 'Not connected' };
+
+  const { data, error } = await supabase.from('shared_items').select('id, view_count, last_viewed_at, first_viewed_at')
+    .eq('owner_id', userData.user.id).eq('is_public_link', true).gt('view_count', 0);
+
+  if (error) return { stats: {}, error: error.message };
+
+  // Get unique viewer counts from access logs
+  const stats: Record<string, ShareViewStats> = {};
+  for (const item of (data || [])) {
+    const { count } = await supabase.from('share_access_logs').select('viewer_id', { count: 'exact', head: true })
+      .eq('shared_item_id', item.id);
+    // Get distinct viewers
+    const { data: viewers } = await supabase.from('share_access_logs').select('viewer_id')
+      .eq('shared_item_id', item.id);
+    const uniqueSet = new Set((viewers || []).map((v: any) => v.viewer_id));
+
+    stats[item.id] = {
+      viewCount: item.view_count || 0,
+      lastViewedAt: item.last_viewed_at,
+      firstViewedAt: item.first_viewed_at,
+      uniqueViewers: uniqueSet.size,
+    };
+  }
+  return { stats, error: null };
+}
+
 export async function isSharedWithMe(itemType: ShareItemType, itemId: string): Promise<boolean> {
   const supabase = getSupabaseClient();
   const { data: userData } = await supabase.auth.getUser();

@@ -26,7 +26,7 @@ import ShareModal from '@/components/ui/ShareModal';
 import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
 import SharedBadge from '@/components/ui/SharedBadge';
 import MergePickerModal from '@/components/ui/MergePickerModal';
-import { isSharedWithMe, saveSharedItemToMyAccount } from '@/services/shareService';
+import { isSharedWithMe, saveSharedItemToMyAccount, recordShareView } from '@/services/shareService';
 import { toggleItemPublic } from '@/services/publicItemsService';
 import { getMeetupsForTerrain, Meetup } from '@/services/meetupService';
 import { useAlert } from '@/template';
@@ -73,7 +73,7 @@ export default function TerrainDetailScreen() {
 
   useEffect(() => {
     if (id) {
-      isSharedWithMe('terrain', id).then(setIsShared);
+      isSharedWithMe('terrain', id).then(shared => { setIsShared(shared); if (shared) recordShareView('terrain', id, 'terrain-detail'); });
     }
   }, [id]);
 

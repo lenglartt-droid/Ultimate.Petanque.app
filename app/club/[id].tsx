@@ -34,7 +34,7 @@ import ShareModal from '@/components/ui/ShareModal';
 import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
 import SharedBadge from '@/components/ui/SharedBadge';
 import MergePickerModal from '@/components/ui/MergePickerModal';
-import { isSharedWithMe, saveSharedItemToMyAccount } from '@/services/shareService';
+import { isSharedWithMe, saveSharedItemToMyAccount, recordShareView } from '@/services/shareService';
 import { toggleItemPublic } from '@/services/publicItemsService';
 import { useAlert } from '@/template';
 import { useAuth } from '@/template';
@@ -142,7 +142,7 @@ export default function ClubDetailScreen() {
 
   React.useEffect(() => {
     if (id) {
-      isSharedWithMe('club', id).then(setIsShared);
+      isSharedWithMe('club', id).then(shared => { setIsShared(shared); if (shared) recordShareView('club', id, 'club-detail'); });
     }
   }, [id]);
 

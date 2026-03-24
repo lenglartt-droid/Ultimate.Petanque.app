@@ -29,7 +29,7 @@ import ShareModal from '@/components/ui/ShareModal';
 import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
 import SharedBadge from '@/components/ui/SharedBadge';
 import MergePickerModal from '@/components/ui/MergePickerModal';
-import { isSharedWithMe, saveSharedItemToMyAccount } from '@/services/shareService';
+import { isSharedWithMe, saveSharedItemToMyAccount, recordShareView } from '@/services/shareService';
 import { toggleItemPublic } from '@/services/publicItemsService';
 import { useAlert } from '@/template';
 import { useAuth } from '@/template';
@@ -231,7 +231,7 @@ export default function TournamentDetailScreen() {
 
   useEffect(() => {
     if (id) {
-      isSharedWithMe('tournament', id).then(setIsShared);
+      isSharedWithMe('tournament', id).then(shared => { setIsShared(shared); if (shared) recordShareView('tournament', id, 'tournament-detail'); });
     }
   }, [id]);
 

@@ -24,10 +24,14 @@ import {
   fetchItemName,
   saveSharedItemToMyAccount,
   getShareNotifications,
+  getMyShareViewStats,
+  getShareAccessLogs,
   SharedItem,
   ShareItemType,
   SharePermission,
   ShareNotification,
+  ShareViewStats,
+  ShareAccessLog,
 } from '@/services/shareService';
 import { useAlert } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -86,6 +90,7 @@ type FilterType = 'all' | ShareItemType;
 interface EnrichedSharedItem extends SharedItem {
   itemName: string;
   accessorNames?: string[];
+  viewStats?: ShareViewStats;
 }
 
 export default function SharedItemsScreen() {
@@ -99,6 +104,10 @@ export default function SharedItemsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+  const [viewStats, setViewStats] = useState<Record<string, ShareViewStats>>({});
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [accessLogs, setAccessLogs] = useState<ShareAccessLog[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
 
   const enrichItems = useCallback(async (items: SharedItem[], notifications?: ShareNotification[]): Promise<EnrichedSharedItem[]> => {
     const enriched: EnrichedSharedItem[] = [];
@@ -135,8 +144,18 @@ export default function SharedItemsScreen() {
 
       const notifications = notifsResult.error ? [] : notifsResult.notifications;
 
+      // Load view stats
+      const viewStatsResult = await getMyShareViewStats();
+      if (!viewStatsResult.error) setViewStats(viewStatsResult.stats);
+
       if (!myResult.error) {
         const enrichedMy = await enrichItems(myResult.items, notifications);
+        // Attach view stats
+        enrichedMy.forEach(item => {
+          if (viewStatsResult.stats[item.id]) {
+            item.viewStats = viewStatsResult.stats[item.id];
+          }
+        });
         setMyShares(enrichedMy);
       }
       if (!withMeResult.error) {
@@ -162,6 +181,19 @@ export default function SharedItemsScreen() {
     await loadData();
     setRefreshing(false);
   }, [loadData]);
+
+  const handleToggleAccessLog = useCallback(async (sharedItemId: string) => {
+    if (expandedLogId === sharedItemId) {
+      setExpandedLogId(null);
+      setAccessLogs([]);
+      return;
+    }
+    setExpandedLogId(sharedItemId);
+    setLogsLoading(true);
+    const { logs } = await getShareAccessLogs(sharedItemId);
+    setAccessLogs(logs);
+    setLogsLoading(false);
+  }, [expandedLogId]);
 
   const handleCopyCode = useCallback(async (code: string, id: string) => {
     await Clipboard.setStringAsync(code);
@@ -480,27 +512,101 @@ export default function SharedItemsScreen() {
                               )}
                             </View>
 
-                            {/* Share code + accessor info (my shares only) */}
+                            {/* Share code + accessor info + view stats (my shares only) */}
                             {activeTab === 'shared_by_me' ? (
-                              <View style={styles.itemBottomRow}>
-                                <View style={styles.codeContainer}>
-                                  <MaterialIcons name="vpn-key" size={11} color={theme.textMuted} />
-                                  <Text style={styles.codeText}>{item.shareCode}</Text>
+                              <View>
+                                <View style={styles.itemBottomRow}>
+                                  <View style={styles.codeContainer}>
+                                    <MaterialIcons name="vpn-key" size={11} color={theme.textMuted} />
+                                    <Text style={styles.codeText}>{item.shareCode}</Text>
+                                  </View>
+                                  {hasAccessors ? (
+                                    <View style={styles.accessorContainer}>
+                                      <MaterialIcons name="people" size={12} color={theme.success} />
+                                      <Text style={styles.accessorText} numberOfLines={1}>
+                                        {item.accessorNames!.slice(0, 2).join(', ')}
+                                        {item.accessorNames!.length > 2 ? ` +${item.accessorNames!.length - 2}` : ''}
+                                      </Text>
+                                    </View>
+                                  ) : (
+                                    <View style={styles.accessorContainer}>
+                                      <MaterialIcons name="person-off" size={12} color={theme.textMuted} />
+                                      <Text style={[styles.accessorText, { color: theme.textMuted }]}>{t('share', 'noOneYet')}</Text>
+                                    </View>
+                                  )}
                                 </View>
-                                {hasAccessors ? (
-                                  <View style={styles.accessorContainer}>
-                                    <MaterialIcons name="people" size={12} color={theme.success} />
-                                    <Text style={styles.accessorText} numberOfLines={1}>
-                                      {item.accessorNames!.slice(0, 2).join(', ')}
-                                      {item.accessorNames!.length > 2 ? ` +${item.accessorNames!.length - 2}` : ''}
+
+                                {/* View Stats Row */}
+                                <Pressable
+                                  style={styles.viewStatsRow}
+                                  onPress={() => { Haptics.selectionAsync(); handleToggleAccessLog(item.id); }}
+                                >
+                                  <View style={styles.viewStatChip}>
+                                    <MaterialIcons name="visibility" size={12} color={item.viewStats ? theme.primary : theme.textMuted} />
+                                    <Text style={[styles.viewStatText, item.viewStats ? { color: theme.primary, fontWeight: '700' } : null]}>
+                                      {item.viewStats ? item.viewStats.viewCount : 0} {t('shareModal', 'viewsLabel')}
                                     </Text>
                                   </View>
-                                ) : (
-                                  <View style={styles.accessorContainer}>
-                                    <MaterialIcons name="person-off" size={12} color={theme.textMuted} />
-                                    <Text style={[styles.accessorText, { color: theme.textMuted }]}>{t('share', 'noOneYet')}</Text>
+                                  {item.viewStats && item.viewStats.uniqueViewers > 0 ? (
+                                    <View style={styles.viewStatChip}>
+                                      <MaterialIcons name="person" size={12} color={theme.accent} />
+                                      <Text style={[styles.viewStatText, { color: theme.accent }]}>
+                                        {item.viewStats.uniqueViewers} {t('shareModal', 'viewersLabel')}
+                                      </Text>
+                                    </View>
+                                  ) : null}
+                                  {item.viewStats?.lastViewedAt ? (
+                                    <Text style={styles.viewStatDate}>
+                                      {formatDate(item.viewStats.lastViewedAt)}
+                                    </Text>
+                                  ) : (
+                                    <Text style={styles.viewStatDate}>{t('shareModal', 'noViewsYet')}</Text>
+                                  )}
+                                  <MaterialIcons name={expandedLogId === item.id ? 'expand-less' : 'expand-more'} size={16} color={theme.textMuted} />
+                                </Pressable>
+
+                                {/* Expanded Access Log */}
+                                {expandedLogId === item.id ? (
+                                  <View style={styles.accessLogSection}>
+                                    <View style={styles.accessLogHeader}>
+                                      <MaterialIcons name="history" size={14} color={theme.primary} />
+                                      <Text style={styles.accessLogTitle}>{t('shareModal', 'viewAccessLog')}</Text>
+                                    </View>
+                                    {logsLoading ? (
+                                      <ActivityIndicator size="small" color={theme.primary} style={{ paddingVertical: 12 }} />
+                                    ) : accessLogs.length > 0 ? (
+                                      <View style={styles.accessLogList}>
+                                        {accessLogs.slice(0, 10).map((log, logIdx) => {
+                                          const isFirst = logIdx === accessLogs.length - 1 || (
+                                            logIdx < accessLogs.length - 1 &&
+                                            accessLogs.slice(logIdx + 1).every(l => l.viewerId !== log.viewerId)
+                                          );
+                                          return (
+                                            <View key={log.id} style={styles.accessLogRow}>
+                                              <View style={[styles.accessLogDot, { backgroundColor: isFirst ? theme.success : theme.primary }]} />
+                                              <View style={{ flex: 1 }}>
+                                                <Text style={styles.accessLogName}>{log.viewerName || 'User'}</Text>
+                                                <Text style={styles.accessLogTime}>
+                                                  {new Date(log.viewedAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                                </Text>
+                                              </View>
+                                              {isFirst ? (
+                                                <View style={styles.firstVisitBadge}>
+                                                  <Text style={styles.firstVisitText}>{t('shareModal', 'viewedFirstTime')}</Text>
+                                                </View>
+                                              ) : null}
+                                            </View>
+                                          );
+                                        })}
+                                        {accessLogs.length > 10 ? (
+                                          <Text style={styles.accessLogMore}>+{accessLogs.length - 10} {t('shareModal', 'totalViews')}</Text>
+                                        ) : null}
+                                      </View>
+                                    ) : (
+                                      <Text style={styles.accessLogEmpty}>{t('shareModal', 'noViewsYet')}</Text>
+                                    )}
                                   </View>
-                                )}
+                                ) : null}
                               </View>
                             ) : null}
                           </View>
@@ -736,4 +842,36 @@ const styles = StyleSheet.create({
     width: 26, height: 26, borderRadius: 6, alignItems: 'center', justifyContent: 'center',
   },
   legendText: { fontSize: 12, color: theme.textPrimary },
+  // View Stats
+  viewStatsRow: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10,
+    marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: theme.border + '40',
+  },
+  viewStatChip: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4,
+    backgroundColor: theme.backgroundSecondary, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
+  },
+  viewStatText: { fontSize: 11, fontWeight: '600' as const, color: theme.textMuted },
+  viewStatDate: { fontSize: 10, color: theme.textMuted, flex: 1, textAlign: 'right' as const },
+  // Access Log
+  accessLogSection: {
+    marginTop: 10, backgroundColor: theme.backgroundSecondary, borderRadius: 10, padding: 12,
+  },
+  accessLogHeader: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginBottom: 10,
+  },
+  accessLogTitle: { fontSize: 12, fontWeight: '700' as const, color: theme.textPrimary },
+  accessLogList: { gap: 8 },
+  accessLogRow: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10,
+  },
+  accessLogDot: { width: 8, height: 8, borderRadius: 4 },
+  accessLogName: { fontSize: 13, fontWeight: '600' as const, color: theme.textPrimary },
+  accessLogTime: { fontSize: 10, color: theme.textMuted, marginTop: 1 },
+  firstVisitBadge: {
+    backgroundColor: theme.success + '15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
+  },
+  firstVisitText: { fontSize: 9, fontWeight: '700' as const, color: theme.success },
+  accessLogMore: { fontSize: 11, color: theme.textMuted, textAlign: 'center' as const, marginTop: 6 },
+  accessLogEmpty: { fontSize: 12, color: theme.textMuted, textAlign: 'center' as const, paddingVertical: 12 },
 });
