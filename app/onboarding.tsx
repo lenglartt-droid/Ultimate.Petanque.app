@@ -43,6 +43,8 @@ import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { Language } from '@/constants/i18n';
+import { requestNotificationPermissions } from '@/services/notificationService';
+import { scheduleRetentionNotifications } from '@/services/retentionNotificationService';
 
 // ============================================
 // TYPES
@@ -243,6 +245,8 @@ export default function OnboardingScreen() {
     if (finished) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       saveTempData();
+      // Schedule retention notifications after first match
+      scheduleRetentionAfterMatch(newStats, newScoreA >= 13);
       setTimeout(() => setStep(4), 800);
     }
   };
@@ -272,6 +276,7 @@ export default function OnboardingScreen() {
     }
 
     const rate = shots > 0 ? Math.round((success / shots) * 100) : 0;
+    const finalStats = { totalShots: shots, successfulShots: success, carreaux, successRate: rate };
     setMatch(prev => ({
       ...prev,
       menes: [...prev.menes, ...fakeMenes],
@@ -279,9 +284,11 @@ export default function OnboardingScreen() {
       scoreB: Math.min(sB, 13),
       finished: true,
       duration: (prev.menes.length + fakeMenes.length) * 3 + 5,
-      stats: { totalShots: shots, successfulShots: success, carreaux, successRate: rate },
+      stats: finalStats,
     }));
     saveTempData();
+    // Schedule retention notifications after simulated match
+    scheduleRetentionAfterMatch(finalStats, sA >= 13);
     setTimeout(() => setStep(4), 600);
   };
 
@@ -351,6 +358,32 @@ export default function OnboardingScreen() {
       setStep(8);
     }
     // Otherwise they need to log in first - go to login
+  };
+
+  // ============================================
+  // SCHEDULE RETENTION NOTIFICATIONS
+  // ============================================
+  const scheduleRetentionAfterMatch = async (
+    stats: { totalShots: number; successfulShots: number; carreaux: number; successRate: number },
+    won: boolean
+  ) => {
+    try {
+      const granted = await requestNotificationPermissions();
+      if (!granted) return;
+      await scheduleRetentionNotifications({
+        language,
+        isRegistered: !!user?.id,
+        matchStats: {
+          successRate: stats.successRate,
+          carreaux: stats.carreaux,
+          matchCount: 1,
+          wins: won ? 1 : 0,
+          tirRate: stats.totalShots > 0 ? Math.round((stats.successfulShots / stats.totalShots) * 100) : 0,
+        },
+      });
+    } catch (e) {
+      console.log('Error scheduling retention notifications:', e);
+    }
   };
 
   const isMatchWon = match.scoreA >= 13;

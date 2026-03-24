@@ -64,6 +64,15 @@ export async function requestNotificationPermissions(): Promise<boolean> {
         lightColor: '#3B82F6',
         sound: 'default',
       });
+
+      await Notifications.setNotificationChannelAsync('retention', {
+        name: 'Rappels et progression',
+        description: 'Notifications de suivi de progression et rappels',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 200, 100, 200],
+        lightColor: '#F59E0B',
+        sound: 'default',
+      });
     }
 
     return true;

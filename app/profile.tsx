@@ -1002,15 +1002,18 @@ export default function ProfileScreen() {
             
             {/* Badges Grid */}
             <View style={styles.badgesSection}>
-              <View style={styles.badgesSectionHeader}>
+              <Pressable style={styles.badgesSectionHeader} onPress={() => router.push('/badges' as any)}>
                 <Text style={styles.badgesSectionTitle}>
                   {language === 'fr' ? 'BADGES' : 'BADGES'}
                 </Text>
-                <Text style={styles.badgesSectionCount}>
-                  {userBadges.length}/{totalBadges}
-                </Text>
-              </View>
-              <View style={styles.badgesGrid}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.badgesSectionCount}>
+                    {userBadges.length}/{totalBadges}
+                  </Text>
+                  <MaterialIcons name="chevron-right" size={16} color={theme.primary} />
+                </View>
+              </Pressable>
+              <Pressable style={styles.badgesGrid} onPress={() => router.push('/badges' as any)}>
                 {BADGES.map(badge => {
                   const unlocked = userBadges.find(b => b.badgeId === badge.id);
                   return (
@@ -1037,7 +1040,7 @@ export default function ProfileScreen() {
                     </View>
                   );
                 })}
-              </View>
+              </Pressable>
             </View>
           </Animated.View>
         )}
