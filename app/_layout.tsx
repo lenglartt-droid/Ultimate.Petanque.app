@@ -18,6 +18,7 @@ import { registerPushToken } from '@/services/pushTokenService';
 import { router } from 'expo-router';
 import { checkTempDataExpiry } from '@/services/retentionNotificationService';
 import { updateRetentionForRegisteredUser } from '@/services/retentionNotificationService';
+import { checkAndTriggerWeeklyReset } from '@/services/weeklyLeaderboardService';
 
 export default function RootLayout() {
   return (

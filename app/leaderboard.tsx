@@ -21,6 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import theme, { blurhash } from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth, useAlert } from '@/template';
+import { getSupabaseClient } from '@/template';
 import { useApp } from '@/contexts/AppContext';
 import { fetchLeaderboard, sortLeaderboard, LeaderboardPlayer, LeaderboardSort, LeaderboardPeriod } from '@/services/leaderboardService';
 import { fetchClubLeaderboard, sortClubLeaderboard, LeaderboardClub, ClubLeaderboardSort } from '@/services/clubLeaderboardService';
@@ -30,10 +31,114 @@ import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services
 import AdBanner from '@/components/ui/AdBanner';
 import { getTrustScoreColor } from '@/services/trustScoreService';
 import { fetchEventLeaderboard, EventLeaderboardEntry, SponsoredEvent } from '@/services/sponsoredEventService';
+import { fetchWeeklyLeaderboard, getSubRankings, saveWeeklySnapshot, checkAndTriggerWeeklyReset, getLastWeekSummary, WeeklyRankChange, SubRanking, getCurrentWeekStart, formatDateISO } from '@/services/weeklyLeaderboardService';
+import { extraTranslations } from '@/constants/i18nExtra';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 
 type LeaderboardTab = 'players' | 'clubs' | 'boules' | 'events';
 
 const PAGE_SIZE = 30;
+
+// Weekly player row with rank change indicator
+const WeeklyPlayerRow = React.memo(function WeeklyPlayerRow({
+  player,
+  rank,
+  globalRank,
+  isMe,
+  language,
+  t,
+}: {
+  player: any;
+  rank: number;
+  globalRank: number;
+  isMe: boolean;
+  language: string;
+  t: (s: string, k: string) => string;
+}) {
+  const rc = player.rankChange as { currentRank: number; previousRank: number | null; direction: string; diff: number };
+  const medalColors: Record<number, string> = { 1: '#FFD700', 2: '#A8B4C0', 3: '#CD7F32' };
+  const medalColor = medalColors[rank];
+
+  return (
+    <Pressable
+      style={[s.row, isMe && s.rowMe, { borderLeftWidth: 3, borderLeftColor: rc.direction === 'up' ? '#10B981' : rc.direction === 'down' ? '#EF4444' : rc.direction === 'new' ? '#2563EB' : theme.border }]}
+      onPress={() => router.push(isMe ? '/player/me' : `/player/${player.id}` as any)}
+    >
+      <View style={s.rankCol}>
+        {medalColor ? (
+          <View style={[s.medal, { backgroundColor: medalColor + '20' }]}>
+            <Text style={[s.medalText, { color: medalColor }]}>{rank}</Text>
+          </View>
+        ) : (
+          <Text style={s.rankText}>{rank}</Text>
+        )}
+      </View>
+      <View style={[s.playerCol, { marginBottom: 6 }]}>
+        <View style={s.avatarWrap}>
+          {player.avatar ? (
+            <Image source={{ uri: player.avatar }} style={s.avatar} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+          ) : (
+            <View style={[s.avatar, { backgroundColor: isMe ? theme.primary : theme.textMuted + '30', alignItems: 'center', justifyContent: 'center' }]}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: isMe ? '#FFF' : theme.textSecondary }}>{player.name.charAt(0)}</Text>
+            </View>
+          )}
+          {isMe ? <View style={s.meBadge}><MaterialIcons name="star" size={8} color="#FFF" /></View> : null}
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[s.playerName, isMe && { color: theme.primary }]} numberOfLines={1}>
+            {player.name}{isMe ? ` (${t('leaderboard', 'you')})` : ''}
+          </Text>
+          <View style={s.playerMeta}>
+            {player.club ? <Text style={s.playerClub} numberOfLines={1}>{player.club}</Text> : null}
+            {player.city ? (
+              <>{player.club ? <View style={s.metaDot} /> : null}<Text style={s.playerCity} numberOfLines={1}>{player.city}</Text></>
+            ) : null}
+          </View>
+        </View>
+        {/* Rank change badge */}
+        <View style={{ alignItems: 'center', minWidth: 44 }}>
+          {rc.direction === 'up' ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#10B98115', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 }}>
+              <MaterialIcons name="arrow-upward" size={14} color="#10B981" />
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#10B981' }}>+{rc.diff}</Text>
+            </View>
+          ) : rc.direction === 'down' ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#EF444415', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 }}>
+              <MaterialIcons name="arrow-downward" size={14} color="#EF4444" />
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#EF4444' }}>-{rc.diff}</Text>
+            </View>
+          ) : rc.direction === 'new' ? (
+            <View style={{ backgroundColor: '#2563EB15', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 }}>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: '#2563EB' }}>{(extraTranslations.weeklyLeaderboard?.weeklyNew as any)?.[language] || 'NEW'}</Text>
+            </View>
+          ) : (
+            <View style={{ backgroundColor: theme.textMuted + '15', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textMuted }}>=</Text>
+            </View>
+          )}
+        </View>
+      </View>
+      <View style={s.statsCol}>
+        <View style={s.statBlock}>
+          <Text style={[s.statValue, { color: '#D97706', fontWeight: '800' }]}>{player.stats.winRate}%</Text>
+          <Text style={s.statLabel}>{t('leaderboard', 'winRate')}</Text>
+        </View>
+        <View style={s.statBlock}>
+          <Text style={s.statValue}>{player.weeklyMatches || player.stats.matchesPlayed}</Text>
+          <Text style={s.statLabel}>{t('leaderboard', 'matches')}</Text>
+        </View>
+        <View style={s.statBlock}>
+          <Text style={s.statValue}>{player.weeklyWins || player.stats.wins}</Text>
+          <Text style={s.statLabel}>{(extraTranslations.weeklyLeaderboard?.weeklyWinsLabel as any)?.[language] || 'wins'}</Text>
+        </View>
+        <View style={s.statBlock}>
+          <Text style={s.statValue}>{player.stats.tirRate > 0 ? `${player.stats.tirRate}%` : '-'}</Text>
+          <Text style={s.statLabel}>{t('leaderboard', 'shotRate')}</Text>
+        </View>
+      </View>
+    </Pressable>
+  );
+});
 
 const MemoizedPlayerRow = React.memo(function PlayerRow({
   player,
@@ -192,6 +297,16 @@ export default function LeaderboardScreen() {
   // ============ TAB STATE ============
   const [activeTab, setActiveTab] = useState<LeaderboardTab>('players');
 
+  // ============ WEEKLY STATE ============
+  const [weeklyMode, setWeeklyMode] = useState<'alltime' | 'weekly'>('alltime');
+  type WeeklySubFilter = 'all' | 'city' | 'club';
+  const [weeklySubFilter, setWeeklySubFilter] = useState<WeeklySubFilter>('all');
+  const [weeklyPlayers, setWeeklyPlayers] = useState<Array<any>>([]);
+  const [weeklyLoading, setWeeklyLoading] = useState(false);
+  const [weeklyError, setWeeklyError] = useState<string | null>(null);
+  const [weeklyLoaded, setWeeklyLoaded] = useState(false);
+  const [weeklySubRankings, setWeeklySubRankings] = useState<SubRanking[]>([]);
+
   // ============ PLAYERS STATE ============
   const [allPlayers, setAllPlayers] = useState<LeaderboardPlayer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -255,6 +370,72 @@ export default function LeaderboardScreen() {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Load weekly leaderboard
+  const loadWeekly = useCallback(async () => {
+    if (weeklyLoaded) return;
+    setWeeklyLoading(true);
+    const { players: wp, error: err } = await fetchWeeklyLeaderboard();
+    setWeeklyPlayers(wp);
+    setWeeklyError(err);
+    setWeeklyLoading(false);
+    setWeeklyLoaded(true);
+
+    // Check if we need to save snapshot (Monday)
+    if (wp.length > 0) {
+      checkAndTriggerWeeklyReset().then(async (needsProcessing) => {
+        if (needsProcessing) {
+          await saveWeeklySnapshot(wp.map((p: any) => ({
+            userId: p.userId,
+            rank: p.rankChange.currentRank,
+            matchesPlayed: p.weeklyMatches,
+            wins: p.weeklyWins,
+            winRate: p.weeklyWinRate,
+            tirRate: p.stats.tirRate,
+            carreauCount: 0,
+            city: p.city,
+            club: p.club,
+          })));
+          // Send Monday push notification summary
+          if (user?.id) {
+            try {
+              const summaries = wp.slice(0, 50).map((p: any) => ({
+                userId: p.userId,
+                rank: p.rankChange.currentRank,
+                matchesPlayed: p.weeklyMatches,
+                wins: p.weeklyWins,
+                winRate: p.weeklyWinRate,
+                rankChange: p.rankChange.direction,
+                rankDiff: p.rankChange.diff,
+                previousRank: p.rankChange.previousRank,
+              }));
+              const supabaseC = getSupabaseClient();
+              await supabaseC.functions.invoke('send-push', {
+                body: { type: 'weekly_summary', payload: { summaries } },
+              });
+            } catch (e) {
+              console.log('Error sending weekly summary push:', e);
+            }
+          }
+        }
+      }).catch(() => {});
+    }
+  }, [weeklyLoaded, user?.id]);
+
+  // Auto-load weekly when switching to weekly mode
+  useEffect(() => {
+    if (weeklyMode === 'weekly' && activeTab === 'players' && !weeklyLoaded) loadWeekly();
+  }, [weeklyMode, activeTab, weeklyLoaded, loadWeekly]);
+
+  // Compute sub-rankings for weekly
+  useEffect(() => {
+    if (weeklySubFilter === 'all' || weeklyPlayers.length === 0) {
+      setWeeklySubRankings([]);
+      return;
+    }
+    const rankings = getSubRankings(weeklyPlayers, weeklySubFilter === 'city' ? 'city' : 'club');
+    setWeeklySubRankings(rankings);
+  }, [weeklySubFilter, weeklyPlayers]);
 
   const handlePeriodChange = useCallback(async (newPeriod: LeaderboardPeriod) => {
     Haptics.selectionAsync();
@@ -538,6 +719,30 @@ export default function LeaderboardScreen() {
           </View>
 
           {/* Search bar */}
+          {/* Weekly / All-time toggle for players tab */}
+          {activeTab === 'players' ? (
+            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
+              <Pressable
+                style={[s.tabBtn, { flex: 0, paddingHorizontal: 16 }, weeklyMode === 'alltime' && { backgroundColor: 'rgba(255,255,255,0.22)' }]}
+                onPress={() => { Haptics.selectionAsync(); setWeeklyMode('alltime'); }}
+              >
+                <MaterialIcons name="emoji-events" size={14} color={weeklyMode === 'alltime' ? '#FFF' : 'rgba(255,255,255,0.5)'} />
+                <Text style={[s.tabBtnText, weeklyMode === 'alltime' && s.tabBtnTextActive]}>
+                  {(extraTranslations.weeklyLeaderboard?.allTimeTab as any)?.[language] || 'All time'}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[s.tabBtn, { flex: 0, paddingHorizontal: 16 }, weeklyMode === 'weekly' && { backgroundColor: '#2563EB80' }]}
+                onPress={() => { Haptics.selectionAsync(); setWeeklyMode('weekly'); }}
+              >
+                <MaterialIcons name="date-range" size={14} color={weeklyMode === 'weekly' ? '#FFF' : 'rgba(255,255,255,0.5)'} />
+                <Text style={[s.tabBtnText, weeklyMode === 'weekly' && s.tabBtnTextActive]}>
+                  {(extraTranslations.weeklyLeaderboard?.weeklyTab as any)?.[language] || 'Weekly'}
+                </Text>
+                {weeklyMode === 'weekly' ? <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#60A5FA' }} /> : null}
+              </Pressable>
+            </View>
+          ) : null}
           <View style={s.searchRow}>
             <View style={s.searchBar}>
               <MaterialIcons name="search" size={20} color="rgba(255,255,255,0.5)" />
@@ -1017,6 +1222,93 @@ export default function LeaderboardScreen() {
         )
       ) : (
       /* ============ PLAYERS TAB ============ */
+      /* --- WEEKLY MODE --- */
+      weeklyMode === 'weekly' ? (
+        weeklyLoading ? (
+          <View style={s.centerState}>
+            <View style={s.loadingIconBg}><MaterialIcons name="date-range" size={32} color="#2563EB" /></View>
+            <Text style={s.loadingText}>{t('leaderboard', 'loading')}</Text>
+          </View>
+        ) : weeklyError ? (
+          <View style={s.centerState}>
+            <MaterialIcons name="error-outline" size={48} color={theme.error} />
+            <Text style={s.errorText}>{t('leaderboard', 'errorLoading')}</Text>
+            <Pressable style={s.retryBtn} onPress={() => { setWeeklyLoaded(false); loadWeekly(); }}>
+              <Text style={s.retryBtnText}>{t('leaderboard', 'retry')}</Text>
+            </Pressable>
+          </View>
+        ) : weeklyPlayers.length === 0 ? (
+          <View style={s.centerState}>
+            <MaterialIcons name="date-range" size={56} color={theme.textMuted} />
+            <Text style={s.emptyTitle}>{(extraTranslations.weeklyLeaderboard?.weeklyNoPlayers as any)?.[language] || 'No weekly ranking yet'}</Text>
+            <Text style={s.emptyDesc}>{(extraTranslations.weeklyLeaderboard?.weeklyNoPlayersDesc as any)?.[language] || 'Play at least 2 public matches this week.'}</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={weeklySubFilter === 'all' ? weeklyPlayers : []}
+            keyExtractor={(item: any) => item.id}
+            contentContainerStyle={[s.listContent, { paddingBottom: insets.bottom + 32 }, isTablet && s.listContentTablet]}
+            showsVerticalScrollIndicator={false}
+            ListHeaderComponent={
+              <View>
+                {/* Sub-ranking filter: All / City / Club */}
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                  {(['all', 'city', 'club'] as WeeklySubFilter[]).map(sf => {
+                    const label = sf === 'all'
+                      ? ((extraTranslations.weeklyLeaderboard?.subRankingAll as any)?.[language] || 'General')
+                      : sf === 'city'
+                        ? ((extraTranslations.weeklyLeaderboard?.subRankingCity as any)?.[language] || 'By city')
+                        : ((extraTranslations.weeklyLeaderboard?.subRankingClub as any)?.[language] || 'By club');
+                    const icon = sf === 'all' ? 'people' : sf === 'city' ? 'place' : 'home';
+                    return (
+                      <Pressable
+                        key={sf}
+                        style={[s.sortChip, weeklySubFilter === sf && { backgroundColor: '#2563EB', borderColor: '#2563EB' }]}
+                        onPress={() => { Haptics.selectionAsync(); setWeeklySubFilter(sf); }}
+                      >
+                        <MaterialIcons name={icon as any} size={14} color={weeklySubFilter === sf ? '#FFF' : theme.textSecondary} />
+                        <Text style={[s.sortChipText, weeklySubFilter === sf && { color: '#FFF' }]}>{label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                {/* Weekly info banner */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#2563EB10', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#2563EB25' }}>
+                  <MaterialIcons name="info-outline" size={16} color="#2563EB" />
+                  <Text style={{ fontSize: 12, color: '#2563EB', flex: 1, fontWeight: '500' }}>
+                    {(extraTranslations.weeklyLeaderboard?.weeklyDesc as any)?.[language] || 'Resets every Monday'} — {(extraTranslations.weeklyLeaderboard?.weeklyMinMatches as any)?.[language] || 'min. 2 matches this week'}
+                  </Text>
+                </View>
+                {/* Grouped sub-rankings */}
+                {weeklySubFilter !== 'all' && weeklySubRankings.length > 0 ? (
+                  weeklySubRankings.map((group, gIdx) => (
+                    <Animated.View key={group.name} entering={FadeInDown.duration(300).delay(gIdx * 60)}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: gIdx > 0 ? 16 : 0, marginBottom: 8 }}>
+                        <MaterialIcons name={weeklySubFilter === 'city' ? 'place' : 'home'} size={16} color="#2563EB" />
+                        <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>{group.name}</Text>
+                        <View style={{ backgroundColor: '#2563EB15', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#2563EB' }}>{group.players.length}</Text>
+                        </View>
+                      </View>
+                      {group.players.map((p: any, pIdx: number) => (
+                        <WeeklyPlayerRow key={p.id} player={p} rank={pIdx + 1} globalRank={p.weeklyRank} isMe={!!(user && (p.userId === user.id || (selfPlayer && p.id === selfPlayer.id)))} language={language} t={t} />
+                      ))}
+                    </Animated.View>
+                  ))
+                ) : null}
+                {weeklySubFilter !== 'all' ? <View style={{ height: 16 }} /> : null}
+                {weeklySubFilter === 'all' ? (
+                  <Text style={s.listHeaderText}>{weeklyPlayers.length} {t('leaderboard', 'publicPlayersCount')}</Text>
+                ) : null}
+              </View>
+            }
+            renderItem={weeklySubFilter === 'all' ? ({ item, index }) => (
+              <WeeklyPlayerRow player={item} rank={index + 1} globalRank={index + 1} isMe={!!(user && (item.userId === user.id || (selfPlayer && item.id === selfPlayer.id)))} language={language} t={t} />
+            ) : undefined}
+            ListEmptyComponent={weeklySubFilter !== 'all' ? null : undefined}
+          />
+        )
+      ) :
       loading ? (
         <View style={s.centerState}>
           <View style={s.loadingIconBg}>

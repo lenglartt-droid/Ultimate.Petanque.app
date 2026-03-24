@@ -410,6 +410,77 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // ============================================================
+    // WEEKLY_SUMMARY: Monday morning summary notification
+    // ============================================================
+    else if (type === 'weekly_summary') {
+      const { summaries } = payload || {};
+      // summaries: Array<{ userId, rank, matchesPlayed, wins, winRate, rankChange, rankDiff, previousRank }>
+      if (!summaries || !Array.isArray(summaries) || summaries.length === 0) {
+        return new Response(JSON.stringify({ sent: 0, errors: 0 }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Filter by notification preference
+      const allUserIds = new Set<string>(summaries.map((s: any) => s.userId));
+      const enabledUserIds = await filterByNotifPref(allUserIds, 'ranking_changed');
+
+      const filteredSummaries = summaries.filter((s: any) => enabledUserIds.has(s.userId));
+      if (filteredSummaries.length === 0) {
+        return new Response(JSON.stringify({ sent: 0, errors: 0, reason: 'all_disabled' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const userIdsList = filteredSummaries.map((s: any) => s.userId);
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('user_id, token')
+        .in('user_id', userIdsList)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const tokensByUser = new Map<string, string[]>();
+        tokens.forEach(t => {
+          if (!tokensByUser.has(t.user_id)) tokensByUser.set(t.user_id, []);
+          tokensByUser.get(t.user_id)!.push(t.token);
+        });
+
+        const messages: any[] = [];
+        for (const summary of filteredSummaries) {
+          const userTokens = tokensByUser.get(summary.userId) || [];
+          if (userTokens.length === 0) continue;
+
+          const rankIcon = summary.rankChange === 'up' ? '\u{1F4C8}' : summary.rankChange === 'down' ? '\u{1F4C9}' : '\u{1F3C6}';
+          let body = `${summary.matchesPlayed} matchs, ${summary.wins} victoires (${summary.winRate}%). `;
+          if (summary.rankChange === 'up') {
+            body += `Tu as gagne ${summary.rankDiff} place(s) : #${summary.rank} !`;
+          } else if (summary.rankChange === 'down') {
+            body += `Tu as perdu ${summary.rankDiff} place(s) : #${summary.rank}.`;
+          } else if (summary.rankChange === 'same') {
+            body += `Position stable : #${summary.rank}.`;
+          } else {
+            body += `Premiere apparition au classement : #${summary.rank} !`;
+          }
+
+          for (const tk of userTokens) {
+            messages.push(buildPushMessage(
+              tk,
+              `${rankIcon} Resume de ta semaine`,
+              body,
+              { type: 'ranking_changed', newRank: summary.rank, weeklyReset: true },
+              { channelId: 'tournament-reminders' }
+            ));
+          }
+        }
+
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter(t => t.status === 'ok').length;
+        errors = tickets.filter(t => t.status === 'error').length;
+      }
+    }
+
     else {
       return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
