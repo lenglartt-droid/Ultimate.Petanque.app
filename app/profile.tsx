@@ -129,6 +129,7 @@ export default function ProfileScreen() {
   // Share notifications count
   const [unreadShareCount, setUnreadShareCount] = useState(0);
   const [pendingMatchInviteCount, setPendingMatchInviteCount] = useState(0);
+  const [pendingWitnessCount, setPendingWitnessCount] = useState(0);
   const [isAmbassador, setIsAmbassador] = useState(false);
   
   // Notification preferences
@@ -165,7 +166,7 @@ export default function ProfileScreen() {
   const [otpCode, setOtpCode] = useState('');
   const [sendingOtp, setSendingOtp] = useState(false);
   
-  // Load unread share notification count
+  // Load unread share notification count + pending witness count
   useEffect(() => {
     if (!user?.id) return;
     const loadCount = async () => {
@@ -173,6 +174,16 @@ export default function ProfileScreen() {
       setUnreadShareCount(count);
       const matchInviteCount = await getPendingShareRequestCount();
       setPendingMatchInviteCount(matchInviteCount);
+      // Load pending witness attestation requests
+      try {
+        const sb = getSupabaseClient();
+        const { data: witnessData, error: wErr } = await sb
+          .from('match_witness_requests')
+          .select('id')
+          .eq('witness_user_id', user.id)
+          .eq('status', 'pending');
+        if (!wErr && witnessData) setPendingWitnessCount(witnessData.length);
+      } catch { /* silent */ }
     };
     loadCount();
     const interval = setInterval(loadCount, 30000);
@@ -1785,8 +1796,10 @@ export default function ProfileScreen() {
                 <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
               </Pressable>
               <View style={styles.compactMenuDivider} />
-              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/witness-invitations' as any); }}>
-                <View style={[styles.compactMenuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="visibility" size={16} color="#7C3AED" /></View>
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); setPendingWitnessCount(0); router.push('/witness-invitations' as any); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="visibility" size={16} color="#7C3AED" />
+                  {pendingWitnessCount > 0 ? <View style={styles.shareNotifBadge}><Text style={styles.shareNotifBadgeText}>{pendingWitnessCount > 9 ? '9+' : pendingWitnessCount}</Text></View> : null}
+                </View>
                 <Text style={styles.compactMenuText}>{language === 'fr' ? 'Attestations de temoin' : 'Witness Attestations'}</Text>
                 <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
               </Pressable>

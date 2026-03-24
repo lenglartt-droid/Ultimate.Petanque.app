@@ -13,7 +13,8 @@ import {
   registerForEvent, declineEvent, attestAsWitness, publishResults,
   cancelSponsoredEvent, SponsoredEvent, SponsoredEventParticipant,
 } from '@/services/sponsoredEventService';
-import { Dimensions } from 'react-native';
+import { Dimensions, Modal } from 'react-native';
+import { config } from '@/constants/config';
 import {
   scheduleEventReminders, cancelEventReminders, getScheduledEventReminders,
   markAllEventNotificationsRead, EventReminderSettings,
@@ -198,11 +199,44 @@ export default function SponsoredEventDetailScreen() {
     ]);
   };
 
+  const [showShareModal, setShowShareModal] = useState(false);
+
   const handleShare = async () => {
+    setShowShareModal(true);
+  };
+
+  const handleShareOption = async (option: 'native' | 'code' | 'link' | 'inapp') => {
     if (!event) return;
-    try {
-      await RNShare.share({ message: `${event.title}\nCode: ${event.shareCode}\nUltimate Petanque` });
-    } catch {}
+    Haptics.selectionAsync();
+    const shareMsg = language === 'fr'
+      ? `Rejoins mon defi ambassadeur "${event.title}" sur Ultimate Petanque !\nCode: ${event.shareCode}\nType: ${challengeName(event.challengeType)}\n${event.city ? `Lieu: ${event.city}` : ''}\nDate: ${new Date(event.startTime).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}\n\nTelecharge l'app: ${config.appDownloadUrl}`
+      : `Join my ambassador challenge "${event.title}" on Ultimate Petanque!\nCode: ${event.shareCode}\nType: ${challengeName(event.challengeType)}\n${event.city ? `Location: ${event.city}` : ''}\nDate: ${new Date(event.startTime).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}\n\nDownload the app: ${config.appDownloadUrl}`;
+
+    if (option === 'native') {
+      setShowShareModal(false);
+      try { await RNShare.share({ message: shareMsg }); } catch {}
+    } else if (option === 'code') {
+      setShowShareModal(false);
+      try {
+        const Clipboard = require('expo-clipboard');
+        await Clipboard.setStringAsync(event.shareCode);
+        showAlert(language === 'fr' ? 'Code copie' : 'Code copied', language === 'fr' ? `Code "${event.shareCode}" copie dans le presse-papier` : `Code "${event.shareCode}" copied to clipboard`);
+      } catch {
+        try { await RNShare.share({ message: event.shareCode }); } catch {}
+      }
+    } else if (option === 'link') {
+      setShowShareModal(false);
+      try {
+        const Clipboard = require('expo-clipboard');
+        await Clipboard.setStringAsync(shareMsg);
+        showAlert(language === 'fr' ? 'Message copie' : 'Message copied', language === 'fr' ? 'Le message d\'invitation a ete copie' : 'Invitation message has been copied');
+      } catch {
+        try { await RNShare.share({ message: shareMsg }); } catch {}
+      }
+    } else if (option === 'inapp') {
+      setShowShareModal(false);
+      try { await RNShare.share({ message: shareMsg }); } catch {}
+    }
   };
 
   const challengeName = (type: string) => type === '10_tirs' ? '10 Tirs' : type === '10_tirs_sautee' ? '10 Tirs sautee' : 'Precision';
@@ -502,6 +536,91 @@ export default function SponsoredEventDetailScreen() {
         ) : null}
 
       </ScrollView>
+
+      {/* Share Options Modal */}
+      <Modal visible={showShareModal} animationType="slide" transparent onRequestClose={() => setShowShareModal(false)}>
+        <View style={s.shareOverlay}>
+          <View style={s.shareContent}>
+            <View style={s.shareHeader}>
+              <Text style={s.shareHeaderTitle}>{language === 'fr' ? 'Partager le defi' : 'Share challenge'}</Text>
+              <Pressable style={s.shareCloseBtn} onPress={() => setShowShareModal(false)}>
+                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+
+            {/* Event preview */}
+            <View style={s.sharePreview}>
+              <LinearGradient colors={['#7C3AED', '#9333EA']} style={s.sharePreviewGradient}>
+                <MaterialIcons name="campaign" size={20} color="#FFF" />
+                <View style={{ flex: 1 }}>
+                  <Text style={s.sharePreviewTitle} numberOfLines={1}>{event?.title}</Text>
+                  <Text style={s.sharePreviewSub}>{challengeName(event?.challengeType || '')} {event?.city ? `\u2022 ${event.city}` : ''}</Text>
+                </View>
+                <View style={s.sharePreviewCode}>
+                  <Text style={s.sharePreviewCodeText}>{event?.shareCode}</Text>
+                </View>
+              </LinearGradient>
+            </View>
+
+            {/* Share options */}
+            <View style={s.shareOptions}>
+              <Pressable style={({ pressed }) => [s.shareOption, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]} onPress={() => handleShareOption('native')}>
+                <View style={[s.shareOptionIcon, { backgroundColor: '#7C3AED15' }]}>
+                  <MaterialIcons name="share" size={22} color="#7C3AED" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.shareOptionTitle}>{language === 'fr' ? 'Partager via...' : 'Share via...'}</Text>
+                  <Text style={s.shareOptionDesc}>{language === 'fr' ? 'WhatsApp, SMS, e-mail, etc.' : 'WhatsApp, SMS, email, etc.'}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              </Pressable>
+
+              <Pressable style={({ pressed }) => [s.shareOption, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]} onPress={() => handleShareOption('code')}>
+                <View style={[s.shareOptionIcon, { backgroundColor: '#F59E0B15' }]}>
+                  <MaterialIcons name="content-copy" size={22} color="#F59E0B" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.shareOptionTitle}>{language === 'fr' ? 'Copier le code' : 'Copy code'}</Text>
+                  <Text style={s.shareOptionDesc}>{language === 'fr' ? `Code: ${event?.shareCode}` : `Code: ${event?.shareCode}`}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              </Pressable>
+
+              <Pressable style={({ pressed }) => [s.shareOption, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]} onPress={() => handleShareOption('link')}>
+                <View style={[s.shareOptionIcon, { backgroundColor: '#3B82F615' }]}>
+                  <MaterialIcons name="description" size={22} color="#3B82F6" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.shareOptionTitle}>{language === 'fr' ? 'Copier l\'invitation' : 'Copy invitation'}</Text>
+                  <Text style={s.shareOptionDesc}>{language === 'fr' ? 'Message complet avec details' : 'Full message with details'}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              </Pressable>
+
+              <Pressable style={({ pressed }) => [s.shareOption, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]} onPress={() => { setShowShareModal(false); router.push('/share' as any); }}>
+                <View style={[s.shareOptionIcon, { backgroundColor: '#22C55E15' }]}>
+                  <MaterialIcons name="qr-code-2" size={22} color="#22C55E" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.shareOptionTitle}>{language === 'fr' ? 'Mon code de partage' : 'My share code'}</Text>
+                  <Text style={s.shareOptionDesc}>{language === 'fr' ? 'Partager via QR code / lien app' : 'Share via QR code / app link'}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              </Pressable>
+            </View>
+
+            {/* Tip */}
+            <View style={s.shareTip}>
+              <MaterialIcons name="lightbulb" size={16} color="#F59E0B" />
+              <Text style={s.shareTipText}>
+                {language === 'fr'
+                  ? 'Les joueurs peuvent rejoindre en entrant le code dans l\'onglet Evenements sponsorises.'
+                  : 'Players can join by entering the code in the Sponsored Events tab.'}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -609,4 +728,23 @@ const s = StyleSheet.create({
   remindersList: { gap: 8 },
   reminderItem: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#F8FAFC', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#E2E8F0' },
   reminderLabel: { flex: 1, fontSize: 14, fontWeight: '500', color: theme.textSecondary },
+  // Share modal
+  shareOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' as const },
+  shareContent: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 32 },
+  shareHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  shareHeaderTitle: { fontSize: 18, fontWeight: '700' as const, color: theme.textPrimary },
+  shareCloseBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F1F5F9', alignItems: 'center' as const, justifyContent: 'center' as const },
+  sharePreview: { marginHorizontal: 20, marginTop: 16, borderRadius: 14, overflow: 'hidden' as const },
+  sharePreviewGradient: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, padding: 14 },
+  sharePreviewTitle: { fontSize: 14, fontWeight: '700' as const, color: '#FFF' },
+  sharePreviewSub: { fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
+  sharePreviewCode: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  sharePreviewCodeText: { fontSize: 14, fontWeight: '900' as const, color: '#FFF', letterSpacing: 1.5 },
+  shareOptions: { paddingHorizontal: 20, paddingTop: 16, gap: 8 },
+  shareOption: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#E2E8F0' },
+  shareOptionIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const },
+  shareOptionTitle: { fontSize: 15, fontWeight: '600' as const, color: theme.textPrimary },
+  shareOptionDesc: { fontSize: 12, color: theme.textMuted, marginTop: 1 },
+  shareTip: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 8, marginHorizontal: 20, marginTop: 16, padding: 12, backgroundColor: '#FEF3C7', borderRadius: 12, borderWidth: 1, borderColor: '#FDE68A' },
+  shareTipText: { flex: 1, fontSize: 12, color: '#92400E', lineHeight: 17 },
 });

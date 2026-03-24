@@ -392,6 +392,27 @@ export default function NotificationsScreen() {
           </Animated.View>
         )}
 
+        {/* Witness Attestation Requests Link */}
+        <Animated.View entering={FadeInDown.duration(300).delay(175)} style={styles.section}>
+          <Pressable
+            style={styles.tournamentCard}
+            onPress={() => router.push('/witness-invitations' as any)}
+          >
+            <View style={[styles.tournamentIconBox, { backgroundColor: '#7C3AED15' }]}>
+              <MaterialIcons name="visibility" size={24} color="#7C3AED" />
+            </View>
+            <View style={styles.tournamentInfo}>
+              <Text style={styles.tournamentName}>
+                {language === 'fr' ? 'Attestations de temoin' : 'Witness Attestations'}
+              </Text>
+              <Text style={styles.tournamentMetaText}>
+                {language === 'fr' ? 'Voir les demandes recues' : 'View received requests'}
+              </Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
+          </Pressable>
+        </Animated.View>
+
         {/* Info Card */}
         <Animated.View entering={FadeInDown.duration(300).delay(200)} style={styles.infoCard}>
           <MaterialIcons name="info-outline" size={20} color={theme.textMuted} />
