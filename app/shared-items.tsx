@@ -26,6 +26,8 @@ import {
   getShareNotifications,
   getMyShareViewStats,
   getShareAccessLogs,
+  extendShareExpiration,
+  regenerateShareCode,
   SharedItem,
   ShareItemType,
   SharePermission,
@@ -330,6 +332,72 @@ export default function SharedItemsScreen() {
     });
   }, [language]);
 
+  // Compute expiration status for a shared item
+  const getExpirationStatus = useCallback((item: EnrichedSharedItem): { status: 'permanent' | 'active' | 'expiring' | 'expired'; label: string; color: string; daysLeft?: number } => {
+    if (!item.expiresAt) return { status: 'permanent', label: t('shareModal', 'expirationPermanent'), color: theme.success };
+    const now = Date.now();
+    const exp = new Date(item.expiresAt).getTime();
+    const diff = exp - now;
+    if (diff <= 0) return { status: 'expired', label: t('shareModal', 'expirationExpired'), color: theme.error };
+    const daysLeft = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    if (daysLeft <= 2) return { status: 'expiring', label: t('shareModal', 'expirationExpiringSoon'), color: theme.warning, daysLeft };
+    return { status: 'active', label: t('shareModal', 'expirationActive'), color: theme.primary, daysLeft };
+  }, [t]);
+
+  // Extend expiration handler
+  const handleExtendExpiration = useCallback((item: EnrichedSharedItem) => {
+    Haptics.selectionAsync();
+    Alert.alert(
+      t('shareModal', 'selectNewExpiration'),
+      '',
+      [
+        { text: t('shareModal', 'extendTo1Day'), onPress: async () => {
+          const d = new Date(); d.setDate(d.getDate() + 1);
+          const { error } = await extendShareExpiration(item.id, d.toISOString());
+          if (error) { showAlert(t('common', 'error'), error); } else { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); showAlert(t('shareModal', 'extendSuccess')); await loadData(); }
+        }},
+        { text: t('shareModal', 'extendTo1Week'), onPress: async () => {
+          const d = new Date(); d.setDate(d.getDate() + 7);
+          const { error } = await extendShareExpiration(item.id, d.toISOString());
+          if (error) { showAlert(t('common', 'error'), error); } else { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); showAlert(t('shareModal', 'extendSuccess')); await loadData(); }
+        }},
+        { text: t('shareModal', 'extendTo1Month'), onPress: async () => {
+          const d = new Date(); d.setMonth(d.getMonth() + 1);
+          const { error } = await extendShareExpiration(item.id, d.toISOString());
+          if (error) { showAlert(t('common', 'error'), error); } else { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); showAlert(t('shareModal', 'extendSuccess')); await loadData(); }
+        }},
+        { text: t('shareModal', 'extendMakePermanent'), onPress: async () => {
+          const { error } = await extendShareExpiration(item.id, null);
+          if (error) { showAlert(t('common', 'error'), error); } else { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); showAlert(t('shareModal', 'extendSuccess')); await loadData(); }
+        }},
+        { text: t('common', 'cancel'), style: 'cancel' },
+      ]
+    );
+  }, [showAlert, t, loadData]);
+
+  // Regenerate expired code handler
+  const handleRegenerateCode = useCallback((item: EnrichedSharedItem) => {
+    Alert.alert(
+      t('shareModal', 'regenerateConfirmTitle'),
+      t('shareModal', 'regenerateConfirmMsg'),
+      [
+        { text: t('common', 'cancel'), style: 'cancel' },
+        { text: t('shareModal', 'regenerateCode'), style: 'destructive', onPress: async () => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          // Regenerate with 1 week expiration by default
+          const d = new Date(); d.setDate(d.getDate() + 7);
+          const { newShareCode, error } = await regenerateShareCode(item.id, d.toISOString());
+          if (error) { showAlert(t('common', 'error'), error); }
+          else {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            showAlert(t('shareModal', 'regenerateSuccess'), `${t('shareModal', 'codeRegeneratedNew')} ${newShareCode}`);
+            await loadData();
+          }
+        }},
+      ]
+    );
+  }, [showAlert, t, loadData]);
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -484,6 +552,21 @@ export default function SharedItemsScreen() {
                                     </Text>
                                   </View>
                                   <Text style={styles.itemDate}>{formatDate(item.createdAt)}</Text>
+                                  {activeTab === 'shared_by_me' ? (() => {
+                                    const expStatus = getExpirationStatus(item);
+                                    return (
+                                      <View style={[styles.expBadge, { backgroundColor: expStatus.color + '12' }]}>
+                                        <MaterialIcons
+                                          name={expStatus.status === 'permanent' ? 'all-inclusive' : expStatus.status === 'expired' ? 'timer-off' : 'timer'}
+                                          size={10}
+                                          color={expStatus.color}
+                                        />
+                                        <Text style={[styles.expBadgeText, { color: expStatus.color }]}>
+                                          {expStatus.daysLeft !== undefined ? `${expStatus.daysLeft}${language === 'fr' ? 'j' : 'd'}` : expStatus.label}
+                                        </Text>
+                                      </View>
+                                    );
+                                  })() : null}
                                 </View>
                               </View>
 
@@ -496,6 +579,19 @@ export default function SharedItemsScreen() {
                                   <Pressable style={styles.actionBtn} onPress={() => handleTogglePermission(item)} hitSlop={4}>
                                     <MaterialIcons name={item.permission === 'read' ? 'lock' : 'lock-open'} size={15} color={theme.warning} />
                                   </Pressable>
+                                  {(() => {
+                                    const expSt = getExpirationStatus(item);
+                                    if (expSt.status === 'expired') return (
+                                      <Pressable style={[styles.actionBtn, styles.actionBtnRegen]} onPress={() => handleRegenerateCode(item)} hitSlop={4}>
+                                        <MaterialIcons name="refresh" size={15} color={theme.accent} />
+                                      </Pressable>
+                                    );
+                                    return (
+                                      <Pressable style={[styles.actionBtn, styles.actionBtnExtend]} onPress={() => handleExtendExpiration(item)} hitSlop={4}>
+                                        <MaterialIcons name="update" size={15} color={theme.tirColor} />
+                                      </Pressable>
+                                    );
+                                  })()}
                                   <Pressable style={[styles.actionBtn, styles.actionBtnDanger]} onPress={() => handleRevoke(item)} hitSlop={4}>
                                     <MaterialIcons name="delete-outline" size={15} color={theme.error} />
                                   </Pressable>
@@ -517,8 +613,8 @@ export default function SharedItemsScreen() {
                               <View>
                                 <View style={styles.itemBottomRow}>
                                   <View style={styles.codeContainer}>
-                                    <MaterialIcons name="vpn-key" size={11} color={theme.textMuted} />
-                                    <Text style={styles.codeText}>{item.shareCode}</Text>
+                                    <MaterialIcons name="vpn-key" size={11} color={getExpirationStatus(item).status === 'expired' ? theme.error : theme.textMuted} />
+                                    <Text style={[styles.codeText, getExpirationStatus(item).status === 'expired' && { textDecorationLine: 'line-through', color: theme.error + '80' }]}>{item.shareCode}</Text>
                                   </View>
                                   {hasAccessors ? (
                                     <View style={styles.accessorContainer}>
@@ -874,4 +970,13 @@ const styles = StyleSheet.create({
   firstVisitText: { fontSize: 9, fontWeight: '700' as const, color: theme.success },
   accessLogMore: { fontSize: 11, color: theme.textMuted, textAlign: 'center' as const, marginTop: 6 },
   accessLogEmpty: { fontSize: 12, color: theme.textMuted, textAlign: 'center' as const, paddingVertical: 12 },
+  // Expiration badges
+  expBadge: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3,
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: theme.borderRadius.full,
+  },
+  expBadgeText: { fontSize: 9, fontWeight: '700' as const },
+  // Action button variants
+  actionBtnExtend: { backgroundColor: theme.tirColor + '12' },
+  actionBtnRegen: { backgroundColor: theme.accent + '15' },
 });

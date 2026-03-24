@@ -515,6 +515,34 @@ export async function getMyShareViewStats(): Promise<{ stats: Record<string, Sha
   return { stats, error: null };
 }
 
+/**
+ * Extend or remove expiration on an existing share.
+ */
+export async function extendShareExpiration(shareId: string, newExpiresAt: string | null): Promise<{ error: string | null }> {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.from('shared_items')
+    .update({ expires_at: newExpiresAt, updated_at: new Date().toISOString() })
+    .eq('id', shareId);
+  return { error: error?.message || null };
+}
+
+/**
+ * Regenerate a share code (old code stops working). Optionally set new expiration.
+ */
+export async function regenerateShareCode(shareId: string, expiresAt?: string | null): Promise<{ newShareCode: string; error: string | null }> {
+  const supabase = getSupabaseClient();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const newCode = generateShareCode();
+    const updateData: any = { share_code: newCode, updated_at: new Date().toISOString() };
+    if (expiresAt !== undefined) updateData.expires_at = expiresAt;
+    const { error } = await supabase.from('shared_items').update(updateData).eq('id', shareId);
+    if (!error) return { newShareCode: newCode, error: null };
+    if (error.code === '23505' && error.message?.includes('share_code')) continue;
+    return { newShareCode: '', error: error.message };
+  }
+  return { newShareCode: '', error: 'Failed to generate unique share code' };
+}
+
 export async function isSharedWithMe(itemType: ShareItemType, itemId: string): Promise<boolean> {
   const supabase = getSupabaseClient();
   const { data: userData } = await supabase.auth.getUser();
