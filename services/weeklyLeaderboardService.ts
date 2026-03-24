@@ -188,6 +188,7 @@ export async function fetchWeeklyLeaderboard(): Promise<{
     // SHADOW BAN: Filter out players with trust score < 25 (except self)
     const visiblePlayersData = qualifiedPlayersData.filter((p: any) => {
       const ts = trustScoreMap.get(p.id);
+      // Also exclude banned players entirely (even from self view in leaderboard)
       if (ts !== undefined && ts < 25 && p.user_id !== currentUserId) {
         return false;
       }

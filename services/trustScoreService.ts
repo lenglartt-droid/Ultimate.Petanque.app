@@ -416,3 +416,207 @@ export function getValidationWeightFromLevel(level: MatchValidationLevel): numbe
     case 'solo': return 0.3;
   }
 }
+
+// ============================================
+// BAN ENFORCEMENT
+// ============================================
+
+/**
+ * Ban a player: set trust score to 0, status to 'banned'.
+ * Called from admin-anticheat when banning.
+ */
+export async function banPlayer(
+  suspiciousId: string,
+  playerId: string
+): Promise<{ error: string | null }> {
+  const supabase = getSupabaseClient();
+  try {
+    const { error } = await supabase
+      .from('suspicious_players')
+      .update({
+        trust_score: 0,
+        status: 'banned',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', suspiciousId);
+    return { error: error?.message || null };
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+/**
+ * Check if a player is banned (trust_score === 0 and status === 'banned')
+ */
+export async function isPlayerBanned(playerId: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  try {
+    const { data } = await supabase
+      .from('suspicious_players')
+      .select('trust_score, status')
+      .eq('player_id', playerId)
+      .single();
+    return data?.status === 'banned';
+  } catch {
+    return false;
+  }
+}
+
+// ============================================
+// TRUST SCORE HISTORY
+// ============================================
+
+export interface TrustScoreHistoryPoint {
+  weekStart: string;
+  score: number;
+  level: string;
+  recordedAt: string;
+}
+
+/**
+ * Save current trust score as a weekly snapshot for history tracking.
+ * Uses upsert to avoid duplicates per player per week.
+ */
+export async function saveTrustScoreSnapshot(
+  userId: string,
+  playerId: string,
+  score: number,
+  level: string,
+  flags: string[]
+): Promise<void> {
+  const supabase = getSupabaseClient();
+  // Compute current week start (Monday)
+  const now = new Date();
+  const day = now.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
+  const weekStart = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+
+  try {
+    await supabase
+      .from('trust_score_history')
+      .upsert({
+        user_id: userId,
+        player_id: playerId,
+        trust_score: score,
+        level,
+        flags,
+        week_start: weekStart,
+        recorded_at: new Date().toISOString(),
+      }, { onConflict: 'player_id,week_start' });
+  } catch (e) {
+    console.log('[trustScore] Error saving history snapshot:', e);
+  }
+}
+
+/**
+ * Fetch trust score history for a player (up to 52 weeks / 1 year)
+ */
+export async function fetchTrustScoreHistory(playerId: string): Promise<TrustScoreHistoryPoint[]> {
+  const supabase = getSupabaseClient();
+  try {
+    const { data, error } = await supabase
+      .from('trust_score_history')
+      .select('week_start, trust_score, level, recorded_at')
+      .eq('player_id', playerId)
+      .order('week_start', { ascending: true })
+      .limit(52);
+
+    if (error || !data) return [];
+    return data.map((d: any) => ({
+      weekStart: d.week_start,
+      score: d.trust_score,
+      level: d.level,
+      recordedAt: d.recorded_at,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// ============================================
+// WEEKLY TRUST TIP CHECK
+// ============================================
+
+/**
+ * Check if weekly trust tip was already sent this week.
+ * Uses last_trust_tip_sent in user_preferences.
+ */
+export async function shouldSendWeeklyTrustTip(): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  try {
+    const { data } = await supabase
+      .from('user_preferences')
+      .select('notification_preferences')
+      .eq('user_id', user.id)
+      .single();
+
+    const prefs = data?.notification_preferences || {};
+    const lastSent = prefs.last_trust_tip_sent;
+    if (!lastSent) return true;
+
+    // Check if last sent was this week
+    const now = new Date();
+    const day = now.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
+    monday.setHours(0, 0, 0, 0);
+
+    return new Date(lastSent) < monday;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Mark weekly trust tip as sent for this week.
+ */
+export async function markWeeklyTrustTipSent(): Promise<void> {
+  const supabase = getSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  try {
+    // Fetch current prefs
+    const { data } = await supabase
+      .from('user_preferences')
+      .select('notification_preferences')
+      .eq('user_id', user.id)
+      .single();
+
+    const prefs = data?.notification_preferences || {};
+    prefs.last_trust_tip_sent = new Date().toISOString();
+
+    await supabase
+      .from('user_preferences')
+      .upsert({
+        user_id: user.id,
+        notification_preferences: prefs,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+  } catch (e) {
+    console.log('[trustScore] Error marking tip sent:', e);
+  }
+}
+
+/**
+ * Fetch all users with trust score below threshold for weekly tip push.
+ * Admin/service use only.
+ */
+export async function fetchLowTrustUsers(threshold: number = 50): Promise<Array<{ userId: string; score: number }>> {
+  const supabase = getSupabaseClient();
+  try {
+    const { data } = await supabase
+      .from('suspicious_players')
+      .select('user_id, trust_score')
+      .lt('trust_score', threshold)
+      .neq('status', 'banned');
+
+    return (data || []).map((d: any) => ({ userId: d.user_id, score: d.trust_score }));
+  } catch {
+    return [];
+  }
+}

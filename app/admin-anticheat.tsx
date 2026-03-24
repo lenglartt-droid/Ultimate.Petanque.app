@@ -16,6 +16,7 @@ import { useApp } from '@/contexts/AppContext';
 import {
   fetchSuspiciousPlayers, updateSuspiciousStatus, updateTrustScore,
   getTrustScoreColor, getTrustScoreIcon, getTrustLevelLabel, getLevelFromScore,
+  banPlayer,
 } from '@/services/trustScoreService';
 import { extraTranslations } from '@/constants/i18nExtra';
 
@@ -80,10 +81,19 @@ export default function AdminAntiCheatScreen() {
 
   const handleUpdateStatus = async (id: string, status: string) => {
     Haptics.selectionAsync();
-    const { error } = await updateSuspiciousStatus(id, status);
-    if (error) { showAlert('Error', error); return; }
-    setPlayers(prev => prev.map(p => p.id === id ? { ...p, status } : p));
-    if (selectedPlayer?.id === id) setSelectedPlayer((prev: any) => prev ? { ...prev, status } : prev);
+    if (status === 'banned') {
+      // Ban enforcement: set trust score to 0 and status to banned
+      const player = players.find(p => p.id === id);
+      const { error } = await banPlayer(id, player?.playerId || '');
+      if (error) { showAlert('Error', error); return; }
+      setPlayers(prev => prev.map(p => p.id === id ? { ...p, status: 'banned', trustScore: 0 } : p));
+      if (selectedPlayer?.id === id) setSelectedPlayer((prev: any) => prev ? { ...prev, status: 'banned', trustScore: 0 } : prev);
+    } else {
+      const { error } = await updateSuspiciousStatus(id, status);
+      if (error) { showAlert('Error', error); return; }
+      setPlayers(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+      if (selectedPlayer?.id === id) setSelectedPlayer((prev: any) => prev ? { ...prev, status } : prev);
+    }
   };
 
   const handleSaveNotes = async () => {

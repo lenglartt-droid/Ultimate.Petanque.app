@@ -32,6 +32,8 @@ import { getShareRequestsForItem, MatchShareRequest } from '@/services/matchShar
 import { checkEditConflict, computeMatchDiffs, fetchUpdatedAt, DiffEntry } from '@/services/collaborativeEditService';
 import { useAuth, getSupabaseClient } from '@/template';
 import { logModification } from '@/services/modificationLogService';
+import { getMatchValidationLevel, getValidationColor, getValidationIcon, getValidationLabel, getMatchValidationWeight } from '@/services/trustScoreService';
+import { extraTranslations } from '@/constants/i18nExtra';
 
 interface MeneEdit {
   teamAPoints: number;
@@ -833,6 +835,46 @@ export default function EditMatchScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView style={styles.scrollView} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           
+          {/* Match Validation Badge */}
+          {(() => {
+            const pIds: string[] = (match as any)?.participantUserIds || [];
+            const isWitnessed = !!(match as any)?.sponsorId;
+            const vLevel = getMatchValidationLevel(Array.isArray(pIds) ? pIds.length : 0, isWitnessed);
+            const vColor = getValidationColor(vLevel);
+            const vIcon = getValidationIcon(vLevel);
+            const vLabel = getValidationLabel(vLevel, language === 'fr');
+            const weight = getMatchValidationWeight(Array.isArray(pIds) ? pIds.length : 0, isWitnessed);
+            const isFr = language === 'fr';
+            return (
+              <Animated.View entering={FadeInDown.duration(400)} style={[styles.section, { marginBottom: 16 }]}>
+                <View style={[validationStyles.card, { borderColor: vColor + '30', backgroundColor: vColor + '06' }]}>
+                  <View style={validationStyles.cardTop}>
+                    <View style={[validationStyles.iconBg, { backgroundColor: vColor + '15' }]}>
+                      <MaterialIcons name={vIcon as any} size={22} color={vColor} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[validationStyles.levelLabel, { color: vColor }]}>{vLabel}</Text>
+                      <Text style={validationStyles.weightBadge}>
+                        {isFr ? 'Poids dans le classement' : 'Leaderboard weight'}: <Text style={{ fontWeight: '800', color: vColor }}>{weight}x</Text>
+                      </Text>
+                    </View>
+                    <View style={[validationStyles.weightCircle, { borderColor: vColor }]}>
+                      <Text style={[validationStyles.weightCircleText, { color: vColor }]}>{weight}x</Text>
+                    </View>
+                  </View>
+                  <View style={validationStyles.infoRow}>
+                    <MaterialIcons name="info-outline" size={13} color={theme.textMuted} />
+                    <Text style={validationStyles.infoText}>
+                      {isFr
+                        ? 'Les matchs avec plus de joueurs inscrits comptent davantage dans le classement communautaire. Solo = 0.3x, 2 joueurs = 1x, 3+ joueurs = 1.5x, atteste = 2x.'
+                        : 'Matches with more registered players count more in the community leaderboard. Solo = 0.3x, 2 players = 1x, 3+ players = 1.5x, witnessed = 2x.'}
+                    </Text>
+                  </View>
+                </View>
+              </Animated.View>
+            );
+          })()}
+
           {/* Series Panel */}
           {seriesMatches.length > 1 && seriesStats && (
             <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
@@ -1642,6 +1684,18 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: theme.textMuted,
   },
+});
+
+const validationStyles = StyleSheet.create({
+  card: { borderRadius: 16, padding: 14, borderWidth: 1 },
+  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
+  iconBg: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  levelLabel: { fontSize: 15, fontWeight: '700' },
+  weightBadge: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  weightCircle: { width: 42, height: 42, borderRadius: 21, borderWidth: 3, alignItems: 'center', justifyContent: 'center' },
+  weightCircleText: { fontSize: 14, fontWeight: '900' },
+  infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border + '40' },
+  infoText: { flex: 1, fontSize: 11, color: theme.textMuted, lineHeight: 16 },
   // Modal
   modalContainer: { flex: 1, backgroundColor: theme.backgroundSecondary },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },

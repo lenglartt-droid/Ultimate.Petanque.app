@@ -615,6 +615,29 @@ export default function PlayerDetailScreen() {
 
               {/* Trust Score Badge */}
               {trustScore ? (
+                trustScore.level === 'suspicious' && trustScore.score === 0 ? (
+                  /* Ban Indicator */
+                  <View style={[s.trustScoreBadge, { borderColor: '#EF4444' + '30', backgroundColor: '#EF4444' + '08' }]}>
+                    <View style={[s.trustScoreIconBg, { backgroundColor: '#EF4444' + '15' }]}>
+                      <MaterialIcons name="block" size={18} color="#EF4444" />
+                    </View>
+                    <View style={s.trustScoreInfo}>
+                      <View style={s.trustScoreTopRow}>
+                        <Text style={[s.trustScoreLabel, { color: '#EF4444' }]}>
+                          {language === 'fr' ? 'Compte restreint' : 'Restricted Account'}
+                        </Text>
+                        <View style={{ backgroundColor: '#EF4444', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '800', color: '#FFF' }}>{language === 'fr' ? 'BANNI' : 'BANNED'}</Text>
+                        </View>
+                      </View>
+                      <Text style={[s.trustScoreDesc, { color: '#EF4444', marginTop: 4 }]} numberOfLines={2}>
+                        {language === 'fr'
+                          ? 'Ce profil a ete restreint pour non-respect des regles. Ses matchs ne comptent pas dans les classements.'
+                          : 'This profile has been restricted for rule violations. Their matches do not count in leaderboards.'}
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
                 <Pressable
                   style={[s.trustScoreBadge, { borderColor: getTrustScoreColor(trustScore.level) + '25', backgroundColor: getTrustScoreColor(trustScore.level) + '06' }]}
                   onPress={isSelfPlayer ? () => router.push('/trust-score' as any) : undefined}
@@ -642,6 +665,7 @@ export default function PlayerDetailScreen() {
                     <MaterialIcons name="chevron-right" size={18} color={getTrustScoreColor(trustScore.level)} style={{ marginLeft: 'auto', marginTop: 2 }} />
                   ) : null}
                 </Pressable>
+                )
               ) : null}
 
               {/* Leaderboard progress bar (public players below threshold) */}

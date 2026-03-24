@@ -76,7 +76,7 @@ import { addTerrainOp, updateTerrainOp, deleteTerrainOp } from '@/services/terra
 import { addChallengeOp, updateChallengeOp, deleteChallengeOp } from '@/services/challengeCrudService';
 import { addBoulesSetOp, updateBoulesSetOp, deleteBoulesSetOp, setPrimaryBoulesSetOp } from '@/services/boulesSetCrudService';
 import { updateRetentionStats } from '@/services/retentionNotificationService';
-import { triggerTrustScoreComputation } from '@/services/trustScoreService';
+import { triggerTrustScoreComputation, fetchLowTrustUsers, shouldSendWeeklyTrustTip, markWeeklyTrustTipSent, saveTrustScoreSnapshot, fetchTrustScore as fetchTrustScoreForSnapshot } from '@/services/trustScoreService';
 
 // ============================================
 // Context type
@@ -523,8 +523,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ===== CRUD wrappers (delegate to extracted services) =====
   const addMatch = async (match: Omit<Match, 'id'>) =>
     addMatchOp(match, { supabase, userId: user?.id, isConnected: isConnectedRef.current, matches, setMatches, persistPlayerStats });
-    // Trigger trust score recomputation in background
-    setTimeout(() => triggerTrustScoreComputation(), 3000);
+    // Trigger trust score recomputation + history snapshot in background
+    setTimeout(async () => {
+      await triggerTrustScoreComputation();
+      if (user?.id) {
+        try {
+          const { data: pData } = await supabase.from('players').select('id').eq('user_id', user.id).single();
+          if (pData?.id) {
+            const ts = await fetchTrustScoreForSnapshot(pData.id);
+            if (ts) saveTrustScoreSnapshot(user.id, pData.id, ts.score, ts.level, ts.flags);
+          }
+        } catch { /* silent */ }
+      }
+    }, 3000);
 
   const addPlayer = async (player: Omit<Player, 'id'>) =>
     addPlayerOp(player, { supabase, userId: user?.id, isConnected: isConnectedRef.current, setPlayers, sharedItemPermissions, players });
@@ -1056,6 +1067,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!user?.id) return;
     startPeriodicCacheCleanup();
     return () => stopPeriodicCacheCleanup();
+  }, [user?.id]);
+
+  // Weekly Monday trust tip check
+  useEffect(() => {
+    if (!user?.id || !isConnectedRef.current) return;
+    const now = new Date();
+    if (now.getDay() !== 1) return; // Only on Mondays
+    const checkAndSendTrustTips = async () => {
+      try {
+        const shouldSend = await shouldSendWeeklyTrustTip();
+        if (!shouldSend) return;
+        const lowUsers = await fetchLowTrustUsers(50);
+        if (lowUsers.length > 0) {
+          await supabase.functions.invoke('send-push', {
+            body: { type: 'trust_weekly_tip', payload: { targets: lowUsers } },
+          });
+          console.log(`[TrustTip] Sent weekly tips to ${lowUsers.length} users`);
+        }
+        await markWeeklyTrustTipSent();
+      } catch (e) {
+        console.log('[TrustTip] Error:', e);
+      }
+    };
+    const timer = setTimeout(checkAndSendTrustTips, 5000);
+    return () => clearTimeout(timer);
   }, [user?.id]);
 
   // Auto-refresh: delta sync normally, full sync every Nth cycle

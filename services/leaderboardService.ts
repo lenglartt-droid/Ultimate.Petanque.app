@@ -164,7 +164,6 @@ export async function fetchLeaderboard(period?: LeaderboardPeriod): Promise<{ pl
             if (pid.startsWith('_raw_')) continue;
             const raw = (playerStatsMap as any)['_raw_' + pid];
             ps.winRate = (raw && raw.totalWeight > 0) ? Math.round((raw.weightedWins / raw.totalWeight) * 1000) / 10 : (ps.matchesPlayed > 0 ? Math.round((ps.wins / ps.matchesPlayed) * 1000) / 10 : 0);
-            const raw = (playerStatsMap as any)['_raw_' + pid];
             if (raw) {
               ps.tirRate = raw.tirs > 0 ? Math.round((raw.tirsSuccess / raw.tirs) * 1000) / 10 : 0;
               ps.pointRate = raw.points > 0 ? Math.round((raw.pointsSuccess / raw.points) * 1000) / 10 : 0;
@@ -235,11 +234,10 @@ export async function fetchLeaderboard(period?: LeaderboardPeriod): Promise<{ pl
           if (pid.startsWith('_raw_')) continue;
           const raw2 = (playerStatsMap as any)['_raw_' + pid];
           ps.winRate = (raw2 && raw2.totalWeight > 0) ? Math.round((raw2.weightedWins / raw2.totalWeight) * 1000) / 10 : (ps.matchesPlayed > 0 ? Math.round((ps.wins / ps.matchesPlayed) * 1000) / 10 : 0);
-          const raw = (playerStatsMap as any)['_raw_' + pid];
-          if (raw) {
-            ps.tirRate = raw.tirs > 0 ? Math.round((raw.tirsSuccess / raw.tirs) * 1000) / 10 : 0;
-            ps.pointRate = raw.points > 0 ? Math.round((raw.pointsSuccess / raw.points) * 1000) / 10 : 0;
-            ps.carreauRate = raw.tirsSuccess > 0 ? Math.round((raw.carreaux / raw.tirsSuccess) * 1000) / 10 : 0;
+          if (raw2) {
+            ps.tirRate = raw2.tirs > 0 ? Math.round((raw2.tirsSuccess / raw2.tirs) * 1000) / 10 : 0;
+            ps.pointRate = raw2.points > 0 ? Math.round((raw2.pointsSuccess / raw2.points) * 1000) / 10 : 0;
+            ps.carreauRate = raw2.tirsSuccess > 0 ? Math.round((raw2.carreaux / raw2.tirsSuccess) * 1000) / 10 : 0;
           }
         }
       }
@@ -300,8 +298,9 @@ export async function fetchLeaderboard(period?: LeaderboardPeriod): Promise<{ pl
     const players: LeaderboardPlayer[] = filteredData
       .filter((p: any) => {
         // SHADOW BAN: Hide players with trust score < 25 from other users
-        // But the player can always see themselves
-        const ts = trustScoreMap.get(p.id)?.score;
+        // Also exclude banned players (score 0) from everyone
+        const tsData = trustScoreMap.get(p.id);
+        const ts = tsData?.score;
         if (ts !== undefined && ts < 25 && p.user_id !== currentUserId) {
           return false; // Hidden from others
         }

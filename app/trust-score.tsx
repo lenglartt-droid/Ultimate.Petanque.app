@@ -26,6 +26,9 @@ import {
   triggerTrustScoreComputation,
   TrustScoreData,
   getLevelFromScore,
+  fetchTrustScoreHistory,
+  TrustScoreHistoryPoint,
+  saveTrustScoreSnapshot,
 } from '@/services/trustScoreService';
 import { extraTranslations } from '@/constants/i18nExtra';
 import Svg, { Circle } from 'react-native-svg';
@@ -124,6 +127,8 @@ export default function TrustScoreScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [recomputing, setRecomputing] = useState(false);
+  const [history, setHistory] = useState<TrustScoreHistoryPoint[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const loadTrustScore = async () => {
     if (!selfPlayer) { setLoading(false); return; }
@@ -139,6 +144,16 @@ export default function TrustScoreScreen() {
 
   useEffect(() => { loadTrustScore(); }, [selfPlayer?.id]);
 
+  // Load history
+  useEffect(() => {
+    if (!selfPlayer?.id) return;
+    setHistoryLoading(true);
+    fetchTrustScoreHistory(selfPlayer.id).then(h => {
+      setHistory(h);
+      setHistoryLoading(false);
+    });
+  }, [selfPlayer?.id]);
+
   const handleRefresh = async () => {
     setRefreshing(true);
     await loadTrustScore();
@@ -148,9 +163,17 @@ export default function TrustScoreScreen() {
   const handleRecompute = async () => {
     setRecomputing(true);
     await triggerTrustScoreComputation();
-    // Wait a bit for the edge function to complete
     setTimeout(async () => {
       await loadTrustScore();
+      // Save history snapshot and reload
+      if (selfPlayer && user) {
+        const ts = await fetchTrustScore(selfPlayer.id);
+        if (ts) {
+          await saveTrustScoreSnapshot(user.id, selfPlayer.id, ts.score, ts.level, ts.flags);
+          const h = await fetchTrustScoreHistory(selfPlayer.id);
+          setHistory(h);
+        }
+      }
       setRecomputing(false);
     }, 3000);
   };
@@ -375,6 +398,86 @@ export default function TrustScoreScreen() {
               )}
             </Animated.View>
 
+            {/* History Chart */}
+            <Animated.View entering={FadeInDown.duration(400).delay(175)} style={st.sectionCard}>
+              <View style={st.sectionHeader}>
+                <View style={[st.sectionIconBg, { backgroundColor: '#7C3AED' + '15' }]}>
+                  <MaterialIcons name="timeline" size={18} color="#7C3AED" />
+                </View>
+                <Text style={st.sectionTitle}>{isFr ? 'Evolution du score' : 'Score Evolution'}</Text>
+              </View>
+
+              {historyLoading ? (
+                <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                  <ActivityIndicator size="small" color={theme.primary} />
+                </View>
+              ) : history.length < 2 ? (
+                <View style={{ paddingVertical: 20, alignItems: 'center', gap: 8 }}>
+                  <MaterialIcons name="show-chart" size={32} color={theme.textMuted} />
+                  <Text style={{ fontSize: 13, color: theme.textMuted, textAlign: 'center', lineHeight: 19 }}>
+                    {isFr
+                      ? 'Le graphique apparaitra apres 2 semaines de donnees. Recalculez votre score regulierement.'
+                      : 'The chart will appear after 2 weeks of data. Recompute your score regularly.'}
+                  </Text>
+                </View>
+              ) : (
+                <View>
+                  {/* Simple line chart using View elements */}
+                  <View style={histSt.chartContainer}>
+                    {/* Y-axis labels */}
+                    <View style={histSt.yAxis}>
+                      <Text style={histSt.yLabel}>100</Text>
+                      <Text style={histSt.yLabel}>75</Text>
+                      <Text style={histSt.yLabel}>50</Text>
+                      <Text style={histSt.yLabel}>25</Text>
+                      <Text style={histSt.yLabel}>0</Text>
+                    </View>
+                    {/* Chart area */}
+                    <View style={histSt.chartArea}>
+                      {/* Grid lines */}
+                      {[0, 25, 50, 75].map(v => (
+                        <View key={v} style={[histSt.gridLine, { bottom: `${v}%` }]} />
+                      ))}
+                      {/* Threshold zones */}
+                      <View style={[histSt.thresholdZone, { bottom: 0, height: '25%', backgroundColor: '#EF444408' }]} />
+                      <View style={[histSt.thresholdZone, { bottom: '25%', height: '20%', backgroundColor: '#F9731608' }]} />
+                      <View style={[histSt.thresholdZone, { bottom: '65%', height: '15%', backgroundColor: '#3B82F608' }]} />
+                      <View style={[histSt.thresholdZone, { bottom: '80%', height: '20%', backgroundColor: '#22C55E08' }]} />
+                      {/* Data points and connecting lines */}
+                      <View style={histSt.dataPointsRow}>
+                        {history.map((point, idx) => {
+                          const pColor = getTrustScoreColor(point.score);
+                          return (
+                            <View key={idx} style={[histSt.dataCol, { height: '100%' }]}>
+                              <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+                                <View style={{ height: `${point.score}%`, alignItems: 'center', justifyContent: 'flex-start' }}>
+                                  <View style={[histSt.dataPoint, { backgroundColor: pColor, borderColor: pColor + '40' }]} />
+                                  <Text style={[histSt.dataPointLabel, { color: pColor }]}>{point.score}</Text>
+                                </View>
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  </View>
+                  {/* X-axis labels */}
+                  <View style={histSt.xAxis}>
+                    {history.map((point, idx) => {
+                      const d = new Date(point.weekStart);
+                      const label = `${d.getDate()}/${d.getMonth() + 1}`;
+                      if (history.length > 8 && idx % 2 !== 0) return <View key={idx} style={histSt.xLabelSlot} />;
+                      return (
+                        <View key={idx} style={histSt.xLabelSlot}>
+                          <Text style={histSt.xLabel}>{label}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+            </Animated.View>
+
             {/* Tips */}
             <Animated.View entering={FadeInDown.duration(400).delay(200)} style={st.sectionCard}>
               <View style={st.sectionHeader}>
@@ -471,4 +574,20 @@ const st = StyleSheet.create({
   tipRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border + '30' },
   tipIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   tipText: { flex: 1, fontSize: 13, color: theme.textPrimary, fontWeight: '500', lineHeight: 18 },
+});
+
+const histSt = StyleSheet.create({
+  chartContainer: { flexDirection: 'row', height: 180, marginBottom: 4 },
+  yAxis: { width: 28, justifyContent: 'space-between', paddingVertical: 4 },
+  yLabel: { fontSize: 8, color: theme.textMuted, fontWeight: '600', textAlign: 'right' },
+  chartArea: { flex: 1, position: 'relative', marginLeft: 6, borderLeftWidth: 1, borderBottomWidth: 1, borderColor: theme.border },
+  gridLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: theme.border + '40' },
+  thresholdZone: { position: 'absolute', left: 0, right: 0 },
+  dataPointsRow: { flexDirection: 'row', flex: 1, alignItems: 'stretch' },
+  dataCol: { flex: 1, alignItems: 'center' },
+  dataPoint: { width: 10, height: 10, borderRadius: 5, borderWidth: 2, marginTop: -5 },
+  dataPointLabel: { fontSize: 8, fontWeight: '700', marginTop: 2 },
+  xAxis: { flexDirection: 'row', marginLeft: 34, marginTop: 4 },
+  xLabelSlot: { flex: 1, alignItems: 'center' },
+  xLabel: { fontSize: 8, color: theme.textMuted, fontWeight: '600' },
 });
