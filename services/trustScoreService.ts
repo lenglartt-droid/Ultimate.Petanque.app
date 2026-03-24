@@ -96,9 +96,10 @@ function getLevel(score: number): TrustScoreData['level'] {
 }
 
 /**
- * Get trust score color for display
+ * Get trust score color for display (accepts level string or numeric score)
  */
-export function getTrustScoreColor(level: TrustScoreData['level']): string {
+export function getTrustScoreColor(levelOrScore: TrustScoreData['level'] | number): string {
+  const level = typeof levelOrScore === 'number' ? getLevel(levelOrScore) : levelOrScore;
   switch (level) {
     case 'verified': return '#22C55E';
     case 'high': return '#3B82F6';
@@ -109,9 +110,10 @@ export function getTrustScoreColor(level: TrustScoreData['level']): string {
 }
 
 /**
- * Get trust score icon
+ * Get trust score icon (accepts level string or numeric score)
  */
-export function getTrustScoreIcon(level: TrustScoreData['level']): string {
+export function getTrustScoreIcon(levelOrScore: TrustScoreData['level'] | number): string {
+  const level = typeof levelOrScore === 'number' ? getLevel(levelOrScore) : levelOrScore;
   switch (level) {
     case 'verified': return 'verified-user';
     case 'high': return 'shield';
@@ -122,9 +124,10 @@ export function getTrustScoreIcon(level: TrustScoreData['level']): string {
 }
 
 /**
- * Get trust level label
+ * Get trust level label (accepts level string or numeric score)
  */
-export function getTrustLevelLabel(level: TrustScoreData['level'], fr: boolean): string {
+export function getTrustLevelLabel(levelOrScore: TrustScoreData['level'] | number, fr: boolean): string {
+  const level = typeof levelOrScore === 'number' ? getLevel(levelOrScore) : levelOrScore;
   switch (level) {
     case 'verified': return fr ? 'Verifie' : 'Verified';
     case 'high': return fr ? 'Fiable' : 'Trusted';
@@ -132,6 +135,13 @@ export function getTrustLevelLabel(level: TrustScoreData['level'], fr: boolean):
     case 'low': return fr ? 'A surveiller' : 'Watch';
     case 'suspicious': return fr ? 'Suspect' : 'Suspicious';
   }
+}
+
+/**
+ * Get level from numeric score (public version)
+ */
+export function getLevelFromScore(score: number): TrustScoreData['level'] {
+  return getLevel(score);
 }
 
 /**

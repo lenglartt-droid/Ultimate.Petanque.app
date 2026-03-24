@@ -513,6 +513,13 @@ function LayoutInner() {
                   animation: 'slide_from_right',
                 }} 
               />
+              <Stack.Screen 
+                name="trust-score" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
             </Stack>
             </View>
   );

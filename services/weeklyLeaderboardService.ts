@@ -157,8 +157,41 @@ export async function fetchWeeklyLeaderboard(): Promise<{
 
     const qualifiedPlayersData = (playersData || []).filter((p: any) => qualifiedPlayerIds.includes(p.id));
 
+    // 4b. Fetch trust scores for shadow banning
+    const qualifiedIds = qualifiedPlayersData.map((p: any) => p.id);
+    let trustScoreMap = new Map<string, number>();
+    if (qualifiedIds.length > 0) {
+      try {
+        const { data: trustData } = await supabase
+          .from('suspicious_players')
+          .select('player_id, trust_score')
+          .in('player_id', qualifiedIds);
+        if (Array.isArray(trustData)) {
+          for (const td of trustData) {
+            trustScoreMap.set(td.player_id, td.trust_score);
+          }
+        }
+      } catch { /* silent */ }
+    }
+
+    // Get current user ID for shadow ban exemption
+    let currentUserId: string | null = null;
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      currentUserId = authUser?.id || null;
+    } catch { /* silent */ }
+
+    // SHADOW BAN: Filter out players with trust score < 25 (except self)
+    const visiblePlayersData = qualifiedPlayersData.filter((p: any) => {
+      const ts = trustScoreMap.get(p.id);
+      if (ts !== undefined && ts < 25 && p.user_id !== currentUserId) {
+        return false;
+      }
+      return true;
+    });
+
     // 5. Build player entries
-    const players: Array<LeaderboardPlayer & { weeklyMatches: number; weeklyWins: number; weeklyWinRate: number; rankChange: WeeklyRankChange }> = qualifiedPlayersData.map((p: any) => {
+    const players: Array<LeaderboardPlayer & { weeklyMatches: number; weeklyWins: number; weeklyWinRate: number; rankChange: WeeklyRankChange; trustScore?: number }> = visiblePlayersData.map((p: any) => {
       const ws = weeklyStatsMap.get(p.id)!;
       const winRate = ws.matchesPlayed > 0 ? Math.round((ws.wins / ws.matchesPlayed) * 1000) / 10 : 0;
       const tirRate = ws.tirTotal > 0 ? Math.round((ws.tirSuccess / ws.tirTotal) * 1000) / 10 : 0;
@@ -175,6 +208,7 @@ export async function fetchWeeklyLeaderboard(): Promise<{
         country: p.country || undefined,
         city: p.location?.city || undefined,
         terrainName: p.terrain_name || undefined,
+        trustScore: trustScoreMap.get(p.id),
         stats: {
           matchesPlayed: ws.matchesPlayed,
           wins: ws.wins,
