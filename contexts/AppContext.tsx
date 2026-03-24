@@ -76,6 +76,7 @@ import { addTerrainOp, updateTerrainOp, deleteTerrainOp } from '@/services/terra
 import { addChallengeOp, updateChallengeOp, deleteChallengeOp } from '@/services/challengeCrudService';
 import { addBoulesSetOp, updateBoulesSetOp, deleteBoulesSetOp, setPrimaryBoulesSetOp } from '@/services/boulesSetCrudService';
 import { updateRetentionStats } from '@/services/retentionNotificationService';
+import { triggerTrustScoreComputation } from '@/services/trustScoreService';
 
 // ============================================
 // Context type
@@ -522,6 +523,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ===== CRUD wrappers (delegate to extracted services) =====
   const addMatch = async (match: Omit<Match, 'id'>) =>
     addMatchOp(match, { supabase, userId: user?.id, isConnected: isConnectedRef.current, matches, setMatches, persistPlayerStats });
+    // Trigger trust score recomputation in background
+    setTimeout(() => triggerTrustScoreComputation(), 3000);
 
   const addPlayer = async (player: Omit<Player, 'id'>) =>
     addPlayerOp(player, { supabase, userId: user?.id, isConnected: isConnectedRef.current, setPlayers, sharedItemPermissions, players });

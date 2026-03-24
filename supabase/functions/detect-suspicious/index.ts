@@ -10,22 +10,21 @@ interface PlayerAnalysis {
 }
 
 Deno.serve(async (req: Request) => {
-  // CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    // Verify admin
     const authHeader = req.headers.get('Authorization');
     const token = authHeader?.replace('Bearer ', '');
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-
     const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Check if user is admin
+    // Auth check
+    let requestingUserId: string | null = null;
+    let isAdmin = false;
     if (token) {
       const supabaseAuth = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY') ?? '');
       const { data: { user }, error: userError } = await supabaseAuth.auth.getUser(token);
@@ -35,19 +34,13 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-
+      requestingUserId = user.id;
       const { data: profile } = await supabaseClient
         .from('user_profiles')
         .select('is_admin')
         .eq('id', user.id)
         .single();
-
-      if (!profile?.is_admin) {
-        return new Response(JSON.stringify({ error: 'Admin only' }), {
-          status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
+      isAdmin = profile?.is_admin === true;
     } else {
       return new Response(JSON.stringify({ error: 'Missing auth' }), {
         status: 401,
@@ -55,44 +48,95 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    console.log('[detect-suspicious] Starting analysis...');
+    // Parse body for mode
+    let body: any = {};
+    try { body = await req.json(); } catch { /* no body is ok */ }
+    const mode = body?.mode || 'full'; // 'full' (admin) or 'self' (single user)
+    const targetUserId = body?.userId || requestingUserId;
 
-    // 1. Fetch all public players with stats
-    const { data: players, error: playersError } = await supabaseClient
-      .from('players')
-      .select('id, user_id, name, stats, created_at, is_public')
-      .eq('is_public', true);
-
-    if (playersError) {
-      console.error('[detect-suspicious] Players fetch error:', playersError.message);
-      return new Response(JSON.stringify({ error: playersError.message }), {
-        status: 500,
+    // Non-admin can only compute their own score
+    if (!isAdmin && mode === 'full') {
+      return new Response(JSON.stringify({ error: 'Admin only for full scan' }), {
+        status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // 2. Fetch all matches for opponent diversity analysis
-    const { data: allMatches, error: matchesError } = await supabaseClient
-      .from('matches')
-      .select('id, user_id, team_a, team_b, winner, duration, date, created_at');
+    console.log(`[detect-suspicious] Mode: ${mode}, Admin: ${isAdmin}, Target: ${targetUserId}`);
 
-    if (matchesError) {
-      console.error('[detect-suspicious] Matches fetch error:', matchesError.message);
+    // ============================================
+    // FETCH DATA
+    // ============================================
+    
+    // 1. Fetch players (all public for full mode, or single user for self mode)
+    let players: any[] = [];
+    if (mode === 'self' && targetUserId) {
+      const { data, error } = await supabaseClient
+        .from('players')
+        .select('id, user_id, name, stats, created_at, is_public')
+        .eq('user_id', targetUserId);
+      if (!error && data) players = data;
+    } else {
+      const { data, error } = await supabaseClient
+        .from('players')
+        .select('id, user_id, name, stats, created_at, is_public')
+        .eq('is_public', true);
+      if (!error && data) players = data;
     }
 
+    if (players.length === 0) {
+      return new Response(JSON.stringify({ success: true, analyzed: 0, flagged: 0 }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const playerUserIds = players.map((p: any) => p.user_id).filter(Boolean);
+
+    // 2. Fetch matches for these users
+    const { data: allMatches } = await supabaseClient
+      .from('matches')
+      .select('id, user_id, team_a, team_b, winner, duration, date, created_at, participant_user_ids, player_actions')
+      .in('user_id', playerUserIds);
     const matches = allMatches || [];
 
-    // 3. Fetch report counts
+    // 3. Fetch challenges
+    const { data: allChallenges } = await supabaseClient
+      .from('challenges')
+      .select('id, user_id, type, date, success_rate, participant_user_ids')
+      .in('user_id', playerUserIds);
+    const challenges = allChallenges || [];
+
+    // 4. Fetch reports
     const { data: reports } = await supabaseClient
       .from('player_reports')
       .select('reported_player_id, status');
+    const reportCounts = new Map<string, number>();
+    const pendingReportCounts = new Map<string, number>();
+    for (const r of reports || []) {
+      reportCounts.set(r.reported_player_id, (reportCounts.get(r.reported_player_id) || 0) + 1);
+      if (r.status === 'pending') {
+        pendingReportCounts.set(r.reported_player_id, (pendingReportCounts.get(r.reported_player_id) || 0) + 1);
+      }
+    }
 
-    // 3b. Fetch device registrations for multi-account detection
+    // 5. Fetch modification logs for these users
+    const { data: modLogs } = await supabaseClient
+      .from('modification_logs')
+      .select('owner_id, modifier_id, created_at')
+      .in('owner_id', playerUserIds);
+    const modLogsByUser = new Map<string, { total: number; external: number }>();
+    for (const log of modLogs || []) {
+      if (!modLogsByUser.has(log.owner_id)) modLogsByUser.set(log.owner_id, { total: 0, external: 0 });
+      const entry = modLogsByUser.get(log.owner_id)!;
+      entry.total++;
+      if (log.modifier_id !== log.owner_id) entry.external++;
+    }
+
+    // 6. Device fingerprints for multi-account detection
     const { data: deviceRegs } = await supabaseClient
       .from('device_registrations')
       .select('device_fingerprint, email, user_id');
-
-    // Build map: user email -> set of device fingerprints, and fingerprint -> set of emails
     const emailToFingerprints = new Map<string, Set<string>>();
     const fingerprintToEmails = new Map<string, Set<string>>();
     for (const dr of deviceRegs || []) {
@@ -103,110 +147,169 @@ Deno.serve(async (req: Request) => {
         fingerprintToEmails.get(dr.device_fingerprint)!.add(dr.email);
       }
     }
-    console.log(`[detect-suspicious] Device registrations loaded: ${(deviceRegs || []).length} entries`);
 
-    const reportCounts = new Map<string, number>();
-    const pendingReportCounts = new Map<string, number>();
-    for (const r of reports || []) {
-      reportCounts.set(r.reported_player_id, (reportCounts.get(r.reported_player_id) || 0) + 1);
-      if (r.status === 'pending') {
-        pendingReportCounts.set(r.reported_player_id, (pendingReportCounts.get(r.reported_player_id) || 0) + 1);
-      }
+    // 7. Fetch user emails for device check
+    const { data: userProfiles } = await supabaseClient
+      .from('user_profiles')
+      .select('id, email')
+      .in('id', playerUserIds);
+    const userEmailMap = new Map<string, string>();
+    for (const up of userProfiles || []) {
+      if (up.email) userEmailMap.set(up.id, up.email.toLowerCase());
     }
 
-    // 4. Analyze each player
+    // ============================================
+    // ANALYSIS
+    // ============================================
     const results: PlayerAnalysis[] = [];
     const now = Date.now();
 
-    for (const player of players || []) {
+    for (const player of players) {
       const stats = player.stats || {};
       const matchesPlayed = stats.matchesPlayed || 0;
-
-      if (matchesPlayed < 10) continue; // skip below threshold
+      const playerMatches = matches.filter((m: any) => m.user_id === player.user_id);
+      const playerChallenges = challenges.filter((c: any) => c.user_id === player.user_id);
 
       const flags: string[] = [];
       const details: Record<string, any> = {};
-      let score = 100;
+      let score = 100; // Start at 100, subtract for issues
 
       const winRate = stats.winRate || 0;
       const tirRate = stats.tirRate || 0;
       const pointRate = stats.pointRate || 0;
       const carreauRate = stats.carreauRate || 0;
 
-      // === Stats Regularity (25 points) ===
-      if (winRate > 95) {
-        score -= 20;
-        flags.push('extreme_win_rate');
-        details.winRate = winRate;
-      } else if (winRate > 90) {
-        score -= 10;
+      // ================================================
+      // FACTOR 1: Multi-Player Validation Ratio (30 pts)
+      // ================================================
+      const multiPlayerMatches = playerMatches.filter((m: any) => {
+        const pids = m.participant_user_ids || [];
+        return Array.isArray(pids) && pids.length >= 2;
+      });
+      const multiPlayerRatio = playerMatches.length > 0 ? multiPlayerMatches.length / playerMatches.length : 0;
+      details.multiPlayerRatio = Math.round(multiPlayerRatio * 100);
+      details.multiPlayerMatches = multiPlayerMatches.length;
+      details.totalMatches = playerMatches.length;
+
+      // Score: 0% multi-player = -30, 100% = 0
+      const mpDeduction = Math.round((1 - multiPlayerRatio) * 30);
+      score -= mpDeduction;
+      if (multiPlayerRatio < 0.1 && matchesPlayed >= 10) {
+        flags.push('very_low_multiplayer');
+      } else if (multiPlayerRatio < 0.3 && matchesPlayed >= 10) {
+        flags.push('low_multiplayer');
       }
 
-      if (tirRate > 85 && pointRate > 85) {
-        score -= 15;
-        flags.push('unrealistic_combined_rates');
-        details.tirRate = tirRate;
-        details.pointRate = pointRate;
-      }
-
-      if (carreauRate > 50) {
-        score -= 15;
-        flags.push('extreme_carreau_rate');
-        details.carreauRate = carreauRate;
-      }
-
-      // === Match Volume (15 points) ===
-      if (matchesPlayed < 15) {
-        score -= 10;
-        flags.push('low_match_count');
-      } else if (matchesPlayed < 30) {
-        score -= 5;
-      }
-
-      // === Account Age (15 points) ===
-      const ageMs = now - new Date(player.created_at).getTime();
-      const ageDays = ageMs / (1000 * 60 * 60 * 24);
-      if (ageDays < 7) {
-        score -= 15;
-        flags.push('very_new_account');
-      } else if (ageDays < 30) {
-        score -= 10;
-        flags.push('new_account');
-      } else if (ageDays < 90) {
-        score -= 5;
-      }
-      details.accountAgeDays = Math.round(ageDays);
-
-      // === Opponent Diversity (20 points) ===
-      const playerMatches = matches.filter(
-        (m: any) => m.user_id === player.user_id
-      );
+      // ================================================
+      // FACTOR 2: Adversary Diversity (20 pts)
+      // ================================================
       const opponents = new Set<string>();
       for (const m of playerMatches) {
         const teamA = m.team_a?.players || [];
         const teamB = m.team_b?.players || [];
         const inA = teamA.includes(player.id);
-        const inB = teamB.includes(player.id);
         if (inA) teamB.forEach((p: string) => opponents.add(p));
-        if (inB) teamA.forEach((p: string) => opponents.add(p));
+        else teamA.forEach((p: string) => opponents.add(p));
       }
       const uniqueOpponents = opponents.size;
       const diversityRatio = playerMatches.length > 0 ? uniqueOpponents / playerMatches.length : 0;
-
-      if (uniqueOpponents <= 1 && matchesPlayed >= 10) {
-        score -= 20;
-        flags.push('single_opponent');
-      } else if (diversityRatio < 0.2 && matchesPlayed >= 15) {
-        score -= 15;
-        flags.push('low_opponent_diversity');
-      } else if (diversityRatio < 0.4 && matchesPlayed >= 15) {
-        score -= 10;
-      }
       details.uniqueOpponents = uniqueOpponents;
       details.diversityRatio = Math.round(diversityRatio * 100) / 100;
 
-      // === Match Frequency (10 points) ===
-      // Check for too many matches in a single day
+      // Shannon-like entropy normalization
+      if (uniqueOpponents <= 1 && matchesPlayed >= 10) {
+        score -= 20;
+        flags.push('single_opponent');
+      } else if (diversityRatio < 0.15 && matchesPlayed >= 15) {
+        score -= 15;
+        flags.push('low_opponent_diversity');
+      } else if (diversityRatio < 0.3 && matchesPlayed >= 15) {
+        score -= 10;
+      } else if (diversityRatio < 0.5) {
+        score -= 5;
+      }
+
+      // ================================================
+      // FACTOR 3: Performance Consistency (20 pts)
+      // Uses 4-week sliding window standard deviation
+      // ================================================
+      const weeklyWinRates: number[] = [];
+      const fourWeeksAgo = new Date();
+      fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
+      
+      // Group matches by week
+      const weekBuckets: Record<string, { wins: number; total: number }> = {};
+      for (const m of playerMatches) {
+        const mDate = new Date(m.date || m.created_at);
+        if (mDate < fourWeeksAgo) continue;
+        const weekNum = Math.floor((now - mDate.getTime()) / (7 * 24 * 60 * 60 * 1000));
+        const key = `w${weekNum}`;
+        if (!weekBuckets[key]) weekBuckets[key] = { wins: 0, total: 0 };
+        weekBuckets[key].total++;
+        if (m.winner === 'A') weekBuckets[key].wins++;
+      }
+      
+      const weekEntries = Object.values(weekBuckets).filter(w => w.total > 0);
+      weekEntries.forEach(w => weeklyWinRates.push(w.total > 0 ? (w.wins / w.total) * 100 : 0));
+      
+      let performanceConsistency = 100;
+      if (weeklyWinRates.length >= 2) {
+        const mean = weeklyWinRates.reduce((a, b) => a + b, 0) / weeklyWinRates.length;
+        const variance = weeklyWinRates.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / weeklyWinRates.length;
+        const stdDev = Math.sqrt(variance);
+        const cv = mean > 0 ? stdDev / mean : 0;
+        performanceConsistency = Math.max(0, 100 - Math.round(cv * 100));
+        
+        if (cv > 0.8) {
+          flags.push('very_inconsistent_performance');
+          score -= 15;
+        } else if (cv > 0.5) {
+          flags.push('inconsistent_performance');
+          score -= 10;
+        } else if (cv > 0.3) {
+          score -= 5;
+        }
+      }
+      details.performanceConsistency = performanceConsistency;
+      details.weeklyWinRates = weeklyWinRates;
+
+      // Check for sudden jumps (25+ point difference between consecutive weeks)
+      for (let i = 1; i < weeklyWinRates.length; i++) {
+        const delta = Math.abs(weeklyWinRates[i] - weeklyWinRates[i - 1]);
+        if (delta > 40 && weekEntries[i]?.total >= 3 && weekEntries[i - 1]?.total >= 3) {
+          if (!flags.includes('sudden_improvement')) {
+            flags.push('sudden_improvement');
+            score -= 5;
+          }
+        }
+      }
+
+      // ================================================
+      // FACTOR 4: Modification History Cleanness (15 pts)
+      // ================================================
+      const modData = modLogsByUser.get(player.user_id) || { total: 0, external: 0 };
+      details.modificationLogs = { total: modData.total, external: modData.external };
+      
+      // External modifications (by other players) reduce trust
+      if (modData.external > 10) {
+        score -= 12;
+        flags.push('many_external_modifications');
+      } else if (modData.external > 5) {
+        score -= 8;
+        flags.push('some_external_modifications');
+      } else if (modData.external > 2) {
+        score -= 4;
+      }
+
+      // ================================================
+      // FACTOR 5: Play Frequency (10 pts)
+      // ================================================
+      const matchesPerWeek = playerMatches.length > 0 
+        ? playerMatches.length / Math.max(1, (now - new Date(player.created_at).getTime()) / (7 * 24 * 60 * 60 * 1000))
+        : 0;
+      details.matchesPerWeek = Math.round(matchesPerWeek * 10) / 10;
+
+      // Too many matches in a day = suspicious
       const dateCount = new Map<string, number>();
       for (const m of playerMatches) {
         const day = new Date(m.date || m.created_at).toISOString().split('T')[0];
@@ -214,37 +317,69 @@ Deno.serve(async (req: Request) => {
       }
       const maxMatchesPerDay = Math.max(...Array.from(dateCount.values()), 0);
       if (maxMatchesPerDay > 15) {
-        score -= 15;
+        score -= 10;
         flags.push('excessive_daily_matches');
         details.maxMatchesPerDay = maxMatchesPerDay;
       } else if (maxMatchesPerDay > 10) {
-        score -= 8;
+        score -= 5;
         flags.push('high_daily_matches');
         details.maxMatchesPerDay = maxMatchesPerDay;
       }
 
-      // === Match Duration (10 points) ===
-      const shortMatches = playerMatches.filter((m: any) => m.duration && m.duration < 2);
-      if (shortMatches.length > 5) {
-        score -= 10;
-        flags.push('many_very_short_matches');
-        details.shortMatchCount = shortMatches.length;
-      } else if (shortMatches.length > 2) {
+      // Too few matches = less trusted
+      if (matchesPlayed < 5) {
         score -= 5;
       }
 
-      // === Multi-account Detection (15 points) ===
-      // Check if this player's user has multiple accounts from same device
-      const playerUserProfile = await supabaseClient
-        .from('user_profiles')
-        .select('email')
-        .eq('id', player.user_id)
-        .single();
-      const playerEmail = playerUserProfile?.data?.email?.toLowerCase();
+      // ================================================
+      // FACTOR 6: Stats Regularity (bonus deductions)
+      // ================================================
+      if (winRate > 95 && matchesPlayed >= 10) {
+        score -= 10;
+        flags.push('extreme_win_rate');
+        details.winRate = winRate;
+      }
+      if (tirRate > 85 && pointRate > 85 && matchesPlayed >= 10) {
+        score -= 8;
+        flags.push('unrealistic_combined_rates');
+      }
+      if (carreauRate > 50 && matchesPlayed >= 10) {
+        score -= 8;
+        flags.push('extreme_carreau_rate');
+        details.carreauRate = carreauRate;
+      }
+
+      // ================================================
+      // FACTOR 7: Account Age (5 pts)
+      // ================================================
+      const ageMs = now - new Date(player.created_at).getTime();
+      const ageDays = ageMs / (1000 * 60 * 60 * 24);
+      details.accountAgeDays = Math.round(ageDays);
+      if (ageDays < 7) {
+        score -= 5;
+        flags.push('very_new_account');
+      } else if (ageDays < 30) {
+        score -= 3;
+      }
+
+      // ================================================
+      // FACTOR 8: Match Duration (suspicious short matches)
+      // ================================================
+      const shortMatches = playerMatches.filter((m: any) => m.duration && m.duration < 2);
+      if (shortMatches.length > 5) {
+        score -= 5;
+        flags.push('many_very_short_matches');
+        details.shortMatchCount = shortMatches.length;
+      }
+
+      // ================================================
+      // FACTOR 9: Multi-Account Detection (10 pts)
+      // ================================================
+      const playerEmail = userEmailMap.get(player.user_id);
       if (playerEmail) {
         const userFingerprints = emailToFingerprints.get(playerEmail);
         if (userFingerprints) {
-          let sharedDeviceAccounts = new Set<string>();
+          const sharedDeviceAccounts = new Set<string>();
           for (const fp of userFingerprints) {
             const accountsOnDevice = fingerprintToEmails.get(fp);
             if (accountsOnDevice) {
@@ -254,49 +389,80 @@ Deno.serve(async (req: Request) => {
             }
           }
           if (sharedDeviceAccounts.size >= 3) {
-            score -= 20;
+            score -= 10;
             flags.push('multi_account_device_3plus');
             details.sharedDeviceAccounts = sharedDeviceAccounts.size;
           } else if (sharedDeviceAccounts.size >= 1) {
-            score -= 8;
+            score -= 5;
             flags.push('multi_account_device');
             details.sharedDeviceAccounts = sharedDeviceAccounts.size;
           }
         }
       }
 
-      // === Reports (5 points) ===
+      // ================================================
+      // FACTOR 10: Reports
+      // ================================================
       const totalReports = reportCounts.get(player.id) || 0;
-      const pendingReports = pendingReportCounts.get(player.id) || 0;
       if (totalReports >= 3) {
-        score -= 10;
+        score -= 8;
         flags.push('multiple_reports');
       } else if (totalReports >= 1) {
-        score -= 5;
+        score -= 3;
         flags.push('has_reports');
       }
       details.totalReports = totalReports;
-      details.pendingReports = pendingReports;
 
-      // Clamp score
+      // ================================================
+      // BONUS: Arranged match detection
+      // ================================================
+      // Same opponent pair > 5 times this week with same/similar scores
+      const recentMatches = playerMatches.filter((m: any) => {
+        const d = new Date(m.date || m.created_at);
+        return (now - d.getTime()) < 7 * 24 * 60 * 60 * 1000;
+      });
+      const opponentPairCounts = new Map<string, { count: number; scores: string[] }>();
+      for (const m of recentMatches) {
+        const teamB = m.team_b?.players?.sort().join(',') || '';
+        if (!opponentPairCounts.has(teamB)) opponentPairCounts.set(teamB, { count: 0, scores: [] });
+        const entry = opponentPairCounts.get(teamB)!;
+        entry.count++;
+        entry.scores.push(`${m.team_a?.score || 0}-${m.team_b?.score || 0}`);
+      }
+      for (const [, data] of opponentPairCounts) {
+        if (data.count >= 5) {
+          const uniqueScores = new Set(data.scores).size;
+          if (uniqueScores <= 2) {
+            score -= 10;
+            flags.push('arranged_matches');
+            details.arrangedMatchDetails = { count: data.count, uniqueScores };
+            break;
+          }
+        }
+      }
+
+      // Clamp
       score = Math.max(0, Math.min(100, score));
       details.matchesPlayed = matchesPlayed;
 
-      // Only store if score < 80 or has flags
-      if (score < 80 || flags.length > 0) {
-        results.push({
-          player_id: player.id,
-          user_id: player.user_id,
-          trust_score: score,
-          flags,
-          details,
-        });
-      }
+      // Determine status
+      const status = score < 25 ? 'flagged' : score < 50 ? 'watch' : 'ok';
+
+      // Store ALL analyzed players (not just flagged) for trust badge display
+      results.push({
+        player_id: player.id,
+        user_id: player.user_id,
+        trust_score: score,
+        flags,
+        details,
+      });
     }
 
-    console.log(`[detect-suspicious] Analyzed ${(players || []).length} players, ${results.length} flagged`);
+    console.log(`[detect-suspicious] Analyzed ${players.length} players, ${results.filter(r => r.flags.length > 0).length} with flags`);
 
-    // 5. Upsert results
+    // ============================================
+    // UPSERT RESULTS
+    // ============================================
     for (const r of results) {
       const { error: upsertError } = await supabaseClient
         .from('suspicious_players')
@@ -316,26 +482,17 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Remove entries for players no longer flagged
-    const flaggedPlayerIds = new Set(results.map(r => r.player_id));
-    const { data: existing } = await supabaseClient
-      .from('suspicious_players')
-      .select('player_id')
-      .eq('status', 'ok');
-
-    for (const e of existing || []) {
-      if (!flaggedPlayerIds.has(e.player_id)) {
-        await supabaseClient.from('suspicious_players').delete().eq('player_id', e.player_id);
-      }
-    }
-
     return new Response(
       JSON.stringify({
         success: true,
-        analyzed: (players || []).length,
-        flagged: results.length,
-        suspicious: results.filter(r => r.trust_score < 25).length,
-        watch: results.filter(r => r.trust_score >= 25 && r.trust_score < 50).length,
+        analyzed: players.length,
+        flagged: results.filter(r => r.trust_score < 50).length,
+        results: mode === 'self' ? results.map(r => ({
+          playerId: r.player_id,
+          trustScore: r.trust_score,
+          flags: r.flags,
+          details: r.details,
+        })) : undefined,
       }),
       {
         status: 200,

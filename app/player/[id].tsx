@@ -29,7 +29,7 @@ import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup as MeetupType } fr
 import { submitReport, REPORT_REASONS, ReportReason } from '@/services/reportService';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
-import { computeQuickTrustScore, getTrustScoreColor, getTrustLevelLabel, TrustScoreData } from '@/services/trustScoreService';
+import { computeQuickTrustScore, getTrustScoreColor, getTrustScoreIcon, getTrustLevelLabel, getTrustBadgeDescription, fetchTrustScore, TrustScoreData } from '@/services/trustScoreService';
 import { LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
 import Svg, { Polygon, Line, Circle as SvgCircle, Text as SvgText, G } from 'react-native-svg';
 import { Modal, Switch, TextInput } from 'react-native';
@@ -150,13 +150,24 @@ export default function PlayerDetailScreen() {
   const [previewShowContacts, setPreviewShowContacts] = React.useState(false);
 
   // Trust score (for public players)
-  const trustScore: TrustScoreData | null = React.useMemo(() => {
-    if (!isPublicItem || !player) return null;
-    return computeQuickTrustScore({
-      stats: player.stats,
-      createdAt: player.createdAt,
-    });
-  }, [isPublicItem, player]);
+  const [trustScore, setTrustScore] = React.useState<TrustScoreData | null>(null);
+  const [trustScoreLoading, setTrustScoreLoading] = React.useState(false);
+  React.useEffect(() => {
+    if (!player) { setTrustScore(null); return; }
+    // Try fetching DB-computed score first
+    const loadScore = async () => {
+      setTrustScoreLoading(true);
+      const dbScore = await fetchTrustScore(player.id);
+      if (dbScore) {
+        setTrustScore(dbScore);
+      } else {
+        // Fallback to quick local computation
+        setTrustScore(computeQuickTrustScore({ stats: player.stats, createdAt: player.createdAt }));
+      }
+      setTrustScoreLoading(false);
+    };
+    loadScore();
+  }, [player?.id, player?.stats?.matchesPlayed]);
   const { showAlert } = useAlert();
 
   // Load ambassador data for this player
@@ -601,13 +612,28 @@ export default function PlayerDetailScreen() {
                 </View>
               ) : null}
 
-              {/* Trust Score Badge (public players only) */}
-              {trustScore && trustScore.level !== 'high' ? (
-                <View style={[s.trustScoreBadge, { borderColor: getTrustScoreColor(trustScore.score) + '25' }]}>
-                  <MaterialIcons name="shield" size={14} color={getTrustScoreColor(trustScore.score)} />
-                  <Text style={[s.trustScoreText, { color: getTrustScoreColor(trustScore.score) }]}>
-                    {t('trustScore', 'badge')}: {trustScore.score}/100 - {getTrustLevelLabel(trustScore.level, language === 'fr')}
-                  </Text>
+              {/* Trust Score Badge */}
+              {trustScore ? (
+                <View style={[s.trustScoreBadge, { borderColor: getTrustScoreColor(trustScore.level) + '25', backgroundColor: getTrustScoreColor(trustScore.level) + '06' }]}>
+                  <View style={[s.trustScoreIconBg, { backgroundColor: getTrustScoreColor(trustScore.level) + '15' }]}>
+                    <MaterialIcons name={getTrustScoreIcon(trustScore.level) as any} size={16} color={getTrustScoreColor(trustScore.level)} />
+                  </View>
+                  <View style={s.trustScoreInfo}>
+                    <View style={s.trustScoreTopRow}>
+                      <Text style={[s.trustScoreLabel, { color: getTrustScoreColor(trustScore.level) }]}>
+                        {getTrustLevelLabel(trustScore.level, language === 'fr')}
+                      </Text>
+                      <Text style={[s.trustScoreValue, { color: getTrustScoreColor(trustScore.level) }]}>
+                        {trustScore.score}/100
+                      </Text>
+                    </View>
+                    <View style={s.trustScoreBarTrack}>
+                      <View style={[s.trustScoreBarFill, { width: `${trustScore.score}%`, backgroundColor: getTrustScoreColor(trustScore.level) }]} />
+                    </View>
+                    <Text style={s.trustScoreDesc} numberOfLines={2}>
+                      {getTrustBadgeDescription(trustScore.level, language === 'fr')}
+                    </Text>
+                  </View>
                 </View>
               ) : null}
 
@@ -1311,8 +1337,15 @@ const s = StyleSheet.create({
   contactPillText: { fontSize: 13, fontWeight: '500', color: theme.primary },
 
   // Trust score badge
-  trustScoreBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginBottom: 12, borderWidth: 1, width: '100%' },
-  trustScoreText: { fontSize: 12, fontWeight: '600' as const },
+  trustScoreBadge: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 16, marginBottom: 14, borderWidth: 1, width: '100%' },
+  trustScoreIconBg: { width: 36, height: 36, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const, marginTop: 2 },
+  trustScoreInfo: { flex: 1 },
+  trustScoreTopRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, marginBottom: 6 },
+  trustScoreLabel: { fontSize: 14, fontWeight: '700' as const },
+  trustScoreValue: { fontSize: 13, fontWeight: '800' as const },
+  trustScoreBarTrack: { height: 5, backgroundColor: 'rgba(0,0,0,0.06)', borderRadius: 3, overflow: 'hidden' as const, marginBottom: 6 },
+  trustScoreBarFill: { height: '100%' as const, borderRadius: 3 },
+  trustScoreDesc: { fontSize: 11, color: theme.textSecondary, lineHeight: 15 },
 
   // Leaderboard progress
   leaderboardProgressCard: { backgroundColor: '#D97706' + '08', borderRadius: 14, padding: 12, width: '100%', marginBottom: 14, borderWidth: 1, borderColor: '#D97706' + '20' },

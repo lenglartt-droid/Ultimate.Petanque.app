@@ -250,6 +250,24 @@ export const extraTranslations = {
     mondayNotifSent: { fr: 'Notifications envoyees', en: 'Notifications sent' },
   },
 
+  trustScore: {
+    verified: { fr: 'Verifie', en: 'Verified' },
+    high: { fr: 'Fiable', en: 'Trusted' },
+    medium: { fr: 'Standard', en: 'Standard' },
+    low: { fr: 'A surveiller', en: 'Watch' },
+    suspicious: { fr: 'Suspect', en: 'Suspicious' },
+    badge: { fr: 'Fiabilite', en: 'Reliability' },
+    scoreLabel: { fr: 'Score de confiance', en: 'Trust Score' },
+    improveTitle: { fr: 'Ameliorer votre score', en: 'Improve your score' },
+    improveTip1: { fr: 'Jouez avec d\'autres utilisateurs de l\'app', en: 'Play with other app users' },
+    improveTip2: { fr: 'Diversifiez vos adversaires', en: 'Diversify your opponents' },
+    improveTip3: { fr: 'Maintenez des performances coherentes', en: 'Maintain consistent performances' },
+    factorMultiPlayer: { fr: 'Matchs multi-joueurs', en: 'Multi-player matches' },
+    factorDiversity: { fr: 'Diversite des adversaires', en: 'Opponent diversity' },
+    factorConsistency: { fr: 'Coherence des performances', en: 'Performance consistency' },
+    factorHistory: { fr: 'Historique de modifications', en: 'Modification history' },
+  },
+
   matchSharing: {
     shareStatusTitle: { fr: 'Partages en cours', en: 'Active shares' },
     noShares: { fr: 'Aucun partage', en: 'No shares' },
