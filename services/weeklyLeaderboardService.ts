@@ -100,9 +100,10 @@ export async function fetchWeeklyLeaderboard(): Promise<{
     if (pErr) return { players: [], error: pErr.message };
 
     // 2. Fetch matches in the current week
+    // ANTI-CHEAT: Include participant_user_ids to filter real-user matches
     const { data: weekMatches, error: mErr } = await supabase
       .from('matches')
-      .select('id, team_a, team_b, winner, player_actions, date')
+      .select('id, team_a, team_b, winner, player_actions, date, participant_user_ids')
       .gte('date', weekStart.toISOString())
       .lte('date', weekEnd.toISOString());
 
@@ -113,10 +114,15 @@ export async function fetchWeeklyLeaderboard(): Promise<{
     }
 
     // 3. Compute weekly stats per player
+    // ANTI-CHEAT: Only count matches with 2+ real app users
     const playerIds = new Set((playersData || []).map((p: any) => p.id));
     const weeklyStatsMap = new Map<string, { matchesPlayed: number; wins: number; losses: number; tirSuccess: number; tirTotal: number; carreaux: number }>();
 
     for (const m of weekMatches) {
+      // ANTI-CHEAT: Skip matches without 2+ real app users
+      const participantIds: string[] = (m as any).participant_user_ids || [];
+      if (participantIds.length < 2) continue;
+
       const teamAPlayers: string[] = m.team_a?.players || [];
       const teamBPlayers: string[] = m.team_b?.players || [];
       const allMatchPlayers = [...teamAPlayers, ...teamBPlayers].filter(id => playerIds.has(id));

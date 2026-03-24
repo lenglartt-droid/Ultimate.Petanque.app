@@ -93,13 +93,17 @@ export async function fetchLeaderboard(period?: LeaderboardPeriod): Promise<{ pl
 
     let playerStatsMap: Map<string, { matchesPlayed: number; wins: number; losses: number; winRate: number; tirRate: number; pointRate: number; carreauRate: number }> | null = null;
 
+    // ANTI-CHEAT: For leaderboard, only count matches played with other real app users.
+    // A match counts only if participant_user_ids has 2+ distinct user IDs.
+    // This prevents inflating stats by playing against directory-only players.
+
     // If period filter, fetch matches within the date range and recompute stats
     if (usePeriod) {
       const range = getPeriodDateRange(period);
       if (range.from) {
         let matchQuery = supabase
           .from('matches')
-          .select('id, team_a, team_b, winner, player_actions')
+          .select('id, team_a, team_b, winner, player_actions, participant_user_ids')
           .gte('date', range.from.toISOString());
         if (range.to) {
           matchQuery = matchQuery.lte('date', range.to.toISOString());
@@ -111,6 +115,10 @@ export async function fetchLeaderboard(period?: LeaderboardPeriod): Promise<{ pl
           const playerIds = new Set((playersData || []).map((p: any) => p.id));
 
           for (const m of matchesData) {
+            // ANTI-CHEAT: Skip matches without 2+ real app users
+            const participantIds: string[] = m.participant_user_ids || [];
+            if (participantIds.length < 2) continue;
+
             const teamAPlayers: string[] = m.team_a?.players || [];
             const teamBPlayers: string[] = m.team_b?.players || [];
             const allMatchPlayers = [...teamAPlayers, ...teamBPlayers].filter(id => playerIds.has(id));
@@ -158,11 +166,74 @@ export async function fetchLeaderboard(period?: LeaderboardPeriod): Promise<{ pl
       }
     }
 
+    // When no period filter is used, we need to recompute stats from scratch
+    // using only matches with 2+ real app users (anti-cheat)
+    if (!playerStatsMap) {
+      // Fetch ALL matches with participant_user_ids to recompute clean stats
+      const { data: allMatchesData } = await supabase
+        .from('matches')
+        .select('id, team_a, team_b, winner, player_actions, participant_user_ids');
+
+      if (allMatchesData && allMatchesData.length > 0) {
+        playerStatsMap = new Map();
+        const playerIdsSet = new Set((playersData || []).map((p: any) => p.id));
+
+        for (const m of allMatchesData) {
+          // ANTI-CHEAT: Skip matches without 2+ real app users
+          const participantIds: string[] = m.participant_user_ids || [];
+          if (participantIds.length < 2) continue;
+
+          const teamAPlayers: string[] = m.team_a?.players || [];
+          const teamBPlayers: string[] = m.team_b?.players || [];
+          const allMatchPlayers = [...teamAPlayers, ...teamBPlayers].filter(id => playerIdsSet.has(id));
+
+          for (const pid of allMatchPlayers) {
+            if (!playerStatsMap.has(pid)) {
+              playerStatsMap.set(pid, { matchesPlayed: 0, wins: 0, losses: 0, winRate: 0, tirRate: 0, pointRate: 0, carreauRate: 0 });
+            }
+            const ps = playerStatsMap.get(pid)!;
+            ps.matchesPlayed++;
+            const inA = teamAPlayers.includes(pid);
+            if ((inA && m.winner === 'A') || (!inA && m.winner === 'B')) {
+              ps.wins++;
+            } else {
+              ps.losses++;
+            }
+            if (m.player_actions) {
+              const pa = (m.player_actions as any[]).find((a: any) => a.playerId === pid);
+              if (pa) {
+                const prev = (playerStatsMap as any)['_raw_' + pid] || { tirs: 0, tirsSuccess: 0, points: 0, pointsSuccess: 0, carreaux: 0 };
+                prev.tirs += pa.actions?.tirs || 0;
+                prev.tirsSuccess += pa.actions?.tirsSuccess || 0;
+                prev.points += pa.actions?.points || 0;
+                prev.pointsSuccess += pa.actions?.pointsSuccess || 0;
+                prev.carreaux += pa.actions?.carreaux || 0;
+                (playerStatsMap as any)['_raw_' + pid] = prev;
+              }
+            }
+          }
+        }
+
+        // Compute rates for the all-time anti-cheat stats
+        for (const [pid, ps] of playerStatsMap.entries()) {
+          if (pid.startsWith('_raw_')) continue;
+          ps.winRate = ps.matchesPlayed > 0 ? Math.round((ps.wins / ps.matchesPlayed) * 1000) / 10 : 0;
+          const raw = (playerStatsMap as any)['_raw_' + pid];
+          if (raw) {
+            ps.tirRate = raw.tirs > 0 ? Math.round((raw.tirsSuccess / raw.tirs) * 1000) / 10 : 0;
+            ps.pointRate = raw.points > 0 ? Math.round((raw.pointsSuccess / raw.points) * 1000) / 10 : 0;
+            ps.carreauRate = raw.tirsSuccess > 0 ? Math.round((raw.carreaux / raw.tirsSuccess) * 1000) / 10 : 0;
+          }
+        }
+      }
+    }
+
     const filteredData = (playersData || []).filter((p: any) => {
       if (playerStatsMap) {
         const ps = playerStatsMap.get(p.id);
         return ps && ps.matchesPlayed >= LEADERBOARD_MIN_MATCHES;
       }
+      // Fallback: use stored stats (shouldn't reach here with anti-cheat)
       const stats = p.stats || {};
       return (stats.matchesPlayed || 0) >= LEADERBOARD_MIN_MATCHES;
     });

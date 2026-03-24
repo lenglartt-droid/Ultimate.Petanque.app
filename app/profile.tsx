@@ -1406,8 +1406,8 @@ export default function ProfileScreen() {
           </Animated.View>
         )}
 
-        {/* Federation Card Section */}
-        {!isEditing && (
+        {/* Federation Card Section — moved below financial */}
+        {false && !isEditing && (
           <Animated.View entering={FadeInDown.duration(400).delay(75)} style={styles.section}>
             <Text style={styles.sectionTitle}>{t('player', 'federationCard').toUpperCase()}</Text>
             {uploadingCard ? (
@@ -1473,6 +1473,71 @@ export default function ProfileScreen() {
         )}
 
         {/* View Mode - My Player Card, Equipment & Palmares Links */}
+        {!isEditing && !loading && (
+          <Animated.View entering={FadeInDown.duration(400).delay(75)} style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('player', 'federationCard').toUpperCase()}</Text>
+            {uploadingCard ? (
+              <View style={styles.fedUploadingCard}>
+                <ActivityIndicator size="large" color={theme.primary} />
+                <Text style={styles.fedUploadingText}>{t('player', 'uploadingCard')}</Text>
+              </View>
+            ) : federationCardUrl ? (
+              <View style={styles.fedCardContainer}>
+                <Pressable style={styles.fedCardPreview} onPress={handleFedCardPress}>
+                  {federationCardType === 'image' ? (
+                    <Image
+                      source={{ uri: federationCardUrl }}
+                      style={styles.fedCardImage}
+                      contentFit="cover"
+                      transition={200}
+                      cachePolicy="memory-disk"
+                    />
+                  ) : (
+                    <View style={styles.fedPdfPreview}>
+                      <MaterialIcons name="picture-as-pdf" size={48} color={theme.error} />
+                      <Text style={styles.fedPdfText}>{t('player', 'pdfDocument')}</Text>
+                      <Text style={styles.fedPdfSubtext}>{t('player', 'tapToView')}</Text>
+                    </View>
+                  )}
+                  <View style={styles.fedCardOverlay}>
+                    <View style={styles.fedCardOverlayBadge}>
+                      <MaterialIcons name={federationCardType === 'pdf' ? 'open-in-new' : 'fullscreen'} size={16} color="#FFF" />
+                      <Text style={styles.fedCardOverlayText}>{t('player', 'viewFullscreen')}</Text>
+                    </View>
+                  </View>
+                </Pressable>
+                <View style={styles.fedCardActions}>
+                  <Pressable style={styles.fedReplaceBtn} onPress={showFederationUploadOptions}>
+                    <MaterialIcons name="refresh" size={18} color={theme.primary} />
+                    <Text style={styles.fedReplaceBtnText}>{t('player', 'replaceFederationCard')}</Text>
+                  </Pressable>
+                  <Pressable style={styles.fedRemoveBtn} onPress={handleRemoveFederationCard}>
+                    <MaterialIcons name="delete-outline" size={18} color={theme.error} />
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <Pressable style={styles.fedAddCard} onPress={showFederationUploadOptions}>
+                <View style={styles.fedAddIcon}>
+                  <MaterialIcons name="badge" size={32} color={theme.primary} />
+                </View>
+                <Text style={styles.fedAddTitle}>{t('player', 'addFederationCard')}</Text>
+                <Text style={styles.fedAddDesc}>{t('player', 'federationCardDesc')}</Text>
+                <View style={styles.fedAddFormats}>
+                  <View style={styles.fedFormatChip}>
+                    <MaterialIcons name="image" size={14} color={theme.textSecondary} />
+                    <Text style={styles.fedFormatText}>JPG / PNG</Text>
+                  </View>
+                  <View style={styles.fedFormatChip}>
+                    <MaterialIcons name="picture-as-pdf" size={14} color={theme.textSecondary} />
+                    <Text style={styles.fedFormatText}>PDF</Text>
+                  </View>
+                </View>
+              </Pressable>
+            )}
+          </Animated.View>
+        )}
+
         {!isEditing && (
           <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
             <Pressable 

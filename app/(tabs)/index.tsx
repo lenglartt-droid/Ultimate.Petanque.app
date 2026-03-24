@@ -32,6 +32,8 @@ import { getMyMeetups, getInvitedMeetups, getMeetupResponses, getPendingInvitati
 import { config } from '@/constants/config';
 import { Share as RNShare } from 'react-native';
 import { LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
+import { fetchWeeklyLeaderboard, getCurrentWeekStart, formatDateISO } from '@/services/weeklyLeaderboardService';
+import { extraTranslations } from '@/constants/i18nExtra';
 import { getPendingWitnessRequests, getUnreadEventNotificationCount, markEventNotificationRead, EventNotification } from '@/services/eventNotificationService';
 
 export default function HomeScreen() {
@@ -72,6 +74,10 @@ export default function HomeScreen() {
     return () => sub?.remove();
   }, []);
   const isTablet = screenWidth >= 600;
+
+  // Weekly leaderboard banner state
+  const [weeklyRank, setWeeklyRank] = useState<{ rank: number; direction: string; diff: number; matchesThisWeek: number } | null>(null);
+  const [weeklyBannerLoaded, setWeeklyBannerLoaded] = useState(false);
 
   // Countdown timer
   const [now, setNow] = useState(Date.now());
@@ -201,6 +207,28 @@ export default function HomeScreen() {
   }), [tournaments]);
 
   const displayName = user?.username || selfPlayer?.name || user?.email?.split('@')[0] || (language === 'en' ? 'Player' : 'Joueur');
+
+  // Load weekly leaderboard rank for banner
+  useEffect(() => {
+    if (!user?.id) return;
+    const loadWeeklyRank = async () => {
+      try {
+        const { players } = await fetchWeeklyLeaderboard();
+        const me = players.find((p: any) => p.userId === user.id);
+        if (me) {
+          setWeeklyRank({
+            rank: me.rankChange.currentRank,
+            direction: me.rankChange.direction,
+            diff: me.rankChange.diff,
+            matchesThisWeek: me.weeklyMatches,
+          });
+        }
+      } catch { /* silent */ }
+      setWeeklyBannerLoaded(true);
+    };
+    const timer = setTimeout(loadWeeklyRank, 1500);
+    return () => clearTimeout(timer);
+  }, [user?.id]);
 
   useEffect(() => { preloadInterstitial(); }, []);
 
@@ -457,6 +485,55 @@ export default function HomeScreen() {
                 </Pressable>
               ) : null}
             </View>
+          </Animated.View>
+        ) : null}
+
+        {/* ========== WEEKLY LEADERBOARD BANNER ========== */}
+        {weeklyBannerLoaded && weeklyRank ? (
+          <Animated.View entering={FadeInDown.duration(400).delay(75)} style={[s.section, isTablet && s.sectionTablet]}>
+            <Pressable
+              style={s.weeklyBanner}
+              onPress={() => router.push('/leaderboard' as any)}
+            >
+              <LinearGradient colors={['#1E3A8A', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.weeklyBannerGradient}>
+                <View style={s.weeklyBannerLeft}>
+                  <View style={s.weeklyBannerIconBg}>
+                    <MaterialIcons name="leaderboard" size={20} color="#FFF" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.weeklyBannerTitle}>
+                      {(extraTranslations.weeklyLeaderboard?.weeklyLeaderboard as any)?.[language] || 'Weekly Leaderboard'}
+                    </Text>
+                    <Text style={s.weeklyBannerSub}>
+                      {weeklyRank.matchesThisWeek} {t('leaderboard', 'matches')} {language === 'fr' ? 'cette semaine' : 'this week'}
+                    </Text>
+                  </View>
+                </View>
+                <View style={s.weeklyBannerRight}>
+                  <Text style={s.weeklyBannerRank}>#{weeklyRank.rank}</Text>
+                  {weeklyRank.direction === 'up' ? (
+                    <View style={s.weeklyBannerChange}>
+                      <MaterialIcons name="arrow-upward" size={14} color="#34D399" />
+                      <Text style={[s.weeklyBannerChangeText, { color: '#34D399' }]}>+{weeklyRank.diff}</Text>
+                    </View>
+                  ) : weeklyRank.direction === 'down' ? (
+                    <View style={s.weeklyBannerChange}>
+                      <MaterialIcons name="arrow-downward" size={14} color="#F87171" />
+                      <Text style={[s.weeklyBannerChangeText, { color: '#F87171' }]}>-{weeklyRank.diff}</Text>
+                    </View>
+                  ) : weeklyRank.direction === 'new' ? (
+                    <View style={[s.weeklyBannerChange, { backgroundColor: 'rgba(96,165,250,0.2)' }]}>
+                      <Text style={[s.weeklyBannerChangeText, { color: '#60A5FA', fontSize: 10 }]}>NEW</Text>
+                    </View>
+                  ) : (
+                    <View style={s.weeklyBannerChange}>
+                      <Text style={[s.weeklyBannerChangeText, { color: 'rgba(255,255,255,0.5)' }]}>=</Text>
+                    </View>
+                  )}
+                  <MaterialIcons name="chevron-right" size={20} color="rgba(255,255,255,0.5)" />
+                </View>
+              </LinearGradient>
+            </Pressable>
           </Animated.View>
         ) : null}
 
@@ -867,6 +944,18 @@ const s = StyleSheet.create({
   actionIconBg: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   actionLabel: { fontSize: 15, fontWeight: '700', color: theme.textPrimary, marginBottom: 2 },
   actionSub: { fontSize: 11, color: theme.textSecondary },
+
+  // ===== WEEKLY BANNER =====
+  weeklyBanner: { borderRadius: 16, overflow: 'hidden' as const, ...Platform.select({ ios: { shadowColor: '#1E3A8A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 8 }, android: { elevation: 3 }, default: {} }) },
+  weeklyBannerGradient: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 16 },
+  weeklyBannerLeft: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, flex: 1 },
+  weeklyBannerIconBg: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center' as const, justifyContent: 'center' as const },
+  weeklyBannerTitle: { fontSize: 14, fontWeight: '700' as const, color: '#FFF' },
+  weeklyBannerSub: { fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 },
+  weeklyBannerRight: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
+  weeklyBannerRank: { fontSize: 24, fontWeight: '900' as const, color: '#FFF' },
+  weeklyBannerChange: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 2, backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  weeklyBannerChangeText: { fontSize: 12, fontWeight: '800' as const },
 
   // ===== PROGRESS =====
   progressCard: { backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#D97706' + '20', ...theme.shadows.card },

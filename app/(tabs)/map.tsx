@@ -872,6 +872,16 @@ export default function MapScreen() {
               );
             })}
           </View>
+
+          {/* City Leaderboard shortcut */}
+          <Pressable
+            style={styles.cityLeaderboardBtn}
+            onPress={() => { Haptics.selectionAsync(); router.push('/city-leaderboard' as any); }}
+          >
+            <MaterialIcons name="leaderboard" size={14} color="rgba(255,255,255,0.8)" />
+            <Text style={styles.cityLeaderboardBtnText}>{language === 'fr' ? 'Classement par ville' : 'City Leaderboard'}</Text>
+            <MaterialIcons name="chevron-right" size={16} color="rgba(255,255,255,0.5)" />
+          </Pressable>
         </LinearGradient>
       </View>
 
@@ -1256,6 +1266,8 @@ const styles = StyleSheet.create({
   heroStatValue: { fontSize: 17, fontWeight: '800' as const, color: 'rgba(255,255,255,0.5)' },
   heroStatLabel: { fontSize: 9, fontWeight: '700' as const, color: 'rgba(255,255,255,0.35)', marginTop: 2, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
   heroStatDivider: { width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.1)' },
+  cityLeaderboardBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, marginTop: 10, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  cityLeaderboardBtnText: { fontSize: 12, fontWeight: '600' as const, color: 'rgba(255,255,255,0.7)' },
   bottomPanel: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     backgroundColor: 'rgba(255,255,255,0.97)',
