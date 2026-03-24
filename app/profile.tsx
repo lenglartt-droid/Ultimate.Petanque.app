@@ -42,6 +42,8 @@ import XPBar from '@/components/ui/XPBar';
 import BadgeUnlockModal from '@/components/ui/BadgeUnlockModal';
 import { BADGES, getBadgeName, getBadgeDescription } from '@/services/badgeService';
 import { useBadges } from '@/hooks/useBadges';
+import { computeStreakFromDates, getStreakStatus, StreakData } from '@/services/streakService';
+import { extraTranslations } from '@/constants/i18nExtra';
 import { Switch } from 'react-native';
 import { NotificationPreferences, DEFAULT_NOTIFICATION_PREFERENCES, loadNotificationPreferences, saveNotificationPreferences } from '@/services/notificationPreferencesService';
 
@@ -1000,6 +1002,76 @@ export default function ProfileScreen() {
           <Animated.View entering={FadeInDown.duration(400).delay(50)} style={{ marginBottom: 20 }}>
             <XPBar xp={userXp} language={language} />
             
+            {/* Streak Counter */}
+            {(() => {
+              const allDates = [...matches.map(m => m.date), ...challenges.map(c => c.date)];
+              const streakData = computeStreakFromDates(allDates);
+              const streakStatus = getStreakStatus(streakData, language as 'fr' | 'en');
+              const et = extraTranslations.streak;
+              const progressPercent = Math.min(100, Math.round((streakData.currentStreak / 7) * 100));
+              return (
+                <View style={streakStyles.streakCard}>
+                  <View style={streakStyles.streakHeader}>
+                    <View style={streakStyles.streakFireBg}>
+                      <MaterialIcons name="local-fire-department" size={22} color={streakData.currentStreak > 0 ? '#F97316' : theme.textMuted} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={streakStyles.streakTitle}>{(et.streakTitle as any)?.[language] || 'Play streak'}</Text>
+                      <Text style={[streakStyles.streakStatusText, { color: streakStatus.color }]}>{streakStatus.text}</Text>
+                    </View>
+                    {streakData.currentStreak >= 7 ? (
+                      <View style={streakStyles.streakFireLabel}>
+                        <MaterialIcons name="local-fire-department" size={12} color="#FFF" />
+                        <Text style={streakStyles.streakFireLabelText}>{(et.streakFireLabel as any)?.[language] || 'On Fire'}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <View style={streakStyles.streakCounterRow}>
+                    <View style={streakStyles.streakCounterItem}>
+                      <Text style={[streakStyles.streakCounterValue, { color: streakData.currentStreak > 0 ? '#F97316' : theme.textMuted }]}>{streakData.currentStreak}</Text>
+                      <Text style={streakStyles.streakCounterLabel}>{(et.currentStreak as any)?.[language] || 'Current streak'}</Text>
+                    </View>
+                    <View style={streakStyles.streakCounterDivider} />
+                    <View style={streakStyles.streakCounterItem}>
+                      <Text style={[streakStyles.streakCounterValue, { color: '#D97706' }]}>{streakData.bestStreak}</Text>
+                      <Text style={streakStyles.streakCounterLabel}>{(et.bestStreak as any)?.[language] || 'Best streak'}</Text>
+                    </View>
+                  </View>
+                  {/* Progress toward 7-day badge */}
+                  {streakData.currentStreak < 7 ? (
+                    <View style={streakStyles.streakProgressSection}>
+                      <View style={streakStyles.streakProgressHeader}>
+                        <MaterialIcons name="emoji-events" size={12} color="#F97316" />
+                        <Text style={streakStyles.streakProgressLabel}>{(et.targetLabel as any)?.[language] || 'Badge target: 7 days'}</Text>
+                        <Text style={streakStyles.streakProgressPct}>{progressPercent}%</Text>
+                      </View>
+                      <View style={streakStyles.streakProgressTrack}>
+                        <View style={[streakStyles.streakProgressFill, { width: `${progressPercent}%` }]} />
+                      </View>
+                      <View style={streakStyles.streakDotsRow}>
+                        {[1, 2, 3, 4, 5, 6, 7].map(day => (
+                          <View key={day} style={[
+                            streakStyles.streakDot,
+                            day <= streakData.currentStreak && streakStyles.streakDotActive,
+                          ]}>
+                            {day <= streakData.currentStreak ? <MaterialIcons name="check" size={8} color="#FFF" /> : <Text style={streakStyles.streakDotText}>{day}</Text>}
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  ) : null}
+                  {/* At risk warning */}
+                  {streakStatus.status === 'at_risk' && streakData.currentStreak > 0 ? (
+                    <Pressable style={streakStyles.streakWarning} onPress={() => router.push('/match/new')}>
+                      <MaterialIcons name="warning" size={14} color="#EF4444" />
+                      <Text style={streakStyles.streakWarningText}>{(et.streakAtRisk as any)?.[language] || 'Play today to keep your streak!'}</Text>
+                      <MaterialIcons name="chevron-right" size={16} color="#EF4444" />
+                    </Pressable>
+                  ) : null}
+                </View>
+              );
+            })()}
+
             {/* Badges Grid */}
             <View style={styles.badgesSection}>
               <Pressable style={styles.badgesSectionHeader} onPress={() => router.push('/badges' as any)}>
@@ -3640,5 +3712,165 @@ const styles = StyleSheet.create({
     backgroundColor: theme.primary + '15',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+});
+
+const streakStyles = StyleSheet.create({
+  streakCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    marginTop: 12,
+    ...theme.shadows.card,
+    borderWidth: 1,
+    borderColor: '#F9731620',
+  },
+  streakHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 14,
+  },
+  streakFireBg: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#F9731612',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  streakTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  streakStatusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  streakFireLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F97316',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
+  streakFireLabelText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFF',
+  },
+  streakCounterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  streakCounterItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  streakCounterValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  streakCounterLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: theme.textMuted,
+    marginTop: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  streakCounterDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: theme.border,
+    marginHorizontal: 12,
+  },
+  streakProgressSection: {
+    backgroundColor: '#F9731608',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#F9731615',
+  },
+  streakProgressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  streakProgressLabel: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#92400E',
+  },
+  streakProgressPct: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#F97316',
+  },
+  streakProgressTrack: {
+    height: 6,
+    backgroundColor: '#F9731615',
+    borderRadius: 3,
+    overflow: 'hidden' as const,
+    marginBottom: 10,
+  },
+  streakProgressFill: {
+    height: '100%',
+    backgroundColor: '#F97316',
+    borderRadius: 3,
+  },
+  streakDotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  streakDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme.backgroundSecondary,
+    borderWidth: 1.5,
+    borderColor: theme.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  streakDotActive: {
+    backgroundColor: '#F97316',
+    borderColor: '#F97316',
+  },
+  streakDotText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: theme.textMuted,
+  },
+  streakWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#EF444410',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#EF444420',
+  },
+  streakWarningText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#EF4444',
   },
 });

@@ -22,6 +22,7 @@ import { router } from 'expo-router';
 import { useLanguage } from '@/hooks/useLanguage';
 import AdBanner from '@/components/ui/AdBanner';
 import SponsorBanner from '@/components/ui/SponsorBanner';
+import WeeklyStatsCard from '@/components/ui/WeeklyStatsCard';
 
 
 // TYPES & CONSTANTS
@@ -1580,6 +1581,7 @@ export default function StatsScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }, isTablet && styles.scrollContentTablet]}
         showsVerticalScrollIndicator={false}
       >
+        <WeeklyStatsCard />
         <SponsorBanner page="stats" />
 
         {!hasData ? (
