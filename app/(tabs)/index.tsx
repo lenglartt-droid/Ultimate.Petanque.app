@@ -401,6 +401,9 @@ export default function HomeScreen() {
                 <Text style={s.heroName} numberOfLines={1}>{displayName}</Text>
               </View>
               <View style={s.heroTopActions}>
+                <Pressable style={s.heroIconBtn} onPress={() => router.push('/scanner' as any)}>
+                  <MaterialIcons name="qr-code-scanner" size={20} color="rgba(255,255,255,0.7)" />
+                </Pressable>
                 <Pressable style={s.heroIconBtn} onPress={() => setShowQRModal(true)}>
                   <MaterialIcons name="qr-code-2" size={20} color="rgba(255,255,255,0.7)" />
                 </Pressable>

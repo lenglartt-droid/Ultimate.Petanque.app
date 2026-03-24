@@ -141,6 +141,64 @@ export const extraTranslations = {
       fr: 'Pour proteger contre les abus, les fonctions sensibles (validation de codes promo, achats) limitent le nombre de tentatives par minute. Si vous etes bloque, attendez quelques secondes puis reessayez.',
       en: 'To protect against abuse, sensitive functions (promo code validation, purchases) limit the number of attempts per minute. If you are blocked, wait a few seconds and try again.',
     },
+    // FAQ Trust Score & Anti-cheat
+    faqTrustCategory: { fr: 'Score de confiance & Anti-triche', en: 'Trust Score & Anti-cheat' },
+    faqTs1Q: { fr: 'Qu\'est-ce que le score de confiance ?', en: 'What is the trust score?' },
+    faqTs1A: {
+      fr: 'Le score de confiance (0-100) mesure la fiabilite de vos statistiques en se basant sur 10 facteurs : matchs multi-joueurs, diversite des adversaires, coherence, historique de modifications, frequence de jeu, anciennete, etc. Il determine votre visibilite dans le classement.',
+      en: 'The trust score (0-100) measures the reliability of your statistics based on 10 factors: multi-player matches, opponent diversity, consistency, modification history, play frequency, account age, etc. It determines your visibility in the leaderboard.',
+    },
+    faqTs2Q: { fr: 'Pourquoi mon score diminue-t-il sans que je joue ?', en: 'Why does my score decrease when I do not play?' },
+    faqTs2A: {
+      fr: 'Une inactivite entraine une baisse de 5 points par mois (plancher 30). Jouez regulierement pour maintenir votre score. Apres 2 semaines sans match, un avertissement s\'affiche sur votre page score.',
+      en: 'Inactivity causes a 5-point monthly decrease (floor 30). Play regularly to maintain your score. After 2 weeks without a match, a warning appears on your score page.',
+    },
+    faqTs3Q: { fr: 'Comment fonctionnent les attestations de temoin ?', en: 'How do witness attestations work?' },
+    faqTs3A: {
+      fr: 'Pour les matchs a 3+ joueurs, vous pouvez inviter un utilisateur non-participant comme temoin. Son attestation augmente le poids du match a 2.0x dans le classement. Les temoins recoivent une notification push et peuvent attester depuis la page Attestations.',
+      en: 'For 3+ player matches, you can invite a non-participant user as a witness. Their attestation upgrades the match weight to 2.0x in the leaderboard. Witnesses receive a push notification and can attest from the Attestations page.',
+    },
+    faqTs4Q: { fr: 'Que signifient les poids de validation (0.3x, 1x, 1.5x, 2x) ?', en: 'What do validation weights (0.3x, 1x, 1.5x, 2x) mean?' },
+    faqTs4A: {
+      fr: 'Le poids de validation multiplie l\'impact du match dans le classement : 0.3x pour solo, 1.0x pour 2 joueurs, 1.5x pour 3-4 joueurs, 2.0x pour matchs attestes par un temoin. Les matchs solo comptent peu, jouez avec d\'autres pour un meilleur classement.',
+      en: 'Validation weight multiplies the match impact on the leaderboard: 0.3x for solo, 1.0x for 2 players, 1.5x for 3-4 players, 2.0x for witness-attested matches. Solo matches count less, play with others for a better ranking.',
+    },
+    // FAQ Badges & Gamification
+    faqBadgesCategory: { fr: 'Badges & Gamification', en: 'Badges & Gamification' },
+    faqBg1Q: { fr: 'Comment debloquer des badges ?', en: 'How do I unlock badges?' },
+    faqBg1A: {
+      fr: 'Il y a 10 badges a debloquer : Premier Match (1 match), Regulier (10 matchs), Centurion (100 matchs), Sniper (tir >50%), Mur (pointe >50%), Duel (5 defis), Serie 7j (7 jours consecutifs), Social (5 joueurs partages), Fiable (score confiance 65+), Verifie (score confiance 80+). Chaque badge rapporte de l\'XP.',
+      en: 'There are 10 badges to unlock: First Match (1 match), Regular (10 matches), Centurion (100 matches), Sniper (tir >50%), Wall (point >50%), Duel (5 challenges), 7-Day Streak (7 consecutive days), Social (5 shared players), Reliable (trust score 65+), Verified (trust score 80+). Each badge gives XP.',
+    },
+    faqBg2Q: { fr: 'Comment fonctionne la barre d\'XP ?', en: 'How does the XP bar work?' },
+    faqBg2A: {
+      fr: 'L\'XP (experience) augmente en debloquant des badges. Chaque badge donne entre 10 et 50 XP. La barre de progression est visible sur votre profil. Plus vous jouez et diversifiez vos activites, plus vous gagnez d\'XP.',
+      en: 'XP (experience) increases by unlocking badges. Each badge gives 10-50 XP. The progress bar is visible on your profile. The more you play and diversify activities, the more XP you earn.',
+    },
+    // FAQ Weekly Leaderboard
+    faqWeeklyCategory: { fr: 'Classement hebdomadaire', en: 'Weekly Leaderboard' },
+    faqWk1Q: { fr: 'Comment fonctionne le classement hebdomadaire ?', en: 'How does the weekly leaderboard work?' },
+    faqWk1A: {
+      fr: 'Le classement est remis a zero chaque lundi. Seuls les matchs de la semaine en cours comptent (minimum 2 matchs publics). Les positions sont sauvegardees chaque semaine pour suivre votre evolution. Les matchs sont ponderes par leur poids de validation.',
+      en: 'The leaderboard resets every Monday. Only current week matches count (minimum 2 public matches). Positions are saved weekly to track your progression. Matches are weighted by their validation weight.',
+    },
+    faqWk2Q: { fr: 'Comment filtrer par niveau de confiance ?', en: 'How to filter by trust level?' },
+    faqWk2A: {
+      fr: 'Dans le classement, des puces de filtre apparaissent : Verifie (80+), Fiable (65-79), Standard (25-64), Tous. Chaque filtre montre le pourcentage de joueurs dans cette categorie pour vous aider a vous situer.',
+      en: 'In the leaderboard, filter chips appear: Verified (80+), Trusted (65-79), Standard (25-64), All. Each filter shows the percentage of players in that category to help you gauge your position.',
+    },
+    // FAQ QR Scanner
+    faqScannerCategory: { fr: 'Scanner QR universel', en: 'Universal QR Scanner' },
+    faqScan1Q: { fr: 'Que puis-je scanner avec le scanner QR ?', en: 'What can I scan with the QR scanner?' },
+    faqScan1A: {
+      fr: 'Le scanner universel detecte automatiquement 3 types de codes : codes evenements ambassadeurs (EVT-XXX), codes meetup (MTU-XXX), et codes de partage. Il vous redirige directement vers la page correspondante.',
+      en: 'The universal scanner automatically detects 3 code types: ambassador event codes (EVT-XXX), meetup codes (MTU-XXX), and share codes. It redirects you directly to the corresponding page.',
+    },
+    faqScan2Q: { fr: 'Comment acceder au scanner ?', en: 'How do I access the scanner?' },
+    faqScan2A: {
+      fr: 'Depuis la page d\'accueil, appuyez sur l\'icone scanner QR (a cote de l\'avatar). Vous pouvez aussi entrer un code manuellement si la camera n\'est pas disponible.',
+      en: 'From the home screen, tap the QR scanner icon (next to your avatar). You can also enter a code manually if the camera is not available.',
+    },
     // FAQ Ambassadors & Partners
     faqAmbassadorsCategory: { fr: 'Ambassadeurs & Partenaires', en: 'Ambassadors & Partners' },
     faqAmb1Q: { fr: 'Que sont les ambassadeurs ?', en: 'What are ambassadors?' },

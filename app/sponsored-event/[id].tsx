@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Platform, RefreshControl, Share as RNShare } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -11,7 +11,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import {
   getSponsoredEvent, getEventParticipants, getMyParticipationStatus,
   registerForEvent, declineEvent, attestAsWitness, publishResults,
-  cancelSponsoredEvent, inviteUsersToEvent, SponsoredEvent, SponsoredEventParticipant,
+  cancelSponsoredEvent, inviteUsersToEvent, reinviteUser, SponsoredEvent, SponsoredEventParticipant,
 } from '@/services/sponsoredEventService';
 import { getSupabaseClient } from '@/template';
 import { Dimensions, Modal, FlatList, TextInput } from 'react-native';
@@ -210,6 +210,7 @@ export default function SponsoredEventDetailScreen() {
   const [invitedPlayerIds, setInvitedPlayerIds] = useState<Set<string>>(new Set());
   const [selectedForBatch, setSelectedForBatch] = useState<Set<string>>(new Set());
   const [batchInviting, setBatchInviting] = useState(false);
+  const [reinvitingUserId, setReinvitingUserId] = useState<string | null>(null);
 
   const handleShare = async () => {
     setShowShareModal(true);
@@ -308,7 +309,7 @@ export default function SponsoredEventDetailScreen() {
     } else {
       setInvitedPlayerIds(prev => new Set([...prev, targetUserId]));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      // Send push notification
+      // Send targeted push notification to specific invited user
       try {
         const supabase = getSupabaseClient();
         const { data: profile } = await supabase.from('user_profiles').select('username').eq('id', user?.id).maybeSingle();
@@ -321,6 +322,7 @@ export default function SponsoredEventDetailScreen() {
               city: event.city,
               challengeType: event.challengeType,
               ambassadorName: profile?.username || 'Ambassadeur',
+              targetUserIds: [targetUserId],
             },
           },
         });
@@ -380,7 +382,7 @@ export default function SponsoredEventDetailScreen() {
         language === 'fr' ? 'Invitations envoyees' : 'Invitations sent',
         language === 'fr' ? `${invited} joueur(s) invite(s) avec succes` : `${invited} player(s) invited successfully`
       );
-      // Send batch push notification
+      // Send targeted batch push notification to specific invited users
       try {
         const supabase = getSupabaseClient();
         const { data: profile } = await supabase.from('user_profiles').select('username').eq('id', user?.id).maybeSingle();
@@ -393,6 +395,7 @@ export default function SponsoredEventDetailScreen() {
               city: event.city,
               challengeType: event.challengeType,
               ambassadorName: profile?.username || 'Ambassadeur',
+              targetUserIds: userIds,
             },
           },
         });
@@ -400,6 +403,28 @@ export default function SponsoredEventDetailScreen() {
     }
     loadData();
   }, [id, event, selectedForBatch, user?.id, language]);
+
+  const handleReinvite = useCallback(async (userId: string, userName: string) => {
+    if (!id) return;
+    setReinvitingUserId(userId);
+    Haptics.selectionAsync();
+    const { error: err } = await reinviteUser(id, userId);
+    setReinvitingUserId(null);
+    if (err) {
+      showAlert(language === 'fr' ? 'Erreur' : 'Error', err);
+      return;
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    showAlert(
+      language === 'fr' ? 'Reinvitation envoyee' : 'Re-invitation sent',
+      language === 'fr' ? `${userName} a ete reinvite(e)` : `${userName} has been re-invited`
+    );
+    loadData();
+  }, [id, language]);
+
+  const invitationHistory = useMemo(() => {
+    return [...participants].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [participants]);
 
   const challengeName = (type: string) => type === '10_tirs' ? '10 Tirs' : type === '10_tirs_sautee' ? '10 Tirs sautee' : 'Precision';
 
@@ -674,6 +699,189 @@ export default function SponsoredEventDetailScreen() {
             ))
           )}
         </View>
+
+        {/* Invitation History */}
+        {isCreator && invitationHistory.length > 0 ? (
+          <View style={s.section}>
+            <View style={s.sectionHeader}>
+              <MaterialIcons name="history" size={18} color="#7C3AED" />
+              <Text style={s.sectionTitle}>{language === 'fr' ? 'Historique des invitations' : 'Invitation History'}</Text>
+              <View style={{ flex: 1 }} />
+              <View style={s.invHistoryCount}>
+                <Text style={s.invHistoryCountText}>{invitationHistory.length}</Text>
+              </View>
+            </View>
+            {invitationHistory.map((p) => {
+              const statusConfig = p.status === 'accepted' || p.status === 'completed'
+                ? { color: theme.success, icon: 'check-circle' as const, label: p.status === 'completed' ? (language === 'fr' ? 'Termine' : 'Completed') : (language === 'fr' ? 'Accepte' : 'Accepted') }
+                : p.status === 'declined'
+                  ? { color: theme.error, icon: 'cancel' as const, label: language === 'fr' ? 'Decline' : 'Declined' }
+                  : { color: '#F59E0B', icon: 'schedule' as const, label: language === 'fr' ? 'En attente' : 'Pending' };
+              return (
+                <View key={`inv-${p.id}`} style={s.invHistoryRow}>
+                  {p.userAvatar ? (
+                    <Image source={{ uri: p.userAvatar }} style={s.invHistoryAvatar} contentFit="cover" cachePolicy="memory-disk" />
+                  ) : (
+                    <View style={[s.invHistoryAvatar, { backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center' }]}>
+                      <Text style={{ fontWeight: '700', color: theme.primary, fontSize: 12 }}>{p.userName?.charAt(0)}</Text>
+                    </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.invHistoryName} numberOfLines={1}>{p.userName} {p.userId === user?.id ? (language === 'fr' ? '(Vous)' : '(You)') : ''}</Text>
+                    <Text style={s.invHistoryDate}>
+                      {language === 'fr' ? 'Invite le' : 'Invited'} {new Date(p.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                    {p.respondedAt ? (
+                      <Text style={s.invHistoryRespondDate}>
+                        {language === 'fr' ? 'Repondu le' : 'Responded'} {new Date(p.respondedAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <View style={[s.invHistoryStatusBadge, { backgroundColor: statusConfig.color + '15' }]}>
+                    <MaterialIcons name={statusConfig.icon} size={12} color={statusConfig.color} />
+                    <Text style={[s.invHistoryStatusText, { color: statusConfig.color }]}>{statusConfig.label}</Text>
+                  </View>
+                  {p.status === 'declined' ? (
+                    <Pressable
+                      style={[s.invHistoryReinviteBtn, reinvitingUserId === p.userId && { opacity: 0.5 }]}
+                      onPress={() => handleReinvite(p.userId, p.userName || '')}
+                      disabled={reinvitingUserId === p.userId}
+                    >
+                      {reinvitingUserId === p.userId ? (
+                        <ActivityIndicator size="small" color="#7C3AED" />
+                      ) : (
+                        <MaterialIcons name="refresh" size={16} color="#7C3AED" />
+                      )}
+                    </Pressable>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
+
+        {/* ===== ANALYTICS DASHBOARD ===== */}
+        {isCreator && participants.length > 0 ? (
+          <Animated.View entering={FadeInDown.duration(300)} style={s.section}>
+            <View style={s.sectionHeader}>
+              <MaterialIcons name="analytics" size={18} color="#7C3AED" />
+              <Text style={s.sectionTitle}>{language === 'fr' ? 'Analytiques' : 'Analytics'}</Text>
+            </View>
+            {/* Conversion Funnel */}
+            <View style={s.analyticsCard}>
+              <Text style={s.analyticsCardTitle}>{language === 'fr' ? 'Entonnoir de conversion' : 'Conversion Funnel'}</Text>
+              {(() => {
+                const invited = participants.length;
+                const accepted = participants.filter(p => p.status === 'accepted' || p.status === 'completed').length;
+                const completed = participants.filter(p => p.status === 'completed').length;
+                const declined = participants.filter(p => p.status === 'declined').length;
+                const pending = participants.filter(p => p.status === 'pending').length;
+                const steps = [
+                  { label: language === 'fr' ? 'Invites' : 'Invited', count: invited, color: '#94A3B8', pct: 100 },
+                  { label: language === 'fr' ? 'Acceptes' : 'Accepted', count: accepted, color: '#7C3AED', pct: invited > 0 ? Math.round((accepted / invited) * 100) : 0 },
+                  { label: language === 'fr' ? 'Termines' : 'Completed', count: completed, color: theme.success, pct: invited > 0 ? Math.round((completed / invited) * 100) : 0 },
+                ];
+                return (
+                  <View style={{ gap: 8 }}>
+                    {steps.map((step, idx) => (
+                      <View key={idx} style={s.funnelRow}>
+                        <View style={{ width: 80 }}>
+                          <Text style={s.funnelLabel}>{step.label}</Text>
+                          <Text style={[s.funnelCount, { color: step.color }]}>{step.count}</Text>
+                        </View>
+                        <View style={s.funnelBarTrack}>
+                          <View style={[s.funnelBarFill, { width: `${step.pct}%`, backgroundColor: step.color }]} />
+                        </View>
+                        <Text style={s.funnelPct}>{step.pct}%</Text>
+                      </View>
+                    ))}
+                    <View style={s.funnelStatsRow}>
+                      <View style={s.funnelStatChip}>
+                        <MaterialIcons name="schedule" size={12} color="#F59E0B" />
+                        <Text style={s.funnelStatText}>{pending} {language === 'fr' ? 'en attente' : 'pending'}</Text>
+                      </View>
+                      <View style={s.funnelStatChip}>
+                        <MaterialIcons name="cancel" size={12} color={theme.error} />
+                        <Text style={s.funnelStatText}>{declined} {language === 'fr' ? 'declines' : 'declined'}</Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })()}
+            </View>
+
+            {/* Registration Timeline */}
+            <View style={[s.analyticsCard, { marginTop: 10 }]}>
+              <Text style={s.analyticsCardTitle}>{language === 'fr' ? 'Inscriptions dans le temps' : 'Registration Over Time'}</Text>
+              {(() => {
+                // Group registrations by day
+                const dayMap = new Map<string, number>();
+                participants.forEach(p => {
+                  const day = new Date(p.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' });
+                  dayMap.set(day, (dayMap.get(day) || 0) + 1);
+                });
+                const entries = Array.from(dayMap.entries()).slice(-7);
+                const maxVal = Math.max(...entries.map(e => e[1]), 1);
+                return entries.length > 0 ? (
+                  <View style={s.timelineChart}>
+                    {entries.map(([day, count], idx) => (
+                      <View key={idx} style={s.timelineBarCol}>
+                        <Text style={s.timelineBarValue}>{count}</Text>
+                        <View style={[s.timelineBar, { height: Math.max(8, (count / maxVal) * 60) }]} />
+                        <Text style={s.timelineBarLabel}>{day}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : <Text style={s.analyticsEmpty}>{language === 'fr' ? 'Pas encore de donnees' : 'No data yet'}</Text>;
+              })()}
+            </View>
+
+            {/* Demographics */}
+            <View style={[s.analyticsCard, { marginTop: 10 }]}>
+              <Text style={s.analyticsCardTitle}>{language === 'fr' ? 'Demographie des participants' : 'Participant Demographics'}</Text>
+              {(() => {
+                // We show club distribution from participant names since we have limited data
+                const statusCounts = { accepted: 0, completed: 0, pending: 0, declined: 0 };
+                participants.forEach(p => { statusCounts[p.status as keyof typeof statusCounts] = (statusCounts[p.status as keyof typeof statusCounts] || 0) + 1; });
+                const totalWitnesses = participants.reduce((s, p) => s + (p.witnessCount || 0), 0);
+                const totalAttested = participants.reduce((s, p) => s + (p.witnessesAttested || 0), 0);
+                const attestRate = totalWitnesses > 0 ? Math.round((totalAttested / totalWitnesses) * 100) : 0;
+                return (
+                  <View style={s.demoGrid}>
+                    <View style={s.demoItem}>
+                      <View style={[s.demoIconBg, { backgroundColor: theme.success + '15' }]}>
+                        <MaterialIcons name="group" size={16} color={theme.success} />
+                      </View>
+                      <Text style={s.demoValue}>{participants.length}</Text>
+                      <Text style={s.demoLabel}>{language === 'fr' ? 'Total' : 'Total'}</Text>
+                    </View>
+                    <View style={s.demoItem}>
+                      <View style={[s.demoIconBg, { backgroundColor: '#7C3AED15' }]}>
+                        <MaterialIcons name="check-circle" size={16} color="#7C3AED" />
+                      </View>
+                      <Text style={s.demoValue}>{statusCounts.completed}</Text>
+                      <Text style={s.demoLabel}>{language === 'fr' ? 'Termines' : 'Completed'}</Text>
+                    </View>
+                    <View style={s.demoItem}>
+                      <View style={[s.demoIconBg, { backgroundColor: theme.accent + '15' }]}>
+                        <MaterialIcons name="visibility" size={16} color={theme.accent} />
+                      </View>
+                      <Text style={s.demoValue}>{attestRate}%</Text>
+                      <Text style={s.demoLabel}>{language === 'fr' ? 'Taux attestation' : 'Attest rate'}</Text>
+                    </View>
+                    <View style={s.demoItem}>
+                      <View style={[s.demoIconBg, { backgroundColor: '#F59E0B15' }]}>
+                        <MaterialIcons name="verified" size={16} color="#F59E0B" />
+                      </View>
+                      <Text style={s.demoValue}>{totalAttested}/{totalWitnesses}</Text>
+                      <Text style={s.demoLabel}>{language === 'fr' ? 'Temoins' : 'Witnesses'}</Text>
+                    </View>
+                  </View>
+                );
+              })()}
+            </View>
+          </Animated.View>
+        ) : null}
 
         {/* Creator Actions */}
         {isCreator ? (
@@ -1091,4 +1299,38 @@ const s = StyleSheet.create({
   ppBatchBar: { position: 'absolute' as const, bottom: 0, left: 0, right: 0, padding: 16, paddingBottom: 32, backgroundColor: 'rgba(255,255,255,0.97)', borderTopWidth: 1, borderTopColor: theme.border },
   ppBatchInviteBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 10, backgroundColor: '#7C3AED', paddingVertical: 16, borderRadius: 16 },
   ppBatchInviteBtnText: { fontSize: 16, fontWeight: '700' as const, color: '#FFF' },
+  // Invitation History
+  invHistoryCount: { backgroundColor: '#7C3AED15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
+  invHistoryCountText: { fontSize: 13, fontWeight: '800' as const, color: '#7C3AED' },
+  invHistoryRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, backgroundColor: '#FFF', borderRadius: 12, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: '#F1F5F9' },
+  invHistoryAvatar: { width: 36, height: 36, borderRadius: 10, overflow: 'hidden' as const },
+  invHistoryName: { fontSize: 14, fontWeight: '600' as const, color: theme.textPrimary },
+  invHistoryDate: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
+  invHistoryRespondDate: { fontSize: 10, color: theme.textMuted, marginTop: 1, fontStyle: 'italic' as const },
+  invHistoryStatusBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8 },
+  invHistoryStatusText: { fontSize: 10, fontWeight: '700' as const },
+  invHistoryReinviteBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#7C3AED12', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1, borderColor: '#7C3AED20' },
+  // Analytics
+  analyticsCard: { backgroundColor: '#FFF', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' },
+  analyticsCardTitle: { fontSize: 13, fontWeight: '700' as const, color: theme.textSecondary, textTransform: 'uppercase' as const, letterSpacing: 0.5, marginBottom: 14 },
+  analyticsEmpty: { fontSize: 13, color: theme.textMuted, textAlign: 'center' as const, paddingVertical: 16 },
+  funnelRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
+  funnelLabel: { fontSize: 11, fontWeight: '600' as const, color: theme.textSecondary },
+  funnelCount: { fontSize: 18, fontWeight: '900' as const },
+  funnelBarTrack: { flex: 1, height: 8, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' as const },
+  funnelBarFill: { height: '100%' as const, borderRadius: 4 },
+  funnelPct: { fontSize: 12, fontWeight: '700' as const, color: theme.textMuted, width: 36, textAlign: 'right' as const },
+  funnelStatsRow: { flexDirection: 'row' as const, gap: 10, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  funnelStatChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, backgroundColor: '#F8FAFC', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  funnelStatText: { fontSize: 12, fontWeight: '600' as const, color: theme.textSecondary },
+  timelineChart: { flexDirection: 'row' as const, alignItems: 'flex-end' as const, justifyContent: 'space-around' as const, height: 100, paddingTop: 10 },
+  timelineBarCol: { alignItems: 'center' as const, gap: 4, flex: 1 },
+  timelineBarValue: { fontSize: 11, fontWeight: '800' as const, color: '#7C3AED' },
+  timelineBar: { width: 24, backgroundColor: '#7C3AED', borderRadius: 6, minHeight: 8 },
+  timelineBarLabel: { fontSize: 9, fontWeight: '600' as const, color: theme.textMuted },
+  demoGrid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
+  demoItem: { width: '47%' as any, backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, alignItems: 'center' as const, gap: 6 },
+  demoIconBg: { width: 36, height: 36, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
+  demoValue: { fontSize: 18, fontWeight: '900' as const, color: theme.textPrimary },
+  demoLabel: { fontSize: 10, fontWeight: '600' as const, color: theme.textMuted, textTransform: 'uppercase' as const },
 });

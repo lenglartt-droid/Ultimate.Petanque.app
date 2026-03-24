@@ -30,6 +30,7 @@ function getQuickActions(t: (s: string, k: string) => string) {
     { id: 'publish', title: t('faq', 'publishOnMap'), icon: 'public', color: '#8B5CF6', steps: t('faq', 'qaPublishSteps').split('|') },
     { id: 'meetup', title: t('faq', 'organizeMeetup'), icon: 'event', color: theme.warning, steps: t('faq', 'qaMeetupSteps').split('|'), route: '/meetup/new' },
     { id: 'leaderboard', title: t('faq', 'viewLeaderboard'), icon: 'leaderboard', color: '#D97706', steps: t('faq', 'qaLeaderboardSteps').split('|'), route: '/leaderboard' },
+    { id: 'scanner', title: language === 'fr' ? 'Scanner un QR code' : 'Scan a QR Code', icon: 'qr-code-scanner', color: '#7C3AED', steps: (language === 'fr' ? 'Appuyez sur l\'icone scanner sur l\'accueil|Pointez la camera vers un QR code|L\'app detecte automatiquement le type|Navigation instantanee vers la destination' : 'Tap the scanner icon on home screen|Point camera at a QR code|App auto-detects the code type|Instant navigation to destination').split('|'), route: '/scanner' },
   ];
 }
 
@@ -144,6 +145,24 @@ function getFaqData(t: (s: string, k: string) => string, language: string) {
     { id: 'security', category: t('pushNotifs', 'faqSecurityCategory'), icon: 'security', color: '#EF4444', questions: [
       { id: 'sec1', q: t('pushNotifs', 'faqSec1Q'), a: t('pushNotifs', 'faqSec1A') },
       { id: 'sec2', q: t('pushNotifs', 'faqSec2Q'), a: t('pushNotifs', 'faqSec2A') },
+    ]},
+    { id: 'trust_score', category: t('pushNotifs', 'faqTrustCategory'), icon: 'verified-user', color: '#3B82F6', questions: [
+      { id: 'ts1', q: t('pushNotifs', 'faqTs1Q'), a: t('pushNotifs', 'faqTs1A') },
+      { id: 'ts2', q: t('pushNotifs', 'faqTs2Q'), a: t('pushNotifs', 'faqTs2A') },
+      { id: 'ts3', q: t('pushNotifs', 'faqTs3Q'), a: t('pushNotifs', 'faqTs3A') },
+      { id: 'ts4', q: t('pushNotifs', 'faqTs4Q'), a: t('pushNotifs', 'faqTs4A') },
+    ]},
+    { id: 'badges', category: t('pushNotifs', 'faqBadgesCategory'), icon: 'military-tech', color: '#F97316', questions: [
+      { id: 'bg1', q: t('pushNotifs', 'faqBg1Q'), a: t('pushNotifs', 'faqBg1A') },
+      { id: 'bg2', q: t('pushNotifs', 'faqBg2Q'), a: t('pushNotifs', 'faqBg2A') },
+    ]},
+    { id: 'weekly_leaderboard', category: t('pushNotifs', 'faqWeeklyCategory'), icon: 'calendar-today', color: '#1E3A8A', questions: [
+      { id: 'wk1', q: t('pushNotifs', 'faqWk1Q'), a: t('pushNotifs', 'faqWk1A') },
+      { id: 'wk2', q: t('pushNotifs', 'faqWk2Q'), a: t('pushNotifs', 'faqWk2A') },
+    ]},
+    { id: 'qr_scanner', category: t('pushNotifs', 'faqScannerCategory'), icon: 'qr-code-scanner', color: '#7C3AED', questions: [
+      { id: 'scan1', q: t('pushNotifs', 'faqScan1Q'), a: t('pushNotifs', 'faqScan1A') },
+      { id: 'scan2', q: t('pushNotifs', 'faqScan2Q'), a: t('pushNotifs', 'faqScan2A') },
     ]},
   ];
 }

@@ -115,92 +115,113 @@ Deno.serve(async (req: Request) => {
 
     // ============================================================
     // EVENT_CREATED: Ambassador created a sponsored event
-    // Notify users within 200km of event location or same city
+    // Supports targeted user IDs via `targetUserIds` array.
+    // If `targetUserIds` is provided, only those users get notified.
+    // Otherwise, falls back to geo-proximity (200km / same city).
     // ============================================================
     if (type === 'event_created') {
-      const { eventId, eventTitle, city, country, latitude, longitude, challengeType, ambassadorName } = payload || {};
+      const { eventId, eventTitle, city, country, latitude, longitude, challengeType, ambassadorName, targetUserIds } = payload || {};
       if (!eventId || !eventTitle) {
         return new Response(JSON.stringify({ error: 'Missing eventId/eventTitle' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      const { data: tokens } = await supabaseAdmin
-        .from('push_tokens')
-        .select('user_id, token')
-        .eq('active', true)
-        .neq('user_id', user.id);
+      let matchedUserIds = new Set<string>();
 
-      if (!tokens || tokens.length === 0) {
-        return new Response(JSON.stringify({ sent: 0, errors: 0, reason: 'no_tokens' }), {
-          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      if (targetUserIds && Array.isArray(targetUserIds) && targetUserIds.length > 0) {
+        // ---- TARGETED MODE: only send to specified users ----
+        console.log(`[send-push] event_created: targeted mode, ${targetUserIds.length} user(s)`);
+        targetUserIds.forEach((uid: string) => {
+          if (uid !== user.id) matchedUserIds.add(uid);
         });
-      }
+      } else {
+        // ---- BROADCAST MODE: geo-proximity based ----
+        const { data: tokens } = await supabaseAdmin
+          .from('push_tokens')
+          .select('user_id, token')
+          .eq('active', true)
+          .neq('user_id', user.id);
 
-      const userIds = [...new Set(tokens.map(t => t.user_id))];
+        if (!tokens || tokens.length === 0) {
+          return new Response(JSON.stringify({ sent: 0, errors: 0, reason: 'no_tokens' }), {
+            status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
 
-      const { data: players } = await supabaseAdmin
-        .from('players')
-        .select('user_id, location, name')
-        .in('user_id', userIds);
+        const userIds = [...new Set(tokens.map(t => t.user_id))];
 
-      const playerMap = new Map<string, any>();
-      (players || []).forEach(p => {
-        if (!playerMap.has(p.user_id)) playerMap.set(p.user_id, p);
-      });
+        const { data: players } = await supabaseAdmin
+          .from('players')
+          .select('user_id, location, name')
+          .in('user_id', userIds);
 
-      // Determine recipients: city match OR within 200km
-      const matchedUserIds = new Set<string>();
+        const playerMap = new Map<string, any>();
+        (players || []).forEach(p => {
+          if (!playerMap.has(p.user_id)) playerMap.set(p.user_id, p);
+        });
 
-      for (const uid of userIds) {
-        const player = playerMap.get(uid);
-        if (!player?.location) {
-          if (city) {
-            const { data: userTerrains } = await supabaseAdmin
-              .from('terrains').select('city').eq('user_id', uid).limit(5);
-            const { data: userClubs } = await supabaseAdmin
-              .from('clubs').select('city').eq('user_id', uid).limit(5);
-            const userCities = [
-              ...(userTerrains || []).map(t => t.city?.toLowerCase()),
-              ...(userClubs || []).map(c => c.city?.toLowerCase()),
-            ].filter(Boolean);
-            if (userCities.includes(city.toLowerCase())) {
+        for (const uid of userIds) {
+          const player = playerMap.get(uid);
+          if (!player?.location) {
+            if (city) {
+              const { data: userTerrains } = await supabaseAdmin
+                .from('terrains').select('city').eq('user_id', uid).limit(5);
+              const { data: userClubs } = await supabaseAdmin
+                .from('clubs').select('city').eq('user_id', uid).limit(5);
+              const userCities = [
+                ...(userTerrains || []).map(t => t.city?.toLowerCase()),
+                ...(userClubs || []).map(c => c.city?.toLowerCase()),
+              ].filter(Boolean);
+              if (userCities.includes(city.toLowerCase())) {
+                matchedUserIds.add(uid);
+              }
+            }
+            continue;
+          }
+
+          const playerLat = player.location.latitude;
+          const playerLng = player.location.longitude;
+
+          if (city && player.location.city?.toLowerCase() === city.toLowerCase()) {
+            matchedUserIds.add(uid);
+            continue;
+          }
+
+          if (latitude && longitude && playerLat && playerLng) {
+            const dist = haversineDistance(latitude, longitude, playerLat, playerLng);
+            if (dist <= PROXIMITY_RADIUS_KM) {
               matchedUserIds.add(uid);
             }
-          }
-          continue;
-        }
-
-        const playerLat = player.location.latitude;
-        const playerLng = player.location.longitude;
-
-        if (city && player.location.city?.toLowerCase() === city.toLowerCase()) {
-          matchedUserIds.add(uid);
-          continue;
-        }
-
-        if (latitude && longitude && playerLat && playerLng) {
-          const dist = haversineDistance(latitude, longitude, playerLat, playerLng);
-          if (dist <= PROXIMITY_RADIUS_KM) {
-            matchedUserIds.add(uid);
           }
         }
       }
 
       // Filter by notification preference
       const recipientUserIds = await filterByNotifPref(matchedUserIds, 'event_created');
-      console.log(`[send-push] event_created: ${recipientUserIds.size} recipients (${matchedUserIds.size} geo-matched, filtered by prefs) within ${PROXIMITY_RADIUS_KM}km or city "${city}"`);
+      console.log(`[send-push] event_created: ${recipientUserIds.size} recipients (${matchedUserIds.size} matched, filtered by prefs)`);
+
+      // Fetch tokens for recipients
+      const { data: recipientTokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('user_id, token')
+        .in('user_id', [...recipientUserIds])
+        .eq('active', true);
+
+      if (!recipientTokens || recipientTokens.length === 0) {
+        return new Response(JSON.stringify({ sent: 0, errors: 0, reason: 'no_tokens' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
 
       const challengeLabel = challengeType === '10_tirs' ? '10 Tirs' : challengeType === '10_tirs_sautee' ? '10 Tirs sautes' : 'Precision';
-      const messages = tokens
-        .filter(t => recipientUserIds.has(t.user_id))
-        .map(t => buildPushMessage(
-          t.token,
-          `\u{1F3AF} Nouveau defi ambassadeur${city ? ` a ${city}` : ''} !`,
-          `${ambassadorName || 'Un ambassadeur'} lance "${eventTitle}" (${challengeLabel}).${city ? ` Pres de chez vous !` : ''}`,
-          { type: 'event_created', eventId },
-          { channelId: 'tournament-reminders', priority: 'high' }
-        ));
+      const messages = recipientTokens.map(t => buildPushMessage(
+        t.token,
+        `\u{1F3AF} Nouveau defi ambassadeur${city ? ` a ${city}` : ''} !`,
+        `${ambassadorName || 'Un ambassadeur'} lance "${eventTitle}" (${challengeLabel}).${city ? ` Pres de chez vous !` : ''}`,
+        { type: 'event_created', eventId },
+        { channelId: 'tournament-reminders', priority: 'high' }
+      ));
 
       const tickets = await sendPushNotifications(messages);
       sent = tickets.filter(t => t.status === 'ok').length;
