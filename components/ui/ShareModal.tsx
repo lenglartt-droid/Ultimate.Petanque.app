@@ -39,6 +39,24 @@ const TYPE_LOWER_KEY: Record<ShareItemType, string> = {
   challenge: 'challengeLabel',
 };
 
+type ExpirationOption = 'never' | '1day' | '1week' | '1month';
+
+const EXPIRATION_OPTIONS: { key: ExpirationOption; labelKey: string; icon: string }[] = [
+  { key: 'never', labelKey: 'expirationNever', icon: 'all-inclusive' },
+  { key: '1day', labelKey: 'expiration1Day', icon: 'schedule' },
+  { key: '1week', labelKey: 'expiration1Week', icon: 'date-range' },
+  { key: '1month', labelKey: 'expiration1Month', icon: 'calendar-today' },
+];
+
+function computeExpiresAt(opt: ExpirationOption): string | null {
+  if (opt === 'never') return null;
+  const d = new Date();
+  if (opt === '1day') d.setDate(d.getDate() + 1);
+  else if (opt === '1week') d.setDate(d.getDate() + 7);
+  else if (opt === '1month') d.setMonth(d.getMonth() + 1);
+  return d.toISOString();
+}
+
 interface ShareModalProps {
   visible: boolean;
   onClose: () => void;
@@ -55,6 +73,28 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
   const [shareCode, setShareCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Expiration state
+  const [expiration, setExpiration] = useState<ExpirationOption>('never');
+  const [expiresAtDate, setExpiresAtDate] = useState<Date | null>(null);
+  const [countdownNow, setCountdownNow] = useState(Date.now());
+
+  // Countdown timer for expiration
+  React.useEffect(() => {
+    if (!expiresAtDate) return;
+    const interval = setInterval(() => setCountdownNow(Date.now()), 60000);
+    return () => clearInterval(interval);
+  }, [expiresAtDate]);
+
+  const expirationCountdown = useMemo(() => {
+    if (!expiresAtDate) return null;
+    const diff = expiresAtDate.getTime() - countdownNow;
+    if (diff <= 0) return { expired: true, days: 0, hours: 0, minutes: 0 };
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    return { expired: false, days, hours, minutes };
+  }, [expiresAtDate, countdownNow]);
 
   // Associated items state (for player sharing)
   const [showAssociatedPrompt, setShowAssociatedPrompt] = useState(false);
@@ -163,6 +203,8 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
       setIncludeClub(true);
       setIncludeTerrain(true);
       setSharedAssociatedItems([]);
+      setExpiration('never');
+      setExpiresAtDate(null);
     }
   }, [visible, itemId, itemType]);
 
@@ -211,16 +253,16 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
     }
 
     // Generate single code (no associated items for non-player types)
-    await generateShareCode([]);
-  }, [itemType, itemId, showAssociatedPrompt, shareCode, detectAssociatedItems]);
+    await doGenerateShareCode([], computeExpiresAt(expiration));
+  }, [itemType, itemId, showAssociatedPrompt, shareCode, detectAssociatedItems, expiration]);
 
-  const generateShareCode = useCallback(async (associatedItems: AssociatedItem[]) => {
+  const doGenerateShareCode = useCallback(async (associatedItems: AssociatedItem[], expiresAtISO?: string | null) => {
     setIsGenerating(true);
     setError(null);
     setShowAssociatedPrompt(false);
 
     try {
-      const result = await createShareLink(itemType, itemId, 'read', associatedItems.length > 0 ? associatedItems : undefined);
+      const result = await createShareLink(itemType, itemId, 'read', associatedItems.length > 0 ? associatedItems : undefined, expiresAtISO);
       if (result.error) {
         setError(result.error);
         setIsGenerating(false);
@@ -229,6 +271,8 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
 
       setShareCode(result.shareCode);
       setSharedAssociatedItems(associatedItems);
+      if (expiresAtISO) setExpiresAtDate(new Date(expiresAtISO));
+      else setExpiresAtDate(null);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
       console.log('Share link creation error:', e);
@@ -246,14 +290,14 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
     if (includeTerrain && associatedTerrain) {
       items.push({ type: 'terrain', id: associatedTerrain.id });
     }
-    await generateShareCode(items);
-  }, [includeClub, includeTerrain, associatedClub, associatedTerrain, generateShareCode]);
+    await doGenerateShareCode(items, computeExpiresAt(expiration));
+  }, [includeClub, includeTerrain, associatedClub, associatedTerrain, doGenerateShareCode, expiration]);
 
   const handleSkipAssociated = useCallback(async () => {
     setIncludeClub(false);
     setIncludeTerrain(false);
-    await generateShareCode([]);
-  }, [generateShareCode]);
+    await doGenerateShareCode([], computeExpiresAt(expiration));
+  }, [doGenerateShareCode, expiration]);
 
   const handleCopy = useCallback(async () => {
     if (!shareCode) return;
@@ -293,6 +337,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
     setCopied(false);
     setShowAssociatedPrompt(false);
     setSharedAssociatedItems([]);
+    setExpiresAtDate(null);
     onClose();
   }, [onClose]);
 
@@ -420,6 +465,29 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
             </Animated.View>
           ) : !shareCode ? (
             <>
+              {/* Expiration picker */}
+              <Animated.View entering={FadeInDown.duration(300).delay(40)} style={styles.expirationSection}>
+                <View style={styles.expirationHeader}>
+                  <MaterialIcons name="timer" size={16} color={theme.textSecondary} />
+                  <Text style={styles.expirationTitle}>{t('shareModal', 'expirationLabel')}</Text>
+                </View>
+                <View style={styles.expirationOptions}>
+                  {EXPIRATION_OPTIONS.map((opt) => {
+                    const isActive = expiration === opt.key;
+                    return (
+                      <Pressable
+                        key={opt.key}
+                        style={[styles.expirationChip, isActive && { backgroundColor: typeConfig.color, borderColor: typeConfig.color }]}
+                        onPress={() => { Haptics.selectionAsync(); setExpiration(opt.key); }}
+                      >
+                        <MaterialIcons name={opt.icon as any} size={14} color={isActive ? '#FFF' : theme.textSecondary} />
+                        <Text style={[styles.expirationChipText, isActive && { color: '#FFF' }]}>{t('shareModal', opt.labelKey)}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </Animated.View>
+
               {/* Read-only info */}
               <Animated.View entering={FadeInDown.duration(300).delay(50)} style={styles.readOnlyInfo}>
                 <View style={[styles.readOnlyBadge, { backgroundColor: theme.primary + '15' }]}>
@@ -506,6 +574,46 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                     {t('shareModal', 'readOnly')} + {t('shareModal', 'autoSaveShort')}
                   </Text>
                 </View>
+
+                {/* Expiration countdown indicator */}
+                {expiresAtDate ? (
+                  <View style={[styles.expirationIndicator, expirationCountdown?.expired ? { backgroundColor: theme.error + '12', borderColor: theme.error + '25' } : { backgroundColor: typeConfig.color + '10', borderColor: typeConfig.color + '20' }]}>
+                    <MaterialIcons name={expirationCountdown?.expired ? 'timer-off' : 'timer'} size={14} color={expirationCountdown?.expired ? theme.error : typeConfig.color} />
+                    {expirationCountdown?.expired ? (
+                      <Text style={[styles.expirationIndicatorText, { color: theme.error }]}>{t('shareModal', 'expired')}</Text>
+                    ) : (
+                      <View style={styles.expirationCountdownRow}>
+                        <Text style={[styles.expirationIndicatorLabel, { color: typeConfig.color }]}>{t('shareModal', 'expiresIn')}</Text>
+                        {expirationCountdown && expirationCountdown.days > 0 ? (
+                          <View style={styles.expirationCountdownUnit}>
+                            <Text style={[styles.expirationCountdownValue, { color: typeConfig.color }]}>{expirationCountdown.days}</Text>
+                            <Text style={[styles.expirationCountdownLabel, { color: typeConfig.color }]}>{t('shareModal', 'daysShort')}</Text>
+                          </View>
+                        ) : null}
+                        {expirationCountdown ? (
+                          <View style={styles.expirationCountdownUnit}>
+                            <Text style={[styles.expirationCountdownValue, { color: typeConfig.color }]}>{expirationCountdown.hours}</Text>
+                            <Text style={[styles.expirationCountdownLabel, { color: typeConfig.color }]}>{t('shareModal', 'hoursShort')}</Text>
+                          </View>
+                        ) : null}
+                        {expirationCountdown && expirationCountdown.days === 0 ? (
+                          <View style={styles.expirationCountdownUnit}>
+                            <Text style={[styles.expirationCountdownValue, { color: typeConfig.color }]}>{expirationCountdown.minutes}</Text>
+                            <Text style={[styles.expirationCountdownLabel, { color: typeConfig.color }]}>{t('shareModal', 'minutesShort')}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    )}
+                    <Text style={styles.expirationDateText}>
+                      {t('shareModal', 'expiresOn')} {expiresAtDate.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={[styles.expirationIndicator, { backgroundColor: theme.success + '08', borderColor: theme.success + '18' }]}>
+                    <MaterialIcons name="all-inclusive" size={14} color={theme.success} />
+                    <Text style={[styles.expirationIndicatorText, { color: theme.success }]}>{t('shareModal', 'noExpiration')}</Text>
+                  </View>
+                )}
               </Animated.View>
 
               {/* QR Code — integrated in preview */}
@@ -571,6 +679,22 @@ const styles = StyleSheet.create({
   itemInfo: { flex: 1 },
   itemName: { fontSize: 17, fontWeight: '700', color: theme.textPrimary },
   itemType: { fontSize: 13, color: theme.textSecondary, marginTop: 2 },
+  // Expiration picker
+  expirationSection: { marginBottom: 20 },
+  expirationHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 10 },
+  expirationTitle: { fontSize: 13, fontWeight: '700' as const, color: theme.textSecondary },
+  expirationOptions: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6 },
+  expirationChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border },
+  expirationChipText: { fontSize: 13, fontWeight: '600' as const, color: theme.textSecondary },
+  // Expiration indicator (post-generation)
+  expirationIndicator: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, alignItems: 'center' as const, gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: theme.borderRadius.md, borderWidth: 1, marginTop: 12, width: '100%' as const },
+  expirationIndicatorText: { fontSize: 13, fontWeight: '600' as const },
+  expirationIndicatorLabel: { fontSize: 12, fontWeight: '600' as const },
+  expirationCountdownRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
+  expirationCountdownUnit: { flexDirection: 'row' as const, alignItems: 'baseline' as const, gap: 1 },
+  expirationCountdownValue: { fontSize: 18, fontWeight: '900' as const },
+  expirationCountdownLabel: { fontSize: 10, fontWeight: '600' as const },
+  expirationDateText: { fontSize: 10, color: theme.textMuted, width: '100%' as const, marginTop: 2 },
   // Read-only info
   readOnlyInfo: { alignItems: 'center', marginBottom: 20 },
   readOnlyBadge: {

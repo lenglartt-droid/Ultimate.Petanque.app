@@ -88,6 +88,7 @@ export async function createShareLink(
   itemId: string,
   permission: SharePermission = 'read',
   associatedItems?: AssociatedItem[],
+  expiresAt?: string | null,
 ): Promise<{ shareCode: string; shareUrl: string; error: string | null }> {
   const supabase = getSupabaseClient();
   const { data: userData, error: authError } = await supabase.auth.getUser();
@@ -109,6 +110,10 @@ export async function createShareLink(
     // Store associated items if provided
     if (associatedItems && associatedItems.length > 0) {
       insertData.associated_items = associatedItems;
+    }
+    // Store expiration date if provided
+    if (expiresAt) {
+      insertData.expires_at = expiresAt;
     }
     const { error } = await supabase.from('shared_items').insert(insertData);
     if (!error) return { shareCode, shareUrl, error: null };

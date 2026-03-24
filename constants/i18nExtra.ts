@@ -40,6 +40,18 @@ export const extraTranslations = {
     associatedClub: { fr: 'Club associe', en: 'Associated club' },
     associatedTerrain: { fr: 'Terrain associe', en: 'Associated court' },
     sharePlayerOnly: { fr: 'Joueur seul', en: 'Player only' },
+    expirationLabel: { fr: 'Expiration du code', en: 'Code expiration' },
+    expirationNever: { fr: 'Jamais', en: 'Never' },
+    expiration1Day: { fr: '1 jour', en: '1 day' },
+    expiration1Week: { fr: '1 semaine', en: '1 week' },
+    expiration1Month: { fr: '1 mois', en: '1 month' },
+    expiresIn: { fr: 'Expire dans', en: 'Expires in' },
+    expired: { fr: 'Expire', en: 'Expired' },
+    noExpiration: { fr: 'Pas d\'expiration', en: 'No expiration' },
+    expiresOn: { fr: 'Expire le', en: 'Expires on' },
+    daysShort: { fr: 'j', en: 'd' },
+    hoursShort: { fr: 'h', en: 'h' },
+    minutesShort: { fr: 'min', en: 'min' },
   },
 
   modificationLogs: {
