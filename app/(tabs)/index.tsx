@@ -493,8 +493,13 @@ export default function HomeScreen() {
           </Animated.View>
         ) : null}
 
-        {/* ========== UNIFIED UPCOMING TIMELINE ========== */}
+        {/* ========== COMMUNITY LEADERBOARD ========== */}
         <Animated.View entering={FadeIn.duration(400).delay(260)} style={[s.section, isTablet && s.sectionTablet]}>
+          <CommunityLeaderboard />
+        </Animated.View>
+
+        {/* ========== UNIFIED UPCOMING TIMELINE ========== */}
+        <Animated.View entering={FadeIn.duration(400).delay(300)} style={[s.section, isTablet && s.sectionTablet]}>
           <UpcomingTimeline
             tournaments={tournaments}
             meetups={meetups}
@@ -510,13 +515,21 @@ export default function HomeScreen() {
           />
         </Animated.View>
 
-        {/* ========== COMMUNITY LEADERBOARD ========== */}
-        <Animated.View entering={FadeIn.duration(400).delay(300)} style={[s.section, isTablet && s.sectionTablet]}>
-          <CommunityLeaderboard />
-        </Animated.View>
+        {/* ========== AMBASSADORS ROTATING BANNER ========== */}
+        {ambassadorsLoaded && featuredAmbassadors.length > 0 ? (
+          <Animated.View entering={FadeIn.duration(400).delay(340)} style={[s.section, isTablet && s.sectionTablet]}>
+            <AmbassadorBanner
+              ambassadors={featuredAmbassadors}
+              language={language}
+              t={t}
+              screenWidth={screenWidth}
+              userId={user?.id}
+            />
+          </Animated.View>
+        ) : null}
 
         {/* ========== COMPACT HISTORY ========== */}
-        <Animated.View entering={FadeIn.duration(400).delay(340)} style={[s.section, isTablet && s.sectionTablet]}>
+        <Animated.View entering={FadeIn.duration(400).delay(380)} style={[s.section, isTablet && s.sectionTablet]}>
           {(matches.length === 0 && challenges.length === 0) ? (
             <View style={s.emptyCard}>
               <View style={s.emptyIconBg}><MaterialIcons name="sports" size={44} color={theme.primary} /></View>
@@ -537,19 +550,6 @@ export default function HomeScreen() {
             />
           )}
         </Animated.View>
-
-        {/* ========== AMBASSADORS ROTATING BANNER ========== */}
-        {ambassadorsLoaded && featuredAmbassadors.length > 0 ? (
-          <Animated.View entering={FadeIn.duration(400).delay(380)} style={[s.section, isTablet && s.sectionTablet]}>
-            <AmbassadorBanner
-              ambassadors={featuredAmbassadors}
-              language={language}
-              t={t}
-              screenWidth={screenWidth}
-              userId={user?.id}
-            />
-          </Animated.View>
-        ) : null}
 
       </ScrollView>
 
