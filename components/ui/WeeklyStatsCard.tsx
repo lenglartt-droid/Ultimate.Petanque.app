@@ -3,9 +3,10 @@
  * Shows win rate trend vs last week, best performance, and sparkline daily activity.
  */
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { router } from 'expo-router';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -124,7 +125,20 @@ export default function WeeklyStatsCard() {
 
         {/* Mini Sparkline */}
         <View style={s.sparklineSection}>
-          <Text style={s.sparklineLabel}>{(et.dailyActivity as any)?.[language] || 'Daily activity'}</Text>
+          <View style={s.sparklineHeader}>
+            <Text style={s.sparklineLabel}>{(et.dailyActivity as any)?.[language] || 'Daily activity'}</Text>
+            <View style={s.sparklineLegend}>
+              <View style={s.sparklineLegendItem}>
+                <View style={[s.sparklineLegendDot, { backgroundColor: theme.primary + '80' }]} />
+                <Text style={s.sparklineLegendText}>{language === 'fr' ? 'Matchs' : 'Matches'}</Text>
+              </View>
+              <View style={s.sparklineLegendItem}>
+                <View style={[s.sparklineLegendDot, { backgroundColor: theme.accent + '80' }]} />
+                <Text style={s.sparklineLegendText}>{language === 'fr' ? 'Defis' : 'Challenges'}</Text>
+              </View>
+            </View>
+          </View>
+          <Text style={s.sparklineDesc}>{language === 'fr' ? 'Sessions jouees chaque jour (7 derniers jours)' : 'Sessions played each day (last 7 days)'}</Text>
           <View style={s.sparklineRow}>
             {weeklyData.dailyActivity.map((day, idx) => {
               const height = day.total > 0 ? Math.max(8, (day.total / weeklyData.maxDaily) * 36) : 4;
@@ -149,6 +163,15 @@ export default function WeeklyStatsCard() {
             })}
           </View>
         </View>
+
+        {/* See full stats link */}
+        <Pressable
+          style={s.seeStatsBtn}
+          onPress={() => router.push({ pathname: '/(tabs)/stats', params: { timeFilter: 'week' } } as any)}
+        >
+          <Text style={s.seeStatsBtnText}>{language === 'fr' ? 'Voir les stats completes' : 'View complete stats'}</Text>
+          <MaterialIcons name="chevron-right" size={16} color={theme.primary} />
+        </Pressable>
       </View>
     </Animated.View>
   );
@@ -241,7 +264,37 @@ const s = StyleSheet.create({
     borderRadius: 8,
   },
   sparklineSection: {
-    gap: 8,
+    gap: 6,
+  },
+  sparklineHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sparklineLegend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  sparklineLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  sparklineLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  sparklineLegendText: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  sparklineDesc: {
+    fontSize: 10,
+    color: '#94A3B8',
+    marginBottom: 2,
   },
   sparklineLabel: {
     fontSize: 10,
@@ -281,5 +334,20 @@ const s = StyleSheet.create({
     fontSize: 8,
     fontWeight: '700',
     color: '#64748B',
+  },
+  seeStatsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingTop: 12,
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  seeStatsBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#2563EB',
   },
 });

@@ -18,11 +18,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import Svg, { Circle, Line, G, Text as SvgText, Rect, Polygon } from 'react-native-svg';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useLanguage } from '@/hooks/useLanguage';
 import AdBanner from '@/components/ui/AdBanner';
 import SponsorBanner from '@/components/ui/SponsorBanner';
-import WeeklyStatsCard from '@/components/ui/WeeklyStatsCard';
+
 
 
 // TYPES & CONSTANTS
@@ -298,6 +298,7 @@ export default function StatsScreen() {
   const { matches, challenges, tournaments, players, terrains, boulesSets, getMatchesByTournament, selfPlayer } = useApp();
   type ItemFilterType = 'all' | 'match' | 'challenge' | 'tournament' | 'opponent' | 'partner' | 'terrain' | 'boules';
   const { t, language } = useLanguage();
+  const { timeFilter: timeFilterParam } = useLocalSearchParams<{ timeFilter?: string }>();
 
   // Translated filter/tab arrays
   const TIME_FILTERS = useMemo(() => TIME_FILTER_KEYS.map(f => ({ ...f, label: t('stats', f.key) || t('common', f.key) })), [language]);
@@ -315,7 +316,11 @@ export default function StatsScreen() {
   const modalChartHeight = isTablet ? 190 : 160;
   const modalBarChartHeight = isTablet ? 160 : 140;
 
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>(() => {
+    const valid: TimeFilter[] = ['today', 'week', 'month', '3months', '6months', 'year', 'all'];
+    if (timeFilterParam && valid.includes(timeFilterParam as TimeFilter)) return timeFilterParam as TimeFilter;
+    return 'all';
+  });
   const [category, setCategory] = useState<StatsCategory>('performance');
   const [showProgressionModal, setShowProgressionModal] = useState(false);
   const [progressionFilter, setProgressionFilter] = useState<ProgressionFilter>('8weeks');
@@ -1581,7 +1586,6 @@ export default function StatsScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }, isTablet && styles.scrollContentTablet]}
         showsVerticalScrollIndicator={false}
       >
-        <WeeklyStatsCard />
         <SponsorBanner page="stats" />
 
         {!hasData ? (
