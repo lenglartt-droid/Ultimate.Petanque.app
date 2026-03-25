@@ -26,6 +26,7 @@ import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAlert } from '@/template';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
+import { COMMON_COUNTRIES, getCountryFlag } from '@/constants/geoData';
 import {
   checkDuplicatePublicClubs,
   importPublicItemToDirectory,
@@ -108,6 +109,15 @@ export default function NewClubScreen() {
   const [website, setWebsite] = useState('');
   const [facebookUrl, setFacebookUrl] = useState('');
   const [instagramHandle, setInstagramHandle] = useState('');
+
+  // Country picker
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const [countrySearch, setCountrySearch] = useState('');
+
+  const filteredCountries = useMemo(() => {
+    const q = countrySearch.toLowerCase();
+    return q ? COMMON_COUNTRIES.filter(c => c.toLowerCase().includes(q)) : COMMON_COUNTRIES;
+  }, [countrySearch]);
 
   // Terrain picker modal
   const [showTerrainPicker, setShowTerrainPicker] = useState(false);
@@ -295,6 +305,19 @@ export default function NewClubScreen() {
             <TextInput style={styles.textInput} value={name} onChangeText={setName} placeholder={t('club', 'namePlaceholder')} placeholderTextColor={theme.textMuted} autoCapitalize="words" autoFocus />
           </SectionCard>
 
+          {/* 1b. Pays */}
+          <SectionCard title={t('player', 'countryLabel') || 'Pays'} icon="flag" color="#6366F1" delay={75}>
+            <Pressable style={styles.pickerButton} onPress={() => { setCountrySearch(''); setShowCountryPicker(true); }}>
+              <View style={styles.pickerSelected}>
+                <MaterialIcons name="flag" size={20} color="#6366F1" />
+                <View style={styles.pickerSelectedInfo}>
+                  <Text style={styles.pickerSelectedName}>{getCountryFlag(location.country || 'France')} {location.country || 'France'}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              </View>
+            </Pressable>
+          </SectionCard>
+
           {/* 2. Localisation */}
           <SectionCard title={t('club', 'locationLabel')} icon="place" color={theme.success} delay={100} required>
             <LocationPicker label="" value={location} onChange={setLocation} placeholder={t('club', 'searchAddress')} required showAddressField />
@@ -437,6 +460,34 @@ export default function NewClubScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Country Picker Modal */}
+      <Modal visible={showCountryPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCountryPicker(false)}>
+        <SafeAreaView edges={['top']} style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('player', 'countryLabel') || 'Pays'}</Text>
+            <Pressable style={styles.modalCloseBtn} onPress={() => setShowCountryPicker(false)}>
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+          </View>
+          <View style={styles.modalSearchContainer}>
+            <MaterialIcons name="search" size={20} color={theme.textMuted} />
+            <TextInput style={styles.modalSearchInput} value={countrySearch} onChangeText={setCountrySearch} placeholder={t('player', 'searchCountry') || 'Rechercher un pays...'} placeholderTextColor={theme.textMuted} autoFocus />
+          </View>
+          <FlatList data={filteredCountries} keyExtractor={(item) => item} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }} renderItem={({ item: country }) => {
+            const isActive = (location.country || 'France') === country;
+            return (
+              <Pressable style={[styles.modalPickerItem, { marginHorizontal: 0 }, isActive && styles.modalPickerItemActive]} onPress={() => { Haptics.selectionAsync(); setLocation({ ...location, country }); setShowCountryPicker(false); }}>
+                <View style={[styles.modalPickerItemIcon, { backgroundColor: '#6366F1' + '15' }]}>
+                  <MaterialIcons name="flag" size={20} color="#6366F1" />
+                </View>
+                <Text style={styles.modalPickerItemName}>{getCountryFlag(country)} {country}</Text>
+                {isActive ? <MaterialIcons name="check-circle" size={20} color="#6366F1" /> : null}
+              </Pressable>
+            );
+          }} ListEmptyComponent={<View style={styles.modalEmpty}><MaterialIcons name="search-off" size={40} color={theme.textMuted} /><Text style={styles.modalEmptyText}>{t('common', 'noResults')}</Text></View>} />
+        </SafeAreaView>
+      </Modal>
 
       {/* Terrain Picker Modal */}
       <Modal visible={showTerrainPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowTerrainPicker(false)}>

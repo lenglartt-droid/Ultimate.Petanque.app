@@ -217,6 +217,7 @@ const MemoizedPlayerRow = React.memo(function PlayerRow({
             <Text style={[s.playerName, isMe && { color: theme.primary }]} numberOfLines={1}>
               {player.name}{isMe ? ` (${t('leaderboard', 'you')})` : ''}
             </Text>
+            {player.country ? <Text style={{ fontSize: 12, lineHeight: 14 }}>{getCountryFlag(player.country)}</Text> : null}
             {player.isAmbassador ? (
               <View style={s.ambassadorBadge}>
                 <MaterialIcons name="verified" size={10} color="#7C3AED" />
@@ -809,7 +810,7 @@ export default function LeaderboardScreen() {
     <SafeAreaView edges={['top']} style={s.container}>
       {/* Header */}
       <View style={s.header}>
-        <LinearGradient colors={['#92400E', '#D97706', '#F59E0B']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.headerGradient}>
+        <LinearGradient colors={['#0F172A', '#1E293B', '#334155']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.headerGradient}>
           <View style={s.headerTop}>
             <Pressable style={s.backBtn} onPress={() => router.back()}>
               <MaterialIcons name="arrow-back" size={24} color="#FFF" />
@@ -877,9 +878,8 @@ export default function LeaderboardScreen() {
             </View>
           ) : null}
 
-          {/* Search bar */}
-          {/* Geographic scope filter */}
-          <View style={{ flexDirection: 'row', gap: 5, marginBottom: 10 }}>
+          {/* Geographic scope filter — modern pill row */}
+          <View style={{ flexDirection: 'row', gap: 4, marginBottom: 10, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 14, padding: 3 }}>
             {(['world', 'continent', 'country', 'city'] as const).map(scope => {
               const isActive = geoScope === scope;
               const icons = { world: 'public', continent: 'travel-explore', country: 'flag', city: 'place' } as const;
@@ -892,7 +892,7 @@ export default function LeaderboardScreen() {
               return (
                 <Pressable
                   key={scope}
-                  style={[s.tabBtn, { flex: 1, paddingVertical: 8 }, isActive && { backgroundColor: '#2563EB80' }]}
+                  style={[{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, borderRadius: 11 }, isActive && { backgroundColor: '#F59E0B25' }]}
                   onPress={() => {
                     Haptics.selectionAsync();
                     let val = '';
@@ -911,8 +911,8 @@ export default function LeaderboardScreen() {
                     updateGeoScope(scope, val);
                   }}
                 >
-                  <MaterialIcons name={icons[scope] as any} size={13} color={isActive ? '#FFF' : 'rgba(255,255,255,0.5)'} />
-                  <Text style={[s.tabBtnText, { fontSize: 11 }, isActive && s.tabBtnTextActive]}>{labels[scope]}</Text>
+                  <MaterialIcons name={icons[scope] as any} size={13} color={isActive ? '#F59E0B' : '#64748B'} />
+                  <Text style={{ fontSize: 10, fontWeight: isActive ? '700' : '600', color: isActive ? '#F59E0B' : '#64748B' }}>{labels[scope]}</Text>
                 </Pressable>
               );
             })}
@@ -927,10 +927,10 @@ export default function LeaderboardScreen() {
                 return (
                   <Pressable
                     key={val}
-                    style={[s.tabBtn, { flex: 0, paddingHorizontal: 14, paddingVertical: 7 }, isActive && { backgroundColor: '#2563EB80' }]}
+                    style={[{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: isActive ? '#F59E0B25' : 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: isActive ? '#F59E0B50' : 'transparent' }]}
                     onPress={() => { Haptics.selectionAsync(); updateGeoScope(geoScope, isActive ? '' : val); }}
                   >
-                    <Text style={[s.tabBtnText, { fontSize: 12 }, isActive && s.tabBtnTextActive]} numberOfLines={1}>{geoScope === 'continent' ? `${getContinentFlag(val)} ${getContinentLabel(val, language === 'fr')}` : geoScope === 'country' ? `${getCountryFlag(val)} ${val}` : val}</Text>
+                    <Text style={{ fontSize: 11, fontWeight: isActive ? '700' : '600', color: isActive ? '#F59E0B' : '#94A3B8', maxWidth: 120 }} numberOfLines={1}>{geoScope === 'continent' ? `${getContinentFlag(val)} ${getContinentLabel(val, language === 'fr')}` : geoScope === 'country' ? `${getCountryFlag(val)} ${val}` : val}</Text>
                   </Pressable>
                 );
               })}
@@ -940,29 +940,29 @@ export default function LeaderboardScreen() {
           {activeTab === 'players' ? (
             <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
               <Pressable
-                style={[s.tabBtn, { flex: 0, paddingHorizontal: 16 }, weeklyMode === 'alltime' && { backgroundColor: 'rgba(255,255,255,0.22)' }]}
+                style={[{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, backgroundColor: weeklyMode === 'alltime' ? '#F59E0B25' : 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: weeklyMode === 'alltime' ? '#F59E0B50' : 'transparent' }]}
                 onPress={() => { Haptics.selectionAsync(); setWeeklyMode('alltime'); }}
               >
-                <MaterialIcons name="emoji-events" size={14} color={weeklyMode === 'alltime' ? '#FFF' : 'rgba(255,255,255,0.5)'} />
-                <Text style={[s.tabBtnText, weeklyMode === 'alltime' && s.tabBtnTextActive]}>
+                <MaterialIcons name="emoji-events" size={14} color={weeklyMode === 'alltime' ? '#F59E0B' : '#64748B'} />
+                <Text style={{ fontSize: 12, fontWeight: weeklyMode === 'alltime' ? '700' : '600', color: weeklyMode === 'alltime' ? '#F59E0B' : '#64748B' }}>
                   {(extraTranslations.weeklyLeaderboard?.allTimeTab as any)?.[language] || 'All time'}
                 </Text>
               </Pressable>
               <Pressable
-                style={[s.tabBtn, { flex: 0, paddingHorizontal: 16 }, weeklyMode === 'weekly' && { backgroundColor: '#2563EB80' }]}
+                style={[{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, backgroundColor: weeklyMode === 'weekly' ? '#3B82F625' : 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: weeklyMode === 'weekly' ? '#3B82F650' : 'transparent' }]}
                 onPress={() => { Haptics.selectionAsync(); setWeeklyMode('weekly'); }}
               >
-                <MaterialIcons name="date-range" size={14} color={weeklyMode === 'weekly' ? '#FFF' : 'rgba(255,255,255,0.5)'} />
-                <Text style={[s.tabBtnText, weeklyMode === 'weekly' && s.tabBtnTextActive]}>
+                <MaterialIcons name="date-range" size={14} color={weeklyMode === 'weekly' ? '#60A5FA' : '#64748B'} />
+                <Text style={{ fontSize: 12, fontWeight: weeklyMode === 'weekly' ? '700' : '600', color: weeklyMode === 'weekly' ? '#60A5FA' : '#64748B' }}>
                   {(extraTranslations.weeklyLeaderboard?.weeklyTab as any)?.[language] || 'Weekly'}
                 </Text>
-                {weeklyMode === 'weekly' ? <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#60A5FA' }} /> : null}
+                {weeklyMode === 'weekly' ? <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#60A5FA' }} /> : null}
               </Pressable>
             </View>
           ) : null}
           <View style={s.searchRow}>
-            <View style={s.searchBar}>
-              <MaterialIcons name="search" size={20} color="rgba(255,255,255,0.5)" />
+            <View style={[s.searchBar, { backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }]}>
+              <MaterialIcons name="search" size={20} color="#64748B" />
               <TextInput
                 style={s.searchInput}
                 placeholder={t('leaderboard', 'searchPlaceholder')}
@@ -2154,24 +2154,24 @@ const s = StyleSheet.create({
   // Header
   header: { backgroundColor: theme.surface },
   headerBottom: { borderBottomWidth: 1, borderBottomColor: theme.border },
-  headerGradient: { paddingTop: 12, paddingBottom: 16, paddingHorizontal: 20, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
+  headerGradient: { paddingTop: 12, paddingBottom: 16, paddingHorizontal: 20, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
 
-  // Tabs
-  tabRow: { flexDirection: 'row', gap: 6, marginBottom: 12 },
-  tabBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.08)' },
-  tabBtnActive: { backgroundColor: 'rgba(255,255,255,0.22)' },
-  tabBtnText: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.5)' },
-  tabBtnTextActive: { color: '#FFF', fontWeight: '700' },
+  // Tabs — new dark theme
+  tabRow: { flexDirection: 'row', gap: 3, marginBottom: 12, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 14, padding: 3 },
+  tabBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 9, borderRadius: 11, position: 'relative' as const },
+  tabBtnActive: { backgroundColor: 'rgba(255,255,255,0.08)' },
+  tabBtnText: { fontSize: 11, fontWeight: '600', color: '#64748B' },
+  tabBtnTextActive: { color: '#F59E0B', fontWeight: '700' },
   headerTop: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
-  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 22, fontWeight: '800', color: '#FFF' },
-  headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
+  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 20, fontWeight: '800', color: '#FFF', letterSpacing: -0.3 },
+  headerSubtitle: { fontSize: 12, color: '#94A3B8', marginTop: 2 },
   searchRow: { flexDirection: 'row', gap: 10 },
-  searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 22, paddingHorizontal: 14, height: 44, gap: 8 },
+  searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: 14, paddingHorizontal: 14, height: 44, gap: 8 },
   searchInput: { flex: 1, fontSize: 15, color: '#FFF' },
   filterBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
-  filterBtnActive: { backgroundColor: 'rgba(255,255,255,0.3)' },
-  filterBadge: { position: 'absolute', top: 2, right: 2, backgroundColor: theme.error, width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#D97706' },
+  filterBtnActive: { backgroundColor: '#F59E0B25', borderWidth: 1, borderColor: '#F59E0B50' },
+  filterBadge: { position: 'absolute', top: 2, right: 2, backgroundColor: '#F59E0B', width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#1E293B' },
   filterBadgeText: { fontSize: 10, fontWeight: '700', color: '#FFF' },
 
   // Sort
@@ -2193,9 +2193,9 @@ const s = StyleSheet.create({
   bModePillTextActive: { color: '#D97706' },
   sortRow: { paddingHorizontal: 16, gap: 8 },
   sortChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
-  sortChipActive: { backgroundColor: '#D97706', borderColor: '#D97706' },
+  sortChipActive: { backgroundColor: '#F59E0B15', borderColor: '#F59E0B60' },
   sortChipText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
-  sortChipTextActive: { color: '#FFF' },
+  sortChipTextActive: { color: '#F59E0B' },
 
   // Filters panel (inside FlatList ListHeaderComponent)
   filtersPanel: { marginBottom: 12, backgroundColor: theme.surface, borderRadius: 16, padding: 0, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' as const },

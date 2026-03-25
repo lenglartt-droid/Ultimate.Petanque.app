@@ -5,6 +5,7 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import theme, { blurhash } from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
@@ -13,7 +14,7 @@ import { fetchLeaderboard, sortLeaderboard, LeaderboardPlayer, LeaderboardSort }
 import { fetchClubLeaderboard, sortClubLeaderboard, LeaderboardClub } from '@/services/clubLeaderboardService';
 import { fetchBoulesLeaderboard, aggregateBoulesData, sortBoulesLeaderboard, LeaderboardBoulesEntry } from '@/services/boulesLeaderboardService';
 import { getBrandVisual, getBrandImage } from '@/constants/boulesDatabase';
-import { getTrustScoreColor, getTrustScoreIcon, getTrustLevelLabel } from '@/services/trustScoreService';
+import { getTrustScoreColor, getTrustScoreIcon } from '@/services/trustScoreService';
 import { fetchEventLeaderboard, EventLeaderboardEntry, SponsoredEvent } from '@/services/sponsoredEventService';
 import { extraTranslations } from '@/constants/i18nExtra';
 import { CONTINENT_MAP, getContinent, getContinentLabel, getCountryFlag, getContinentFlag } from '@/constants/geoData';
@@ -61,7 +62,6 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [eventsLoaded, setEventsLoaded] = useState(false);
 
-  // Auto-detect geo scope from selfPlayer or restore from storage
   useEffect(() => {
     if (geoInitialized) return;
     const initGeo = async () => {
@@ -77,7 +77,6 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
           }
         }
       } catch {}
-      // Auto-detect from selfPlayer country
       if (selfPlayer?.country) {
         const continent = getContinent(selfPlayer.country);
         setGeoScope('continent');
@@ -88,14 +87,12 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
     initGeo();
   }, [selfPlayer?.country, geoInitialized]);
 
-  // Persist geo scope changes
   const updateGeoScope = useCallback((scope: GeoScope, value: string) => {
     setGeoScope(scope);
     setGeoValue(value);
     AsyncStorage.setItem(GEO_STORAGE_KEY, JSON.stringify({ scope, value })).catch(() => {});
   }, []);
 
-  // Load players
   const loadPlayers = useCallback(async () => {
     setPlayersLoading(true);
     const { players: lbP, error: err } = await fetchLeaderboard();
@@ -106,7 +103,6 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
 
   useEffect(() => { loadPlayers(); }, [loadPlayers]);
 
-  // Lazy load clubs
   const loadClubs = useCallback(async () => {
     if (clubsLoaded) return;
     setClubsLoading(true);
@@ -117,7 +113,6 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
     setClubsLoaded(true);
   }, [clubsLoaded]);
 
-  // Lazy load boules
   const loadBoules = useCallback(async () => {
     if (boulesLoaded) return;
     setBoulesLoading(true);
@@ -128,7 +123,6 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
     setBoulesLoaded(true);
   }, [boulesLoaded]);
 
-  // Lazy load events
   const loadEvents = useCallback(async () => {
     if (eventsLoaded) return;
     setEventsLoading(true);
@@ -149,50 +143,29 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
   // Computed
   const geoFilteredPlayers = useMemo(() => {
     let filtered = players;
-    if (geoScope === 'city' && geoValue) {
-      filtered = filtered.filter(p => p.city?.toLowerCase() === geoValue.toLowerCase());
-    } else if (geoScope === 'country' && geoValue) {
-      filtered = filtered.filter(p => p.country?.toLowerCase() === geoValue.toLowerCase());
-    } else if (geoScope === 'continent' && geoValue) {
-      filtered = filtered.filter(p => p.country ? getContinent(p.country) === geoValue : false);
-    }
+    if (geoScope === 'city' && geoValue) filtered = filtered.filter(p => p.city?.toLowerCase() === geoValue.toLowerCase());
+    else if (geoScope === 'country' && geoValue) filtered = filtered.filter(p => p.country?.toLowerCase() === geoValue.toLowerCase());
+    else if (geoScope === 'continent' && geoValue) filtered = filtered.filter(p => p.country ? getContinent(p.country) === geoValue : false);
     return filtered;
   }, [players, geoScope, geoValue]);
 
   const filteredSorted = useMemo(() => sortLeaderboard(geoFilteredPlayers, sortBy), [geoFilteredPlayers, sortBy]);
   const sortedClubs = useMemo(() => {
     let filtered = clubs;
-    if (geoScope === 'city' && geoValue) {
-      filtered = filtered.filter((c: any) => c.city?.toLowerCase() === geoValue.toLowerCase());
-    } else if (geoScope === 'country' && geoValue) {
-      filtered = filtered.filter((c: any) => (c.country || 'France').toLowerCase() === geoValue.toLowerCase());
-    } else if (geoScope === 'continent' && geoValue) {
-      filtered = filtered.filter((c: any) => getContinent(c.country || 'France') === geoValue);
-    }
+    if (geoScope === 'city' && geoValue) filtered = filtered.filter((c: any) => c.city?.toLowerCase() === geoValue.toLowerCase());
+    else if (geoScope === 'country' && geoValue) filtered = filtered.filter((c: any) => (c.country || 'France').toLowerCase() === geoValue.toLowerCase());
+    else if (geoScope === 'continent' && geoValue) filtered = filtered.filter((c: any) => getContinent(c.country || 'France') === geoValue);
     return sortClubLeaderboard(filtered, 'compositeScore');
   }, [clubs, geoScope, geoValue]);
-  const boulesEntries = useMemo(() => {
-    const agg = aggregateBoulesData(boulesRaw, 'brand', 'all');
-    return sortBoulesLeaderboard(agg, 'userCount');
-  }, [boulesRaw]);
+  const boulesEntries = useMemo(() => sortBoulesLeaderboard(aggregateBoulesData(boulesRaw, 'brand', 'all'), 'userCount'), [boulesRaw]);
 
-  // Unique geo values for selection
-  const uniqueCountries = useMemo(() => {
-    const cs = players.map(p => p.country).filter(Boolean) as string[];
-    return [...new Set(cs)].sort();
-  }, [players]);
-
+  const uniqueCountries = useMemo(() => [...new Set(players.map(p => p.country).filter(Boolean) as string[])].sort(), [players]);
   const uniqueCities = useMemo(() => {
     let source = players;
     if (geoScope === 'country' && geoValue) source = source.filter(p => p.country?.toLowerCase() === geoValue.toLowerCase());
-    const cs = source.map(p => p.city).filter(Boolean) as string[];
-    return [...new Set(cs)].sort();
+    return [...new Set(source.map(p => p.city).filter(Boolean) as string[])].sort();
   }, [players, geoScope, geoValue]);
-
-  const uniqueContinents = useMemo(() => {
-    const cs = players.map(p => p.country ? getContinent(p.country) : null).filter(Boolean) as string[];
-    return [...new Set(cs)].sort();
-  }, [players]);
+  const uniqueContinents = useMemo(() => [...new Set(players.map(p => p.country ? getContinent(p.country) : null).filter(Boolean) as string[])].sort(), [players]);
 
   const myRank = useMemo(() => {
     if (!selfPlayer || !user) return null;
@@ -210,108 +183,125 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
     else { setEventsLoaded(false); loadEvents(); }
   }, [activeTab, loadPlayers, loadClubs, loadBoules, loadEvents]);
 
-  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+
+  const geoLabel = useMemo(() => {
+    if (geoScope === 'world') return language === 'fr' ? 'Monde' : 'World';
+    if (!geoValue) return (extraTranslations.geoScope as any)?.[geoScope]?.[language] || geoScope;
+    if (geoScope === 'continent') return `${getContinentFlag(geoValue)} ${getContinentLabel(geoValue, language === 'fr')}`;
+    if (geoScope === 'country') return `${getCountryFlag(geoValue)} ${geoValue}`;
+    return geoValue;
+  }, [geoScope, geoValue, language]);
+
+  const activeGeoCount = geoScope !== 'world' ? 1 : 0;
 
   return (
     <View style={s.section}>
-      <View style={s.sectionHeader}>
-        <View style={[s.sectionIcon, { backgroundColor: '#D97706' + '15' }]}>
-          <MaterialIcons name="leaderboard" size={18} color="#D97706" />
-        </View>
-        <View style={s.sectionHeaderText}>
-          <Text style={s.sectionTitle}>{t('leaderboard', 'title')}</Text>
-          {activeTab === 'players' && filteredSorted.length > 0 ? (
-            <Text style={s.sectionSubtitle}>{filteredSorted.length} {t('leaderboard', 'publicPlayersCount')} (≥10 {t('leaderboard', 'matches')})</Text>
-          ) : activeTab === 'clubs' && sortedClubs.length > 0 ? (
-            <Text style={s.sectionSubtitle}>{sortedClubs.length} {t('leaderboard', 'publicClubsCount')}</Text>
-          ) : activeTab === 'boules' && boulesEntries.length > 0 ? (
-            <Text style={s.sectionSubtitle}>{boulesEntries.length} {t('leaderboard', 'publicBoulesCount')}</Text>
-          ) : null}
-        </View>
-        <Pressable style={s.infoBtn} onPress={() => setShowInfoModal(true)} hitSlop={8}>
-          <MaterialIcons name="info-outline" size={20} color={theme.textMuted} />
-        </Pressable>
-      </View>
-
-      {/* Tab switcher */}
-      <View style={s.tabRow}>
-        {([
-          { id: 'players' as WidgetTab, label: t('leaderboard', 'tabPlayers'), icon: 'people' },
-          { id: 'clubs' as WidgetTab, label: t('leaderboard', 'tabClubs'), icon: 'home' },
-          { id: 'boules' as WidgetTab, label: t('leaderboard', 'tabBoules'), icon: 'sports-baseball' },
-          { id: 'events' as WidgetTab, label: t('leaderboard', 'tabEvents'), icon: 'campaign' },
-        ]).map(tab => (
+      {/* Modern gradient header */}
+      <LinearGradient colors={['#1E293B', '#334155']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.headerGradient}>
+        <View style={s.headerRow}>
+          <View style={s.headerIcon}>
+            <MaterialIcons name="emoji-events" size={20} color="#F59E0B" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.headerTitle}>{t('leaderboard', 'title')}</Text>
+            <Text style={s.headerCount}>
+              {activeTab === 'players' ? `${filteredSorted.length} ${t('leaderboard', 'publicPlayersCount')}`
+                : activeTab === 'clubs' ? `${sortedClubs.length} ${t('leaderboard', 'publicClubsCount')}`
+                : activeTab === 'boules' ? `${boulesEntries.length} ${t('leaderboard', 'publicBoulesCount')}`
+                : `${eventEntries.length} ${t('leaderboard', 'publicEventsCount')}`}
+              {myRank && activeTab === 'players' ? ` \u2022 #${myRank}` : ''}
+            </Text>
+          </View>
+          {/* Geo pill */}
           <Pressable
-            key={tab.id}
-            style={[s.tabBtn, activeTab === tab.id && s.tabBtnActive]}
-            onPress={() => { Haptics.selectionAsync(); setActiveTab(tab.id); }}
+            style={[s.geoPill, activeGeoCount > 0 && s.geoPillActive]}
+            onPress={() => { Haptics.selectionAsync(); setShowFilters(!showFilters); }}
           >
-            <MaterialIcons name={tab.icon as any} size={14} color={activeTab === tab.id ? '#FFF' : theme.textSecondary} />
-            <Text style={[s.tabBtnText, activeTab === tab.id && s.tabBtnTextActive]}>{tab.label}</Text>
+            <MaterialIcons name={geoScope === 'world' ? 'public' : geoScope === 'continent' ? 'travel-explore' : geoScope === 'country' ? 'flag' : 'place'} size={14} color={activeGeoCount > 0 ? '#F59E0B' : '#94A3B8'} />
+            <Text style={[s.geoPillText, activeGeoCount > 0 && s.geoPillTextActive]} numberOfLines={1}>{geoLabel}</Text>
+            <MaterialIcons name={showFilters ? 'expand-less' : 'expand-more'} size={16} color={activeGeoCount > 0 ? '#F59E0B' : '#94A3B8'} />
           </Pressable>
-        ))}
-      </View>
+        </View>
 
-      {/* Geographic scope selector */}
-      <View style={s.geoRow}>
-        {(['world', 'continent', 'country', 'city'] as GeoScope[]).map(scope => {
-          const isActive = geoScope === scope;
-          const icons: Record<GeoScope, string> = { world: 'public', continent: 'travel-explore', country: 'flag', city: 'place' };
-          const labels: Record<GeoScope, string> = {
-            world: (extraTranslations.geoScope?.world as any)?.[language] || 'World',
-            continent: (extraTranslations.geoScope?.continent as any)?.[language] || 'Continent',
-            country: (extraTranslations.geoScope?.country as any)?.[language] || 'Country',
-            city: (extraTranslations.geoScope?.city as any)?.[language] || 'City',
-          };
-          return (
-            <Pressable
-              key={scope}
-              style={[s.geoChip, isActive && s.geoChipActive]}
-              onPress={() => {
-                Haptics.selectionAsync();
-                let val = '';
-                if (scope === 'world') val = '';
-                else if (scope === 'continent') {
-                  if (uniqueContinents.length === 1) val = uniqueContinents[0];
-                  else if (selfPlayer?.country) val = getContinent(selfPlayer.country);
-                }
-                else if (scope === 'country') {
-                  if (uniqueCountries.length === 1) val = uniqueCountries[0];
-                  else if (selfPlayer?.country) val = selfPlayer.country;
-                }
-                else if (scope === 'city') {
-                  if (uniqueCities.length === 1) val = uniqueCities[0];
-                  else if (selfPlayer?.location?.city) val = selfPlayer.location.city;
-                }
-                updateGeoScope(scope, val);
-              }}
-            >
-              <MaterialIcons name={icons[scope] as any} size={12} color={isActive ? '#FFF' : theme.textSecondary} />
-              <Text style={[s.geoChipText, isActive && s.geoChipTextActive]}>{labels[scope]}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {/* Geo value selector (when scope needs a specific value) */}
-      {geoScope !== 'world' ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.geoValueRow}>
-          {(geoScope === 'continent' ? uniqueContinents : geoScope === 'country' ? uniqueCountries : uniqueCities).map(val => {
-            const isActive = geoValue === val;
+        {/* Tab icons */}
+        <View style={s.tabRow}>
+          {([
+            { id: 'players' as WidgetTab, icon: 'people', label: t('leaderboard', 'tabPlayers') },
+            { id: 'clubs' as WidgetTab, icon: 'home', label: t('leaderboard', 'tabClubs') },
+            { id: 'boules' as WidgetTab, icon: 'sports-baseball', label: t('leaderboard', 'tabBoules') },
+            { id: 'events' as WidgetTab, icon: 'campaign', label: t('leaderboard', 'tabEvents') },
+          ]).map(tab => {
+            const isActive = activeTab === tab.id;
             return (
-              <Pressable
-                key={val}
-                style={[s.geoValueChip, isActive && s.geoValueChipActive]}
-                onPress={() => { Haptics.selectionAsync(); updateGeoScope(geoScope, isActive ? '' : val); }}
-              >
-                <Text style={[s.geoValueChipText, isActive && s.geoValueChipTextActive]} numberOfLines={1}>{geoScope === 'continent' ? `${getContinentFlag(val)} ${getContinentLabel(val, language === 'fr')}` : geoScope === 'country' ? `${getCountryFlag(val)} ${val}` : val}</Text>
+              <Pressable key={tab.id} style={[s.tabItem, isActive && s.tabItemActive]} onPress={() => { Haptics.selectionAsync(); setActiveTab(tab.id); }}>
+                <MaterialIcons name={tab.icon as any} size={18} color={isActive ? '#F59E0B' : '#64748B'} />
+                <Text style={[s.tabLabel, isActive && s.tabLabelActive]}>{tab.label}</Text>
+                {isActive ? <View style={s.tabIndicator} /> : null}
               </Pressable>
             );
           })}
-        </ScrollView>
-      ) : null}
+        </View>
 
-      {/* Sort chips - players only */}
+        {/* Expandable geo filters */}
+        {showFilters ? (
+          <Animated.View entering={FadeIn.duration(200)} style={s.geoPanel}>
+            <View style={s.geoScopeRow}>
+              {(['world', 'continent', 'country', 'city'] as GeoScope[]).map(scope => {
+                const isActive = geoScope === scope;
+                const icons: Record<GeoScope, string> = { world: 'public', continent: 'travel-explore', country: 'flag', city: 'place' };
+                const labels: Record<GeoScope, string> = {
+                  world: (extraTranslations.geoScope?.world as any)?.[language] || 'World',
+                  continent: (extraTranslations.geoScope?.continent as any)?.[language] || 'Continent',
+                  country: (extraTranslations.geoScope?.country as any)?.[language] || 'Country',
+                  city: (extraTranslations.geoScope?.city as any)?.[language] || 'City',
+                };
+                return (
+                  <Pressable
+                    key={scope}
+                    style={[s.geoScopeChip, isActive && s.geoScopeChipActive]}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      let val = '';
+                      if (scope === 'world') val = '';
+                      else if (scope === 'continent') {
+                        if (uniqueContinents.length === 1) val = uniqueContinents[0];
+                        else if (selfPlayer?.country) val = getContinent(selfPlayer.country);
+                      } else if (scope === 'country') {
+                        if (uniqueCountries.length === 1) val = uniqueCountries[0];
+                        else if (selfPlayer?.country) val = selfPlayer.country;
+                      } else if (scope === 'city') {
+                        if (uniqueCities.length === 1) val = uniqueCities[0];
+                        else if (selfPlayer?.location?.city) val = selfPlayer.location.city;
+                      }
+                      updateGeoScope(scope, val);
+                    }}
+                  >
+                    <MaterialIcons name={icons[scope] as any} size={13} color={isActive ? '#FFF' : '#94A3B8'} />
+                    <Text style={[s.geoScopeText, isActive && s.geoScopeTextActive]}>{labels[scope]}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {geoScope !== 'world' ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.geoValueRow}>
+                {(geoScope === 'continent' ? uniqueContinents : geoScope === 'country' ? uniqueCountries : uniqueCities).map(val => {
+                  const isActive = geoValue === val;
+                  return (
+                    <Pressable key={val} style={[s.geoValueChip, isActive && s.geoValueChipActive]} onPress={() => { Haptics.selectionAsync(); updateGeoScope(geoScope, isActive ? '' : val); }}>
+                      <Text style={[s.geoValueText, isActive && s.geoValueTextActive]} numberOfLines={1}>
+                        {geoScope === 'continent' ? `${getContinentFlag(val)} ${getContinentLabel(val, language === 'fr')}` : geoScope === 'country' ? `${getCountryFlag(val)} ${val}` : val}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            ) : null}
+          </Animated.View>
+        ) : null}
+      </LinearGradient>
+
+      {/* Sort pills — players only */}
       {activeTab === 'players' ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.sortRow}>
           {([
@@ -321,35 +311,27 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
             { id: 'pointRate' as LeaderboardSort, label: t('leaderboard', 'sortByPointRate') },
             { id: 'carreauRate' as LeaderboardSort, label: t('leaderboard', 'sortByCarreauRate') },
           ]).map(chip => (
-            <Pressable
-              key={chip.id}
-              style={[s.sortChip, sortBy === chip.id && s.sortChipActive]}
-              onPress={() => { Haptics.selectionAsync(); setSortBy(chip.id); }}
-            >
+            <Pressable key={chip.id} style={[s.sortChip, sortBy === chip.id && s.sortChipActive]} onPress={() => { Haptics.selectionAsync(); setSortBy(chip.id); }}>
               <Text style={[s.sortChipText, sortBy === chip.id && s.sortChipTextActive]}>{chip.label}</Text>
             </Pressable>
           ))}
         </ScrollView>
       ) : null}
 
+      {/* Content card */}
       <View style={s.card}>
         {isLoading ? (
           <View style={s.center}>
-            <View style={s.loadingIconBg}>
-              <MaterialIcons name={activeTab === 'players' ? 'leaderboard' : activeTab === 'clubs' ? 'home' : 'sports-baseball'} size={24} color="#D97706" />
-            </View>
+            <ActivityIndicator size="large" color="#F59E0B" />
             <Text style={s.loadingText}>{t('leaderboard', 'loading')}</Text>
           </View>
         ) : hasError ? (
           <View style={s.center}>
             <MaterialIcons name="error-outline" size={36} color={theme.error} />
             <Text style={s.errorText}>{t('leaderboard', 'errorLoading')}</Text>
-            <Pressable style={s.retryBtn} onPress={retryFn}>
-              <Text style={s.retryBtnText}>{t('leaderboard', 'retry')}</Text>
-            </Pressable>
+            <Pressable style={s.retryBtn} onPress={retryFn}><Text style={s.retryBtnText}>{t('leaderboard', 'retry')}</Text></Pressable>
           </View>
         ) : activeTab === 'players' ? (
-          /* ============ PLAYERS TAB ============ */
           filteredSorted.length === 0 ? (
             <View style={s.center}>
               <MaterialIcons name="people-outline" size={40} color={theme.textMuted} />
@@ -358,141 +340,115 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
             </View>
           ) : (
             <>
-              {/* Header */}
-              <View style={s.headerRow}>
-                <Text style={[s.headerCell, { width: 28, textAlign: 'center' }]}>#</Text>
-                <Text style={[s.headerCell, { flex: 1 }]}>{t('leaderboard', 'player')}</Text>
-                <Text style={[s.headerCell, s.headerCellStat]}>{t('leaderboard', 'matches')}</Text>
-                <Text style={[s.headerCell, s.headerCellStat, sortBy === 'winRate' && { color: '#D97706' }]}>%V</Text>
-                <Text style={[s.headerCell, s.headerCellStat, sortBy === 'tirRate' && { color: theme.tirColor }]}>Tir</Text>
-                <Text style={[s.headerCell, s.headerCellStat, sortBy === 'pointRate' && { color: theme.pointColor }]}>Pt</Text>
-                <Text style={[s.headerCell, s.headerCellStat, sortBy === 'carreauRate' && { color: theme.carreauColor }]}>Car.</Text>
-              </View>
-
-              {/* Rows */}
-              {filteredSorted.slice(0, 10).map((p, idx) => {
-                const rank = idx + 1;
-                const isMe = user && (p.userId === user.id || (selfPlayer && p.id === selfPlayer.id));
-                const medalColors: Record<number, string> = { 1: '#FFD700', 2: '#A8B4C0', 3: '#CD7F32' };
-                const medalColor = medalColors[rank];
-                return (
-                  <Pressable
-                    key={p.id}
-                    style={[s.row, isMe && s.rowMe, idx % 2 === 0 && s.rowAlt]}
-                    onPress={() => router.push(isMe ? '/player/me' : `/player/${p.id}` as any)}
-                  >
-                    <View style={{ width: 28, alignItems: 'center' }}>
-                      {rank === 1 ? (
-                        <View style={s.crownContainer}>
-                          <Text style={s.crownEmoji}>👑</Text>
-                          <View style={[s.medal, { backgroundColor: '#FFD700' + '20' }]}>
-                            <Text style={[s.medalText, { color: '#FFD700' }]}>1</Text>
+              {/* Top 3 podium */}
+              {filteredSorted.length >= 3 ? (
+                <View style={s.podium}>
+                  {[1, 0, 2].map(idx => {
+                    const p = filteredSorted[idx];
+                    if (!p) return null;
+                    const rank = idx + 1;
+                    const isMe = user && (p.userId === user.id || (selfPlayer && p.id === selfPlayer.id));
+                    const heights = [64, 80, 52];
+                    const sizes = [44, 52, 40];
+                    const colors = ['#C0C0C0', '#FFD700', '#CD7F32'];
+                    const order = [1, 0, 2];
+                    const h = heights[order.indexOf(idx)];
+                    const sz = sizes[order.indexOf(idx)];
+                    const col = colors[idx];
+                    return (
+                      <Pressable key={p.id} style={[s.podiumItem, { marginTop: idx === 0 ? 0 : idx === 1 ? 0 : 16 }]} onPress={() => router.push(isMe ? '/player/me' : `/player/${p.id}` as any)}>
+                        <View style={[s.podiumAvatarWrap, { width: sz, height: sz, borderColor: col }]}>
+                          {p.avatar ? (
+                            <Image source={{ uri: p.avatar }} style={{ width: sz - 4, height: sz - 4, borderRadius: (sz - 4) / 2 }} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                          ) : (
+                            <View style={{ width: sz - 4, height: sz - 4, borderRadius: (sz - 4) / 2, backgroundColor: isMe ? theme.primary : '#334155', alignItems: 'center', justifyContent: 'center' }}>
+                              <Text style={{ fontSize: sz * 0.3, fontWeight: '700', color: '#FFF' }}>{p.name.charAt(0)}</Text>
+                            </View>
+                          )}
+                          <View style={[s.podiumRankBadge, { backgroundColor: col }]}>
+                            <Text style={s.podiumRankText}>{rank}</Text>
                           </View>
                         </View>
-                      ) : medalColor ? (
-                        <View style={[s.medal, { backgroundColor: medalColor + '20' }]}>
-                          <Text style={[s.medalText, { color: medalColor }]}>{rank}</Text>
+                        <Text style={[s.podiumName, isMe && { color: theme.primary }]} numberOfLines={1}>{p.name.split(' ')[0]}</Text>
+                        {p.country ? <Text style={s.podiumFlag}>{getCountryFlag(p.country)}</Text> : null}
+                        <Text style={s.podiumStat}>{p.stats.winRate}%</Text>
+                        <View style={[s.podiumBar, { height: h, backgroundColor: col + '25' }]}>
+                          <Text style={[s.podiumBarText, { color: col }]}>{rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉'}</Text>
                         </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
+
+              {/* Remaining rows */}
+              {filteredSorted.slice(filteredSorted.length >= 3 ? 3 : 0, 10).map((p, idx) => {
+                const rank = (filteredSorted.length >= 3 ? 3 : 0) + idx + 1;
+                const isMe = user && (p.userId === user.id || (selfPlayer && p.id === selfPlayer.id));
+                return (
+                  <Pressable key={p.id} style={[s.row, isMe && s.rowMe]} onPress={() => router.push(isMe ? '/player/me' : `/player/${p.id}` as any)}>
+                    <Text style={s.rankText}>{rank}</Text>
+                    <View style={s.avatarWrap}>
+                      {p.avatar ? (
+                        <Image source={{ uri: p.avatar }} style={s.avatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                       ) : (
-                        <Text style={s.rankText}>{rank}</Text>
+                        <View style={[s.avatar, { backgroundColor: isMe ? theme.primary : '#E2E8F0', alignItems: 'center', justifyContent: 'center' }]}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: isMe ? '#FFF' : theme.textSecondary }}>{p.name.charAt(0)}</Text>
+                        </View>
                       )}
                     </View>
-                    <View style={s.playerCol}>
-                      <View style={s.avatarWrap}>
-                        {p.avatar ? (
-                          <Image source={{ uri: p.avatar }} style={s.avatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
-                        ) : (
-                          <View style={[s.avatar, { backgroundColor: isMe ? theme.primary : theme.textMuted + '30', alignItems: 'center', justifyContent: 'center' }]}>
-                            <Text style={{ fontSize: 11, fontWeight: '700', color: isMe ? '#FFF' : theme.textSecondary }}>{p.name.charAt(0)}</Text>
-                          </View>
-                        )}
-                        {isMe ? <View style={s.meBadge}><MaterialIcons name="star" size={7} color="#FFF" /></View> : null}
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        {p.country ? <Text style={{ fontSize: 12 }}>{getCountryFlag(p.country)}</Text> : null}
+                        <Text style={[s.playerName, isMe && { color: theme.primary }]} numberOfLines={1}>
+                          {p.name}{isMe ? ` (${t('leaderboard', 'you')})` : ''}
+                        </Text>
+                        {p.isAmbassador ? <MaterialIcons name="verified" size={12} color="#7C3AED" /> : p.isPremium ? <MaterialIcons name="star" size={11} color="#A8B4C0" /> : null}
                       </View>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                          <Text style={[s.playerName, isMe && { color: theme.primary }]} numberOfLines={1}>
-                            {p.name}{isMe ? ` (${t('leaderboard', 'you')})` : ''}
-                          </Text>
-                          {p.isAmbassador ? (
-                            <View style={s.ambassadorBadge}>
-                              <MaterialIcons name="verified" size={9} color="#7C3AED" />
-                            </View>
-                          ) : p.isPremium ? (
-                            <View style={s.premiumBadge}>
-                              <MaterialIcons name="star" size={8} color="#A8B4C0" />
-                            </View>
-                          ) : null}
-                        </View>
-                        {p.club ? <Text style={s.playerClub} numberOfLines={1}>{p.club}</Text> : null}
-                      </View>
+                      {p.club ? <Text style={s.playerClub} numberOfLines={1}>{p.club}</Text> : null}
                     </View>
-                    {p.trustScore !== undefined ? (
-                      <View style={[s.trustBadge, { backgroundColor: getTrustScoreColor(p.trustScore) + '10', borderColor: getTrustScoreColor(p.trustScore) + '30' }]}>
-                        <MaterialIcons name={getTrustScoreIcon(p.trustScore) as any} size={8} color={getTrustScoreColor(p.trustScore)} />
-                      </View>
-                    ) : null}
-                    <Text style={s.statCell}>{p.stats.matchesPlayed}</Text>
-                    <Text style={[s.statCell, sortBy === 'winRate' && { color: '#D97706', fontWeight: '700' }]}>{p.stats.winRate}%</Text>
-                    <Text style={[s.statCell, sortBy === 'tirRate' && { color: theme.tirColor, fontWeight: '700' }]}>{p.stats.tirRate > 0 ? `${p.stats.tirRate}%` : '-'}</Text>
-                    <Text style={[s.statCell, sortBy === 'pointRate' && { color: theme.pointColor, fontWeight: '700' }]}>{p.stats.pointRate > 0 ? `${p.stats.pointRate}%` : '-'}</Text>
-                    <Text style={[s.statCell, sortBy === 'carreauRate' && { color: theme.carreauColor, fontWeight: '700' }]}>{p.stats.carreauRate > 0 ? `${p.stats.carreauRate}%` : '-'}</Text>
+                    <View style={s.rowStats}>
+                      <Text style={[s.rowStatMain, sortBy === 'winRate' && { color: '#F59E0B' }]}>{p.stats.winRate}%</Text>
+                      <Text style={s.rowStatSub}>{p.stats.matchesPlayed} {t('leaderboard', 'matches')}</Text>
+                    </View>
                   </Pressable>
                 );
               })}
 
-              {/* My rank if not in top 10 */}
+              {/* My rank if not visible */}
               {myRank && myRank > 10 ? (() => {
                 const myP = filteredSorted[myRank - 1];
                 if (!myP) return null;
                 return (
-                  <React.Fragment key="my-rank-footer">
-                    <View style={s.separator}>
-                      <View style={s.separatorDot} />
-                      <View style={s.separatorDot} />
-                      <View style={s.separatorDot} />
-                    </View>
-                    <View style={[s.row, s.rowMe]}>
-                      <View style={{ width: 28, alignItems: 'center' }}>
-                        <Text style={[s.rankText, { color: theme.primary }]}>{myRank}</Text>
-                      </View>
-                      <View style={s.playerCol}>
-                        <View style={s.avatarWrap}>
-                          {myP.avatar ? (
-                            <Image source={{ uri: myP.avatar }} style={s.avatar} contentFit="cover" transition={200} cachePolicy="memory-disk" />
-                          ) : (
-                            <View style={[s.avatar, { backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center' }]}>
-                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFF' }}>{myP.name.charAt(0)}</Text>
-                            </View>
-                          )}
-                          <View style={s.meBadge}><MaterialIcons name="star" size={7} color="#FFF" /></View>
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <Text style={[s.playerName, { color: theme.primary }]} numberOfLines={1}>{myP.name} ({t('leaderboard', 'you')})</Text>
-                            {myP.isAmbassador ? (
-                              <View style={s.ambassadorBadge}>
-                                <MaterialIcons name="verified" size={9} color="#7C3AED" />
-                              </View>
-                            ) : myP.isPremium ? (
-                              <View style={s.premiumBadge}>
-                                <MaterialIcons name="star" size={8} color="#A8B4C0" />
-                              </View>
-                            ) : null}
+                  <React.Fragment key="my-rank">
+                    <View style={s.separator}><View style={s.separatorLine} /><Text style={s.separatorText}>#{myRank}</Text><View style={s.separatorLine} /></View>
+                    <Pressable style={[s.row, s.rowMe]} onPress={() => router.push('/player/me' as any)}>
+                      <Text style={[s.rankText, { color: theme.primary }]}>{myRank}</Text>
+                      <View style={s.avatarWrap}>
+                        {myP.avatar ? (
+                          <Image source={{ uri: myP.avatar }} style={s.avatar} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                        ) : (
+                          <View style={[s.avatar, { backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center' }]}>
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFF' }}>{myP.name.charAt(0)}</Text>
                           </View>
-                          {myP.club ? <Text style={s.playerClub} numberOfLines={1}>{myP.club}</Text> : null}
-                        </View>
+                        )}
                       </View>
-                      <Text style={s.statCell}>{myP.stats.matchesPlayed}</Text>
-                      <Text style={[s.statCell, { color: '#D97706', fontWeight: '700' }]}>{myP.stats.winRate}%</Text>
-                      <Text style={s.statCell}>{myP.stats.tirRate > 0 ? `${myP.stats.tirRate}%` : '-'}</Text>
-                      <Text style={s.statCell}>{myP.stats.pointRate > 0 ? `${myP.stats.pointRate}%` : '-'}</Text>
-                      <Text style={s.statCell}>{myP.stats.carreauRate > 0 ? `${myP.stats.carreauRate}%` : '-'}</Text>
-                    </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          {myP.country ? <Text style={{ fontSize: 12 }}>{getCountryFlag(myP.country)}</Text> : null}
+                          <Text style={[s.playerName, { color: theme.primary }]} numberOfLines={1}>{myP.name} ({t('leaderboard', 'you')})</Text>
+                        </View>
+                        {myP.club ? <Text style={s.playerClub} numberOfLines={1}>{myP.club}</Text> : null}
+                      </View>
+                      <View style={s.rowStats}>
+                        <Text style={[s.rowStatMain, { color: '#F59E0B' }]}>{myP.stats.winRate}%</Text>
+                        <Text style={s.rowStatSub}>{myP.stats.matchesPlayed} {t('leaderboard', 'matches')}</Text>
+                      </View>
+                    </Pressable>
                   </React.Fragment>
                 );
               })() : null}
 
-              {/* Make public note */}
               {!myRank && selfPlayer ? (
                 <View style={s.note}>
                   <MaterialIcons name="info-outline" size={14} color={theme.textMuted} />
@@ -502,415 +458,209 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
             </>
           )
         ) : activeTab === 'clubs' ? (
-          /* ============ CLUBS TAB ============ */
           sortedClubs.length === 0 ? (
-            <View style={s.center}>
-              <MaterialIcons name="home" size={40} color={theme.textMuted} />
-              <Text style={s.emptyTitle}>{t('leaderboard', 'noClubs')}</Text>
-              <Text style={s.emptyDesc}>{t('leaderboard', 'noClubsDesc')}</Text>
-            </View>
+            <View style={s.center}><MaterialIcons name="home" size={40} color={theme.textMuted} /><Text style={s.emptyTitle}>{t('leaderboard', 'noClubs')}</Text></View>
           ) : (
             <>
-              {sortedClubs.slice(0, 3).map((club, idx) => {
+              {sortedClubs.slice(0, 5).map((club, idx) => {
                 const rank = idx + 1;
-                const medalColors: Record<number, string> = { 1: '#FFD700', 2: '#A8B4C0', 3: '#CD7F32' };
-                const medalColor = medalColors[rank];
+                const medalColors: Record<number, string> = { 1: '#FFD700', 2: '#C0C0C0', 3: '#CD7F32' };
+                const mc = medalColors[rank];
                 return (
-                  <Animated.View key={club.id} entering={FadeIn.duration(200).delay(idx * 60)}>
-                    <Pressable
-                      style={[s.clubRow, idx < 2 && { borderBottomWidth: 1, borderBottomColor: theme.border + '40' }]}
-                      onPress={() => router.push({ pathname: `/club-ranking/${club.id}`, params: { name: club.name } } as any)}
-                    >
-                      <View style={{ width: 28, alignItems: 'center' }}>
-                        {rank === 1 ? (
-                          <View style={s.crownContainer}>
-                            <Text style={s.crownEmoji}>👑</Text>
-                            <View style={[s.medal, { backgroundColor: '#FFD700' + '20' }]}>
-                              <Text style={[s.medalText, { color: '#FFD700' }]}>1</Text>
-                            </View>
-                          </View>
-                        ) : medalColor ? (
-                          <View style={[s.medal, { backgroundColor: medalColor + '20' }]}>
-                            <Text style={[s.medalText, { color: medalColor }]}>{rank}</Text>
-                          </View>
-                        ) : (
-                          <Text style={s.rankText}>{rank}</Text>
-                        )}
+                  <Pressable key={club.id} style={[s.row, idx < 4 && { borderBottomWidth: 1, borderBottomColor: theme.border + '30' }]} onPress={() => router.push({ pathname: `/club-ranking/${club.id}`, params: { name: club.name } } as any)}>
+                    <View style={{ width: 24, alignItems: 'center' }}>
+                      {mc ? <Text style={{ fontSize: 14 }}>{rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉'}</Text> : <Text style={s.rankText}>{rank}</Text>}
+                    </View>
+                    <View style={s.avatarWrap}>
+                      {club.logo ? (
+                        <Image source={{ uri: club.logo }} style={s.avatar} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                      ) : (
+                        <View style={[s.avatar, { backgroundColor: '#F59E0B15', alignItems: 'center', justifyContent: 'center' }]}><MaterialIcons name="home" size={16} color="#F59E0B" /></View>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.playerName} numberOfLines={1}>{club.name}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                        {club.city ? <Text style={s.playerClub} numberOfLines={1}>{club.city}</Text> : null}
+                        <Text style={{ fontSize: 10, color: theme.textMuted }}>{club.playerCount} {t('leaderboard', 'clubPlayers')}</Text>
                       </View>
-                      <View style={s.clubLogoWrap}>
-                        {club.logo ? (
-                          <Image source={{ uri: club.logo }} style={s.clubLogo} contentFit="cover" transition={200} cachePolicy="memory-disk" />
-                        ) : (
-                          <View style={[s.clubLogo, { backgroundColor: '#D97706' + '15', alignItems: 'center', justifyContent: 'center' }]}>
-                            <MaterialIcons name="home" size={16} color="#D97706" />
-                          </View>
-                        )}
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.clubName} numberOfLines={1}>{club.name}</Text>
-                        <View style={s.clubMeta}>
-                          {club.city ? <Text style={s.clubCity} numberOfLines={1}>{club.city}</Text> : null}
-                          <View style={s.clubMetaChip}>
-                            <MaterialIcons name="people" size={10} color={theme.textMuted} />
-                            <Text style={s.clubMetaText}>{club.playerCount}</Text>
-                          </View>
-                        </View>
-                      </View>
-                      <View style={s.clubScoreCol}>
-                        <Text style={s.clubScoreValue}>{club.stats.compositeScore}</Text>
-                        <Text style={s.clubScoreLabel}>{t('leaderboard', 'clubComposite')}</Text>
-                      </View>
-                      <View style={s.clubWinCol}>
-                        <Text style={s.clubWinValue}>{club.stats.avgWinRate}%</Text>
-                        <Text style={s.clubWinLabel}>{t('leaderboard', 'clubAvgWin')}</Text>
-                      </View>
-                    </Pressable>
-                  </Animated.View>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={{ fontSize: 16, fontWeight: '900', color: '#F59E0B' }}>{club.stats.compositeScore}</Text>
+                      <Text style={{ fontSize: 9, color: theme.textMuted }}>{club.stats.avgWinRate}% V</Text>
+                    </View>
+                  </Pressable>
                 );
               })}
             </>
           )
         ) : activeTab === 'events' ? (
-          /* ============ EVENTS TAB ============ */
           eventEntries.length === 0 ? (
-            <View style={s.center}>
-              <MaterialIcons name="campaign" size={40} color={theme.textMuted} />
-              <Text style={s.emptyTitle}>{t('leaderboard', 'noEvents')}</Text>
-              <Text style={s.emptyDesc}>{t('leaderboard', 'noEventsDesc')}</Text>
-            </View>
+            <View style={s.center}><MaterialIcons name="campaign" size={40} color={theme.textMuted} /><Text style={s.emptyTitle}>{t('leaderboard', 'noEvents')}</Text></View>
           ) : (
             <>
               {eventEntries.slice(0, 5).map((entry, idx) => {
                 const rank = idx + 1;
-                const medalColors: Record<number, string> = { 1: '#FFD700', 2: '#A8B4C0', 3: '#CD7F32' };
-                const medalColor = medalColors[rank];
                 return (
-                  <Animated.View key={entry.userId} entering={FadeIn.duration(200).delay(idx * 60)}>
-                    <View style={[s.eventRow, idx < 4 && { borderBottomWidth: 1, borderBottomColor: theme.border + '40' }]}>
-                      <View style={{ width: 28, alignItems: 'center' }}>
-                        {rank === 1 ? (
-                          <View style={s.crownContainer}>
-                            <Text style={s.crownEmoji}>{"\u{1F451}"}</Text>
-                            <View style={[s.medal, { backgroundColor: '#FFD700' + '20' }]}>
-                              <Text style={[s.medalText, { color: '#FFD700' }]}>1</Text>
-                            </View>
-                          </View>
-                        ) : medalColor ? (
-                          <View style={[s.medal, { backgroundColor: medalColor + '20' }]}>
-                            <Text style={[s.medalText, { color: medalColor }]}>{rank}</Text>
-                          </View>
-                        ) : (
-                          <Text style={s.rankText}>{rank}</Text>
-                        )}
-                      </View>
-                      <View style={s.avatarWrap}>
-                        {entry.userAvatar ? (
-                          <Image source={{ uri: entry.userAvatar }} style={s.avatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
-                        ) : (
-                          <View style={[s.avatar, { backgroundColor: '#7C3AED' + '20', alignItems: 'center', justifyContent: 'center' }]}>
-                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#7C3AED' }}>{entry.userName.charAt(0)}</Text>
-                          </View>
-                        )}
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.playerName} numberOfLines={1}>{entry.userName}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                          {entry.wins > 0 ? (
-                            <View style={s.eventWinBadge}>
-                              <MaterialIcons name="emoji-events" size={9} color="#D97706" />
-                              <Text style={s.eventWinBadgeText}>{entry.wins}</Text>
-                            </View>
-                          ) : null}
-                          {entry.podiums > 0 ? (
-                            <View style={s.eventPodiumBadge}>
-                              <MaterialIcons name="military-tech" size={9} color="#7C3AED" />
-                              <Text style={s.eventPodiumBadgeText}>{entry.podiums}</Text>
-                            </View>
-                          ) : null}
-                          <View style={s.clubMetaChip}>
-                            <MaterialIcons name="campaign" size={10} color={theme.textMuted} />
-                            <Text style={s.clubMetaText}>{entry.eventsCompleted}</Text>
-                          </View>
-                        </View>
-                      </View>
-                      <View style={s.eventScoreCol}>
-                        <Text style={s.eventScoreValue}>{entry.avgScore}%</Text>
-                        <Text style={s.eventScoreLabel}>{t('leaderboard', 'eventAvgScore')}</Text>
+                  <View key={entry.userId} style={[s.row, idx < 4 && { borderBottomWidth: 1, borderBottomColor: theme.border + '30' }]}>
+                    <View style={{ width: 24, alignItems: 'center' }}>
+                      {rank <= 3 ? <Text style={{ fontSize: 14 }}>{rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉'}</Text> : <Text style={s.rankText}>{rank}</Text>}
+                    </View>
+                    <View style={s.avatarWrap}>
+                      {entry.userAvatar ? (
+                        <Image source={{ uri: entry.userAvatar }} style={s.avatar} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                      ) : (
+                        <View style={[s.avatar, { backgroundColor: '#7C3AED15', alignItems: 'center', justifyContent: 'center' }]}><Text style={{ fontSize: 11, fontWeight: '700', color: '#7C3AED' }}>{entry.userName.charAt(0)}</Text></View>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.playerName} numberOfLines={1}>{entry.userName}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                        {entry.wins > 0 ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#F59E0B12', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 6 }}><MaterialIcons name="emoji-events" size={9} color="#F59E0B" /><Text style={{ fontSize: 9, fontWeight: '700', color: '#F59E0B' }}>{entry.wins}</Text></View> : null}
+                        {entry.podiums > 0 ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#7C3AED10', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 6 }}><MaterialIcons name="military-tech" size={9} color="#7C3AED" /><Text style={{ fontSize: 9, fontWeight: '700', color: '#7C3AED' }}>{entry.podiums}</Text></View> : null}
                       </View>
                     </View>
-                  </Animated.View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={{ fontSize: 15, fontWeight: '800', color: '#7C3AED' }}>{entry.avgScore}%</Text>
+                      <Text style={{ fontSize: 9, color: theme.textMuted }}>{entry.eventsCompleted} {t('leaderboard', 'tabEvents').toLowerCase()}</Text>
+                    </View>
+                  </View>
                 );
               })}
             </>
           )
         ) : (
-          /* ============ BOULES TAB ============ */
           boulesEntries.length === 0 ? (
-            <View style={s.center}>
-              <MaterialIcons name="sports-baseball" size={40} color={theme.textMuted} />
-              <Text style={s.emptyTitle}>{t('leaderboard', 'noBoules')}</Text>
-              <Text style={s.emptyDesc}>{t('leaderboard', 'noBoulesDesc')}</Text>
-            </View>
+            <View style={s.center}><MaterialIcons name="sports-baseball" size={40} color={theme.textMuted} /><Text style={s.emptyTitle}>{t('leaderboard', 'noBoules')}</Text></View>
           ) : (
             <>
-              {boulesEntries.slice(0, 3).map((entry, idx) => {
+              {boulesEntries.slice(0, 5).map((entry, idx) => {
                 const rank = idx + 1;
-                const medalColors: Record<number, string> = { 1: '#FFD700', 2: '#A8B4C0', 3: '#CD7F32' };
-                const medalColor = medalColors[rank];
                 return (
-                  <Animated.View key={entry.id} entering={FadeIn.duration(200).delay(idx * 60)}>
-                    <Pressable style={[s.boulesRow, idx < 2 && { borderBottomWidth: 1, borderBottomColor: theme.border + '40' }]} onPress={() => router.push({ pathname: `/boules-ranking/${encodeURIComponent(entry.id)}`, params: { brand: entry.brand, model: entry.model || '', mode: 'brand' } } as any)}>
-                      <View style={{ width: 28, alignItems: 'center' }}>
-                        {rank === 1 ? (
-                          <View style={s.crownContainer}>
-                            <Text style={s.crownEmoji}>👑</Text>
-                            <View style={[s.medal, { backgroundColor: '#FFD700' + '20' }]}>
-                              <Text style={[s.medalText, { color: '#FFD700' }]}>1</Text>
-                            </View>
-                          </View>
-                        ) : medalColor ? (
-                          <View style={[s.medal, { backgroundColor: medalColor + '20' }]}>
-                            <Text style={[s.medalText, { color: medalColor }]}>{rank}</Text>
-                          </View>
-                        ) : (
-                          <Text style={s.rankText}>{rank}</Text>
-                        )}
+                  <Pressable key={entry.id} style={[s.row, idx < 4 && { borderBottomWidth: 1, borderBottomColor: theme.border + '30' }]} onPress={() => router.push({ pathname: `/boules-ranking/${encodeURIComponent(entry.id)}`, params: { brand: entry.brand, model: entry.model || '', mode: 'brand' } } as any)}>
+                    <View style={{ width: 24, alignItems: 'center' }}>
+                      {rank <= 3 ? <Text style={{ fontSize: 14 }}>{rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉'}</Text> : <Text style={s.rankText}>{rank}</Text>}
+                    </View>
+                    {(() => { const bv = getBrandVisual(entry.brand); const bImg = getBrandImage(entry.brand); return (
+                    <View style={[s.avatar, { backgroundColor: bImg ? '#FFF' : bv.bg, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.border }]}>
+                      {bImg ? <Image source={bImg} style={{ width: '75%', height: '75%' }} contentFit="contain" transition={200} /> : <Text style={{ fontSize: 9, fontWeight: '900', color: bv.text }}>{bv.abbr}</Text>}
+                    </View>
+                    ); })()}
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.playerName} numberOfLines={1}>{entry.brand}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                        <Text style={{ fontSize: 10, color: theme.textMuted }}>{entry.userCount} {t('leaderboard', 'boulesUsers')}</Text>
+                        <Text style={{ fontSize: 10, color: theme.textMuted }}>{entry.totalMatches} {t('leaderboard', 'boulesMatches')}</Text>
                       </View>
-                      {(() => { const bv = getBrandVisual(entry.brand); const bImg = getBrandImage(entry.brand); return (
-                      <View style={[s.boulesIconWrap, { backgroundColor: bImg ? '#FFF' : bv.bg, alignItems: 'center', justifyContent: 'center' }]}>
-                        {bImg ? (
-                          <Image source={bImg} style={{ width: '80%', height: '80%' }} contentFit="contain" transition={200} />
-                        ) : (
-                          <Text style={{ fontSize: 10, fontWeight: '900', color: bv.text, letterSpacing: -0.5 }}>{bv.abbr}</Text>
-                        )}
-                      </View>
-                      ); })()}
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.boulesName} numberOfLines={1}>{entry.brand}</Text>
-                        <View style={s.boulesMeta}>
-                          <View style={s.clubMetaChip}>
-                            <MaterialIcons name="people" size={10} color={theme.textMuted} />
-                            <Text style={s.clubMetaText}>{entry.userCount}</Text>
-                          </View>
-                          <View style={s.clubMetaChip}>
-                            <MaterialIcons name="sports" size={10} color={theme.textMuted} />
-                            <Text style={s.clubMetaText}>{entry.totalMatches}</Text>
-                          </View>
-                        </View>
-                      </View>
-                      <View style={s.boulesStatCol}>
-                        <Text style={s.boulesStatValue}>{entry.stats.avgWinRate}%</Text>
-                        <Text style={s.boulesStatLabel}>{t('leaderboard', 'boulesAvgWin')}</Text>
-                      </View>
-                      <View style={s.boulesStatCol}>
-                        <Text style={s.boulesStatValue}>{entry.stats.avgTirRate > 0 ? `${entry.stats.avgTirRate}%` : '-'}</Text>
-                        <Text style={s.boulesStatLabel}>{t('leaderboard', 'boulesTir')}</Text>
-                      </View>
-                    </Pressable>
-                  </Animated.View>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={{ fontSize: 15, fontWeight: '800', color: '#F59E0B' }}>{entry.stats.avgWinRate}%</Text>
+                      <Text style={{ fontSize: 9, color: theme.textMuted }}>Tir {entry.stats.avgTirRate}%</Text>
+                    </View>
+                  </Pressable>
                 );
               })}
             </>
           )
         )}
 
-        {/* See full leaderboard link — always present */}
-        <Pressable
-          style={s.seeFullBtn}
-          onPress={() => { Haptics.selectionAsync(); router.push('/leaderboard' as any); }}
-        >
-          <Text style={s.seeFullBtnText}>{t('leaderboard', 'seeFullLeaderboard')}</Text>
-          <MaterialIcons name="arrow-forward" size={16} color="#D97706" />
+        {/* CTA */}
+        <Pressable style={s.ctaBtn} onPress={() => { Haptics.selectionAsync(); router.push('/leaderboard' as any); }}>
+          <Text style={s.ctaBtnText}>{t('leaderboard', 'seeFullLeaderboard')}</Text>
+          <MaterialIcons name="arrow-forward" size={16} color="#F59E0B" />
         </Pressable>
       </View>
-
-      {/* Info Modal */}
-      <Modal visible={showInfoModal} animationType="fade" transparent onRequestClose={() => setShowInfoModal(false)}>
-        <Pressable style={s.infoOverlay} onPress={() => setShowInfoModal(false)}>
-          <Pressable style={s.infoContent} onPress={() => {}}>
-            <View style={s.infoHeader}>
-              <View style={s.infoHeaderIcon}>
-                <MaterialIcons name="info" size={22} color="#D97706" />
-              </View>
-              <Text style={s.infoHeaderTitle}>{t('leaderboard', 'infoTitle')}</Text>
-              <Pressable style={s.infoCloseBtn} onPress={() => setShowInfoModal(false)} hitSlop={8}>
-                <MaterialIcons name="close" size={20} color={theme.textSecondary} />
-              </Pressable>
-            </View>
-            <ScrollView style={s.infoScroll} showsVerticalScrollIndicator={false}>
-              {/* Players section */}
-              <View style={s.infoSection}>
-                <View style={s.infoSectionHeader}>
-                  <MaterialIcons name="people" size={16} color={theme.primary} />
-                  <Text style={s.infoSectionTitle}>{t('leaderboard', 'infoPlayersTitle')}</Text>
-                </View>
-                <Text style={s.infoSectionDesc}>{t('leaderboard', 'infoPlayersDesc')}</Text>
-              </View>
-              {/* Clubs section */}
-              <View style={s.infoSection}>
-                <View style={s.infoSectionHeader}>
-                  <MaterialIcons name="home" size={16} color="#D97706" />
-                  <Text style={s.infoSectionTitle}>{t('leaderboard', 'infoClubsTitle')}</Text>
-                </View>
-                <Text style={s.infoSectionDesc}>{t('leaderboard', 'infoClubsDesc')}</Text>
-              </View>
-              {/* Boules section */}
-              <View style={s.infoSection}>
-                <View style={s.infoSectionHeader}>
-                  <MaterialIcons name="sports-baseball" size={16} color={theme.accent} />
-                  <Text style={s.infoSectionTitle}>{t('leaderboard', 'infoBoulesTitle')}</Text>
-                </View>
-                <Text style={s.infoSectionDesc}>{t('leaderboard', 'infoBoulesDesc')}</Text>
-              </View>
-              {/* Key notes */}
-              <View style={s.infoNotes}>
-                <View style={s.infoNoteItem}>
-                  <MaterialIcons name="sports" size={14} color={theme.textMuted} />
-                  <Text style={s.infoNoteText}>{t('leaderboard', 'infoMinMatches')}</Text>
-                </View>
-                <View style={s.infoNoteItem}>
-                  <MaterialIcons name="visibility" size={14} color={theme.textMuted} />
-                  <Text style={s.infoNoteText}>{t('leaderboard', 'infoPublicOnly')}</Text>
-                </View>
-                <View style={s.infoNoteItem}>
-                  <MaterialIcons name="auto-graph" size={14} color={theme.textMuted} />
-                  <Text style={s.infoNoteText}>{t('leaderboard', 'infoAutoCalc')}</Text>
-                </View>
-              </View>
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  section: { marginBottom: 4 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 10 },
-  sectionIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  sectionHeaderText: { flex: 1 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: theme.textPrimary },
-  sectionSubtitle: { fontSize: 11, color: theme.textMuted, marginTop: 1 },
+  section: { marginBottom: 4, borderRadius: 20, overflow: 'hidden' as const },
+
+  // Header gradient
+  headerGradient: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 },
+  headerRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 14 },
+  headerIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#F59E0B18', alignItems: 'center' as const, justifyContent: 'center' as const },
+  headerTitle: { fontSize: 16, fontWeight: '800' as const, color: '#FFF', letterSpacing: -0.3 },
+  headerCount: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
+
+  // Geo pill
+  geoPill: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20, maxWidth: 150 },
+  geoPillActive: { backgroundColor: '#F59E0B18', borderWidth: 1, borderColor: '#F59E0B40' },
+  geoPillText: { fontSize: 11, fontWeight: '600' as const, color: '#94A3B8', maxWidth: 80 },
+  geoPillTextActive: { color: '#F59E0B' },
 
   // Tabs
-  tabRow: { flexDirection: 'row', gap: 6, marginBottom: 10 },
-  tabBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 8, borderRadius: 12, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
-  tabBtnActive: { backgroundColor: '#D97706', borderColor: '#D97706' },
-  tabBtnText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
-  tabBtnTextActive: { color: '#FFF', fontWeight: '700' },
+  tabRow: { flexDirection: 'row' as const, gap: 2, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 14, padding: 3 },
+  tabItem: { flex: 1, alignItems: 'center' as const, paddingVertical: 8, borderRadius: 12, gap: 3, position: 'relative' as const },
+  tabItemActive: { backgroundColor: 'rgba(255,255,255,0.08)' },
+  tabLabel: { fontSize: 10, fontWeight: '600' as const, color: '#64748B' },
+  tabLabelActive: { color: '#F59E0B', fontWeight: '700' as const },
+  tabIndicator: { position: 'absolute' as const, bottom: 2, width: 16, height: 2, borderRadius: 1, backgroundColor: '#F59E0B' },
 
-  sortRow: { gap: 6, marginBottom: 12 },
+  // Geo panel (expandable)
+  geoPanel: { marginTop: 8, gap: 8 },
+  geoScopeRow: { flexDirection: 'row' as const, gap: 6 },
+  geoScopeChip: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 4, paddingVertical: 7, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.06)' },
+  geoScopeChipActive: { backgroundColor: '#F59E0B30' },
+  geoScopeText: { fontSize: 10, fontWeight: '600' as const, color: '#94A3B8' },
+  geoScopeTextActive: { color: '#FFF', fontWeight: '700' as const },
+  geoValueRow: { gap: 6 },
+  geoValueChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.06)' },
+  geoValueChipActive: { backgroundColor: '#F59E0B30' },
+  geoValueText: { fontSize: 11, fontWeight: '600' as const, color: '#94A3B8', maxWidth: 110 },
+  geoValueTextActive: { color: '#FFF' },
 
-  // Geographic scope
-  geoRow: { flexDirection: 'row' as const, gap: 6, marginBottom: 8 },
-  geoChip: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 4, paddingVertical: 7, borderRadius: 10, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
-  geoChipActive: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
-  geoChipText: { fontSize: 11, fontWeight: '600' as const, color: theme.textSecondary },
-  geoChipTextActive: { color: '#FFF', fontWeight: '700' as const },
-  geoValueRow: { gap: 6, marginBottom: 10, paddingRight: 4 },
-  geoValueChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
-  geoValueChipActive: { backgroundColor: '#2563EB15', borderColor: '#2563EB' },
-  geoValueChipText: { fontSize: 12, fontWeight: '600' as const, color: theme.textSecondary, maxWidth: 120 },
-  geoValueChipTextActive: { color: '#2563EB' },
-  sortChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
-  sortChipActive: { backgroundColor: '#D97706', borderColor: '#D97706' },
-  sortChipText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
-  sortChipTextActive: { color: '#FFF' },
-  card: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, ...theme.shadows.card },
-  center: { alignItems: 'center', paddingVertical: 28 },
-  loadingIconBg: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#D97706' + '12', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  loadingText: { fontSize: 13, color: theme.textMuted },
+  // Sort
+  sortRow: { gap: 6, paddingHorizontal: 16, paddingVertical: 10 },
+  sortChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
+  sortChipActive: { backgroundColor: '#F59E0B15', borderColor: '#F59E0B60' },
+  sortChipText: { fontSize: 11, fontWeight: '600' as const, color: theme.textSecondary },
+  sortChipTextActive: { color: '#F59E0B', fontWeight: '700' as const },
+
+  // Content card
+  card: { backgroundColor: theme.surface, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
+  center: { alignItems: 'center' as const, paddingVertical: 28 },
+  loadingText: { fontSize: 13, color: theme.textMuted, marginTop: 12 },
   errorText: { fontSize: 13, color: theme.textSecondary, marginTop: 8 },
-  retryBtn: { marginTop: 12, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: theme.primary + '15', borderRadius: 8 },
-  retryBtnText: { fontSize: 13, fontWeight: '600', color: theme.primary },
-  emptyTitle: { fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginTop: 12 },
-  emptyDesc: { fontSize: 12, color: theme.textSecondary, textAlign: 'center', marginTop: 4, maxWidth: 240 },
+  retryBtn: { marginTop: 12, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#F59E0B15', borderRadius: 8 },
+  retryBtnText: { fontSize: 13, fontWeight: '600' as const, color: '#F59E0B' },
+  emptyTitle: { fontSize: 14, fontWeight: '600' as const, color: theme.textPrimary, marginTop: 12 },
+  emptyDesc: { fontSize: 12, color: theme.textSecondary, textAlign: 'center' as const, marginTop: 4, maxWidth: 240 },
 
-  // Players table
-  headerRow: { flexDirection: 'row', alignItems: 'center', paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: theme.border, gap: 4 },
-  headerCell: { fontSize: 10, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
-  headerCellStat: { width: 34, textAlign: 'center' },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 4, borderBottomWidth: 1, borderBottomColor: theme.border + '40' },
-  rowAlt: { backgroundColor: theme.backgroundSecondary + '30' },
-  rowMe: { backgroundColor: theme.primary + '08', borderLeftWidth: 3, borderLeftColor: theme.primary, paddingLeft: 4 },
-  medal: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  medalText: { fontSize: 13, fontWeight: '900' },
-  rankText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
-  playerCol: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, marginRight: 4 },
-  avatarWrap: { position: 'relative' },
-  avatar: { width: 30, height: 30, borderRadius: 10, overflow: 'hidden' },
-  meBadge: { position: 'absolute', bottom: -2, right: -2, width: 14, height: 14, borderRadius: 7, backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: theme.surface },
-  playerName: { fontSize: 13, fontWeight: '600', color: theme.textPrimary },
+  // Podium
+  podium: { flexDirection: 'row' as const, justifyContent: 'center' as const, alignItems: 'flex-end' as const, paddingVertical: 16, paddingHorizontal: 8, gap: 8 },
+  podiumItem: { alignItems: 'center' as const, flex: 1, gap: 4 },
+  podiumAvatarWrap: { borderRadius: 100, borderWidth: 2.5, overflow: 'hidden' as const, alignItems: 'center' as const, justifyContent: 'center' as const, position: 'relative' as const },
+  podiumRankBadge: { position: 'absolute' as const, bottom: -4, width: 18, height: 18, borderRadius: 9, alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1.5, borderColor: '#FFF' },
+  podiumRankText: { fontSize: 10, fontWeight: '900' as const, color: '#FFF' },
+  podiumName: { fontSize: 12, fontWeight: '700' as const, color: theme.textPrimary, maxWidth: 80, textAlign: 'center' as const },
+  podiumFlag: { fontSize: 12, lineHeight: 14 },
+  podiumStat: { fontSize: 13, fontWeight: '800' as const, color: '#F59E0B' },
+  podiumBar: { width: '80%', borderRadius: 6, alignItems: 'center' as const, justifyContent: 'flex-end' as const, paddingBottom: 6, marginTop: 4 },
+  podiumBarText: { fontSize: 14 },
+
+  // Rows
+  row: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingVertical: 10, gap: 10 },
+  rowMe: { backgroundColor: theme.primary + '08', borderRadius: 10, paddingHorizontal: 8, marginHorizontal: -8, borderLeftWidth: 3, borderLeftColor: theme.primary },
+  rankText: { fontSize: 13, fontWeight: '600' as const, color: theme.textMuted, width: 24, textAlign: 'center' as const },
+  avatarWrap: {},
+  avatar: { width: 32, height: 32, borderRadius: 10, overflow: 'hidden' as const },
+  playerName: { fontSize: 13, fontWeight: '600' as const, color: theme.textPrimary },
   playerClub: { fontSize: 10, color: theme.textMuted, marginTop: 1 },
-  premiumBadge: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#A8B4C0' + '20', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#A8B4C0' + '40' },
-  ambassadorBadge: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#7C3AED' + '20', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#7C3AED' + '40' },
-  statCell: { width: 34, fontSize: 12, fontWeight: '500', color: theme.textPrimary, textAlign: 'center' },
-  trustBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 2, paddingHorizontal: 4, paddingVertical: 3, borderRadius: 6, borderWidth: 1, marginRight: 2 },
-  trustBadgeText: { fontSize: 8, fontWeight: '800' as const },
-  separator: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 6 },
-  separatorDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: theme.textMuted },
-  note: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border },
+  rowStats: { alignItems: 'flex-end' as const },
+  rowStatMain: { fontSize: 15, fontWeight: '800' as const, color: theme.textPrimary },
+  rowStatSub: { fontSize: 9, color: theme.textMuted },
+
+  // Separator
+  separator: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, paddingVertical: 6 },
+  separatorLine: { flex: 1, height: 1, backgroundColor: theme.border },
+  separatorText: { fontSize: 11, fontWeight: '700' as const, color: theme.textMuted },
+
+  note: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border },
   noteText: { flex: 1, fontSize: 11, color: theme.textMuted, lineHeight: 16 },
 
-  // Club rows
-  clubRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 10 },
-  clubLogoWrap: {},
-  clubLogo: { width: 34, height: 34, borderRadius: 10, overflow: 'hidden' as const },
-  clubName: { fontSize: 13, fontWeight: '700', color: theme.textPrimary },
-  clubMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
-  clubCity: { fontSize: 10, color: theme.textMuted },
-  clubMetaChip: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  clubMetaText: { fontSize: 10, color: theme.textMuted },
-  clubScoreCol: { alignItems: 'center', minWidth: 40 },
-  clubScoreValue: { fontSize: 16, fontWeight: '900', color: '#D97706' },
-  clubScoreLabel: { fontSize: 8, fontWeight: '600', color: '#D97706' },
-  clubWinCol: { alignItems: 'center', minWidth: 36 },
-  clubWinValue: { fontSize: 13, fontWeight: '700', color: theme.textPrimary },
-  clubWinLabel: { fontSize: 8, color: theme.textMuted },
-
-  // Boules rows
-  boulesRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 10 },
-  boulesIconWrap: { width: 34, height: 34, borderRadius: 10, backgroundColor: '#D97706' + '12', overflow: 'hidden' as const },
-  boulesName: { fontSize: 13, fontWeight: '700', color: theme.textPrimary },
-  boulesMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 3 },
-  boulesStatCol: { alignItems: 'center', minWidth: 36 },
-  boulesStatValue: { fontSize: 13, fontWeight: '700', color: theme.textPrimary },
-  boulesStatLabel: { fontSize: 8, color: theme.textMuted },
-
-  // Event rows
-  eventRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 10 },
-  eventWinBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#D97706' + '12', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  eventWinBadgeText: { fontSize: 9, fontWeight: '800', color: '#D97706' },
-  eventPodiumBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#7C3AED' + '12', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  eventPodiumBadgeText: { fontSize: 9, fontWeight: '800', color: '#7C3AED' },
-  eventScoreCol: { alignItems: 'center', minWidth: 44 },
-  eventScoreValue: { fontSize: 14, fontWeight: '800', color: '#7C3AED' },
-  eventScoreLabel: { fontSize: 8, color: theme.textMuted },
-
-  seeFullBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: theme.border },
-  seeFullBtnText: { fontSize: 14, fontWeight: '700', color: '#D97706' },
-
-  // Crown badge for #1
-  crownContainer: { alignItems: 'center', position: 'relative' as const },
-  crownEmoji: { fontSize: 12, lineHeight: 14, marginBottom: -2 },
-
-  // Info button
-  infoBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
-
-  // Info Modal
-  infoOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center' as const, paddingHorizontal: 24 },
-  infoContent: { backgroundColor: theme.surface, borderRadius: 20, maxHeight: '80%', overflow: 'hidden' as const },
-  infoHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: theme.border },
-  infoHeaderIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#D97706' + '12', alignItems: 'center' as const, justifyContent: 'center' as const },
-  infoHeaderTitle: { flex: 1, fontSize: 16, fontWeight: '700' as const, color: theme.textPrimary },
-  infoCloseBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: theme.backgroundSecondary, alignItems: 'center' as const, justifyContent: 'center' as const },
-  infoScroll: { paddingHorizontal: 20, paddingVertical: 16 },
-  infoSection: { marginBottom: 18 },
-  infoSectionHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 8 },
-  infoSectionTitle: { fontSize: 14, fontWeight: '700' as const, color: theme.textPrimary },
-  infoSectionDesc: { fontSize: 13, color: theme.textSecondary, lineHeight: 19 },
-  infoNotes: { backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 14, gap: 10, marginBottom: 8 },
-  infoNoteItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
-  infoNoteText: { fontSize: 12, color: theme.textMuted, flex: 1 },
+  // CTA
+  ctaBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, marginTop: 12, paddingVertical: 14, borderTopWidth: 1, borderTopColor: theme.border },
+  ctaBtnText: { fontSize: 14, fontWeight: '700' as const, color: '#F59E0B' },
 });
