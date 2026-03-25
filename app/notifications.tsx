@@ -396,7 +396,7 @@ export default function NotificationsScreen() {
         <Animated.View entering={FadeInDown.duration(300).delay(175)} style={styles.section}>
           <Pressable
             style={styles.tournamentCard}
-            onPress={() => router.push('/witness-invitations' as any)}
+            onPress={() => router.push({ pathname: '/notifications-hub', params: { tab: 'witness' } } as any)}
           >
             <View style={[styles.tournamentIconBox, { backgroundColor: '#7C3AED15' }]}>
               <MaterialIcons name="visibility" size={24} color="#7C3AED" />
