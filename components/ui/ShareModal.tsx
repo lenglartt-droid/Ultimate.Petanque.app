@@ -308,7 +308,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
             </Pressable>
           </View>
 
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <ScrollView style={s.scrollView} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" bounces={false} nestedScrollEnabled>
 
             {/* ===== PREVIEW CARD (always visible) ===== */}
             <LinearGradient colors={typeConfig.gradient} style={s.previewGradient}>
@@ -597,11 +597,12 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
 
 const s = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  sheet: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '92%', overflow: 'hidden' },
+  sheet: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A' },
   closeBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
-  scrollContent: { paddingBottom: 40 },
+  scrollView: { flexGrow: 0, flexShrink: 1 },
+  scrollContent: { paddingBottom: 48 },
 
   // Preview gradient
   previewGradient: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, marginHorizontal: 16, marginTop: 16, borderRadius: 16 },
