@@ -27,14 +27,16 @@ import { preloadInterstitial } from '@/services/adService';
 import CommunityLeaderboard from '@/components/ui/CommunityLeaderboard';
 import { BannerSkeleton, TimelineSkeleton, LeaderboardSkeleton, HistorySkeleton, SponsorSkeleton } from '@/components/ui/SkeletonLoader';
 import SponsorBanner from '@/components/ui/SponsorBanner';
+import UpcomingTimeline from '@/components/feature/UpcomingTimeline';
+import CompactHistory from '@/components/feature/CompactHistory';
+import AmbassadorBanner from '@/components/feature/AmbassadorBanner';
 import { getFeaturedAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { getMyMeetups, getInvitedMeetups, getMeetupResponses, getPendingInvitationsCount, findMeetupByCode, Meetup, MeetupResponse } from '@/services/meetupService';
 import { config } from '@/constants/config';
 import { Share as RNShare } from 'react-native';
 import { LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
-import { getMatchValidationLevel, getValidationColor, getValidationIcon, getValidationLabel } from '@/services/trustScoreService';
-import { fetchWeeklyLeaderboard, getCurrentWeekStart, formatDateISO } from '@/services/weeklyLeaderboardService';
+import { fetchWeeklyLeaderboard } from '@/services/weeklyLeaderboardService';
 import { extraTranslations } from '@/constants/i18nExtra';
 import { getPendingWitnessRequests, getUnreadEventNotificationCount, markEventNotificationRead, EventNotification } from '@/services/eventNotificationService';
 import { getSponsoredEvents, SponsoredEvent } from '@/services/sponsoredEventService';
@@ -51,9 +53,6 @@ export default function HomeScreen() {
   // Ambassadors state
   const [featuredAmbassadors, setFeaturedAmbassadors] = useState<Ambassador[]>([]);
   const [ambassadorsLoaded, setAmbassadorsLoaded] = useState(false);
-  const [bannerIndex, setBannerIndex] = useState(0);
-  const bannerScrollRef = useRef<ScrollView>(null);
-  const bannerAutoplayRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Meetups state
   const [meetups, setMeetups] = useState<(Meetup & { _source: 'created' | 'invited'; _acceptedCount?: number; _maxParticipants?: number })[]>([]);
@@ -93,7 +92,6 @@ export default function HomeScreen() {
     return () => clearInterval(interval);
   }, []);
 
-  // Load pending witness requests
   // Pending witness count from match_witness_requests table
   const [pendingWitnessMatchCount, setPendingWitnessMatchCount] = useState(0);
 
@@ -104,7 +102,6 @@ export default function HomeScreen() {
     ]);
     setWitnessRequests(requests);
     setEventNotifCount(count);
-    // Also count match witness requests
     try {
       const sb = getSupabaseClient();
       const { data: uid } = await sb.auth.getUser();
@@ -126,6 +123,7 @@ export default function HomeScreen() {
   }, [loadWitnessRequests]);
 
   const loadMeetups = useCallback(async () => {
+    setMeetupsLoading(true);
     try {
       const [{ meetups: created }, { meetups: invited }] = await Promise.all([
         getMyMeetups(),
@@ -155,6 +153,7 @@ export default function HomeScreen() {
 
   // Load upcoming sponsored events
   const loadUpcomingEvents = useCallback(async () => {
+    setEventsLoading(true);
     try {
       const { events } = await getSponsoredEvents();
       const nowDate = new Date();
@@ -172,98 +171,57 @@ export default function HomeScreen() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await Promise.all([refreshData(), loadMeetups(), loadWitnessRequests(), loadUpcomingEvents()]);
-    setRefreshing(false);
-  };
-
   // Load featured ambassadors
-  useEffect(() => {
-    getFeaturedAmbassadors().then((ambassadors) => {
-      setFeaturedAmbassadors(ambassadors);
-      setAmbassadorsLoaded(true);
-    });
+  const loadAmbassadors = useCallback(async () => {
+    const ambassadors = await getFeaturedAmbassadors();
+    setFeaturedAmbassadors(ambassadors);
+    setAmbassadorsLoaded(true);
   }, []);
 
-  // Auto-rotate ambassador banner
-  useEffect(() => {
-    if (featuredAmbassadors.length <= 1) return;
-    bannerAutoplayRef.current = setInterval(() => {
-      setBannerIndex(prev => {
-        const next = (prev + 1) % featuredAmbassadors.length;
-        bannerScrollRef.current?.scrollTo({ x: next * (screenWidth - 32), animated: true });
-        return next;
-      });
-    }, 5000);
-    return () => { if (bannerAutoplayRef.current) clearInterval(bannerAutoplayRef.current); };
-  }, [featuredAmbassadors.length, screenWidth]);
+  useEffect(() => { loadAmbassadors(); }, [loadAmbassadors]);
 
-  const handleBannerScroll = useCallback((e: any) => {
-    const offset = e.nativeEvent.contentOffset.x;
-    const cardW = screenWidth - 32;
-    const idx = Math.round(offset / cardW);
-    if (idx !== bannerIndex && idx >= 0 && idx < featuredAmbassadors.length) {
-      setBannerIndex(idx);
-      if (bannerAutoplayRef.current) clearInterval(bannerAutoplayRef.current);
-      bannerAutoplayRef.current = setInterval(() => {
-        setBannerIndex(prev => {
-          const next = (prev + 1) % featuredAmbassadors.length;
-          bannerScrollRef.current?.scrollTo({ x: next * (screenWidth - 32), animated: true });
-          return next;
-        });
-      }, 5000);
-    }
-  }, [bannerIndex, featuredAmbassadors.length, screenWidth]);
-
-  // Track banner impressions (deduplicated per session)
-  const trackedBannerImpressions = useRef(new Set<string>());
-  useEffect(() => {
-    if (featuredAmbassadors.length > 0 && bannerIndex >= 0 && bannerIndex < featuredAmbassadors.length) {
-      const amb = featuredAmbassadors[bannerIndex];
-      if (amb && !trackedBannerImpressions.current.has(amb.id)) {
-        trackedBannerImpressions.current.add(amb.id);
-        trackAmbassadorEvent(amb.id, 'banner_impression', undefined, { sourcePage: 'home', viewerId: user?.id });
-      }
-    }
-  }, [bannerIndex, featuredAmbassadors]);
-
-  // Status priority
-  const statusOrder: Record<string, number> = { 'En cours': 0, 'À venir': 1, 'Terminé': 2 };
-  const filteredTournaments = useMemo(() => {
-    const list = statusFilter === 'all' ? [...tournaments] : tournaments.filter(t => t.status === statusFilter);
-    return list.sort((a, b) => (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3));
-  }, [tournaments, statusFilter]);
-  const statusCounts = useMemo(() => ({
-    all: tournaments.length,
-    'À venir': tournaments.filter(t => t.status === 'À venir').length,
-    'En cours': tournaments.filter(t => t.status === 'En cours').length,
-    'Terminé': tournaments.filter(t => t.status === 'Terminé').length,
-  }), [tournaments]);
-
-  const displayName = user?.username || selfPlayer?.name || user?.email?.split('@')[0] || (language === 'en' ? 'Player' : 'Joueur');
-
-  // Load weekly leaderboard rank for banner
-  useEffect(() => {
+  // Load weekly leaderboard rank
+  const loadWeeklyRank = useCallback(async () => {
     if (!user?.id) return;
-    const loadWeeklyRank = async () => {
-      try {
-        const { players } = await fetchWeeklyLeaderboard();
-        const me = players.find((p: any) => p.userId === user.id);
-        if (me) {
-          setWeeklyRank({
-            rank: me.rankChange.currentRank,
-            direction: me.rankChange.direction,
-            diff: me.rankChange.diff,
-            matchesThisWeek: me.weeklyMatches,
-          });
-        }
-      } catch { /* silent */ }
-      setWeeklyBannerLoaded(true);
-    };
+    try {
+      const { players } = await fetchWeeklyLeaderboard();
+      const me = players.find((p: any) => p.userId === user.id);
+      if (me) {
+        setWeeklyRank({
+          rank: me.rankChange.currentRank,
+          direction: me.rankChange.direction,
+          diff: me.rankChange.diff,
+          matchesThisWeek: me.weeklyMatches,
+        });
+      } else {
+        setWeeklyRank(null);
+      }
+    } catch { /* silent */ }
+    setWeeklyBannerLoaded(true);
+  }, [user?.id]);
+
+  useEffect(() => {
     const timer = setTimeout(loadWeeklyRank, 1500);
     return () => clearTimeout(timer);
-  }, [user?.id]);
+  }, [loadWeeklyRank]);
+
+  // Pull-to-refresh: reset loaded states to show skeletons, then reload all data
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    setWeeklyBannerLoaded(false);
+    setMeetupsLoading(true);
+    setEventsLoading(true);
+    setAmbassadorsLoaded(false);
+    await Promise.all([
+      refreshData(),
+      loadMeetups(),
+      loadWitnessRequests(),
+      loadUpcomingEvents(),
+      loadWeeklyRank(),
+      loadAmbassadors(),
+    ]);
+    setRefreshing(false);
+  }, [refreshData, loadMeetups, loadWitnessRequests, loadUpcomingEvents, loadWeeklyRank, loadAmbassadors]);
 
   useEffect(() => { preloadInterstitial(); }, []);
 
@@ -291,23 +249,7 @@ export default function HomeScreen() {
     return items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 3);
   }, [matches, challenges, t]);
 
-  const nextTournament = useMemo(() => {
-    const upcoming = tournaments
-      .filter((t: any) => t.status === 'À venir' || t.status === 'En cours')
-      .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    return upcoming[0] || null;
-  }, [tournaments]);
-
-  const countdown = useMemo(() => {
-    if (!nextTournament) return null;
-    const diff = new Date(nextTournament.date).getTime() - now;
-    if (diff <= 0) return { days: 0, hours: 0, minutes: 0, label: t('notifications', 'todayLabel') };
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    return { days, hours, minutes, label: null };
-  }, [nextTournament, now, t]);
-
+  const displayName = user?.username || selfPlayer?.name || user?.email?.split('@')[0] || (language === 'en' ? 'Player' : 'Joueur');
   const totalMatches = userStats?.matchesPlayed || matches.length;
   const totalWins = userStats?.wins || 0;
   const winRate = totalMatches > 0 ? Math.round((totalWins / totalMatches) * 100) : 0;
@@ -324,9 +266,20 @@ export default function HomeScreen() {
     return 'Good evening';
   }, [language]);
 
-  const resultColor = (r: string) => r === 'win' ? theme.success : r === 'loss' ? theme.error : r === 'draw' ? theme.warning : theme.textMuted;
+  // Tournament filter
+  const statusOrder: Record<string, number> = { 'En cours': 0, 'À venir': 1, 'Terminé': 2 };
+  const filteredTournaments = useMemo(() => {
+    const list = statusFilter === 'all' ? [...tournaments] : tournaments.filter(t => t.status === statusFilter);
+    return list.sort((a, b) => (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3));
+  }, [tournaments, statusFilter]);
+  const statusCounts = useMemo(() => ({
+    all: tournaments.length,
+    'À venir': tournaments.filter(t => t.status === 'À venir').length,
+    'En cours': tournaments.filter(t => t.status === 'En cours').length,
+    'Terminé': tournaments.filter(t => t.status === 'Terminé').length,
+  }), [tournaments]);
 
-  // FlatList renderItem for tournament picker modal
+  // FlatList renderers
   const renderTournamentPickerItem = useCallback(({ item: tournament }: { item: any }) => {
     const statusColors: Record<string, { bg: string; text: string }> = {
       'À venir': { bg: theme.primary + '15', text: theme.primary },
@@ -361,7 +314,6 @@ export default function HomeScreen() {
     );
   }, [t, language]);
 
-  // FlatList renderItem for meetup list modal
   const renderMeetupModalItem = useCallback(({ item: m }: { item: any }) => {
     const mDate = new Date(m.date);
     const isCreator = m._source === 'created';
@@ -412,7 +364,6 @@ export default function HomeScreen() {
         {/* ========== HERO HEADER ========== */}
         <Animated.View entering={FadeIn.duration(450)}>
           <View style={[s.heroWrap, isTablet && s.heroWrapTablet]}>
-            {/* Top row */}
             <View style={s.heroTopRow}>
               <View style={{ flex: 1 }}>
                 <Text style={s.heroGreeting}>{greeting},</Text>
@@ -445,8 +396,6 @@ export default function HomeScreen() {
                 </Pressable>
               </View>
             </View>
-
-            {/* Stats chips row */}
             <View style={s.statsChipRow}>
               {[
                 { value: totalMatches, label: t('stats', 'matches'), color: theme.primary },
@@ -533,10 +482,7 @@ export default function HomeScreen() {
           </Animated.View>
         ) : weeklyRank ? (
           <Animated.View entering={FadeIn.duration(400).delay(180)} style={[s.section, isTablet && s.sectionTablet]}>
-            <Pressable
-              style={s.weeklyBanner}
-              onPress={() => router.push('/leaderboard' as any)}
-            >
+            <Pressable style={s.weeklyBanner} onPress={() => router.push('/leaderboard' as any)}>
               <LinearGradient colors={['#1E3A8A', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.weeklyBannerGradient}>
                 <View style={s.weeklyBannerLeft}>
                   <View style={s.weeklyBannerIconBg}>
@@ -554,23 +500,13 @@ export default function HomeScreen() {
                 <View style={s.weeklyBannerRight}>
                   <Text style={s.weeklyBannerRank}>#{weeklyRank.rank}</Text>
                   {weeklyRank.direction === 'up' ? (
-                    <View style={s.weeklyBannerChange}>
-                      <MaterialIcons name="arrow-upward" size={14} color="#34D399" />
-                      <Text style={[s.weeklyBannerChangeText, { color: '#34D399' }]}>+{weeklyRank.diff}</Text>
-                    </View>
+                    <View style={s.weeklyBannerChange}><MaterialIcons name="arrow-upward" size={14} color="#34D399" /><Text style={[s.weeklyBannerChangeText, { color: '#34D399' }]}>+{weeklyRank.diff}</Text></View>
                   ) : weeklyRank.direction === 'down' ? (
-                    <View style={s.weeklyBannerChange}>
-                      <MaterialIcons name="arrow-downward" size={14} color="#F87171" />
-                      <Text style={[s.weeklyBannerChangeText, { color: '#F87171' }]}>-{weeklyRank.diff}</Text>
-                    </View>
+                    <View style={s.weeklyBannerChange}><MaterialIcons name="arrow-downward" size={14} color="#F87171" /><Text style={[s.weeklyBannerChangeText, { color: '#F87171' }]}>-{weeklyRank.diff}</Text></View>
                   ) : weeklyRank.direction === 'new' ? (
-                    <View style={[s.weeklyBannerChange, { backgroundColor: 'rgba(96,165,250,0.2)' }]}>
-                      <Text style={[s.weeklyBannerChangeText, { color: '#60A5FA', fontSize: 10 }]}>NEW</Text>
-                    </View>
+                    <View style={[s.weeklyBannerChange, { backgroundColor: 'rgba(96,165,250,0.2)' }]}><Text style={[s.weeklyBannerChangeText, { color: '#60A5FA', fontSize: 10 }]}>NEW</Text></View>
                   ) : (
-                    <View style={s.weeklyBannerChange}>
-                      <Text style={[s.weeklyBannerChangeText, { color: 'rgba(255,255,255,0.5)' }]}>=</Text>
-                    </View>
+                    <View style={s.weeklyBannerChange}><Text style={[s.weeklyBannerChangeText, { color: 'rgba(255,255,255,0.5)' }]}>=</Text></View>
                   )}
                   <MaterialIcons name="chevron-right" size={20} color="rgba(255,255,255,0.5)" />
                 </View>
@@ -579,14 +515,10 @@ export default function HomeScreen() {
           </Animated.View>
         ) : null}
 
-        {/* ========== SPONSOR BANNER SKELETON ========== */}
-        {!ambassadorsLoaded ? (
-          <View style={[s.section, isTablet && s.sectionTablet]}>
-            <SponsorSkeleton />
-          </View>
-        ) : null}
-
         {/* ========== SPONSOR BANNER ========== */}
+        {!ambassadorsLoaded ? (
+          <View style={[s.section, isTablet && s.sectionTablet]}><SponsorSkeleton /></View>
+        ) : null}
         <SponsorBanner style={{ marginHorizontal: 16, marginBottom: 20 }} page="home" />
 
         {/* ========== LEADERBOARD PROGRESS ========== */}
@@ -610,221 +542,19 @@ export default function HomeScreen() {
 
         {/* ========== UNIFIED UPCOMING TIMELINE ========== */}
         <Animated.View entering={FadeIn.duration(400).delay(260)} style={[s.section, isTablet && s.sectionTablet]}>
-          <View style={s.sectionHeaderRow}>
-            <MaterialIcons name="event-note" size={18} color={theme.primary} />
-            <Text style={s.sectionTitle}>{t('home', 'upcoming')}</Text>
-            <View style={{ flex: 1 }} />
-            <View style={s.upcomingActions}>
-              {pendingInviteCount > 0 ? (
-                <Pressable style={s.upcomingActionBtn} onPress={() => router.push('/meetup/invitations' as any)}>
-                  <MaterialIcons name="mail" size={14} color={theme.error} />
-                  <View style={s.upcomingActionBadge}><Text style={s.upcomingActionBadgeText}>{pendingInviteCount > 9 ? '9+' : pendingInviteCount}</Text></View>
-                </Pressable>
-              ) : null}
-              <Pressable style={[s.upcomingActionBtn, { backgroundColor: theme.accent + '15' }]} onPress={() => setShowJoinMeetupModal(true)}>
-                <MaterialIcons name="qr-code" size={14} color={theme.accent} />
-              </Pressable>
-            </View>
-          </View>
-
-          {/* Unified timeline */}
-          {(meetupsLoading || eventsLoading) ? (
-            <TimelineSkeleton items={3} />
-          ) : (() => {
-            // Build unified items list
-            type UpcomingItem = { id: string; type: 'tournament' | 'meetup' | 'challenge'; date: Date; data: any };
-            const items: UpcomingItem[] = [];
-
-            // Add tournaments
-            tournaments
-              .filter((t: any) => t.status === 'À venir' || t.status === 'En cours')
-              .forEach((t: any) => items.push({ id: `t-${t.id}`, type: 'tournament', date: new Date(t.date), data: t }));
-
-            // Add meetups
-            meetups.forEach(m => items.push({ id: `m-${m.id}`, type: 'meetup', date: new Date(m.date), data: m }));
-
-            // Add sponsored events
-            upcomingEvents.forEach(e => items.push({ id: `e-${e.id}`, type: 'challenge', date: new Date(e.eventDate), data: e }));
-
-            // Sort by date
-            items.sort((a, b) => a.date.getTime() - b.date.getTime());
-
-            const visibleItems = items.slice(0, 6);
-
-            if (visibleItems.length === 0 && !meetupsLoading && !eventsLoading) {
-              return (
-                <View style={s.upcomingEmpty}>
-                  <View style={s.upcomingEmptyIcon}>
-                    <MaterialIcons name="event-available" size={36} color={theme.textMuted} />
-                  </View>
-                  <Text style={s.upcomingEmptyTitle}>{language === 'fr' ? 'Rien de prevu' : 'Nothing planned'}</Text>
-                  <Text style={s.upcomingEmptyDesc}>{language === 'fr' ? 'Planifie un RDV, un tournoi ou un defi.' : 'Plan a meetup, tournament or challenge.'}</Text>
-                  <View style={s.upcomingEmptyActions}>
-                    <Pressable style={[s.upcomingEmptyBtn, { backgroundColor: '#0369A1' }]} onPress={() => router.push('/meetup/new' as any)}>
-                      <MaterialIcons name="event" size={16} color="#FFF" />
-                      <Text style={s.upcomingEmptyBtnText}>{language === 'fr' ? 'RDV' : 'Meetup'}</Text>
-                    </Pressable>
-                    <Pressable style={[s.upcomingEmptyBtn, { backgroundColor: '#B45309' }]} onPress={() => router.push('/tournament/new' as any)}>
-                      <MaterialIcons name="emoji-events" size={16} color="#FFF" />
-                      <Text style={s.upcomingEmptyBtnText}>{language === 'fr' ? 'Tournoi' : 'Tournament'}</Text>
-                    </Pressable>
-                    <Pressable style={[s.upcomingEmptyBtn, { backgroundColor: '#7C3AED' }]} onPress={() => router.push('/sponsored-event/list' as any)}>
-                      <MaterialIcons name="campaign" size={16} color="#FFF" />
-                      <Text style={s.upcomingEmptyBtnText}>{language === 'fr' ? 'Defis' : 'Challenges'}</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              );
-            }
-
-            // Color schemes per type
-            const typeConfig = {
-              meetup: { bg: '#E0F2FE', border: '#BAE6FD', accent: '#0369A1', icon: 'event' as const, label: language === 'fr' ? 'RDV' : 'Meetup', gradient: ['#E0F2FE', '#BAE6FD'] as [string, string] },
-              tournament: { bg: '#FEF3C7', border: '#FDE68A', accent: '#B45309', icon: 'emoji-events' as const, label: language === 'fr' ? 'Tournoi' : 'Tournament', gradient: ['#FEF3C7', '#FDE68A'] as [string, string] },
-              challenge: { bg: '#EDE9FE', border: '#DDD6FE', accent: '#7C3AED', icon: 'campaign' as const, label: language === 'fr' ? 'Defi' : 'Challenge', gradient: ['#EDE9FE', '#DDD6FE'] as [string, string] },
-            };
-
-            return (
-              <View style={s.upcomingTimeline}>
-                {visibleItems.map((item, idx) => {
-                  const cfg = typeConfig[item.type];
-                  const d = item.date;
-                  const daysUntil = Math.max(0, Math.ceil((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-                  const isToday = daysUntil === 0;
-                  const isTomorrow = daysUntil === 1;
-                  const isLast = idx === visibleItems.length - 1;
-
-                  return (
-                    <Pressable
-                      key={item.id}
-                      style={({ pressed }) => [s.upcomingCard, { borderLeftColor: cfg.accent, backgroundColor: cfg.bg }, pressed && { opacity: 0.9, transform: [{ scale: 0.985 }] }]}
-                      onPress={() => {
-                        if (item.type === 'tournament') router.push(`/tournament/${item.data.id}`);
-                        else if (item.type === 'meetup') router.push(`/meetup/${item.data.id}` as any);
-                        else router.push(`/sponsored-event/${item.data.id}` as any);
-                      }}
-                    >
-                      {/* Date column */}
-                      <View style={[s.upcomingDateCol, { backgroundColor: cfg.accent + '15' }]}>
-                        <Text style={[s.upcomingDateDay, { color: cfg.accent }]}>{d.getDate()}</Text>
-                        <Text style={[s.upcomingDateMonth, { color: cfg.accent }]}>{d.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}</Text>
-                      </View>
-
-                      {/* Content */}
-                      <View style={s.upcomingContent}>
-                        <View style={s.upcomingContentTop}>
-                          <View style={[s.upcomingTypeBadge, { backgroundColor: cfg.accent + '18' }]}>
-                            <MaterialIcons name={cfg.icon} size={10} color={cfg.accent} />
-                            <Text style={[s.upcomingTypeBadgeText, { color: cfg.accent }]}>{cfg.label}</Text>
-                          </View>
-                          {(isToday || isTomorrow) ? (
-                            <View style={[s.upcomingSoonBadge, isToday && { backgroundColor: '#FEE2E2' }]}>
-                              {isToday ? <MaterialIcons name="local-fire-department" size={10} color="#DC2626" /> : null}
-                              <Text style={[s.upcomingSoonText, isToday && { color: '#DC2626' }]}>{isToday ? t('notifications', 'todayLabel') : t('notifications', 'tomorrowLabel')}</Text>
-                            </View>
-                          ) : null}
-                        </View>
-
-                        <Text style={[s.upcomingTitle, { color: cfg.accent }]} numberOfLines={1}>
-                          {item.type === 'tournament' ? item.data.name : item.type === 'meetup' ? item.data.title : item.data.title}
-                        </Text>
-
-                        <View style={s.upcomingMeta}>
-                          {/* Time */}
-                          <View style={s.upcomingMetaItem}>
-                            <MaterialIcons name="schedule" size={11} color={cfg.accent + '90'} />
-                            <Text style={[s.upcomingMetaText, { color: cfg.accent + '90' }]}>
-                              {item.type === 'challenge'
-                                ? new Date(item.data.startTime).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })
-                                : d.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
-                            </Text>
-                          </View>
-                          {/* Location */}
-                          {(item.type === 'tournament' && item.data.location?.city) ? (
-                            <View style={s.upcomingMetaItem}>
-                              <MaterialIcons name="place" size={11} color={cfg.accent + '90'} />
-                              <Text style={[s.upcomingMetaText, { color: cfg.accent + '90' }]} numberOfLines={1}>{item.data.location.city}</Text>
-                            </View>
-                          ) : (item.type === 'challenge' && item.data.city) ? (
-                            <View style={s.upcomingMetaItem}>
-                              <MaterialIcons name="place" size={11} color={cfg.accent + '90'} />
-                              <Text style={[s.upcomingMetaText, { color: cfg.accent + '90' }]} numberOfLines={1}>{item.data.city}</Text>
-                            </View>
-                          ) : null}
-                          {/* Participants */}
-                          {item.type === 'meetup' ? (
-                            <View style={s.upcomingMetaItem}>
-                              <MaterialIcons name="group" size={11} color={cfg.accent + '90'} />
-                              <Text style={[s.upcomingMetaText, { color: cfg.accent + '90' }]}>{item.data._acceptedCount || 0}/{item.data._maxParticipants || 8}</Text>
-                            </View>
-                          ) : item.type === 'challenge' && item.data.ambassadorName ? (
-                            <View style={s.upcomingMetaItem}>
-                              <MaterialIcons name="verified" size={11} color="#7C3AED" />
-                              <Text style={[s.upcomingMetaText, { color: '#7C3AED' }]} numberOfLines={1}>{item.data.ambassadorName}</Text>
-                            </View>
-                          ) : item.type === 'tournament' ? (
-                            <View style={s.upcomingMetaItem}>
-                              <MaterialIcons name="sports" size={11} color={cfg.accent + '90'} />
-                              <Text style={[s.upcomingMetaText, { color: cfg.accent + '90' }]}>{t('formats', item.data.format)}</Text>
-                            </View>
-                          ) : null}
-                        </View>
-
-                        {/* Countdown for all items */}
-                        {(() => {
-                          const diffMs = d.getTime() - now;
-                          if (diffMs <= 0) return null;
-                          const cDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                          const cHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                          const cMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-                          if (isToday || isTomorrow) return null; // already shown via badge
-                          return (
-                            <View style={[s.upcomingCountdown, { backgroundColor: cfg.accent + '10' }]}>
-                              <MaterialIcons name="timer" size={11} color={cfg.accent} />
-                              {cDays > 0 ? (
-                                <Text style={[s.upcomingCountdownCompact, { color: cfg.accent }]}>
-                                  {language === 'fr' ? `dans ${cDays}j ${cHours}h` : `in ${cDays}d ${cHours}h`}
-                                </Text>
-                              ) : (
-                                <Text style={[s.upcomingCountdownCompact, { color: cfg.accent }]}>
-                                  {language === 'fr' ? `dans ${cHours}h ${cMinutes}min` : `in ${cHours}h ${cMinutes}min`}
-                                </Text>
-                              )}
-                            </View>
-                          );
-                        })()}
-                      </View>
-
-                      <MaterialIcons name="chevron-right" size={18} color={cfg.accent + '60'} />
-                    </Pressable>
-                  );
-                })}
-
-                {/* Quick add row */}
-                <View style={s.upcomingAddRow}>
-                  <Pressable style={[s.upcomingAddBtn, { backgroundColor: '#E0F2FE', borderColor: '#BAE6FD' }]} onPress={() => router.push('/meetup/new' as any)}>
-                    <MaterialIcons name="event" size={15} color="#0369A1" />
-                    <Text style={[s.upcomingAddBtnText, { color: '#0369A1' }]}>+ {language === 'fr' ? 'RDV' : 'Meetup'}</Text>
-                  </Pressable>
-                  <Pressable style={[s.upcomingAddBtn, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]} onPress={() => router.push('/tournament/new' as any)}>
-                    <MaterialIcons name="emoji-events" size={15} color="#B45309" />
-                    <Text style={[s.upcomingAddBtnText, { color: '#B45309' }]}>+ {language === 'fr' ? 'Tournoi' : 'Tournament'}</Text>
-                  </Pressable>
-                  <Pressable style={[s.upcomingAddBtn, { backgroundColor: '#EDE9FE', borderColor: '#DDD6FE' }]} onPress={() => router.push('/sponsored-event/list' as any)}>
-                    <MaterialIcons name="campaign" size={15} color="#7C3AED" />
-                    <Text style={[s.upcomingAddBtnText, { color: '#7C3AED' }]}>+ {language === 'fr' ? 'Defi' : 'Challenge'}</Text>
-                  </Pressable>
-                </View>
-
-                {items.length > 6 ? (
-                  <Pressable style={s.upcomingMoreLink} onPress={() => setShowMeetupListModal(true)}>
-                    <Text style={s.upcomingMoreText}>+{items.length - 6} {language === 'fr' ? 'autre(s)' : 'more'}</Text>
-                    <MaterialIcons name="chevron-right" size={14} color={theme.primary} />
-                  </Pressable>
-                ) : null}
-              </View>
-            );
-          })()}
+          <UpcomingTimeline
+            tournaments={tournaments}
+            meetups={meetups}
+            upcomingEvents={upcomingEvents}
+            meetupsLoading={meetupsLoading}
+            eventsLoading={eventsLoading}
+            pendingInviteCount={pendingInviteCount}
+            language={language}
+            t={t}
+            now={now}
+            onShowJoinMeetup={() => setShowJoinMeetupModal(true)}
+            onShowMeetupList={() => setShowMeetupListModal(true)}
+          />
         </Animated.View>
 
         {/* ========== COMMUNITY LEADERBOARD ========== */}
@@ -832,191 +562,39 @@ export default function HomeScreen() {
           <CommunityLeaderboard />
         </Animated.View>
 
-        {/* ========== COMPACT HISTORY SKELETON ========== */}
-        {recentResults.length === 0 && (matches.length > 0 || challenges.length > 0) ? (
-          <Animated.View entering={FadeIn.duration(300).delay(340)} style={[s.section, isTablet && s.sectionTablet]}>
-            <View style={s.sectionHeaderRow}>
-              <MaterialIcons name="history" size={18} color={theme.primary} />
-              <Text style={s.sectionTitle}>{t('history', 'history')}</Text>
-            </View>
-            <HistorySkeleton />
-          </Animated.View>
-        ) : null}
-
         {/* ========== COMPACT HISTORY ========== */}
-        {recentResults.length > 0 ? (
-          <Animated.View entering={FadeIn.duration(400).delay(340)} style={[s.section, isTablet && s.sectionTablet]}>
-            <View style={s.sectionHeaderRow}>
-              <MaterialIcons name="history" size={18} color={theme.primary} />
-              <Text style={s.sectionTitle}>{t('history', 'history')}</Text>
-              <View style={{ flex: 1 }} />
-              <Pressable onPress={() => router.push('/history')} style={s.seeAllBtn}>
-                <Text style={s.seeAllText}>{t('common', 'seeAll')}</Text>
-                <MaterialIcons name="chevron-right" size={16} color={theme.primary} />
+        <Animated.View entering={FadeIn.duration(400).delay(340)} style={[s.section, isTablet && s.sectionTablet]}>
+          {(matches.length === 0 && challenges.length === 0) ? (
+            <View style={s.emptyCard}>
+              <View style={s.emptyIconBg}><MaterialIcons name="sports" size={44} color={theme.primary} /></View>
+              <Text style={s.emptyTitle}>{t('home', 'welcomeTitle')}</Text>
+              <Text style={s.emptyText}>{t('home', 'welcomeText')}</Text>
+              <Pressable style={s.emptyCta} onPress={() => router.push('/match/new')}>
+                <MaterialIcons name="play-arrow" size={20} color="#FFF" />
+                <Text style={s.emptyCtaText}>{t('home', 'firstMatch')}</Text>
               </Pressable>
             </View>
-            <View style={s.historyList}>
-              {(() => {
-                const today = new Date();
-                const yesterday = new Date(today);
-                yesterday.setDate(yesterday.getDate() - 1);
-                const weekAgo = new Date(today);
-                weekAgo.setDate(weekAgo.getDate() - 7);
-
-                const getGroup = (dateStr: string) => {
-                  const d = new Date(dateStr);
-                  if (d.toDateString() === today.toDateString()) return 'today';
-                  if (d.toDateString() === yesterday.toDateString()) return 'yesterday';
-                  if (d >= weekAgo) return 'week';
-                  return 'older';
-                };
-
-                const groupLabels: Record<string, string> = {
-                  today: language === 'fr' ? "Aujourd'hui" : 'Today',
-                  yesterday: language === 'fr' ? 'Hier' : 'Yesterday',
-                  week: language === 'fr' ? 'Cette semaine' : 'This week',
-                  older: language === 'fr' ? 'Plus ancien' : 'Older',
-                };
-
-                let lastGroup = '';
-                return recentResults.map((item, idx) => {
-                  const d = new Date(item.date);
-                  const group = getGroup(item.date);
-                  const showHeader = group !== lastGroup;
-                  lastGroup = group;
-                  const isLast = idx === recentResults.length - 1;
-
-                  return (
-                    <React.Fragment key={item.id}>
-                      {showHeader ? (
-                        <View style={s.hcDateHeader}>
-                          <View style={s.hcDateDot} />
-                          <Text style={s.hcDateLabel}>{groupLabels[group]}</Text>
-                          <View style={s.hcDateLine} />
-                        </View>
-                      ) : null}
-                      <Pressable
-                        style={({ pressed }) => [s.hcRow, !isLast && s.hcRowBorder, pressed && { opacity: 0.75, backgroundColor: theme.backgroundSecondary }]}
-                        onPress={() => item.type === 'match' ? router.push({ pathname: '/history', params: { openMatchId: item.id } }) : router.push({ pathname: '/history', params: { openChallengeId: item.id } })}
-                      >
-                        <View style={[s.hcDot, { backgroundColor: resultColor(item.result) }]} />
-                        <View style={[s.hcTypeIcon, { backgroundColor: (item.type === 'match' ? theme.primary : theme.accent) + '12' }]}>
-                          <MaterialIcons name={item.icon} size={14} color={item.type === 'match' ? theme.primary : theme.accent} />
-                        </View>
-                        <View style={s.hcInfo}>
-                          <Text style={s.hcTitle} numberOfLines={1}>{item.title}</Text>
-                          <View style={s.hcSubRow}>
-                            <Text style={s.hcSub} numberOfLines={1}>{item.subtitle} {' \u2022 '} {d.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
-                            {item.type === 'match' ? (() => {
-                              const match = matches.find((m: any) => m.id === item.id);
-                              const pIds = (match as any)?.participantUserIds || [];
-                              const vLevel = getMatchValidationLevel(Array.isArray(pIds) ? pIds.length : 0);
-                              const vColor = getValidationColor(vLevel);
-                              return (
-                                <View style={s.hcValidation}>
-                                  <MaterialIcons name={getValidationIcon(vLevel) as any} size={9} color={vColor} />
-                                  <Text style={{ fontSize: 8, fontWeight: '700', color: vColor }}>{vLevel === 'solo' ? '0.3x' : vLevel === 'shared_2' ? '1x' : vLevel === 'shared_3plus' ? '1.5x' : '2x'}</Text>
-                                </View>
-                              );
-                            })() : null}
-                          </View>
-                        </View>
-                        <Text style={[s.hcScore, { color: resultColor(item.result) }]}>{item.score}</Text>
-                        <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
-                      </Pressable>
-                    </React.Fragment>
-                  );
-                });
-              })()}
-            </View>
-          </Animated.View>
-        ) : (matches.length === 0 && challenges.length === 0) ? (
-          <Animated.View entering={FadeIn.duration(500).delay(340)} style={[s.section, s.emptyCard, isTablet && s.emptyCardTablet]}>
-            <View style={s.emptyIconBg}><MaterialIcons name="sports" size={44} color={theme.primary} /></View>
-            <Text style={s.emptyTitle}>{t('home', 'welcomeTitle')}</Text>
-            <Text style={s.emptyText}>{t('home', 'welcomeText')}</Text>
-            <Pressable style={s.emptyCta} onPress={() => router.push('/match/new')}>
-              <MaterialIcons name="play-arrow" size={20} color="#FFF" />
-              <Text style={s.emptyCtaText}>{t('home', 'firstMatch')}</Text>
-            </Pressable>
-          </Animated.View>
-        ) : null}
+          ) : (
+            <CompactHistory
+              recentResults={recentResults}
+              matches={matches}
+              hasData={matches.length > 0 || challenges.length > 0}
+              language={language}
+              t={t}
+            />
+          )}
+        </Animated.View>
 
         {/* ========== AMBASSADORS ROTATING BANNER ========== */}
         {ambassadorsLoaded && featuredAmbassadors.length > 0 ? (
           <Animated.View entering={FadeIn.duration(400).delay(380)} style={[s.section, isTablet && s.sectionTablet]}>
-            <View style={s.sectionHeaderRow}>
-              <View style={s.ambassadorIcon}><MaterialIcons name="verified" size={16} color="#7C3AED" /></View>
-              <Text style={s.sectionTitle}>{language === 'fr' ? 'Ambassadeurs' : 'Ambassadors'}</Text>
-              <View style={{ flex: 1 }} />
-              <Pressable style={s.seeAllBtn} onPress={() => router.push('/ambassadors' as any)}>
-                <Text style={[s.seeAllText, { color: '#7C3AED' }]}>{t('common', 'seeAll')}</Text>
-                <MaterialIcons name="chevron-right" size={16} color="#7C3AED" />
-              </Pressable>
-            </View>
-
-            <View style={s.bannerCarousel}>
-              <ScrollView
-                ref={bannerScrollRef}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                onMomentumScrollEnd={handleBannerScroll}
-                scrollEventThrottle={16}
-                decelerationRate="fast"
-                snapToInterval={screenWidth - 32}
-                snapToAlignment="start"
-              >
-                {featuredAmbassadors.map((amb) => (
-                  <Pressable
-                    key={amb.id}
-                    style={[s.bannerSlide, { width: screenWidth - 32 }]}
-                    onPress={() => amb.playerId ? router.push(`/player/${amb.playerId}` as any) : router.push({ pathname: '/ambassadors', params: { scrollTo: amb.id } } as any)}
-                  >
-                    <LinearGradient colors={['#7C3AED', '#9333EA', '#A855F7']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.bannerGradient}>
-                      <View style={s.bannerSponsorTag}><MaterialIcons name="campaign" size={10} color="rgba(255,255,255,0.7)" /><Text style={s.bannerSponsorText}>{language === 'fr' ? 'Ambassadeur' : 'Ambassador'}</Text></View>
-                      <View style={s.bannerContent}>
-                        <View style={s.bannerAvatarWrap}>
-                          {amb.photo ? (
-                            <Image source={{ uri: amb.photo }} style={s.bannerAvatar} contentFit="cover" transition={300} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
-                          ) : (
-                            <View style={[s.bannerAvatar, { backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }]}>
-                              <Text style={{ fontSize: 26, fontWeight: '800', color: '#FFF' }}>{amb.displayName.charAt(0)}</Text>
-                            </View>
-                          )}
-                          <View style={s.bannerVerifiedIcon}><MaterialIcons name="verified" size={14} color="#FFF" /></View>
-                        </View>
-                        <View style={s.bannerInfo}>
-                          <Text style={s.bannerName} numberOfLines={1}>{amb.displayName}</Text>
-                          {amb.bio ? <Text style={s.bannerBio} numberOfLines={2}>{amb.bio}</Text> : amb.role ? <Text style={s.bannerBio} numberOfLines={1}>{t('roles', amb.role)}{amb.club ? ` \u2022 ${amb.club}` : ''}</Text> : null}
-                          {amb.stats ? (
-                            <View style={s.bannerStatsRow}>
-                              <View style={s.bannerStatItem}><Text style={s.bannerStatVal}>{amb.stats.winRate}%</Text><Text style={s.bannerStatLbl}>{language === 'fr' ? 'Vict.' : 'Win'}</Text></View>
-                              <View style={s.bannerStatDivider} />
-                              <View style={s.bannerStatItem}><Text style={s.bannerStatVal}>{amb.stats.matchesPlayed}</Text><Text style={s.bannerStatLbl}>{language === 'fr' ? 'Matchs' : 'Matches'}</Text></View>
-                              {amb.stats.tirRate > 0 ? (<><View style={s.bannerStatDivider} /><View style={s.bannerStatItem}><Text style={s.bannerStatVal}>{amb.stats.tirRate}%</Text><Text style={s.bannerStatLbl}>Tir</Text></View></>) : null}
-                            </View>
-                          ) : null}
-                          <View style={s.bannerSocialsRow}>
-                            {amb.youtubeUrl ? <View style={s.bannerSocialChip}><MaterialIcons name="play-arrow" size={11} color="#FFF" /><Text style={s.bannerSocialChipText}>YouTube</Text></View> : null}
-                            {amb.instagramHandle ? <View style={s.bannerSocialChip}><MaterialIcons name="camera-alt" size={11} color="#FFF" /><Text style={s.bannerSocialChipText}>@{amb.instagramHandle.replace('@', '').substring(0, 10)}</Text></View> : null}
-                            {amb.tiktokUrl ? <View style={s.bannerSocialChip}><MaterialIcons name="music-note" size={11} color="#FFF" /><Text style={s.bannerSocialChipText}>TikTok</Text></View> : null}
-                          </View>
-                        </View>
-                      </View>
-                      <View style={s.bannerCta}><Text style={s.bannerCtaText}>{language === 'fr' ? 'Voir le profil' : 'View profile'}</Text><MaterialIcons name="arrow-forward" size={14} color="rgba(255,255,255,0.8)" /></View>
-                    </LinearGradient>
-                  </Pressable>
-                ))}
-              </ScrollView>
-              {featuredAmbassadors.length > 1 ? (
-                <View style={s.bannerDots}>
-                  {featuredAmbassadors.map((_, i) => (
-                    <Pressable key={i} style={[s.bannerDot, i === bannerIndex && s.bannerDotActive]} onPress={() => { setBannerIndex(i); bannerScrollRef.current?.scrollTo({ x: i * (screenWidth - 32), animated: true }); if (bannerAutoplayRef.current) clearInterval(bannerAutoplayRef.current); bannerAutoplayRef.current = setInterval(() => { setBannerIndex(prev => { const next = (prev + 1) % featuredAmbassadors.length; bannerScrollRef.current?.scrollTo({ x: next * (screenWidth - 32), animated: true }); return next; }); }, 5000); }} hitSlop={8} />
-                  ))}
-                </View>
-              ) : null}
-            </View>
+            <AmbassadorBanner
+              ambassadors={featuredAmbassadors}
+              language={language}
+              t={t}
+              screenWidth={screenWidth}
+              userId={user?.id}
+            />
           </Animated.View>
         ) : null}
 
@@ -1128,12 +706,6 @@ const s = StyleSheet.create({
   section: { paddingHorizontal: 16, marginBottom: 20 },
   sectionTablet: { marginBottom: 28 },
 
-  // ===== SECTION HEADER =====
-  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
-  sectionTitle: { fontSize: 17, fontWeight: '700', color: theme.textPrimary },
-  seeAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  seeAllText: { fontSize: 13, fontWeight: '600', color: theme.primary },
-
   // ===== HERO =====
   heroWrap: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20, marginBottom: 20, backgroundColor: '#0F172A', borderBottomLeftRadius: 24, borderBottomRightRadius: 24, ...Platform.select({ ios: { shadowColor: '#0F172A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 16 }, android: { elevation: 4 }, default: {} }) },
   heroWrapTablet: { paddingTop: 16, paddingBottom: 24, paddingHorizontal: 28 },
@@ -1150,8 +722,6 @@ const s = StyleSheet.create({
   heroAvatarLetter: { fontSize: 22, fontWeight: '700', color: '#FFF' },
   avatarNotifBadge: { position: 'absolute' as const, top: -4, right: -4, backgroundColor: '#7C3AED', minWidth: 20, height: 20, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const, paddingHorizontal: 4, borderWidth: 2.5, borderColor: '#0F172A' },
   avatarNotifBadgeText: { fontSize: 10, fontWeight: '800' as const, color: '#FFF' },
-
-  // Stats chips
   statsChipRow: { flexDirection: 'row', gap: 8 },
   statsChip: { flex: 1, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 14, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   statsChipValue: { fontSize: 20, fontWeight: '800' },
@@ -1187,99 +757,13 @@ const s = StyleSheet.create({
   progressBarTrack: { height: 6, backgroundColor: '#D97706' + '12', borderRadius: 3, overflow: 'hidden' as const },
   progressBarFill: { height: '100%', backgroundColor: '#D97706', borderRadius: 3 },
 
-  // ===== UNIFIED UPCOMING TIMELINE =====
-  upcomingActions: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
-  upcomingActionBtn: { width: 34, height: 34, borderRadius: 11, backgroundColor: '#F1F5F9', alignItems: 'center' as const, justifyContent: 'center' as const, position: 'relative' as const },
-  upcomingActionBadge: { position: 'absolute' as const, top: -4, right: -4, backgroundColor: theme.error, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const, paddingHorizontal: 3, borderWidth: 2, borderColor: '#F8FAFC' },
-  upcomingActionBadgeText: { fontSize: 9, fontWeight: '800' as const, color: '#FFF' },
-
-  upcomingTimeline: { gap: 8 },
-
-  upcomingCard: { flexDirection: 'row' as const, alignItems: 'center' as const, borderRadius: 16, padding: 12, gap: 12, borderLeftWidth: 4, borderWidth: 1, borderColor: 'transparent', ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4 }, android: { elevation: 1 }, default: {} }) },
-  upcomingDateCol: { width: 44, height: 44, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const },
-  upcomingDateDay: { fontSize: 18, fontWeight: '900' as const, lineHeight: 20 },
-  upcomingDateMonth: { fontSize: 8, fontWeight: '700' as const, letterSpacing: 0.3, marginTop: 1 },
-  upcomingContent: { flex: 1, gap: 4 },
-  upcomingContentTop: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
-  upcomingTypeBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
-  upcomingTypeBadgeText: { fontSize: 9, fontWeight: '700' as const, textTransform: 'uppercase' as const, letterSpacing: 0.3 },
-  upcomingSoonBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, backgroundColor: '#FEF3C7', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
-  upcomingSoonText: { fontSize: 9, fontWeight: '700' as const, color: '#B45309' },
-  upcomingTitle: { fontSize: 14, fontWeight: '700' as const },
-  upcomingMeta: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, flexWrap: 'wrap' as const },
-  upcomingMetaItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3 },
-  upcomingMetaText: { fontSize: 11, fontWeight: '600' as const },
-
-  upcomingCountdown: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, borderRadius: 8, paddingVertical: 4, paddingHorizontal: 8, alignSelf: 'flex-start' as const, marginTop: 2 },
-  upcomingCountdownCompact: { fontSize: 11, fontWeight: '700' as const },
-
-  upcomingAddRow: { flexDirection: 'row' as const, gap: 8, marginTop: 4 },
-  upcomingAddBtn: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 5, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
-  upcomingAddBtnText: { fontSize: 11, fontWeight: '700' as const },
-  upcomingMoreLink: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 4, paddingVertical: 10, marginTop: 4 },
-  upcomingMoreText: { fontSize: 12, fontWeight: '600' as const, color: theme.primary },
-
-  upcomingEmpty: { backgroundColor: '#FFF', borderRadius: 18, padding: 28, alignItems: 'center' as const, borderWidth: 1, borderColor: '#E2E8F0' },
-  upcomingEmptyIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#F1F5F9', alignItems: 'center' as const, justifyContent: 'center' as const, marginBottom: 14 },
-  upcomingEmptyTitle: { fontSize: 16, fontWeight: '700' as const, color: theme.textPrimary, marginBottom: 4 },
-  upcomingEmptyDesc: { fontSize: 13, color: theme.textSecondary, textAlign: 'center' as const, marginBottom: 16, lineHeight: 19 },
-  upcomingEmptyActions: { flexDirection: 'row' as const, gap: 8 },
-  upcomingEmptyBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
-  upcomingEmptyBtnText: { fontSize: 12, fontWeight: '700' as const, color: '#FFF' },
-
-  // ===== HISTORY =====
-  historyList: { backgroundColor: '#FFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden' as const },
-  hcDateHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6, gap: 6 },
-  hcDateDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: theme.primary },
-  hcDateLabel: { fontSize: 11, fontWeight: '700' as const, color: theme.textSecondary, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
-  hcDateLine: { flex: 1, height: 1, backgroundColor: '#E2E8F0', marginLeft: 6 },
-  hcRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16, gap: 10 },
-  hcRowBorder: { borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  hcDot: { width: 8, height: 8, borderRadius: 4 },
-  hcTypeIcon: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  hcInfo: { flex: 1, marginRight: 4, overflow: 'hidden' as const },
-  hcTitle: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
-  hcSubRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, marginTop: 2, overflow: 'hidden' as const },
-  hcSub: { fontSize: 12, color: theme.textSecondary, flexShrink: 1 },
-  hcValidation: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 2, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 6, flexShrink: 0 },
-  hcScore: { fontSize: 16, fontWeight: '900', minWidth: 44, maxWidth: 60, textAlign: 'right' as const },
-
   // ===== EMPTY STATE =====
   emptyCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 32, alignItems: 'center', ...theme.shadows.card },
-  emptyCardTablet: { padding: 48, maxWidth: 560, alignSelf: 'center' as const, width: '100%' },
   emptyIconBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
   emptyTitle: { fontSize: 20, fontWeight: '700', color: theme.textPrimary, marginBottom: 8 },
   emptyText: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 20 },
   emptyCta: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.primary, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14 },
   emptyCtaText: { fontSize: 15, fontWeight: '600', color: '#FFF' },
-
-  // ===== AMBASSADORS =====
-  ambassadorIcon: { width: 28, height: 28, borderRadius: 8, backgroundColor: '#7C3AED' + '12', alignItems: 'center', justifyContent: 'center' },
-  bannerCarousel: { overflow: 'hidden' as const, borderRadius: 20 },
-  bannerSlide: { borderRadius: 20, overflow: 'hidden' as const },
-  bannerGradient: { borderRadius: 20, padding: 16, position: 'relative' as const },
-  bannerSponsorTag: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: 'rgba(255,255,255,0.12)', alignSelf: 'flex-start' as const, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, marginBottom: 10 },
-  bannerSponsorText: { fontSize: 9, fontWeight: '700' as const, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase' as const, letterSpacing: 0.5 },
-  bannerContent: { flexDirection: 'row' as const, gap: 12, marginBottom: 10 },
-  bannerAvatarWrap: { position: 'relative' as const },
-  bannerAvatar: { width: 64, height: 64, borderRadius: 20, overflow: 'hidden' as const, borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)' },
-  bannerVerifiedIcon: { position: 'absolute' as const, bottom: -3, right: -3, width: 24, height: 24, borderRadius: 12, backgroundColor: '#7C3AED', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 2, borderColor: '#9333EA' },
-  bannerInfo: { flex: 1, justifyContent: 'center' as const },
-  bannerName: { fontSize: 17, fontWeight: '800' as const, color: '#FFF', marginBottom: 3 },
-  bannerBio: { fontSize: 11, color: 'rgba(255,255,255,0.75)', lineHeight: 16, marginBottom: 8 },
-  bannerStatsRow: { flexDirection: 'row' as const, alignItems: 'center' as const, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 10, paddingVertical: 5, paddingHorizontal: 8, marginBottom: 8, alignSelf: 'flex-start' as const },
-  bannerStatItem: { alignItems: 'center' as const, paddingHorizontal: 8 },
-  bannerStatVal: { fontSize: 13, fontWeight: '800' as const, color: '#FFF' },
-  bannerStatLbl: { fontSize: 7, fontWeight: '600' as const, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' as const },
-  bannerStatDivider: { width: 1, height: 16, backgroundColor: 'rgba(255,255,255,0.15)' },
-  bannerSocialsRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 5 },
-  bannerSocialChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
-  bannerSocialChipText: { fontSize: 9, fontWeight: '600' as const, color: 'rgba(255,255,255,0.85)' },
-  bannerCta: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'flex-end' as const, gap: 4 },
-  bannerCtaText: { fontSize: 11, fontWeight: '600' as const, color: 'rgba(255,255,255,0.8)' },
-  bannerDots: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, paddingTop: 12 },
-  bannerDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#7C3AED' + '25' },
-  bannerDotActive: { width: 24, backgroundColor: '#7C3AED', borderRadius: 4 },
 
   // ===== WITNESS ALERTS =====
   witnessAlertCard: { backgroundColor: '#FFFBEB', borderRadius: 16, padding: 16, borderWidth: 1.5, borderColor: '#FDE68A' },
@@ -1297,7 +781,6 @@ const s = StyleSheet.create({
   witnessMoreText: { fontSize: 12, fontWeight: '600' as const, color: '#F59E0B' },
 
   // ===== MODALS =====
-  // Meetup list
   meetupModalContainer: { flex: 1, backgroundColor: '#F8FAFC' },
   meetupModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
   meetupModalHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -1323,8 +806,6 @@ const s = StyleSheet.create({
   meetupCreatorText: { fontSize: 10, fontWeight: '700', color: theme.primary },
   meetupInvitedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.accent + '12', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
   meetupInvitedText: { fontSize: 10, fontWeight: '700', color: theme.accent },
-
-  // Join modal
   joinOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 24 },
   joinContent: { backgroundColor: '#FFF', borderRadius: 24, padding: 24 },
   joinHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
@@ -1334,8 +815,6 @@ const s = StyleSheet.create({
   joinInput: { backgroundColor: '#F8FAFC', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 18, fontWeight: '700', color: theme.textPrimary, textAlign: 'center', letterSpacing: 2, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 16 },
   joinBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.primary, paddingVertical: 16, borderRadius: 16 },
   joinBtnText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
-
-  // QR modal
   qrOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center' as const, paddingHorizontal: 24 },
   qrContent: { backgroundColor: '#FFF', borderRadius: 24, overflow: 'hidden' as const },
   qrHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
@@ -1352,8 +831,6 @@ const s = StyleSheet.create({
   qrCopyBtnText: { fontSize: 15, fontWeight: '600' as const, color: theme.primary },
   qrDoneBtn: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, paddingVertical: 14, borderRadius: 12, backgroundColor: '#F1F5F9' },
   qrDoneBtnText: { fontSize: 15, fontWeight: '600' as const, color: theme.textSecondary },
-
-  // Tournament picker modal
   modalContainer: { flex: 1, backgroundColor: '#F8FAFC' },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
   modalCloseBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
