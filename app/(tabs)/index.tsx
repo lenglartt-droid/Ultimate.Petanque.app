@@ -430,11 +430,11 @@ export default function HomeScreen() {
 
         {/* ========== WEEKLY LEADERBOARD BANNER ========== */}
         {!weeklyBannerLoaded ? (
-          <Animated.View entering={FadeIn.duration(300)} style={[s.section, isTablet && s.sectionTablet]}>
+          <Animated.View entering={FadeIn.duration(300)} style={[s.section, s.weeklyBannerWrap, isTablet && s.sectionTablet]}>
             <BannerSkeleton />
           </Animated.View>
         ) : weeklyRank ? (
-          <Animated.View entering={FadeIn.duration(400).delay(180)} style={[s.section, isTablet && s.sectionTablet]}>
+          <Animated.View entering={FadeIn.duration(400).delay(180)} style={[s.section, s.weeklyBannerWrap, isTablet && s.sectionTablet]}>
             <Pressable style={s.weeklyBanner} onPress={() => router.push('/leaderboard' as any)}>
               <LinearGradient colors={['#1E3A8A', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.weeklyBannerGradient}>
                 <View style={s.weeklyBannerLeft}>
@@ -470,9 +470,11 @@ export default function HomeScreen() {
 
         {/* ========== SPONSOR BANNER ========== */}
         {!ambassadorsLoaded ? (
-          <View style={[s.section, isTablet && s.sectionTablet]}><SponsorSkeleton /></View>
+          <View style={[s.section, s.sponsorWrap, isTablet && s.sectionTablet]}><SponsorSkeleton /></View>
         ) : null}
-        <SponsorBanner style={{ marginHorizontal: 16, marginBottom: 20 }} page="home" />
+        <View style={s.sponsorWrap}>
+          <SponsorBanner style={{ marginHorizontal: 16, marginBottom: 20 }} page="home" />
+        </View>
 
         {/* ========== LEADERBOARD PROGRESS ========== */}
         {selfPlayer?.isPublic && totalMatches < LEADERBOARD_MIN_MATCHES ? (
@@ -494,12 +496,14 @@ export default function HomeScreen() {
         ) : null}
 
         {/* ========== COMMUNITY LEADERBOARD ========== */}
-        <Animated.View entering={FadeIn.duration(400).delay(260)} style={[s.section, isTablet && s.sectionTablet]}>
+        <Animated.View entering={FadeIn.duration(400).delay(260)} style={[s.section, s.leaderboardWrap, isTablet && s.sectionTablet]}>
           <CommunityLeaderboard />
         </Animated.View>
 
+        <View style={s.divider}><View style={s.dividerLine} /><View style={s.dividerDot} /><View style={s.dividerLine} /></View>
+
         {/* ========== UNIFIED UPCOMING TIMELINE ========== */}
-        <Animated.View entering={FadeIn.duration(400).delay(300)} style={[s.section, isTablet && s.sectionTablet]}>
+        <Animated.View entering={FadeIn.duration(400).delay(300)} style={[s.section, s.timelineWrap, isTablet && s.sectionTablet]}>
           <UpcomingTimeline
             tournaments={tournaments}
             meetups={meetups}
@@ -515,6 +519,8 @@ export default function HomeScreen() {
           />
         </Animated.View>
 
+        <View style={s.divider}><View style={s.dividerLine} /><View style={s.dividerDot} /><View style={s.dividerLine} /></View>
+
         {/* ========== AMBASSADORS ROTATING BANNER ========== */}
         {ambassadorsLoaded && featuredAmbassadors.length > 0 ? (
           <Animated.View entering={FadeIn.duration(400).delay(340)} style={[s.section, isTablet && s.sectionTablet]}>
@@ -527,6 +533,8 @@ export default function HomeScreen() {
             />
           </Animated.View>
         ) : null}
+
+        <View style={s.divider}><View style={s.dividerLine} /><View style={s.dividerDot} /><View style={s.dividerLine} /></View>
 
         {/* ========== COMPACT HISTORY ========== */}
         <Animated.View entering={FadeIn.duration(400).delay(380)} style={[s.section, isTablet && s.sectionTablet]}>
@@ -684,4 +692,14 @@ const s = StyleSheet.create({
   meetupInvitedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.accent + '12', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
   meetupInvitedText: { fontSize: 10, fontWeight: '700', color: theme.accent },
 
+  // ===== ASYNC SECTION WRAPPERS (fixed minHeight to prevent layout shift) =====
+  weeklyBannerWrap: { minHeight: 68 },
+  sponsorWrap: { minHeight: 60 },
+  leaderboardWrap: { minHeight: 380 },
+  timelineWrap: { minHeight: 230 },
+
+  // ===== SECTION DIVIDERS =====
+  divider: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 32, marginBottom: 20 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#E2E8F0' },
+  dividerDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#CBD5E1', marginHorizontal: 12 },
 });
