@@ -1598,47 +1598,6 @@ export default function ProfileScreen() {
           </Animated.View>
         )}
 
-        {/* Financial Summary Button */}
-        {!isEditing && (
-          <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
-            {(() => {
-              const myClub = selfPlayer?.clubId ? clubs.find(c => c.id === selfPlayer.clubId) : null;
-              const membershipCost = myClub?.membershipCost || 0;
-              const totalRegistrationCosts = tournaments.reduce((sum, t) => sum + (t.registrationCost || 0), 0);
-              const totalPrizesWon = tournaments.reduce((sum, t) => sum + (t.prizeWon || 0), 0);
-              const totalCosts = membershipCost + totalRegistrationCosts;
-              const balance = totalPrizesWon - totalCosts;
-              const podiums = tournaments.filter(t => ['1er', '2ème', '3ème'].includes(t.finalResult || '')).length;
-              return (
-                <Pressable
-                  style={styles.financialButton}
-                  onPress={() => router.push('/financial')}
-                >
-                  <View style={[styles.financialButtonIcon, { backgroundColor: (balance >= 0 ? theme.success : theme.error) + '15' }]}>
-                    <MaterialIcons name="account-balance-wallet" size={24} color={balance >= 0 ? theme.success : theme.error} />
-                  </View>
-                  <View style={styles.financialButtonInfo}>
-                    <Text style={styles.financialButtonTitle}>{t('profile', 'financialSummary')}</Text>
-                    <View style={styles.financialButtonMeta}>
-                      <Text style={[styles.financialButtonBalance, { color: balance >= 0 ? theme.success : theme.error }]}>
-                        {balance >= 0 ? '+' : ''}{balance.toFixed(0)} €
-                      </Text>
-                      {podiums > 0 && (
-                        <>
-                          <View style={styles.financialButtonDot} />
-                          <MaterialIcons name="emoji-events" size={12} color={theme.carreauColor} />
-                          <Text style={styles.financialButtonPodiums}>{podiums} {t('palmares', 'podiums')}</Text>
-                        </>
-                      )}
-                    </View>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
-                </Pressable>
-              );
-            })()}
-          </Animated.View>
-        )}
-
         {/* Federation Card Section */}
         {!isEditing && !loading && (
           <Animated.View entering={FadeInDown.duration(400).delay(175)} style={styles.section}>

@@ -548,6 +548,46 @@ export default function PalmaresScreen() {
               </Animated.View>
             ) : null}
 
+            {/* ============ FINANCIAL SUMMARY ============ */}
+            {summary.totalTournaments > 0 ? (
+              <Animated.View entering={FadeInDown.duration(400).delay(70)}>
+                <Pressable
+                  style={styles.financialCard}
+                  onPress={() => router.push('/financial')}
+                >
+                  <View style={styles.financialCardHeader}>
+                    <View style={[styles.financialCardIcon, { backgroundColor: (summary.totalPrize - summary.totalCost >= 0 ? theme.success : theme.error) + '15' }]}>
+                      <MaterialIcons name="account-balance-wallet" size={22} color={summary.totalPrize - summary.totalCost >= 0 ? theme.success : theme.error} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.financialCardTitle}>{t('financial', 'title')}</Text>
+                      <Text style={styles.financialCardSub}>{summary.totalTournaments} {t('palmares', 'tournois').toLowerCase()}</Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' as const }}>
+                      <Text style={[styles.financialCardBalance, { color: summary.totalPrize - summary.totalCost >= 0 ? theme.success : theme.error }]}>
+                        {summary.totalPrize - summary.totalCost >= 0 ? '+' : ''}{summary.totalPrize - summary.totalCost}€
+                      </Text>
+                      <Text style={styles.financialCardLabel}>Net</Text>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                  </View>
+                  <View style={styles.financialCardRow}>
+                    <View style={styles.financialCardItem}>
+                      <MaterialIcons name="arrow-upward" size={14} color={theme.success} />
+                      <Text style={[styles.financialCardAmount, { color: theme.success }]}>+{summary.totalPrize}€</Text>
+                      <Text style={styles.financialCardAmountLabel}>{t('financial', 'gains')}</Text>
+                    </View>
+                    <View style={styles.financialCardDivider} />
+                    <View style={styles.financialCardItem}>
+                      <MaterialIcons name="arrow-downward" size={14} color={theme.error} />
+                      <Text style={[styles.financialCardAmount, { color: theme.error }]}>-{summary.totalCost}€</Text>
+                      <Text style={styles.financialCardAmountLabel}>{t('financial', 'expenses')}</Text>
+                    </View>
+                  </View>
+                </Pressable>
+              </Animated.View>
+            ) : null}
+
             {/* Ad Banner */}
             <AdBanner position="inline" />
 
@@ -1005,6 +1045,77 @@ const styles = StyleSheet.create({
   cardTypeText: { fontSize: 11, color: theme.textMuted, fontWeight: '500' },
   carreauBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.carreauColor + '12', paddingHorizontal: 8, paddingVertical: 4, borderRadius: theme.borderRadius.sm },
   carreauText: { fontSize: 11, color: theme.carreauColor, fontWeight: '700' },
+
+  // Financial card in palmares
+  financialCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    marginBottom: 14,
+    ...theme.shadows.card,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  financialCardHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+    marginBottom: 12,
+  },
+  financialCardIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  financialCardTitle: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+    color: theme.textPrimary,
+  },
+  financialCardSub: {
+    fontSize: 11,
+    color: theme.textSecondary,
+    marginTop: 2,
+  },
+  financialCardBalance: {
+    fontSize: 20,
+    fontWeight: '800' as const,
+  },
+  financialCardLabel: {
+    fontSize: 10,
+    color: theme.textMuted,
+    fontWeight: '600' as const,
+  },
+  financialCardRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.md,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  financialCardItem: {
+    flex: 1,
+    alignItems: 'center' as const,
+    gap: 2,
+  },
+  financialCardAmount: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+  },
+  financialCardAmountLabel: {
+    fontSize: 10,
+    color: theme.textSecondary,
+    fontWeight: '500' as const,
+  },
+  financialCardDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: theme.border,
+    marginHorizontal: 8,
+  },
 
   // Empty
   emptyState: { alignItems: 'center', paddingVertical: 48, paddingHorizontal: 24 },

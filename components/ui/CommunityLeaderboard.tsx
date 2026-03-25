@@ -452,7 +452,11 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
               {!myRank && selfPlayer ? (
                 <View style={s.note}>
                   <MaterialIcons name="info-outline" size={14} color={theme.textMuted} />
-                  <Text style={s.noteText}>{t('leaderboard', 'makePublicToAppear')}</Text>
+                  <Text style={s.noteText}>
+                    {language === 'fr'
+                      ? 'Rendez votre profil public et jouez au moins 3 matchs pour apparaitre. Filtrez par zone geographique (monde, continent, pays, ville) pour affiner le classement.'
+                      : 'Make your profile public and play at least 3 matches to appear. Filter by geographic zone (world, continent, country, city) to refine rankings.'}
+                  </Text>
                 </View>
               ) : null}
             </>
