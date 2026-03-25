@@ -21,7 +21,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 // ============================================
 // Quick Actions
 // ============================================
-function getQuickActions(t: (s: string, k: string) => string) {
+function getQuickActions(t: (s: string, k: string) => string, language: string) {
   return [
     { id: 'match', title: t('faq', 'createMatch'), icon: 'sports', color: theme.primary, steps: t('faq', 'qaMatchSteps').split('|'), route: '/match/new' },
     { id: 'challenge', title: t('faq', 'launchChallenge'), icon: 'track-changes', color: theme.carreauColor, steps: t('faq', 'qaChallengeSteps').split('|'), route: '/challenge/new' },
@@ -164,6 +164,19 @@ function getFaqData(t: (s: string, k: string) => string, language: string) {
       { id: 'scan1', q: t('pushNotifs', 'faqScan1Q'), a: t('pushNotifs', 'faqScan1A') },
       { id: 'scan2', q: t('pushNotifs', 'faqScan2Q'), a: t('pushNotifs', 'faqScan2A') },
     ]},
+    { id: 'sponsored_events', category: language === 'fr' ? 'Evenements sponsorises' : 'Sponsored Events', icon: 'campaign', color: '#7C3AED', questions: [
+      { id: 'se1', q: language === 'fr' ? 'Comment participer a un evenement sponsorise ?' : 'How do I participate in a sponsored event?', a: language === 'fr' ? 'Depuis l\'accueil ou la page Evenements, rejoignez un evenement via son code ou la liste publique. Chaque evenement est organise par un ambassadeur, a une date/heure precise, un type de defi (10 tirs, sautee, precision) et un nombre maximum de participants.' : 'From the home screen or Events page, join an event via its code or the public list. Each event is organized by an ambassador, has a specific date/time, challenge type (10 shots, lob, precision) and a maximum number of participants.' },
+      { id: 'se2', q: language === 'fr' ? 'Comment fonctionne l\'attestation de temoin ?' : 'How does witness attestation work?', a: language === 'fr' ? 'Apres avoir realise votre defi dans un evenement, d\'autres participants peuvent attester de vos resultats. Chaque evenement requiert un nombre minimum de temoins (generalement 2). Les attestations renforcent la fiabilite des classements et du score de confiance.' : 'After completing your challenge in an event, other participants can attest to your results. Each event requires a minimum number of witnesses (usually 2). Attestations strengthen leaderboard reliability and trust scores.' },
+      { id: 'se3', q: language === 'fr' ? 'Ou voir les resultats des evenements ?' : 'Where can I see event results?', a: language === 'fr' ? 'Les resultats sont publies par l\'organisateur apres la fin de l\'evenement. Le classement des evenements est visible dans l\'onglet Evenements du classement communautaire. Vos participations et podiums sont comptabilises dans votre profil.' : 'Results are published by the organizer after the event ends. Event rankings are visible in the Events tab of the community leaderboard. Your participations and podiums are counted in your profile.' },
+    ]},
+    { id: 'geo_filters', category: language === 'fr' ? 'Filtres geographiques' : 'Geographic Filters', icon: 'public', color: '#0369A1', questions: [
+      { id: 'geo1', q: language === 'fr' ? 'Comment filtrer le classement par zone geographique ?' : 'How do I filter the leaderboard by geographic zone?', a: language === 'fr' ? 'Dans le classement communautaire (accueil ou page complete), appuyez sur le bouton globe/filtre geographique. Choisissez parmi 4 niveaux : Monde (tous les joueurs), Continent (auto-detecte depuis votre pays), Pays ou Ville. Votre selection est memorisee entre les sessions.' : 'In the community leaderboard (home or full page), tap the globe/geographic filter button. Choose from 4 levels: World (all players), Continent (auto-detected from your country), Country or City. Your selection is remembered between sessions.' },
+      { id: 'geo2', q: language === 'fr' ? 'Le filtrage geographique s\'applique-t-il aux clubs ?' : 'Does geographic filtering apply to clubs?', a: language === 'fr' ? 'Oui, les filtres geographiques s\'appliquent aux onglets Joueurs et Clubs. L\'onglet Boules est classe par marque (pas de filtre geo). L\'onglet Evenements montre le classement global des participants.' : 'Yes, geographic filters apply to the Players and Clubs tabs. The Boules tab is ranked by brand (no geo filter). The Events tab shows the global participant ranking.' },
+    ]},
+    { id: 'home_page', category: language === 'fr' ? 'Page d\'accueil' : 'Home Page', icon: 'home', color: theme.primary, questions: [
+      { id: 'hp1', q: language === 'fr' ? 'Que contient la page d\'accueil ?' : 'What does the home page contain?', a: language === 'fr' ? 'La page d\'accueil affiche : vos stats rapides (matchs, victoires, taux), 3 boutons d\'action rapide (Match, Defi, Tournoi), le classement communautaire avec filtres geo, la timeline "A Venir" (RDV, tournois, defis sponsorises), la banniere ambassadeurs et l\'historique recent avec scores.' : 'The home page displays: your quick stats (matches, wins, rate), 3 quick action buttons (Match, Challenge, Tournament), the community leaderboard with geo filters, the "Upcoming" timeline (meetups, tournaments, sponsored events), the ambassador banner and recent history with scores.' },
+      { id: 'hp2', q: language === 'fr' ? 'Comment fonctionne le classement hebdomadaire ?' : 'How does the weekly leaderboard work?', a: language === 'fr' ? 'Si vous avez joue des matchs cette semaine, une banniere bleue affiche votre classement hebdomadaire avec votre evolution (monte, descente, nouveau). Appuyez dessus pour acceder au classement complet.' : 'If you played matches this week, a blue banner shows your weekly ranking with your evolution (up, down, new). Tap it to access the full leaderboard.' },
+    ]},
   ];
 }
 
@@ -252,7 +265,7 @@ export default function FAQScreen() {
   React.useEffect(() => { const sub = Dimensions.addEventListener('change', ({ window }) => setScreenW(window.width)); return () => sub?.remove(); }, []);
   const isTablet = screenW >= 600;
 
-  const QUICK_ACTIONS = useMemo(() => getQuickActions(t), [t]);
+  const QUICK_ACTIONS = useMemo(() => getQuickActions(t, language), [t, language]);
   const FAQ_DATA = useMemo(() => getFaqData(t, language), [t, language]);
   const TIPS = useMemo(() => getTips(t), [t]);
 
