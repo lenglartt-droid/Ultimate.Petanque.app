@@ -328,13 +328,10 @@ export default function LeaderboardScreen() {
   const [filterRole, setFilterRole] = useState<string>('all');
   const [filterLevel, setFilterLevel] = useState<string>('all');
   const [filterTrustLevel, setFilterTrustLevel] = useState<string>('all');
-  const [filterCity, setFilterCity] = useState<string>('all');
-  const [filterCountry, setFilterCountry] = useState<string>('all');
   const [filterClub, setFilterClub] = useState<string>('all');
   const [filterBrand, setFilterBrand] = useState<string>('all');
   const [filterTerrain, setFilterTerrain] = useState<string>('all');
-  const [showFilters, setShowFilters] = useState(false);
-  const [filterSearchText, setFilterSearchText] = useState('');
+  const [showFilterModal, setShowFilterModal] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [periodFilter, setPeriodFilter] = useState<LeaderboardPeriod>('all');
   const [periodLoading, setPeriodLoading] = useState(false);
@@ -661,8 +658,10 @@ export default function LeaderboardScreen() {
 
   // Active filter count
   const activeFilterCount = useMemo(() => {
-    return [filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand, filterTerrain, filterTrustLevel].filter(f => f !== 'all').length + (geoScope !== 'world' && geoValue ? 1 : 0);
-  }, [filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand, filterTerrain, filterTrustLevel, geoScope, geoValue]);
+    return [filterRole, filterLevel, filterClub, filterBrand, filterTerrain, filterTrustLevel].filter(f => f !== 'all').length
+      + (geoScope !== 'world' && geoValue ? 1 : 0)
+      + (periodFilter !== 'all' ? 1 : 0);
+  }, [filterRole, filterLevel, filterClub, filterBrand, filterTerrain, filterTrustLevel, geoScope, geoValue, periodFilter]);
 
   // Trust level distribution stats
   const trustLevelStats = useMemo(() => {
@@ -719,20 +718,18 @@ export default function LeaderboardScreen() {
         return false;
       });
     }
-    if (filterCity !== 'all') result = result.filter(p => p.city === filterCity);
-    if (filterCountry !== 'all') result = result.filter(p => p.country === filterCountry);
     if (filterClub !== 'all') result = result.filter(p => p.club === filterClub);
     if (filterBrand !== 'all') result = result.filter(p => p.boulesBrand === filterBrand);
     if (filterTerrain !== 'all') result = result.filter(p => p.terrainName === filterTerrain);
 
     return sortLeaderboard(result, sortBy);
-  }, [allPlayers, search, filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand, filterTerrain, sortBy]);
+  }, [allPlayers, search, filterRole, filterLevel, filterClub, filterBrand, filterTerrain, filterTrustLevel, sortBy, geoScope, geoValue]);
 
   const paginatedData = useMemo(() => filteredSorted.slice(0, visibleCount), [filteredSorted, visibleCount]);
   const hasMore = filteredSorted.length > visibleCount;
 
   // Reset pagination on filter/search change
-  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [search, filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand, filterTerrain, filterTrustLevel, sortBy]);
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [search, filterRole, filterLevel, filterClub, filterBrand, filterTerrain, filterTrustLevel, sortBy, geoScope, geoValue, periodFilter]);
 
   const handleLoadMore = useCallback(() => {
     if (hasMore) setVisibleCount(prev => prev + PAGE_SIZE);
@@ -748,14 +745,12 @@ export default function LeaderboardScreen() {
   const clearFilters = () => {
     setFilterRole('all');
     setFilterLevel('all');
-    setFilterCity('all');
-    setFilterCountry('all');
     setFilterClub('all');
     setFilterBrand('all');
     setFilterTerrain('all');
     setFilterTrustLevel('all');
     setSearch('');
-    setFilterSearchText('');
+    setPeriodFilter('all');
     updateGeoScope('world', '');
   };
 
@@ -850,90 +845,63 @@ export default function LeaderboardScreen() {
             ))}
           </View>
 
-          {/* Trust Level Filter Chips (players tab, all-time mode) */}
-          {activeTab === 'players' && weeklyMode === 'alltime' ? (
-            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
-              {[
-                { id: 'all', label: language === 'fr' ? 'Tous' : 'All', icon: 'people', pct: null },
-                { id: 'verified', label: language === 'fr' ? 'Verifie' : 'Verified', icon: 'verified-user', pct: trustLevelStats.verified },
-                { id: 'trusted', label: language === 'fr' ? 'Fiable' : 'Trusted', icon: 'shield', pct: trustLevelStats.trusted },
-                { id: 'standard', label: 'Standard', icon: 'shield', pct: trustLevelStats.standard },
-              ].map(chip => {
-                const isActive = filterTrustLevel === chip.id;
-                const chipColor = chip.id === 'verified' ? '#22C55E' : chip.id === 'trusted' ? '#3B82F6' : chip.id === 'standard' ? '#D97706' : 'rgba(255,255,255,0.5)';
-                return (
-                  <Pressable
-                    key={chip.id}
-                    style={[s.tabBtn, { flex: 0, paddingHorizontal: 14 }, isActive && { backgroundColor: chip.id === 'all' ? 'rgba(255,255,255,0.22)' : chipColor + '40' }]}
-                    onPress={() => { Haptics.selectionAsync(); setFilterTrustLevel(chip.id); }}
-                  >
-                    <MaterialIcons name={chip.icon as any} size={13} color={isActive ? '#FFF' : 'rgba(255,255,255,0.5)'} />
-                    <Text style={[s.tabBtnText, isActive && s.tabBtnTextActive]}>{chip.label}</Text>
-                    {chip.pct !== null ? (
-                      <Text style={{ fontSize: 9, fontWeight: '700', color: isActive ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.35)' }}>{chip.pct}%</Text>
-                    ) : null}
-                  </Pressable>
-                );
-              })}
-            </View>
-          ) : null}
-
-          {/* Geographic scope filter — modern pill row */}
-          <View style={{ flexDirection: 'row', gap: 4, marginBottom: 10, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 14, padding: 3 }}>
-            {(['world', 'continent', 'country', 'city'] as const).map(scope => {
-              const isActive = geoScope === scope;
-              const icons = { world: 'public', continent: 'travel-explore', country: 'flag', city: 'place' } as const;
-              const labels = {
-                world: (extraTranslations.geoScope?.world as any)?.[language] || 'World',
-                continent: (extraTranslations.geoScope?.continent as any)?.[language] || 'Continent',
-                country: (extraTranslations.geoScope?.country as any)?.[language] || 'Country',
-                city: (extraTranslations.geoScope?.city as any)?.[language] || 'City',
-              };
-              return (
-                <Pressable
-                  key={scope}
-                  style={[{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, borderRadius: 11 }, isActive && { backgroundColor: '#F59E0B25' }]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    let val = '';
-                    if (scope === 'world') val = '';
-                    else if (scope === 'continent') {
-                      if (selfPlayer?.country) val = getContinent(selfPlayer.country);
-                    }
-                    else if (scope === 'country') {
-                      if (uniqueCountries.length === 1) val = uniqueCountries[0];
-                      else if (selfPlayer?.country) val = selfPlayer.country;
-                    }
-                    else if (scope === 'city') {
-                      if (uniqueCities.length === 1) val = uniqueCities[0];
-                      else if (selfPlayer?.location?.city) val = (selfPlayer.location as any).city;
-                    }
-                    updateGeoScope(scope, val);
-                  }}
-                >
-                  <MaterialIcons name={icons[scope] as any} size={13} color={isActive ? '#F59E0B' : '#64748B'} />
-                  <Text style={{ fontSize: 10, fontWeight: isActive ? '700' : '600', color: isActive ? '#F59E0B' : '#64748B' }}>{labels[scope]}</Text>
+          {/* Quick filter summary chips */}
+          {activeFilterCount > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginBottom: 10, paddingRight: 8 }}>
+              {geoScope !== 'world' && geoValue ? (
+                <Pressable style={s.headerFilterChip} onPress={() => setShowFilterModal(true)}>
+                  <MaterialIcons name={geoScope === 'continent' ? 'travel-explore' : geoScope === 'country' ? 'flag' : 'place'} size={11} color="#F59E0B" />
+                  <Text style={s.headerFilterChipText}>{geoScope === 'continent' ? `${getContinentFlag(geoValue)} ${getContinentLabel(geoValue, language === 'fr')}` : geoScope === 'country' ? `${getCountryFlag(geoValue)} ${geoValue}` : geoValue}</Text>
+                  <Pressable onPress={() => updateGeoScope('world', '')} hitSlop={6}><MaterialIcons name="close" size={12} color="#F59E0B" /></Pressable>
                 </Pressable>
-              );
-            })}
-          </View>
-          {geoScope !== 'world' ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginBottom: 10 }}>
-              {(geoScope === 'continent'
-                ? (() => { const cs = allPlayers.map(p => p.country).filter(Boolean).map(c => getContinent(c!)); return [...new Set(cs)].sort(); })()
-                : geoScope === 'country' ? uniqueCountries : uniqueCities
-              ).map(val => {
-                const isActive = geoValue === val;
-                return (
-                  <Pressable
-                    key={val}
-                    style={[{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: isActive ? '#F59E0B25' : 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: isActive ? '#F59E0B50' : 'transparent' }]}
-                    onPress={() => { Haptics.selectionAsync(); updateGeoScope(geoScope, isActive ? '' : val); }}
-                  >
-                    <Text style={{ fontSize: 11, fontWeight: isActive ? '700' : '600', color: isActive ? '#F59E0B' : '#94A3B8', maxWidth: 120 }} numberOfLines={1}>{geoScope === 'continent' ? `${getContinentFlag(val)} ${getContinentLabel(val, language === 'fr')}` : geoScope === 'country' ? `${getCountryFlag(val)} ${val}` : val}</Text>
-                  </Pressable>
-                );
-              })}
+              ) : null}
+              {periodFilter !== 'all' ? (
+                <Pressable style={s.headerFilterChip} onPress={() => setShowFilterModal(true)}>
+                  <MaterialIcons name="date-range" size={11} color="#F59E0B" />
+                  <Text style={s.headerFilterChipText}>{t('leaderboard', `period${periodFilter.charAt(0).toUpperCase() + periodFilter.slice(1)}` as any) || periodFilter}</Text>
+                  <Pressable onPress={() => handlePeriodChange('all')} hitSlop={6}><MaterialIcons name="close" size={12} color="#F59E0B" /></Pressable>
+                </Pressable>
+              ) : null}
+              {filterTrustLevel !== 'all' ? (
+                <Pressable style={s.headerFilterChip} onPress={() => setShowFilterModal(true)}>
+                  <MaterialIcons name="shield" size={11} color="#F59E0B" />
+                  <Text style={s.headerFilterChipText}>{filterTrustLevel === 'verified' ? (language === 'fr' ? 'Verifie' : 'Verified') : filterTrustLevel === 'trusted' ? (language === 'fr' ? 'Fiable' : 'Trusted') : 'Standard'}</Text>
+                  <Pressable onPress={() => setFilterTrustLevel('all')} hitSlop={6}><MaterialIcons name="close" size={12} color="#F59E0B" /></Pressable>
+                </Pressable>
+              ) : null}
+              {filterRole !== 'all' ? (
+                <Pressable style={s.headerFilterChip} onPress={() => setShowFilterModal(true)}>
+                  <Text style={s.headerFilterChipText}>{t('roles', filterRole)}</Text>
+                  <Pressable onPress={() => setFilterRole('all')} hitSlop={6}><MaterialIcons name="close" size={12} color="#F59E0B" /></Pressable>
+                </Pressable>
+              ) : null}
+              {filterLevel !== 'all' ? (
+                <Pressable style={s.headerFilterChip} onPress={() => setShowFilterModal(true)}>
+                  <Text style={s.headerFilterChipText}>{t('levels', filterLevel)}</Text>
+                  <Pressable onPress={() => setFilterLevel('all')} hitSlop={6}><MaterialIcons name="close" size={12} color="#F59E0B" /></Pressable>
+                </Pressable>
+              ) : null}
+              {filterClub !== 'all' ? (
+                <Pressable style={s.headerFilterChip} onPress={() => setShowFilterModal(true)}>
+                  <MaterialIcons name="home" size={11} color="#F59E0B" />
+                  <Text style={s.headerFilterChipText}>{filterClub}</Text>
+                  <Pressable onPress={() => setFilterClub('all')} hitSlop={6}><MaterialIcons name="close" size={12} color="#F59E0B" /></Pressable>
+                </Pressable>
+              ) : null}
+              {filterTerrain !== 'all' ? (
+                <Pressable style={s.headerFilterChip} onPress={() => setShowFilterModal(true)}>
+                  <MaterialIcons name="sports-soccer" size={11} color="#F59E0B" />
+                  <Text style={s.headerFilterChipText}>{filterTerrain}</Text>
+                  <Pressable onPress={() => setFilterTerrain('all')} hitSlop={6}><MaterialIcons name="close" size={12} color="#F59E0B" /></Pressable>
+                </Pressable>
+              ) : null}
+              {filterBrand !== 'all' ? (
+                <Pressable style={s.headerFilterChip} onPress={() => setShowFilterModal(true)}>
+                  <MaterialIcons name="sports-baseball" size={11} color="#F59E0B" />
+                  <Text style={s.headerFilterChipText}>{filterBrand}</Text>
+                  <Pressable onPress={() => setFilterBrand('all')} hitSlop={6}><MaterialIcons name="close" size={12} color="#F59E0B" /></Pressable>
+                </Pressable>
+              ) : null}
             </ScrollView>
           ) : null}
           {/* Weekly / All-time toggle for players tab */}
@@ -976,19 +944,17 @@ export default function LeaderboardScreen() {
                 </Pressable>
               ) : null}
             </View>
-            {activeTab === 'players' ? (
-              <Pressable
-                style={[s.filterBtn, activeFilterCount > 0 && s.filterBtnActive]}
-                onPress={() => { Haptics.selectionAsync(); setShowFilters(!showFilters); }}
-              >
-                <MaterialIcons name="tune" size={20} color={activeFilterCount > 0 ? '#FFF' : 'rgba(255,255,255,0.6)'} />
-                {activeFilterCount > 0 ? (
-                  <View style={s.filterBadge}>
-                    <Text style={s.filterBadgeText}>{activeFilterCount}</Text>
-                  </View>
-                ) : null}
-              </Pressable>
-            ) : null}
+            <Pressable
+              style={[s.filterBtn, activeFilterCount > 0 && s.filterBtnActive]}
+              onPress={() => { Haptics.selectionAsync(); setShowFilterModal(true); }}
+            >
+              <MaterialIcons name="tune" size={20} color={activeFilterCount > 0 ? '#FFF' : 'rgba(255,255,255,0.6)'} />
+              {activeFilterCount > 0 ? (
+                <View style={s.filterBadge}>
+                  <Text style={s.filterBadgeText}>{activeFilterCount}</Text>
+                </View>
+              ) : null}
+            </Pressable>
           </View>
         </LinearGradient>
 
@@ -1058,36 +1024,14 @@ export default function LeaderboardScreen() {
           </ScrollView>
 
           {/* Boules-specific: mode toggle + role filter */}
-          {/* Period filter for all tabs */}
-          {true ? (
+          {/* Period indicator */}
+          {periodFilter !== 'all' ? (
             <View style={s.periodFilterSection}>
               <View style={s.periodLabelRow}>
                 <MaterialIcons name="date-range" size={13} color={theme.textMuted} />
-                <Text style={s.periodLabelText}>{t('leaderboard', 'periodLabel')}</Text>
+                <Text style={s.periodLabelText}>{t('leaderboard', 'periodLabel')}: {t('leaderboard', `period${periodFilter.charAt(0).toUpperCase() + periodFilter.slice(1)}` as any) || periodFilter}</Text>
+                {periodLoading ? <ActivityIndicator size={10} color="#D97706" style={{ marginLeft: 6 }} /> : null}
               </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.sortRow}>
-                {([
-                  { id: 'all' as LeaderboardPeriod, label: t('leaderboard', 'periodAll') },
-                  { id: '7d' as LeaderboardPeriod, label: t('leaderboard', 'period7d') },
-                  { id: '30d' as LeaderboardPeriod, label: t('leaderboard', 'period30d') },
-                  { id: '3m' as LeaderboardPeriod, label: t('leaderboard', 'period3m') },
-                  { id: '6m' as LeaderboardPeriod, label: t('leaderboard', 'period6m') },
-                  { id: '1y' as LeaderboardPeriod, label: t('leaderboard', 'period1y') },
-                  { id: 'season' as LeaderboardPeriod, label: t('leaderboard', 'periodSeason') },
-                  { id: 'lastSeason' as LeaderboardPeriod, label: t('leaderboard', 'periodLastSeason') },
-                ]).map(chip => (
-                  <Pressable
-                    key={chip.id}
-                    style={[s.sortChip, periodFilter === chip.id && s.periodChipActive]}
-                    onPress={() => handlePeriodChange(chip.id)}
-                  >
-                    <Text style={[s.sortChipText, periodFilter === chip.id && s.periodChipTextActive]}>{chip.label}</Text>
-                    {periodLoading && periodFilter === chip.id ? (
-                      <ActivityIndicator size={10} color="#FFF" style={{ marginLeft: 4 }} />
-                    ) : null}
-                  </Pressable>
-                ))}
-              </ScrollView>
             </View>
           ) : null}
 
@@ -1684,338 +1628,7 @@ export default function LeaderboardScreen() {
           onEndReachedThreshold={0.4}
           ListHeaderComponent={
             <View>
-              {/* Filters expandable — inside list so content pushes down */}
-              {showFilters ? (
-                <Animated.View entering={FadeIn.duration(200)} style={s.filtersPanel}>
-                  {/* Panel header with title, count & close */}
-                  <View style={s.fpHeader}>
-                    <View style={s.fpHeaderLeft}>
-                      <View style={s.fpHeaderIcon}>
-                        <MaterialIcons name="tune" size={16} color="#D97706" />
-                      </View>
-                      <Text style={s.fpHeaderTitle}>{language === 'fr' ? 'Filtres' : 'Filters'}</Text>
-                      {activeFilterCount > 0 ? (
-                        <View style={s.fpCountBadge}>
-                          <Text style={s.fpCountBadgeText}>{activeFilterCount}</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    <View style={s.fpHeaderRight}>
-                      {activeFilterCount > 0 ? (
-                        <Pressable style={s.fpClearBtn} onPress={clearFilters} hitSlop={6}>
-                          <MaterialIcons name="clear-all" size={16} color={theme.error} />
-                          <Text style={s.fpClearBtnText}>{t('directory', 'clearAll')}</Text>
-                        </Pressable>
-                      ) : null}
-                      <Pressable style={s.fpCloseBtn} onPress={() => setShowFilters(false)} hitSlop={6}>
-                        <MaterialIcons name="close" size={18} color={theme.textSecondary} />
-                      </Pressable>
-                    </View>
-                  </View>
 
-                  {/* Search within filters */}
-                  <View style={s.filterSearchBar}>
-                    <MaterialIcons name="search" size={16} color={theme.textMuted} />
-                    <TextInput
-                      style={s.filterSearchInput}
-                      placeholder={language === 'fr' ? 'Rechercher dans les filtres...' : 'Search filters...'}
-                      placeholderTextColor={theme.textMuted}
-                      value={filterSearchText}
-                      onChangeText={setFilterSearchText}
-                    />
-                    {filterSearchText.length > 0 ? (
-                      <Pressable onPress={() => setFilterSearchText('')} hitSlop={8}>
-                        <MaterialIcons name="close" size={14} color={theme.textMuted} />
-                      </Pressable>
-                    ) : null}
-                  </View>
-
-                  {/* Role filter */}
-                  <View style={s.filterGroup}>
-                    <View style={s.filterGroupHeader}>
-                      <MaterialIcons name="person" size={14} color={theme.primary} />
-                      <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByRole')}</Text>
-                      {filterRole !== 'all' ? <View style={s.fgActiveDot} /> : null}
-                    </View>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
-                      {['all', 'Tireur', 'Pointeur', 'Milieu'].map(opt => (
-                        <Pressable
-                          key={opt}
-                          style={[s.filterChip, filterRole === opt && s.filterChipActive]}
-                          onPress={() => { Haptics.selectionAsync(); setFilterRole(opt); }}
-                        >
-                          <Text style={[s.filterChipText, filterRole === opt && s.filterChipTextActive]}>
-                            {opt === 'all' ? t('leaderboard', 'allRoles') : t('roles', opt)}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </ScrollView>
-                  </View>
-
-                  {/* Level filter */}
-                  <View style={s.filterGroup}>
-                    <View style={s.filterGroupHeader}>
-                      <MaterialIcons name="signal-cellular-alt" size={14} color={theme.accent} />
-                      <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByLevel')}</Text>
-                      {filterLevel !== 'all' ? <View style={s.fgActiveDot} /> : null}
-                    </View>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
-                      {['all', 'D\u00e9butant', 'Interm\u00e9diaire', 'Confirm\u00e9', 'Expert'].map(opt => (
-                        <Pressable
-                          key={opt}
-                          style={[s.filterChip, filterLevel === opt && s.filterChipActive]}
-                          onPress={() => { Haptics.selectionAsync(); setFilterLevel(opt); }}
-                        >
-                          <Text style={[s.filterChipText, filterLevel === opt && s.filterChipTextActive]}>
-                            {opt === 'all' ? t('leaderboard', 'allLevels') : t('levels', opt)}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </ScrollView>
-                  </View>
-
-                  <View style={s.fgDivider} />
-
-                  {/* Terrain filter */}
-                  {uniqueTerrains.length > 0 ? (
-                    <View style={s.filterGroup}>
-                      <View style={s.filterGroupHeader}>
-                        <MaterialIcons name="sports-soccer" size={14} color={theme.success} />
-                        <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByTerrain')}</Text>
-                        {filterTerrain !== 'all' ? <View style={s.fgActiveDot} /> : null}
-                      </View>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
-                        <Pressable
-                          style={[s.filterChip, filterTerrain === 'all' && s.filterChipActive]}
-                          onPress={() => { Haptics.selectionAsync(); setFilterTerrain('all'); }}
-                        >
-                          <Text style={[s.filterChipText, filterTerrain === 'all' && s.filterChipTextActive]}>
-                            {t('leaderboard', 'allTerrains')}
-                          </Text>
-                        </Pressable>
-                        {uniqueTerrains
-                          .filter(tn => !filterSearchText || tn.toLowerCase().includes(filterSearchText.toLowerCase()))
-                          .map(tn => (
-                          <Pressable
-                            key={tn}
-                            style={[s.filterChip, filterTerrain === tn && s.filterChipActive]}
-                            onPress={() => { Haptics.selectionAsync(); setFilterTerrain(tn); }}
-                          >
-                            <Text style={[s.filterChipText, filterTerrain === tn && s.filterChipTextActive]}>{tn}</Text>
-                          </Pressable>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  ) : null}
-
-                  {/* Brand filter */}
-                  {uniqueBrands.length > 0 ? (
-                    <View style={s.filterGroup}>
-                      <View style={s.filterGroupHeader}>
-                        <MaterialIcons name="sports-baseball" size={14} color="#D97706" />
-                        <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByBrand')}</Text>
-                        {filterBrand !== 'all' ? <View style={s.fgActiveDot} /> : null}
-                      </View>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
-                        <Pressable
-                          style={[s.filterChip, filterBrand === 'all' && s.filterChipActive]}
-                          onPress={() => { Haptics.selectionAsync(); setFilterBrand('all'); }}
-                        >
-                          <Text style={[s.filterChipText, filterBrand === 'all' && s.filterChipTextActive]}>
-                            {t('leaderboard', 'allBrands')}
-                          </Text>
-                        </Pressable>
-                        {uniqueBrands
-                          .filter(b => !filterSearchText || b.toLowerCase().includes(filterSearchText.toLowerCase()))
-                          .map(brand => (
-                          <Pressable
-                            key={brand}
-                            style={[s.filterChip, filterBrand === brand && s.filterChipActive]}
-                            onPress={() => { Haptics.selectionAsync(); setFilterBrand(brand); }}
-                          >
-                            <Text style={[s.filterChipText, filterBrand === brand && s.filterChipTextActive]}>{brand}</Text>
-                          </Pressable>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  ) : null}
-
-                  {/* Club filter */}
-                  {uniqueClubs.length > 0 ? (
-                    <View style={s.filterGroup}>
-                      <View style={s.filterGroupHeader}>
-                        <MaterialIcons name="home" size={14} color={theme.primary} />
-                        <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByClub')}</Text>
-                        {filterClub !== 'all' ? <View style={s.fgActiveDot} /> : null}
-                      </View>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
-                        <Pressable
-                          style={[s.filterChip, filterClub === 'all' && s.filterChipActive]}
-                          onPress={() => { Haptics.selectionAsync(); setFilterClub('all'); }}
-                        >
-                          <Text style={[s.filterChipText, filterClub === 'all' && s.filterChipTextActive]}>
-                            {t('leaderboard', 'allClubs')}
-                          </Text>
-                        </Pressable>
-                        {uniqueClubs
-                          .filter(c => !filterSearchText || c.toLowerCase().includes(filterSearchText.toLowerCase()))
-                          .map(club => (
-                          <Pressable
-                            key={club}
-                            style={[s.filterChip, filterClub === club && s.filterChipActive]}
-                            onPress={() => { Haptics.selectionAsync(); setFilterClub(club); }}
-                          >
-                            <Text style={[s.filterChipText, filterClub === club && s.filterChipTextActive]}>{club}</Text>
-                          </Pressable>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  ) : null}
-
-                  <View style={s.fgDivider} />
-
-                  {/* Country filter */}
-                  {uniqueCountries.length > 0 ? (
-                    <View style={s.filterGroup}>
-                      <View style={s.filterGroupHeader}>
-                        <MaterialIcons name="public" size={14} color={theme.textSecondary} />
-                        <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByCountry')}</Text>
-                        {filterCountry !== 'all' ? <View style={s.fgActiveDot} /> : null}
-                      </View>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
-                        <Pressable
-                          style={[s.filterChip, filterCountry === 'all' && s.filterChipActive]}
-                          onPress={() => { Haptics.selectionAsync(); setFilterCountry('all'); }}
-                        >
-                          <Text style={[s.filterChipText, filterCountry === 'all' && s.filterChipTextActive]}>
-                            {t('leaderboard', 'allCountries')}
-                          </Text>
-                        </Pressable>
-                        {uniqueCountries
-                          .filter(c => !filterSearchText || c.toLowerCase().includes(filterSearchText.toLowerCase()))
-                          .map(country => (
-                          <Pressable
-                            key={country}
-                            style={[s.filterChip, filterCountry === country && s.filterChipActive]}
-                            onPress={() => { Haptics.selectionAsync(); setFilterCountry(country); }}
-                          >
-                            <Text style={[s.filterChipText, filterCountry === country && s.filterChipTextActive]}>{country}</Text>
-                          </Pressable>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  ) : null}
-
-                  {uniqueCities.length > 0 ? (
-                    <View style={s.filterGroup}>
-                      <View style={s.filterGroupHeader}>
-                        <MaterialIcons name="place" size={14} color={theme.error} />
-                        <Text style={s.filterGroupTitle}>{t('leaderboard', 'filterByCity')}</Text>
-                        {filterCity !== 'all' ? <View style={s.fgActiveDot} /> : null}
-                      </View>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChipsRow}>
-                        <Pressable
-                          style={[s.filterChip, filterCity === 'all' && s.filterChipActive]}
-                          onPress={() => { Haptics.selectionAsync(); setFilterCity('all'); }}
-                        >
-                          <Text style={[s.filterChipText, filterCity === 'all' && s.filterChipTextActive]}>
-                            {t('leaderboard', 'allCities')}
-                          </Text>
-                        </Pressable>
-                        {uniqueCities
-                          .filter(c => !filterSearchText || c.toLowerCase().includes(filterSearchText.toLowerCase()))
-                          .map(city => (
-                          <Pressable
-                            key={city}
-                            style={[s.filterChip, filterCity === city && s.filterChipActive]}
-                            onPress={() => { Haptics.selectionAsync(); setFilterCity(city); }}
-                          >
-                            <Text style={[s.filterChipText, filterCity === city && s.filterChipTextActive]}>{city}</Text>
-                          </Pressable>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  ) : null}
-
-                  {/* Bottom close button */}
-                  <Pressable
-                    style={s.fpBottomCloseBtn}
-                    onPress={() => { Haptics.selectionAsync(); setShowFilters(false); }}
-                  >
-                    <MaterialIcons name="keyboard-arrow-up" size={18} color={theme.textSecondary} />
-                    <Text style={s.fpBottomCloseBtnText}>{language === 'fr' ? 'Masquer les filtres' : 'Hide filters'}</Text>
-                  </Pressable>
-                </Animated.View>
-              ) : null}
-
-              {/* Active filter pills */}
-              {activeFilterCount > 0 && !showFilters ? (
-                <View style={s.activeFiltersRowInline}>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.activeFiltersScroll}>
-                    {filterRole !== 'all' ? (
-                      <Pressable style={s.activeFilterPill} onPress={() => setFilterRole('all')}>
-                        <Text style={s.activeFilterPillText}>{t('roles', filterRole)}</Text>
-                        <MaterialIcons name="close" size={14} color="#D97706" />
-                      </Pressable>
-                    ) : null}
-                    {filterLevel !== 'all' ? (
-                      <Pressable style={s.activeFilterPill} onPress={() => setFilterLevel('all')}>
-                        <Text style={s.activeFilterPillText}>{t('levels', filterLevel)}</Text>
-                        <MaterialIcons name="close" size={14} color="#D97706" />
-                      </Pressable>
-                    ) : null}
-                    {filterClub !== 'all' ? (
-                      <Pressable style={s.activeFilterPill} onPress={() => setFilterClub('all')}>
-                        <Text style={s.activeFilterPillText}>{filterClub}</Text>
-                        <MaterialIcons name="close" size={14} color="#D97706" />
-                      </Pressable>
-                    ) : null}
-                    {filterTerrain !== 'all' ? (
-                      <Pressable style={s.activeFilterPill} onPress={() => setFilterTerrain('all')}>
-                        <MaterialIcons name="sports-soccer" size={12} color="#D97706" />
-                        <Text style={s.activeFilterPillText}>{filterTerrain}</Text>
-                        <MaterialIcons name="close" size={14} color="#D97706" />
-                      </Pressable>
-                    ) : null}
-                    {filterBrand !== 'all' ? (
-                      <Pressable style={s.activeFilterPill} onPress={() => setFilterBrand('all')}>
-                        <MaterialIcons name="sports-baseball" size={12} color="#D97706" />
-                        <Text style={s.activeFilterPillText}>{filterBrand}</Text>
-                        <MaterialIcons name="close" size={14} color="#D97706" />
-                      </Pressable>
-                    ) : null}
-                    {filterTrustLevel !== 'all' ? (
-                      <Pressable style={s.activeFilterPill} onPress={() => setFilterTrustLevel('all')}>
-                        <MaterialIcons name="shield" size={12} color="#D97706" />
-                        <Text style={s.activeFilterPillText}>
-                          {filterTrustLevel === 'verified' ? (language === 'fr' ? 'Verifie' : 'Verified') :
-                           filterTrustLevel === 'trusted' ? (language === 'fr' ? 'Fiable' : 'Trusted') : 'Standard'}
-                        </Text>
-                        <MaterialIcons name="close" size={14} color="#D97706" />
-                      </Pressable>
-                    ) : null}
-                    {filterCountry !== 'all' ? (
-                      <Pressable style={s.activeFilterPill} onPress={() => setFilterCountry('all')}>
-                        <Text style={s.activeFilterPillText}>{filterCountry}</Text>
-                        <MaterialIcons name="close" size={14} color="#D97706" />
-                      </Pressable>
-                    ) : null}
-                    {filterCity !== 'all' ? (
-                      <Pressable style={s.activeFilterPill} onPress={() => setFilterCity('all')}>
-                        <Text style={s.activeFilterPillText}>{filterCity}</Text>
-                        <MaterialIcons name="close" size={14} color="#D97706" />
-                      </Pressable>
-                    ) : null}
-                    {geoScope !== 'world' && geoValue ? (
-                      <Pressable style={s.activeFilterPill} onPress={() => { updateGeoScope('world', ''); }}>
-                        <MaterialIcons name="public" size={12} color="#D97706" />
-                        <Text style={s.activeFilterPillText}>{geoScope === 'continent' ? `${getContinentFlag(geoValue)} ${getContinentLabel(geoValue, language === 'fr')}` : geoScope === 'country' ? `${getCountryFlag(geoValue)} ${geoValue}` : geoValue}</Text>
-                        <MaterialIcons name="close" size={14} color="#D97706" />
-                      </Pressable>
-                    ) : null}
-                  </ScrollView>
-                </View>
-              ) : null}
 
               {filteredSorted.length > 0 ? (
                 <View style={s.listHeader}>
@@ -2083,6 +1696,232 @@ export default function LeaderboardScreen() {
           </View>
         );
       })() : null}
+
+      {/* ============ FILTER MODAL ============ */}
+      <Modal visible={showFilterModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowFilterModal(false)}>
+        <SafeAreaView edges={['top']} style={s.fmContainer}>
+          <View style={s.fmHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.fmHeaderTitle}>{language === 'fr' ? 'Filtres' : 'Filters'}</Text>
+              {activeFilterCount > 0 ? <Text style={s.fmHeaderCount}>{activeFilterCount} {language === 'fr' ? 'actif(s)' : 'active'}</Text> : null}
+            </View>
+            {activeFilterCount > 0 ? (
+              <Pressable style={s.fmClearBtn} onPress={() => { Haptics.selectionAsync(); clearFilters(); }}>
+                <MaterialIcons name="restart-alt" size={16} color={theme.error} />
+                <Text style={s.fmClearBtnText}>{language === 'fr' ? 'Effacer tout' : 'Clear all'}</Text>
+              </Pressable>
+            ) : null}
+            <Pressable style={s.fmCloseBtn} onPress={() => setShowFilterModal(false)}>
+              <MaterialIcons name="close" size={22} color={theme.textPrimary} />
+            </Pressable>
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={s.fmContent} showsVerticalScrollIndicator={false}>
+            {/* Geographic Scope */}
+            <View style={s.fmSection}>
+              <View style={s.fmSectionHeader}>
+                <View style={[s.fmSectionIcon, { backgroundColor: '#F59E0B18' }]}><MaterialIcons name="public" size={16} color="#F59E0B" /></View>
+                <Text style={s.fmSectionTitle}>{(extraTranslations.geoScope?.title as any)?.[language] || (language === 'fr' ? 'Zone geographique' : 'Geographic zone')}</Text>
+              </View>
+              <View style={s.fmChipGrid}>
+                {(['world', 'continent', 'country', 'city'] as const).map(scope => {
+                  const isActive = geoScope === scope;
+                  const icons: Record<string, string> = { world: 'public', continent: 'travel-explore', country: 'flag', city: 'place' };
+                  const labels: Record<string, string> = {
+                    world: (extraTranslations.geoScope?.world as any)?.[language] || 'World',
+                    continent: (extraTranslations.geoScope?.continent as any)?.[language] || 'Continent',
+                    country: (extraTranslations.geoScope?.country as any)?.[language] || 'Country',
+                    city: (extraTranslations.geoScope?.city as any)?.[language] || 'City',
+                  };
+                  return (
+                    <Pressable key={scope} style={[s.fmChip, isActive && s.fmChipActive]} onPress={() => {
+                      Haptics.selectionAsync();
+                      let val = '';
+                      if (scope === 'continent' && selfPlayer?.country) val = getContinent(selfPlayer.country);
+                      else if (scope === 'country' && selfPlayer?.country) val = selfPlayer.country;
+                      else if (scope === 'city' && selfPlayer?.location?.city) val = (selfPlayer.location as any).city;
+                      updateGeoScope(scope, val);
+                    }}>
+                      <MaterialIcons name={icons[scope] as any} size={15} color={isActive ? '#F59E0B' : theme.textSecondary} />
+                      <Text style={[s.fmChipText, isActive && s.fmChipTextActive]}>{labels[scope]}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {geoScope !== 'world' ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.fmValueRow}>
+                  {(geoScope === 'continent'
+                    ? (() => { const cs = allPlayers.map(p => p.country).filter(Boolean).map(c => getContinent(c!)); return [...new Set(cs)].sort(); })()
+                    : geoScope === 'country' ? uniqueCountries : uniqueCities
+                  ).map(val => {
+                    const isActive = geoValue === val;
+                    return (
+                      <Pressable key={val} style={[s.fmValueChip, isActive && s.fmValueChipActive]} onPress={() => { Haptics.selectionAsync(); updateGeoScope(geoScope, isActive ? '' : val); }}>
+                        <Text style={[s.fmValueChipText, isActive && s.fmValueChipTextActive]} numberOfLines={1}>
+                          {geoScope === 'continent' ? `${getContinentFlag(val)} ${getContinentLabel(val, language === 'fr')}` : geoScope === 'country' ? `${getCountryFlag(val)} ${val}` : val}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              ) : null}
+            </View>
+
+            {/* Period */}
+            <View style={s.fmSection}>
+              <View style={s.fmSectionHeader}>
+                <View style={[s.fmSectionIcon, { backgroundColor: '#2563EB18' }]}><MaterialIcons name="date-range" size={16} color="#2563EB" /></View>
+                <Text style={s.fmSectionTitle}>{t('leaderboard', 'periodLabel')}</Text>
+              </View>
+              <View style={s.fmChipGrid}>
+                {([
+                  { id: 'all' as LeaderboardPeriod, label: t('leaderboard', 'periodAll') },
+                  { id: '7d' as LeaderboardPeriod, label: t('leaderboard', 'period7d') },
+                  { id: '30d' as LeaderboardPeriod, label: t('leaderboard', 'period30d') },
+                  { id: '3m' as LeaderboardPeriod, label: t('leaderboard', 'period3m') },
+                  { id: '6m' as LeaderboardPeriod, label: t('leaderboard', 'period6m') },
+                  { id: '1y' as LeaderboardPeriod, label: t('leaderboard', 'period1y') },
+                  { id: 'season' as LeaderboardPeriod, label: t('leaderboard', 'periodSeason') },
+                  { id: 'lastSeason' as LeaderboardPeriod, label: t('leaderboard', 'periodLastSeason') },
+                ]).map(chip => (
+                  <Pressable key={chip.id} style={[s.fmChip, periodFilter === chip.id && { backgroundColor: '#2563EB15', borderColor: '#2563EB60' }]} onPress={() => handlePeriodChange(chip.id)}>
+                    <Text style={[s.fmChipText, periodFilter === chip.id && { color: '#2563EB', fontWeight: '700' }]}>{chip.label}</Text>
+                    {periodLoading && periodFilter === chip.id ? <ActivityIndicator size={10} color="#2563EB" /> : null}
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            {/* Trust Level (players tab) */}
+            {activeTab === 'players' ? (
+              <View style={s.fmSection}>
+                <View style={s.fmSectionHeader}>
+                  <View style={[s.fmSectionIcon, { backgroundColor: '#22C55E18' }]}><MaterialIcons name="shield" size={16} color="#22C55E" /></View>
+                  <Text style={s.fmSectionTitle}>{language === 'fr' ? 'Niveau de confiance' : 'Trust level'}</Text>
+                </View>
+                <View style={s.fmChipGrid}>
+                  {[
+                    { id: 'all', label: language === 'fr' ? 'Tous' : 'All', color: theme.textSecondary, pct: null },
+                    { id: 'verified', label: language === 'fr' ? 'Verifie' : 'Verified', color: '#22C55E', pct: trustLevelStats.verified },
+                    { id: 'trusted', label: language === 'fr' ? 'Fiable' : 'Trusted', color: '#3B82F6', pct: trustLevelStats.trusted },
+                    { id: 'standard', label: 'Standard', color: '#D97706', pct: trustLevelStats.standard },
+                  ].map(chip => {
+                    const isActive = filterTrustLevel === chip.id;
+                    return (
+                      <Pressable key={chip.id} style={[s.fmChip, isActive && { backgroundColor: chip.color + '15', borderColor: chip.color + '60' }]} onPress={() => { Haptics.selectionAsync(); setFilterTrustLevel(chip.id); }}>
+                        <MaterialIcons name={chip.id === 'all' ? 'people' : 'verified-user'} size={14} color={isActive ? chip.color : theme.textSecondary} />
+                        <Text style={[s.fmChipText, isActive && { color: chip.color, fontWeight: '700' }]}>{chip.label}</Text>
+                        {chip.pct !== null ? <Text style={{ fontSize: 9, fontWeight: '700', color: isActive ? chip.color : theme.textMuted }}>{chip.pct}%</Text> : null}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
+
+            {/* Role (players tab) */}
+            {activeTab === 'players' ? (
+              <View style={s.fmSection}>
+                <View style={s.fmSectionHeader}>
+                  <View style={[s.fmSectionIcon, { backgroundColor: theme.primary + '18' }]}><MaterialIcons name="sports" size={16} color={theme.primary} /></View>
+                  <Text style={s.fmSectionTitle}>{t('leaderboard', 'filterByRole')}</Text>
+                </View>
+                <View style={s.fmChipGrid}>
+                  {['all', 'Tireur', 'Pointeur', 'Milieu'].map(opt => (
+                    <Pressable key={opt} style={[s.fmChip, filterRole === opt && s.fmChipActive]} onPress={() => { Haptics.selectionAsync(); setFilterRole(opt); }}>
+                      <Text style={[s.fmChipText, filterRole === opt && s.fmChipTextActive]}>{opt === 'all' ? t('leaderboard', 'allRoles') : t('roles', opt)}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            ) : null}
+
+            {/* Level (players tab) */}
+            {activeTab === 'players' ? (
+              <View style={s.fmSection}>
+                <View style={s.fmSectionHeader}>
+                  <View style={[s.fmSectionIcon, { backgroundColor: theme.accent + '18' }]}><MaterialIcons name="signal-cellular-alt" size={16} color={theme.accent} /></View>
+                  <Text style={s.fmSectionTitle}>{t('leaderboard', 'filterByLevel')}</Text>
+                </View>
+                <View style={s.fmChipGrid}>
+                  {['all', 'D\u00e9butant', 'Interm\u00e9diaire', 'Confirm\u00e9', 'Expert'].map(opt => (
+                    <Pressable key={opt} style={[s.fmChip, filterLevel === opt && s.fmChipActive]} onPress={() => { Haptics.selectionAsync(); setFilterLevel(opt); }}>
+                      <Text style={[s.fmChipText, filterLevel === opt && s.fmChipTextActive]}>{opt === 'all' ? t('leaderboard', 'allLevels') : t('levels', opt)}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            ) : null}
+
+            {/* Club (players tab) */}
+            {activeTab === 'players' && uniqueClubs.length > 0 ? (
+              <View style={s.fmSection}>
+                <View style={s.fmSectionHeader}>
+                  <View style={[s.fmSectionIcon, { backgroundColor: theme.primary + '18' }]}><MaterialIcons name="home" size={16} color={theme.primary} /></View>
+                  <Text style={s.fmSectionTitle}>{t('leaderboard', 'filterByClub')}</Text>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.fmValueRow}>
+                  <Pressable style={[s.fmValueChip, filterClub === 'all' && s.fmValueChipActive]} onPress={() => { Haptics.selectionAsync(); setFilterClub('all'); }}>
+                    <Text style={[s.fmValueChipText, filterClub === 'all' && s.fmValueChipTextActive]}>{t('leaderboard', 'allClubs')}</Text>
+                  </Pressable>
+                  {uniqueClubs.map(club => (
+                    <Pressable key={club} style={[s.fmValueChip, filterClub === club && s.fmValueChipActive]} onPress={() => { Haptics.selectionAsync(); setFilterClub(club); }}>
+                      <Text style={[s.fmValueChipText, filterClub === club && s.fmValueChipTextActive]} numberOfLines={1}>{club}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
+
+            {/* Terrain (players tab) */}
+            {activeTab === 'players' && uniqueTerrains.length > 0 ? (
+              <View style={s.fmSection}>
+                <View style={s.fmSectionHeader}>
+                  <View style={[s.fmSectionIcon, { backgroundColor: theme.success + '18' }]}><MaterialIcons name="sports-soccer" size={16} color={theme.success} /></View>
+                  <Text style={s.fmSectionTitle}>{t('leaderboard', 'filterByTerrain')}</Text>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.fmValueRow}>
+                  <Pressable style={[s.fmValueChip, filterTerrain === 'all' && s.fmValueChipActive]} onPress={() => { Haptics.selectionAsync(); setFilterTerrain('all'); }}>
+                    <Text style={[s.fmValueChipText, filterTerrain === 'all' && s.fmValueChipTextActive]}>{t('leaderboard', 'allTerrains')}</Text>
+                  </Pressable>
+                  {uniqueTerrains.map(tn => (
+                    <Pressable key={tn} style={[s.fmValueChip, filterTerrain === tn && s.fmValueChipActive]} onPress={() => { Haptics.selectionAsync(); setFilterTerrain(tn); }}>
+                      <Text style={[s.fmValueChipText, filterTerrain === tn && s.fmValueChipTextActive]} numberOfLines={1}>{tn}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
+
+            {/* Brand (players tab) */}
+            {activeTab === 'players' && uniqueBrands.length > 0 ? (
+              <View style={s.fmSection}>
+                <View style={s.fmSectionHeader}>
+                  <View style={[s.fmSectionIcon, { backgroundColor: '#D9770618' }]}><MaterialIcons name="sports-baseball" size={16} color="#D97706" /></View>
+                  <Text style={s.fmSectionTitle}>{t('leaderboard', 'filterByBrand')}</Text>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.fmValueRow}>
+                  <Pressable style={[s.fmValueChip, filterBrand === 'all' && s.fmValueChipActive]} onPress={() => { Haptics.selectionAsync(); setFilterBrand('all'); }}>
+                    <Text style={[s.fmValueChipText, filterBrand === 'all' && s.fmValueChipTextActive]}>{t('leaderboard', 'allBrands')}</Text>
+                  </Pressable>
+                  {uniqueBrands.map(brand => (
+                    <Pressable key={brand} style={[s.fmValueChip, filterBrand === brand && s.fmValueChipActive]} onPress={() => { Haptics.selectionAsync(); setFilterBrand(brand); }}>
+                      <Text style={[s.fmValueChipText, filterBrand === brand && s.fmValueChipTextActive]} numberOfLines={1}>{brand}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
+          </ScrollView>
+
+          {/* Apply button */}
+          <View style={s.fmFooter}>
+            <Pressable style={s.fmApplyBtn} onPress={() => { Haptics.selectionAsync(); setShowFilterModal(false); }}>
+              <MaterialIcons name="check" size={20} color="#FFF" />
+              <Text style={s.fmApplyBtnText}>{language === 'fr' ? 'Appliquer' : 'Apply'}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}</Text>
+            </Pressable>
+          </View>
+        </SafeAreaView>
+      </Modal>
 
       {/* Meetup Invitation Picker Modal */}
       <Modal visible={showMeetupPicker} animationType="slide" transparent onRequestClose={() => setShowMeetupPicker(false)}>
@@ -2197,41 +2036,36 @@ const s = StyleSheet.create({
   sortChipText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
   sortChipTextActive: { color: '#F59E0B' },
 
-  // Filters panel (inside FlatList ListHeaderComponent)
-  filtersPanel: { marginBottom: 12, backgroundColor: theme.surface, borderRadius: 16, padding: 0, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' as const },
-  fpHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.border, backgroundColor: '#D97706' + '06' },
-  fpHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  fpHeaderIcon: { width: 28, height: 28, borderRadius: 8, backgroundColor: '#D97706' + '15', alignItems: 'center', justifyContent: 'center' },
-  fpHeaderTitle: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
-  fpCountBadge: { backgroundColor: '#D97706', minWidth: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
-  fpCountBadgeText: { fontSize: 11, fontWeight: '800', color: '#FFF' },
-  fpHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  fpClearBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: theme.error + '10', borderRadius: 8 },
-  fpClearBtnText: { fontSize: 12, fontWeight: '600', color: theme.error },
-  fpCloseBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
-  filterSearchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.backgroundSecondary, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginHorizontal: 14, marginTop: 12, marginBottom: 14, borderWidth: 1, borderColor: theme.border },
-  filterSearchInput: { flex: 1, fontSize: 13, color: theme.textPrimary, paddingVertical: 0 },
-  filterGroupHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  filterGroup: { marginBottom: 14, paddingHorizontal: 14 },
-  filterGroupTitle: { fontSize: 11, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 0 },
-  fgActiveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#D97706', marginLeft: 4 },
-  fgDivider: { height: 1, backgroundColor: theme.border, marginHorizontal: 14, marginBottom: 14 },
-  filterChipsRow: { gap: 6, paddingRight: 4 },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: theme.backgroundSecondary, borderWidth: 1.5, borderColor: theme.border },
-  filterChipActive: { backgroundColor: '#D97706' + '15', borderColor: '#D97706' },
-  filterChipText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
-  filterChipTextActive: { color: '#D97706' },
-  fpBottomCloseBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderTopWidth: 1, borderTopColor: theme.border, backgroundColor: theme.backgroundSecondary + '80' },
-  fpBottomCloseBtnText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
-  clearFiltersBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8 },
-  clearFiltersBtnText: { fontSize: 13, fontWeight: '600', color: theme.error },
+  // Header filter chips (compact, in gradient)
+  headerFilterChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: '#F59E0B18', borderRadius: 14, borderWidth: 1, borderColor: '#F59E0B30' },
+  headerFilterChipText: { fontSize: 11, fontWeight: '600' as const, color: '#F59E0B', maxWidth: 100 },
 
-  // Active filters (in header — kept for compatibility)
-  activeFiltersRow: { backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
-  activeFiltersRowInline: { marginBottom: 10 },
-  activeFiltersScroll: { gap: 6 },
-  activeFilterPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#D97706' + '10', borderRadius: 16, borderWidth: 1, borderColor: '#D97706' + '25' },
-  activeFilterPillText: { fontSize: 12, fontWeight: '600', color: '#D97706' },
+  // Filter Modal
+  fmContainer: { flex: 1, backgroundColor: theme.backgroundSecondary },
+  fmHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingHorizontal: 20, paddingVertical: 14, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  fmHeaderTitle: { fontSize: 20, fontWeight: '800' as const, color: theme.textPrimary },
+  fmHeaderCount: { fontSize: 12, color: '#F59E0B', fontWeight: '600' as const, marginTop: 2 },
+  fmClearBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: theme.error + '10', borderRadius: 10 },
+  fmClearBtnText: { fontSize: 12, fontWeight: '600' as const, color: theme.error },
+  fmCloseBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.backgroundSecondary, alignItems: 'center' as const, justifyContent: 'center' as const },
+  fmContent: { padding: 16, paddingBottom: 40 },
+  fmSection: { marginBottom: 20 },
+  fmSectionHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 12 },
+  fmSectionIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
+  fmSectionTitle: { fontSize: 14, fontWeight: '700' as const, color: theme.textPrimary },
+  fmChipGrid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
+  fmChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border },
+  fmChipActive: { backgroundColor: '#F59E0B12', borderColor: '#F59E0B60' },
+  fmChipText: { fontSize: 13, fontWeight: '600' as const, color: theme.textSecondary },
+  fmChipTextActive: { color: '#F59E0B', fontWeight: '700' as const },
+  fmValueRow: { gap: 8, paddingTop: 10 },
+  fmValueChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border },
+  fmValueChipActive: { backgroundColor: '#F59E0B12', borderColor: '#F59E0B60' },
+  fmValueChipText: { fontSize: 12, fontWeight: '600' as const, color: theme.textSecondary, maxWidth: 140 },
+  fmValueChipTextActive: { color: '#F59E0B', fontWeight: '700' as const },
+  fmFooter: { paddingHorizontal: 20, paddingVertical: 12, backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border },
+  fmApplyBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: '#F59E0B', paddingVertical: 16, borderRadius: 14 },
+  fmApplyBtnText: { fontSize: 16, fontWeight: '700' as const, color: '#FFF' },
 
   // List
   listContent: { paddingHorizontal: 16, paddingTop: 8 },
