@@ -756,25 +756,29 @@ export default function HomeScreen() {
                           ) : null}
                         </View>
 
-                        {/* Tournament countdown for nearest one */}
-                        {item.type === 'tournament' && idx === visibleItems.findIndex(i => i.type === 'tournament') && countdown ? (
-                          <View style={s.upcomingCountdown}>
-                            {countdown.label ? (
-                              <View style={s.upcomingCountdownToday}>
-                                <MaterialIcons name="local-fire-department" size={11} color="#B45309" />
-                                <Text style={s.upcomingCountdownTodayText}>{countdown.label}</Text>
-                              </View>
-                            ) : (
-                              <>
-                                <View style={s.upcomingCountdownUnit}><Text style={s.upcomingCountdownVal}>{countdown.days}</Text><Text style={s.upcomingCountdownLbl}>{language === 'fr' ? 'j' : 'd'}</Text></View>
-                                <Text style={s.upcomingCountdownSep}>:</Text>
-                                <View style={s.upcomingCountdownUnit}><Text style={s.upcomingCountdownVal}>{countdown.hours}</Text><Text style={s.upcomingCountdownLbl}>h</Text></View>
-                                <Text style={s.upcomingCountdownSep}>:</Text>
-                                <View style={s.upcomingCountdownUnit}><Text style={s.upcomingCountdownVal}>{countdown.minutes}</Text><Text style={s.upcomingCountdownLbl}>min</Text></View>
-                              </>
-                            )}
-                          </View>
-                        ) : null}
+                        {/* Countdown for all items */}
+                        {(() => {
+                          const diffMs = d.getTime() - now;
+                          if (diffMs <= 0) return null;
+                          const cDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                          const cHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                          const cMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                          if (isToday || isTomorrow) return null; // already shown via badge
+                          return (
+                            <View style={[s.upcomingCountdown, { backgroundColor: cfg.accent + '10' }]}>
+                              <MaterialIcons name="timer" size={11} color={cfg.accent} />
+                              {cDays > 0 ? (
+                                <Text style={[s.upcomingCountdownCompact, { color: cfg.accent }]}>
+                                  {language === 'fr' ? `dans ${cDays}j ${cHours}h` : `in ${cDays}d ${cHours}h`}
+                                </Text>
+                              ) : (
+                                <Text style={[s.upcomingCountdownCompact, { color: cfg.accent }]}>
+                                  {language === 'fr' ? `dans ${cHours}h ${cMinutes}min` : `in ${cHours}h ${cMinutes}min`}
+                                </Text>
+                              )}
+                            </View>
+                          );
+                        })()}
                       </View>
 
                       <MaterialIcons name="chevron-right" size={18} color={cfg.accent + '60'} />
@@ -837,7 +841,7 @@ export default function HomeScreen() {
                     </View>
                     <View style={s.hcInfo}>
                       <Text style={s.hcTitle} numberOfLines={1}>{item.title}</Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                      <View style={s.hcSubRow}>
                         <Text style={s.hcSub} numberOfLines={1}>{item.subtitle} {' \u2022 '} {d.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
                         {item.type === 'match' ? (() => {
                           const match = matches.find((m: any) => m.id === item.id);
@@ -845,7 +849,7 @@ export default function HomeScreen() {
                           const vLevel = getMatchValidationLevel(Array.isArray(pIds) ? pIds.length : 0);
                           const vColor = getValidationColor(vLevel);
                           return (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: vColor + '12', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 6 }}>
+                            <View style={s.hcValidation}>
                               <MaterialIcons name={getValidationIcon(vLevel) as any} size={9} color={vColor} />
                               <Text style={{ fontSize: 8, fontWeight: '700', color: vColor }}>{vLevel === 'solo' ? '0.3x' : vLevel === 'shared_2' ? '1x' : vLevel === 'shared_3plus' ? '1.5x' : '2x'}</Text>
                             </View>
@@ -1145,13 +1149,8 @@ const s = StyleSheet.create({
   upcomingMetaItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3 },
   upcomingMetaText: { fontSize: 11, fontWeight: '600' as const },
 
-  upcomingCountdown: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: 'rgba(180,83,9,0.08)', borderRadius: 8, paddingVertical: 5, paddingHorizontal: 8, alignSelf: 'flex-start' as const, marginTop: 2 },
-  upcomingCountdownUnit: { alignItems: 'center' as const },
-  upcomingCountdownVal: { fontSize: 14, fontWeight: '900' as const, color: '#78350F' },
-  upcomingCountdownLbl: { fontSize: 7, fontWeight: '700' as const, color: '#92400E' },
-  upcomingCountdownSep: { fontSize: 12, fontWeight: '700' as const, color: '#92400E' },
-  upcomingCountdownToday: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3 },
-  upcomingCountdownTodayText: { fontSize: 11, fontWeight: '800' as const, color: '#78350F' },
+  upcomingCountdown: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, borderRadius: 8, paddingVertical: 4, paddingHorizontal: 8, alignSelf: 'flex-start' as const, marginTop: 2 },
+  upcomingCountdownCompact: { fontSize: 11, fontWeight: '700' as const },
 
   upcomingAddRow: { flexDirection: 'row' as const, gap: 8, marginTop: 4 },
   upcomingAddBtn: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 5, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
@@ -1173,9 +1172,11 @@ const s = StyleSheet.create({
   hcRowBorder: { borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   hcDot: { width: 8, height: 8, borderRadius: 4 },
   hcTypeIcon: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  hcInfo: { flex: 1, marginRight: 4 },
+  hcInfo: { flex: 1, marginRight: 4, overflow: 'hidden' as const },
   hcTitle: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
-  hcSub: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  hcSubRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, marginTop: 2, overflow: 'hidden' as const },
+  hcSub: { fontSize: 12, color: theme.textSecondary, flexShrink: 1 },
+  hcValidation: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 2, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 6, flexShrink: 0 },
   hcScore: { fontSize: 16, fontWeight: '900', minWidth: 44, textAlign: 'right' as const },
 
   // ===== EMPTY STATE =====
