@@ -271,6 +271,7 @@ export default function PalmaresScreen() {
   const [showBadges, setShowBadges] = useState(true);
   const [showFormatStats, setShowFormatStats] = useState(false);
   const [showTournamentDetails, setShowTournamentDetails] = useState(false);
+  const [showHeaderFilters, setShowHeaderFilters] = useState(false);
 
   // Build palmares data
   const allPalmaresData = useMemo(() => {
@@ -420,10 +421,61 @@ export default function PalmaresScreen() {
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>{t('palmares', 'title')}</Text>
-        <Pressable style={styles.progressionBtn} onPress={() => { Haptics.selectionAsync(); router.push('/(tabs)/stats'); }}>
-          <MaterialIcons name="show-chart" size={20} color={theme.primary} />
-        </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Pressable
+            style={[styles.filterToggleBtn, showHeaderFilters && styles.filterToggleBtnActive]}
+            onPress={() => { Haptics.selectionAsync(); setShowHeaderFilters(!showHeaderFilters); }}
+          >
+            <MaterialIcons name="tune" size={18} color={showHeaderFilters ? '#FFF' : theme.primary} />
+            {activeFiltersCount > 0 ? (
+              <View style={[styles.filterToggleBadge, showHeaderFilters && { backgroundColor: '#FFF' }]}>
+                <Text style={[styles.filterToggleBadgeText, showHeaderFilters && { color: theme.primary }]}>{activeFiltersCount}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+          <Pressable style={styles.progressionBtn} onPress={() => { Haptics.selectionAsync(); router.push('/(tabs)/stats'); }}>
+            <MaterialIcons name="show-chart" size={20} color={theme.primary} />
+          </Pressable>
+        </View>
       </View>
+
+      {/* ============ COMPACT HEADER FILTERS ============ */}
+      {showHeaderFilters ? (
+        <View style={styles.headerFilters}>
+          {/* Year row */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hfRow}>
+            <View style={styles.hfGroupIcon}><MaterialIcons name="date-range" size={13} color={theme.primary} /></View>
+            <Pressable style={[styles.hfPill, yearFilter === 'all' && styles.hfPillActive]} onPress={() => { Haptics.selectionAsync(); setYearFilter('all'); }}>
+              <Text style={[styles.hfPillText, yearFilter === 'all' && styles.hfPillTextActive]}>{t('palmares', 'allYears')}</Text>
+            </Pressable>
+            {availableYears.map(year => (
+              <Pressable key={year} style={[styles.hfPill, yearFilter === year && styles.hfPillActive]} onPress={() => { Haptics.selectionAsync(); setYearFilter(yearFilter === year ? 'all' : year); }}>
+                <Text style={[styles.hfPillText, yearFilter === year && styles.hfPillTextActive]}>{year}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+          {/* Format + Podium row */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hfRow}>
+            <View style={[styles.hfGroupIcon, { backgroundColor: theme.accent + '12' }]}><MaterialIcons name="groups" size={13} color={theme.accent} /></View>
+            {FORMAT_FILTERS.map(f => (
+              <Pressable key={f.id} style={[styles.hfPill, formatFilter === f.id && styles.hfPillActive]} onPress={() => { Haptics.selectionAsync(); setFormatFilter(f.id); }}>
+                <MaterialIcons name={f.icon as any} size={12} color={formatFilter === f.id ? '#FFF' : theme.textMuted} />
+                <Text style={[styles.hfPillText, formatFilter === f.id && styles.hfPillTextActive]}>{f.label}</Text>
+              </Pressable>
+            ))}
+            <View style={styles.hfSep} />
+            <Pressable style={[styles.hfPill, resultFilter === 'podium' && { backgroundColor: theme.carreauColor, borderColor: theme.carreauColor }]} onPress={() => { Haptics.selectionAsync(); setResultFilter(resultFilter === 'podium' ? 'all' : 'podium'); }}>
+              <MaterialIcons name="emoji-events" size={12} color={resultFilter === 'podium' ? '#FFF' : theme.carreauColor} />
+              <Text style={[styles.hfPillText, resultFilter === 'podium' && { color: '#FFF' }]}>{t('palmares', 'podiumsOnly')}</Text>
+            </Pressable>
+            {activeFiltersCount > 0 ? (
+              <Pressable style={styles.hfResetBtn} onPress={() => { Haptics.selectionAsync(); setYearFilter('all'); setFormatFilter('all'); setResultFilter('all'); }}>
+                <MaterialIcons name="close" size={13} color={theme.error} />
+              </Pressable>
+            ) : null}
+          </ScrollView>
+        </View>
+      ) : null}
 
       <FlatList
         data={flatListData}
@@ -591,7 +643,7 @@ export default function PalmaresScreen() {
             {/* Ad Banner */}
             <AdBanner position="inline" />
 
-            {/* ============ BADGES ============ */}
+            {/* ============ BADGES (no filter card here — moved to header) ============ */}
             <Animated.View entering={FadeInDown.duration(400).delay(80)}>
               <Pressable style={styles.badgesSectionHeader} onPress={() => { Haptics.selectionAsync(); setShowBadges(!showBadges); }}>
                 <View style={styles.badgesSectionLeft}>
@@ -609,94 +661,7 @@ export default function PalmaresScreen() {
               ) : null}
             </Animated.View>
 
-            {/* ============ FILTERS — Modern Redesign ============ */}
-            <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.filtersCard}>
-              {/* Filter Header */}
-              <View style={styles.filterHeaderRow}>
-                <View style={styles.filterHeaderLeft}>
-                  <MaterialIcons name="tune" size={18} color={theme.primary} />
-                  <Text style={styles.filterHeaderTitle}>{language === 'en' ? 'Filters' : 'Filtres'}</Text>
-                  {activeFiltersCount > 0 ? (
-                    <View style={styles.filterCountBadge}>
-                      <Text style={styles.filterCountText}>{activeFiltersCount}</Text>
-                    </View>
-                  ) : null}
-                </View>
-                {activeFiltersCount > 0 ? (
-                  <Pressable style={styles.clearFiltersBtn} onPress={() => { Haptics.selectionAsync(); setYearFilter('all'); setFormatFilter('all'); setResultFilter('all'); }}>
-                    <MaterialIcons name="close" size={14} color={theme.error} />
-                    <Text style={styles.clearFiltersBtnText}>{t('common', 'reset')}</Text>
-                  </Pressable>
-                ) : null}
-              </View>
 
-              {/* DATE filter — Horizontal scroll with calendar icon */}
-              <View style={styles.filterGroup}>
-                <View style={styles.filterGroupHeader}>
-                  <View style={[styles.filterGroupIcon, { backgroundColor: theme.primary + '12' }]}>
-                    <MaterialIcons name="date-range" size={16} color={theme.primary} />
-                  </View>
-                  <Text style={styles.filterGroupLabel}>{language === 'en' ? 'Period' : 'Periode'}</Text>
-                </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipsScroll}>
-                  <Pressable style={[styles.filterPill, yearFilter === 'all' && styles.filterPillActive]} onPress={() => { Haptics.selectionAsync(); setYearFilter('all'); }}>
-                    <Text style={[styles.filterPillText, yearFilter === 'all' && styles.filterPillTextActive]}>{t('palmares', 'allYears')}</Text>
-                  </Pressable>
-                  {availableYears.map(year => (
-                    <Pressable key={year} style={[styles.filterPill, yearFilter === year && styles.filterPillActive]} onPress={() => { Haptics.selectionAsync(); setYearFilter(yearFilter === year ? 'all' : year); }}>
-                      <Text style={[styles.filterPillText, yearFilter === year && styles.filterPillTextActive]}>{year}</Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              </View>
-
-              {/* FORMAT filter — Card-style options with icons */}
-              <View style={styles.filterGroup}>
-                <View style={styles.filterGroupHeader}>
-                  <View style={[styles.filterGroupIcon, { backgroundColor: theme.accent + '12' }]}>
-                    <MaterialIcons name="groups" size={16} color={theme.accent} />
-                  </View>
-                  <Text style={styles.filterGroupLabel}>Format</Text>
-                </View>
-                <View style={styles.formatFilterRow}>
-                  {FORMAT_FILTERS.map(f => {
-                    const isActive = formatFilter === f.id;
-                    return (
-                      <Pressable
-                        key={f.id}
-                        style={[styles.formatFilterCard, isActive && styles.formatFilterCardActive]}
-                        onPress={() => { Haptics.selectionAsync(); setFormatFilter(f.id); }}
-                      >
-                        <MaterialIcons name={f.icon as any} size={18} color={isActive ? theme.primary : theme.textMuted} />
-                        <Text style={[styles.formatFilterText, isActive && styles.formatFilterTextActive]}>{f.label}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {/* PODIUM filter — Toggle card */}
-              <View style={styles.filterGroup}>
-                <Pressable
-                  style={[styles.podiumFilterCard, resultFilter === 'podium' && styles.podiumFilterCardActive]}
-                  onPress={() => { Haptics.selectionAsync(); setResultFilter(resultFilter === 'podium' ? 'all' : 'podium'); }}
-                >
-                  <View style={[styles.podiumFilterIcon, { backgroundColor: resultFilter === 'podium' ? theme.carreauColor + '20' : theme.backgroundSecondary }]}>
-                    <MaterialIcons name="emoji-events" size={22} color={resultFilter === 'podium' ? theme.carreauColor : theme.textMuted} />
-                  </View>
-                  <View style={styles.podiumFilterInfo}>
-                    <Text style={[styles.podiumFilterTitle, resultFilter === 'podium' && { color: theme.carreauColor }]}>{t('palmares', 'podiumsOnly')}</Text>
-                    <Text style={styles.podiumFilterDesc}>{language === 'en' ? 'Show only 1st, 2nd & 3rd places' : 'Afficher uniquement les 1er, 2eme et 3eme'}</Text>
-                  </View>
-                  <View style={[styles.podiumFilterCheck, resultFilter === 'podium' && styles.podiumFilterCheckActive]}>
-                    {resultFilter === 'podium' ? <MaterialIcons name="check" size={16} color="#FFF" /> : null}
-                  </View>
-                </Pressable>
-              </View>
-            </Animated.View>
-
-            {/* Ad Banner */}
-            <AdBanner position="inline" />
 
             {/* ============ TOURNAMENT LIST TOGGLE ============ */}
             {palmaresData.length > 0 ? (
@@ -741,6 +706,20 @@ const styles = StyleSheet.create({
   backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
   progressionBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.primary + '12', borderRadius: 20 },
+  filterToggleBtn: { width: 40, height: 40, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: theme.primary + '12', borderRadius: 20, position: 'relative' as const },
+  filterToggleBtnActive: { backgroundColor: theme.primary },
+  filterToggleBadge: { position: 'absolute' as const, top: -2, right: -2, width: 18, height: 18, borderRadius: 9, backgroundColor: theme.primary, alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 2, borderColor: theme.surface },
+  filterToggleBadgeText: { fontSize: 10, fontWeight: '700' as const, color: '#FFF' },
+  // Header filters
+  headerFilters: { backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border, paddingVertical: 8, gap: 6 },
+  hfRow: { paddingHorizontal: 16, gap: 6, alignItems: 'center' as const },
+  hfGroupIcon: { width: 26, height: 26, borderRadius: 7, backgroundColor: theme.primary + '12', alignItems: 'center' as const, justifyContent: 'center' as const },
+  hfPill: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, backgroundColor: theme.backgroundSecondary, borderWidth: 1.5, borderColor: theme.border },
+  hfPillActive: { backgroundColor: theme.primary, borderColor: theme.primary },
+  hfPillText: { fontSize: 12, fontWeight: '600' as const, color: theme.textSecondary },
+  hfPillTextActive: { color: '#FFF' },
+  hfSep: { width: 1, height: 18, backgroundColor: theme.border, marginHorizontal: 2 },
+  hfResetBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: theme.error + '10', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1, borderColor: theme.error + '20' },
   listContent: { paddingHorizontal: 16, paddingTop: 16 },
   listContentTablet: { maxWidth: 960, alignSelf: 'center' as const, width: '100%', paddingHorizontal: 24 },
 
@@ -815,184 +794,7 @@ const styles = StyleSheet.create({
   badgeProgressBar: { width: '85%', height: 4, backgroundColor: theme.border, borderRadius: 2, overflow: 'hidden', marginBottom: 4 },
   badgeProgressFill: { height: '100%', borderRadius: 2 },
 
-  // ============ NEW FILTER DESIGN ============
-  filtersCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.xl,
-    padding: 18,
-    marginBottom: 14,
-    ...theme.shadows.card,
-  },
-  filterHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  filterHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  filterHeaderTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: theme.textPrimary,
-  },
-  filterCountBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: theme.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterCountText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  clearFiltersBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: theme.error + '08',
-    borderRadius: theme.borderRadius.full,
-    borderWidth: 1,
-    borderColor: theme.error + '20',
-  },
-  clearFiltersBtnText: { fontSize: 12, fontWeight: '600', color: theme.error },
 
-  // Filter Group
-  filterGroup: {
-    marginBottom: 14,
-  },
-  filterGroupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 10,
-  },
-  filterGroupIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterGroupLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textSecondary,
-    letterSpacing: 0.3,
-  },
-
-  // Date pills
-  filterChipsScroll: {
-    gap: 8,
-    paddingRight: 4,
-  },
-  filterPill: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.backgroundSecondary,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
-  filterPillActive: {
-    backgroundColor: theme.primary,
-    borderColor: theme.primary,
-  },
-  filterPillText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  filterPillTextActive: {
-    color: '#FFF',
-  },
-
-  // Format filter cards
-  formatFilterRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  formatFilterCard: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.backgroundSecondary,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
-  formatFilterCardActive: {
-    backgroundColor: theme.primary + '08',
-    borderColor: theme.primary,
-  },
-  formatFilterText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: theme.textMuted,
-    textAlign: 'center',
-  },
-  formatFilterTextActive: {
-    color: theme.primary,
-  },
-
-  // Podium toggle card
-  podiumFilterCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    padding: 14,
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.backgroundSecondary,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
-  podiumFilterCardActive: {
-    backgroundColor: theme.carreauColor + '06',
-    borderColor: theme.carreauColor + '40',
-  },
-  podiumFilterIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  podiumFilterInfo: {
-    flex: 1,
-  },
-  podiumFilterTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: theme.textPrimary,
-  },
-  podiumFilterDesc: {
-    fontSize: 11,
-    color: theme.textMuted,
-    marginTop: 2,
-  },
-  podiumFilterCheck: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    borderWidth: 2,
-    borderColor: theme.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  podiumFilterCheckActive: {
-    backgroundColor: theme.carreauColor,
-    borderColor: theme.carreauColor,
-  },
 
   // Toggle tournament details
   toggleDetailsBtn: {

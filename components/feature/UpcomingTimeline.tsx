@@ -1,9 +1,11 @@
-import React, { memo } from 'react';
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import React, { memo, useState, useCallback } from 'react';
+import { View, Text, Pressable, StyleSheet, Platform, TextInput, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import theme from '@/constants/theme';
 import { TimelineSkeleton } from '@/components/ui/SkeletonLoader';
+import { findMeetupByCode } from '@/services/meetupService';
 
 interface UpcomingItem {
   id: string;
@@ -24,12 +26,39 @@ interface Props {
   now: number;
   onShowJoinMeetup: () => void;
   onShowMeetupList: () => void;
+  onJoinSuccess?: (meetupId: string) => void;
 }
 
 function UpcomingTimeline({
   tournaments, meetups, upcomingEvents, meetupsLoading, eventsLoading,
-  pendingInviteCount, language, t, now, onShowJoinMeetup, onShowMeetupList,
+  pendingInviteCount, language, t, now, onShowJoinMeetup, onShowMeetupList, onJoinSuccess,
 }: Props) {
+  const [joinCode, setJoinCode] = useState('');
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState('');
+
+  const handleJoinByCode = useCallback(async () => {
+    const code = joinCode.trim().toUpperCase();
+    if (!code) return;
+    setJoining(true);
+    setJoinError('');
+    try {
+      const { meetup: found } = await findMeetupByCode(code);
+      if (!found) {
+        setJoinError(language === 'fr' ? 'Code invalide ou RDV introuvable' : 'Invalid code or meetup not found');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setJoinCode('');
+        if (onJoinSuccess) onJoinSuccess(found.id);
+        else router.push(`/meetup/${found.id}` as any);
+      }
+    } catch {
+      setJoinError(language === 'fr' ? 'Erreur de connexion' : 'Connection error');
+    } finally {
+      setJoining(false);
+    }
+  }, [joinCode, language, onJoinSuccess]);
   const typeConfig = {
     meetup: { bg: '#E0F2FE', accent: '#0369A1', icon: 'event' as const, label: language === 'fr' ? 'RDV' : 'Meetup' },
     tournament: { bg: '#FEF3C7', accent: '#B45309', icon: 'emoji-events' as const, label: language === 'fr' ? 'Tournoi' : 'Tournament' },
@@ -69,23 +98,79 @@ function UpcomingTimeline({
       {(meetupsLoading || eventsLoading) ? (
         <TimelineSkeleton items={3} />
       ) : visibleItems.length === 0 ? (
-        <View style={s.empty}>
-          <View style={s.emptyIcon}><MaterialIcons name="event-available" size={36} color={theme.textMuted} /></View>
-          <Text style={s.emptyTitle}>{language === 'fr' ? 'Rien de prevu' : 'Nothing planned'}</Text>
-          <Text style={s.emptyDesc}>{language === 'fr' ? 'Planifie un RDV, un tournoi ou un defi.' : 'Plan a meetup, tournament or challenge.'}</Text>
-          <View style={s.emptyActions}>
-            <Pressable style={[s.emptyBtn, { backgroundColor: '#0369A1' }]} onPress={() => router.push('/meetup/new' as any)}>
-              <MaterialIcons name="event" size={16} color="#FFF" />
-              <Text style={s.emptyBtnText}>{language === 'fr' ? 'RDV' : 'Meetup'}</Text>
-            </Pressable>
-            <Pressable style={[s.emptyBtn, { backgroundColor: '#B45309' }]} onPress={() => router.push('/tournament/new' as any)}>
-              <MaterialIcons name="emoji-events" size={16} color="#FFF" />
-              <Text style={s.emptyBtnText}>{language === 'fr' ? 'Tournoi' : 'Tournament'}</Text>
-            </Pressable>
-            <Pressable style={[s.emptyBtn, { backgroundColor: '#7C3AED' }]} onPress={() => router.push('/sponsored-event/list' as any)}>
-              <MaterialIcons name="campaign" size={16} color="#FFF" />
-              <Text style={s.emptyBtnText}>{language === 'fr' ? 'Defis' : 'Challenges'}</Text>
-            </Pressable>
+        <View style={s.emptyWrap}>
+          {/* Prominent Join Meetup Card */}
+          <View style={s.joinCard}>
+            <View style={s.joinCardHeader}>
+              <View style={s.joinCardIconBg}>
+                <MaterialIcons name="qr-code-2" size={32} color="#0369A1" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.joinCardTitle}>{language === 'fr' ? 'Rejoindre un RDV' : 'Join a Meetup'}</Text>
+                <Text style={s.joinCardDesc}>{language === 'fr' ? 'Entrez le code ou scannez le QR' : 'Enter the code or scan the QR'}</Text>
+              </View>
+              <Pressable style={s.joinScanBtn} onPress={() => router.push('/scanner' as any)}>
+                <MaterialIcons name="qr-code-scanner" size={20} color="#0369A1" />
+              </Pressable>
+            </View>
+            <View style={s.joinInputRow}>
+              <View style={s.joinInputWrap}>
+                <MaterialIcons name="tag" size={18} color={joinCode ? '#0369A1' : '#94A3B8'} />
+                <TextInput
+                  style={s.joinInput}
+                  value={joinCode}
+                  onChangeText={(text) => { setJoinCode(text.toUpperCase()); if (joinError) setJoinError(''); }}
+                  placeholder={language === 'fr' ? 'CODE DU RDV' : 'MEETUP CODE'}
+                  placeholderTextColor="#94A3B8"
+                  autoCapitalize="characters"
+                  maxLength={10}
+                  editable={!joining}
+                  returnKeyType="go"
+                  onSubmitEditing={handleJoinByCode}
+                />
+              </View>
+              <Pressable
+                style={[s.joinSubmitBtn, !joinCode.trim() && s.joinSubmitBtnDisabled]}
+                onPress={handleJoinByCode}
+                disabled={!joinCode.trim() || joining}
+              >
+                {joining ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <MaterialIcons name="login" size={16} color="#FFF" />
+                    <Text style={s.joinSubmitText}>{language === 'fr' ? 'Rejoindre' : 'Join'}</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+            {joinError ? (
+              <View style={s.joinErrorRow}>
+                <MaterialIcons name="error-outline" size={13} color="#DC2626" />
+                <Text style={s.joinErrorText}>{joinError}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          {/* Empty state */}
+          <View style={s.empty}>
+            <View style={s.emptyIcon}><MaterialIcons name="event-available" size={36} color={theme.textMuted} /></View>
+            <Text style={s.emptyTitle}>{language === 'fr' ? 'Rien de prevu' : 'Nothing planned'}</Text>
+            <Text style={s.emptyDesc}>{language === 'fr' ? 'Planifie un RDV, un tournoi ou un defi.' : 'Plan a meetup, tournament or challenge.'}</Text>
+            <View style={s.emptyActions}>
+              <Pressable style={[s.emptyBtn, { backgroundColor: '#0369A1' }]} onPress={() => router.push('/meetup/new' as any)}>
+                <MaterialIcons name="event" size={16} color="#FFF" />
+                <Text style={s.emptyBtnText}>{language === 'fr' ? 'RDV' : 'Meetup'}</Text>
+              </Pressable>
+              <Pressable style={[s.emptyBtn, { backgroundColor: '#B45309' }]} onPress={() => router.push('/tournament/new' as any)}>
+                <MaterialIcons name="emoji-events" size={16} color="#FFF" />
+                <Text style={s.emptyBtnText}>{language === 'fr' ? 'Tournoi' : 'Tournament'}</Text>
+              </Pressable>
+              <Pressable style={[s.emptyBtn, { backgroundColor: '#7C3AED' }]} onPress={() => router.push('/sponsored-event/list' as any)}>
+                <MaterialIcons name="campaign" size={16} color="#FFF" />
+                <Text style={s.emptyBtnText}>{language === 'fr' ? 'Defis' : 'Challenges'}</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       ) : (
@@ -230,6 +315,22 @@ const s = StyleSheet.create({
   addBtnText: { fontSize: 11, fontWeight: '700' },
   moreLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 10, marginTop: 4 },
   moreText: { fontSize: 12, fontWeight: '600', color: theme.primary },
+  emptyWrap: { gap: 12 },
+  // Join card
+  joinCard: { backgroundColor: '#F0F9FF', borderRadius: 18, padding: 16, borderWidth: 1.5, borderColor: '#BAE6FD' },
+  joinCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
+  joinCardIconBg: { width: 56, height: 56, borderRadius: 16, backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#BAE6FD' },
+  joinCardTitle: { fontSize: 16, fontWeight: '700', color: '#0C4A6E' },
+  joinCardDesc: { fontSize: 12, color: '#0369A1', marginTop: 2 },
+  joinScanBtn: { width: 42, height: 42, borderRadius: 12, backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#BAE6FD' },
+  joinInputRow: { flexDirection: 'row', gap: 10 },
+  joinInputWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFF', borderRadius: 12, paddingHorizontal: 12, borderWidth: 1.5, borderColor: '#BAE6FD' },
+  joinInput: { flex: 1, fontSize: 15, fontWeight: '700', color: '#0C4A6E', paddingVertical: Platform.select({ ios: 13, android: 10, default: 12 }), letterSpacing: 1.5 },
+  joinSubmitBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#0369A1', paddingHorizontal: 18, borderRadius: 12, justifyContent: 'center' },
+  joinSubmitBtnDisabled: { backgroundColor: '#93C5FD', opacity: 0.6 },
+  joinSubmitText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
+  joinErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingHorizontal: 4 },
+  joinErrorText: { fontSize: 12, color: '#DC2626', fontWeight: '500' },
   empty: { backgroundColor: '#FFF', borderRadius: 18, padding: 28, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
   emptyIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: theme.textPrimary, marginBottom: 4 },
