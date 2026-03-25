@@ -1,14 +1,14 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   Pressable,
   StyleSheet,
   Modal,
   Dimensions,
   RefreshControl,
   FlatList,
+  SectionList,
   Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,14 +16,13 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeIn } from 'react-native-reanimated';
 import theme, { blurhash } from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
-import { useAuth, useAlert, getSupabaseClient } from '@/template';
+import { useAuth, getSupabaseClient } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import { preloadInterstitial } from '@/services/adService';
 import CommunityLeaderboard from '@/components/ui/CommunityLeaderboard';
-import { BannerSkeleton, TimelineSkeleton, LeaderboardSkeleton, HistorySkeleton, SponsorSkeleton } from '@/components/ui/SkeletonLoader';
+import { Skeleton, LeaderboardSkeleton, TimelineSkeleton, HistorySkeleton } from '@/components/ui/SkeletonLoader';
 import SponsorBanner from '@/components/ui/SponsorBanner';
 import UpcomingTimeline from '@/components/feature/UpcomingTimeline';
 import CompactHistory from '@/components/feature/CompactHistory';
@@ -34,13 +33,70 @@ import QRShareModal from '@/components/feature/QRShareModal';
 import { getFeaturedAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { getMyMeetups, getInvitedMeetups, getMeetupResponses, getPendingInvitationsCount, Meetup, MeetupResponse } from '@/services/meetupService';
-
 import { LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
 import { fetchWeeklyLeaderboard } from '@/services/weeklyLeaderboardService';
 import { extraTranslations } from '@/constants/i18nExtra';
 import { getPendingWitnessRequests, getUnreadEventNotificationCount, markEventNotificationRead, EventNotification } from '@/services/eventNotificationService';
 import { getSponsoredEvents, SponsoredEvent } from '@/services/sponsoredEventService';
 
+// ============================================================
+// FULL PAGE SKELETON — single unified skeleton for initial load
+// ============================================================
+function FullPageSkeleton() {
+  return (
+    <View style={sk.root}>
+      {/* Hero skeleton */}
+      <View style={sk.hero}>
+        <View style={sk.heroTop}>
+          <View style={{ flex: 1, gap: 6 }}>
+            <Skeleton width={100} height={14} borderRadius={8} style={{ backgroundColor: 'rgba(255,255,255,0.1)' }} />
+            <Skeleton width={170} height={24} borderRadius={8} style={{ backgroundColor: 'rgba(255,255,255,0.15)' }} />
+          </View>
+          <Skeleton width={56} height={56} borderRadius={18} style={{ backgroundColor: 'rgba(255,255,255,0.1)' }} />
+        </View>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {[1, 2, 3, 4].map(i => (
+            <View key={i} style={{ flex: 1 }}>
+              <Skeleton height={52} borderRadius={14} style={{ backgroundColor: 'rgba(255,255,255,0.08)' }} />
+            </View>
+          ))}
+        </View>
+      </View>
+      {/* Actions skeleton */}
+      <View style={sk.actions}>
+        {[1, 2, 3].map(i => (
+          <View key={i} style={{ flex: 1 }}>
+            <Skeleton height={110} borderRadius={18} />
+          </View>
+        ))}
+      </View>
+      {/* Leaderboard skeleton */}
+      <View style={sk.block}><LeaderboardSkeleton /></View>
+      {/* Timeline skeleton */}
+      <View style={sk.block}><TimelineSkeleton items={3} /></View>
+      {/* History skeleton */}
+      <View style={sk.block}><HistorySkeleton /></View>
+    </View>
+  );
+}
+
+const sk = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#F8FAFC' },
+  hero: { backgroundColor: '#0F172A', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+  heroTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  actions: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginTop: 20 },
+  block: { paddingHorizontal: 16, marginTop: 20 },
+});
+
+// ============================================================
+// SECTION TYPES
+// ============================================================
+type SectionKey = 'hero' | 'actions' | 'witness' | 'weekly' | 'sponsor' | 'progress' | 'leaderboard' | 'divider1' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history';
+interface HomeSection { key: SectionKey; data: SectionKey[] }
+
+// ============================================================
+// HOME SCREEN
+// ============================================================
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { userStats, tournaments, matches, challenges, selfPlayer, refreshData } = useApp();
@@ -49,11 +105,13 @@ export default function HomeScreen() {
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Ambassadors state
-  const [featuredAmbassadors, setFeaturedAmbassadors] = useState<Ambassador[]>([]);
-  const [ambassadorsLoaded, setAmbassadorsLoaded] = useState(false);
+  // Initial load
+  const [initialLoading, setInitialLoading] = useState(true);
 
-  // Meetups state
+  // Ambassadors
+  const [featuredAmbassadors, setFeaturedAmbassadors] = useState<Ambassador[]>([]);
+
+  // Meetups
   const [meetups, setMeetups] = useState<(Meetup & { _source: 'created' | 'invited'; _acceptedCount?: number; _maxParticipants?: number })[]>([]);
   const [meetupsLoading, setMeetupsLoading] = useState(true);
   const [pendingInviteCount, setPendingInviteCount] = useState(0);
@@ -61,15 +119,13 @@ export default function HomeScreen() {
   const [showMeetupListModal, setShowMeetupListModal] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
 
-  // Sponsored events state
-
+  // Sponsored events
   const [upcomingEvents, setUpcomingEvents] = useState<SponsoredEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
 
-  // Witness attestation alerts
+  // Witness alerts
   const [witnessRequests, setWitnessRequests] = useState<EventNotification[]>([]);
   const [eventNotifCount, setEventNotifCount] = useState(0);
-
 
   // Responsive
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
@@ -79,19 +135,20 @@ export default function HomeScreen() {
   }, []);
   const isTablet = screenWidth >= 600;
 
-  // Weekly leaderboard banner state
+  // Weekly leaderboard
   const [weeklyRank, setWeeklyRank] = useState<{ rank: number; direction: string; diff: number; matchesThisWeek: number } | null>(null);
-  const [weeklyBannerLoaded, setWeeklyBannerLoaded] = useState(false);
 
-  // Countdown timer
+  // Countdown
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 60000);
     return () => clearInterval(interval);
   }, []);
 
-  // Pending witness count from match_witness_requests table
+  // Pending match witnesses
   const [pendingWitnessMatchCount, setPendingWitnessMatchCount] = useState(0);
+
+  // === LOAD FUNCTIONS ===
 
   const loadWitnessRequests = useCallback(async () => {
     const [{ requests }, count] = await Promise.all([
@@ -104,35 +161,19 @@ export default function HomeScreen() {
       const sb = getSupabaseClient();
       const { data: uid } = await sb.auth.getUser();
       if (uid?.user?.id) {
-        const { data: wData } = await sb
-          .from('match_witness_requests')
-          .select('id')
-          .eq('witness_user_id', uid.user.id)
-          .eq('status', 'pending');
+        const { data: wData } = await sb.from('match_witness_requests').select('id').eq('witness_user_id', uid.user.id).eq('status', 'pending');
         setPendingWitnessMatchCount(wData?.length || 0);
       }
     } catch { /* silent */ }
   }, []);
 
-  useEffect(() => {
-    loadWitnessRequests();
-    const interval = setInterval(loadWitnessRequests, 30000);
-    return () => clearInterval(interval);
-  }, [loadWitnessRequests]);
-
   const loadMeetups = useCallback(async () => {
-    setMeetupsLoading(true);
     try {
-      const [{ meetups: created }, { meetups: invited }] = await Promise.all([
-        getMyMeetups(),
-        getInvitedMeetups(),
-      ]);
+      const [{ meetups: created }, { meetups: invited }] = await Promise.all([getMyMeetups(), getInvitedMeetups()]);
       const nowDate = new Date();
       const allMap = new Map<string, Meetup & { _source: 'created' | 'invited' }>();
       created.filter(m => m.status === 'active' && new Date(m.date) > nowDate).forEach(m => allMap.set(m.id, { ...m, _source: 'created' }));
-      invited.filter(m => m.status === 'active' && new Date(m.date) > nowDate).forEach(m => {
-        if (!allMap.has(m.id)) allMap.set(m.id, { ...m, _source: 'invited' });
-      });
+      invited.filter(m => m.status === 'active' && new Date(m.date) > nowDate).forEach(m => { if (!allMap.has(m.id)) allMap.set(m.id, { ...m, _source: 'invited' }); });
       const sorted = Array.from(allMap.values()).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       const withCounts = await Promise.all(
         sorted.slice(0, 5).map(async (m) => {
@@ -142,16 +183,10 @@ export default function HomeScreen() {
         })
       );
       setMeetups(withCounts);
-    } catch { /* silent */ } finally {
-      setMeetupsLoading(false);
-    }
+    } catch { /* silent */ } finally { setMeetupsLoading(false); }
   }, []);
 
-  useEffect(() => { loadMeetups(); }, [loadMeetups]);
-
-  // Load upcoming sponsored events
   const loadUpcomingEvents = useCallback(async () => {
-    setEventsLoading(true);
     try {
       const { events } = await getSponsoredEvents();
       const nowDate = new Date();
@@ -160,7 +195,42 @@ export default function HomeScreen() {
     } catch { /* silent */ } finally { setEventsLoading(false); }
   }, []);
 
-  useEffect(() => { loadUpcomingEvents(); }, [loadUpcomingEvents]);
+  const loadAmbassadors = useCallback(async () => {
+    const ambassadors = await getFeaturedAmbassadors();
+    setFeaturedAmbassadors(ambassadors);
+  }, []);
+
+  const loadWeeklyRank = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const { players } = await fetchWeeklyLeaderboard();
+      const me = players.find((p: any) => p.userId === user.id);
+      if (me) {
+        setWeeklyRank({ rank: me.rankChange.currentRank, direction: me.rankChange.direction, diff: me.rankChange.diff, matchesThisWeek: me.weeklyMatches });
+      } else { setWeeklyRank(null); }
+    } catch { /* silent */ }
+  }, [user?.id]);
+
+  // === INITIAL LOAD ===
+  useEffect(() => {
+    const loadAll = async () => {
+      await Promise.all([
+        loadWeeklyRank(),
+        loadAmbassadors(),
+        loadMeetups(),
+        loadUpcomingEvents(),
+        loadWitnessRequests(),
+      ]);
+      setInitialLoading(false);
+    };
+    loadAll();
+  }, [loadWeeklyRank, loadAmbassadors, loadMeetups, loadUpcomingEvents, loadWitnessRequests]);
+
+  // Polling
+  useEffect(() => {
+    const interval = setInterval(loadWitnessRequests, 30000);
+    return () => clearInterval(interval);
+  }, [loadWitnessRequests]);
 
   useEffect(() => {
     const loadPending = () => { getPendingInvitationsCount().then(setPendingInviteCount); };
@@ -169,47 +239,11 @@ export default function HomeScreen() {
     return () => clearInterval(interval);
   }, []);
 
-  // Load featured ambassadors
-  const loadAmbassadors = useCallback(async () => {
-    const ambassadors = await getFeaturedAmbassadors();
-    setFeaturedAmbassadors(ambassadors);
-    setAmbassadorsLoaded(true);
-  }, []);
+  useEffect(() => { preloadInterstitial(); }, []);
 
-  useEffect(() => { loadAmbassadors(); }, [loadAmbassadors]);
-
-  // Load weekly leaderboard rank
-  const loadWeeklyRank = useCallback(async () => {
-    if (!user?.id) return;
-    try {
-      const { players } = await fetchWeeklyLeaderboard();
-      const me = players.find((p: any) => p.userId === user.id);
-      if (me) {
-        setWeeklyRank({
-          rank: me.rankChange.currentRank,
-          direction: me.rankChange.direction,
-          diff: me.rankChange.diff,
-          matchesThisWeek: me.weeklyMatches,
-        });
-      } else {
-        setWeeklyRank(null);
-      }
-    } catch { /* silent */ }
-    setWeeklyBannerLoaded(true);
-  }, [user?.id]);
-
-  useEffect(() => {
-    const timer = setTimeout(loadWeeklyRank, 1500);
-    return () => clearTimeout(timer);
-  }, [loadWeeklyRank]);
-
-  // Pull-to-refresh: reset loaded states to show skeletons, then reload all data
+  // === PULL-TO-REFRESH (no skeletons, just spinner) ===
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    setWeeklyBannerLoaded(false);
-    setMeetupsLoading(true);
-    setEventsLoading(true);
-    setAmbassadorsLoaded(false);
     await Promise.all([
       refreshData(),
       loadMeetups(),
@@ -221,9 +255,7 @@ export default function HomeScreen() {
     setRefreshing(false);
   }, [refreshData, loadMeetups, loadWitnessRequests, loadUpcomingEvents, loadWeeklyRank, loadAmbassadors]);
 
-  useEffect(() => { preloadInterstitial(); }, []);
-
-  // --- Computed data ---
+  // === COMPUTED DATA ===
   const recentResults = useMemo(() => {
     const items: { type: 'match' | 'challenge'; id: string; date: string; title: string; subtitle: string; result: 'win' | 'loss' | 'draw' | 'neutral'; score?: string; icon: keyof typeof MaterialIcons.glyphMap }[] = [];
     matches.slice().sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 3).forEach((m: any) => {
@@ -264,36 +296,285 @@ export default function HomeScreen() {
     return 'Good evening';
   }, [language]);
 
+  // === SECTION LIST SECTIONS ===
+  const sections = useMemo<HomeSection[]>(() => {
+    const s: HomeSection[] = [];
+    s.push({ key: 'hero', data: ['hero'] });
+    s.push({ key: 'actions', data: ['actions'] });
+    if (witnessRequests.length > 0) s.push({ key: 'witness', data: ['witness'] });
+    if (weeklyRank) s.push({ key: 'weekly', data: ['weekly'] });
+    s.push({ key: 'sponsor', data: ['sponsor'] });
+    if (selfPlayer?.isPublic && totalMatches < LEADERBOARD_MIN_MATCHES) s.push({ key: 'progress', data: ['progress'] });
+    s.push({ key: 'leaderboard', data: ['leaderboard'] });
+    s.push({ key: 'divider1', data: ['divider1'] });
+    s.push({ key: 'timeline', data: ['timeline'] });
+    s.push({ key: 'divider2', data: ['divider2'] });
+    if (featuredAmbassadors.length > 0) {
+      s.push({ key: 'ambassadors', data: ['ambassadors'] });
+      s.push({ key: 'divider3', data: ['divider3'] });
+    }
+    s.push({ key: 'history', data: ['history'] });
+    return s;
+  }, [witnessRequests.length, weeklyRank, selfPlayer?.isPublic, totalMatches, featuredAmbassadors.length, matches.length, challenges.length]);
 
+  // === RENDER SECTION ITEM ===
+  const renderSectionItem = useCallback(({ item }: { item: SectionKey }) => {
+    switch (item) {
+      // ===== HERO =====
+      case 'hero':
+        return (
+          <View style={[st.heroWrap, isTablet && st.heroWrapTablet]}>
+            <View style={st.heroTopRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={st.heroGreeting}>{greeting},</Text>
+                <Text style={st.heroName} numberOfLines={1}>{displayName}</Text>
+              </View>
+              <View style={st.heroTopActions}>
+                <Pressable style={st.heroIconBtn} onPress={() => router.push('/scanner' as any)}>
+                  <MaterialIcons name="qr-code-scanner" size={20} color="rgba(255,255,255,0.7)" />
+                </Pressable>
+                <Pressable style={st.heroIconBtn} onPress={() => setShowQRModal(true)}>
+                  <MaterialIcons name="qr-code-2" size={20} color="rgba(255,255,255,0.7)" />
+                </Pressable>
+                {pendingInviteCount > 0 ? (
+                  <Pressable style={st.heroIconBtn} onPress={() => router.push('/meetup/invitations' as any)}>
+                    <MaterialIcons name="mail" size={20} color="#60A5FA" />
+                    <View style={st.heroBadge}><Text style={st.heroBadgeText}>{pendingInviteCount > 9 ? '9+' : pendingInviteCount}</Text></View>
+                  </Pressable>
+                ) : null}
+                <Pressable style={st.heroAvatarBtn} onPress={() => router.push('/profile')}>
+                  {selfPlayer?.avatar ? (
+                    <Image source={{ uri: selfPlayer.avatar }} style={st.heroAvatarImg} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
+                  ) : (
+                    <LinearGradient colors={['#3B82F6', '#60A5FA']} style={st.heroAvatarFallback}>
+                      <Text style={st.heroAvatarLetter}>{displayName.charAt(0).toUpperCase()}</Text>
+                    </LinearGradient>
+                  )}
+                  {(eventNotifCount + pendingWitnessMatchCount) > 0 ? (
+                    <View style={st.avatarNotifBadge}><Text style={st.avatarNotifBadgeText}>{(eventNotifCount + pendingWitnessMatchCount) > 9 ? '9+' : (eventNotifCount + pendingWitnessMatchCount)}</Text></View>
+                  ) : null}
+                </Pressable>
+              </View>
+            </View>
+            <View style={st.statsChipRow}>
+              {[
+                { value: totalMatches, label: t('stats', 'matches'), color: theme.primary },
+                { value: totalWins, label: t('stats', 'victories'), color: theme.success },
+                { value: `${winRate}%`, label: t('stats', 'winRate'), color: theme.accent },
+                { value: challenges.length, label: t('profile', 'challenges'), color: theme.tirColor },
+              ].map((stat, idx) => (
+                <View key={idx} style={st.statsChip}>
+                  <Text style={[st.statsChipValue, { color: stat.color }]}>{stat.value}</Text>
+                  <Text style={st.statsChipLabel}>{stat.label}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        );
 
+      // ===== QUICK ACTIONS =====
+      case 'actions':
+        return (
+          <View style={[st.section, isTablet && st.sectionTablet]}>
+            <View style={[st.actionsRow, isTablet && st.actionsRowTablet]}>
+              {[
+                { label: t('home', 'match'), sub: t('home', 'training'), icon: 'sports' as const, gradient: ['#2563EB', '#60A5FA'] as [string, string], onPress: () => router.push('/match/new') },
+                { label: t('home', 'challenge'), sub: t('home', 'shotsPoints'), icon: 'track-changes' as const, gradient: ['#D97706', '#FBBF24'] as [string, string], onPress: () => router.push('/challenge/new') },
+                { label: t('home', 'tournament'), sub: t('home', 'myJourney'), icon: 'emoji-events' as const, gradient: ['#B45309', '#F59E0B'] as [string, string], onPress: () => setShowTournamentPicker(true) },
+              ].map((action, idx) => (
+                <Pressable key={idx} style={({ pressed }) => [st.actionCard, isTablet && st.actionCardTablet, pressed && { transform: [{ scale: 0.96 }], opacity: 0.9 }]} onPress={action.onPress}>
+                  <LinearGradient colors={action.gradient} style={st.actionIconBg} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+                    <MaterialIcons name={action.icon} size={isTablet ? 36 : 28} color="#FFF" />
+                  </LinearGradient>
+                  <Text style={[st.actionLabel, isTablet && { fontSize: 17 }]} adjustsFontSizeToFit numberOfLines={1}>{action.label}</Text>
+                  <Text style={st.actionSub}>{action.sub}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        );
 
+      // ===== WITNESS ALERTS =====
+      case 'witness':
+        return (
+          <View style={[st.section, isTablet && st.sectionTablet]}>
+            <View style={st.witnessAlertCard}>
+              <View style={st.witnessAlertHeader}>
+                <View style={st.witnessAlertIconBg}><MaterialIcons name="visibility" size={18} color="#F59E0B" /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={st.witnessAlertTitle}>{language === 'fr' ? 'Attestations en attente' : 'Pending attestations'}</Text>
+                  <Text style={st.witnessAlertCount}>{witnessRequests.length} {language === 'fr' ? 'demande(s)' : 'request(s)'}</Text>
+                </View>
+              </View>
+              {witnessRequests.slice(0, 3).map((req) => (
+                <Pressable key={req.id} style={({ pressed }) => [st.witnessReqRow, pressed && { opacity: 0.85 }]} onPress={() => { markEventNotificationRead(req.id); setWitnessRequests(prev => prev.filter(r => r.id !== req.id)); router.push(`/sponsored-event/${req.eventId}` as any); }}>
+                  <View style={st.witnessReqDot} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={st.witnessReqTitle} numberOfLines={1}>{req.eventTitle || req.title}</Text>
+                    <Text style={st.witnessReqMsg} numberOfLines={1}>{req.message}</Text>
+                  </View>
+                  <View style={st.witnessReqBtn}><MaterialIcons name="verified" size={14} color="#FFF" /><Text style={st.witnessReqBtnText}>{language === 'fr' ? 'Attester' : 'Attest'}</Text></View>
+                </Pressable>
+              ))}
+              {witnessRequests.length > 3 ? (
+                <Pressable style={st.witnessMoreLink} onPress={() => router.push('/sponsored-event/list' as any)}>
+                  <Text style={st.witnessMoreText}>+{witnessRequests.length - 3} {language === 'fr' ? 'autre(s)' : 'more'}</Text>
+                  <MaterialIcons name="chevron-right" size={14} color="#F59E0B" />
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+        );
 
+      // ===== WEEKLY BANNER =====
+      case 'weekly':
+        return weeklyRank ? (
+          <View style={[st.section, isTablet && st.sectionTablet]}>
+            <Pressable style={st.weeklyBanner} onPress={() => router.push('/leaderboard' as any)}>
+              <LinearGradient colors={['#1E3A8A', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.weeklyBannerGradient}>
+                <View style={st.weeklyBannerLeft}>
+                  <View style={st.weeklyBannerIconBg}><MaterialIcons name="leaderboard" size={20} color="#FFF" /></View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={st.weeklyBannerTitle}>{(extraTranslations.weeklyLeaderboard?.weeklyLeaderboard as any)?.[language] || 'Weekly Leaderboard'}</Text>
+                    <Text style={st.weeklyBannerSub}>{weeklyRank.matchesThisWeek} {t('leaderboard', 'matches')} {language === 'fr' ? 'cette semaine' : 'this week'}</Text>
+                  </View>
+                </View>
+                <View style={st.weeklyBannerRight}>
+                  <Text style={st.weeklyBannerRank}>#{weeklyRank.rank}</Text>
+                  {weeklyRank.direction === 'up' ? (
+                    <View style={st.weeklyBannerChange}><MaterialIcons name="arrow-upward" size={14} color="#34D399" /><Text style={[st.weeklyBannerChangeText, { color: '#34D399' }]}>+{weeklyRank.diff}</Text></View>
+                  ) : weeklyRank.direction === 'down' ? (
+                    <View style={st.weeklyBannerChange}><MaterialIcons name="arrow-downward" size={14} color="#F87171" /><Text style={[st.weeklyBannerChangeText, { color: '#F87171' }]}>-{weeklyRank.diff}</Text></View>
+                  ) : weeklyRank.direction === 'new' ? (
+                    <View style={[st.weeklyBannerChange, { backgroundColor: 'rgba(96,165,250,0.2)' }]}><Text style={[st.weeklyBannerChangeText, { color: '#60A5FA', fontSize: 10 }]}>NEW</Text></View>
+                  ) : (
+                    <View style={st.weeklyBannerChange}><Text style={[st.weeklyBannerChangeText, { color: 'rgba(255,255,255,0.5)' }]}>=</Text></View>
+                  )}
+                  <MaterialIcons name="chevron-right" size={20} color="rgba(255,255,255,0.5)" />
+                </View>
+              </LinearGradient>
+            </Pressable>
+          </View>
+        ) : null;
+
+      // ===== SPONSOR BANNER =====
+      case 'sponsor':
+        return <SponsorBanner style={{ marginHorizontal: 16, marginBottom: 20 }} page="home" />;
+
+      // ===== LEADERBOARD PROGRESS =====
+      case 'progress':
+        return (
+          <View style={[st.section, isTablet && st.sectionTablet]}>
+            <Pressable style={st.progressCard} onPress={() => router.push('/leaderboard' as any)}>
+              <View style={st.progressHeader}>
+                <View style={st.progressIconBg}><MaterialIcons name="leaderboard" size={16} color="#D97706" /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={st.progressTitle}>{t('leaderboard', 'progressTitle')}</Text>
+                  <Text style={st.progressCount}>{totalMatches}/{LEADERBOARD_MIN_MATCHES} {t('leaderboard', 'matches')}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color="#D97706" />
+              </View>
+              <View style={st.progressBarTrack}>
+                <View style={[st.progressBarFill, { width: `${Math.min((totalMatches / LEADERBOARD_MIN_MATCHES) * 100, 100)}%` }]} />
+              </View>
+            </Pressable>
+          </View>
+        );
+
+      // ===== COMMUNITY LEADERBOARD =====
+      case 'leaderboard':
+        return <View style={[st.section, isTablet && st.sectionTablet]}><CommunityLeaderboard /></View>;
+
+      // ===== DIVIDERS =====
+      case 'divider1':
+      case 'divider2':
+      case 'divider3':
+        return <View style={st.divider}><View style={st.dividerLine} /><View style={st.dividerDot} /><View style={st.dividerLine} /></View>;
+
+      // ===== UPCOMING TIMELINE =====
+      case 'timeline':
+        return (
+          <View style={[st.section, isTablet && st.sectionTablet]}>
+            <UpcomingTimeline
+              tournaments={tournaments}
+              meetups={meetups}
+              upcomingEvents={upcomingEvents}
+              meetupsLoading={false}
+              eventsLoading={false}
+              pendingInviteCount={pendingInviteCount}
+              language={language}
+              t={t}
+              now={now}
+              onShowJoinMeetup={() => setShowJoinMeetupModal(true)}
+              onShowMeetupList={() => setShowMeetupListModal(true)}
+            />
+          </View>
+        );
+
+      // ===== AMBASSADORS =====
+      case 'ambassadors':
+        return (
+          <View style={[st.section, isTablet && st.sectionTablet]}>
+            <AmbassadorBanner ambassadors={featuredAmbassadors} language={language} t={t} screenWidth={screenWidth} userId={user?.id} />
+          </View>
+        );
+
+      // ===== HISTORY =====
+      case 'history':
+        return (
+          <View style={[st.section, isTablet && st.sectionTablet]}>
+            {(matches.length === 0 && challenges.length === 0) ? (
+              <View style={st.emptyCard}>
+                <View style={st.emptyIconBg}><MaterialIcons name="sports" size={44} color={theme.primary} /></View>
+                <Text style={st.emptyTitle}>{t('home', 'welcomeTitle')}</Text>
+                <Text style={st.emptyText}>{t('home', 'welcomeText')}</Text>
+                <Pressable style={st.emptyCta} onPress={() => router.push('/match/new')}>
+                  <MaterialIcons name="play-arrow" size={20} color="#FFF" />
+                  <Text style={st.emptyCtaText}>{t('home', 'firstMatch')}</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <CompactHistory recentResults={recentResults} matches={matches} hasData={matches.length > 0 || challenges.length > 0} language={language} t={t} />
+            )}
+          </View>
+        );
+
+      default:
+        return null;
+    }
+  }, [
+    isTablet, greeting, displayName, selfPlayer, pendingInviteCount, eventNotifCount, pendingWitnessMatchCount,
+    totalMatches, totalWins, winRate, challenges.length, weeklyRank, language, t,
+    witnessRequests, tournaments, meetups, upcomingEvents, featuredAmbassadors,
+    now, screenWidth, user?.id, matches, recentResults,
+  ]);
+
+  const keyExtractor = useCallback((item: SectionKey) => item, []);
+
+  // === MEETUP LIST MODAL RENDERER ===
   const renderMeetupModalItem = useCallback(({ item: m }: { item: any }) => {
     const mDate = new Date(m.date);
     const isCreator = m._source === 'created';
     const daysUntil = Math.max(0, Math.ceil((mDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
     return (
-      <Pressable style={({ pressed }) => [s.meetupModalItem, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]} onPress={() => { setShowMeetupListModal(false); router.push(`/meetup/${m.id}` as any); }}>
-        <View style={s.meetupDateCol}>
-          <Text style={s.meetupDateDay}>{mDate.getDate()}</Text>
-          <Text style={s.meetupDateMonth}>{mDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}</Text>
+      <Pressable style={({ pressed }) => [st.meetupModalItem, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]} onPress={() => { setShowMeetupListModal(false); router.push(`/meetup/${m.id}` as any); }}>
+        <View style={st.meetupDateCol}>
+          <Text style={st.meetupDateDay}>{mDate.getDate()}</Text>
+          <Text style={st.meetupDateMonth}>{mDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}</Text>
         </View>
-        <View style={s.meetupInfoCol}>
-          <Text style={s.meetupItemTitle} numberOfLines={1}>{m.title}</Text>
-          <View style={s.meetupItemMeta}>
+        <View style={st.meetupInfoCol}>
+          <Text style={st.meetupItemTitle} numberOfLines={1}>{m.title}</Text>
+          <View style={st.meetupItemMeta}>
             <MaterialIcons name="schedule" size={12} color={theme.textMuted} />
-            <Text style={s.meetupItemTime}>{mDate.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}</Text>
-            {daysUntil <= 1 ? <View style={s.meetupSoonBadge}><Text style={s.meetupSoonText}>{daysUntil === 0 ? t('notifications', 'todayLabel') : t('notifications', 'tomorrowLabel')}</Text></View> : null}
+            <Text style={st.meetupItemTime}>{mDate.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}</Text>
+            {daysUntil <= 1 ? <View style={st.meetupSoonBadge}><Text style={st.meetupSoonText}>{daysUntil === 0 ? t('notifications', 'todayLabel') : t('notifications', 'tomorrowLabel')}</Text></View> : null}
           </View>
-          <View style={s.meetupItemBottom}>
-            <View style={s.meetupConfirmBadge}>
-              <MaterialIcons name="group" size={12} color={theme.success} />
-              <Text style={s.meetupConfirmText}>{m._acceptedCount || 0}/{m._maxParticipants || 8} {t('meetup', 'confirmedCount')}</Text>
-            </View>
+          <View style={st.meetupItemBottom}>
+            <View style={st.meetupConfirmBadge}><MaterialIcons name="group" size={12} color={theme.success} /><Text style={st.meetupConfirmText}>{m._acceptedCount || 0}/{m._maxParticipants || 8} {t('meetup', 'confirmedCount')}</Text></View>
             {isCreator ? (
-              <View style={s.meetupCreatorBadge}><MaterialIcons name="person" size={10} color={theme.primary} /><Text style={s.meetupCreatorText}>{t('meetup', 'yourMeetup')}</Text></View>
+              <View style={st.meetupCreatorBadge}><MaterialIcons name="person" size={10} color={theme.primary} /><Text style={st.meetupCreatorText}>{t('meetup', 'yourMeetup')}</Text></View>
             ) : (
-              <View style={s.meetupInvitedBadge}><MaterialIcons name="mail" size={10} color={theme.accent} /><Text style={s.meetupInvitedText}>{t('meetup', 'invited')}</Text></View>
+              <View style={st.meetupInvitedBadge}><MaterialIcons name="mail" size={10} color={theme.accent} /><Text style={st.meetupInvitedText}>{t('meetup', 'invited')}</Text></View>
             )}
           </View>
         </View>
@@ -303,295 +584,60 @@ export default function HomeScreen() {
   }, [t, language]);
 
   const meetupKeyExtractor = useCallback((item: any) => item.id, []);
-  const scrollViewRef = useRef<ScrollView>(null);
+
+  // === RENDER ===
+  if (initialLoading) {
+    return (
+      <SafeAreaView edges={['top']} style={st.container}>
+        <FullPageSkeleton />
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <SafeAreaView edges={['top']} style={s.container}>
-      <ScrollView
-        ref={scrollViewRef}
-        style={s.scrollView}
-        contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+    <SafeAreaView edges={['top']} style={st.container}>
+      <SectionList
+        sections={sections}
+        keyExtractor={keyExtractor}
+        renderItem={renderSectionItem}
+        renderSectionHeader={() => null}
+        stickySectionHeadersEnabled={false}
+        contentContainerStyle={[st.scrollContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
-      >
-        {/* ========== HERO HEADER ========== */}
-        <Animated.View entering={FadeIn.duration(450)}>
-          <View style={[s.heroWrap, isTablet && s.heroWrapTablet]}>
-            <View style={s.heroTopRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={s.heroGreeting}>{greeting},</Text>
-                <Text style={s.heroName} numberOfLines={1}>{displayName}</Text>
-              </View>
-              <View style={s.heroTopActions}>
-                <Pressable style={s.heroIconBtn} onPress={() => router.push('/scanner' as any)}>
-                  <MaterialIcons name="qr-code-scanner" size={20} color="rgba(255,255,255,0.7)" />
-                </Pressable>
-                <Pressable style={s.heroIconBtn} onPress={() => setShowQRModal(true)}>
-                  <MaterialIcons name="qr-code-2" size={20} color="rgba(255,255,255,0.7)" />
-                </Pressable>
-                {pendingInviteCount > 0 ? (
-                  <Pressable style={s.heroIconBtn} onPress={() => router.push('/meetup/invitations' as any)}>
-                    <MaterialIcons name="mail" size={20} color="#60A5FA" />
-                    <View style={s.heroBadge}><Text style={s.heroBadgeText}>{pendingInviteCount > 9 ? '9+' : pendingInviteCount}</Text></View>
-                  </Pressable>
-                ) : null}
-                <Pressable style={s.heroAvatarBtn} onPress={() => router.push('/profile')}>
-                  {selfPlayer?.avatar ? (
-                    <Image source={{ uri: selfPlayer.avatar }} style={s.heroAvatarImg} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
-                  ) : (
-                    <LinearGradient colors={['#3B82F6', '#60A5FA']} style={s.heroAvatarFallback}>
-                      <Text style={s.heroAvatarLetter}>{displayName.charAt(0).toUpperCase()}</Text>
-                    </LinearGradient>
-                  )}
-                  {(eventNotifCount + pendingWitnessMatchCount) > 0 ? (
-                    <View style={s.avatarNotifBadge}><Text style={s.avatarNotifBadgeText}>{(eventNotifCount + pendingWitnessMatchCount) > 9 ? '9+' : (eventNotifCount + pendingWitnessMatchCount)}</Text></View>
-                  ) : null}
-                </Pressable>
-              </View>
-            </View>
-            <View style={s.statsChipRow}>
-              {[
-                { value: totalMatches, label: t('stats', 'matches'), color: theme.primary },
-                { value: totalWins, label: t('stats', 'victories'), color: theme.success },
-                { value: `${winRate}%`, label: t('stats', 'winRate'), color: theme.accent },
-                { value: challenges.length, label: t('profile', 'challenges'), color: theme.tirColor },
-              ].map((stat, idx) => (
-                <View key={idx} style={s.statsChip}>
-                  <Text style={[s.statsChipValue, { color: stat.color }]}>{stat.value}</Text>
-                  <Text style={s.statsChipLabel}>{stat.label}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        </Animated.View>
+        initialNumToRender={6}
+        maxToRenderPerBatch={4}
+        windowSize={7}
+      />
 
-        {/* ========== QUICK ACTIONS ========== */}
-        <Animated.View entering={FadeIn.duration(400).delay(100)} style={[s.section, isTablet && s.sectionTablet]}>
-          <View style={[s.actionsRow, isTablet && s.actionsRowTablet]}>
-            {[
-              { label: t('home', 'match'), sub: t('home', 'training'), icon: 'sports' as const, gradient: ['#2563EB', '#60A5FA'] as [string, string], onPress: () => router.push('/match/new') },
-              { label: t('home', 'challenge'), sub: t('home', 'shotsPoints'), icon: 'track-changes' as const, gradient: ['#D97706', '#FBBF24'] as [string, string], onPress: () => router.push('/challenge/new') },
-              { label: t('home', 'tournament'), sub: t('home', 'myJourney'), icon: 'emoji-events' as const, gradient: ['#B45309', '#F59E0B'] as [string, string], onPress: () => setShowTournamentPicker(true) },
-            ].map((action, idx) => (
-              <Pressable key={idx} style={({ pressed }) => [s.actionCard, isTablet && s.actionCardTablet, pressed && { transform: [{ scale: 0.96 }], opacity: 0.9 }]} onPress={action.onPress}>
-                <LinearGradient colors={action.gradient} style={s.actionIconBg} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-                  <MaterialIcons name={action.icon} size={isTablet ? 36 : 28} color="#FFF" />
-                </LinearGradient>
-                <Text style={[s.actionLabel, isTablet && { fontSize: 17 }]} adjustsFontSizeToFit numberOfLines={1}>{action.label}</Text>
-                <Text style={s.actionSub}>{action.sub}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </Animated.View>
-
-        {/* ========== WITNESS ATTESTATION ALERTS ========== */}
-        {witnessRequests.length > 0 ? (
-          <View style={[s.section, isTablet && s.sectionTablet]}>
-            <View style={s.witnessAlertCard}>
-              <View style={s.witnessAlertHeader}>
-                <View style={s.witnessAlertIconBg}>
-                  <MaterialIcons name="visibility" size={18} color="#F59E0B" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.witnessAlertTitle}>{language === 'fr' ? 'Attestations en attente' : 'Pending attestations'}</Text>
-                  <Text style={s.witnessAlertCount}>{witnessRequests.length} {language === 'fr' ? 'demande(s)' : 'request(s)'}</Text>
-                </View>
-              </View>
-              {witnessRequests.slice(0, 3).map((req) => (
-                <Pressable
-                  key={req.id}
-                  style={({ pressed }) => [s.witnessReqRow, pressed && { opacity: 0.85 }]}
-                  onPress={() => {
-                    markEventNotificationRead(req.id);
-                    setWitnessRequests(prev => prev.filter(r => r.id !== req.id));
-                    router.push(`/sponsored-event/${req.eventId}` as any);
-                  }}
-                >
-                  <View style={s.witnessReqDot} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.witnessReqTitle} numberOfLines={1}>{req.eventTitle || req.title}</Text>
-                    <Text style={s.witnessReqMsg} numberOfLines={1}>{req.message}</Text>
-                  </View>
-                  <View style={s.witnessReqBtn}>
-                    <MaterialIcons name="verified" size={14} color="#FFF" />
-                    <Text style={s.witnessReqBtnText}>{language === 'fr' ? 'Attester' : 'Attest'}</Text>
-                  </View>
-                </Pressable>
-              ))}
-              {witnessRequests.length > 3 ? (
-                <Pressable style={s.witnessMoreLink} onPress={() => router.push('/sponsored-event/list' as any)}>
-                  <Text style={s.witnessMoreText}>+{witnessRequests.length - 3} {language === 'fr' ? 'autre(s)' : 'more'}</Text>
-                  <MaterialIcons name="chevron-right" size={14} color="#F59E0B" />
-                </Pressable>
-              ) : null}
-            </View>
-          </View>
-        ) : null}
-
-        {/* ========== WEEKLY LEADERBOARD BANNER ========== */}
-        {!weeklyBannerLoaded ? (
-          <View style={[s.section, s.weeklyBannerWrap, isTablet && s.sectionTablet]}>
-            <BannerSkeleton />
-          </View>
-        ) : weeklyRank ? (
-          <View style={[s.section, s.weeklyBannerWrap, isTablet && s.sectionTablet]}>
-            <Pressable style={s.weeklyBanner} onPress={() => router.push('/leaderboard' as any)}>
-              <LinearGradient colors={['#1E3A8A', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.weeklyBannerGradient}>
-                <View style={s.weeklyBannerLeft}>
-                  <View style={s.weeklyBannerIconBg}>
-                    <MaterialIcons name="leaderboard" size={20} color="#FFF" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.weeklyBannerTitle}>
-                      {(extraTranslations.weeklyLeaderboard?.weeklyLeaderboard as any)?.[language] || 'Weekly Leaderboard'}
-                    </Text>
-                    <Text style={s.weeklyBannerSub}>
-                      {weeklyRank.matchesThisWeek} {t('leaderboard', 'matches')} {language === 'fr' ? 'cette semaine' : 'this week'}
-                    </Text>
-                  </View>
-                </View>
-                <View style={s.weeklyBannerRight}>
-                  <Text style={s.weeklyBannerRank}>#{weeklyRank.rank}</Text>
-                  {weeklyRank.direction === 'up' ? (
-                    <View style={s.weeklyBannerChange}><MaterialIcons name="arrow-upward" size={14} color="#34D399" /><Text style={[s.weeklyBannerChangeText, { color: '#34D399' }]}>+{weeklyRank.diff}</Text></View>
-                  ) : weeklyRank.direction === 'down' ? (
-                    <View style={s.weeklyBannerChange}><MaterialIcons name="arrow-downward" size={14} color="#F87171" /><Text style={[s.weeklyBannerChangeText, { color: '#F87171' }]}>-{weeklyRank.diff}</Text></View>
-                  ) : weeklyRank.direction === 'new' ? (
-                    <View style={[s.weeklyBannerChange, { backgroundColor: 'rgba(96,165,250,0.2)' }]}><Text style={[s.weeklyBannerChangeText, { color: '#60A5FA', fontSize: 10 }]}>NEW</Text></View>
-                  ) : (
-                    <View style={s.weeklyBannerChange}><Text style={[s.weeklyBannerChangeText, { color: 'rgba(255,255,255,0.5)' }]}>=</Text></View>
-                  )}
-                  <MaterialIcons name="chevron-right" size={20} color="rgba(255,255,255,0.5)" />
-                </View>
-              </LinearGradient>
-            </Pressable>
-          </View>
-        ) : null}
-
-        {/* ========== SPONSOR BANNER ========== */}
-        {!ambassadorsLoaded ? (
-          <View style={[s.section, s.sponsorWrap, isTablet && s.sectionTablet]}><SponsorSkeleton /></View>
-        ) : null}
-        <View style={s.sponsorWrap}>
-          <SponsorBanner style={{ marginHorizontal: 16, marginBottom: 20 }} page="home" />
-        </View>
-
-        {/* ========== LEADERBOARD PROGRESS ========== */}
-        {selfPlayer?.isPublic && totalMatches < LEADERBOARD_MIN_MATCHES ? (
-          <View style={[s.section, isTablet && s.sectionTablet]}>
-            <Pressable style={s.progressCard} onPress={() => router.push('/leaderboard' as any)}>
-              <View style={s.progressHeader}>
-                <View style={s.progressIconBg}><MaterialIcons name="leaderboard" size={16} color="#D97706" /></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.progressTitle}>{t('leaderboard', 'progressTitle')}</Text>
-                  <Text style={s.progressCount}>{totalMatches}/{LEADERBOARD_MIN_MATCHES} {t('leaderboard', 'matches')}</Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={20} color="#D97706" />
-              </View>
-              <View style={s.progressBarTrack}>
-                <View style={[s.progressBarFill, { width: `${Math.min((totalMatches / LEADERBOARD_MIN_MATCHES) * 100, 100)}%` }]} />
-              </View>
-            </Pressable>
-          </View>
-        ) : null}
-
-        {/* ========== COMMUNITY LEADERBOARD ========== */}
-        <Animated.View entering={FadeIn.duration(400).delay(260)} style={[s.section, s.leaderboardWrap, isTablet && s.sectionTablet]}>
-          <CommunityLeaderboard />
-        </Animated.View>
-
-        <View style={s.divider}><View style={s.dividerLine} /><View style={s.dividerDot} /><View style={s.dividerLine} /></View>
-
-        {/* ========== UNIFIED UPCOMING TIMELINE ========== */}
-        <Animated.View entering={FadeIn.duration(400).delay(300)} style={[s.section, s.timelineWrap, isTablet && s.sectionTablet]}>
-          <UpcomingTimeline
-            tournaments={tournaments}
-            meetups={meetups}
-            upcomingEvents={upcomingEvents}
-            meetupsLoading={meetupsLoading}
-            eventsLoading={eventsLoading}
-            pendingInviteCount={pendingInviteCount}
-            language={language}
-            t={t}
-            now={now}
-            onShowJoinMeetup={() => setShowJoinMeetupModal(true)}
-            onShowMeetupList={() => setShowMeetupListModal(true)}
-          />
-        </Animated.View>
-
-        <View style={s.divider}><View style={s.dividerLine} /><View style={s.dividerDot} /><View style={s.dividerLine} /></View>
-
-        {/* ========== AMBASSADORS ROTATING BANNER ========== */}
-        {ambassadorsLoaded && featuredAmbassadors.length > 0 ? (
-          <Animated.View entering={FadeIn.duration(400).delay(340)} style={[s.section, isTablet && s.sectionTablet]}>
-            <AmbassadorBanner
-              ambassadors={featuredAmbassadors}
-              language={language}
-              t={t}
-              screenWidth={screenWidth}
-              userId={user?.id}
-            />
-          </Animated.View>
-        ) : null}
-
-        <View style={s.divider}><View style={s.dividerLine} /><View style={s.dividerDot} /><View style={s.dividerLine} /></View>
-
-        {/* ========== COMPACT HISTORY ========== */}
-        <Animated.View entering={FadeIn.duration(400).delay(380)} style={[s.section, isTablet && s.sectionTablet]}>
-          {(matches.length === 0 && challenges.length === 0) ? (
-            <View style={s.emptyCard}>
-              <View style={s.emptyIconBg}><MaterialIcons name="sports" size={44} color={theme.primary} /></View>
-              <Text style={s.emptyTitle}>{t('home', 'welcomeTitle')}</Text>
-              <Text style={s.emptyText}>{t('home', 'welcomeText')}</Text>
-              <Pressable style={s.emptyCta} onPress={() => router.push('/match/new')}>
-                <MaterialIcons name="play-arrow" size={20} color="#FFF" />
-                <Text style={s.emptyCtaText}>{t('home', 'firstMatch')}</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <CompactHistory
-              recentResults={recentResults}
-              matches={matches}
-              hasData={matches.length > 0 || challenges.length > 0}
-              language={language}
-              t={t}
-            />
-          )}
-        </Animated.View>
-
-      </ScrollView>
-
-      {/* ========== MEETUP LIST MODAL ========== */}
+      {/* ===== MODALS ===== */}
       <Modal visible={showMeetupListModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowMeetupListModal(false)}>
-        <SafeAreaView style={s.meetupModalContainer}>
-          <View style={s.meetupModalHeader}>
-            <View style={s.meetupModalHeaderLeft}><View style={s.meetupModalIconBg}><MaterialIcons name="event" size={20} color={theme.accent} /></View><Text style={s.meetupModalTitle}>{t('meetup', 'upcomingMeetups')}</Text></View>
-            <Pressable style={s.meetupModalCloseBtn} onPress={() => setShowMeetupListModal(false)}><MaterialIcons name="close" size={24} color={theme.textPrimary} /></Pressable>
+        <SafeAreaView style={st.meetupModalContainer}>
+          <View style={st.meetupModalHeader}>
+            <View style={st.meetupModalHeaderLeft}><View style={st.meetupModalIconBg}><MaterialIcons name="event" size={20} color={theme.accent} /></View><Text style={st.meetupModalTitle}>{t('meetup', 'upcomingMeetups')}</Text></View>
+            <Pressable style={st.meetupModalCloseBtn} onPress={() => setShowMeetupListModal(false)}><MaterialIcons name="close" size={24} color={theme.textPrimary} /></Pressable>
           </View>
-          <FlatList data={meetups} keyExtractor={meetupKeyExtractor} renderItem={renderMeetupModalItem} style={s.meetupModalScroll} contentContainerStyle={s.meetupModalScrollContent} showsVerticalScrollIndicator={false} initialNumToRender={10} />
+          <FlatList data={meetups} keyExtractor={meetupKeyExtractor} renderItem={renderMeetupModalItem} style={st.meetupModalScroll} contentContainerStyle={st.meetupModalScrollContent} showsVerticalScrollIndicator={false} initialNumToRender={10} />
         </SafeAreaView>
       </Modal>
 
-      {/* ========== JOIN MEETUP MODAL ========== */}
       <JoinMeetupModal visible={showJoinMeetupModal} onClose={() => setShowJoinMeetupModal(false)} />
-
-      {/* ========== QR CODE SHARE MODAL ========== */}
       <QRShareModal visible={showQRModal} onClose={() => setShowQRModal(false)} />
-
-      {/* ========== TOURNAMENT PICKER MODAL ========== */}
       <TournamentPickerModal visible={showTournamentPicker} onClose={() => setShowTournamentPicker(false)} tournaments={tournaments} />
     </SafeAreaView>
   );
 }
 
-const s = StyleSheet.create({
+// ============================================================
+// STYLES
+// ============================================================
+const st = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
-  scrollView: { flex: 1 },
-  scrollContent: { maxWidth: 960, alignSelf: 'center' as const, width: '100%', gap: 0 },
+  scrollContent: { maxWidth: 960, alignSelf: 'center' as const, width: '100%' },
   section: { paddingHorizontal: 16, marginBottom: 20 },
   sectionTablet: { marginBottom: 28 },
 
-  // ===== HERO =====
+  // HERO
   heroWrap: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20, marginBottom: 20, backgroundColor: '#0F172A', borderBottomLeftRadius: 24, borderBottomRightRadius: 24, ...Platform.select({ ios: { shadowColor: '#0F172A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 16 }, android: { elevation: 4 }, default: {} }) },
   heroWrapTablet: { paddingTop: 16, paddingBottom: 24, paddingHorizontal: 28 },
   heroTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
@@ -612,7 +658,7 @@ const s = StyleSheet.create({
   statsChipValue: { fontSize: 20, fontWeight: '800' },
   statsChipLabel: { fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.5)', marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.3 },
 
-  // ===== ACTIONS =====
+  // ACTIONS
   actionsRow: { flexDirection: 'row', gap: 10 },
   actionsRowTablet: { gap: 16 },
   actionCard: { flex: 1, backgroundColor: '#FFF', borderRadius: 18, padding: 18, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0', ...Platform.select({ ios: { shadowColor: '#0F172A', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 6 }, android: { elevation: 2 }, default: {} }) },
@@ -621,7 +667,7 @@ const s = StyleSheet.create({
   actionLabel: { fontSize: 15, fontWeight: '700', color: theme.textPrimary, marginBottom: 2 },
   actionSub: { fontSize: 11, color: theme.textSecondary },
 
-  // ===== WEEKLY BANNER =====
+  // WEEKLY BANNER
   weeklyBanner: { borderRadius: 16, overflow: 'hidden' as const, ...Platform.select({ ios: { shadowColor: '#1E3A8A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 8 }, android: { elevation: 3 }, default: {} }) },
   weeklyBannerGradient: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 16 },
   weeklyBannerLeft: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, flex: 1 },
@@ -633,7 +679,7 @@ const s = StyleSheet.create({
   weeklyBannerChange: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 2, backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   weeklyBannerChangeText: { fontSize: 12, fontWeight: '800' as const },
 
-  // ===== PROGRESS =====
+  // PROGRESS
   progressCard: { backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#D97706' + '20', ...theme.shadows.card },
   progressHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
   progressIconBg: { width: 32, height: 32, borderRadius: 9, backgroundColor: '#D97706' + '12', alignItems: 'center', justifyContent: 'center' },
@@ -642,7 +688,7 @@ const s = StyleSheet.create({
   progressBarTrack: { height: 6, backgroundColor: '#D97706' + '12', borderRadius: 3, overflow: 'hidden' as const },
   progressBarFill: { height: '100%', backgroundColor: '#D97706', borderRadius: 3 },
 
-  // ===== EMPTY STATE =====
+  // EMPTY STATE
   emptyCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 32, alignItems: 'center', ...theme.shadows.card },
   emptyIconBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
   emptyTitle: { fontSize: 20, fontWeight: '700', color: theme.textPrimary, marginBottom: 8 },
@@ -650,7 +696,7 @@ const s = StyleSheet.create({
   emptyCta: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.primary, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14 },
   emptyCtaText: { fontSize: 15, fontWeight: '600', color: '#FFF' },
 
-  // ===== WITNESS ALERTS =====
+  // WITNESS
   witnessAlertCard: { backgroundColor: '#FFFBEB', borderRadius: 16, padding: 16, borderWidth: 1.5, borderColor: '#FDE68A' },
   witnessAlertHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 12 },
   witnessAlertIconBg: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#F59E0B18', alignItems: 'center' as const, justifyContent: 'center' as const },
@@ -665,7 +711,7 @@ const s = StyleSheet.create({
   witnessMoreLink: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 4, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#FDE68A' },
   witnessMoreText: { fontSize: 12, fontWeight: '600' as const, color: '#F59E0B' },
 
-  // ===== MODALS =====
+  // MODALS
   meetupModalContainer: { flex: 1, backgroundColor: '#F8FAFC' },
   meetupModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
   meetupModalHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -692,13 +738,7 @@ const s = StyleSheet.create({
   meetupInvitedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.accent + '12', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
   meetupInvitedText: { fontSize: 10, fontWeight: '700', color: theme.accent },
 
-  // ===== ASYNC SECTION WRAPPERS (fixed minHeight to prevent layout shift) =====
-  weeklyBannerWrap: { minHeight: 68 },
-  sponsorWrap: { minHeight: 60 },
-  leaderboardWrap: { minHeight: 380 },
-  timelineWrap: { minHeight: 230 },
-
-  // ===== SECTION DIVIDERS =====
+  // DIVIDERS
   divider: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 32, marginBottom: 20 },
   dividerLine: { flex: 1, height: 1, backgroundColor: '#E2E8F0' },
   dividerDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#CBD5E1', marginHorizontal: 12 },
