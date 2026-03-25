@@ -36,6 +36,7 @@ import { getMatchValidationLevel, getValidationColor, getValidationIcon, getVali
 import { fetchWeeklyLeaderboard, getCurrentWeekStart, formatDateISO } from '@/services/weeklyLeaderboardService';
 import { extraTranslations } from '@/constants/i18nExtra';
 import { getPendingWitnessRequests, getUnreadEventNotificationCount, markEventNotificationRead, EventNotification } from '@/services/eventNotificationService';
+import { getSponsoredEvents, SponsoredEvent } from '@/services/sponsoredEventService';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -60,6 +61,10 @@ export default function HomeScreen() {
   const [showJoinMeetupModal, setShowJoinMeetupModal] = useState(false);
   const [showMeetupListModal, setShowMeetupListModal] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
+
+  // Sponsored events state
+  const [upcomingEvents, setUpcomingEvents] = useState<SponsoredEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
 
   // Witness attestation alerts
   const [witnessRequests, setWitnessRequests] = useState<EventNotification[]>([]);
@@ -147,6 +152,18 @@ export default function HomeScreen() {
 
   useEffect(() => { loadMeetups(); }, [loadMeetups]);
 
+  // Load upcoming sponsored events
+  const loadUpcomingEvents = useCallback(async () => {
+    try {
+      const { events } = await getSponsoredEvents();
+      const nowDate = new Date();
+      const upcoming = events.filter(e => (e.status === 'upcoming' || e.status === 'active') && new Date(e.eventDate) >= new Date(nowDate.toISOString().split('T')[0])).sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime()).slice(0, 5);
+      setUpcomingEvents(upcoming);
+    } catch { /* silent */ } finally { setEventsLoading(false); }
+  }, []);
+
+  useEffect(() => { loadUpcomingEvents(); }, [loadUpcomingEvents]);
+
   useEffect(() => {
     const loadPending = () => { getPendingInvitationsCount().then(setPendingInviteCount); };
     loadPending();
@@ -156,7 +173,7 @@ export default function HomeScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([refreshData(), loadMeetups(), loadWitnessRequests()]);
+    await Promise.all([refreshData(), loadMeetups(), loadWitnessRequests(), loadUpcomingEvents()]);
     setRefreshing(false);
   };
 
@@ -579,112 +596,217 @@ export default function HomeScreen() {
           </Animated.View>
         ) : null}
 
-        {/* ========== UPCOMING (TOURNAMENT + MEETUPS) ========== */}
+        {/* ========== UNIFIED UPCOMING TIMELINE ========== */}
         <Animated.View entering={FadeIn.duration(400).delay(120)} style={[s.section, isTablet && s.sectionTablet]}>
           <View style={s.sectionHeaderRow}>
             <MaterialIcons name="event-note" size={18} color={theme.primary} />
             <Text style={s.sectionTitle}>{t('home', 'upcoming')}</Text>
-          </View>
-
-          <View style={s.upcomingColumnsRow}>
-            {/* Tournament Column */}
-            <View style={s.upcomingCol}>
-              {nextTournament ? (
-                <Pressable style={({ pressed }) => [s.tournamentCard, pressed && { opacity: 0.92, transform: [{ scale: 0.985 }] }]} onPress={() => router.push(`/tournament/${nextTournament.id}`)}>
-                  <LinearGradient colors={['#FEF3C7', '#FDE68A']} style={s.tournamentCardInner} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-                    <View style={s.tournamentHeader}>
-                      <View style={s.tournamentIconBg}><MaterialIcons name="emoji-events" size={18} color="#B45309" /></View>
-                      <Text style={s.tournamentBadge}>{nextTournament.status === 'En cours' ? t('tournamentStatus', 'inProgress') : t('tournamentStatus', 'upcoming')}</Text>
-                    </View>
-                    <Text style={s.tournamentName} numberOfLines={2}>{nextTournament.name}</Text>
-                    <View style={s.tournamentMeta}>
-                      <MaterialIcons name="place" size={11} color="#92400E" />
-                      <Text style={s.tournamentCity} numberOfLines={1}>{nextTournament.location?.city || ''}</Text>
-                    </View>
-                    <Text style={s.tournamentDate}>{new Date(nextTournament.date).toLocaleDateString(language === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short' })}</Text>
-                    {countdown ? (
-                      <View style={s.countdownRow}>
-                        {countdown.label ? (
-                          <View style={s.countdownTodayBadge}><MaterialIcons name="local-fire-department" size={13} color="#B45309" /><Text style={s.countdownTodayText}>{countdown.label}</Text></View>
-                        ) : (
-                          <>
-                            <View style={s.countdownUnit}><Text style={s.countdownValue}>{countdown.days}</Text><Text style={s.countdownUnitLabel}>{language === 'fr' ? 'j' : 'd'}</Text></View>
-                            <Text style={s.countdownSep}>:</Text>
-                            <View style={s.countdownUnit}><Text style={s.countdownValue}>{countdown.hours}</Text><Text style={s.countdownUnitLabel}>h</Text></View>
-                            <Text style={s.countdownSep}>:</Text>
-                            <View style={s.countdownUnit}><Text style={s.countdownValue}>{countdown.minutes}</Text><Text style={s.countdownUnitLabel}>min</Text></View>
-                          </>
-                        )}
-                      </View>
-                    ) : null}
-                  </LinearGradient>
+            <View style={{ flex: 1 }} />
+            <View style={s.upcomingActions}>
+              {pendingInviteCount > 0 ? (
+                <Pressable style={s.upcomingActionBtn} onPress={() => router.push('/meetup/invitations' as any)}>
+                  <MaterialIcons name="mail" size={14} color={theme.error} />
+                  <View style={s.upcomingActionBadge}><Text style={s.upcomingActionBadgeText}>{pendingInviteCount > 9 ? '9+' : pendingInviteCount}</Text></View>
                 </Pressable>
-              ) : (
-                <View style={s.emptyColCard}>
-                  <View style={s.emptyColIconBg}><MaterialIcons name="emoji-events" size={26} color={theme.textMuted} /></View>
-                  <Text style={s.emptyColText}>{t('home', 'noTournament')}</Text>
-                  <Pressable style={s.emptyColBtn} onPress={() => router.push('/tournament/new')}><MaterialIcons name="add" size={14} color="#FFF" /></Pressable>
-                </View>
-              )}
-            </View>
-
-            {/* Meetups Column */}
-            <View style={s.upcomingCol}>
-              <View style={s.meetupColHeader}>
-                <View style={s.meetupColTitleRow}><MaterialIcons name="event" size={13} color={theme.accent} /><Text style={s.meetupColTitle}>{t('history', 'meetups')}</Text></View>
-                <View style={s.meetupColActions}>
-                  {pendingInviteCount > 0 ? (
-                    <Pressable style={s.meetupColActionBtn} onPress={() => router.push('/meetup/invitations' as any)}>
-                      <MaterialIcons name="mail" size={12} color={theme.error} />
-                      <View style={s.meetupColBadge}><Text style={s.meetupColBadgeText}>{pendingInviteCount > 9 ? '9+' : pendingInviteCount}</Text></View>
-                    </Pressable>
-                  ) : null}
-                  <Pressable style={[s.meetupColActionBtn, { backgroundColor: theme.accent }]} onPress={() => setShowJoinMeetupModal(true)}><MaterialIcons name="qr-code" size={14} color="#FFF" /></Pressable>
-                  <Pressable style={[s.meetupColActionBtn, { backgroundColor: theme.primary }]} onPress={() => router.push('/meetup/new' as any)}><MaterialIcons name="add" size={14} color="#FFF" /></Pressable>
-                </View>
-              </View>
-              {meetups.length > 0 ? (
-                <View style={s.meetupColList}>
-                  {meetups.slice(0, 2).map((m) => {
-                    const mDate = new Date(m.date);
-                    const daysUntil = Math.max(0, Math.ceil((mDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-                    return (
-                      <Pressable key={m.id} style={({ pressed }) => [s.meetupColItem, pressed && { opacity: 0.85 }]} onPress={() => router.push(`/meetup/${m.id}` as any)}>
-                        <View style={s.meetupColDateBox}>
-                          <Text style={s.meetupColDateDay}>{mDate.getDate()}</Text>
-                          <Text style={s.meetupColDateMonth}>{mDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}</Text>
-                        </View>
-                        <View style={s.meetupColInfo}>
-                          <Text style={s.meetupColItemTitle} numberOfLines={1}>{m.title}</Text>
-                          <View style={s.meetupColItemMeta}>
-                            <Text style={s.meetupColItemTime}>{mDate.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}</Text>
-                            {daysUntil <= 1 ? <View style={s.meetupColSoonBadge}><Text style={s.meetupColSoonText}>{daysUntil === 0 ? t('notifications', 'todayLabel') : t('notifications', 'tomorrowLabel')}</Text></View> : null}
-                          </View>
-                          <View style={s.meetupColItemBottom}>
-                            <MaterialIcons name="group" size={11} color="#0369A1" />
-                            <Text style={s.meetupColParticipants}>{m._acceptedCount || 0}/{m._maxParticipants || 8}</Text>
-                            {m._source === 'created' ? <View style={s.meetupColCreatorDot}><MaterialIcons name="person" size={8} color={theme.primary} /></View> : <View style={s.meetupColInvitedDot}><MaterialIcons name="mail" size={8} color={theme.accent} /></View>}
-                          </View>
-                        </View>
-                        <MaterialIcons name="chevron-right" size={16} color="#0369A1" />
-                      </Pressable>
-                    );
-                  })}
-                  {meetups.length > 2 ? (
-                    <Pressable style={({ pressed }) => [s.meetupColMoreLink, pressed && { opacity: 0.7 }]} onPress={() => setShowMeetupListModal(true)}>
-                      <Text style={s.meetupColMoreText}>+{meetups.length - 2} {language === 'fr' ? 'autre(s)' : 'more'}</Text>
-                      <MaterialIcons name="chevron-right" size={14} color={theme.accent} />
-                    </Pressable>
-                  ) : null}
-                </View>
-              ) : !meetupsLoading ? (
-                <View style={s.meetupColEmpty}>
-                  <MaterialIcons name="event-available" size={22} color={theme.textMuted} />
-                  <Text style={s.meetupColEmptyText}>{t('meetup', 'noMeetups')}</Text>
-                </View>
               ) : null}
+              <Pressable style={[s.upcomingActionBtn, { backgroundColor: theme.accent + '15' }]} onPress={() => setShowJoinMeetupModal(true)}>
+                <MaterialIcons name="qr-code" size={14} color={theme.accent} />
+              </Pressable>
             </View>
           </View>
+
+          {/* Unified timeline */}
+          {(() => {
+            // Build unified items list
+            type UpcomingItem = { id: string; type: 'tournament' | 'meetup' | 'challenge'; date: Date; data: any };
+            const items: UpcomingItem[] = [];
+
+            // Add tournaments
+            tournaments
+              .filter((t: any) => t.status === 'À venir' || t.status === 'En cours')
+              .forEach((t: any) => items.push({ id: `t-${t.id}`, type: 'tournament', date: new Date(t.date), data: t }));
+
+            // Add meetups
+            meetups.forEach(m => items.push({ id: `m-${m.id}`, type: 'meetup', date: new Date(m.date), data: m }));
+
+            // Add sponsored events
+            upcomingEvents.forEach(e => items.push({ id: `e-${e.id}`, type: 'challenge', date: new Date(e.eventDate), data: e }));
+
+            // Sort by date
+            items.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+            const visibleItems = items.slice(0, 6);
+
+            if (visibleItems.length === 0 && !meetupsLoading && !eventsLoading) {
+              return (
+                <View style={s.upcomingEmpty}>
+                  <View style={s.upcomingEmptyIcon}>
+                    <MaterialIcons name="event-available" size={36} color={theme.textMuted} />
+                  </View>
+                  <Text style={s.upcomingEmptyTitle}>{language === 'fr' ? 'Rien de prevu' : 'Nothing planned'}</Text>
+                  <Text style={s.upcomingEmptyDesc}>{language === 'fr' ? 'Planifie un RDV, un tournoi ou un defi.' : 'Plan a meetup, tournament or challenge.'}</Text>
+                  <View style={s.upcomingEmptyActions}>
+                    <Pressable style={[s.upcomingEmptyBtn, { backgroundColor: '#0369A1' }]} onPress={() => router.push('/meetup/new' as any)}>
+                      <MaterialIcons name="event" size={16} color="#FFF" />
+                      <Text style={s.upcomingEmptyBtnText}>{language === 'fr' ? 'RDV' : 'Meetup'}</Text>
+                    </Pressable>
+                    <Pressable style={[s.upcomingEmptyBtn, { backgroundColor: '#B45309' }]} onPress={() => router.push('/tournament/new' as any)}>
+                      <MaterialIcons name="emoji-events" size={16} color="#FFF" />
+                      <Text style={s.upcomingEmptyBtnText}>{language === 'fr' ? 'Tournoi' : 'Tournament'}</Text>
+                    </Pressable>
+                    <Pressable style={[s.upcomingEmptyBtn, { backgroundColor: '#7C3AED' }]} onPress={() => router.push('/sponsored-event/list' as any)}>
+                      <MaterialIcons name="campaign" size={16} color="#FFF" />
+                      <Text style={s.upcomingEmptyBtnText}>{language === 'fr' ? 'Defis' : 'Challenges'}</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              );
+            }
+
+            // Color schemes per type
+            const typeConfig = {
+              meetup: { bg: '#E0F2FE', border: '#BAE6FD', accent: '#0369A1', icon: 'event' as const, label: language === 'fr' ? 'RDV' : 'Meetup', gradient: ['#E0F2FE', '#BAE6FD'] as [string, string] },
+              tournament: { bg: '#FEF3C7', border: '#FDE68A', accent: '#B45309', icon: 'emoji-events' as const, label: language === 'fr' ? 'Tournoi' : 'Tournament', gradient: ['#FEF3C7', '#FDE68A'] as [string, string] },
+              challenge: { bg: '#EDE9FE', border: '#DDD6FE', accent: '#7C3AED', icon: 'campaign' as const, label: language === 'fr' ? 'Defi' : 'Challenge', gradient: ['#EDE9FE', '#DDD6FE'] as [string, string] },
+            };
+
+            return (
+              <View style={s.upcomingTimeline}>
+                {visibleItems.map((item, idx) => {
+                  const cfg = typeConfig[item.type];
+                  const d = item.date;
+                  const daysUntil = Math.max(0, Math.ceil((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+                  const isToday = daysUntil === 0;
+                  const isTomorrow = daysUntil === 1;
+                  const isLast = idx === visibleItems.length - 1;
+
+                  return (
+                    <Pressable
+                      key={item.id}
+                      style={({ pressed }) => [s.upcomingCard, { borderLeftColor: cfg.accent, backgroundColor: cfg.bg }, pressed && { opacity: 0.9, transform: [{ scale: 0.985 }] }]}
+                      onPress={() => {
+                        if (item.type === 'tournament') router.push(`/tournament/${item.data.id}`);
+                        else if (item.type === 'meetup') router.push(`/meetup/${item.data.id}` as any);
+                        else router.push(`/sponsored-event/${item.data.id}` as any);
+                      }}
+                    >
+                      {/* Date column */}
+                      <View style={[s.upcomingDateCol, { backgroundColor: cfg.accent + '15' }]}>
+                        <Text style={[s.upcomingDateDay, { color: cfg.accent }]}>{d.getDate()}</Text>
+                        <Text style={[s.upcomingDateMonth, { color: cfg.accent }]}>{d.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}</Text>
+                      </View>
+
+                      {/* Content */}
+                      <View style={s.upcomingContent}>
+                        <View style={s.upcomingContentTop}>
+                          <View style={[s.upcomingTypeBadge, { backgroundColor: cfg.accent + '18' }]}>
+                            <MaterialIcons name={cfg.icon} size={10} color={cfg.accent} />
+                            <Text style={[s.upcomingTypeBadgeText, { color: cfg.accent }]}>{cfg.label}</Text>
+                          </View>
+                          {(isToday || isTomorrow) ? (
+                            <View style={[s.upcomingSoonBadge, isToday && { backgroundColor: '#FEE2E2' }]}>
+                              {isToday ? <MaterialIcons name="local-fire-department" size={10} color="#DC2626" /> : null}
+                              <Text style={[s.upcomingSoonText, isToday && { color: '#DC2626' }]}>{isToday ? t('notifications', 'todayLabel') : t('notifications', 'tomorrowLabel')}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+
+                        <Text style={[s.upcomingTitle, { color: cfg.accent }]} numberOfLines={1}>
+                          {item.type === 'tournament' ? item.data.name : item.type === 'meetup' ? item.data.title : item.data.title}
+                        </Text>
+
+                        <View style={s.upcomingMeta}>
+                          {/* Time */}
+                          <View style={s.upcomingMetaItem}>
+                            <MaterialIcons name="schedule" size={11} color={cfg.accent + '90'} />
+                            <Text style={[s.upcomingMetaText, { color: cfg.accent + '90' }]}>
+                              {item.type === 'challenge'
+                                ? new Date(item.data.startTime).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })
+                                : d.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                            </Text>
+                          </View>
+                          {/* Location */}
+                          {(item.type === 'tournament' && item.data.location?.city) ? (
+                            <View style={s.upcomingMetaItem}>
+                              <MaterialIcons name="place" size={11} color={cfg.accent + '90'} />
+                              <Text style={[s.upcomingMetaText, { color: cfg.accent + '90' }]} numberOfLines={1}>{item.data.location.city}</Text>
+                            </View>
+                          ) : (item.type === 'challenge' && item.data.city) ? (
+                            <View style={s.upcomingMetaItem}>
+                              <MaterialIcons name="place" size={11} color={cfg.accent + '90'} />
+                              <Text style={[s.upcomingMetaText, { color: cfg.accent + '90' }]} numberOfLines={1}>{item.data.city}</Text>
+                            </View>
+                          ) : null}
+                          {/* Participants */}
+                          {item.type === 'meetup' ? (
+                            <View style={s.upcomingMetaItem}>
+                              <MaterialIcons name="group" size={11} color={cfg.accent + '90'} />
+                              <Text style={[s.upcomingMetaText, { color: cfg.accent + '90' }]}>{item.data._acceptedCount || 0}/{item.data._maxParticipants || 8}</Text>
+                            </View>
+                          ) : item.type === 'challenge' && item.data.ambassadorName ? (
+                            <View style={s.upcomingMetaItem}>
+                              <MaterialIcons name="verified" size={11} color="#7C3AED" />
+                              <Text style={[s.upcomingMetaText, { color: '#7C3AED' }]} numberOfLines={1}>{item.data.ambassadorName}</Text>
+                            </View>
+                          ) : item.type === 'tournament' ? (
+                            <View style={s.upcomingMetaItem}>
+                              <MaterialIcons name="sports" size={11} color={cfg.accent + '90'} />
+                              <Text style={[s.upcomingMetaText, { color: cfg.accent + '90' }]}>{t('formats', item.data.format)}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+
+                        {/* Tournament countdown for nearest one */}
+                        {item.type === 'tournament' && idx === visibleItems.findIndex(i => i.type === 'tournament') && countdown ? (
+                          <View style={s.upcomingCountdown}>
+                            {countdown.label ? (
+                              <View style={s.upcomingCountdownToday}>
+                                <MaterialIcons name="local-fire-department" size={11} color="#B45309" />
+                                <Text style={s.upcomingCountdownTodayText}>{countdown.label}</Text>
+                              </View>
+                            ) : (
+                              <>
+                                <View style={s.upcomingCountdownUnit}><Text style={s.upcomingCountdownVal}>{countdown.days}</Text><Text style={s.upcomingCountdownLbl}>{language === 'fr' ? 'j' : 'd'}</Text></View>
+                                <Text style={s.upcomingCountdownSep}>:</Text>
+                                <View style={s.upcomingCountdownUnit}><Text style={s.upcomingCountdownVal}>{countdown.hours}</Text><Text style={s.upcomingCountdownLbl}>h</Text></View>
+                                <Text style={s.upcomingCountdownSep}>:</Text>
+                                <View style={s.upcomingCountdownUnit}><Text style={s.upcomingCountdownVal}>{countdown.minutes}</Text><Text style={s.upcomingCountdownLbl}>min</Text></View>
+                              </>
+                            )}
+                          </View>
+                        ) : null}
+                      </View>
+
+                      <MaterialIcons name="chevron-right" size={18} color={cfg.accent + '60'} />
+                    </Pressable>
+                  );
+                })}
+
+                {/* Quick add row */}
+                <View style={s.upcomingAddRow}>
+                  <Pressable style={[s.upcomingAddBtn, { backgroundColor: '#E0F2FE', borderColor: '#BAE6FD' }]} onPress={() => router.push('/meetup/new' as any)}>
+                    <MaterialIcons name="event" size={15} color="#0369A1" />
+                    <Text style={[s.upcomingAddBtnText, { color: '#0369A1' }]}>+ {language === 'fr' ? 'RDV' : 'Meetup'}</Text>
+                  </Pressable>
+                  <Pressable style={[s.upcomingAddBtn, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]} onPress={() => router.push('/tournament/new' as any)}>
+                    <MaterialIcons name="emoji-events" size={15} color="#B45309" />
+                    <Text style={[s.upcomingAddBtnText, { color: '#B45309' }]}>+ {language === 'fr' ? 'Tournoi' : 'Tournament'}</Text>
+                  </Pressable>
+                  <Pressable style={[s.upcomingAddBtn, { backgroundColor: '#EDE9FE', borderColor: '#DDD6FE' }]} onPress={() => router.push('/sponsored-event/list' as any)}>
+                    <MaterialIcons name="campaign" size={15} color="#7C3AED" />
+                    <Text style={[s.upcomingAddBtnText, { color: '#7C3AED' }]}>+ {language === 'fr' ? 'Defi' : 'Challenge'}</Text>
+                  </Pressable>
+                </View>
+
+                {items.length > 6 ? (
+                  <Pressable style={s.upcomingMoreLink} onPress={() => setShowMeetupListModal(true)}>
+                    <Text style={s.upcomingMoreText}>+{items.length - 6} {language === 'fr' ? 'autre(s)' : 'more'}</Text>
+                    <MaterialIcons name="chevron-right" size={14} color={theme.primary} />
+                  </Pressable>
+                ) : null}
+              </View>
+            );
+          })()}
         </Animated.View>
 
         {/* ========== COMPACT HISTORY ========== */}
@@ -1000,59 +1122,50 @@ const s = StyleSheet.create({
   progressBarTrack: { height: 6, backgroundColor: '#D97706' + '12', borderRadius: 3, overflow: 'hidden' as const },
   progressBarFill: { height: '100%', backgroundColor: '#D97706', borderRadius: 3 },
 
-  // ===== UPCOMING 2-COL =====
-  upcomingColumnsRow: { flexDirection: 'row', gap: 10 },
-  upcomingCol: { flex: 1 },
+  // ===== UNIFIED UPCOMING TIMELINE =====
+  upcomingActions: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
+  upcomingActionBtn: { width: 34, height: 34, borderRadius: 11, backgroundColor: '#F1F5F9', alignItems: 'center' as const, justifyContent: 'center' as const, position: 'relative' as const },
+  upcomingActionBadge: { position: 'absolute' as const, top: -4, right: -4, backgroundColor: theme.error, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const, paddingHorizontal: 3, borderWidth: 2, borderColor: '#F8FAFC' },
+  upcomingActionBadgeText: { fontSize: 9, fontWeight: '800' as const, color: '#FFF' },
 
-  // Tournament card
-  tournamentCard: { borderRadius: 18, overflow: 'hidden', ...theme.shadows.cardElevated, flex: 1 },
-  tournamentCardInner: { padding: 14, flex: 1 },
-  tournamentHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  tournamentIconBg: { width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(180,83,9,0.1)', alignItems: 'center', justifyContent: 'center' },
-  tournamentBadge: { fontSize: 9, fontWeight: '700', color: '#92400E', textTransform: 'uppercase', letterSpacing: 0.5, flex: 1 },
-  tournamentName: { fontSize: 14, fontWeight: '800', color: '#78350F', marginBottom: 5, lineHeight: 19 },
-  tournamentMeta: { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 2 },
-  tournamentCity: { fontSize: 11, fontWeight: '600', color: '#92400E', flex: 1 },
-  tournamentDate: { fontSize: 11, fontWeight: '600', color: '#92400E', marginBottom: 8 },
-  countdownRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: 'rgba(180,83,9,0.06)', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 8 },
-  countdownUnit: { alignItems: 'center' },
-  countdownValue: { fontSize: 18, fontWeight: '900', color: '#78350F' },
-  countdownUnitLabel: { fontSize: 8, fontWeight: '700', color: '#92400E', textTransform: 'uppercase' },
-  countdownSep: { fontSize: 15, fontWeight: '700', color: '#92400E', marginHorizontal: 1 },
-  countdownTodayBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(180,83,9,0.12)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
-  countdownTodayText: { fontSize: 12, fontWeight: '800', color: '#78350F' },
-  emptyColCard: { backgroundColor: '#FFF', borderRadius: 18, padding: 20, alignItems: 'center', justifyContent: 'center', flex: 1, borderWidth: 1, borderColor: '#E2E8F0', minHeight: 160 },
-  emptyColIconBg: { width: 48, height: 48, borderRadius: 24, backgroundColor: theme.carreauColor + '12', alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  emptyColText: { fontSize: 12, color: theme.textMuted, fontWeight: '500', textAlign: 'center', marginBottom: 10 },
-  emptyColBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: theme.carreauColor, alignItems: 'center', justifyContent: 'center' },
+  upcomingTimeline: { gap: 8 },
 
-  // Meetup column
-  meetupColHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  meetupColTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  meetupColTitle: { fontSize: 13, fontWeight: '700', color: theme.textSecondary },
-  meetupColActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  meetupColActionBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', position: 'relative' as const },
-  meetupColBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: theme.error, minWidth: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
-  meetupColBadgeText: { fontSize: 8, fontWeight: '800', color: '#FFF' },
-  meetupColList: { flex: 1, gap: 6, backgroundColor: '#F0F9FF', borderRadius: 14, padding: 8 },
-  meetupColItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E0F2FE', borderRadius: 12, padding: 8, gap: 8 },
-  meetupColDateBox: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(3,105,161,0.1)', alignItems: 'center', justifyContent: 'center' },
-  meetupColDateDay: { fontSize: 16, fontWeight: '900', color: '#0369A1', lineHeight: 18 },
-  meetupColDateMonth: { fontSize: 7, fontWeight: '700', color: '#0369A1', letterSpacing: 0.3 },
-  meetupColInfo: { flex: 1 },
-  meetupColItemTitle: { fontSize: 12, fontWeight: '700', color: '#0C4A6E', marginBottom: 2 },
-  meetupColItemMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 },
-  meetupColItemTime: { fontSize: 10, fontWeight: '600', color: '#0369A1' },
-  meetupColSoonBadge: { backgroundColor: '#FEF3C7', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
-  meetupColSoonText: { fontSize: 7, fontWeight: '700', color: '#B45309' },
-  meetupColItemBottom: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  meetupColParticipants: { fontSize: 10, fontWeight: '600', color: '#0369A1' },
-  meetupColCreatorDot: { width: 14, height: 14, borderRadius: 7, backgroundColor: theme.primary + '18', alignItems: 'center', justifyContent: 'center' },
-  meetupColInvitedDot: { width: 14, height: 14, borderRadius: 7, backgroundColor: theme.accent + '18', alignItems: 'center', justifyContent: 'center' },
-  meetupColMoreLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 6, backgroundColor: theme.accent + '08', borderRadius: 8, borderWidth: 1, borderColor: theme.accent + '18' },
-  meetupColMoreText: { fontSize: 11, fontWeight: '600', color: theme.accent },
-  meetupColEmpty: { alignItems: 'center', backgroundColor: '#FFF', borderRadius: 14, paddingVertical: 20, gap: 6, borderWidth: 1, borderColor: '#E2E8F0', flex: 1, justifyContent: 'center', minHeight: 120 },
-  meetupColEmptyText: { fontSize: 11, color: theme.textMuted, fontWeight: '500', textAlign: 'center' },
+  upcomingCard: { flexDirection: 'row' as const, alignItems: 'center' as const, borderRadius: 16, padding: 12, gap: 12, borderLeftWidth: 4, borderWidth: 1, borderColor: 'transparent', ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4 }, android: { elevation: 1 }, default: {} }) },
+  upcomingDateCol: { width: 44, height: 44, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const },
+  upcomingDateDay: { fontSize: 18, fontWeight: '900' as const, lineHeight: 20 },
+  upcomingDateMonth: { fontSize: 8, fontWeight: '700' as const, letterSpacing: 0.3, marginTop: 1 },
+  upcomingContent: { flex: 1, gap: 4 },
+  upcomingContentTop: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
+  upcomingTypeBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+  upcomingTypeBadgeText: { fontSize: 9, fontWeight: '700' as const, textTransform: 'uppercase' as const, letterSpacing: 0.3 },
+  upcomingSoonBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, backgroundColor: '#FEF3C7', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+  upcomingSoonText: { fontSize: 9, fontWeight: '700' as const, color: '#B45309' },
+  upcomingTitle: { fontSize: 14, fontWeight: '700' as const },
+  upcomingMeta: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, flexWrap: 'wrap' as const },
+  upcomingMetaItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3 },
+  upcomingMetaText: { fontSize: 11, fontWeight: '600' as const },
+
+  upcomingCountdown: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: 'rgba(180,83,9,0.08)', borderRadius: 8, paddingVertical: 5, paddingHorizontal: 8, alignSelf: 'flex-start' as const, marginTop: 2 },
+  upcomingCountdownUnit: { alignItems: 'center' as const },
+  upcomingCountdownVal: { fontSize: 14, fontWeight: '900' as const, color: '#78350F' },
+  upcomingCountdownLbl: { fontSize: 7, fontWeight: '700' as const, color: '#92400E' },
+  upcomingCountdownSep: { fontSize: 12, fontWeight: '700' as const, color: '#92400E' },
+  upcomingCountdownToday: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3 },
+  upcomingCountdownTodayText: { fontSize: 11, fontWeight: '800' as const, color: '#78350F' },
+
+  upcomingAddRow: { flexDirection: 'row' as const, gap: 8, marginTop: 4 },
+  upcomingAddBtn: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 5, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
+  upcomingAddBtnText: { fontSize: 11, fontWeight: '700' as const },
+  upcomingMoreLink: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 4, paddingVertical: 10, marginTop: 4 },
+  upcomingMoreText: { fontSize: 12, fontWeight: '600' as const, color: theme.primary },
+
+  upcomingEmpty: { backgroundColor: '#FFF', borderRadius: 18, padding: 28, alignItems: 'center' as const, borderWidth: 1, borderColor: '#E2E8F0' },
+  upcomingEmptyIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#F1F5F9', alignItems: 'center' as const, justifyContent: 'center' as const, marginBottom: 14 },
+  upcomingEmptyTitle: { fontSize: 16, fontWeight: '700' as const, color: theme.textPrimary, marginBottom: 4 },
+  upcomingEmptyDesc: { fontSize: 13, color: theme.textSecondary, textAlign: 'center' as const, marginBottom: 16, lineHeight: 19 },
+  upcomingEmptyActions: { flexDirection: 'row' as const, gap: 8 },
+  upcomingEmptyBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
+  upcomingEmptyBtnText: { fontSize: 12, fontWeight: '700' as const, color: '#FFF' },
 
   // ===== HISTORY =====
   historyList: { backgroundColor: '#FFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden' as const },
