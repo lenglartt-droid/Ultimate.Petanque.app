@@ -386,7 +386,7 @@ export default function HomeScreen() {
 
         {/* ========== WITNESS ATTESTATION ALERTS ========== */}
         {witnessRequests.length > 0 ? (
-          <Animated.View entering={FadeIn.duration(400).delay(140)} style={[s.section, isTablet && s.sectionTablet]}>
+          <View style={[s.section, isTablet && s.sectionTablet]}>
             <View style={s.witnessAlertCard}>
               <View style={s.witnessAlertHeader}>
                 <View style={s.witnessAlertIconBg}>
@@ -425,16 +425,16 @@ export default function HomeScreen() {
                 </Pressable>
               ) : null}
             </View>
-          </Animated.View>
+          </View>
         ) : null}
 
         {/* ========== WEEKLY LEADERBOARD BANNER ========== */}
         {!weeklyBannerLoaded ? (
-          <Animated.View entering={FadeIn.duration(300)} style={[s.section, s.weeklyBannerWrap, isTablet && s.sectionTablet]}>
+          <View style={[s.section, s.weeklyBannerWrap, isTablet && s.sectionTablet]}>
             <BannerSkeleton />
-          </Animated.View>
+          </View>
         ) : weeklyRank ? (
-          <Animated.View entering={FadeIn.duration(400).delay(180)} style={[s.section, s.weeklyBannerWrap, isTablet && s.sectionTablet]}>
+          <View style={[s.section, s.weeklyBannerWrap, isTablet && s.sectionTablet]}>
             <Pressable style={s.weeklyBanner} onPress={() => router.push('/leaderboard' as any)}>
               <LinearGradient colors={['#1E3A8A', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.weeklyBannerGradient}>
                 <View style={s.weeklyBannerLeft}>
@@ -465,7 +465,7 @@ export default function HomeScreen() {
                 </View>
               </LinearGradient>
             </Pressable>
-          </Animated.View>
+          </View>
         ) : null}
 
         {/* ========== SPONSOR BANNER ========== */}
@@ -478,7 +478,7 @@ export default function HomeScreen() {
 
         {/* ========== LEADERBOARD PROGRESS ========== */}
         {selfPlayer?.isPublic && totalMatches < LEADERBOARD_MIN_MATCHES ? (
-          <Animated.View entering={FadeIn.duration(400).delay(220)} style={[s.section, isTablet && s.sectionTablet]}>
+          <View style={[s.section, isTablet && s.sectionTablet]}>
             <Pressable style={s.progressCard} onPress={() => router.push('/leaderboard' as any)}>
               <View style={s.progressHeader}>
                 <View style={s.progressIconBg}><MaterialIcons name="leaderboard" size={16} color="#D97706" /></View>
@@ -492,7 +492,7 @@ export default function HomeScreen() {
                 <View style={[s.progressBarFill, { width: `${Math.min((totalMatches / LEADERBOARD_MIN_MATCHES) * 100, 100)}%` }]} />
               </View>
             </Pressable>
-          </Animated.View>
+          </View>
         ) : null}
 
         {/* ========== COMMUNITY LEADERBOARD ========== */}
