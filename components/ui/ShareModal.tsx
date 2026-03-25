@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Share,
   ScrollView,
   Switch,
+  Dimensions,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -91,6 +92,8 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
 
   // Pending share action after code generation
   const [pendingAction, setPendingAction] = useState<'native' | 'code' | 'invitation' | 'qr' | null>(null);
+
+  const scrollRef = useRef<ScrollView>(null);
 
   const typeConfig = TYPE_CONFIG[itemType];
   const typeLabelLower = t('shareModal', TYPE_LOWER_KEY[itemType]);
@@ -209,6 +212,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
       if (expiresAtISO) setExpiresAtDate(new Date(expiresAtISO));
       else setExpiresAtDate(null);
       setStep('result');
+      scrollToTop();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
       setError(e?.message || t('shareModal', 'errorCreating'));
@@ -216,6 +220,11 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
       setIsGenerating(false);
     }
   }, [itemType, itemId, t]);
+
+  // Scroll to top helper
+  const scrollToTop = useCallback(() => {
+    setTimeout(() => scrollRef.current?.scrollTo({ y: 0, animated: true }), 50);
+  }, []);
 
   // Initiate share flow: check for associated items, then generate
   const initiateGenerate = useCallback(async (action: 'native' | 'code' | 'invitation' | 'qr') => {
@@ -229,22 +238,26 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
         setIncludeClub(!!club);
         setIncludeTerrain(!!terrain);
         setStep('associated');
+        scrollToTop();
         return;
       }
     }
     // Show expiration step
     setStep('expiration');
-  }, [itemType, detectAssociatedItems]);
+    scrollToTop();
+  }, [itemType, detectAssociatedItems, scrollToTop]);
 
   const handleConfirmAssociated = useCallback(() => {
     setStep('expiration');
-  }, []);
+    scrollToTop();
+  }, [scrollToTop]);
 
   const handleSkipAssociated = useCallback(() => {
     setIncludeClub(false);
     setIncludeTerrain(false);
     setStep('expiration');
-  }, []);
+    scrollToTop();
+  }, [scrollToTop]);
 
   const handleConfirmExpiration = useCallback(async () => {
     const items: AssociatedItem[] = [];
@@ -308,7 +321,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
             </Pressable>
           </View>
 
-          <ScrollView style={s.scrollView} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" bounces={false} nestedScrollEnabled>
+          <ScrollView ref={scrollRef} style={s.scrollView} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" bounces={false} nestedScrollEnabled>
 
             {/* ===== PREVIEW CARD (always visible) ===== */}
             <LinearGradient colors={typeConfig.gradient} style={s.previewGradient}>
@@ -597,12 +610,12 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
 
 const s = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  sheet: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%' },
+  sheet: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '88%', minHeight: 300 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A' },
   closeBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
-  scrollView: { flexGrow: 0, flexShrink: 1 },
-  scrollContent: { paddingBottom: 48 },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingBottom: 48, flexGrow: 1 },
 
   // Preview gradient
   previewGradient: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, marginHorizontal: 16, marginTop: 16, borderRadius: 16 },
