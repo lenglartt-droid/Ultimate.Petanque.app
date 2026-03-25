@@ -16,29 +16,13 @@ import { getBrandVisual, getBrandImage } from '@/constants/boulesDatabase';
 import { getTrustScoreColor, getTrustScoreIcon, getTrustLevelLabel } from '@/services/trustScoreService';
 import { fetchEventLeaderboard, EventLeaderboardEntry, SponsoredEvent } from '@/services/sponsoredEventService';
 import { extraTranslations } from '@/constants/i18nExtra';
+import { CONTINENT_MAP, getContinent, getContinentLabel } from '@/constants/geoData';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type WidgetTab = 'players' | 'clubs' | 'boules' | 'events';
 type GeoScope = 'world' | 'continent' | 'country' | 'city';
 
-const CONTINENT_MAP: Record<string, string> = {
-  'France': 'Europe', 'Belgique': 'Europe', 'Belgium': 'Europe', 'Suisse': 'Europe', 'Switzerland': 'Europe',
-  'Luxembourg': 'Europe', 'Espagne': 'Europe', 'Spain': 'Europe', 'Italie': 'Europe', 'Italy': 'Europe',
-  'Allemagne': 'Europe', 'Germany': 'Europe', 'Portugal': 'Europe', 'Pays-Bas': 'Europe', 'Netherlands': 'Europe',
-  'Royaume-Uni': 'Europe', 'United Kingdom': 'Europe', 'Angleterre': 'Europe', 'Croatie': 'Europe', 'Croatia': 'Europe',
-  'Monaco': 'Europe', 'Tunisie': 'Africa', 'Tunisia': 'Africa', 'Maroc': 'Africa', 'Morocco': 'Africa',
-  'Algerie': 'Africa', 'Algeria': 'Africa', 'Senegal': 'Africa', 'Madagascar': 'Africa',
-  'Canada': 'North America', 'Etats-Unis': 'North America', 'United States': 'North America', 'USA': 'North America',
-  'Mexique': 'North America', 'Mexico': 'North America',
-  'Bresil': 'South America', 'Brazil': 'South America', 'Argentine': 'South America', 'Argentina': 'South America',
-  'Thailande': 'Asia', 'Thailand': 'Asia', 'Japon': 'Asia', 'Japan': 'Asia', 'Chine': 'Asia', 'China': 'Asia',
-  'Vietnam': 'Asia', 'Cambodge': 'Asia', 'Cambodia': 'Asia', 'Laos': 'Asia',
-  'Australie': 'Oceania', 'Australia': 'Oceania', 'Nouvelle-Zelande': 'Oceania', 'New Zealand': 'Oceania',
-  'Nouvelle-Caledonie': 'Oceania', 'Polynesie': 'Oceania', 'Tahiti': 'Oceania',
-};
-
-function getContinent(country: string): string {
-  return CONTINENT_MAP[country] || 'Europe';
-}
+const GEO_STORAGE_KEY = 'leaderboard_geo_scope';
 
 export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersToggled?: (open: boolean) => void }) {
   const { t, language } = useLanguage();
@@ -50,6 +34,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
   // Geographic scope
   const [geoScope, setGeoScope] = useState<GeoScope>('world');
   const [geoValue, setGeoValue] = useState<string>('');
+  const [geoInitialized, setGeoInitialized] = useState(false);
 
   // Players
   const [players, setPlayers] = useState<LeaderboardPlayer[]>([]);
@@ -75,6 +60,40 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
   const [eventsLoading, setEventsLoading] = useState(false);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [eventsLoaded, setEventsLoaded] = useState(false);
+
+  // Auto-detect geo scope from selfPlayer or restore from storage
+  useEffect(() => {
+    if (geoInitialized) return;
+    const initGeo = async () => {
+      try {
+        const saved = await AsyncStorage.getItem(GEO_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.scope && parsed.scope !== 'world') {
+            setGeoScope(parsed.scope);
+            if (parsed.value) setGeoValue(parsed.value);
+            setGeoInitialized(true);
+            return;
+          }
+        }
+      } catch {}
+      // Auto-detect from selfPlayer country
+      if (selfPlayer?.country) {
+        const continent = getContinent(selfPlayer.country);
+        setGeoScope('continent');
+        setGeoValue(continent);
+      }
+      setGeoInitialized(true);
+    };
+    initGeo();
+  }, [selfPlayer?.country, geoInitialized]);
+
+  // Persist geo scope changes
+  const updateGeoScope = useCallback((scope: GeoScope, value: string) => {
+    setGeoScope(scope);
+    setGeoValue(value);
+    AsyncStorage.setItem(GEO_STORAGE_KEY, JSON.stringify({ scope, value })).catch(() => {});
+  }, []);
 
   // Load players
   const loadPlayers = useCallback(async () => {
@@ -250,12 +269,21 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
               style={[s.geoChip, isActive && s.geoChipActive]}
               onPress={() => {
                 Haptics.selectionAsync();
-                setGeoScope(scope);
-                if (scope === 'world') setGeoValue('');
-                else if (scope === 'continent' && uniqueContinents.length === 1) setGeoValue(uniqueContinents[0]);
-                else if (scope === 'country' && uniqueCountries.length === 1) setGeoValue(uniqueCountries[0]);
-                else if (scope === 'city' && uniqueCities.length === 1) setGeoValue(uniqueCities[0]);
-                else setGeoValue('');
+                let val = '';
+                if (scope === 'world') val = '';
+                else if (scope === 'continent') {
+                  if (uniqueContinents.length === 1) val = uniqueContinents[0];
+                  else if (selfPlayer?.country) val = getContinent(selfPlayer.country);
+                }
+                else if (scope === 'country') {
+                  if (uniqueCountries.length === 1) val = uniqueCountries[0];
+                  else if (selfPlayer?.country) val = selfPlayer.country;
+                }
+                else if (scope === 'city') {
+                  if (uniqueCities.length === 1) val = uniqueCities[0];
+                  else if (selfPlayer?.location?.city) val = selfPlayer.location.city;
+                }
+                updateGeoScope(scope, val);
               }}
             >
               <MaterialIcons name={icons[scope] as any} size={12} color={isActive ? '#FFF' : theme.textSecondary} />
@@ -274,9 +302,9 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
               <Pressable
                 key={val}
                 style={[s.geoValueChip, isActive && s.geoValueChipActive]}
-                onPress={() => { Haptics.selectionAsync(); setGeoValue(isActive ? '' : val); }}
+                onPress={() => { Haptics.selectionAsync(); updateGeoScope(geoScope, isActive ? '' : val); }}
               >
-                <Text style={[s.geoValueChipText, isActive && s.geoValueChipTextActive]} numberOfLines={1}>{val}</Text>
+                <Text style={[s.geoValueChipText, isActive && s.geoValueChipTextActive]} numberOfLines={1}>{geoScope === 'continent' ? getContinentLabel(val, language === 'fr') : val}</Text>
               </Pressable>
             );
           })}

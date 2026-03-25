@@ -34,6 +34,10 @@ import { fetchEventLeaderboard, EventLeaderboardEntry, SponsoredEvent } from '@/
 import { fetchWeeklyLeaderboard, getSubRankings, saveWeeklySnapshot, checkAndTriggerWeeklyReset, getLastWeekSummary, WeeklyRankChange, SubRanking, getCurrentWeekStart, formatDateISO } from '@/services/weeklyLeaderboardService';
 import { extraTranslations } from '@/constants/i18nExtra';
 import { FunctionsHttpError } from '@supabase/supabase-js';
+import { CONTINENT_MAP, getContinent, getContinentLabel } from '@/constants/geoData';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const GEO_STORAGE_KEY = 'leaderboard_geo_scope';
 
 type LeaderboardTab = 'players' | 'clubs' | 'boules' | 'events' | 'trust';
 
@@ -338,6 +342,39 @@ export default function LeaderboardScreen() {
   type GeoScope = 'world' | 'continent' | 'country' | 'city';
   const [geoScope, setGeoScope] = useState<GeoScope>('world');
   const [geoValue, setGeoValue] = useState<string>('');
+  const [geoInitialized, setGeoInitialized] = useState(false);
+
+  // Auto-detect geo scope from selfPlayer or restore from storage
+  useEffect(() => {
+    if (geoInitialized) return;
+    const initGeo = async () => {
+      try {
+        const saved = await AsyncStorage.getItem(GEO_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.scope && parsed.scope !== 'world') {
+            setGeoScope(parsed.scope);
+            if (parsed.value) setGeoValue(parsed.value);
+            setGeoInitialized(true);
+            return;
+          }
+        }
+      } catch {}
+      if (selfPlayer?.country) {
+        const continent = getContinent(selfPlayer.country);
+        setGeoScope('continent');
+        setGeoValue(continent);
+      }
+      setGeoInitialized(true);
+    };
+    initGeo();
+  }, [selfPlayer?.country, geoInitialized]);
+
+  const updateGeoScope = useCallback((scope: GeoScope, value: string) => {
+    setGeoScope(scope);
+    setGeoValue(value);
+    AsyncStorage.setItem(GEO_STORAGE_KEY, JSON.stringify({ scope, value })).catch(() => {});
+  }, []);
 
   // ============ CLUBS STATE ============
   const [allClubs, setAllClubs] = useState<LeaderboardClub[]>([]);
@@ -668,16 +705,7 @@ export default function LeaderboardScreen() {
     if (geoScope === 'city' && geoValue) result = result.filter(p => p.city?.toLowerCase() === geoValue.toLowerCase());
     else if (geoScope === 'country' && geoValue) result = result.filter(p => p.country?.toLowerCase() === geoValue.toLowerCase());
     else if (geoScope === 'continent' && geoValue) {
-      const CONTINENT_MAP: Record<string, string> = {
-        'France': 'Europe', 'Belgique': 'Europe', 'Belgium': 'Europe', 'Suisse': 'Europe', 'Switzerland': 'Europe',
-        'Luxembourg': 'Europe', 'Espagne': 'Europe', 'Spain': 'Europe', 'Italie': 'Europe', 'Italy': 'Europe',
-        'Allemagne': 'Europe', 'Germany': 'Europe', 'Portugal': 'Europe', 'Pays-Bas': 'Europe', 'Netherlands': 'Europe',
-        'Tunisie': 'Africa', 'Tunisia': 'Africa', 'Maroc': 'Africa', 'Morocco': 'Africa',
-        'Canada': 'North America', 'Etats-Unis': 'North America', 'United States': 'North America', 'USA': 'North America',
-        'Bresil': 'South America', 'Brazil': 'South America', 'Australie': 'Oceania', 'Australia': 'Oceania',
-        'Thailande': 'Asia', 'Thailand': 'Asia', 'Japon': 'Asia', 'Japan': 'Asia',
-      };
-      result = result.filter(p => p.country ? (CONTINENT_MAP[p.country] || 'Europe') === geoValue : false);
+      result = result.filter(p => p.country ? getContinent(p.country) === geoValue : false);
     }
     // Trust level filter
     if (filterTrustLevel !== 'all') {
@@ -727,8 +755,7 @@ export default function LeaderboardScreen() {
     setFilterTrustLevel('all');
     setSearch('');
     setFilterSearchText('');
-    setGeoScope('world');
-    setGeoValue('');
+    updateGeoScope('world', '');
   };
 
   const handleInviteToMeetup = useCallback(async (targetUserId: string, targetName: string) => {
@@ -868,11 +895,20 @@ export default function LeaderboardScreen() {
                   style={[s.tabBtn, { flex: 1, paddingVertical: 8 }, isActive && { backgroundColor: '#2563EB80' }]}
                   onPress={() => {
                     Haptics.selectionAsync();
-                    setGeoScope(scope);
-                    if (scope === 'world') setGeoValue('');
-                    else if (scope === 'country' && uniqueCountries.length === 1) setGeoValue(uniqueCountries[0]);
-                    else if (scope === 'city' && uniqueCities.length === 1) setGeoValue(uniqueCities[0]);
-                    else setGeoValue('');
+                    let val = '';
+                    if (scope === 'world') val = '';
+                    else if (scope === 'continent') {
+                      if (selfPlayer?.country) val = getContinent(selfPlayer.country);
+                    }
+                    else if (scope === 'country') {
+                      if (uniqueCountries.length === 1) val = uniqueCountries[0];
+                      else if (selfPlayer?.country) val = selfPlayer.country;
+                    }
+                    else if (scope === 'city') {
+                      if (uniqueCities.length === 1) val = uniqueCities[0];
+                      else if (selfPlayer?.location?.city) val = (selfPlayer.location as any).city;
+                    }
+                    updateGeoScope(scope, val);
                   }}
                 >
                   <MaterialIcons name={icons[scope] as any} size={13} color={isActive ? '#FFF' : 'rgba(255,255,255,0.5)'} />
@@ -884,7 +920,7 @@ export default function LeaderboardScreen() {
           {geoScope !== 'world' ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginBottom: 10 }}>
               {(geoScope === 'continent'
-                ? (() => { const cs = allPlayers.map(p => p.country).filter(Boolean).map(c => { const CM: Record<string, string> = { 'France': 'Europe', 'Belgique': 'Europe', 'Belgium': 'Europe', 'Suisse': 'Europe', 'Tunisie': 'Africa', 'Tunisia': 'Africa', 'Maroc': 'Africa', 'Canada': 'North America', 'Etats-Unis': 'North America', 'Australie': 'Oceania', 'Thailande': 'Asia' }; return CM[c!] || 'Europe'; }); return [...new Set(cs)].sort(); })()
+                ? (() => { const cs = allPlayers.map(p => p.country).filter(Boolean).map(c => getContinent(c!)); return [...new Set(cs)].sort(); })()
                 : geoScope === 'country' ? uniqueCountries : uniqueCities
               ).map(val => {
                 const isActive = geoValue === val;
@@ -892,9 +928,9 @@ export default function LeaderboardScreen() {
                   <Pressable
                     key={val}
                     style={[s.tabBtn, { flex: 0, paddingHorizontal: 14, paddingVertical: 7 }, isActive && { backgroundColor: '#2563EB80' }]}
-                    onPress={() => { Haptics.selectionAsync(); setGeoValue(isActive ? '' : val); }}
+                    onPress={() => { Haptics.selectionAsync(); updateGeoScope(geoScope, isActive ? '' : val); }}
                   >
-                    <Text style={[s.tabBtnText, { fontSize: 12 }, isActive && s.tabBtnTextActive]} numberOfLines={1}>{val}</Text>
+                    <Text style={[s.tabBtnText, { fontSize: 12 }, isActive && s.tabBtnTextActive]} numberOfLines={1}>{geoScope === 'continent' ? getContinentLabel(val, language === 'fr') : val}</Text>
                   </Pressable>
                 );
               })}
@@ -1971,9 +2007,9 @@ export default function LeaderboardScreen() {
                       </Pressable>
                     ) : null}
                     {geoScope !== 'world' && geoValue ? (
-                      <Pressable style={s.activeFilterPill} onPress={() => { setGeoScope('world'); setGeoValue(''); }}>
+                      <Pressable style={s.activeFilterPill} onPress={() => { updateGeoScope('world', ''); }}>
                         <MaterialIcons name="public" size={12} color="#D97706" />
-                        <Text style={s.activeFilterPillText}>{geoValue}</Text>
+                        <Text style={s.activeFilterPillText}>{geoScope === 'continent' ? getContinentLabel(geoValue, language === 'fr') : geoValue}</Text>
                         <MaterialIcons name="close" size={14} color="#D97706" />
                       </Pressable>
                     ) : null}

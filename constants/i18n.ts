@@ -817,6 +817,8 @@ export const translations = {
     diameterLabel: { fr: 'Diamètre (mm)', en: 'Diameter (mm)' },
     weightLabel: { fr: 'Poids (g)', en: 'Weight (g)' },
     handedness: { fr: 'Latéralité', en: 'Handedness' },
+     countryLabel: { fr: 'Pays', en: 'Country' },
+     searchCountry: { fr: 'Rechercher un pays...', en: 'Search country...' },
     rightHanded: { fr: 'Droitier', en: 'Right-handed' },
     leftHanded: { fr: 'Gaucher', en: 'Left-handed' },
     ambidextrous: { fr: 'Ambidextre', en: 'Ambidextrous' },

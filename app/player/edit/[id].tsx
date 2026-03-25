@@ -26,6 +26,7 @@ import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
+import { COMMON_COUNTRIES } from '@/constants/geoData';
 
 const levels = ['Débutant', 'Intermédiaire', 'Confirmé', 'Expert'] as const;
 
@@ -117,8 +118,15 @@ export default function EditPlayerScreen() {
   const [showLevelPicker, setShowLevelPicker] = useState(false);
   const [showClubPicker, setShowClubPicker] = useState(false);
   const [showTerrainPicker, setShowTerrainPicker] = useState(false);
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [clubSearch, setClubSearch] = useState('');
   const [terrainSearch, setTerrainSearch] = useState('');
+  const [countrySearch, setCountrySearch] = useState('');
+
+  const filteredCountries = useMemo(() => {
+    const q = countrySearch.toLowerCase();
+    return q ? COMMON_COUNTRIES.filter(c => c.toLowerCase().includes(q)) : COMMON_COUNTRIES;
+  }, [countrySearch]);
 
   const filteredClubs = useMemo(() => {
     const s = clubSearch.toLowerCase();
@@ -336,7 +344,20 @@ export default function EditPlayerScreen() {
             <TextInput style={[styles.textInput, { marginTop: 10 }]} value={nickname} onChangeText={setNickname} placeholder={t('player', 'nicknamePlaceholder')} placeholderTextColor={theme.textMuted} />
           </SectionCard>
 
-          {/* 2. Localisation */}
+          {/* 2. Pays */}
+          <SectionCard title={t('player', 'countryLabel') || 'Pays'} icon="flag" color="#6366F1" delay={75}>
+            <Pressable style={styles.pickerButton} onPress={() => { setCountrySearch(''); setShowCountryPicker(true); }}>
+              <View style={styles.pickerSelected}>
+                <MaterialIcons name="flag" size={20} color="#6366F1" />
+                <View style={styles.pickerSelectedInfo}>
+                  <Text style={styles.pickerSelectedName}>{location.country || 'France'}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              </View>
+            </Pressable>
+          </SectionCard>
+
+          {/* 3. Localisation */}
           <SectionCard title={t('player', 'locationLabel')} icon="my-location" color={theme.primaryLight} delay={100}>
             <LocationPicker label="" value={location} onChange={setLocation} placeholder={t('player', 'searchCity')} showCityOnly />
             {(() => {
@@ -647,6 +668,34 @@ export default function EditPlayerScreen() {
               {clubId === club.id ? <MaterialIcons name="check-circle" size={20} color={theme.accent} /> : null}
             </Pressable>
           )} ListEmptyComponent={<View style={styles.modalEmpty}><MaterialIcons name="home-work" size={40} color={theme.textMuted} /><Text style={styles.modalEmptyText}>{t('profile', 'noClubRegistered')}</Text></View>} />
+        </SafeAreaView>
+      </Modal>
+
+      {/* Country Picker Modal */}
+      <Modal visible={showCountryPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCountryPicker(false)}>
+        <SafeAreaView edges={['top']} style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('player', 'countryLabel') || 'Pays'}</Text>
+            <Pressable style={styles.modalCloseBtn} onPress={() => setShowCountryPicker(false)}>
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+          </View>
+          <View style={styles.modalSearchContainer}>
+            <MaterialIcons name="search" size={20} color={theme.textMuted} />
+            <TextInput style={styles.modalSearchInput} value={countrySearch} onChangeText={setCountrySearch} placeholder={t('player', 'searchCountry') || 'Rechercher un pays...'} placeholderTextColor={theme.textMuted} autoFocus />
+          </View>
+          <FlatList data={filteredCountries} keyExtractor={(item) => item} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }} renderItem={({ item: country }) => {
+            const isActive = (location.country || 'France') === country;
+            return (
+              <Pressable style={[styles.modalPickerItem, { marginHorizontal: 0 }, isActive && styles.modalPickerItemActive]} onPress={() => { Haptics.selectionAsync(); setLocation({ ...location, country }); setShowCountryPicker(false); }}>
+                <View style={[styles.modalPickerItemIcon, { backgroundColor: '#6366F1' + '15' }]}>
+                  <MaterialIcons name="flag" size={20} color="#6366F1" />
+                </View>
+                <Text style={styles.modalPickerItemName}>{country}</Text>
+                {isActive ? <MaterialIcons name="check-circle" size={20} color="#6366F1" /> : null}
+              </Pressable>
+            );
+          }} ListEmptyComponent={<View style={styles.modalEmpty}><MaterialIcons name="search-off" size={40} color={theme.textMuted} /><Text style={styles.modalEmptyText}>{t('common', 'noResults')}</Text></View>} />
         </SafeAreaView>
       </Modal>
 
