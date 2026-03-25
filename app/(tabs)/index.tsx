@@ -23,6 +23,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { preloadInterstitial } from '@/services/adService';
 import CommunityLeaderboard from '@/components/ui/CommunityLeaderboard';
 import { Skeleton, LeaderboardSkeleton, TimelineSkeleton, HistorySkeleton } from '@/components/ui/SkeletonLoader';
+import WeeklyStatsCard from '@/components/ui/WeeklyStatsCard';
 import SponsorBanner from '@/components/ui/SponsorBanner';
 import UpcomingTimeline from '@/components/feature/UpcomingTimeline';
 import CompactHistory from '@/components/feature/CompactHistory';
@@ -91,7 +92,7 @@ const sk = StyleSheet.create({
 // ============================================================
 // SECTION TYPES
 // ============================================================
-type SectionKey = 'hero' | 'actions' | 'witness' | 'weekly' | 'sponsor' | 'progress' | 'leaderboard' | 'divider1' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history';
+type SectionKey = 'hero' | 'actions' | 'witness' | 'weekly' | 'sponsor' | 'progress' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history';
 interface HomeSection { key: SectionKey; data: SectionKey[] }
 
 // ============================================================
@@ -307,6 +308,7 @@ export default function HomeScreen() {
     if (selfPlayer?.isPublic && totalMatches < LEADERBOARD_MIN_MATCHES) s.push({ key: 'progress', data: ['progress'] });
     s.push({ key: 'leaderboard', data: ['leaderboard'] });
     s.push({ key: 'divider1', data: ['divider1'] });
+    if (matches.length > 0 || challenges.length > 0) s.push({ key: 'weeklyStats', data: ['weeklyStats'] });
     s.push({ key: 'timeline', data: ['timeline'] });
     s.push({ key: 'divider2', data: ['divider2'] });
     if (featuredAmbassadors.length > 0) {
@@ -490,6 +492,14 @@ export default function HomeScreen() {
       case 'divider2':
       case 'divider3':
         return <View style={st.divider}><View style={st.dividerLine} /><View style={st.dividerDot} /><View style={st.dividerLine} /></View>;
+
+      // ===== WEEKLY STATS CARD =====
+      case 'weeklyStats':
+        return (
+          <View style={[st.section, isTablet && st.sectionTablet]}>
+            <WeeklyStatsCard />
+          </View>
+        );
 
       // ===== UPCOMING TIMELINE =====
       case 'timeline':
