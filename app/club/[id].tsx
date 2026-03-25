@@ -72,10 +72,6 @@ export default function ClubDetailScreen() {
   const { showAlert } = useAlert();
   const [showMergePicker, setShowMergePicker] = React.useState(false);
   const [showPublicPreview, setShowPublicPreview] = React.useState(false);
-  const [showSharePreview, setShowSharePreview] = React.useState(false);
-  const [previewShowContacts, setPreviewShowContacts] = React.useState(false);
-
-
   const sharedPermission = getSharedPermission(id!);
   const isSharedItem = sharedPermission !== null;
   const isReadOnly = sharedPermission === 'read';
@@ -275,16 +271,8 @@ export default function ClubDetailScreen() {
   const handleOpenSharePreview = React.useCallback(() => {
     if (!club) return;
     Haptics.selectionAsync();
-    setPreviewShowContacts(club.showContactPublic ?? false);
-    setShowSharePreview(true);
-  }, [club]);
-
-  const handleConfirmShare = React.useCallback(async () => {
-    if (!club) return;
-    await updateClub(club.id, { showContactPublic: previewShowContacts } as any);
-    setShowSharePreview(false);
     setShowShareModal(true);
-  }, [club, previewShowContacts, updateClub]);
+  }, [club]);
 
   const handleDelete = () => {
     Alert.alert(
@@ -891,8 +879,9 @@ export default function ClubDetailScreen() {
         </View>
       </Modal>
 
-      {/* ===== SHARE PREVIEW MODAL ===== */}
-      <Modal visible={showSharePreview} animationType="slide" transparent>
+      {/* ShareModal handles the full share flow including contact toggle */}
+      {/* Removed inline share preview modal - now handled by ShareModal */}
+      {false ? <Modal visible={false} animationType="slide" transparent>
         <View style={styles.pvOverlay}>
           <View style={styles.pvModal}>
             <View style={styles.pvHeader}>
@@ -1020,7 +1009,7 @@ export default function ClubDetailScreen() {
             </View>
           </View>
         </View>
-      </Modal>
+      </Modal> : null}
 
       <ShareModal
         visible={showShareModal}

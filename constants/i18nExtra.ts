@@ -390,6 +390,24 @@ export const extraTranslations = {
     mondayNotifSent: { fr: 'Notifications envoyees', en: 'Notifications sent' },
   },
 
+  geoScope: {
+    world: { fr: 'Monde', en: 'World' },
+    continent: { fr: 'Continent', en: 'Continent' },
+    country: { fr: 'Pays', en: 'Country' },
+    city: { fr: 'Ville', en: 'City' },
+    scopeLabel: { fr: 'Zone geographique', en: 'Geographic zone' },
+    europe: { fr: 'Europe', en: 'Europe' },
+    africa: { fr: 'Afrique', en: 'Africa' },
+    asia: { fr: 'Asie', en: 'Asia' },
+    northAmerica: { fr: 'Amerique du Nord', en: 'North America' },
+    southAmerica: { fr: 'Amerique du Sud', en: 'South America' },
+    oceania: { fr: 'Oceanie', en: 'Oceania' },
+    selectCity: { fr: 'Choisir une ville', en: 'Select a city' },
+    selectCountry: { fr: 'Choisir un pays', en: 'Select a country' },
+    selectContinent: { fr: 'Choisir un continent', en: 'Select a continent' },
+    allLocations: { fr: 'Toutes les zones', en: 'All locations' },
+  },
+
   trustScore: {
     verified: { fr: 'Verifie', en: 'Verified' },
     high: { fr: 'Fiable', en: 'Trusted' },

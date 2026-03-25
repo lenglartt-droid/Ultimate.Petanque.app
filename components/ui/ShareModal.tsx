@@ -64,15 +64,11 @@ interface ShareModalProps {
   itemId: string;
   itemName: string;
   forceReadOnly?: boolean;
-  /** Optional: show contact visibility toggle */
-  showContactToggle?: boolean;
-  contactVisible?: boolean;
-  onToggleContact?: (val: boolean) => void;
 }
 
-export default function ShareModal({ visible, onClose, itemType, itemId, itemName, forceReadOnly = false, showContactToggle, contactVisible, onToggleContact }: ShareModalProps) {
+export default function ShareModal({ visible, onClose, itemType, itemId, itemName, forceReadOnly = false }: ShareModalProps) {
   const { t, language } = useLanguage();
-  const { getPlayerById, getClubById, getTerrainById, getTournamentById, getMatchById, challenges } = useApp();
+  const { getPlayerById, getClubById, getTerrainById, getTournamentById, getMatchById, challenges, updatePlayer, updateClub, selfPlayer } = useApp();
   const fr = language === 'fr';
 
   const [step, setStep] = useState<ShareStep>('options');
@@ -93,6 +89,33 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
 
   // Pending share action after code generation
   const [pendingAction, setPendingAction] = useState<'native' | 'code' | 'invitation' | 'qr' | null>(null);
+
+  // Contact visibility (managed internally for player/club)
+  const [contactVisible, setContactVisible] = useState(false);
+  const hasContact = useMemo(() => {
+    if (itemType === 'player') {
+      const p = getPlayerById(itemId);
+      return !!(p?.phone || p?.email);
+    }
+    if (itemType === 'club') {
+      const c = getClubById(itemId);
+      return !!(c?.contactEmail || c?.contactPhone);
+    }
+    return false;
+  }, [itemType, itemId, getPlayerById, getClubById]);
+  const showContactToggle = (itemType === 'player' || itemType === 'club') && hasContact;
+  // Only show toggle if user owns the item
+  const isOwnItem = useMemo(() => {
+    if (itemType === 'player') {
+      const p = getPlayerById(itemId);
+      return selfPlayer?.id === itemId;
+    }
+    if (itemType === 'club') {
+      const c = getClubById(itemId);
+      return !!(c && (c as any).userId);
+    }
+    return false;
+  }, [itemType, itemId, getPlayerById, getClubById, selfPlayer]);
 
   const scrollRef = useRef<ScrollView>(null);
 
@@ -299,6 +322,14 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
       setIncludeTerrain(true);
       setSharedAssociatedItems([]);
       setPendingAction(null);
+      // Init contact visibility from item data
+      if (itemType === 'player') {
+        const p = getPlayerById(itemId);
+        setContactVisible(p?.showContactPublic ?? false);
+      } else if (itemType === 'club') {
+        const c = getClubById(itemId);
+        setContactVisible((c as any)?.showContactPublic ?? false);
+      }
     }
   }, [visible, itemId, itemType]);
 
@@ -634,19 +665,25 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
             {/* ===== STEP: OPTIONS (share mode selection) ===== */}
             {step === 'options' ? (
               <View>
-                {/* Contact visibility toggle */}
-                {showContactToggle ? (
+                {/* Contact visibility toggle (auto-detected for player/club) */}
+                {showContactToggle && isOwnItem ? (
                   <Animated.View entering={FadeInDown.duration(250)} style={s.contactToggleCard}>
                     <View style={[s.contactToggleIcon, { backgroundColor: (contactVisible ? '#10B981' : '#94A3B8') + '15' }]}>
                       <MaterialIcons name={contactVisible ? 'contact-phone' : 'phone-disabled'} size={18} color={contactVisible ? '#10B981' : '#94A3B8'} />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={s.contactToggleLabel}>{fr ? 'Contacts visibles' : 'Contacts visible'}</Text>
-                      <Text style={s.contactToggleDesc}>{contactVisible ? (fr ? 'Email et telephone visibles' : 'Email and phone visible') : (fr ? 'Contacts masques pour le destinataire' : 'Contacts hidden from recipient')}</Text>
+                      <Text style={s.contactToggleDesc}>{contactVisible ? (fr ? 'Email et telephone visibles pour le destinataire' : 'Email and phone visible to recipient') : (fr ? 'Contacts masques pour le destinataire' : 'Contacts hidden from recipient')}</Text>
                     </View>
                     <Switch
-                      value={contactVisible ?? false}
-                      onValueChange={(v) => { Haptics.selectionAsync(); onToggleContact?.(v); }}
+                      value={contactVisible}
+                      onValueChange={(v) => {
+                        Haptics.selectionAsync();
+                        setContactVisible(v);
+                        // Persist immediately
+                        if (itemType === 'player') updatePlayer(itemId, { showContactPublic: v });
+                        else if (itemType === 'club') updateClub(itemId, { showContactPublic: v } as any);
+                      }}
                       trackColor={{ false: '#E2E8F0', true: '#10B98160' }}
                       thumbColor={contactVisible ? '#10B981' : '#94A3B8'}
                     />

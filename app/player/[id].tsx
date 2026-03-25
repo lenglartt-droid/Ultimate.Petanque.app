@@ -146,8 +146,7 @@ export default function PlayerDetailScreen() {
   const isPublicItem = (player as any)?.isPublic === true;
   const playerUserId = (player as any)?.userId;
   const isRealUser = isPublicItem && playerUserId && playerUserId !== user?.id;
-  const [showSharePreview, setShowSharePreview] = React.useState(false);
-  const [previewShowContacts, setPreviewShowContacts] = React.useState(false);
+
 
   // Trust score (for public players)
   const [trustScore, setTrustScore] = React.useState<TrustScoreData | null>(null);
@@ -200,18 +199,8 @@ export default function PlayerDetailScreen() {
   const handleOpenSharePreview = React.useCallback(() => {
     if (!player) return;
     Haptics.selectionAsync();
-    setPreviewShowContacts(player.showContactPublic ?? false);
-    setShowSharePreview(true);
-  }, [player]);
-
-  const handleConfirmShare = React.useCallback(async () => {
-    if (!player) return;
-    if (isSelf) {
-      await updatePlayerFn(player.id, { showContactPublic: previewShowContacts });
-    }
-    setShowSharePreview(false);
     setShowShareModal(true);
-  }, [player, previewShowContacts, updatePlayerFn, isSelf]);
+  }, [player]);
 
   // Role analysis
   const roleAnalysis = React.useMemo(() => {
@@ -981,155 +970,6 @@ export default function PlayerDetailScreen() {
         {/* Modification Logs */}
         <ModificationLogsSection itemType="player" itemId={id!} isOwner={!isSharedItem && !!user?.id} />
       </ScrollView>
-
-      {/* ===== SHARE PREVIEW MODAL ===== */}
-      <Modal visible={showSharePreview} animationType="slide" transparent>
-        <View style={s.pvOverlay}>
-          <View style={s.pvModal}>
-            <View style={s.pvHeader}>
-              <View style={[s.pvHeaderIcon, { backgroundColor: theme.primary + '15' }]}>
-                <MaterialIcons name="share" size={22} color={theme.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.pvHeaderTitle}>{t('preview', 'shareTitle')}</Text>
-                <Text style={s.pvHeaderSub}>{t('preview', 'shareDesc')}</Text>
-              </View>
-              <Pressable style={s.pvCloseBtn} onPress={() => setShowSharePreview(false)} hitSlop={8}>
-                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
-              </Pressable>
-            </View>
-            <ScrollView style={s.pvScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
-              <View style={s.pvReadOnlyBadge}>
-                <MaterialIcons name="lock" size={14} color={theme.warning} />
-                <Text style={s.pvReadOnlyText}>{t('preview', 'readOnlyOtherPlayer')}</Text>
-              </View>
-              <View style={s.pvCard}>
-                <View style={s.pvAvatarRow}>
-                  <View style={s.pvAvatar}>
-                    {player.avatar ? (
-                      <Image source={{ uri: player.avatar }} style={s.pvAvatarImg} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
-                    ) : (
-                      <Text style={s.pvAvatarText}>{player.name?.split(' ').map(n => n[0]).join('')}</Text>
-                    )}
-                    <View style={[s.pvRoleBadge, { backgroundColor: getRoleColor(player.role) }]}>
-                      <MaterialIcons name={getRoleIcon(player.role)} size={10} color="#FFF" />
-                    </View>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.pvName}>{player.name}</Text>
-                    {player.nickname ? <Text style={s.pvNickname}>"{player.nickname}"</Text> : null}
-                  </View>
-                </View>
-                <View style={s.pvBadgesRow}>
-                  <View style={[s.pvBadge, { backgroundColor: getRoleColor(player.role) + '15' }]}>
-                    <Text style={[s.pvBadgeText, { color: getRoleColor(player.role) }]}>{t('roles', player.role)}</Text>
-                  </View>
-                  <View style={[s.pvBadge, { backgroundColor: theme.accent + '15' }]}>
-                    <Text style={[s.pvBadgeText, { color: theme.accent }]}>{t('levels', player.level)}</Text>
-                  </View>
-                  {player.handedness ? (
-                    <View style={[s.pvBadge, { backgroundColor: '#6366F1' + '15' }]}>
-                      <Text style={[s.pvBadgeText, { color: '#6366F1' }]}>
-                        {player.handedness === 'right' ? t('player', 'rightHanded') : player.handedness === 'left' ? t('player', 'leftHanded') : t('player', 'ambidextrous')}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-                {(clubDisplayName || terrainDisplayName) ? (
-                  <View style={s.pvInfoRow}>
-                    {clubDisplayName ? (
-                      <View style={s.pvInfoPill}>
-                        <MaterialIcons name="location-city" size={12} color={theme.carreauColor} />
-                        <Text style={[s.pvInfoText, { color: theme.carreauColor }]}>{clubDisplayName}</Text>
-                      </View>
-                    ) : null}
-                    {terrainDisplayName ? (
-                      <View style={s.pvInfoPill}>
-                        <MaterialIcons name="sports-soccer" size={12} color={theme.success} />
-                        <Text style={[s.pvInfoText, { color: theme.success }]}>{terrainDisplayName}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                ) : null}
-                {(player.location?.city || player.country) ? (
-                  <View style={s.pvLocationRow}>
-                    <MaterialIcons name="place" size={14} color={theme.textSecondary} />
-                    <Text style={s.pvLocationText}>{[player.location?.city, player.country].filter(Boolean).join(', ')}</Text>
-                  </View>
-                ) : null}
-                {isSelf && previewShowContacts && (player.phone || player.email) ? (
-                  <View style={s.pvContactRow}>
-                    {player.phone ? (
-                      <View style={s.pvContactPill}>
-                        <MaterialIcons name="phone" size={12} color={theme.primary} />
-                        <Text style={s.pvContactText}>{player.phone}</Text>
-                      </View>
-                    ) : null}
-                    {player.email ? (
-                      <View style={s.pvContactPill}>
-                        <MaterialIcons name="email" size={12} color={theme.primary} />
-                        <Text style={s.pvContactText}>{player.email}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                ) : null}
-                <View style={s.pvStatsRow}>
-                  <View style={s.pvStatItem}>
-                    <Text style={s.pvStatValue}>{player.stats.matchesPlayed}</Text>
-                    <Text style={s.pvStatLabel}>{t('player', 'matchesUpper')}</Text>
-                  </View>
-                  <View style={s.pvStatDivider} />
-                  <View style={s.pvStatItem}>
-                    <Text style={[s.pvStatValue, { color: theme.success }]}>{player.stats.wins}</Text>
-                    <Text style={s.pvStatLabel}>{t('player', 'victories')}</Text>
-                  </View>
-                  <View style={s.pvStatDivider} />
-                  <View style={s.pvStatItem}>
-                    <Text style={[s.pvStatValue, { color: theme.accent }]}>{player.stats.winRate}%</Text>
-                    <Text style={s.pvStatLabel}>{t('player', 'winsLabel')}</Text>
-                  </View>
-                </View>
-              </View>
-              {isSelf && (player.phone || player.email) ? (
-                <View style={s.pvToggleCard}>
-                  <View style={s.pvToggleRow}>
-                    <View style={[s.pvToggleIcon, { backgroundColor: (previewShowContacts ? theme.success : theme.textMuted) + '15' }]}>
-                      <MaterialIcons name={previewShowContacts ? 'contact-phone' : 'phone-disabled'} size={18} color={previewShowContacts ? theme.success : theme.textMuted} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.pvToggleTitle}>{t('preview', 'showContacts')}</Text>
-                      <Text style={s.pvToggleDesc}>{previewShowContacts
-                        ? t('preview', 'contactsVisibleOther')
-                        : t('preview', 'contactsHiddenOther')
-                      }</Text>
-                    </View>
-                    <Switch value={previewShowContacts} onValueChange={setPreviewShowContacts} trackColor={{ false: theme.border, true: theme.success + '60' }} thumbColor={previewShowContacts ? theme.success : theme.textMuted} />
-                  </View>
-                </View>
-              ) : null}
-              {!isSelf && (player.phone || player.email) ? (
-                <View style={s.pvNote}>
-                  <MaterialIcons name="phone-disabled" size={16} color={theme.warning} />
-                  <Text style={s.pvNoteText}>{t('preview', 'contactsNotIncluded')}</Text>
-                </View>
-              ) : null}
-              <View style={s.pvNote}>
-                <MaterialIcons name="visibility" size={16} color={theme.primary} />
-                <Text style={s.pvNoteText}>{t('preview', 'shareNoteOtherPlayer')}</Text>
-              </View>
-            </ScrollView>
-            <View style={s.pvActions}>
-              <Pressable style={s.pvCancelBtn} onPress={() => setShowSharePreview(false)}>
-                <Text style={s.pvCancelText}>{t('common', 'cancel')}</Text>
-              </Pressable>
-              <Pressable style={[s.pvConfirmBtn, { backgroundColor: theme.primary }]} onPress={handleConfirmShare}>
-                <MaterialIcons name="share" size={18} color="#FFF" />
-                <Text style={s.pvConfirmText}>{t('preview', 'shareBtn')}</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {player ? (
         <ShareModal visible={showShareModal} onClose={() => setShowShareModal(false)} itemType="player" itemId={player.id} itemName={player.name} />

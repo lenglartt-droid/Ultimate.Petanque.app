@@ -334,6 +334,11 @@ export default function LeaderboardScreen() {
   const [periodFilter, setPeriodFilter] = useState<LeaderboardPeriod>('all');
   const [periodLoading, setPeriodLoading] = useState(false);
 
+  // Geographic scope for all tabs
+  type GeoScope = 'world' | 'continent' | 'country' | 'city';
+  const [geoScope, setGeoScope] = useState<GeoScope>('world');
+  const [geoValue, setGeoValue] = useState<string>('');
+
   // ============ CLUBS STATE ============
   const [allClubs, setAllClubs] = useState<LeaderboardClub[]>([]);
   const [clubsLoading, setClubsLoading] = useState(false);
@@ -618,8 +623,8 @@ export default function LeaderboardScreen() {
 
   // Active filter count
   const activeFilterCount = useMemo(() => {
-    return [filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand, filterTerrain, filterTrustLevel].filter(f => f !== 'all').length;
-  }, [filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand, filterTerrain, filterTrustLevel]);
+    return [filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand, filterTerrain, filterTrustLevel].filter(f => f !== 'all').length + (geoScope !== 'world' && geoValue ? 1 : 0);
+  }, [filterRole, filterLevel, filterCity, filterCountry, filterClub, filterBrand, filterTerrain, filterTrustLevel, geoScope, geoValue]);
 
   // Trust level distribution stats
   const trustLevelStats = useMemo(() => {
@@ -659,6 +664,21 @@ export default function LeaderboardScreen() {
     // Filters
     if (filterRole !== 'all') result = result.filter(p => p.role === filterRole);
     if (filterLevel !== 'all') result = result.filter(p => p.level === filterLevel);
+    // Geographic scope filter
+    if (geoScope === 'city' && geoValue) result = result.filter(p => p.city?.toLowerCase() === geoValue.toLowerCase());
+    else if (geoScope === 'country' && geoValue) result = result.filter(p => p.country?.toLowerCase() === geoValue.toLowerCase());
+    else if (geoScope === 'continent' && geoValue) {
+      const CONTINENT_MAP: Record<string, string> = {
+        'France': 'Europe', 'Belgique': 'Europe', 'Belgium': 'Europe', 'Suisse': 'Europe', 'Switzerland': 'Europe',
+        'Luxembourg': 'Europe', 'Espagne': 'Europe', 'Spain': 'Europe', 'Italie': 'Europe', 'Italy': 'Europe',
+        'Allemagne': 'Europe', 'Germany': 'Europe', 'Portugal': 'Europe', 'Pays-Bas': 'Europe', 'Netherlands': 'Europe',
+        'Tunisie': 'Africa', 'Tunisia': 'Africa', 'Maroc': 'Africa', 'Morocco': 'Africa',
+        'Canada': 'North America', 'Etats-Unis': 'North America', 'United States': 'North America', 'USA': 'North America',
+        'Bresil': 'South America', 'Brazil': 'South America', 'Australie': 'Oceania', 'Australia': 'Oceania',
+        'Thailande': 'Asia', 'Thailand': 'Asia', 'Japon': 'Asia', 'Japan': 'Asia',
+      };
+      result = result.filter(p => p.country ? (CONTINENT_MAP[p.country] || 'Europe') === geoValue : false);
+    }
     // Trust level filter
     if (filterTrustLevel !== 'all') {
       result = result.filter(p => {
@@ -707,6 +727,8 @@ export default function LeaderboardScreen() {
     setFilterTrustLevel('all');
     setSearch('');
     setFilterSearchText('');
+    setGeoScope('world');
+    setGeoValue('');
   };
 
   const handleInviteToMeetup = useCallback(async (targetUserId: string, targetName: string) => {
@@ -829,6 +851,55 @@ export default function LeaderboardScreen() {
           ) : null}
 
           {/* Search bar */}
+          {/* Geographic scope filter */}
+          <View style={{ flexDirection: 'row', gap: 5, marginBottom: 10 }}>
+            {(['world', 'continent', 'country', 'city'] as const).map(scope => {
+              const isActive = geoScope === scope;
+              const icons = { world: 'public', continent: 'travel-explore', country: 'flag', city: 'place' } as const;
+              const labels = {
+                world: (extraTranslations.geoScope?.world as any)?.[language] || 'World',
+                continent: (extraTranslations.geoScope?.continent as any)?.[language] || 'Continent',
+                country: (extraTranslations.geoScope?.country as any)?.[language] || 'Country',
+                city: (extraTranslations.geoScope?.city as any)?.[language] || 'City',
+              };
+              return (
+                <Pressable
+                  key={scope}
+                  style={[s.tabBtn, { flex: 1, paddingVertical: 8 }, isActive && { backgroundColor: '#2563EB80' }]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setGeoScope(scope);
+                    if (scope === 'world') setGeoValue('');
+                    else if (scope === 'country' && uniqueCountries.length === 1) setGeoValue(uniqueCountries[0]);
+                    else if (scope === 'city' && uniqueCities.length === 1) setGeoValue(uniqueCities[0]);
+                    else setGeoValue('');
+                  }}
+                >
+                  <MaterialIcons name={icons[scope] as any} size={13} color={isActive ? '#FFF' : 'rgba(255,255,255,0.5)'} />
+                  <Text style={[s.tabBtnText, { fontSize: 11 }, isActive && s.tabBtnTextActive]}>{labels[scope]}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {geoScope !== 'world' ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginBottom: 10 }}>
+              {(geoScope === 'continent'
+                ? (() => { const cs = allPlayers.map(p => p.country).filter(Boolean).map(c => { const CM: Record<string, string> = { 'France': 'Europe', 'Belgique': 'Europe', 'Belgium': 'Europe', 'Suisse': 'Europe', 'Tunisie': 'Africa', 'Tunisia': 'Africa', 'Maroc': 'Africa', 'Canada': 'North America', 'Etats-Unis': 'North America', 'Australie': 'Oceania', 'Thailande': 'Asia' }; return CM[c!] || 'Europe'; }); return [...new Set(cs)].sort(); })()
+                : geoScope === 'country' ? uniqueCountries : uniqueCities
+              ).map(val => {
+                const isActive = geoValue === val;
+                return (
+                  <Pressable
+                    key={val}
+                    style={[s.tabBtn, { flex: 0, paddingHorizontal: 14, paddingVertical: 7 }, isActive && { backgroundColor: '#2563EB80' }]}
+                    onPress={() => { Haptics.selectionAsync(); setGeoValue(isActive ? '' : val); }}
+                  >
+                    <Text style={[s.tabBtnText, { fontSize: 12 }, isActive && s.tabBtnTextActive]} numberOfLines={1}>{val}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : null}
           {/* Weekly / All-time toggle for players tab */}
           {activeTab === 'players' ? (
             <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
@@ -1896,6 +1967,13 @@ export default function LeaderboardScreen() {
                     {filterCity !== 'all' ? (
                       <Pressable style={s.activeFilterPill} onPress={() => setFilterCity('all')}>
                         <Text style={s.activeFilterPillText}>{filterCity}</Text>
+                        <MaterialIcons name="close" size={14} color="#D97706" />
+                      </Pressable>
+                    ) : null}
+                    {geoScope !== 'world' && geoValue ? (
+                      <Pressable style={s.activeFilterPill} onPress={() => { setGeoScope('world'); setGeoValue(''); }}>
+                        <MaterialIcons name="public" size={12} color="#D97706" />
+                        <Text style={s.activeFilterPillText}>{geoValue}</Text>
                         <MaterialIcons name="close" size={14} color="#D97706" />
                       </Pressable>
                     ) : null}

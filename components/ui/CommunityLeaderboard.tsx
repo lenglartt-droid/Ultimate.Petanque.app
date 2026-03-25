@@ -15,8 +15,30 @@ import { fetchBoulesLeaderboard, aggregateBoulesData, sortBoulesLeaderboard, Lea
 import { getBrandVisual, getBrandImage } from '@/constants/boulesDatabase';
 import { getTrustScoreColor, getTrustScoreIcon, getTrustLevelLabel } from '@/services/trustScoreService';
 import { fetchEventLeaderboard, EventLeaderboardEntry, SponsoredEvent } from '@/services/sponsoredEventService';
+import { extraTranslations } from '@/constants/i18nExtra';
 
 type WidgetTab = 'players' | 'clubs' | 'boules' | 'events';
+type GeoScope = 'world' | 'continent' | 'country' | 'city';
+
+const CONTINENT_MAP: Record<string, string> = {
+  'France': 'Europe', 'Belgique': 'Europe', 'Belgium': 'Europe', 'Suisse': 'Europe', 'Switzerland': 'Europe',
+  'Luxembourg': 'Europe', 'Espagne': 'Europe', 'Spain': 'Europe', 'Italie': 'Europe', 'Italy': 'Europe',
+  'Allemagne': 'Europe', 'Germany': 'Europe', 'Portugal': 'Europe', 'Pays-Bas': 'Europe', 'Netherlands': 'Europe',
+  'Royaume-Uni': 'Europe', 'United Kingdom': 'Europe', 'Angleterre': 'Europe', 'Croatie': 'Europe', 'Croatia': 'Europe',
+  'Monaco': 'Europe', 'Tunisie': 'Africa', 'Tunisia': 'Africa', 'Maroc': 'Africa', 'Morocco': 'Africa',
+  'Algerie': 'Africa', 'Algeria': 'Africa', 'Senegal': 'Africa', 'Madagascar': 'Africa',
+  'Canada': 'North America', 'Etats-Unis': 'North America', 'United States': 'North America', 'USA': 'North America',
+  'Mexique': 'North America', 'Mexico': 'North America',
+  'Bresil': 'South America', 'Brazil': 'South America', 'Argentine': 'South America', 'Argentina': 'South America',
+  'Thailande': 'Asia', 'Thailand': 'Asia', 'Japon': 'Asia', 'Japan': 'Asia', 'Chine': 'Asia', 'China': 'Asia',
+  'Vietnam': 'Asia', 'Cambodge': 'Asia', 'Cambodia': 'Asia', 'Laos': 'Asia',
+  'Australie': 'Oceania', 'Australia': 'Oceania', 'Nouvelle-Zelande': 'Oceania', 'New Zealand': 'Oceania',
+  'Nouvelle-Caledonie': 'Oceania', 'Polynesie': 'Oceania', 'Tahiti': 'Oceania',
+};
+
+function getContinent(country: string): string {
+  return CONTINENT_MAP[country] || 'Europe';
+}
 
 export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersToggled?: (open: boolean) => void }) {
   const { t, language } = useLanguage();
@@ -24,6 +46,10 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
   const { selfPlayer } = useApp();
 
   const [activeTab, setActiveTab] = useState<WidgetTab>('players');
+
+  // Geographic scope
+  const [geoScope, setGeoScope] = useState<GeoScope>('world');
+  const [geoValue, setGeoValue] = useState<string>('');
 
   // Players
   const [players, setPlayers] = useState<LeaderboardPlayer[]>([]);
@@ -102,12 +128,52 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
   }, [activeTab, loadClubs, loadBoules, loadEvents]);
 
   // Computed
-  const filteredSorted = useMemo(() => sortLeaderboard(players, sortBy), [players, sortBy]);
-  const sortedClubs = useMemo(() => sortClubLeaderboard(clubs, 'compositeScore'), [clubs]);
+  const geoFilteredPlayers = useMemo(() => {
+    let filtered = players;
+    if (geoScope === 'city' && geoValue) {
+      filtered = filtered.filter(p => p.city?.toLowerCase() === geoValue.toLowerCase());
+    } else if (geoScope === 'country' && geoValue) {
+      filtered = filtered.filter(p => p.country?.toLowerCase() === geoValue.toLowerCase());
+    } else if (geoScope === 'continent' && geoValue) {
+      filtered = filtered.filter(p => p.country ? getContinent(p.country) === geoValue : false);
+    }
+    return filtered;
+  }, [players, geoScope, geoValue]);
+
+  const filteredSorted = useMemo(() => sortLeaderboard(geoFilteredPlayers, sortBy), [geoFilteredPlayers, sortBy]);
+  const sortedClubs = useMemo(() => {
+    let filtered = clubs;
+    if (geoScope === 'city' && geoValue) {
+      filtered = filtered.filter((c: any) => c.city?.toLowerCase() === geoValue.toLowerCase());
+    } else if (geoScope === 'country' && geoValue) {
+      filtered = filtered.filter((c: any) => (c.country || 'France').toLowerCase() === geoValue.toLowerCase());
+    } else if (geoScope === 'continent' && geoValue) {
+      filtered = filtered.filter((c: any) => getContinent(c.country || 'France') === geoValue);
+    }
+    return sortClubLeaderboard(filtered, 'compositeScore');
+  }, [clubs, geoScope, geoValue]);
   const boulesEntries = useMemo(() => {
     const agg = aggregateBoulesData(boulesRaw, 'brand', 'all');
     return sortBoulesLeaderboard(agg, 'userCount');
   }, [boulesRaw]);
+
+  // Unique geo values for selection
+  const uniqueCountries = useMemo(() => {
+    const cs = players.map(p => p.country).filter(Boolean) as string[];
+    return [...new Set(cs)].sort();
+  }, [players]);
+
+  const uniqueCities = useMemo(() => {
+    let source = players;
+    if (geoScope === 'country' && geoValue) source = source.filter(p => p.country?.toLowerCase() === geoValue.toLowerCase());
+    const cs = source.map(p => p.city).filter(Boolean) as string[];
+    return [...new Set(cs)].sort();
+  }, [players, geoScope, geoValue]);
+
+  const uniqueContinents = useMemo(() => {
+    const cs = players.map(p => p.country ? getContinent(p.country) : null).filter(Boolean) as string[];
+    return [...new Set(cs)].sort();
+  }, [players]);
 
   const myRank = useMemo(() => {
     if (!selfPlayer || !user) return null;
@@ -166,6 +232,56 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
           </Pressable>
         ))}
       </View>
+
+      {/* Geographic scope selector */}
+      <View style={s.geoRow}>
+        {(['world', 'continent', 'country', 'city'] as GeoScope[]).map(scope => {
+          const isActive = geoScope === scope;
+          const icons: Record<GeoScope, string> = { world: 'public', continent: 'travel-explore', country: 'flag', city: 'place' };
+          const labels: Record<GeoScope, string> = {
+            world: (extraTranslations.geoScope?.world as any)?.[language] || 'World',
+            continent: (extraTranslations.geoScope?.continent as any)?.[language] || 'Continent',
+            country: (extraTranslations.geoScope?.country as any)?.[language] || 'Country',
+            city: (extraTranslations.geoScope?.city as any)?.[language] || 'City',
+          };
+          return (
+            <Pressable
+              key={scope}
+              style={[s.geoChip, isActive && s.geoChipActive]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setGeoScope(scope);
+                if (scope === 'world') setGeoValue('');
+                else if (scope === 'continent' && uniqueContinents.length === 1) setGeoValue(uniqueContinents[0]);
+                else if (scope === 'country' && uniqueCountries.length === 1) setGeoValue(uniqueCountries[0]);
+                else if (scope === 'city' && uniqueCities.length === 1) setGeoValue(uniqueCities[0]);
+                else setGeoValue('');
+              }}
+            >
+              <MaterialIcons name={icons[scope] as any} size={12} color={isActive ? '#FFF' : theme.textSecondary} />
+              <Text style={[s.geoChipText, isActive && s.geoChipTextActive]}>{labels[scope]}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* Geo value selector (when scope needs a specific value) */}
+      {geoScope !== 'world' ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.geoValueRow}>
+          {(geoScope === 'continent' ? uniqueContinents : geoScope === 'country' ? uniqueCountries : uniqueCities).map(val => {
+            const isActive = geoValue === val;
+            return (
+              <Pressable
+                key={val}
+                style={[s.geoValueChip, isActive && s.geoValueChipActive]}
+                onPress={() => { Haptics.selectionAsync(); setGeoValue(isActive ? '' : val); }}
+              >
+                <Text style={[s.geoValueChipText, isActive && s.geoValueChipTextActive]} numberOfLines={1}>{val}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      ) : null}
 
       {/* Sort chips - players only */}
       {activeTab === 'players' ? (
@@ -657,6 +773,18 @@ const s = StyleSheet.create({
   tabBtnTextActive: { color: '#FFF', fontWeight: '700' },
 
   sortRow: { gap: 6, marginBottom: 12 },
+
+  // Geographic scope
+  geoRow: { flexDirection: 'row' as const, gap: 6, marginBottom: 8 },
+  geoChip: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 4, paddingVertical: 7, borderRadius: 10, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
+  geoChipActive: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
+  geoChipText: { fontSize: 11, fontWeight: '600' as const, color: theme.textSecondary },
+  geoChipTextActive: { color: '#FFF', fontWeight: '700' as const },
+  geoValueRow: { gap: 6, marginBottom: 10, paddingRight: 4 },
+  geoValueChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
+  geoValueChipActive: { backgroundColor: '#2563EB15', borderColor: '#2563EB' },
+  geoValueChipText: { fontSize: 12, fontWeight: '600' as const, color: theme.textSecondary, maxWidth: 120 },
+  geoValueChipTextActive: { color: '#2563EB' },
   sortChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
   sortChipActive: { backgroundColor: '#D97706', borderColor: '#D97706' },
   sortChipText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
