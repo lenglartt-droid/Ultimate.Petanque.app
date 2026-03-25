@@ -8,12 +8,13 @@ import {
   ActivityIndicator,
   Share,
   ScrollView,
+  Switch,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import theme from '@/constants/theme';
 import { createShareLink, ShareItemType, AssociatedItem } from '@/services/shareService';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -21,25 +22,22 @@ import { useApp } from '@/contexts/AppContext';
 import QRCode from 'react-native-qrcode-svg';
 import { config } from '@/constants/config';
 
-const TYPE_CONFIG: Record<ShareItemType, { labelKey: string; icon: string; color: string }> = {
-  player: { labelKey: 'playerLabelUpper', icon: 'person', color: theme.primary },
-  club: { labelKey: 'clubLabelUpper', icon: 'home', color: theme.accent },
-  terrain: { labelKey: 'terrainLabelUpper', icon: 'landscape', color: theme.success },
-  tournament: { labelKey: 'tournamentLabelUpper', icon: 'emoji-events', color: theme.carreauColor },
-  match: { labelKey: 'matchLabelUpper', icon: 'sports', color: theme.tirColor },
-  challenge: { labelKey: 'challengeLabelUpper', icon: 'flag', color: theme.warning },
+const TYPE_CONFIG: Record<ShareItemType, { labelKey: string; icon: string; color: string; gradient: [string, string, string] }> = {
+  player: { labelKey: 'playerLabelUpper', icon: 'person', color: '#2563EB', gradient: ['#1D4ED8', '#2563EB', '#3B82F6'] },
+  club: { labelKey: 'clubLabelUpper', icon: 'home', color: '#D97706', gradient: ['#B45309', '#D97706', '#F59E0B'] },
+  terrain: { labelKey: 'terrainLabelUpper', icon: 'landscape', color: '#059669', gradient: ['#047857', '#059669', '#10B981'] },
+  tournament: { labelKey: 'tournamentLabelUpper', icon: 'emoji-events', color: '#CA8A04', gradient: ['#A16207', '#CA8A04', '#EAB308'] },
+  match: { labelKey: 'matchLabelUpper', icon: 'sports', color: '#2563EB', gradient: ['#1E40AF', '#2563EB', '#60A5FA'] },
+  challenge: { labelKey: 'challengeLabelUpper', icon: 'flag', color: '#EA580C', gradient: ['#C2410C', '#EA580C', '#F97316'] },
 };
 
 const TYPE_LOWER_KEY: Record<ShareItemType, string> = {
-  player: 'playerLabel',
-  club: 'clubLabel',
-  terrain: 'terrainLabel',
-  tournament: 'tournamentLabel',
-  match: 'matchLabel',
-  challenge: 'challengeLabel',
+  player: 'playerLabel', club: 'clubLabel', terrain: 'terrainLabel',
+  tournament: 'tournamentLabel', match: 'matchLabel', challenge: 'challengeLabel',
 };
 
 type ExpirationOption = 'never' | '1day' | '1week' | '1month';
+type ShareStep = 'options' | 'expiration' | 'associated' | 'result';
 
 const EXPIRATION_OPTIONS: { key: ExpirationOption; labelKey: string; icon: string }[] = [
   { key: 'never', labelKey: 'expirationNever', icon: 'all-inclusive' },
@@ -64,22 +62,40 @@ interface ShareModalProps {
   itemId: string;
   itemName: string;
   forceReadOnly?: boolean;
+  /** Optional: show contact visibility toggle */
+  showContactToggle?: boolean;
+  contactVisible?: boolean;
+  onToggleContact?: (val: boolean) => void;
 }
 
-export default function ShareModal({ visible, onClose, itemType, itemId, itemName, forceReadOnly = false }: ShareModalProps) {
+export default function ShareModal({ visible, onClose, itemType, itemId, itemName, forceReadOnly = false, showContactToggle, contactVisible, onToggleContact }: ShareModalProps) {
   const { t, language } = useLanguage();
   const { getPlayerById, getClubById, getTerrainById, getTournamentById, getMatchById, challenges } = useApp();
+  const fr = language === 'fr';
+
+  const [step, setStep] = useState<ShareStep>('options');
   const [isGenerating, setIsGenerating] = useState(false);
   const [shareCode, setShareCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-
-  // Expiration state
   const [expiration, setExpiration] = useState<ExpirationOption>('never');
   const [expiresAtDate, setExpiresAtDate] = useState<Date | null>(null);
   const [countdownNow, setCountdownNow] = useState(Date.now());
 
-  // Countdown timer for expiration
+  // Associated items (player sharing)
+  const [associatedClub, setAssociatedClub] = useState<{ id: string; name: string } | null>(null);
+  const [associatedTerrain, setAssociatedTerrain] = useState<{ id: string; name: string } | null>(null);
+  const [includeClub, setIncludeClub] = useState(true);
+  const [includeTerrain, setIncludeTerrain] = useState(true);
+  const [sharedAssociatedItems, setSharedAssociatedItems] = useState<AssociatedItem[]>([]);
+
+  // Pending share action after code generation
+  const [pendingAction, setPendingAction] = useState<'native' | 'code' | 'invitation' | 'qr' | null>(null);
+
+  const typeConfig = TYPE_CONFIG[itemType];
+  const typeLabelLower = t('shareModal', TYPE_LOWER_KEY[itemType]);
+
+  // Countdown timer
   React.useEffect(() => {
     if (!expiresAtDate) return;
     const interval = setInterval(() => setCountdownNow(Date.now()), 60000);
@@ -96,210 +112,162 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
     return { expired: false, days, hours, minutes };
   }, [expiresAtDate, countdownNow]);
 
-  // Associated items state (for player sharing)
-  const [showAssociatedPrompt, setShowAssociatedPrompt] = useState(false);
-  const [associatedClub, setAssociatedClub] = useState<{ id: string; name: string } | null>(null);
-  const [associatedTerrain, setAssociatedTerrain] = useState<{ id: string; name: string } | null>(null);
-  const [includeClub, setIncludeClub] = useState(true);
-  const [includeTerrain, setIncludeTerrain] = useState(true);
-  // Track what was included in the final share
-  const [sharedAssociatedItems, setSharedAssociatedItems] = useState<AssociatedItem[]>([]);
-
-  const typeConfig = TYPE_CONFIG[itemType];
-  const typeLabel = t('shareModal', typeConfig.labelKey);
-  const typeLabelLower = t('shareModal', TYPE_LOWER_KEY[itemType]);
-  const fr = language === 'fr';
-
-  // Build preview data for the shared item
-  const previewData = useMemo(() => {
-    const rows: { icon: string; label: string; value: string; color?: string }[] = [];
+  // Build preview subtitle
+  const previewSubtitle = useMemo(() => {
     if (itemType === 'player') {
       const p = getPlayerById(itemId);
-      if (p) {
-        if (p.role) rows.push({ icon: 'sports', label: fr ? 'Role' : 'Role', value: t('roles', p.role) || p.role });
-        if (p.level) rows.push({ icon: 'signal-cellular-alt', label: fr ? 'Niveau' : 'Level', value: t('levels', p.level) || p.level });
-        if (p.club) rows.push({ icon: 'home', label: 'Club', value: p.club });
-        const stats = p.stats as any;
-        if (stats) {
-          if (stats.matchesPlayed > 0) rows.push({ icon: 'bar-chart', label: fr ? 'Matchs' : 'Matches', value: `${stats.matchesPlayed}`, color: theme.primary });
-          if (stats.winRate > 0) rows.push({ icon: 'emoji-events', label: fr ? 'Victoires' : 'Win rate', value: `${stats.winRate}%`, color: theme.success });
-          if (stats.tirRate > 0) rows.push({ icon: 'gps-fixed', label: fr ? 'Taux tir' : 'Shooting', value: `${stats.tirRate}%`, color: theme.tirColor });
-        }
-        if (p.country) rows.push({ icon: 'flag', label: fr ? 'Pays' : 'Country', value: p.country });
-      }
-    } else if (itemType === 'club') {
-      const c = getClubById(itemId);
-      if (c) {
-        if (c.city) rows.push({ icon: 'location-city', label: fr ? 'Ville' : 'City', value: c.city });
-        if (c.country) rows.push({ icon: 'flag', label: fr ? 'Pays' : 'Country', value: c.country });
-        if (c.membersCount) rows.push({ icon: 'group', label: fr ? 'Membres' : 'Members', value: `${c.membersCount}`, color: theme.primary });
-        if (c.foundedYear) rows.push({ icon: 'history', label: fr ? 'Fonde' : 'Founded', value: `${c.foundedYear}` });
-        if (c.facilities && c.facilities.length > 0) rows.push({ icon: 'sports-soccer', label: fr ? 'Equipements' : 'Facilities', value: c.facilities.slice(0, 3).join(', ') });
-        if (c.website) rows.push({ icon: 'language', label: 'Web', value: c.website.replace(/^https?:\/\//, '').substring(0, 30) });
-      }
-    } else if (itemType === 'terrain') {
-      const tr = getTerrainById(itemId);
-      if (tr) {
-        if (tr.type) rows.push({ icon: 'terrain', label: 'Type', value: tr.type });
-        if (tr.city) rows.push({ icon: 'location-city', label: fr ? 'Ville' : 'City', value: tr.city });
-        if (tr.courtsCount) rows.push({ icon: 'dashboard', label: fr ? 'Terrains' : 'Courts', value: `${tr.courtsCount}`, color: theme.primary });
-        if (tr.lighting) rows.push({ icon: 'lightbulb', label: fr ? 'Eclairage' : 'Lighting', value: fr ? 'Oui' : 'Yes', color: theme.success });
-        if (tr.covered) rows.push({ icon: 'roofing', label: fr ? 'Couvert' : 'Covered', value: fr ? 'Oui' : 'Yes', color: theme.success });
-        if (tr.environment) rows.push({ icon: 'nature', label: fr ? 'Env.' : 'Env.', value: tr.environment === 'indoor' ? (fr ? 'Interieur' : 'Indoor') : (fr ? 'Exterieur' : 'Outdoor') });
-        if (tr.clubName) rows.push({ icon: 'home', label: 'Club', value: tr.clubName });
-      }
-    } else if (itemType === 'tournament') {
-      const to = getTournamentById(itemId);
-      if (to) {
-        if (to.format) rows.push({ icon: 'group', label: 'Format', value: t('formats', to.format) || to.format });
-        if (to.type) rows.push({ icon: 'category', label: 'Type', value: to.type });
-        if (to.date) rows.push({ icon: 'event', label: 'Date', value: new Date(to.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' }) });
-        if (to.location?.city) rows.push({ icon: 'place', label: fr ? 'Lieu' : 'Location', value: to.location.city });
-        if (to.status) rows.push({ icon: 'info', label: 'Status', value: to.status === 'A venir' ? t('tournamentStatus', 'upcoming') : to.status === 'En cours' ? t('tournamentStatus', 'inProgress') : t('tournamentStatus', 'completed'), color: to.status === 'En cours' ? theme.warning : to.status === 'Termine' ? theme.success : theme.primary });
-        if (to.participants) rows.push({ icon: 'people', label: fr ? 'Participants' : 'Participants', value: `${to.participants}/${to.maxParticipants || '-'}` });
-        if (to.prize) rows.push({ icon: 'card-giftcard', label: fr ? 'Dotation' : 'Prize', value: to.prize });
-      }
-    } else if (itemType === 'match') {
-      const m = getMatchById(itemId) as any;
-      if (m) {
-        if (m.format) rows.push({ icon: 'group', label: 'Format', value: t('formats', m.format) || m.format });
-        if (m.mode) rows.push({ icon: 'flag', label: 'Mode', value: m.mode });
-        const scoreA = m.teamA?.score ?? 0;
-        const scoreB = m.teamB?.score ?? 0;
-        rows.push({ icon: 'scoreboard', label: 'Score', value: `${scoreA} - ${scoreB}`, color: m.winner === 'A' ? theme.success : m.winner === 'B' ? theme.error : theme.warning });
-        if (m.date) rows.push({ icon: 'event', label: 'Date', value: new Date(m.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' }) });
-        if (m.menes?.length) rows.push({ icon: 'format-list-numbered', label: fr ? 'Menes' : 'Ends', value: `${m.menes.length}` });
-        if (m.duration) rows.push({ icon: 'schedule', label: fr ? 'Duree' : 'Duration', value: `${m.duration} min` });
-      }
-    } else if (itemType === 'challenge') {
-      const ch = challenges.find((c: any) => c.id === itemId) as any;
-      if (ch) {
-        const cTypeName = ch.type === '10_tirs' ? '10 Tirs' : ch.type === '10_tirs_sautee' ? (fr ? '10 Tirs sautee' : '10 Lob Shots') : (fr ? 'Precision' : 'Precision');
-        rows.push({ icon: 'track-changes', label: 'Type', value: cTypeName });
-        rows.push({ icon: 'person', label: 'Mode', value: ch.mode === 'duel' ? 'Duel' : 'Solo' });
-        const rate = ch.type === 'precision'
-          ? (ch.maxPoints > 0 ? Math.round(((ch.totalPoints || 0) / ch.maxPoints) * 100) : 0)
-          : (ch.successRate !== undefined && ch.successRate !== null)
-            ? Math.round(ch.successRate)
-            : (ch.totalShots > 0 ? Math.round(((ch.successCount || 0) / ch.totalShots) * 100) : 0);
-        rows.push({ icon: 'stars', label: fr ? 'Taux reussite' : 'Success rate', value: `${rate}%`, color: rate >= 60 ? theme.success : rate >= 40 ? theme.warning : theme.error });
-        if (ch.date) rows.push({ icon: 'event', label: 'Date', value: new Date(ch.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' }) });
-        if (ch.mode === 'duel' && ch.opponent_name) rows.push({ icon: 'person-outline', label: fr ? 'Adversaire' : 'Opponent', value: ch.opponent_name });
-      }
+      return p ? [p.role, p.club, p.country].filter(Boolean).join(' \u2022 ') : '';
     }
-    return rows;
-  }, [itemType, itemId, fr, getPlayerById, getClubById, getTerrainById, getTournamentById, getMatchById, challenges, t]);
+    if (itemType === 'club') {
+      const c = getClubById(itemId);
+      return c ? [c.city, c.country, c.membersCount ? `${c.membersCount} ${fr ? 'membres' : 'members'}` : ''].filter(Boolean).join(' \u2022 ') : '';
+    }
+    if (itemType === 'terrain') {
+      const tr = getTerrainById(itemId);
+      return tr ? [tr.type, tr.city, tr.clubName].filter(Boolean).join(' \u2022 ') : '';
+    }
+    if (itemType === 'tournament') {
+      const to = getTournamentById(itemId);
+      if (!to) return '';
+      const dateStr = to.date ? new Date(to.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' }) : '';
+      return [to.format, to.location?.city, dateStr].filter(Boolean).join(' \u2022 ');
+    }
+    if (itemType === 'match') {
+      const m = getMatchById(itemId) as any;
+      if (!m) return '';
+      const scoreA = m.teamA?.score ?? 0;
+      const scoreB = m.teamB?.score ?? 0;
+      const dateStr = m.date ? new Date(m.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' }) : '';
+      return [`${scoreA}-${scoreB}`, m.format, dateStr].filter(Boolean).join(' \u2022 ');
+    }
+    if (itemType === 'challenge') {
+      const ch = challenges.find((c: any) => c.id === itemId) as any;
+      if (!ch) return '';
+      const typeName = ch.type === '10_tirs' ? '10 Tirs' : ch.type === '10_tirs_sautee' ? '10 Tirs sautee' : 'Precision';
+      return [typeName, ch.mode === 'duel' ? 'Duel' : 'Solo'].filter(Boolean).join(' \u2022 ');
+    }
+    return '';
+  }, [itemType, itemId, fr, getPlayerById, getClubById, getTerrainById, getTournamentById, getMatchById, challenges]);
 
-  // Reset state when modal opens
+  // Build share invitation message
+  const buildShareMessage = useCallback(() => {
+    let msg = fr
+      ? `Je partage avec toi ma fiche ${typeLabelLower} "${itemName}" sur Ultimate Petanque !`
+      : `I am sharing my ${typeLabelLower} "${itemName}" on Ultimate Petanque!`;
+    if (shareCode) msg += `\n${fr ? 'Code' : 'Code'}: ${shareCode}`;
+    if (previewSubtitle) msg += `\n${previewSubtitle}`;
+    if (sharedAssociatedItems.length > 0) {
+      sharedAssociatedItems.forEach(ai => {
+        const name = ai.type === 'club' ? associatedClub?.name : associatedTerrain?.name;
+        if (name) msg += `\n+ ${ai.type === 'club' ? 'Club' : 'Terrain'}: ${name}`;
+      });
+    }
+    msg += `\n\n${fr ? 'Telecharge l\'app' : 'Download the app'}: ${config.appDownloadUrl}`;
+    return msg;
+  }, [fr, typeLabelLower, itemName, shareCode, previewSubtitle, sharedAssociatedItems, associatedClub, associatedTerrain]);
+
+  // Reset on open
   React.useEffect(() => {
     if (visible) {
+      setStep('options');
       setShareCode(null);
       setError(null);
       setCopied(false);
       setIsGenerating(false);
-      setShowAssociatedPrompt(false);
+      setExpiration('never');
+      setExpiresAtDate(null);
       setAssociatedClub(null);
       setAssociatedTerrain(null);
       setIncludeClub(true);
       setIncludeTerrain(true);
       setSharedAssociatedItems([]);
-      setExpiration('never');
-      setExpiresAtDate(null);
+      setPendingAction(null);
     }
   }, [visible, itemId, itemType]);
 
-  // Detect associated club/terrain for player sharing
+  // Detect associated items for player
   const detectAssociatedItems = useCallback(() => {
     if (itemType !== 'player') return { club: null, terrain: null };
     const player = getPlayerById(itemId);
     if (!player) return { club: null, terrain: null };
-
     let club: { id: string; name: string } | null = null;
     let terrain: { id: string; name: string } | null = null;
-
-    if (player.clubId) {
-      const clubEntity = getClubById(player.clubId);
-      if (clubEntity) {
-        club = { id: clubEntity.id, name: clubEntity.name };
-      }
-    }
-    if (player.terrainId) {
-      const terrainEntity = getTerrainById(player.terrainId);
-      if (terrainEntity) {
-        terrain = { id: terrainEntity.id, name: terrainEntity.name };
-      }
-    }
-
+    if (player.clubId) { const c = getClubById(player.clubId); if (c) club = { id: c.id, name: c.name }; }
+    if (player.terrainId) { const tr = getTerrainById(player.terrainId); if (tr) terrain = { id: tr.id, name: tr.name }; }
     return { club, terrain };
   }, [itemType, itemId, getPlayerById, getClubById, getTerrainById]);
 
-  const handleGenerate = useCallback(async () => {
-    if (!itemId) {
-      setError('Item ID is missing');
-      return;
-    }
-
-    // For player type, check associated items first (before generating code)
-    if (itemType === 'player' && !showAssociatedPrompt && !shareCode) {
-      const { club, terrain } = detectAssociatedItems();
-      if (club || terrain) {
-        setAssociatedClub(club);
-        setAssociatedTerrain(terrain);
-        setIncludeClub(!!club);
-        setIncludeTerrain(!!terrain);
-        setShowAssociatedPrompt(true);
-        return;
-      }
-    }
-
-    // Generate single code (no associated items for non-player types)
-    await doGenerateShareCode([], computeExpiresAt(expiration));
-  }, [itemType, itemId, showAssociatedPrompt, shareCode, detectAssociatedItems, expiration]);
-
+  // Core generate function
   const doGenerateShareCode = useCallback(async (associatedItems: AssociatedItem[], expiresAtISO?: string | null) => {
     setIsGenerating(true);
     setError(null);
-    setShowAssociatedPrompt(false);
-
     try {
       const result = await createShareLink(itemType, itemId, 'read', associatedItems.length > 0 ? associatedItems : undefined, expiresAtISO);
-      if (result.error) {
-        setError(result.error);
-        setIsGenerating(false);
-        return;
-      }
-
+      if (result.error) { setError(result.error); setIsGenerating(false); return; }
       setShareCode(result.shareCode);
       setSharedAssociatedItems(associatedItems);
       if (expiresAtISO) setExpiresAtDate(new Date(expiresAtISO));
       else setExpiresAtDate(null);
+      setStep('result');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
-      console.log('Share link creation error:', e);
       setError(e?.message || t('shareModal', 'errorCreating'));
     } finally {
       setIsGenerating(false);
     }
   }, [itemType, itemId, t]);
 
-  const handleConfirmWithAssociated = useCallback(async () => {
-    const items: AssociatedItem[] = [];
-    if (includeClub && associatedClub) {
-      items.push({ type: 'club', id: associatedClub.id });
+  // Initiate share flow: check for associated items, then generate
+  const initiateGenerate = useCallback(async (action: 'native' | 'code' | 'invitation' | 'qr') => {
+    setPendingAction(action);
+    // For player, check associated items
+    if (itemType === 'player') {
+      const { club, terrain } = detectAssociatedItems();
+      if (club || terrain) {
+        setAssociatedClub(club);
+        setAssociatedTerrain(terrain);
+        setIncludeClub(!!club);
+        setIncludeTerrain(!!terrain);
+        setStep('associated');
+        return;
+      }
     }
-    if (includeTerrain && associatedTerrain) {
-      items.push({ type: 'terrain', id: associatedTerrain.id });
-    }
-    await doGenerateShareCode(items, computeExpiresAt(expiration));
-  }, [includeClub, includeTerrain, associatedClub, associatedTerrain, doGenerateShareCode, expiration]);
+    // Show expiration step
+    setStep('expiration');
+  }, [itemType, detectAssociatedItems]);
 
-  const handleSkipAssociated = useCallback(async () => {
+  const handleConfirmAssociated = useCallback(() => {
+    setStep('expiration');
+  }, []);
+
+  const handleSkipAssociated = useCallback(() => {
     setIncludeClub(false);
     setIncludeTerrain(false);
-    await doGenerateShareCode([], computeExpiresAt(expiration));
-  }, [doGenerateShareCode, expiration]);
+    setStep('expiration');
+  }, []);
 
-  const handleCopy = useCallback(async () => {
+  const handleConfirmExpiration = useCallback(async () => {
+    const items: AssociatedItem[] = [];
+    if (includeClub && associatedClub) items.push({ type: 'club', id: associatedClub.id });
+    if (includeTerrain && associatedTerrain) items.push({ type: 'terrain', id: associatedTerrain.id });
+    await doGenerateShareCode(items, computeExpiresAt(expiration));
+  }, [includeClub, includeTerrain, associatedClub, associatedTerrain, expiration, doGenerateShareCode]);
+
+  // Execute the pending share action after code is generated
+  React.useEffect(() => {
+    if (step === 'result' && shareCode && pendingAction) {
+      const timer = setTimeout(() => {
+        if (pendingAction === 'native') handleNativeShare();
+        else if (pendingAction === 'code') handleCopyCode();
+        else if (pendingAction === 'invitation') handleCopyInvitation();
+        // qr: just show the result with QR
+        setPendingAction(null);
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+  }, [step, shareCode, pendingAction]);
+
+  const handleCopyCode = useCallback(async () => {
     if (!shareCode) return;
     await Clipboard.setStringAsync(shareCode);
     setCopied(true);
@@ -307,509 +275,427 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
     setTimeout(() => setCopied(false), 2000);
   }, [shareCode]);
 
-  const handleShare = useCallback(async () => {
+  const handleNativeShare = useCallback(async () => {
     if (!shareCode) return;
-    let message = `${t('shareModal', 'shareMessage')} ${typeLabelLower} "${itemName}" ${t('shareModal', 'shareMessageSuffix')}\n\n${t('shareModal', 'shareMessageCode')} ${shareCode}`;
+    try { await Share.share({ message: buildShareMessage(), title: `${fr ? 'Partage' : 'Share'} - ${itemName}` }); } catch {}
+  }, [shareCode, buildShareMessage, fr, itemName]);
 
-    // Mention included associated items
-    if (sharedAssociatedItems.length > 0) {
-      message += '\n';
-      sharedAssociatedItems.forEach(ai => {
-        const label = ai.type === 'club' ? t('shareModal', 'clubLabel') : t('shareModal', 'terrainLabel');
-        const name = ai.type === 'club' ? associatedClub?.name : associatedTerrain?.name;
-        if (name) message += `\n+ ${label} "${name}" ${t('shareModal', 'includedInShare')}`;
-      });
-    }
-
-    try {
-      await Share.share({
-        message,
-        title: `${t('shareModal', 'shareMessageTitle')} ${itemName}`,
-      });
-    } catch (e) {
-      // User cancelled
-    }
-  }, [shareCode, typeLabelLower, itemName, sharedAssociatedItems, associatedClub, associatedTerrain, t]);
+  const handleCopyInvitation = useCallback(async () => {
+    if (!shareCode) return;
+    await Clipboard.setStringAsync(buildShareMessage());
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [shareCode, buildShareMessage]);
 
   const handleClose = useCallback(() => {
     setShareCode(null);
     setError(null);
     setCopied(false);
-    setShowAssociatedPrompt(false);
     setSharedAssociatedItems([]);
     setExpiresAtDate(null);
+    setPendingAction(null);
     onClose();
   }, [onClose]);
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={handleClose}
-    >
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Pressable style={styles.closeBtn} onPress={handleClose}>
-            <MaterialIcons name="close" size={24} color={theme.textPrimary} />
-          </Pressable>
-          <Text style={styles.headerTitle}>{t('shareModal', 'shareTitle')}</Text>
-          <View style={{ width: 40 }} />
-        </View>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
+      <View style={s.overlay}>
+        <View style={s.sheet}>
+          {/* Header */}
+          <View style={s.header}>
+            <Text style={s.headerTitle}>{t('shareModal', 'shareTitle')}</Text>
+            <Pressable style={s.closeBtn} onPress={handleClose}>
+              <MaterialIcons name="close" size={22} color="#64748B" />
+            </Pressable>
+          </View>
 
-        <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          {/* Item preview */}
-          <Animated.View entering={FadeInDown.duration(300)} style={styles.itemPreview}>
-            <View style={[styles.itemIcon, { backgroundColor: typeConfig.color + '15' }]}>
-              <MaterialIcons name={typeConfig.icon as any} size={28} color={typeConfig.color} />
-            </View>
-            <View style={styles.itemInfo}>
-              <Text style={styles.itemName} numberOfLines={1}>{itemName}</Text>
-              <Text style={styles.itemType}>{typeLabel}</Text>
-            </View>
-          </Animated.View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
-          {/* Visual Summary Card — what the recipient will see */}
-          {previewData.length > 0 ? (
-            <Animated.View entering={FadeInDown.duration(300).delay(30)} style={styles.summaryCard}>
-              <View style={styles.summaryHeader}>
-                <MaterialIcons name="preview" size={16} color={typeConfig.color} />
-                <Text style={styles.summaryHeaderText}>{fr ? 'Apercu du contenu partage' : 'Shared content preview'}</Text>
+            {/* ===== PREVIEW CARD (always visible) ===== */}
+            <LinearGradient colors={typeConfig.gradient} style={s.previewGradient}>
+              <MaterialIcons name={typeConfig.icon as any} size={22} color="rgba(255,255,255,0.85)" />
+              <View style={{ flex: 1 }}>
+                <Text style={s.previewTitle} numberOfLines={1}>{itemName}</Text>
+                {previewSubtitle ? <Text style={s.previewSub} numberOfLines={1}>{previewSubtitle}</Text> : null}
               </View>
-              <View style={styles.summaryGrid}>
-                {previewData.map((row, idx) => (
-                  <View key={idx} style={styles.summaryRow}>
-                    <View style={[styles.summaryRowIcon, { backgroundColor: (row.color || typeConfig.color) + '10' }]}>
-                      <MaterialIcons name={row.icon as any} size={14} color={row.color || typeConfig.color} />
+              {shareCode ? (
+                <View style={s.previewCodeBadge}>
+                  <Text style={s.previewCodeText}>{shareCode}</Text>
+                </View>
+              ) : (
+                <View style={s.previewTypeBadge}>
+                  <Text style={s.previewTypeText}>{t('shareModal', TYPE_LOWER_KEY[itemType])}</Text>
+                </View>
+              )}
+            </LinearGradient>
+
+            {/* ===== STEP: OPTIONS (share mode selection) ===== */}
+            {step === 'options' ? (
+              <View>
+                {/* Contact visibility toggle */}
+                {showContactToggle ? (
+                  <Animated.View entering={FadeInDown.duration(250)} style={s.contactToggleCard}>
+                    <View style={[s.contactToggleIcon, { backgroundColor: (contactVisible ? '#10B981' : '#94A3B8') + '15' }]}>
+                      <MaterialIcons name={contactVisible ? 'contact-phone' : 'phone-disabled'} size={18} color={contactVisible ? '#10B981' : '#94A3B8'} />
                     </View>
-                    <Text style={styles.summaryRowLabel}>{row.label}</Text>
-                    <Text style={[styles.summaryRowValue, row.color ? { color: row.color } : null]} numberOfLines={1}>{row.value}</Text>
-                  </View>
-                ))}
-              </View>
-              <View style={styles.summaryFooter}>
-                <MaterialIcons name="info-outline" size={12} color={theme.textMuted} />
-                <Text style={styles.summaryFooterText}>
-                  {fr ? 'Le destinataire verra ces informations en lecture seule' : 'The recipient will see this information as read-only'}
-                </Text>
-              </View>
-            </Animated.View>
-          ) : null}
-
-          {/* Associated items prompt — shown BEFORE code generation */}
-          {showAssociatedPrompt ? (
-            <Animated.View entering={FadeInDown.duration(300)}>
-              <View style={styles.associatedSection}>
-                <View style={styles.associatedHeader}>
-                  <MaterialIcons name="link" size={22} color={theme.primary} />
-                  <Text style={styles.associatedTitle}>{t('shareModal', 'alsoShareAssociated')}</Text>
-                </View>
-                <Text style={styles.associatedDesc}>{t('shareModal', 'alsoShareAssociatedDesc')}</Text>
-
-                {associatedClub ? (
-                  <Pressable
-                    style={[styles.associatedItem, includeClub && styles.associatedItemActive]}
-                    onPress={() => { Haptics.selectionAsync(); setIncludeClub(!includeClub); }}
-                  >
-                    <View style={[styles.associatedItemIcon, { backgroundColor: theme.accent + '15' }]}>
-                      <MaterialIcons name="home" size={20} color={theme.accent} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.contactToggleLabel}>{fr ? 'Contacts visibles' : 'Contacts visible'}</Text>
+                      <Text style={s.contactToggleDesc}>{contactVisible ? (fr ? 'Email et telephone visibles' : 'Email and phone visible') : (fr ? 'Contacts masques pour le destinataire' : 'Contacts hidden from recipient')}</Text>
                     </View>
-                    <View style={styles.associatedItemInfo}>
-                      <Text style={styles.associatedItemLabel}>{t('shareModal', 'associatedClub')}</Text>
-                      <Text style={styles.associatedItemName} numberOfLines={1}>{associatedClub.name}</Text>
-                    </View>
-                    <View style={[styles.checkbox, includeClub && styles.checkboxActive]}>
-                      {includeClub ? <MaterialIcons name="check" size={16} color="#FFF" /> : null}
-                    </View>
-                  </Pressable>
-                ) : null}
-
-                {associatedTerrain ? (
-                  <Pressable
-                    style={[styles.associatedItem, includeTerrain && styles.associatedItemActive]}
-                    onPress={() => { Haptics.selectionAsync(); setIncludeTerrain(!includeTerrain); }}
-                  >
-                    <View style={[styles.associatedItemIcon, { backgroundColor: theme.success + '15' }]}>
-                      <MaterialIcons name="sports-soccer" size={20} color={theme.success} />
-                    </View>
-                    <View style={styles.associatedItemInfo}>
-                      <Text style={styles.associatedItemLabel}>{t('shareModal', 'associatedTerrain')}</Text>
-                      <Text style={styles.associatedItemName} numberOfLines={1}>{associatedTerrain.name}</Text>
-                    </View>
-                    <View style={[styles.checkbox, includeTerrain && styles.checkboxActive]}>
-                      {includeTerrain ? <MaterialIcons name="check" size={16} color="#FFF" /> : null}
-                    </View>
-                  </Pressable>
-                ) : null}
-
-                <View style={styles.associatedActions}>
-                  <Pressable style={styles.associatedSkipBtn} onPress={handleSkipAssociated}>
-                    <Text style={styles.associatedSkipBtnText}>{t('shareModal', 'sharePlayerOnly')}</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.associatedShareBtn, isGenerating && { opacity: 0.7 }]}
-                    onPress={handleConfirmWithAssociated}
-                    disabled={isGenerating}
-                  >
-                    {isGenerating ? (
-                      <ActivityIndicator size="small" color="#FFF" />
-                    ) : (
-                      <>
-                        <MaterialIcons name="link" size={18} color="#FFF" />
-                        <Text style={styles.associatedShareBtnText}>{t('shareModal', 'generateCode')}</Text>
-                      </>
-                    )}
-                  </Pressable>
-                </View>
-              </View>
-            </Animated.View>
-          ) : !shareCode ? (
-            <>
-              {/* Expiration picker */}
-              <Animated.View entering={FadeInDown.duration(300).delay(40)} style={styles.expirationSection}>
-                <View style={styles.expirationHeader}>
-                  <MaterialIcons name="timer" size={16} color={theme.textSecondary} />
-                  <Text style={styles.expirationTitle}>{t('shareModal', 'expirationLabel')}</Text>
-                </View>
-                <View style={styles.expirationOptions}>
-                  {EXPIRATION_OPTIONS.map((opt) => {
-                    const isActive = expiration === opt.key;
-                    return (
-                      <Pressable
-                        key={opt.key}
-                        style={[styles.expirationChip, isActive && { backgroundColor: typeConfig.color, borderColor: typeConfig.color }]}
-                        onPress={() => { Haptics.selectionAsync(); setExpiration(opt.key); }}
-                      >
-                        <MaterialIcons name={opt.icon as any} size={14} color={isActive ? '#FFF' : theme.textSecondary} />
-                        <Text style={[styles.expirationChipText, isActive && { color: '#FFF' }]}>{t('shareModal', opt.labelKey)}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </Animated.View>
-
-              {/* Read-only info */}
-              <Animated.View entering={FadeInDown.duration(300).delay(50)} style={styles.readOnlyInfo}>
-                <View style={[styles.readOnlyBadge, { backgroundColor: theme.primary + '15' }]}>
-                  <MaterialIcons name="visibility" size={16} color={theme.primary} />
-                  <Text style={[styles.readOnlyBadgeText, { color: theme.primary }]}>{t('shareModal', 'readOnly')}</Text>
-                </View>
-                <Text style={styles.readOnlyDesc}>{t('shareModal', 'autoSaveDesc')}</Text>
-              </Animated.View>
-
-              {error ? (
-                <View style={styles.errorBox}>
-                  <MaterialIcons name="error" size={18} color={theme.error} />
-                  <Text style={styles.errorText}>{error}</Text>
-                </View>
-              ) : null}
-
-              {/* Generate button */}
-              <Animated.View entering={FadeInDown.duration(300).delay(100)}>
-                <Pressable
-                  style={[styles.generateBtn, isGenerating && { opacity: 0.7 }]}
-                  onPress={handleGenerate}
-                  disabled={isGenerating}
-                >
-                  {isGenerating ? (
-                    <ActivityIndicator size="small" color="#FFF" />
-                  ) : (
-                    <>
-                      <MaterialIcons name="link" size={22} color="#FFF" />
-                      <Text style={styles.generateBtnText}>{t('shareModal', 'generateCode')}</Text>
-                    </>
-                  )}
-                </Pressable>
-              </Animated.View>
-            </>
-          ) : (
-            <>
-              {/* Share code result — single code */}
-              <Animated.View entering={FadeInDown.duration(300).delay(50)} style={styles.resultSection}>
-                <View style={styles.resultIcon}>
-                  <MaterialIcons name="check-circle" size={48} color={theme.success} />
-                </View>
-                <Text style={styles.resultTitle}>{t('shareModal', 'codeCreated')}</Text>
-                <Text style={styles.resultDesc}>{t('shareModal', 'shareCodeAutoSaveDesc')}</Text>
-
-                {/* Share code display */}
-                <View style={styles.codeBox}>
-                  <Text style={styles.codeText}>{shareCode}</Text>
-                  <Pressable style={styles.copyBtn} onPress={handleCopy}>
-                    <MaterialIcons name={copied ? 'check' : 'content-copy'} size={20} color={copied ? theme.success : theme.primary} />
-                    <Text style={[styles.copyBtnText, copied && { color: theme.success }]}>
-                      {copied ? t('shareModal', 'copied') : t('shareModal', 'copy')}
-                    </Text>
-                  </Pressable>
-                </View>
-
-                {/* What's included */}
-                <View style={styles.includedSection}>
-                  <View style={styles.includedItem}>
-                    <MaterialIcons name={typeConfig.icon as any} size={16} color={typeConfig.color} />
-                    <Text style={styles.includedItemText}>{itemName}</Text>
-                  </View>
-                  {sharedAssociatedItems.map((ai) => {
-                    const aiConfig = ai.type === 'club'
-                      ? { icon: 'home' as const, color: theme.accent, name: associatedClub?.name }
-                      : { icon: 'sports-soccer' as const, color: theme.success, name: associatedTerrain?.name };
-                    return (
-                      <View key={ai.type} style={styles.includedItem}>
-                        <MaterialIcons name={aiConfig.icon} size={16} color={aiConfig.color} />
-                        <Text style={styles.includedItemText}>{aiConfig.name}</Text>
-                        <View style={[styles.includedBadge, { backgroundColor: aiConfig.color + '15' }]}>
-                          <Text style={[styles.includedBadgeText, { color: aiConfig.color }]}>
-                            {ai.type === 'club' ? t('shareModal', 'clubLabel') : t('shareModal', 'terrainLabel')}
-                          </Text>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-
-                {/* Permission badge */}
-                <View style={[styles.permissionBadge, { backgroundColor: theme.primary + '15' }]}>
-                  <MaterialIcons name="visibility" size={14} color={theme.primary} />
-                  <Text style={[styles.permissionBadgeText, { color: theme.primary }]}>
-                    {t('shareModal', 'readOnly')} + {t('shareModal', 'autoSaveShort')}
-                  </Text>
-                </View>
-
-                {/* Expiration countdown indicator */}
-                {expiresAtDate ? (
-                  <View style={[styles.expirationIndicator, expirationCountdown?.expired ? { backgroundColor: theme.error + '12', borderColor: theme.error + '25' } : { backgroundColor: typeConfig.color + '10', borderColor: typeConfig.color + '20' }]}>
-                    <MaterialIcons name={expirationCountdown?.expired ? 'timer-off' : 'timer'} size={14} color={expirationCountdown?.expired ? theme.error : typeConfig.color} />
-                    {expirationCountdown?.expired ? (
-                      <Text style={[styles.expirationIndicatorText, { color: theme.error }]}>{t('shareModal', 'expired')}</Text>
-                    ) : (
-                      <View style={styles.expirationCountdownRow}>
-                        <Text style={[styles.expirationIndicatorLabel, { color: typeConfig.color }]}>{t('shareModal', 'expiresIn')}</Text>
-                        {expirationCountdown && expirationCountdown.days > 0 ? (
-                          <View style={styles.expirationCountdownUnit}>
-                            <Text style={[styles.expirationCountdownValue, { color: typeConfig.color }]}>{expirationCountdown.days}</Text>
-                            <Text style={[styles.expirationCountdownLabel, { color: typeConfig.color }]}>{t('shareModal', 'daysShort')}</Text>
-                          </View>
-                        ) : null}
-                        {expirationCountdown ? (
-                          <View style={styles.expirationCountdownUnit}>
-                            <Text style={[styles.expirationCountdownValue, { color: typeConfig.color }]}>{expirationCountdown.hours}</Text>
-                            <Text style={[styles.expirationCountdownLabel, { color: typeConfig.color }]}>{t('shareModal', 'hoursShort')}</Text>
-                          </View>
-                        ) : null}
-                        {expirationCountdown && expirationCountdown.days === 0 ? (
-                          <View style={styles.expirationCountdownUnit}>
-                            <Text style={[styles.expirationCountdownValue, { color: typeConfig.color }]}>{expirationCountdown.minutes}</Text>
-                            <Text style={[styles.expirationCountdownLabel, { color: typeConfig.color }]}>{t('shareModal', 'minutesShort')}</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                    )}
-                    <Text style={styles.expirationDateText}>
-                      {t('shareModal', 'expiresOn')} {expiresAtDate.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={[styles.expirationIndicator, { backgroundColor: theme.success + '08', borderColor: theme.success + '18' }]}>
-                    <MaterialIcons name="all-inclusive" size={14} color={theme.success} />
-                    <Text style={[styles.expirationIndicatorText, { color: theme.success }]}>{t('shareModal', 'noExpiration')}</Text>
-                  </View>
-                )}
-              </Animated.View>
-
-              {/* QR Code — integrated in preview */}
-              <Animated.View entering={FadeInDown.duration(300).delay(120)} style={styles.qrInlineSection}>
-                <View style={styles.qrInlineHeader}>
-                  <MaterialIcons name="qr-code-2" size={18} color={typeConfig.color} />
-                  <Text style={styles.qrInlineTitle}>{t('shareModal', 'qrCodeLabel') || (fr ? 'QR Code de partage' : 'Share QR Code')}</Text>
-                </View>
-                <View style={styles.qrInlineBody}>
-                  <View style={styles.qrInlineWrapper}>
-                    <QRCode
-                      value={`${config.appDownloadUrl}?share=${shareCode}`}
-                      size={130}
-                      color={typeConfig.color}
-                      backgroundColor="#FFFFFF"
+                    <Switch
+                      value={contactVisible ?? false}
+                      onValueChange={(v) => { Haptics.selectionAsync(); onToggleContact?.(v); }}
+                      trackColor={{ false: '#E2E8F0', true: '#10B98160' }}
+                      thumbColor={contactVisible ? '#10B981' : '#94A3B8'}
                     />
+                  </Animated.View>
+                ) : null}
+
+                {/* Share options */}
+                <Animated.View entering={FadeInDown.duration(250).delay(50)} style={s.optionsList}>
+                  <Pressable style={({ pressed }) => [s.optionCard, pressed && s.optionCardPressed]} onPress={() => initiateGenerate('native')}>
+                    <View style={[s.optionIcon, { backgroundColor: typeConfig.color + '12' }]}>
+                      <MaterialIcons name="share" size={22} color={typeConfig.color} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.optionTitle}>{fr ? 'Partager via...' : 'Share via...'}</Text>
+                      <Text style={s.optionDesc}>{fr ? 'WhatsApp, SMS, e-mail, etc.' : 'WhatsApp, SMS, email, etc.'}</Text>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color="#CBD5E1" />
+                  </Pressable>
+
+                  <Pressable style={({ pressed }) => [s.optionCard, pressed && s.optionCardPressed]} onPress={() => initiateGenerate('code')}>
+                    <View style={[s.optionIcon, { backgroundColor: '#F59E0B12' }]}>
+                      <MaterialIcons name="content-copy" size={22} color="#F59E0B" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.optionTitle}>{fr ? 'Copier le code' : 'Copy code'}</Text>
+                      <Text style={s.optionDesc}>{fr ? 'Generer et copier le code de partage' : 'Generate and copy the share code'}</Text>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color="#CBD5E1" />
+                  </Pressable>
+
+                  <Pressable style={({ pressed }) => [s.optionCard, pressed && s.optionCardPressed]} onPress={() => initiateGenerate('invitation')}>
+                    <View style={[s.optionIcon, { backgroundColor: '#3B82F612' }]}>
+                      <MaterialIcons name="description" size={22} color="#3B82F6" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.optionTitle}>{fr ? 'Copier l\'invitation' : 'Copy invitation'}</Text>
+                      <Text style={s.optionDesc}>{fr ? 'Message complet avec details' : 'Full message with details'}</Text>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color="#CBD5E1" />
+                  </Pressable>
+
+                  <Pressable style={({ pressed }) => [s.optionCard, pressed && s.optionCardPressed]} onPress={() => initiateGenerate('qr')}>
+                    <View style={[s.optionIcon, { backgroundColor: '#22C55E12' }]}>
+                      <MaterialIcons name="qr-code-2" size={22} color="#22C55E" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.optionTitle}>{fr ? 'QR Code de partage' : 'Share QR Code'}</Text>
+                      <Text style={s.optionDesc}>{fr ? 'Generer un QR code scannable' : 'Generate a scannable QR code'}</Text>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color="#CBD5E1" />
+                  </Pressable>
+                </Animated.View>
+
+                {/* Read-only info */}
+                <View style={s.infoRow}>
+                  <MaterialIcons name="visibility" size={14} color={typeConfig.color} />
+                  <Text style={s.infoText}>{t('shareModal', 'autoSaveDesc')}</Text>
+                </View>
+              </View>
+            ) : null}
+
+            {/* ===== STEP: ASSOCIATED ITEMS (player only) ===== */}
+            {step === 'associated' ? (
+              <Animated.View entering={FadeInDown.duration(300)}>
+                <View style={s.stepCard}>
+                  <View style={s.stepHeader}>
+                    <MaterialIcons name="link" size={20} color={typeConfig.color} />
+                    <Text style={s.stepTitle}>{t('shareModal', 'alsoShareAssociated')}</Text>
                   </View>
-                  <Text style={styles.qrInlineHint}>{t('shareModal', 'qrHint') || (fr ? 'Scannez pour acceder a la fiche' : 'Scan to access the card')}</Text>
+                  <Text style={s.stepDesc}>{t('shareModal', 'alsoShareAssociatedDesc')}</Text>
+
+                  {associatedClub ? (
+                    <Pressable style={[s.assocItem, includeClub && s.assocItemActive]} onPress={() => { Haptics.selectionAsync(); setIncludeClub(!includeClub); }}>
+                      <View style={[s.assocItemIcon, { backgroundColor: '#D9770615' }]}><MaterialIcons name="home" size={20} color="#D97706" /></View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.assocItemLabel}>{t('shareModal', 'associatedClub')}</Text>
+                        <Text style={s.assocItemName} numberOfLines={1}>{associatedClub.name}</Text>
+                      </View>
+                      <View style={[s.checkbox, includeClub && s.checkboxActive]}>{includeClub ? <MaterialIcons name="check" size={14} color="#FFF" /> : null}</View>
+                    </Pressable>
+                  ) : null}
+
+                  {associatedTerrain ? (
+                    <Pressable style={[s.assocItem, includeTerrain && s.assocItemActive]} onPress={() => { Haptics.selectionAsync(); setIncludeTerrain(!includeTerrain); }}>
+                      <View style={[s.assocItemIcon, { backgroundColor: '#10B98115' }]}><MaterialIcons name="sports-soccer" size={20} color="#10B981" /></View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.assocItemLabel}>{t('shareModal', 'associatedTerrain')}</Text>
+                        <Text style={s.assocItemName} numberOfLines={1}>{associatedTerrain.name}</Text>
+                      </View>
+                      <View style={[s.checkbox, includeTerrain && s.checkboxActive]}>{includeTerrain ? <MaterialIcons name="check" size={14} color="#FFF" /> : null}</View>
+                    </Pressable>
+                  ) : null}
+
+                  <View style={s.stepActions}>
+                    <Pressable style={s.stepSecondaryBtn} onPress={handleSkipAssociated}>
+                      <Text style={s.stepSecondaryBtnText}>{t('shareModal', 'sharePlayerOnly')}</Text>
+                    </Pressable>
+                    <Pressable style={[s.stepPrimaryBtn, { backgroundColor: typeConfig.color }]} onPress={handleConfirmAssociated}>
+                      <MaterialIcons name="arrow-forward" size={18} color="#FFF" />
+                      <Text style={s.stepPrimaryBtnText}>{fr ? 'Continuer' : 'Continue'}</Text>
+                    </Pressable>
+                  </View>
                 </View>
               </Animated.View>
+            ) : null}
 
-              {/* Share actions */}
-              <Animated.View entering={FadeInDown.duration(300).delay(160)} style={styles.shareActions}>
-                <Pressable style={styles.shareActionBtn} onPress={handleShare}>
-                  <MaterialIcons name="share" size={24} color={theme.primary} />
-                  <Text style={styles.shareActionBtnText}>{t('shareModal', 'shareBtn')}</Text>
-                </Pressable>
-                <Pressable style={styles.shareActionBtn} onPress={handleCopy}>
-                  <MaterialIcons name="content-copy" size={24} color={theme.accent} />
-                  <Text style={styles.shareActionBtnText}>{t('shareModal', 'copyCode')}</Text>
-                </Pressable>
+            {/* ===== STEP: EXPIRATION ===== */}
+            {step === 'expiration' ? (
+              <Animated.View entering={FadeInDown.duration(300)}>
+                <View style={s.stepCard}>
+                  <View style={s.stepHeader}>
+                    <MaterialIcons name="timer" size={20} color={typeConfig.color} />
+                    <Text style={s.stepTitle}>{t('shareModal', 'expirationLabel')}</Text>
+                  </View>
+                  <Text style={s.stepDesc}>{fr ? 'Choisissez la duree de validite du code de partage' : 'Choose how long the share code should be valid'}</Text>
+
+                  <View style={s.expirationGrid}>
+                    {EXPIRATION_OPTIONS.map((opt) => {
+                      const isActive = expiration === opt.key;
+                      return (
+                        <Pressable key={opt.key} style={[s.expirationChip, isActive && { backgroundColor: typeConfig.color, borderColor: typeConfig.color }]} onPress={() => { Haptics.selectionAsync(); setExpiration(opt.key); }}>
+                          <MaterialIcons name={opt.icon as any} size={16} color={isActive ? '#FFF' : '#64748B'} />
+                          <Text style={[s.expirationChipText, isActive && { color: '#FFF' }]}>{t('shareModal', opt.labelKey)}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  {error ? (
+                    <View style={s.errorBox}>
+                      <MaterialIcons name="error" size={16} color="#EF4444" />
+                      <Text style={s.errorText}>{error}</Text>
+                    </View>
+                  ) : null}
+
+                  <View style={s.stepActions}>
+                    <Pressable style={s.stepSecondaryBtn} onPress={() => setStep(itemType === 'player' && (associatedClub || associatedTerrain) ? 'associated' : 'options')}>
+                      <MaterialIcons name="arrow-back" size={16} color="#64748B" />
+                      <Text style={s.stepSecondaryBtnText}>{fr ? 'Retour' : 'Back'}</Text>
+                    </Pressable>
+                    <Pressable style={[s.stepPrimaryBtn, { backgroundColor: typeConfig.color }, isGenerating && { opacity: 0.6 }]} onPress={handleConfirmExpiration} disabled={isGenerating}>
+                      {isGenerating ? <ActivityIndicator size="small" color="#FFF" /> : <><MaterialIcons name="link" size={18} color="#FFF" /><Text style={s.stepPrimaryBtnText}>{t('shareModal', 'generateCode')}</Text></>}
+                    </Pressable>
+                  </View>
+                </View>
               </Animated.View>
+            ) : null}
 
-              <View style={styles.infoBox}>
-                <MaterialIcons name="info-outline" size={16} color={theme.textMuted} />
-                <Text style={styles.infoText}>{t('shareModal', 'infoTextAutoSave')}</Text>
+            {/* ===== STEP: RESULT ===== */}
+            {step === 'result' && shareCode ? (
+              <View>
+                {/* Code display */}
+                <Animated.View entering={FadeInDown.duration(300)} style={s.codeCard}>
+                  <View style={s.codeCardRow}>
+                    <View style={[s.codeSuccessIcon, { backgroundColor: '#10B98115' }]}>
+                      <MaterialIcons name="check-circle" size={24} color="#10B981" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.codeCardTitle}>{t('shareModal', 'codeCreated')}</Text>
+                      <Text style={s.codeCardSub}>{t('shareModal', 'shareCodeAutoSaveDesc')}</Text>
+                    </View>
+                  </View>
+                  <View style={s.codeDisplay}>
+                    <Text style={[s.codeText, { color: typeConfig.color }]}>{shareCode}</Text>
+                    <Pressable style={[s.codeCopyBtn, { backgroundColor: typeConfig.color + '12' }]} onPress={handleCopyCode}>
+                      <MaterialIcons name={copied ? 'check' : 'content-copy'} size={18} color={copied ? '#10B981' : typeConfig.color} />
+                      <Text style={[s.codeCopyBtnText, { color: copied ? '#10B981' : typeConfig.color }]}>{copied ? t('shareModal', 'copied') : t('shareModal', 'copy')}</Text>
+                    </Pressable>
+                  </View>
+
+                  {/* Included items */}
+                  {sharedAssociatedItems.length > 0 ? (
+                    <View style={s.includedList}>
+                      {sharedAssociatedItems.map(ai => {
+                        const conf = ai.type === 'club' ? { icon: 'home' as const, color: '#D97706', name: associatedClub?.name } : { icon: 'sports-soccer' as const, color: '#10B981', name: associatedTerrain?.name };
+                        return (
+                          <View key={ai.type} style={s.includedRow}>
+                            <MaterialIcons name={conf.icon} size={14} color={conf.color} />
+                            <Text style={s.includedRowText}>{conf.name}</Text>
+                            <View style={[s.includedBadge, { backgroundColor: conf.color + '12' }]}><Text style={[s.includedBadgeText, { color: conf.color }]}>{ai.type === 'club' ? 'Club' : 'Terrain'}</Text></View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+
+                  {/* Expiration indicator */}
+                  {expiresAtDate ? (
+                    <View style={[s.expirationIndicator, { backgroundColor: typeConfig.color + '08', borderColor: typeConfig.color + '18' }]}>
+                      <MaterialIcons name="timer" size={14} color={typeConfig.color} />
+                      {expirationCountdown && !expirationCountdown.expired ? (
+                        <Text style={[s.expirationIndicatorText, { color: typeConfig.color }]}>
+                          {t('shareModal', 'expiresIn')} {expirationCountdown.days > 0 ? `${expirationCountdown.days}${t('shareModal', 'daysShort')} ` : ''}{expirationCountdown.hours}{t('shareModal', 'hoursShort')}{expirationCountdown.days === 0 ? ` ${expirationCountdown.minutes}${t('shareModal', 'minutesShort')}` : ''}
+                        </Text>
+                      ) : (
+                        <Text style={[s.expirationIndicatorText, { color: '#EF4444' }]}>{t('shareModal', 'expired')}</Text>
+                      )}
+                    </View>
+                  ) : (
+                    <View style={[s.expirationIndicator, { backgroundColor: '#10B98108', borderColor: '#10B98118' }]}>
+                      <MaterialIcons name="all-inclusive" size={14} color="#10B981" />
+                      <Text style={[s.expirationIndicatorText, { color: '#10B981' }]}>{t('shareModal', 'noExpiration')}</Text>
+                    </View>
+                  )}
+                </Animated.View>
+
+                {/* QR Code */}
+                <Animated.View entering={FadeInDown.duration(300).delay(100)} style={s.qrSection}>
+                  <View style={s.qrHeader}>
+                    <MaterialIcons name="qr-code-2" size={16} color={typeConfig.color} />
+                    <Text style={s.qrTitle}>{fr ? 'QR Code de partage' : 'Share QR Code'}</Text>
+                  </View>
+                  <View style={s.qrBody}>
+                    <View style={[s.qrWrapper, { borderColor: typeConfig.color + '20' }]}>
+                      <QRCode value={`${config.appDownloadUrl}?share=${shareCode}`} size={130} color={typeConfig.color} backgroundColor="#FFFFFF" />
+                    </View>
+                    <Text style={s.qrHint}>{fr ? 'Scannez pour acceder a la fiche' : 'Scan to access the card'}</Text>
+                  </View>
+                </Animated.View>
+
+                {/* Share action buttons */}
+                <Animated.View entering={FadeIn.duration(200).delay(200)} style={s.resultActions}>
+                  <Pressable style={({ pressed }) => [s.resultActionBtn, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]} onPress={handleNativeShare}>
+                    <View style={[s.resultActionIcon, { backgroundColor: typeConfig.color + '12' }]}><MaterialIcons name="share" size={20} color={typeConfig.color} /></View>
+                    <Text style={s.resultActionText}>{fr ? 'Partager' : 'Share'}</Text>
+                  </Pressable>
+                  <Pressable style={({ pressed }) => [s.resultActionBtn, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]} onPress={handleCopyCode}>
+                    <View style={[s.resultActionIcon, { backgroundColor: '#F59E0B12' }]}><MaterialIcons name="content-copy" size={20} color="#F59E0B" /></View>
+                    <Text style={s.resultActionText}>{t('shareModal', 'copyCode')}</Text>
+                  </Pressable>
+                  <Pressable style={({ pressed }) => [s.resultActionBtn, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]} onPress={handleCopyInvitation}>
+                    <View style={[s.resultActionIcon, { backgroundColor: '#3B82F612' }]}><MaterialIcons name="description" size={20} color="#3B82F6" /></View>
+                    <Text style={s.resultActionText}>{fr ? 'Invitation' : 'Invitation'}</Text>
+                  </Pressable>
+                </Animated.View>
+
+                {/* Tip */}
+                <View style={s.tipRow}>
+                  <MaterialIcons name="lightbulb" size={14} color="#F59E0B" />
+                  <Text style={s.tipText}>{t('shareModal', 'infoTextAutoSave')}</Text>
+                </View>
               </View>
-            </>
-          )}
-        </ScrollView>
-      </SafeAreaView>
+            ) : null}
+
+          </ScrollView>
+        </View>
+      </View>
     </Modal>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.backgroundSecondary },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface,
-    borderBottomWidth: 1, borderBottomColor: theme.border,
-  },
-  closeBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
-  content: { flex: 1 },
-  contentInner: { padding: 16, paddingBottom: 80 },
-  itemPreview: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 20, gap: 14,
-    ...theme.shadows.card,
-  },
-  itemIcon: { width: 52, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  itemInfo: { flex: 1 },
-  itemName: { fontSize: 17, fontWeight: '700', color: theme.textPrimary },
-  itemType: { fontSize: 13, color: theme.textSecondary, marginTop: 2 },
-  // Expiration picker
-  expirationSection: { marginBottom: 20 },
-  expirationHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 10 },
-  expirationTitle: { fontSize: 13, fontWeight: '700' as const, color: theme.textSecondary },
-  expirationOptions: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6 },
-  expirationChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border },
-  expirationChipText: { fontSize: 13, fontWeight: '600' as const, color: theme.textSecondary },
-  // Expiration indicator (post-generation)
-  expirationIndicator: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, alignItems: 'center' as const, gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: theme.borderRadius.md, borderWidth: 1, marginTop: 12, width: '100%' as const },
-  expirationIndicatorText: { fontSize: 13, fontWeight: '600' as const },
-  expirationIndicatorLabel: { fontSize: 12, fontWeight: '600' as const },
-  expirationCountdownRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
-  expirationCountdownUnit: { flexDirection: 'row' as const, alignItems: 'baseline' as const, gap: 1 },
-  expirationCountdownValue: { fontSize: 18, fontWeight: '900' as const },
-  expirationCountdownLabel: { fontSize: 10, fontWeight: '600' as const },
-  expirationDateText: { fontSize: 10, color: theme.textMuted, width: '100%' as const, marginTop: 2 },
-  // Read-only info
-  readOnlyInfo: { alignItems: 'center', marginBottom: 20 },
-  readOnlyBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14,
-    paddingVertical: 8, borderRadius: theme.borderRadius.full, marginBottom: 10,
-  },
-  readOnlyBadgeText: { fontSize: 14, fontWeight: '600' },
-  readOnlyDesc: { fontSize: 13, color: theme.textSecondary, textAlign: 'center', lineHeight: 20 },
-  errorBox: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.error + '15',
-    padding: 12, borderRadius: theme.borderRadius.md, marginBottom: 16,
-  },
-  errorText: { flex: 1, fontSize: 13, color: theme.error },
-  generateBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    backgroundColor: theme.primary, paddingVertical: 16, borderRadius: theme.borderRadius.lg,
-  },
-  generateBtnText: { fontSize: 16, fontWeight: '600', color: '#FFF' },
-  resultSection: { alignItems: 'center', marginBottom: 20 },
-  resultIcon: { marginBottom: 12 },
-  resultTitle: { fontSize: 20, fontWeight: '700', color: theme.textPrimary, marginBottom: 6 },
-  resultDesc: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 16, paddingHorizontal: 8 },
-  codeBox: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg, padding: 16, gap: 10, width: '100%',
-    borderWidth: 2, borderColor: theme.primary + '30', borderStyle: 'dashed',
-  },
-  codeText: { flex: 1, fontSize: 22, fontWeight: '800', color: theme.primary, letterSpacing: 1.5, textAlign: 'center' },
-  copyBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8,
-    backgroundColor: theme.primary + '15', borderRadius: theme.borderRadius.md,
-  },
-  copyBtnText: { fontSize: 13, fontWeight: '600', color: theme.primary },
-  // Included items
-  includedSection: {
-    width: '100%', marginTop: 14, gap: 8,
-  },
-  includedItem: {
-    flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.surface,
-    paddingVertical: 10, paddingHorizontal: 14, borderRadius: theme.borderRadius.md,
-    borderWidth: 1, borderColor: theme.border,
-  },
-  includedItemText: { flex: 1, fontSize: 14, fontWeight: '600', color: theme.textPrimary },
-  includedBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: theme.borderRadius.sm },
-  includedBadgeText: { fontSize: 11, fontWeight: '600' },
-  permissionBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: theme.borderRadius.full, marginTop: 12,
-  },
-  permissionBadgeText: { fontSize: 12, fontWeight: '600' },
-  shareActions: { flexDirection: 'row', gap: 12, marginBottom: 20 },
-  shareActionBtn: {
-    flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: theme.surface, paddingVertical: 20, borderRadius: theme.borderRadius.lg,
-    ...theme.shadows.card,
-  },
-  shareActionBtnText: { fontSize: 13, fontWeight: '600', color: theme.textPrimary },
-  infoBox: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: theme.surface,
-    padding: 14, borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.border,
-  },
-  infoText: { flex: 1, fontSize: 12, color: theme.textMuted, lineHeight: 18 },
-  // Summary card
-  summaryCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: theme.border, ...theme.shadows.card },
-  summaryHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 14, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: theme.border },
-  summaryHeaderText: { fontSize: 13, fontWeight: '700' as const, color: theme.textPrimary, flex: 1 },
-  summaryGrid: { gap: 8 },
-  summaryRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
-  summaryRowIcon: { width: 28, height: 28, borderRadius: 7, alignItems: 'center' as const, justifyContent: 'center' as const },
-  summaryRowLabel: { fontSize: 12, fontWeight: '600' as const, color: theme.textMuted, width: 80 },
-  summaryRowValue: { flex: 1, fontSize: 14, fontWeight: '600' as const, color: theme.textPrimary, textAlign: 'right' as const },
-  summaryFooter: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border },
-  summaryFooterText: { flex: 1, fontSize: 11, color: theme.textMuted, lineHeight: 15 },
-  // QR Code — inline in preview
-  qrInlineSection: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: theme.border, ...theme.shadows.card },
-  qrInlineHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 14 },
-  qrInlineTitle: { fontSize: 13, fontWeight: '700' as const, color: theme.textPrimary },
-  qrInlineBody: { alignItems: 'center' as const },
-  qrInlineWrapper: { padding: 14, backgroundColor: '#FFF', borderRadius: 14, borderWidth: 2, borderColor: theme.primary + '15', ...theme.shadows.card },
-  qrInlineHint: { fontSize: 11, color: theme.textMuted, marginTop: 10 },
-  // Associated items prompt
-  associatedSection: {
-    backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg,
-    padding: 20, marginBottom: 20, ...theme.shadows.card,
-  },
-  associatedHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
-  associatedTitle: { fontSize: 16, fontWeight: '700', color: theme.textPrimary, flex: 1 },
-  associatedDesc: { fontSize: 13, color: theme.textSecondary, lineHeight: 20, marginBottom: 16 },
-  associatedItem: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.md, padding: 14, marginBottom: 10,
-    borderWidth: 2, borderColor: 'transparent', gap: 12,
-  },
-  associatedItemActive: { borderColor: theme.primary + '40', backgroundColor: theme.primary + '05' },
-  associatedItemIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  associatedItemInfo: { flex: 1 },
-  associatedItemLabel: {
-    fontSize: 11, fontWeight: '600', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5,
-  },
-  associatedItemName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary, marginTop: 2 },
-  checkbox: {
-    width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: theme.border,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  checkboxActive: { backgroundColor: theme.primary, borderColor: theme.primary },
-  associatedActions: { flexDirection: 'row', gap: 10, marginTop: 6 },
-  associatedSkipBtn: {
-    flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14,
-    backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md,
-    borderWidth: 1, borderColor: theme.border,
-  },
-  associatedSkipBtnText: { fontSize: 14, fontWeight: '600', color: theme.textSecondary },
-  associatedShareBtn: {
-    flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, paddingVertical: 14, backgroundColor: theme.primary, borderRadius: theme.borderRadius.md,
-  },
-  associatedShareBtnText: { fontSize: 14, fontWeight: '600', color: '#FFF' },
+const s = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '92%', overflow: 'hidden' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A' },
+  closeBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
+  scrollContent: { paddingBottom: 40 },
+
+  // Preview gradient
+  previewGradient: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, marginHorizontal: 16, marginTop: 16, borderRadius: 16 },
+  previewTitle: { fontSize: 16, fontWeight: '700', color: '#FFF' },
+  previewSub: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
+  previewCodeBadge: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  previewCodeText: { fontSize: 13, fontWeight: '900', color: '#FFF', letterSpacing: 1.5 },
+  previewTypeBadge: { backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
+  previewTypeText: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.8)', textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  // Contact toggle
+  contactToggleCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginTop: 16, backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#F1F5F9' },
+  contactToggleIcon: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  contactToggleLabel: { fontSize: 14, fontWeight: '600', color: '#0F172A' },
+  contactToggleDesc: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
+
+  // Options list
+  optionsList: { paddingHorizontal: 16, paddingTop: 16, gap: 8 },
+  optionCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#E2E8F0' },
+  optionCardPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+  optionIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  optionTitle: { fontSize: 15, fontWeight: '600', color: '#0F172A' },
+  optionDesc: { fontSize: 12, color: '#94A3B8', marginTop: 1 },
+
+  // Info row
+  infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginHorizontal: 16, marginTop: 16, padding: 12, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#F1F5F9' },
+  infoText: { flex: 1, fontSize: 11, color: '#94A3B8', lineHeight: 16 },
+
+  // Step card (associated + expiration)
+  stepCard: { marginHorizontal: 16, marginTop: 16, backgroundColor: '#FFF', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#F1F5F9' },
+  stepHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
+  stepTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A', flex: 1 },
+  stepDesc: { fontSize: 13, color: '#64748B', lineHeight: 19, marginBottom: 16 },
+  stepActions: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  stepSecondaryBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, borderRadius: 12, backgroundColor: '#F1F5F9' },
+  stepSecondaryBtnText: { fontSize: 14, fontWeight: '600', color: '#64748B' },
+  stepPrimaryBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 12 },
+  stepPrimaryBtnText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
+
+  // Associated items
+  assocItem: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#F8FAFC', borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 2, borderColor: 'transparent' },
+  assocItemActive: { borderColor: '#2563EB30', backgroundColor: '#2563EB05' },
+  assocItemIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  assocItemLabel: { fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5 },
+  assocItemName: { fontSize: 15, fontWeight: '600', color: '#0F172A', marginTop: 2 },
+  checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' },
+  checkboxActive: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
+
+  // Expiration
+  expirationGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  expirationChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 11, borderRadius: 22, backgroundColor: '#F8FAFC', borderWidth: 1.5, borderColor: '#E2E8F0' },
+  expirationChipText: { fontSize: 13, fontWeight: '600', color: '#64748B' },
+
+  // Error
+  errorBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FEF2F2', padding: 12, borderRadius: 10, marginTop: 12, borderWidth: 1, borderColor: '#FECACA' },
+  errorText: { flex: 1, fontSize: 12, color: '#EF4444' },
+
+  // Code card (result)
+  codeCard: { marginHorizontal: 16, marginTop: 16, backgroundColor: '#FFF', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#F1F5F9' },
+  codeCardRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
+  codeSuccessIcon: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  codeCardTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
+  codeCardSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  codeDisplay: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, gap: 10, borderWidth: 2, borderColor: '#E2E8F0', borderStyle: 'dashed' },
+  codeText: { flex: 1, fontSize: 22, fontWeight: '900', letterSpacing: 2, textAlign: 'center' },
+  codeCopyBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  codeCopyBtnText: { fontSize: 12, fontWeight: '700' },
+
+  // Included
+  includedList: { gap: 6, marginTop: 12 },
+  includedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F8FAFC', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10 },
+  includedRowText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#0F172A' },
+  includedBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  includedBadgeText: { fontSize: 10, fontWeight: '700' },
+
+  // Expiration indicator
+  expirationIndicator: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1, marginTop: 12 },
+  expirationIndicatorText: { fontSize: 12, fontWeight: '600' },
+
+  // QR
+  qrSection: { marginHorizontal: 16, marginTop: 12, backgroundColor: '#FFF', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#F1F5F9' },
+  qrHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
+  qrTitle: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
+  qrBody: { alignItems: 'center' },
+  qrWrapper: { padding: 14, backgroundColor: '#FFF', borderRadius: 14, borderWidth: 2 },
+  qrHint: { fontSize: 11, color: '#94A3B8', marginTop: 10 },
+
+  // Result actions
+  resultActions: { flexDirection: 'row', gap: 8, marginHorizontal: 16, marginTop: 16 },
+  resultActionBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#FFF', paddingVertical: 16, borderRadius: 14, borderWidth: 1, borderColor: '#F1F5F9' },
+  resultActionIcon: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  resultActionText: { fontSize: 11, fontWeight: '600', color: '#0F172A' },
+
+  // Tip
+  tipRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginHorizontal: 16, marginTop: 16, padding: 12, backgroundColor: '#FFFBEB', borderRadius: 12, borderWidth: 1, borderColor: '#FDE68A' },
+  tipText: { flex: 1, fontSize: 11, color: '#92400E', lineHeight: 16 },
 });
