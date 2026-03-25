@@ -905,15 +905,7 @@ export default function MapScreen() {
             })}
           </View>
 
-          {/* City Leaderboard shortcut */}
-          <Pressable
-            style={styles.cityLeaderboardBtn}
-            onPress={() => { Haptics.selectionAsync(); router.push('/city-leaderboard' as any); }}
-          >
-            <MaterialIcons name="leaderboard" size={14} color="rgba(255,255,255,0.8)" />
-            <Text style={styles.cityLeaderboardBtnText}>{language === 'fr' ? 'Classement par ville' : 'City Leaderboard'}</Text>
-            <MaterialIcons name="chevron-right" size={16} color="rgba(255,255,255,0.5)" />
-          </Pressable>
+
         </LinearGradient>
       </View>
 
@@ -999,6 +991,21 @@ export default function MapScreen() {
         ) : null}
 
         <SponsorBanner style={{ marginHorizontal: 12, marginTop: 6, marginBottom: 2 }} page="map" />
+
+        {/* City Leaderboard shortcut */}
+        <Pressable
+          style={styles.panelLeaderboardCard}
+          onPress={() => { Haptics.selectionAsync(); router.push('/city-leaderboard' as any); }}
+        >
+          <View style={styles.panelLeaderboardIcon}>
+            <MaterialIcons name="leaderboard" size={16} color="#FFF" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.panelLeaderboardTitle}>{language === 'fr' ? 'Classement par zone' : 'Zone Leaderboard'}</Text>
+            <Text style={styles.panelLeaderboardSub}>{language === 'fr' ? 'Decouvrir les meilleurs joueurs' : 'Discover top players'}</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+        </Pressable>
 
         {/* Category filters */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
@@ -1294,7 +1301,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.backgroundSecondary },
   // ========== GRADIENT HERO HEADER ==========
   heroHeader: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 },
-  heroGradient: { paddingTop: 16, paddingBottom: 28, paddingHorizontal: 20, borderBottomLeftRadius: 32, borderBottomRightRadius: 32, overflow: 'hidden' as const, position: 'relative' as const },
+  heroGradient: { paddingTop: 12, paddingBottom: 20, paddingHorizontal: 20, borderBottomLeftRadius: 28, borderBottomRightRadius: 28, overflow: 'hidden' as const, position: 'relative' as const },
   heroDecoCircle1: { position: 'absolute' as const, top: -40, right: -30, width: 140, height: 140, borderRadius: 70, backgroundColor: 'rgba(255,255,255,0.04)' },
   heroDecoCircle2: { position: 'absolute' as const, bottom: -20, left: -20, width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.03)' },
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
@@ -1303,34 +1310,39 @@ const styles = StyleSheet.create({
   heroActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   heroActionBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   heroActionBtnActive: { backgroundColor: 'rgba(255,255,255,0.3)' },
-  heroStatsSummary: { flexDirection: 'row' as const, alignItems: 'center' as const, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 16, paddingVertical: 12, paddingHorizontal: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  heroStatsSummary: { flexDirection: 'row' as const, alignItems: 'center' as const, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, paddingVertical: 10, paddingHorizontal: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
   heroStatItem: { flex: 1, alignItems: 'center' as const },
-  heroStatValue: { fontSize: 17, fontWeight: '800' as const, color: 'rgba(255,255,255,0.5)' },
-  heroStatLabel: { fontSize: 9, fontWeight: '700' as const, color: 'rgba(255,255,255,0.35)', marginTop: 2, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
-  heroStatDivider: { width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.1)' },
-  cityLeaderboardBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, marginTop: 10, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
-  cityLeaderboardBtnText: { fontSize: 12, fontWeight: '600' as const, color: 'rgba(255,255,255,0.7)' },
+  heroStatValue: { fontSize: 15, fontWeight: '800' as const, color: 'rgba(255,255,255,0.5)' },
+  heroStatLabel: { fontSize: 8, fontWeight: '700' as const, color: 'rgba(255,255,255,0.3)', marginTop: 2, textTransform: 'uppercase' as const, letterSpacing: 0.4 },
+  heroStatDivider: { width: 1, height: 24, backgroundColor: 'rgba(255,255,255,0.08)' },
+
   bottomPanel: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: 'rgba(255,255,255,0.97)',
-    borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    paddingBottom: Platform.select({ ios: 8, default: 8 }), ...theme.shadows.cardElevated,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingBottom: Platform.select({ ios: 8, default: 8 }),
+    shadowColor: '#0F172A', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 8,
+    borderTopWidth: 1, borderTopColor: '#E8EDF2',
   },
 
   searchRowOuter: {
     paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4,
   },
   searchBar: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.md, paddingHorizontal: 12, height: 42, gap: 8,
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9',
+    borderRadius: 14, paddingHorizontal: 14, height: 42, gap: 8, borderWidth: 1, borderColor: '#E2E8F0',
   },
   searchInput: { flex: 1, fontSize: 14, color: theme.textPrimary },
   searchCount: { fontSize: 11, color: theme.textSecondary, marginTop: 6, textAlign: 'center' },
   filters: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 6, gap: 6 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: theme.borderRadius.full, backgroundColor: theme.backgroundSecondary },
-  chipActive: { backgroundColor: theme.primary },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, backgroundColor: '#F1F5F9', borderWidth: 1.5, borderColor: '#E2E8F0' },
+  chipActive: { backgroundColor: theme.primary, borderColor: theme.primary },
   chipText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
   chipTextActive: { color: '#FFF' },
+  panelLeaderboardCard: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginHorizontal: 12, marginTop: 6, marginBottom: 4, backgroundColor: '#F8FAFC', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: '#E8EDF2' },
+  panelLeaderboardIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: theme.primary, alignItems: 'center' as const, justifyContent: 'center' as const },
+  panelLeaderboardTitle: { fontSize: 13, fontWeight: '700' as const, color: theme.textPrimary },
+  panelLeaderboardSub: { fontSize: 10, color: theme.textMuted, marginTop: 1 },
 
   // Single markers
   marker: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF', ...theme.shadows.card },
