@@ -575,7 +575,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
 }
 
 const s = StyleSheet.create({
-  section: { borderRadius: 20 },
+  section: { borderRadius: 20, overflow: 'hidden' as const },
 
   // Header gradient
   headerGradient: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12, borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' as const },
@@ -612,7 +612,7 @@ const s = StyleSheet.create({
   geoValueTextActive: { color: '#FFF' },
 
   // Sort
-  sortRow: { gap: 6, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: theme.surface },
+  sortRow: { gap: 6, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: theme.surface, overflow: 'hidden' as const },
   sortChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
   sortChipActive: { backgroundColor: '#F59E0B15', borderColor: '#F59E0B60' },
   sortChipText: { fontSize: 11, fontWeight: '600' as const, color: theme.textSecondary },
