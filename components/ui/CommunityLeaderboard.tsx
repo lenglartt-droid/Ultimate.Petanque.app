@@ -16,7 +16,7 @@ import { getBrandVisual, getBrandImage } from '@/constants/boulesDatabase';
 import { getTrustScoreColor, getTrustScoreIcon, getTrustLevelLabel } from '@/services/trustScoreService';
 import { fetchEventLeaderboard, EventLeaderboardEntry, SponsoredEvent } from '@/services/sponsoredEventService';
 import { extraTranslations } from '@/constants/i18nExtra';
-import { CONTINENT_MAP, getContinent, getContinentLabel } from '@/constants/geoData';
+import { CONTINENT_MAP, getContinent, getContinentLabel, getCountryFlag, getContinentFlag } from '@/constants/geoData';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type WidgetTab = 'players' | 'clubs' | 'boules' | 'events';
@@ -304,7 +304,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                 style={[s.geoValueChip, isActive && s.geoValueChipActive]}
                 onPress={() => { Haptics.selectionAsync(); updateGeoScope(geoScope, isActive ? '' : val); }}
               >
-                <Text style={[s.geoValueChipText, isActive && s.geoValueChipTextActive]} numberOfLines={1}>{geoScope === 'continent' ? getContinentLabel(val, language === 'fr') : val}</Text>
+                <Text style={[s.geoValueChipText, isActive && s.geoValueChipTextActive]} numberOfLines={1}>{geoScope === 'continent' ? `${getContinentFlag(val)} ${getContinentLabel(val, language === 'fr')}` : geoScope === 'country' ? `${getCountryFlag(val)} ${val}` : val}</Text>
               </Pressable>
             );
           })}

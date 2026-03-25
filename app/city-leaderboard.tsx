@@ -26,6 +26,10 @@ import { fetchWeeklyLeaderboard, getSubRankings, WeeklyRankChange } from '@/serv
 import { fetchLeaderboard, LeaderboardPlayer, sortLeaderboard, LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services/meetupService';
 import { extraTranslations } from '@/constants/i18nExtra';
+import { getContinent, getContinentLabel, getCountryFlag, getContinentFlag } from '@/constants/geoData';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const GEO_STORAGE_KEY = 'city_leaderboard_geo_scope';
 
 export default function CityLeaderboardScreen() {
   const insets = useSafeAreaInsets();
@@ -51,6 +55,44 @@ export default function CityLeaderboardScreen() {
   const [citySearch, setCitySearch] = useState('');
   const [search, setSearch] = useState('');
   const [mode, setMode] = useState<'alltime' | 'weekly'>('alltime');
+
+  // Geographic scope filter
+  type GeoScope = 'world' | 'continent' | 'country' | 'city';
+  const [geoScope, setGeoScope] = useState<GeoScope>('world');
+  const [geoValue, setGeoValue] = useState<string>('');
+  const [geoInitialized, setGeoInitialized] = useState(false);
+
+  // Auto-detect geo scope
+  useEffect(() => {
+    if (geoInitialized) return;
+    const initGeo = async () => {
+      try {
+        const saved = await AsyncStorage.getItem(GEO_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.scope && parsed.scope !== 'world') {
+            setGeoScope(parsed.scope);
+            if (parsed.value) setGeoValue(parsed.value);
+            setGeoInitialized(true);
+            return;
+          }
+        }
+      } catch {}
+      if (selfPlayer?.country) {
+        const continent = getContinent(selfPlayer.country);
+        setGeoScope('continent');
+        setGeoValue(continent);
+      }
+      setGeoInitialized(true);
+    };
+    initGeo();
+  }, [selfPlayer?.country, geoInitialized]);
+
+  const updateGeoScope = useCallback((scope: GeoScope, value: string) => {
+    setGeoScope(scope);
+    setGeoValue(value);
+    AsyncStorage.setItem(GEO_STORAGE_KEY, JSON.stringify({ scope, value })).catch(() => {});
+  }, []);
 
   // Meetup invitation
   const [showMeetupPicker, setShowMeetupPicker] = useState(false);
@@ -80,16 +122,47 @@ export default function CityLeaderboardScreen() {
     load();
   }, []);
 
+  // Geo-derived unique values
+  const uniqueCountries = useMemo(() => {
+    const cs = allPlayers.map(p => p.country).filter(Boolean) as string[];
+    return [...new Set(cs)].sort();
+  }, [allPlayers]);
+
+  const uniqueContinents = useMemo(() => {
+    const cs = allPlayers.map(p => p.country ? getContinent(p.country) : null).filter(Boolean) as string[];
+    return [...new Set(cs)].sort();
+  }, [allPlayers]);
+
+  // Filter cities by geo scope
+  const geoFilteredCities = useMemo(() => {
+    if (geoScope === 'world' || !geoValue) return cities;
+    // Get players matching geo filter, then extract their cities
+    let filtered = allPlayers;
+    if (geoScope === 'continent') {
+      filtered = filtered.filter(p => p.country ? getContinent(p.country) === geoValue : false);
+    } else if (geoScope === 'country') {
+      filtered = filtered.filter(p => p.country?.toLowerCase() === geoValue.toLowerCase());
+    }
+    const citySet = new Set<string>();
+    filtered.forEach(p => { if (p.city) citySet.add(p.city); });
+    return [...citySet].sort();
+  }, [cities, allPlayers, geoScope, geoValue]);
+
   const cityPlayers = useMemo(() => {
     if (!selectedCity) return [];
     const source = mode === 'weekly' ? weeklyPlayers : allPlayers;
-    return source
-      .filter((p: any) => p.city?.toLowerCase() === selectedCity.toLowerCase())
-      .sort((a: any, b: any) => {
+    let filtered = source.filter((p: any) => p.city?.toLowerCase() === selectedCity.toLowerCase());
+    // Apply geo scope filter for additional filtering
+    if (geoScope === 'continent' && geoValue) {
+      filtered = filtered.filter((p: any) => p.country ? getContinent(p.country) === geoValue : false);
+    } else if (geoScope === 'country' && geoValue) {
+      filtered = filtered.filter((p: any) => p.country?.toLowerCase() === geoValue.toLowerCase());
+    }
+    return filtered.sort((a: any, b: any) => {
         if (b.stats.winRate !== a.stats.winRate) return b.stats.winRate - a.stats.winRate;
         return b.stats.matchesPlayed - a.stats.matchesPlayed;
       });
-  }, [selectedCity, mode, allPlayers, weeklyPlayers]);
+  }, [selectedCity, mode, allPlayers, weeklyPlayers, geoScope, geoValue]);
 
   const filteredCityPlayers = useMemo(() => {
     if (!search.trim()) return cityPlayers;
@@ -98,10 +171,11 @@ export default function CityLeaderboardScreen() {
   }, [cityPlayers, search]);
 
   const filteredCities = useMemo(() => {
-    if (!citySearch.trim()) return cities;
+    const base = geoFilteredCities;
+    if (!citySearch.trim()) return base;
     const q = citySearch.toLowerCase().trim();
-    return cities.filter(c => c.toLowerCase().includes(q));
-  }, [cities, citySearch]);
+    return base.filter(c => c.toLowerCase().includes(q));
+  }, [geoFilteredCities, citySearch]);
 
   const handleInviteToMeetup = useCallback(async (targetUserId: string, targetName: string) => {
     Haptics.selectionAsync();
@@ -251,6 +325,60 @@ export default function CityLeaderboardScreen() {
             ) : null}
           </View>
         </View>
+
+        {/* Geographic scope filter */}
+        <View style={cs.geoRow}>
+          {(['world', 'continent', 'country'] as const).map(scope => {
+            const isActive = geoScope === scope;
+            const icons = { world: 'public', continent: 'travel-explore', country: 'flag' } as const;
+            const labels: Record<string, string> = {
+              world: (extraTranslations.geoScope?.world as any)?.[language] || 'World',
+              continent: (extraTranslations.geoScope?.continent as any)?.[language] || 'Continent',
+              country: (extraTranslations.geoScope?.country as any)?.[language] || 'Country',
+            };
+            return (
+              <Pressable
+                key={scope}
+                style={[cs.geoChip, isActive && cs.geoChipActive]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  let val = '';
+                  if (scope === 'world') val = '';
+                  else if (scope === 'continent') {
+                    if (uniqueContinents.length === 1) val = uniqueContinents[0];
+                    else if (selfPlayer?.country) val = getContinent(selfPlayer.country);
+                  }
+                  else if (scope === 'country') {
+                    if (uniqueCountries.length === 1) val = uniqueCountries[0];
+                    else if (selfPlayer?.country) val = selfPlayer.country;
+                  }
+                  updateGeoScope(scope, val);
+                }}
+              >
+                <MaterialIcons name={icons[scope] as any} size={12} color={isActive ? '#FFF' : 'rgba(255,255,255,0.5)'} />
+                <Text style={[cs.geoChipText, isActive && cs.geoChipTextActive]}>{labels[scope]}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        {geoScope !== 'world' ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginBottom: 10 }}>
+            {(geoScope === 'continent' ? uniqueContinents : uniqueCountries).map(val => {
+              const isActive = geoValue === val;
+              return (
+                <Pressable
+                  key={val}
+                  style={[cs.geoValueChip, isActive && cs.geoValueChipActive]}
+                  onPress={() => { Haptics.selectionAsync(); updateGeoScope(geoScope, isActive ? '' : val); }}
+                >
+                  <Text style={[cs.geoValueChipText, isActive && cs.geoValueChipTextActive]} numberOfLines={1}>
+                    {geoScope === 'continent' ? `${getContinentFlag(val)} ${getContinentLabel(val, language === 'fr')}` : `${getCountryFlag(val)} ${val}`}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        ) : null}
 
         {/* City selector */}
         <Pressable style={cs.citySelector} onPress={() => setShowCityPicker(true)}>
@@ -453,6 +581,15 @@ const cs = StyleSheet.create({
   headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 2 },
   citySelector: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 10 },
   citySelectorText: { flex: 1, fontSize: 15, fontWeight: '600', color: '#FFF' },
+  geoRow: { flexDirection: 'row' as const, gap: 5, marginBottom: 10 },
+  geoChip: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 5, paddingVertical: 8, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.08)' },
+  geoChipActive: { backgroundColor: '#2563EB80' },
+  geoChipText: { fontSize: 11, fontWeight: '600' as const, color: 'rgba(255,255,255,0.5)' },
+  geoChipTextActive: { color: '#FFF', fontWeight: '700' as const },
+  geoValueChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.08)' },
+  geoValueChipActive: { backgroundColor: '#2563EB80' },
+  geoValueChipText: { fontSize: 12, fontWeight: '600' as const, color: 'rgba(255,255,255,0.5)', maxWidth: 140 },
+  geoValueChipTextActive: { color: '#FFF' },
   modeToggle: { flexDirection: 'row', gap: 6 },
   modeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.08)' },
   modeBtnActive: { backgroundColor: 'rgba(255,255,255,0.22)' },

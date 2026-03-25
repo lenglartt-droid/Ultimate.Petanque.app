@@ -26,7 +26,7 @@ import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
-import { COMMON_COUNTRIES } from '@/constants/geoData';
+import { COMMON_COUNTRIES, getCountryFlag } from '@/constants/geoData';
 
 const levels = ['Débutant', 'Intermédiaire', 'Confirmé', 'Expert'] as const;
 
@@ -350,7 +350,7 @@ export default function EditPlayerScreen() {
               <View style={styles.pickerSelected}>
                 <MaterialIcons name="flag" size={20} color="#6366F1" />
                 <View style={styles.pickerSelectedInfo}>
-                  <Text style={styles.pickerSelectedName}>{location.country || 'France'}</Text>
+                  <Text style={styles.pickerSelectedName}>{getCountryFlag(location.country || 'France')} {location.country || 'France'}</Text>
                 </View>
                 <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
               </View>
@@ -691,7 +691,7 @@ export default function EditPlayerScreen() {
                 <View style={[styles.modalPickerItemIcon, { backgroundColor: '#6366F1' + '15' }]}>
                   <MaterialIcons name="flag" size={20} color="#6366F1" />
                 </View>
-                <Text style={styles.modalPickerItemName}>{country}</Text>
+                <Text style={styles.modalPickerItemName}>{getCountryFlag(country)} {country}</Text>
                 {isActive ? <MaterialIcons name="check-circle" size={20} color="#6366F1" /> : null}
               </Pressable>
             );

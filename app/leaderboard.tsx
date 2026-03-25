@@ -34,7 +34,7 @@ import { fetchEventLeaderboard, EventLeaderboardEntry, SponsoredEvent } from '@/
 import { fetchWeeklyLeaderboard, getSubRankings, saveWeeklySnapshot, checkAndTriggerWeeklyReset, getLastWeekSummary, WeeklyRankChange, SubRanking, getCurrentWeekStart, formatDateISO } from '@/services/weeklyLeaderboardService';
 import { extraTranslations } from '@/constants/i18nExtra';
 import { FunctionsHttpError } from '@supabase/supabase-js';
-import { CONTINENT_MAP, getContinent, getContinentLabel } from '@/constants/geoData';
+import { CONTINENT_MAP, getContinent, getContinentLabel, getCountryFlag, getContinentFlag } from '@/constants/geoData';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const GEO_STORAGE_KEY = 'leaderboard_geo_scope';
@@ -930,7 +930,7 @@ export default function LeaderboardScreen() {
                     style={[s.tabBtn, { flex: 0, paddingHorizontal: 14, paddingVertical: 7 }, isActive && { backgroundColor: '#2563EB80' }]}
                     onPress={() => { Haptics.selectionAsync(); updateGeoScope(geoScope, isActive ? '' : val); }}
                   >
-                    <Text style={[s.tabBtnText, { fontSize: 12 }, isActive && s.tabBtnTextActive]} numberOfLines={1}>{geoScope === 'continent' ? getContinentLabel(val, language === 'fr') : val}</Text>
+                    <Text style={[s.tabBtnText, { fontSize: 12 }, isActive && s.tabBtnTextActive]} numberOfLines={1}>{geoScope === 'continent' ? `${getContinentFlag(val)} ${getContinentLabel(val, language === 'fr')}` : geoScope === 'country' ? `${getCountryFlag(val)} ${val}` : val}</Text>
                   </Pressable>
                 );
               })}
@@ -2009,7 +2009,7 @@ export default function LeaderboardScreen() {
                     {geoScope !== 'world' && geoValue ? (
                       <Pressable style={s.activeFilterPill} onPress={() => { updateGeoScope('world', ''); }}>
                         <MaterialIcons name="public" size={12} color="#D97706" />
-                        <Text style={s.activeFilterPillText}>{geoScope === 'continent' ? getContinentLabel(geoValue, language === 'fr') : geoValue}</Text>
+                        <Text style={s.activeFilterPillText}>{geoScope === 'continent' ? `${getContinentFlag(geoValue)} ${getContinentLabel(geoValue, language === 'fr')}` : geoScope === 'country' ? `${getCountryFlag(geoValue)} ${geoValue}` : geoValue}</Text>
                         <MaterialIcons name="close" size={14} color="#D97706" />
                       </Pressable>
                     ) : null}
