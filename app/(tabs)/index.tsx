@@ -575,7 +575,9 @@ export default function HomeScreen() {
         ) : null}
 
         {/* ========== SPONSOR BANNER ========== */}
-        <SponsorBanner style={{ marginBottom: 8 }} page="home" />
+        <View style={[s.section, isTablet && s.sectionTablet]}>
+          <SponsorBanner style={{ marginHorizontal: 0 }} page="home" />
+        </View>
 
         {/* ========== LEADERBOARD PROGRESS ========== */}
         {selfPlayer?.isPublic && totalMatches < LEADERBOARD_MIN_MATCHES ? (
@@ -919,7 +921,7 @@ export default function HomeScreen() {
 
         {/* ========== AMBASSADORS ROTATING BANNER ========== */}
         {ambassadorsLoaded && featuredAmbassadors.length > 0 ? (
-          <Animated.View entering={FadeIn.duration(400).delay(300)} style={[s.section, isTablet && s.sectionTablet, { marginTop: 20 }]}>
+          <Animated.View entering={FadeIn.duration(400).delay(300)} style={[s.section, isTablet && s.sectionTablet]}>
             <View style={s.sectionHeaderRow}>
               <View style={s.ambassadorIcon}><MaterialIcons name="verified" size={16} color="#7C3AED" /></View>
               <Text style={s.sectionTitle}>{language === 'fr' ? 'Ambassadeurs' : 'Ambassadors'}</Text>
@@ -1099,9 +1101,9 @@ export default function HomeScreen() {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   scrollView: { flex: 1 },
-  scrollContent: { maxWidth: 960, alignSelf: 'center' as const, width: '100%' },
-  section: { paddingHorizontal: 16, marginBottom: 24 },
-  sectionTablet: { marginBottom: 32 },
+  scrollContent: { maxWidth: 960, alignSelf: 'center' as const, width: '100%', gap: 0 },
+  section: { paddingHorizontal: 16, marginBottom: 20 },
+  sectionTablet: { marginBottom: 28 },
 
   // ===== SECTION HEADER =====
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
@@ -1110,7 +1112,7 @@ const s = StyleSheet.create({
   seeAllText: { fontSize: 13, fontWeight: '600', color: theme.primary },
 
   // ===== HERO =====
-  heroWrap: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20, marginBottom: 20, backgroundColor: '#0F172A', borderBottomLeftRadius: 24, borderBottomRightRadius: 24, ...Platform.select({ ios: { shadowColor: '#0F172A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 16 }, android: { elevation: 4 }, default: {} }) },
+  heroWrap: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20, marginBottom: 24, backgroundColor: '#0F172A', borderBottomLeftRadius: 24, borderBottomRightRadius: 24, ...Platform.select({ ios: { shadowColor: '#0F172A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 16 }, android: { elevation: 4 }, default: {} }) },
   heroWrapTablet: { paddingTop: 16, paddingBottom: 24, paddingHorizontal: 28 },
   heroTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   heroGreeting: { fontSize: 14, fontWeight: '500', color: 'rgba(255,255,255,0.6)' },

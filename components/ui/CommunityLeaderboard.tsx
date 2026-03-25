@@ -575,7 +575,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
 }
 
 const s = StyleSheet.create({
-  section: { marginBottom: 4, borderRadius: 20, overflow: 'hidden' as const },
+  section: { borderRadius: 20, overflow: 'hidden' as const },
 
   // Header gradient
   headerGradient: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 },
@@ -619,7 +619,7 @@ const s = StyleSheet.create({
   sortChipTextActive: { color: '#F59E0B', fontWeight: '700' as const },
 
   // Content card
-  card: { backgroundColor: theme.surface, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
+  card: { backgroundColor: theme.surface, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
   center: { alignItems: 'center' as const, paddingVertical: 28 },
   loadingText: { fontSize: 13, color: theme.textMuted, marginTop: 12 },
   errorText: { fontSize: 13, color: theme.textSecondary, marginTop: 8 },

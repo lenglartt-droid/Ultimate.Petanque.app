@@ -106,8 +106,7 @@ export default function SponsorBanner({ style, page = 'unknown' }: SponsorBanner
 
 const styles = StyleSheet.create({
   container: {
-    marginHorizontal: 16,
-    marginBottom: 12,
+    marginBottom: 0,
   },
   banner: {
     flexDirection: 'row',
