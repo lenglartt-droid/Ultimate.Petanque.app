@@ -72,6 +72,7 @@ export default function ClubDetailScreen() {
   const { showAlert } = useAlert();
   const [showMergePicker, setShowMergePicker] = React.useState(false);
   const [showPublicPreview, setShowPublicPreview] = React.useState(false);
+  const [previewShowContacts, setPreviewShowContacts] = React.useState(false);
   const sharedPermission = getSharedPermission(id!);
   const isSharedItem = sharedPermission !== null;
   const isReadOnly = sharedPermission === 'read';
