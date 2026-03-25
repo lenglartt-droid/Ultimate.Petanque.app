@@ -826,42 +826,78 @@ export default function HomeScreen() {
               </Pressable>
             </View>
             <View style={s.historyList}>
-              {recentResults.map((item, idx) => {
-                const d = new Date(item.date);
-                const isLast = idx === recentResults.length - 1;
-                return (
-                  <Pressable
-                    key={item.id}
-                    style={({ pressed }) => [s.hcRow, !isLast && s.hcRowBorder, pressed && { opacity: 0.75, backgroundColor: theme.backgroundSecondary }]}
-                    onPress={() => item.type === 'match' ? router.push({ pathname: '/history', params: { openMatchId: item.id } }) : router.push({ pathname: '/history', params: { openChallengeId: item.id } })}
-                  >
-                    <View style={[s.hcDot, { backgroundColor: resultColor(item.result) }]} />
-                    <View style={[s.hcTypeIcon, { backgroundColor: (item.type === 'match' ? theme.primary : theme.accent) + '12' }]}>
-                      <MaterialIcons name={item.icon} size={14} color={item.type === 'match' ? theme.primary : theme.accent} />
-                    </View>
-                    <View style={s.hcInfo}>
-                      <Text style={s.hcTitle} numberOfLines={1}>{item.title}</Text>
-                      <View style={s.hcSubRow}>
-                        <Text style={s.hcSub} numberOfLines={1}>{item.subtitle} {' \u2022 '} {d.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
-                        {item.type === 'match' ? (() => {
-                          const match = matches.find((m: any) => m.id === item.id);
-                          const pIds = (match as any)?.participantUserIds || [];
-                          const vLevel = getMatchValidationLevel(Array.isArray(pIds) ? pIds.length : 0);
-                          const vColor = getValidationColor(vLevel);
-                          return (
-                            <View style={s.hcValidation}>
-                              <MaterialIcons name={getValidationIcon(vLevel) as any} size={9} color={vColor} />
-                              <Text style={{ fontSize: 8, fontWeight: '700', color: vColor }}>{vLevel === 'solo' ? '0.3x' : vLevel === 'shared_2' ? '1x' : vLevel === 'shared_3plus' ? '1.5x' : '2x'}</Text>
-                            </View>
-                          );
-                        })() : null}
-                      </View>
-                    </View>
-                    <Text style={[s.hcScore, { color: resultColor(item.result) }]}>{item.score}</Text>
-                    <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
-                  </Pressable>
-                );
-              })}
+              {(() => {
+                const today = new Date();
+                const yesterday = new Date(today);
+                yesterday.setDate(yesterday.getDate() - 1);
+                const weekAgo = new Date(today);
+                weekAgo.setDate(weekAgo.getDate() - 7);
+
+                const getGroup = (dateStr: string) => {
+                  const d = new Date(dateStr);
+                  if (d.toDateString() === today.toDateString()) return 'today';
+                  if (d.toDateString() === yesterday.toDateString()) return 'yesterday';
+                  if (d >= weekAgo) return 'week';
+                  return 'older';
+                };
+
+                const groupLabels: Record<string, string> = {
+                  today: language === 'fr' ? "Aujourd'hui" : 'Today',
+                  yesterday: language === 'fr' ? 'Hier' : 'Yesterday',
+                  week: language === 'fr' ? 'Cette semaine' : 'This week',
+                  older: language === 'fr' ? 'Plus ancien' : 'Older',
+                };
+
+                let lastGroup = '';
+                return recentResults.map((item, idx) => {
+                  const d = new Date(item.date);
+                  const group = getGroup(item.date);
+                  const showHeader = group !== lastGroup;
+                  lastGroup = group;
+                  const isLast = idx === recentResults.length - 1;
+
+                  return (
+                    <React.Fragment key={item.id}>
+                      {showHeader ? (
+                        <View style={s.hcDateHeader}>
+                          <View style={s.hcDateDot} />
+                          <Text style={s.hcDateLabel}>{groupLabels[group]}</Text>
+                          <View style={s.hcDateLine} />
+                        </View>
+                      ) : null}
+                      <Pressable
+                        style={({ pressed }) => [s.hcRow, !isLast && s.hcRowBorder, pressed && { opacity: 0.75, backgroundColor: theme.backgroundSecondary }]}
+                        onPress={() => item.type === 'match' ? router.push({ pathname: '/history', params: { openMatchId: item.id } }) : router.push({ pathname: '/history', params: { openChallengeId: item.id } })}
+                      >
+                        <View style={[s.hcDot, { backgroundColor: resultColor(item.result) }]} />
+                        <View style={[s.hcTypeIcon, { backgroundColor: (item.type === 'match' ? theme.primary : theme.accent) + '12' }]}>
+                          <MaterialIcons name={item.icon} size={14} color={item.type === 'match' ? theme.primary : theme.accent} />
+                        </View>
+                        <View style={s.hcInfo}>
+                          <Text style={s.hcTitle} numberOfLines={1}>{item.title}</Text>
+                          <View style={s.hcSubRow}>
+                            <Text style={s.hcSub} numberOfLines={1}>{item.subtitle} {' \u2022 '} {d.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
+                            {item.type === 'match' ? (() => {
+                              const match = matches.find((m: any) => m.id === item.id);
+                              const pIds = (match as any)?.participantUserIds || [];
+                              const vLevel = getMatchValidationLevel(Array.isArray(pIds) ? pIds.length : 0);
+                              const vColor = getValidationColor(vLevel);
+                              return (
+                                <View style={s.hcValidation}>
+                                  <MaterialIcons name={getValidationIcon(vLevel) as any} size={9} color={vColor} />
+                                  <Text style={{ fontSize: 8, fontWeight: '700', color: vColor }}>{vLevel === 'solo' ? '0.3x' : vLevel === 'shared_2' ? '1x' : vLevel === 'shared_3plus' ? '1.5x' : '2x'}</Text>
+                                </View>
+                              );
+                            })() : null}
+                          </View>
+                        </View>
+                        <Text style={[s.hcScore, { color: resultColor(item.result) }]}>{item.score}</Text>
+                        <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+                      </Pressable>
+                    </React.Fragment>
+                  );
+                });
+              })()}
             </View>
           </Animated.View>
         ) : (matches.length === 0 && challenges.length === 0) ? (
@@ -1168,6 +1204,10 @@ const s = StyleSheet.create({
 
   // ===== HISTORY =====
   historyList: { backgroundColor: '#FFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden' as const },
+  hcDateHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6, gap: 6 },
+  hcDateDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: theme.primary },
+  hcDateLabel: { fontSize: 11, fontWeight: '700' as const, color: theme.textSecondary, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
+  hcDateLine: { flex: 1, height: 1, backgroundColor: '#E2E8F0', marginLeft: 6 },
   hcRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16, gap: 10 },
   hcRowBorder: { borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   hcDot: { width: 8, height: 8, borderRadius: 4 },
