@@ -1008,183 +1008,118 @@ export default function ProfileScreen() {
           </View>
         </Animated.View>
 
-        {/* XP Bar & Badges */}
+        {/* Progression Section: XP + Streak + Badges (compact unified card) */}
         {!isEditing && (
           <Animated.View entering={FadeInDown.duration(400).delay(50)} style={{ marginBottom: 20 }}>
-            <XPBar xp={userXp} language={language} />
-            
-            {/* Streak Counter */}
-            {(() => {
-              const allDates = [...matches.map(m => m.date), ...challenges.map(c => c.date)];
-              const streakData = computeStreakFromDates(allDates);
-              const streakStatus = getStreakStatus(streakData, language as 'fr' | 'en');
-              const et = extraTranslations.streak;
-              const progressPercent = Math.min(100, Math.round((streakData.currentStreak / 7) * 100));
-              return (
-                <View style={streakStyles.streakCard}>
-                  <View style={streakStyles.streakHeader}>
-                    <View style={streakStyles.streakFireBg}>
-                      <MaterialIcons name="local-fire-department" size={22} color={streakData.currentStreak > 0 ? '#F97316' : theme.textMuted} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={streakStyles.streakTitle}>{(et.streakTitle as any)?.[language] || 'Play streak'}</Text>
-                      <Text style={[streakStyles.streakStatusText, { color: streakStatus.color }]}>{streakStatus.text}</Text>
-                    </View>
-                    {streakData.currentStreak >= 7 ? (
-                      <View style={streakStyles.streakFireLabel}>
-                        <MaterialIcons name="local-fire-department" size={12} color="#FFF" />
-                        <Text style={streakStyles.streakFireLabelText}>{(et.streakFireLabel as any)?.[language] || 'On Fire'}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  <View style={streakStyles.streakCounterRow}>
-                    <View style={streakStyles.streakCounterItem}>
-                      <Text style={[streakStyles.streakCounterValue, { color: streakData.currentStreak > 0 ? '#F97316' : theme.textMuted }]}>{streakData.currentStreak}</Text>
-                      <Text style={streakStyles.streakCounterLabel}>{(et.currentStreak as any)?.[language] || 'Current streak'}</Text>
-                    </View>
-                    <View style={streakStyles.streakCounterDivider} />
-                    <View style={streakStyles.streakCounterItem}>
-                      <Text style={[streakStyles.streakCounterValue, { color: '#D97706' }]}>{streakData.bestStreak}</Text>
-                      <Text style={streakStyles.streakCounterLabel}>{(et.bestStreak as any)?.[language] || 'Best streak'}</Text>
-                    </View>
-                  </View>
-                  {/* Progress toward 7-day badge */}
-                  {streakData.currentStreak < 7 ? (
-                    <View style={streakStyles.streakProgressSection}>
-                      <View style={streakStyles.streakProgressHeader}>
-                        <MaterialIcons name="emoji-events" size={12} color="#F97316" />
-                        <Text style={streakStyles.streakProgressLabel}>{(et.targetLabel as any)?.[language] || 'Badge target: 7 days'}</Text>
-                        <Text style={streakStyles.streakProgressPct}>{progressPercent}%</Text>
-                      </View>
-                      <View style={streakStyles.streakProgressTrack}>
-                        <View style={[streakStyles.streakProgressFill, { width: `${progressPercent}%` }]} />
-                      </View>
-                      <View style={streakStyles.streakDotsRow}>
-                        {[1, 2, 3, 4, 5, 6, 7].map(day => (
-                          <View key={day} style={[
-                            streakStyles.streakDot,
-                            day <= streakData.currentStreak && streakStyles.streakDotActive,
-                          ]}>
-                            {day <= streakData.currentStreak ? <MaterialIcons name="check" size={8} color="#FFF" /> : <Text style={streakStyles.streakDotText}>{day}</Text>}
-                          </View>
-                        ))}
-                      </View>
-                    </View>
-                  ) : null}
-                  {/* At risk warning */}
-                  {streakStatus.status === 'at_risk' && streakData.currentStreak > 0 ? (
-                    <Pressable style={streakStyles.streakWarning} onPress={() => router.push('/match/new')}>
-                      <MaterialIcons name="warning" size={14} color="#EF4444" />
-                      <Text style={streakStyles.streakWarningText}>{(et.streakAtRisk as any)?.[language] || 'Play today to keep your streak!'}</Text>
-                      <MaterialIcons name="chevron-right" size={16} color="#EF4444" />
-                    </Pressable>
-                  ) : null}
-                </View>
-              );
-            })()}
+            <View style={progStyles.card}>
+              {/* XP Bar inline */}
+              <XPBar xp={userXp} language={language} />
 
-            {/* Badge Showcase - Horizontal Scrollable */}
-            <View style={styles.badgesSection}>
-              <Pressable style={styles.badgesSectionHeader} onPress={() => router.push('/badges' as any)}>
-                <Text style={styles.badgesSectionTitle}>
-                  {language === 'fr' ? 'BADGES' : 'BADGES'}
-                </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.badgesSectionCount}>
-                    {userBadges.length}/{totalBadges}
-                  </Text>
-                  <MaterialIcons name="chevron-right" size={16} color={theme.primary} />
-                </View>
-              </Pressable>
-
-              {/* Horizontal showcase of earned badges */}
-              {userBadges.length > 0 ? (
-                <View>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ gap: 10, paddingRight: 4 }}
-                  >
-                    {(() => {
-                      // Sort: latest unlocked first
-                      const sorted = [...userBadges].sort(
-                        (a, b) => new Date(b.unlockedAt).getTime() - new Date(a.unlockedAt).getTime()
-                      );
-                      return sorted.map((ub, idx) => {
-                        const badge = BADGES.find(b => b.id === ub.badgeId);
-                        if (!badge) return null;
-                        const isLatest = idx === 0;
-                        return (
-                          <Pressable
-                            key={badge.id}
-                            style={[
-                              showcaseStyles.badgeChip,
-                              isLatest && { borderColor: badge.color + '50', backgroundColor: badge.color + '10' },
-                            ]}
-                            onPress={() => router.push('/badges' as any)}
-                          >
-                            <View style={[
-                              showcaseStyles.badgeChipIcon,
-                              { backgroundColor: badge.color + '20' },
-                              isLatest && { backgroundColor: badge.color + '30' },
-                            ]}>
-                              <MaterialIcons name={badge.icon as any} size={20} color={badge.color} />
-                              {isLatest ? (
-                                <View style={[showcaseStyles.newDot, { backgroundColor: badge.color }]} />
-                              ) : null}
+              {/* Streak + Badges side-by-side */}
+              {(() => {
+                const allDates = [...matches.map(m => m.date), ...challenges.map(c => c.date)];
+                const streakData = computeStreakFromDates(allDates);
+                const streakStatus = getStreakStatus(streakData, language as 'fr' | 'en');
+                const et = extraTranslations.streak;
+                const progressPercent = Math.min(100, Math.round((streakData.currentStreak / 7) * 100));
+                return (
+                  <>
+                    <View style={progStyles.divider} />
+                    <View style={progStyles.streakBadgeRow}>
+                      {/* Streak compact */}
+                      <View style={progStyles.streakCol}>
+                        <View style={progStyles.streakHeader}>
+                          <MaterialIcons name="local-fire-department" size={18} color={streakData.currentStreak > 0 ? '#F97316' : theme.textMuted} />
+                          <Text style={progStyles.streakLabel}>{(et.streakTitle as any)?.[language] || 'Streak'}</Text>
+                          {streakData.currentStreak >= 7 ? (
+                            <View style={progStyles.fireTag}>
+                              <MaterialIcons name="local-fire-department" size={9} color="#FFF" />
                             </View>
-                            <Text
-                              style={[
-                                showcaseStyles.badgeChipName,
-                                isLatest && { color: badge.color, fontWeight: '700' },
-                              ]}
-                              numberOfLines={1}
-                            >
-                              {getBadgeName(badge.id, language)}
-                            </Text>
+                          ) : null}
+                        </View>
+                        <View style={progStyles.streakNumbers}>
+                          <View style={progStyles.streakNumItem}>
+                            <Text style={[progStyles.streakNumValue, { color: streakData.currentStreak > 0 ? '#F97316' : theme.textMuted }]}>{streakData.currentStreak}</Text>
+                            <Text style={progStyles.streakNumLabel}>{language === 'fr' ? 'actuel' : 'current'}</Text>
+                          </View>
+                          <View style={progStyles.streakNumDivider} />
+                          <View style={progStyles.streakNumItem}>
+                            <Text style={[progStyles.streakNumValue, { color: '#D97706' }]}>{streakData.bestStreak}</Text>
+                            <Text style={progStyles.streakNumLabel}>{language === 'fr' ? 'record' : 'best'}</Text>
+                          </View>
+                        </View>
+                        {/* Compact 7-day dots */}
+                        {streakData.currentStreak < 7 ? (
+                          <View style={progStyles.dotsRow}>
+                            {[1, 2, 3, 4, 5, 6, 7].map(day => (
+                              <View key={day} style={[progStyles.dot, day <= streakData.currentStreak && progStyles.dotActive]}>
+                                {day <= streakData.currentStreak ? <MaterialIcons name="check" size={7} color="#FFF" /> : null}
+                              </View>
+                            ))}
+                          </View>
+                        ) : null}
+                        {streakStatus.status === 'at_risk' && streakData.currentStreak > 0 ? (
+                          <Pressable style={progStyles.atRiskRow} onPress={() => router.push('/match/new')}>
+                            <MaterialIcons name="warning" size={11} color="#EF4444" />
+                            <Text style={progStyles.atRiskText}>{language === 'fr' ? 'Jouez aujourd\'hui !' : 'Play today!'}</Text>
                           </Pressable>
-                        );
-                      });
-                    })()}
-                  </ScrollView>
-
-                  {/* Locked badges preview (compact) */}
-                  <View style={showcaseStyles.lockedRow}>
-                    {BADGES.filter(b => !userBadges.find(ub => ub.badgeId === b.id)).slice(0, 5).map(badge => (
-                      <View key={badge.id} style={showcaseStyles.lockedDot}>
-                        <MaterialIcons name={badge.icon as any} size={14} color={theme.textMuted + '50'} />
+                        ) : null}
                       </View>
-                    ))}
-                    {BADGES.filter(b => !userBadges.find(ub => ub.badgeId === b.id)).length > 5 ? (
-                      <Text style={showcaseStyles.lockedMore}>
-                        +{BADGES.filter(b => !userBadges.find(ub => ub.badgeId === b.id)).length - 5}
-                      </Text>
-                    ) : null}
-                    <Pressable
-                      style={showcaseStyles.viewAllBtn}
-                      onPress={() => router.push('/badges' as any)}
-                    >
-                      <Text style={showcaseStyles.viewAllText}>
-                        {language === 'fr' ? 'Voir tout' : 'View all'}
-                      </Text>
-                      <MaterialIcons name="chevron-right" size={14} color={theme.primary} />
-                    </Pressable>
-                  </View>
-                </View>
-              ) : (
-                <Pressable style={showcaseStyles.emptyBadges} onPress={() => router.push('/badges' as any)}>
-                  <MaterialIcons name="military-tech" size={28} color={theme.textMuted} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={showcaseStyles.emptyBadgesTitle}>
-                      {language === 'fr' ? 'Aucun badge debloque' : 'No badges unlocked'}
-                    </Text>
-                    <Text style={showcaseStyles.emptyBadgesDesc}>
-                      {language === 'fr' ? 'Jouez des matchs pour debloquer des badges' : 'Play matches to unlock badges'}
-                    </Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-                </Pressable>
-              )}
+
+                      <View style={progStyles.vertDivider} />
+
+                      {/* Badges compact */}
+                      <View style={progStyles.badgeCol}>
+                        <Pressable style={progStyles.badgeHeader} onPress={() => router.push('/badges' as any)}>
+                          <MaterialIcons name="military-tech" size={18} color={theme.carreauColor} />
+                          <Text style={progStyles.badgeLabel}>Badges</Text>
+                          <View style={progStyles.badgeCountPill}>
+                            <Text style={progStyles.badgeCountText}>{userBadges.length}/{totalBadges}</Text>
+                          </View>
+                        </Pressable>
+
+                        {userBadges.length > 0 ? (
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingRight: 2 }}>
+                            {[...userBadges].sort((a, b) => new Date(b.unlockedAt).getTime() - new Date(a.unlockedAt).getTime()).slice(0, 4).map((ub, idx) => {
+                              const badge = BADGES.find(b => b.id === ub.badgeId);
+                              if (!badge) return null;
+                              return (
+                                <Pressable key={badge.id} style={[progStyles.badgeChip, idx === 0 && { borderColor: badge.color + '40' }]} onPress={() => router.push('/badges' as any)}>
+                                  <View style={[progStyles.badgeChipIcon, { backgroundColor: badge.color + '20' }]}>
+                                    <MaterialIcons name={badge.icon as any} size={16} color={badge.color} />
+                                  </View>
+                                  <Text style={[progStyles.badgeChipName, idx === 0 && { color: badge.color }]} numberOfLines={1}>{getBadgeName(badge.id, language)}</Text>
+                                </Pressable>
+                              );
+                            })}
+                          </ScrollView>
+                        ) : (
+                          <View style={progStyles.noBadges}>
+                            <MaterialIcons name="lock-outline" size={18} color={theme.textMuted} />
+                            <Text style={progStyles.noBadgesText}>{language === 'fr' ? 'Jouez pour debloquer' : 'Play to unlock'}</Text>
+                          </View>
+                        )}
+
+                        {/* Locked preview dots */}
+                        <View style={progStyles.lockedDotsRow}>
+                          {BADGES.filter(b => !userBadges.find(ub => ub.badgeId === b.id)).slice(0, 4).map(badge => (
+                            <View key={badge.id} style={progStyles.lockedDot}>
+                              <MaterialIcons name={badge.icon as any} size={10} color={theme.textMuted + '40'} />
+                            </View>
+                          ))}
+                          {BADGES.filter(b => !userBadges.find(ub => ub.badgeId === b.id)).length > 4 ? (
+                            <Text style={progStyles.lockedMore}>+{BADGES.filter(b => !userBadges.find(ub => ub.badgeId === b.id)).length - 4}</Text>
+                          ) : null}
+                          <Pressable style={progStyles.viewAllBtn} onPress={() => router.push('/badges' as any)}>
+                            <Text style={progStyles.viewAllText}>{language === 'fr' ? 'Tout' : 'All'}</Text>
+                            <MaterialIcons name="chevron-right" size={12} color={theme.primary} />
+                          </Pressable>
+                        </View>
+                      </View>
+                    </View>
+                  </>
+                );
+              })()}
             </View>
           </Animated.View>
         )}
@@ -3674,256 +3609,213 @@ const styles = StyleSheet.create({
   },
 });
 
-const showcaseStyles = StyleSheet.create({
+const progStyles = StyleSheet.create({
+  card: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.xl,
+    padding: 16,
+    ...theme.shadows.card,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: theme.border,
+    marginVertical: 14,
+  },
+  streakBadgeRow: {
+    flexDirection: 'row' as const,
+    gap: 0,
+  },
+  vertDivider: {
+    width: 1,
+    backgroundColor: theme.border,
+    marginHorizontal: 14,
+  },
+  // Streak
+  streakCol: {
+    flex: 1,
+    gap: 8,
+  },
+  streakHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+  },
+  streakLabel: {
+    fontSize: 13,
+    fontWeight: '700' as const,
+    color: theme.textPrimary,
+    flex: 1,
+  },
+  fireTag: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#F97316',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  streakNumbers: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  streakNumItem: {
+    flex: 1,
+    alignItems: 'center' as const,
+  },
+  streakNumValue: {
+    fontSize: 20,
+    fontWeight: '800' as const,
+  },
+  streakNumLabel: {
+    fontSize: 9,
+    fontWeight: '600' as const,
+    color: theme.textMuted,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.3,
+    marginTop: 1,
+  },
+  streakNumDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: theme.border,
+    marginHorizontal: 6,
+  },
+  dotsRow: {
+    flexDirection: 'row' as const,
+    gap: 4,
+    justifyContent: 'center' as const,
+  },
+  dot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: theme.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: theme.border,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  dotActive: {
+    backgroundColor: '#F97316',
+    borderColor: '#F97316',
+  },
+  atRiskRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    backgroundColor: '#EF444410',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+  },
+  atRiskText: {
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: '#EF4444',
+    flex: 1,
+  },
+  // Badges
+  badgeCol: {
+    flex: 1,
+    gap: 8,
+  },
+  badgeHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+  },
+  badgeLabel: {
+    fontSize: 13,
+    fontWeight: '700' as const,
+    color: theme.textPrimary,
+    flex: 1,
+  },
+  badgeCountPill: {
+    backgroundColor: theme.primary + '15',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: theme.borderRadius.full,
+  },
+  badgeCountText: {
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: theme.primary,
+  },
   badgeChip: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: 10,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  badgeChipIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  badgeChipName: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+    color: theme.textPrimary,
+    maxWidth: 70,
+  },
+  noBadges: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 8,
     backgroundColor: theme.backgroundSecondary,
-    borderRadius: 14,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    paddingRight: 14,
-    borderWidth: 1.5,
-    borderColor: theme.border,
-  },
-  badgeChipIcon: {
-    width: 36,
-    height: 36,
     borderRadius: 10,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    position: 'relative' as const,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
-  newDot: {
-    position: 'absolute' as const,
-    top: -2,
-    right: -2,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 2,
-    borderColor: theme.surface,
+  noBadgesText: {
+    fontSize: 11,
+    color: theme.textMuted,
+    fontWeight: '500' as const,
   },
-  badgeChipName: {
-    fontSize: 13,
-    fontWeight: '600' as const,
-    color: theme.textPrimary,
-    maxWidth: 100,
-  },
-  lockedRow: {
+  lockedDotsRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    gap: 6,
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: theme.border + '40',
+    gap: 4,
   },
   lockedDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+    width: 22,
+    height: 22,
+    borderRadius: 6,
     backgroundColor: theme.backgroundSecondary,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
   lockedMore: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700' as const,
     color: theme.textMuted,
   },
   viewAllBtn: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    gap: 4,
+    gap: 2,
     marginLeft: 'auto' as any,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     backgroundColor: theme.primary + '10',
-    borderRadius: 10,
+    borderRadius: 8,
   },
   viewAllText: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '700' as const,
     color: theme.primary,
   },
-  emptyBadges: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: 12,
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: 12,
-    padding: 14,
-  },
-  emptyBadgesTitle: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: theme.textSecondary,
-  },
-  emptyBadgesDesc: {
-    fontSize: 12,
-    color: theme.textMuted,
-    marginTop: 2,
-  },
 });
 
-const streakStyles = StyleSheet.create({
-  streakCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    marginTop: 12,
-    ...theme.shadows.card,
-    borderWidth: 1,
-    borderColor: '#F9731620',
-  },
-  streakHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 14,
-  },
-  streakFireBg: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: '#F9731612',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  streakTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: theme.textPrimary,
-  },
-  streakStatusText: {
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 1,
-  },
-  streakFireLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#F97316',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-  },
-  streakFireLabelText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#FFF',
-  },
-  streakCounterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-  },
-  streakCounterItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  streakCounterValue: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-  },
-  streakCounterLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: theme.textMuted,
-    marginTop: 2,
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  streakCounterDivider: {
-    width: 1,
-    height: 32,
-    backgroundColor: theme.border,
-    marginHorizontal: 12,
-  },
-  streakProgressSection: {
-    backgroundColor: '#F9731608',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#F9731615',
-  },
-  streakProgressHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
-  },
-  streakProgressLabel: {
-    flex: 1,
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#92400E',
-  },
-  streakProgressPct: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#F97316',
-  },
-  streakProgressTrack: {
-    height: 6,
-    backgroundColor: '#F9731615',
-    borderRadius: 3,
-    overflow: 'hidden' as const,
-    marginBottom: 10,
-  },
-  streakProgressFill: {
-    height: '100%',
-    backgroundColor: '#F97316',
-    borderRadius: 3,
-  },
-  streakDotsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 6,
-  },
-  streakDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: theme.backgroundSecondary,
-    borderWidth: 1.5,
-    borderColor: theme.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  streakDotActive: {
-    backgroundColor: '#F97316',
-    borderColor: '#F97316',
-  },
-  streakDotText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: theme.textMuted,
-  },
-  streakWarning: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: '#EF444410',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#EF444420',
-  },
-  streakWarningText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#EF4444',
-  },
-});
+
