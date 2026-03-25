@@ -8,8 +8,6 @@ import {
   Modal,
   Dimensions,
   RefreshControl,
-  TextInput,
-  ActivityIndicator,
   FlatList,
   Platform,
 } from 'react-native';
@@ -30,11 +28,13 @@ import SponsorBanner from '@/components/ui/SponsorBanner';
 import UpcomingTimeline from '@/components/feature/UpcomingTimeline';
 import CompactHistory from '@/components/feature/CompactHistory';
 import AmbassadorBanner from '@/components/feature/AmbassadorBanner';
+import TournamentPickerModal from '@/components/feature/TournamentPickerModal';
+import JoinMeetupModal from '@/components/feature/JoinMeetupModal';
+import QRShareModal from '@/components/feature/QRShareModal';
 import { getFeaturedAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
-import { getMyMeetups, getInvitedMeetups, getMeetupResponses, getPendingInvitationsCount, findMeetupByCode, Meetup, MeetupResponse } from '@/services/meetupService';
-import { config } from '@/constants/config';
-import { Share as RNShare } from 'react-native';
+import { getMyMeetups, getInvitedMeetups, getMeetupResponses, getPendingInvitationsCount, Meetup, MeetupResponse } from '@/services/meetupService';
+
 import { LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
 import { fetchWeeklyLeaderboard } from '@/services/weeklyLeaderboardService';
 import { extraTranslations } from '@/constants/i18nExtra';
@@ -47,7 +47,6 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const { t, language } = useLanguage();
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'À venir' | 'En cours' | 'Terminé'>('all');
   const [refreshing, setRefreshing] = useState(false);
 
   // Ambassadors state
@@ -63,15 +62,14 @@ export default function HomeScreen() {
   const [showQRModal, setShowQRModal] = useState(false);
 
   // Sponsored events state
+
   const [upcomingEvents, setUpcomingEvents] = useState<SponsoredEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
 
   // Witness attestation alerts
   const [witnessRequests, setWitnessRequests] = useState<EventNotification[]>([]);
   const [eventNotifCount, setEventNotifCount] = useState(0);
-  const [joinCode, setJoinCode] = useState('');
-  const [joinLoading, setJoinLoading] = useState(false);
-  const { showAlert } = useAlert();
+
 
   // Responsive
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
@@ -266,53 +264,9 @@ export default function HomeScreen() {
     return 'Good evening';
   }, [language]);
 
-  // Tournament filter
-  const statusOrder: Record<string, number> = { 'En cours': 0, 'À venir': 1, 'Terminé': 2 };
-  const filteredTournaments = useMemo(() => {
-    const list = statusFilter === 'all' ? [...tournaments] : tournaments.filter(t => t.status === statusFilter);
-    return list.sort((a, b) => (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3));
-  }, [tournaments, statusFilter]);
-  const statusCounts = useMemo(() => ({
-    all: tournaments.length,
-    'À venir': tournaments.filter(t => t.status === 'À venir').length,
-    'En cours': tournaments.filter(t => t.status === 'En cours').length,
-    'Terminé': tournaments.filter(t => t.status === 'Terminé').length,
-  }), [tournaments]);
 
-  // FlatList renderers
-  const renderTournamentPickerItem = useCallback(({ item: tournament }: { item: any }) => {
-    const statusColors: Record<string, { bg: string; text: string }> = {
-      'À venir': { bg: theme.primary + '15', text: theme.primary },
-      'En cours': { bg: theme.warning + '15', text: theme.warning },
-      'Terminé': { bg: theme.success + '15', text: theme.success },
-    };
-    const colors = statusColors[tournament.status as keyof typeof statusColors] || statusColors['À venir'];
-    return (
-      <Pressable key={tournament.id} style={s.tPickerItem} onPress={() => { setShowTournamentPicker(false); router.push(`/tournament/${tournament.id}`); }}>
-        <View style={s.tPickerIcon}><MaterialIcons name="emoji-events" size={28} color={theme.carreauColor} /></View>
-        <View style={s.tPickerInfo}>
-          <Text style={s.tPickerName} numberOfLines={1}>{tournament.name}</Text>
-          <View style={s.tPickerMeta}>
-            <MaterialIcons name="event" size={12} color={theme.textMuted} />
-            <Text style={s.tPickerDate}>{new Date(tournament.date).toLocaleDateString(language === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
-            <View style={s.tPickerDot} />
-            <Text style={s.tPickerCity}>{tournament.location.city}</Text>
-          </View>
-          <View style={s.tPickerBadges}>
-            <View style={[s.tPickerBadge, { backgroundColor: colors.bg }]}>
-              <Text style={[s.tPickerBadgeText, { color: colors.text }]}>
-                {tournament.status === 'À venir' ? t('tournamentStatus', 'upcoming') : tournament.status === 'En cours' ? t('tournamentStatus', 'inProgress') : t('tournamentStatus', 'completed')}
-              </Text>
-            </View>
-            <View style={[s.tPickerBadge, { backgroundColor: theme.backgroundSecondary }]}>
-              <Text style={[s.tPickerBadgeText, { color: theme.textSecondary }]}>{t('formats', tournament.format)}</Text>
-            </View>
-          </View>
-        </View>
-        <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-      </Pressable>
-    );
-  }, [t, language]);
+
+
 
   const renderMeetupModalItem = useCallback(({ item: m }: { item: any }) => {
     const mDate = new Date(m.date);
@@ -349,7 +303,6 @@ export default function HomeScreen() {
   }, [t, language]);
 
   const meetupKeyExtractor = useCallback((item: any) => item.id, []);
-  const tournamentKeyExtractor = useCallback((item: any) => item.id, []);
   const scrollViewRef = useRef<ScrollView>(null);
 
   return (
@@ -612,89 +565,13 @@ export default function HomeScreen() {
       </Modal>
 
       {/* ========== JOIN MEETUP MODAL ========== */}
-      <Modal visible={showJoinMeetupModal} animationType="slide" transparent onRequestClose={() => setShowJoinMeetupModal(false)}>
-        <View style={s.joinOverlay}>
-          <View style={s.joinContent}>
-            <View style={s.joinHeader}><Text style={s.joinTitle}>{t('meetup', 'joinMeetup')}</Text><Pressable style={s.joinClose} onPress={() => setShowJoinMeetupModal(false)}><MaterialIcons name="close" size={22} color={theme.textSecondary} /></Pressable></View>
-            <Text style={s.joinDesc}>{t('meetup', 'enterMeetupCode')}</Text>
-            <TextInput style={s.joinInput} value={joinCode} onChangeText={setJoinCode} placeholder={t('meetup', 'enterCodePlaceholder')} placeholderTextColor={theme.textMuted} autoCapitalize="characters" autoFocus />
-            <Pressable style={[s.joinBtn, (!joinCode.trim() || joinLoading) && { opacity: 0.5 }]} disabled={!joinCode.trim() || joinLoading} onPress={async () => { setJoinLoading(true); const { meetup: found } = await findMeetupByCode(joinCode.trim()); setJoinLoading(false); if (found) { setShowJoinMeetupModal(false); setJoinCode(''); router.push(`/meetup/${found.id}` as any); } else { showAlert(t('common', 'error'), t('meetup', 'invalidCode')); } }}>
-              {joinLoading ? <ActivityIndicator size="small" color="#FFF" /> : (<><MaterialIcons name="search" size={20} color="#FFF" /><Text style={s.joinBtnText}>{t('meetup', 'joinMeetup')}</Text></>)}
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <JoinMeetupModal visible={showJoinMeetupModal} onClose={() => setShowJoinMeetupModal(false)} />
 
       {/* ========== QR CODE SHARE MODAL ========== */}
-      <Modal visible={showQRModal} animationType="slide" transparent onRequestClose={() => setShowQRModal(false)}>
-        <View style={s.qrOverlay}>
-          <View style={s.qrContent}>
-            <View style={s.qrHeader}><Text style={s.qrHeaderTitle}>{t('home', 'shareAppTitle')}</Text><Pressable style={s.qrCloseBtn} onPress={() => setShowQRModal(false)}><MaterialIcons name="close" size={22} color={theme.textSecondary} /></Pressable></View>
-            <View style={s.qrBody}>
-              <View style={s.qrCodeWrapper}><View style={{ width: 200, height: 200, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F4F6', borderRadius: 12 }}><MaterialIcons name="qr-code-2" size={80} color="#1E3A8A" /><Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 8, textAlign: 'center', paddingHorizontal: 12 }} numberOfLines={2}>{config.appDownloadUrl}</Text></View></View>
-              <Text style={s.qrAppName}>Ultimate Petanque</Text>
-              <Text style={s.qrDesc}>{t('home', 'shareAppDesc')}</Text>
-              <View style={s.qrNote}><MaterialIcons name="people" size={18} color={theme.success} /><Text style={s.qrNoteText}>{t('home', 'shareAppNote')}</Text></View>
-            </View>
-            <View style={s.qrActions}>
-              <Pressable style={s.qrCopyBtn} onPress={async () => { try { const Clipboard = require('expo-clipboard'); await Clipboard.setStringAsync(config.appDownloadUrl); } catch { try { await RNShare.share({ message: config.appDownloadUrl }); } catch {} } showAlert(t('home', 'linkCopied')); }}>
-                <MaterialIcons name="content-copy" size={18} color={theme.primary} /><Text style={s.qrCopyBtnText}>{t('home', 'copyLink')}</Text>
-              </Pressable>
-              <Pressable style={s.qrDoneBtn} onPress={() => setShowQRModal(false)}><Text style={s.qrDoneBtnText}>{t('common', 'close')}</Text></Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <QRShareModal visible={showQRModal} onClose={() => setShowQRModal(false)} />
 
       {/* ========== TOURNAMENT PICKER MODAL ========== */}
-      <Modal visible={showTournamentPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowTournamentPicker(false)}>
-        <SafeAreaView style={s.modalContainer}>
-          <View style={s.modalHeader}>
-            <Pressable style={s.modalCloseBtn} onPress={() => setShowTournamentPicker(false)}><MaterialIcons name="close" size={24} color={theme.textPrimary} /></Pressable>
-            <Text style={s.modalTitle}>{t('home', 'myTournaments')}</Text>
-            <Pressable style={s.modalAddBtn} onPress={() => { setShowTournamentPicker(false); router.push('/tournament/new'); }}><MaterialIcons name="add" size={24} color={theme.primary} /></Pressable>
-          </View>
-          {tournaments.length > 0 ? (
-            <FlatList
-              data={filteredTournaments}
-              keyExtractor={tournamentKeyExtractor}
-              renderItem={renderTournamentPickerItem}
-              style={s.modalContent}
-              contentContainerStyle={s.modalScrollContent}
-              showsVerticalScrollIndicator={false}
-              initialNumToRender={10}
-              ListHeaderComponent={
-                <View style={s.statusFilterRow}>
-                  {(['all', 'À venir', 'En cours', 'Terminé'] as const).map((status) => {
-                    const isActive = statusFilter === status;
-                    const statusConfig: Record<string, { icon: keyof typeof MaterialIcons.glyphMap; color: string }> = { 'all': { icon: 'layers', color: theme.textSecondary }, 'À venir': { icon: 'event', color: theme.primary }, 'En cours': { icon: 'play-circle-filled', color: theme.warning }, 'Terminé': { icon: 'check-circle', color: theme.success } };
-                    const cfg = statusConfig[status];
-                    return (
-                      <Pressable key={status} style={[s.statusChip, isActive && { backgroundColor: cfg.color, borderColor: cfg.color }]} onPress={() => setStatusFilter(status)}>
-                        <MaterialIcons name={cfg.icon} size={14} color={isActive ? '#FFF' : cfg.color} />
-                        <Text style={[s.statusChipText, isActive && { color: '#FFF' }, !isActive && { color: cfg.color }]}>{status === 'all' ? t('common', 'all') : status === 'À venir' ? t('tournamentStatus', 'upcoming') : status === 'En cours' ? t('tournamentStatus', 'inProgress') : t('tournamentStatus', 'completed')}</Text>
-                        <View style={[s.statusChipCount, isActive && { backgroundColor: 'rgba(255,255,255,0.25)' }]}><Text style={[s.statusChipCountText, isActive && { color: '#FFF' }]}>{statusCounts[status]}</Text></View>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              }
-              ListEmptyComponent={<View style={s.emptyFilter}><MaterialIcons name="filter-list-off" size={40} color={theme.textMuted} /><Text style={s.emptyFilterText}>{t('home', 'noTournamentFilter')}</Text><Pressable style={s.resetFilterBtn} onPress={() => setStatusFilter('all')}><Text style={s.resetFilterText}>{t('common', 'seeAll')}</Text></Pressable></View>}
-            />
-          ) : (
-            <ScrollView style={s.modalContent} contentContainerStyle={s.modalScrollContent} showsVerticalScrollIndicator={false}>
-              <View style={s.emptyTournament}>
-                <View style={s.emptyTournamentIcon}><MaterialIcons name="emoji-events" size={56} color={theme.carreauColor} /></View>
-                <Text style={s.emptyTournamentTitle}>{t('home', 'noTournament')}</Text>
-                <Text style={s.emptyTournamentText}>{t('home', 'noTournamentText')}</Text>
-                <Pressable style={s.createTournamentBtn} onPress={() => { setShowTournamentPicker(false); router.push('/tournament/new'); }}>
-                  <MaterialIcons name="add" size={20} color="#FFF" /><Text style={s.createTournamentBtnText}>{t('home', 'createTournament')}</Text>
-                </Pressable>
-              </View>
-            </ScrollView>
-          )}
-        </SafeAreaView>
-      </Modal>
+      <TournamentPickerModal visible={showTournamentPicker} onClose={() => setShowTournamentPicker(false)} tournaments={tournaments} />
     </SafeAreaView>
   );
 }
@@ -806,62 +683,5 @@ const s = StyleSheet.create({
   meetupCreatorText: { fontSize: 10, fontWeight: '700', color: theme.primary },
   meetupInvitedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.accent + '12', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
   meetupInvitedText: { fontSize: 10, fontWeight: '700', color: theme.accent },
-  joinOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 24 },
-  joinContent: { backgroundColor: '#FFF', borderRadius: 24, padding: 24 },
-  joinHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  joinTitle: { fontSize: 18, fontWeight: '700', color: theme.textPrimary },
-  joinClose: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
-  joinDesc: { fontSize: 14, color: theme.textSecondary, marginBottom: 16, lineHeight: 20 },
-  joinInput: { backgroundColor: '#F8FAFC', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 18, fontWeight: '700', color: theme.textPrimary, textAlign: 'center', letterSpacing: 2, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 16 },
-  joinBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.primary, paddingVertical: 16, borderRadius: 16 },
-  joinBtnText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
-  qrOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center' as const, paddingHorizontal: 24 },
-  qrContent: { backgroundColor: '#FFF', borderRadius: 24, overflow: 'hidden' as const },
-  qrHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-  qrHeaderTitle: { fontSize: 18, fontWeight: '700' as const, color: theme.textPrimary },
-  qrCloseBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F1F5F9', alignItems: 'center' as const, justifyContent: 'center' as const },
-  qrBody: { alignItems: 'center' as const, paddingVertical: 28, paddingHorizontal: 24 },
-  qrCodeWrapper: { backgroundColor: '#FFF', padding: 16, borderRadius: 20, borderWidth: 2, borderColor: '#E2E8F0', marginBottom: 20 },
-  qrAppName: { fontSize: 20, fontWeight: '800' as const, color: '#1E3A8A', marginBottom: 6 },
-  qrDesc: { fontSize: 14, color: theme.textSecondary, textAlign: 'center' as const, lineHeight: 20, marginBottom: 16 },
-  qrNote: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 10, backgroundColor: theme.success + '08', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: theme.success + '15' },
-  qrNoteText: { flex: 1, fontSize: 12, color: theme.textSecondary, lineHeight: 17 },
-  qrActions: { flexDirection: 'row' as const, gap: 10, paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: '#E2E8F0' },
-  qrCopyBtn: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, paddingVertical: 14, borderRadius: 12, backgroundColor: theme.primary + '10' },
-  qrCopyBtnText: { fontSize: 15, fontWeight: '600' as const, color: theme.primary },
-  qrDoneBtn: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, paddingVertical: 14, borderRadius: 12, backgroundColor: '#F1F5F9' },
-  qrDoneBtnText: { fontSize: 15, fontWeight: '600' as const, color: theme.textSecondary },
-  modalContainer: { flex: 1, backgroundColor: '#F8FAFC' },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-  modalCloseBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  modalAddBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  modalTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
-  modalContent: { flex: 1 },
-  modalScrollContent: { padding: 16 },
-  statusFilterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
-  statusChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: '#FFF', borderRadius: 9999, borderWidth: 1.5, borderColor: '#E2E8F0' },
-  statusChipText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
-  statusChipCount: { backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, minWidth: 20, alignItems: 'center' },
-  statusChipCountText: { fontSize: 10, fontWeight: '700', color: theme.textSecondary },
-  tPickerItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', borderRadius: 16, padding: 14, marginBottom: 12, ...theme.shadows.card },
-  tPickerIcon: { width: 52, height: 52, borderRadius: 12, backgroundColor: theme.carreauColor + '15', alignItems: 'center', justifyContent: 'center', marginRight: 14 },
-  tPickerInfo: { flex: 1 },
-  tPickerName: { fontSize: 16, fontWeight: '600', color: theme.textPrimary, marginBottom: 6 },
-  tPickerMeta: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  tPickerDate: { fontSize: 12, color: theme.textMuted, marginLeft: 4 },
-  tPickerDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: theme.textMuted, marginHorizontal: 6 },
-  tPickerCity: { fontSize: 12, color: theme.textMuted },
-  tPickerBadges: { flexDirection: 'row', gap: 8 },
-  tPickerBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  tPickerBadgeText: { fontSize: 11, fontWeight: '600' },
-  emptyFilter: { alignItems: 'center', paddingVertical: 40 },
-  emptyFilterText: { fontSize: 14, color: theme.textMuted, marginTop: 12, marginBottom: 16 },
-  resetFilterBtn: { paddingHorizontal: 20, paddingVertical: 10, backgroundColor: theme.primary + '15', borderRadius: 9999 },
-  resetFilterText: { fontSize: 13, fontWeight: '600', color: theme.primary },
-  emptyTournament: { alignItems: 'center', paddingVertical: 48, paddingHorizontal: 24 },
-  emptyTournamentIcon: { width: 100, height: 100, borderRadius: 50, backgroundColor: theme.carreauColor + '12', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
-  emptyTournamentTitle: { fontSize: 20, fontWeight: '700', color: theme.textPrimary, marginBottom: 8 },
-  emptyTournamentText: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
-  createTournamentBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.carreauColor, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14 },
-  createTournamentBtnText: { fontSize: 15, fontWeight: '600', color: '#FFF' },
+
 });
