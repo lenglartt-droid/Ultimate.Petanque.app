@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -338,6 +338,31 @@ export default function LeaderboardScreen() {
   type GeoScope = 'world' | 'continent' | 'country' | 'city';
   const [geoScope, setGeoScope] = useState<GeoScope>('world');
   const [geoValue, setGeoValue] = useState<string>('');
+
+  // Auto-detect continent from selfPlayer country on first load
+  const geoInitRef = useRef(false);
+  useEffect(() => {
+    if (!geoInitRef.current && selfPlayer?.country) {
+      geoInitRef.current = true;
+      const CM: Record<string, string> = {
+        'France': 'Europe', 'Belgique': 'Europe', 'Belgium': 'Europe', 'Suisse': 'Europe', 'Switzerland': 'Europe',
+        'Luxembourg': 'Europe', 'Espagne': 'Europe', 'Spain': 'Europe', 'Italie': 'Europe', 'Italy': 'Europe',
+        'Allemagne': 'Europe', 'Germany': 'Europe', 'Portugal': 'Europe', 'Pays-Bas': 'Europe', 'Netherlands': 'Europe',
+        'Royaume-Uni': 'Europe', 'United Kingdom': 'Europe', 'Monaco': 'Europe', 'Croatie': 'Europe', 'Croatia': 'Europe',
+        'Tunisie': 'Africa', 'Tunisia': 'Africa', 'Maroc': 'Africa', 'Morocco': 'Africa',
+        'Algerie': 'Africa', 'Algeria': 'Africa', 'Senegal': 'Africa', 'Madagascar': 'Africa',
+        'Canada': 'North America', 'Etats-Unis': 'North America', 'United States': 'North America', 'USA': 'North America',
+        'Mexique': 'North America', 'Mexico': 'North America',
+        'Bresil': 'South America', 'Brazil': 'South America', 'Argentine': 'South America', 'Argentina': 'South America',
+        'Thailande': 'Asia', 'Thailand': 'Asia', 'Japon': 'Asia', 'Japan': 'Asia', 'Chine': 'Asia', 'China': 'Asia',
+        'Vietnam': 'Asia', 'Cambodge': 'Asia', 'Cambodia': 'Asia', 'Laos': 'Asia',
+        'Australie': 'Oceania', 'Australia': 'Oceania', 'Nouvelle-Zelande': 'Oceania', 'New Zealand': 'Oceania',
+      };
+      const continent = CM[selfPlayer.country] || 'Europe';
+      setGeoScope('continent');
+      setGeoValue(continent);
+    }
+  }, [selfPlayer?.country]);
 
   // ============ CLUBS STATE ============
   const [allClubs, setAllClubs] = useState<LeaderboardClub[]>([]);
