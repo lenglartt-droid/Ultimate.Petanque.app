@@ -1767,60 +1767,35 @@ export default function ProfileScreen() {
 
             </>
 
-            {/* ===== SECTION: NOTIFICATIONS & PARTAGE ===== */}
+            {/* ===== SECTION: INVITATIONS, NOTIFICATIONS & PARTAGE ===== */}
             <Pressable style={styles.accordionHeader} onPress={() => toggleSection('notifications')}>
-              <Text style={styles.accordionTitle}>{language === 'fr' ? 'NOTIFICATIONS & PARTAGE' : 'NOTIFICATIONS & SHARING'}</Text>
+              <Text style={styles.accordionTitle}>{language === 'fr' ? 'INVITATIONS, NOTIFICATIONS & PARTAGE' : 'INVITATIONS, NOTIFICATIONS & SHARING'}</Text>
               <MaterialIcons name={expandedSections.notifications ? 'expand-less' : 'expand-more'} size={20} color={theme.textSecondary} />
             </Pressable>
 
             {expandedSections.notifications ? (
             <View style={styles.compactMenuGroup}>
-              {/* Notification preferences page link */}
-              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/notification-preferences' as any); }}>
-                <View style={[styles.compactMenuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="notifications-active" size={16} color="#7C3AED" /></View>
-                <Text style={styles.compactMenuText}>{language === 'fr' ? 'Preferences de notifications' : 'Notification Preferences'}</Text>
-                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
-              </Pressable>
-              <View style={styles.compactMenuDivider} />
-              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); setPendingMatchInviteCount(0); router.push('/match-invitations'); }}>
-                <View style={[styles.compactMenuIcon, { backgroundColor: theme.primary + '15' }]}><MaterialIcons name="mail" size={16} color={theme.primary} />
-                  {pendingMatchInviteCount > 0 ? <View style={styles.shareNotifBadge}><Text style={styles.shareNotifBadgeText}>{pendingMatchInviteCount > 9 ? '9+' : pendingMatchInviteCount}</Text></View> : null}
+              {/* Unified Notifications Hub */}
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); setPendingMatchInviteCount(0); setPendingWitnessCount(0); router.push('/notifications-hub' as any); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: theme.primary + '15' }]}><MaterialIcons name="notifications" size={16} color={theme.primary} />
+                  {(pendingMatchInviteCount + pendingWitnessCount) > 0 ? <View style={styles.shareNotifBadge}><Text style={styles.shareNotifBadgeText}>{(pendingMatchInviteCount + pendingWitnessCount) > 9 ? '9+' : (pendingMatchInviteCount + pendingWitnessCount)}</Text></View> : null}
                 </View>
-                <Text style={styles.compactMenuText}>{language === 'fr' ? 'Invitations matchs & defis' : 'Match & challenge invitations'}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.compactMenuText}>{language === 'fr' ? 'Notifications' : 'Notifications'}</Text>
+                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 1 }}>{language === 'fr' ? 'Invitations, attestations, rappels, preferences' : 'Invitations, attestations, reminders, preferences'}</Text>
+                </View>
                 <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
               </Pressable>
               <View style={styles.compactMenuDivider} />
-              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); setUnreadShareCount(0); router.push('/share-notifications'); }}>
-                <View style={[styles.compactMenuIcon, { backgroundColor: theme.warning + '15' }]}><MaterialIcons name="share" size={16} color={theme.warning} />
+              {/* Unified Share Hub */}
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); setUnreadShareCount(0); router.push('/share-hub' as any); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: theme.success + '15' }]}><MaterialIcons name="share" size={16} color={theme.success} />
                   {unreadShareCount > 0 ? <View style={styles.shareNotifBadge}><Text style={styles.shareNotifBadgeText}>{unreadShareCount > 9 ? '9+' : unreadShareCount}</Text></View> : null}
                 </View>
-                <Text style={styles.compactMenuText}>{t('profile', 'shareNotifications')}</Text>
-                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
-              </Pressable>
-              <View style={styles.compactMenuDivider} />
-              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/notifications'); }}>
-                <View style={[styles.compactMenuIcon, { backgroundColor: theme.success + '15' }]}><MaterialIcons name="event" size={16} color={theme.success} /></View>
-                <Text style={styles.compactMenuText}>{t('profile', 'tournamentNotifications')}</Text>
-                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
-              </Pressable>
-              <View style={styles.compactMenuDivider} />
-              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); setPendingWitnessCount(0); router.push('/witness-invitations' as any); }}>
-                <View style={[styles.compactMenuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="visibility" size={16} color="#7C3AED" />
-                  {pendingWitnessCount > 0 ? <View style={styles.shareNotifBadge}><Text style={styles.shareNotifBadgeText}>{pendingWitnessCount > 9 ? '9+' : pendingWitnessCount}</Text></View> : null}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.compactMenuText}>{language === 'fr' ? 'Partage' : 'Sharing'}</Text>
+                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 1 }}>{language === 'fr' ? 'Code, activite, gestion des partages' : 'Code, activity, share management'}</Text>
                 </View>
-                <Text style={styles.compactMenuText}>{language === 'fr' ? 'Attestations de temoin' : 'Witness Attestations'}</Text>
-                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
-              </Pressable>
-              <View style={styles.compactMenuDivider} />
-              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/share'); }}>
-                <View style={[styles.compactMenuIcon, { backgroundColor: theme.success + '15' }]}><MaterialIcons name="qr-code-2" size={16} color={theme.success} /></View>
-                <Text style={styles.compactMenuText}>{t('profile', 'shareCode')}</Text>
-                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
-              </Pressable>
-              <View style={styles.compactMenuDivider} />
-              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/shared-items'); }}>
-                <View style={[styles.compactMenuIcon, { backgroundColor: theme.accent + '15' }]}><MaterialIcons name="manage-accounts" size={16} color={theme.accent} /></View>
-                <Text style={styles.compactMenuText}>{t('profile', 'shareManagement')}</Text>
                 <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
               </Pressable>
             </View>

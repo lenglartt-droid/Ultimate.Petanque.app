@@ -543,6 +543,83 @@ export async function regenerateShareCode(shareId: string, expiresAt?: string | 
   return { newShareCode: '', error: 'Failed to generate unique share code' };
 }
 
+// ============================================
+// Share Analytics
+// ============================================
+
+export interface ShareAnalyticsData {
+  viewsByDay: { date: string; label: string; count: number }[];
+  topItems: { itemName: string; itemType: ShareItemType; viewCount: number }[];
+  peakHours: { hour: number; count: number }[];
+  totalViews: number;
+  totalUniqueViewers: number;
+}
+
+export async function getShareAnalyticsData(language: string = 'fr'): Promise<{ data: ShareAnalyticsData | null; error: string | null }> {
+  const supabase = getSupabaseClient();
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData?.user) return { data: null, error: 'Not connected' };
+
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const { data: logs, error } = await supabase.from('share_access_logs')
+    .select('*')
+    .eq('owner_id', userData.user.id)
+    .gte('viewed_at', thirtyDaysAgo.toISOString())
+    .order('viewed_at', { ascending: false })
+    .limit(500);
+
+  if (error) return { data: null, error: error.message };
+  if (!logs || logs.length === 0) {
+    return { data: { viewsByDay: [], topItems: [], peakHours: [], totalViews: 0, totalUniqueViewers: 0 }, error: null };
+  }
+
+  // Views by day (last 7 days)
+  const locale = language === 'fr' ? 'fr-FR' : 'en-US';
+  const viewsByDay: { date: string; label: string; count: number }[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0];
+    const count = logs.filter((l: any) => l.viewed_at.startsWith(dateStr)).length;
+    const label = d.toLocaleDateString(locale, { weekday: 'short' }).replace('.', '');
+    viewsByDay.push({ date: dateStr, label: label.charAt(0).toUpperCase() + label.slice(1), count });
+  }
+
+  // Top items by view count
+  const itemCounts: Record<string, { type: string; id: string; count: number }> = {};
+  logs.forEach((l: any) => {
+    const key = `${l.item_type}_${l.item_id}`;
+    if (!itemCounts[key]) itemCounts[key] = { type: l.item_type, id: l.item_id, count: 0 };
+    itemCounts[key].count++;
+  });
+  const sortedItems = Object.values(itemCounts).sort((a, b) => b.count - a.count).slice(0, 5);
+  const topItems: { itemName: string; itemType: ShareItemType; viewCount: number }[] = [];
+  for (const item of sortedItems) {
+    const name = await fetchItemName(item.type as ShareItemType, item.id);
+    topItems.push({ itemName: name, itemType: item.type as ShareItemType, viewCount: item.count });
+  }
+
+  // Peak hours (grouped into 3-hour blocks)
+  const hourRaw: number[] = new Array(24).fill(0);
+  logs.forEach((l: any) => { hourRaw[new Date(l.viewed_at).getHours()]++; });
+  const peakHours = hourRaw.map((count, hour) => ({ hour, count }));
+
+  const uniqueViewers = new Set(logs.map((l: any) => l.viewer_id));
+
+  return {
+    data: {
+      viewsByDay,
+      topItems,
+      peakHours,
+      totalViews: logs.length,
+      totalUniqueViewers: uniqueViewers.size,
+    },
+    error: null,
+  };
+}
+
 export async function isSharedWithMe(itemType: ShareItemType, itemId: string): Promise<boolean> {
   const supabase = getSupabaseClient();
   const { data: userData } = await supabase.auth.getUser();

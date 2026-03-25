@@ -116,11 +116,11 @@ function LayoutInner() {
             } else if (data.action === 'view_stats') {
               router.push('/(tabs)/stats' as any);
             } else if (data.action === 'invite_partner') {
-              router.push('/share' as any);
+              router.push('/share-hub' as any);
             }
             break;
           case 'share_request':
-            router.push('/match-invitations');
+            router.push({ pathname: '/notifications-hub', params: { tab: 'invitations' } } as any);
             break;
           case 'event_created':
           case 'event_reminder':
@@ -135,7 +135,7 @@ function LayoutInner() {
             router.push('/leaderboard' as any);
             break;
           case 'witness_request':
-            router.push('/witness-invitations' as any);
+            router.push({ pathname: '/notifications-hub', params: { tab: 'witness' } } as any);
             break;
           case 'witness_attested':
             if (data.matchId) router.push(`/match/${data.matchId}` as any);
@@ -427,6 +427,20 @@ function LayoutInner() {
               />
               <Stack.Screen 
                 name="share" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
+                name="notifications-hub" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
+                name="share-hub" 
                 options={{ 
                   presentation: 'card',
                   animation: 'slide_from_right',

@@ -967,7 +967,7 @@ export default function SponsoredEventDetailScreen() {
                 <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
               </Pressable>
 
-              <Pressable style={({ pressed }) => [s.shareOption, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]} onPress={() => { setShowShareModal(false); router.push('/share' as any); }}>
+              <Pressable style={({ pressed }) => [s.shareOption, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]} onPress={() => { setShowShareModal(false); router.push('/share-hub' as any); }}>
                 <View style={[s.shareOptionIcon, { backgroundColor: '#22C55E15' }]}>
                   <MaterialIcons name="qr-code-2" size={22} color="#22C55E" />
                 </View>
