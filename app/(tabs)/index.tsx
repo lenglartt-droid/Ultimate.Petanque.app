@@ -18,7 +18,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import theme, { blurhash } from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth, useAlert, getSupabaseClient } from '@/template';
@@ -409,7 +409,7 @@ export default function HomeScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
       >
         {/* ========== HERO HEADER ========== */}
-        <Animated.View entering={FadeInDown.duration(450)}>
+        <Animated.View entering={FadeIn.duration(450)}>
           <View style={[s.heroWrap, isTablet && s.heroWrapTablet]}>
             {/* Top row */}
             <View style={s.heroTopRow}>
@@ -463,7 +463,7 @@ export default function HomeScreen() {
         </Animated.View>
 
         {/* ========== QUICK ACTIONS ========== */}
-        <Animated.View entering={FadeInDown.duration(400).delay(60)} style={[s.section, isTablet && s.sectionTablet]}>
+        <Animated.View entering={FadeIn.duration(400).delay(100)} style={[s.section, isTablet && s.sectionTablet]}>
           <View style={[s.actionsRow, isTablet && s.actionsRowTablet]}>
             {[
               { label: t('home', 'match'), sub: t('home', 'training'), icon: 'sports' as const, gradient: ['#2563EB', '#60A5FA'] as [string, string], onPress: () => router.push('/match/new') },
@@ -483,7 +483,7 @@ export default function HomeScreen() {
 
         {/* ========== WITNESS ATTESTATION ALERTS ========== */}
         {witnessRequests.length > 0 ? (
-          <Animated.View entering={FadeInDown.duration(400).delay(70)} style={[s.section, isTablet && s.sectionTablet]}>
+          <Animated.View entering={FadeIn.duration(400).delay(140)} style={[s.section, isTablet && s.sectionTablet]}>
             <View style={s.witnessAlertCard}>
               <View style={s.witnessAlertHeader}>
                 <View style={s.witnessAlertIconBg}>
@@ -527,7 +527,7 @@ export default function HomeScreen() {
 
         {/* ========== WEEKLY LEADERBOARD BANNER ========== */}
         {weeklyBannerLoaded && weeklyRank ? (
-          <Animated.View entering={FadeInDown.duration(400).delay(75)} style={[s.section, isTablet && s.sectionTablet]}>
+          <Animated.View entering={FadeIn.duration(400).delay(180)} style={[s.section, isTablet && s.sectionTablet]}>
             <Pressable
               style={s.weeklyBanner}
               onPress={() => router.push('/leaderboard' as any)}
@@ -581,7 +581,7 @@ export default function HomeScreen() {
 
         {/* ========== LEADERBOARD PROGRESS ========== */}
         {selfPlayer?.isPublic && totalMatches < LEADERBOARD_MIN_MATCHES ? (
-          <Animated.View entering={FadeInDown.duration(400).delay(90)} style={[s.section, isTablet && s.sectionTablet]}>
+          <Animated.View entering={FadeIn.duration(400).delay(220)} style={[s.section, isTablet && s.sectionTablet]}>
             <Pressable style={s.progressCard} onPress={() => router.push('/leaderboard' as any)}>
               <View style={s.progressHeader}>
                 <View style={s.progressIconBg}><MaterialIcons name="leaderboard" size={16} color="#D97706" /></View>
@@ -599,7 +599,7 @@ export default function HomeScreen() {
         ) : null}
 
         {/* ========== UNIFIED UPCOMING TIMELINE ========== */}
-        <Animated.View entering={FadeIn.duration(400).delay(120)} style={[s.section, isTablet && s.sectionTablet]}>
+        <Animated.View entering={FadeIn.duration(400).delay(260)} style={[s.section, isTablet && s.sectionTablet]}>
           <View style={s.sectionHeaderRow}>
             <MaterialIcons name="event-note" size={18} color={theme.primary} />
             <Text style={s.sectionTitle}>{t('home', 'upcoming')}</Text>
@@ -816,13 +816,13 @@ export default function HomeScreen() {
         </Animated.View>
 
         {/* ========== COMMUNITY LEADERBOARD ========== */}
-        <Animated.View entering={FadeIn.duration(400).delay(180)} style={[s.section, isTablet && s.sectionTablet]}>
+        <Animated.View entering={FadeIn.duration(400).delay(300)} style={[s.section, isTablet && s.sectionTablet]}>
           <CommunityLeaderboard />
         </Animated.View>
 
         {/* ========== COMPACT HISTORY ========== */}
         {recentResults.length > 0 ? (
-          <Animated.View entering={FadeIn.duration(400).delay(220)} style={[s.section, isTablet && s.sectionTablet]}>
+          <Animated.View entering={FadeIn.duration(400).delay(340)} style={[s.section, isTablet && s.sectionTablet]}>
             <View style={s.sectionHeaderRow}>
               <MaterialIcons name="history" size={18} color={theme.primary} />
               <Text style={s.sectionTitle}>{t('history', 'history')}</Text>
@@ -908,7 +908,7 @@ export default function HomeScreen() {
             </View>
           </Animated.View>
         ) : (matches.length === 0 && challenges.length === 0) ? (
-          <Animated.View entering={FadeIn.duration(500).delay(220)} style={[s.emptyCard, isTablet && s.emptyCardTablet]}>
+          <Animated.View entering={FadeIn.duration(500).delay(340)} style={[s.section, s.emptyCard, isTablet && s.emptyCardTablet]}>
             <View style={s.emptyIconBg}><MaterialIcons name="sports" size={44} color={theme.primary} /></View>
             <Text style={s.emptyTitle}>{t('home', 'welcomeTitle')}</Text>
             <Text style={s.emptyText}>{t('home', 'welcomeText')}</Text>
@@ -921,7 +921,7 @@ export default function HomeScreen() {
 
         {/* ========== AMBASSADORS ROTATING BANNER ========== */}
         {ambassadorsLoaded && featuredAmbassadors.length > 0 ? (
-          <Animated.View entering={FadeIn.duration(400).delay(300)} style={[s.section, isTablet && s.sectionTablet]}>
+          <Animated.View entering={FadeIn.duration(400).delay(380)} style={[s.section, isTablet && s.sectionTablet]}>
             <View style={s.sectionHeaderRow}>
               <View style={s.ambassadorIcon}><MaterialIcons name="verified" size={16} color="#7C3AED" /></View>
               <Text style={s.sectionTitle}>{language === 'fr' ? 'Ambassadeurs' : 'Ambassadors'}</Text>
@@ -1112,7 +1112,7 @@ const s = StyleSheet.create({
   seeAllText: { fontSize: 13, fontWeight: '600', color: theme.primary },
 
   // ===== HERO =====
-  heroWrap: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20, marginBottom: 24, backgroundColor: '#0F172A', borderBottomLeftRadius: 24, borderBottomRightRadius: 24, ...Platform.select({ ios: { shadowColor: '#0F172A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 16 }, android: { elevation: 4 }, default: {} }) },
+  heroWrap: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20, backgroundColor: '#0F172A', borderBottomLeftRadius: 24, borderBottomRightRadius: 24, ...Platform.select({ ios: { shadowColor: '#0F172A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 16 }, android: { elevation: 4 }, default: {} }) },
   heroWrapTablet: { paddingTop: 16, paddingBottom: 24, paddingHorizontal: 28 },
   heroTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   heroGreeting: { fontSize: 14, fontWeight: '500', color: 'rgba(255,255,255,0.6)' },
@@ -1222,7 +1222,7 @@ const s = StyleSheet.create({
   hcScore: { fontSize: 16, fontWeight: '900', minWidth: 44, textAlign: 'right' as const },
 
   // ===== EMPTY STATE =====
-  emptyCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 32, alignItems: 'center', marginHorizontal: 16, marginBottom: 24, ...theme.shadows.card },
+  emptyCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 32, alignItems: 'center', ...theme.shadows.card },
   emptyCardTablet: { padding: 48, maxWidth: 560, alignSelf: 'center' as const, width: '100%' },
   emptyIconBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
   emptyTitle: { fontSize: 20, fontWeight: '700', color: theme.textPrimary, marginBottom: 8 },

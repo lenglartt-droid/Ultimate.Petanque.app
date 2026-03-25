@@ -575,10 +575,10 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
 }
 
 const s = StyleSheet.create({
-  section: { borderRadius: 20, overflow: 'hidden' as const },
+  section: { borderRadius: 20 },
 
   // Header gradient
-  headerGradient: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 },
+  headerGradient: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12, borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' as const },
   headerRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 14 },
   headerIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#F59E0B18', alignItems: 'center' as const, justifyContent: 'center' as const },
   headerTitle: { fontSize: 16, fontWeight: '800' as const, color: '#FFF', letterSpacing: -0.3 },
@@ -612,14 +612,14 @@ const s = StyleSheet.create({
   geoValueTextActive: { color: '#FFF' },
 
   // Sort
-  sortRow: { gap: 6, paddingHorizontal: 16, paddingVertical: 10 },
+  sortRow: { gap: 6, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: theme.surface },
   sortChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
   sortChipActive: { backgroundColor: '#F59E0B15', borderColor: '#F59E0B60' },
   sortChipText: { fontSize: 11, fontWeight: '600' as const, color: theme.textSecondary },
   sortChipTextActive: { color: '#F59E0B', fontWeight: '700' as const },
 
   // Content card
-  card: { backgroundColor: theme.surface, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
+  card: { backgroundColor: theme.surface, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, borderBottomLeftRadius: 20, borderBottomRightRadius: 20, overflow: 'hidden' as const },
   center: { alignItems: 'center' as const, paddingVertical: 28 },
   loadingText: { fontSize: 13, color: theme.textMuted, marginTop: 12 },
   errorText: { fontSize: 13, color: theme.textSecondary, marginTop: 8 },

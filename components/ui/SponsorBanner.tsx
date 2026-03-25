@@ -60,7 +60,8 @@ export default function SponsorBanner({ style, page = 'unknown' }: SponsorBanner
     router.push('/partners');
   }, [ambassadors, currentIndex]);
 
-  if (!loaded || ambassadors.length === 0) return null;
+  if (!loaded) return <View style={[styles.container, styles.placeholder, style]} />;
+  if (ambassadors.length === 0) return null;
 
   const amb = ambassadors[currentIndex];
 
@@ -107,6 +108,9 @@ export default function SponsorBanner({ style, page = 'unknown' }: SponsorBanner
 const styles = StyleSheet.create({
   container: {
     marginBottom: 0,
+  },
+  placeholder: {
+    minHeight: 56,
   },
   banner: {
     flexDirection: 'row',
