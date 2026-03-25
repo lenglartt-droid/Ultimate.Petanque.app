@@ -813,9 +813,14 @@ export default function HomeScreen() {
           })()}
         </Animated.View>
 
+        {/* ========== COMMUNITY LEADERBOARD ========== */}
+        <Animated.View entering={FadeIn.duration(400).delay(180)} style={[s.section, isTablet && s.sectionTablet]}>
+          <CommunityLeaderboard />
+        </Animated.View>
+
         {/* ========== COMPACT HISTORY ========== */}
         {recentResults.length > 0 ? (
-          <Animated.View entering={FadeIn.duration(400).delay(180)} style={[s.section, isTablet && s.sectionTablet]}>
+          <Animated.View entering={FadeIn.duration(400).delay(220)} style={[s.section, isTablet && s.sectionTablet]}>
             <View style={s.sectionHeaderRow}>
               <MaterialIcons name="history" size={18} color={theme.primary} />
               <Text style={s.sectionTitle}>{t('history', 'history')}</Text>
@@ -901,7 +906,7 @@ export default function HomeScreen() {
             </View>
           </Animated.View>
         ) : (matches.length === 0 && challenges.length === 0) ? (
-          <Animated.View entering={FadeIn.duration(500).delay(180)} style={[s.emptyCard, isTablet && s.emptyCardTablet]}>
+          <Animated.View entering={FadeIn.duration(500).delay(220)} style={[s.emptyCard, isTablet && s.emptyCardTablet]}>
             <View style={s.emptyIconBg}><MaterialIcons name="sports" size={44} color={theme.primary} /></View>
             <Text style={s.emptyTitle}>{t('home', 'welcomeTitle')}</Text>
             <Text style={s.emptyText}>{t('home', 'welcomeText')}</Text>
@@ -911,11 +916,6 @@ export default function HomeScreen() {
             </Pressable>
           </Animated.View>
         ) : null}
-
-        {/* ========== COMMUNITY LEADERBOARD ========== */}
-        <Animated.View entering={FadeIn.duration(400).delay(220)} style={[s.section, isTablet && s.sectionTablet]}>
-          <CommunityLeaderboard />
-        </Animated.View>
 
         {/* ========== AMBASSADORS ROTATING BANNER ========== */}
         {ambassadorsLoaded && featuredAmbassadors.length > 0 ? (
