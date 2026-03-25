@@ -16,7 +16,8 @@ import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import theme from '@/constants/theme';
+import { Image } from 'expo-image';
+import theme, { blurhash } from '@/constants/theme';
 import { createShareLink, ShareItemType, AssociatedItem } from '@/services/shareService';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useApp } from '@/contexts/AppContext';
@@ -115,7 +116,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
     return { expired: false, days, hours, minutes };
   }, [expiresAtDate, countdownNow]);
 
-  // Build preview subtitle
+  // Build preview subtitle (short form for messages)
   const previewSubtitle = useMemo(() => {
     if (itemType === 'player') {
       const p = getPlayerById(itemId);
@@ -151,6 +152,119 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
     }
     return '';
   }, [itemType, itemId, fr, getPlayerById, getClubById, getTerrainById, getTournamentById, getMatchById, challenges]);
+
+  // Rich preview data for detailed card
+  const previewDetails = useMemo(() => {
+    if (itemType === 'player') {
+      const p = getPlayerById(itemId);
+      if (!p) return null;
+      const clubEntity = p.clubId ? getClubById(p.clubId) : null;
+      const terrainEntity = p.terrainId ? getTerrainById(p.terrainId) : null;
+      return {
+        type: 'player' as const,
+        avatar: p.avatar || null,
+        initials: p.name?.split(' ').map((n: string) => n[0]).join('') || '?',
+        role: p.role,
+        level: p.level,
+        nickname: p.nickname,
+        club: clubEntity?.name || p.club || null,
+        terrain: terrainEntity?.name || p.terrainName || null,
+        city: p.location?.city || null,
+        country: p.country || null,
+        handedness: p.handedness || null,
+        stats: { matches: p.stats?.matchesPlayed || 0, wins: p.stats?.wins || 0, winRate: p.stats?.winRate || 0, losses: p.stats?.losses || 0 },
+        hasContact: !!(p.phone || p.email),
+      };
+    }
+    if (itemType === 'club') {
+      const c = getClubById(itemId);
+      if (!c) return null;
+      return {
+        type: 'club' as const,
+        logo: c.logo || null,
+        city: c.city || null,
+        country: c.country || null,
+        address: c.address || null,
+        membersCount: c.membersCount || 0,
+        foundedYear: c.foundedYear || null,
+        facilities: c.facilities || [],
+        hasContact: !!(c.contactEmail || c.contactPhone),
+        description: c.description || null,
+        membershipCost: c.membershipCost || null,
+        website: c.website || null,
+      };
+    }
+    if (itemType === 'terrain') {
+      const tr = getTerrainById(itemId);
+      if (!tr) return null;
+      return {
+        type: 'terrain' as const,
+        terrainType: tr.type || null,
+        city: tr.city || null,
+        address: tr.address || null,
+        clubName: tr.clubName || null,
+        courtsCount: tr.courtsCount || 1,
+        lighting: tr.lighting || false,
+        covered: tr.covered || false,
+        environment: (tr as any).environment || null,
+        publicAccess: (tr as any).publicAccess !== false,
+        photos: tr.photos || [],
+      };
+    }
+    if (itemType === 'tournament') {
+      const to = getTournamentById(itemId);
+      if (!to) return null;
+      return {
+        type: 'tournament' as const,
+        date: to.date,
+        endDate: to.endDate || null,
+        format: to.format,
+        tournamentType: to.type,
+        city: to.location?.city || null,
+        clubName: to.clubName || null,
+        status: to.status,
+        participants: to.participants || 0,
+        maxParticipants: to.maxParticipants || 0,
+        prize: to.prize || null,
+        description: to.description || null,
+        terrainName: to.terrainName || null,
+      };
+    }
+    if (itemType === 'match') {
+      const m = getMatchById(itemId) as any;
+      if (!m) return null;
+      return {
+        type: 'match' as const,
+        teamANames: m.teamA?.playerNames || [],
+        teamBNames: m.teamB?.playerNames || [],
+        scoreA: m.teamA?.score ?? 0,
+        scoreB: m.teamB?.score ?? 0,
+        winner: m.winner,
+        format: m.format,
+        mode: m.mode,
+        date: m.date,
+        duration: m.duration || 0,
+        terrainType: m.terrainType || null,
+      };
+    }
+    if (itemType === 'challenge') {
+      const ch = challenges.find((c: any) => c.id === itemId) as any;
+      if (!ch) return null;
+      return {
+        type: 'challenge' as const,
+        challengeType: ch.type,
+        mode: ch.mode || 'solo',
+        successCount: ch.successCount ?? ch.success_count ?? 0,
+        totalShots: ch.totalShots ?? ch.total_shots ?? 0,
+        successRate: ch.successRate ?? ch.success_rate ?? 0,
+        carreauCount: ch.carreauCount ?? ch.carreau_count ?? 0,
+        totalPoints: ch.totalPoints ?? ch.total_points ?? 0,
+        maxPoints: ch.maxPoints ?? ch.max_points ?? 0,
+        date: ch.date,
+      };
+    }
+    return null;
+  }, [itemType, itemId, getPlayerById, getClubById, getTerrainById, getTournamentById, getMatchById, challenges]);
 
   // Build share invitation message
   const buildShareMessage = useCallback(() => {
@@ -325,21 +439,197 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
 
             {/* ===== PREVIEW CARD (always visible) ===== */}
             <LinearGradient colors={typeConfig.gradient} style={s.previewGradient}>
-              <MaterialIcons name={typeConfig.icon as any} size={22} color="rgba(255,255,255,0.85)" />
-              <View style={{ flex: 1 }}>
-                <Text style={s.previewTitle} numberOfLines={1}>{itemName}</Text>
-                {previewSubtitle ? <Text style={s.previewSub} numberOfLines={1}>{previewSubtitle}</Text> : null}
-              </View>
-              {shareCode ? (
-                <View style={s.previewCodeBadge}>
-                  <Text style={s.previewCodeText}>{shareCode}</Text>
-                </View>
-              ) : (
+              <View style={s.previewHeaderRow}>
                 <View style={s.previewTypeBadge}>
+                  <MaterialIcons name={typeConfig.icon as any} size={12} color="rgba(255,255,255,0.9)" />
                   <Text style={s.previewTypeText}>{t('shareModal', TYPE_LOWER_KEY[itemType])}</Text>
                 </View>
-              )}
+                {shareCode ? (
+                  <View style={s.previewCodeBadge}>
+                    <Text style={s.previewCodeText}>{shareCode}</Text>
+                  </View>
+                ) : null}
+              </View>
+              <Text style={s.previewTitle}>{itemName}</Text>
             </LinearGradient>
+
+            {/* ===== DETAILED PREVIEW (rich item info) ===== */}
+            {previewDetails ? (
+              <View style={s.detailCard}>
+                {/* PLAYER */}
+                {previewDetails.type === 'player' ? (() => {
+                  const d = previewDetails as any;
+                  return (
+                    <View>
+                      <View style={s.detailIdentity}>
+                        <View style={[s.detailAvatar, { backgroundColor: typeConfig.color }]}>
+                          {d.avatar ? <Image source={{ uri: d.avatar }} style={s.detailAvatarImg} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} /> : <Text style={s.detailAvatarText}>{d.initials}</Text>}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          {d.nickname ? <Text style={s.detailNickname}>"{d.nickname}"</Text> : null}
+                          <View style={s.detailPillsRow}>
+                            <View style={[s.detailPill, { backgroundColor: typeConfig.color + '12' }]}><MaterialIcons name="sports" size={11} color={typeConfig.color} /><Text style={[s.detailPillText, { color: typeConfig.color }]}>{d.role}</Text></View>
+                            <View style={[s.detailPill, { backgroundColor: '#F59E0B12' }]}><MaterialIcons name="trending-up" size={11} color="#D97706" /><Text style={[s.detailPillText, { color: '#D97706' }]}>{d.level}</Text></View>
+                            {d.handedness ? <View style={[s.detailPill, { backgroundColor: '#6366F112' }]}><MaterialIcons name={d.handedness === 'left' ? 'front-hand' : 'back-hand'} size={11} color="#6366F1" /><Text style={[s.detailPillText, { color: '#6366F1' }]}>{d.handedness === 'right' ? (fr ? 'Droitier' : 'Right') : d.handedness === 'left' ? (fr ? 'Gaucher' : 'Left') : (fr ? 'Ambidextre' : 'Ambidextrous')}</Text></View> : null}
+                          </View>
+                        </View>
+                      </View>
+                      {(d.club || d.terrain) ? (
+                        <View style={s.detailInfoRow}>
+                          {d.club ? <View style={s.detailInfoPill}><MaterialIcons name="location-city" size={12} color="#D97706" /><Text style={[s.detailInfoPillText, { color: '#D97706' }]}>{d.club}</Text></View> : null}
+                          {d.terrain ? <View style={s.detailInfoPill}><MaterialIcons name="sports-soccer" size={12} color="#10B981" /><Text style={[s.detailInfoPillText, { color: '#10B981' }]}>{d.terrain}</Text></View> : null}
+                        </View>
+                      ) : null}
+                      {(d.city || d.country) ? <View style={s.detailLocationRow}><MaterialIcons name="place" size={12} color="#94A3B8" /><Text style={s.detailLocationText}>{[d.city, d.country].filter(Boolean).join(', ')}</Text></View> : null}
+                      <View style={s.detailStatsBar}>
+                        <View style={s.detailStatItem}><Text style={s.detailStatValue}>{d.stats.matches}</Text><Text style={s.detailStatLabel}>{fr ? 'Matchs' : 'Matches'}</Text></View>
+                        <View style={s.detailStatDivider} />
+                        <View style={s.detailStatItem}><Text style={[s.detailStatValue, { color: '#10B981' }]}>{d.stats.wins}</Text><Text style={s.detailStatLabel}>{fr ? 'Victoires' : 'Wins'}</Text></View>
+                        <View style={s.detailStatDivider} />
+                        <View style={s.detailStatItem}><Text style={[s.detailStatValue, { color: typeConfig.color }]}>{d.stats.winRate}%</Text><Text style={s.detailStatLabel}>{fr ? 'Victoires' : 'Win rate'}</Text></View>
+                      </View>
+                      {d.hasContact ? <View style={s.detailNote}><MaterialIcons name="info-outline" size={12} color="#94A3B8" /><Text style={s.detailNoteText}>{fr ? 'Contacts inclus selon vos reglages de visibilite' : 'Contacts included per your visibility settings'}</Text></View> : null}
+                    </View>
+                  );
+                })() : null}
+
+                {/* CLUB */}
+                {previewDetails.type === 'club' ? (() => {
+                  const d = previewDetails as any;
+                  return (
+                    <View>
+                      <View style={s.detailIdentity}>
+                        <View style={[s.detailAvatar, { backgroundColor: '#D97706' }]}>
+                          {d.logo ? <Image source={{ uri: d.logo }} style={s.detailAvatarImg} contentFit="cover" transition={200} /> : <MaterialIcons name="home" size={24} color="#FFF" />}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          {d.address ? <View style={s.detailLocationRow}><MaterialIcons name="place" size={12} color="#94A3B8" /><Text style={s.detailLocationText}>{d.address}, {d.city}</Text></View> : d.city ? <View style={s.detailLocationRow}><MaterialIcons name="place" size={12} color="#94A3B8" /><Text style={s.detailLocationText}>{[d.city, d.country].filter(Boolean).join(', ')}</Text></View> : null}
+                          {d.description ? <Text style={s.detailDescText} numberOfLines={2}>{d.description}</Text> : null}
+                        </View>
+                      </View>
+                      <View style={s.detailStatsBar}>
+                        <View style={s.detailStatItem}><Text style={s.detailStatValue}>{d.membersCount}</Text><Text style={s.detailStatLabel}>{fr ? 'Membres' : 'Members'}</Text></View>
+                        <View style={s.detailStatDivider} />
+                        <View style={s.detailStatItem}><Text style={s.detailStatValue}>{d.foundedYear || '-'}</Text><Text style={s.detailStatLabel}>{fr ? 'Fonde' : 'Founded'}</Text></View>
+                        <View style={s.detailStatDivider} />
+                        <View style={s.detailStatItem}><Text style={s.detailStatValue}>{d.membershipCost ? `${d.membershipCost}\u20AC` : '-'}</Text><Text style={s.detailStatLabel}>{fr ? 'Cotisation' : 'Fee'}</Text></View>
+                      </View>
+                      {d.facilities.length > 0 ? <View style={s.detailInfoRow}>{d.facilities.slice(0, 4).map((f: string, i: number) => <View key={i} style={s.detailInfoPill}><MaterialIcons name="check-circle" size={10} color="#10B981" /><Text style={[s.detailInfoPillText, { color: '#10B981' }]}>{f}</Text></View>)}</View> : null}
+                      {d.website ? <View style={s.detailLocationRow}><MaterialIcons name="language" size={12} color={typeConfig.color} /><Text style={[s.detailLocationText, { color: typeConfig.color }]}>{d.website}</Text></View> : null}
+                      {d.hasContact ? <View style={s.detailNote}><MaterialIcons name="info-outline" size={12} color="#94A3B8" /><Text style={s.detailNoteText}>{fr ? 'Contacts inclus selon vos reglages de visibilite' : 'Contacts included per your visibility settings'}</Text></View> : null}
+                    </View>
+                  );
+                })() : null}
+
+                {/* TERRAIN */}
+                {previewDetails.type === 'terrain' ? (() => {
+                  const d = previewDetails as any;
+                  return (
+                    <View>
+                      {(d.address || d.city) ? <View style={s.detailLocationRow}><MaterialIcons name="place" size={12} color="#94A3B8" /><Text style={s.detailLocationText}>{d.address ? `${d.address}, ${d.city}` : d.city}</Text></View> : null}
+                      <View style={s.detailPillsRow}>
+                        {d.terrainType ? <View style={[s.detailPill, { backgroundColor: '#10B98112' }]}><MaterialIcons name="landscape" size={11} color="#10B981" /><Text style={[s.detailPillText, { color: '#10B981' }]}>{d.terrainType}</Text></View> : null}
+                        {d.environment ? <View style={[s.detailPill, { backgroundColor: '#3B82F612' }]}><MaterialIcons name={d.environment === 'indoor' ? 'home' : 'wb-sunny'} size={11} color="#3B82F6" /><Text style={[s.detailPillText, { color: '#3B82F6' }]}>{d.environment === 'indoor' ? (fr ? 'Interieur' : 'Indoor') : (fr ? 'Exterieur' : 'Outdoor')}</Text></View> : null}
+                        {d.publicAccess ? <View style={[s.detailPill, { backgroundColor: '#22C55E12' }]}><MaterialIcons name="lock-open" size={11} color="#22C55E" /><Text style={[s.detailPillText, { color: '#22C55E' }]}>{fr ? 'Acces libre' : 'Public'}</Text></View> : null}
+                      </View>
+                      <View style={s.detailStatsBar}>
+                        <View style={s.detailStatItem}><Text style={s.detailStatValue}>{d.courtsCount}</Text><Text style={s.detailStatLabel}>{fr ? 'Pistes' : 'Courts'}</Text></View>
+                        <View style={s.detailStatDivider} />
+                        <View style={s.detailStatItem}><MaterialIcons name={d.lighting ? 'lightbulb' : 'lightbulb-outline'} size={18} color={d.lighting ? '#F59E0B' : '#CBD5E1'} /><Text style={s.detailStatLabel}>{fr ? 'Eclairage' : 'Lighting'}</Text></View>
+                        <View style={s.detailStatDivider} />
+                        <View style={s.detailStatItem}><MaterialIcons name={d.covered ? 'roofing' : 'wb-sunny'} size={18} color={d.covered ? '#3B82F6' : '#CBD5E1'} /><Text style={s.detailStatLabel}>{fr ? 'Couvert' : 'Covered'}</Text></View>
+                      </View>
+                      {d.clubName ? <View style={s.detailInfoRow}><View style={s.detailInfoPill}><MaterialIcons name="location-city" size={12} color="#D97706" /><Text style={[s.detailInfoPillText, { color: '#D97706' }]}>{d.clubName}</Text></View></View> : null}
+                    </View>
+                  );
+                })() : null}
+
+                {/* TOURNAMENT */}
+                {previewDetails.type === 'tournament' ? (() => {
+                  const d = previewDetails as any;
+                  const tDate = d.date ? new Date(d.date) : null;
+                  const statusColor = d.status === 'A venir' || d.status === 'À venir' ? '#2563EB' : d.status === 'En cours' ? '#10B981' : '#94A3B8';
+                  return (
+                    <View>
+                      {tDate ? <View style={s.detailLocationRow}><MaterialIcons name="event" size={12} color="#94A3B8" /><Text style={s.detailLocationText}>{tDate.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}{d.endDate ? ` - ${new Date(d.endDate).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'long' })}` : ''}</Text></View> : null}
+                      <View style={s.detailPillsRow}>
+                        <View style={[s.detailPill, { backgroundColor: '#EAB30812' }]}><MaterialIcons name="emoji-events" size={11} color="#CA8A04" /><Text style={[s.detailPillText, { color: '#CA8A04' }]}>{d.format}</Text></View>
+                        <View style={[s.detailPill, { backgroundColor: '#6366F112' }]}><MaterialIcons name="category" size={11} color="#6366F1" /><Text style={[s.detailPillText, { color: '#6366F1' }]}>{d.tournamentType}</Text></View>
+                        <View style={[s.detailPill, { backgroundColor: statusColor + '12' }]}><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: statusColor }} /><Text style={[s.detailPillText, { color: statusColor }]}>{d.status}</Text></View>
+                      </View>
+                      {d.city ? <View style={s.detailLocationRow}><MaterialIcons name="place" size={12} color="#94A3B8" /><Text style={s.detailLocationText}>{d.city}{d.terrainName ? ` \u2022 ${d.terrainName}` : ''}{d.clubName ? ` \u2022 ${d.clubName}` : ''}</Text></View> : null}
+                      <View style={s.detailStatsBar}>
+                        <View style={s.detailStatItem}><Text style={s.detailStatValue}>{d.participants}/{d.maxParticipants}</Text><Text style={s.detailStatLabel}>{fr ? 'Inscrits' : 'Registered'}</Text></View>
+                        {d.prize ? <><View style={s.detailStatDivider} /><View style={s.detailStatItem}><Text style={[s.detailStatValue, { color: '#CA8A04' }]}>{d.prize}</Text><Text style={s.detailStatLabel}>{fr ? 'Dotation' : 'Prize'}</Text></View></> : null}
+                      </View>
+                      {d.description ? <Text style={s.detailDescText} numberOfLines={3}>{d.description}</Text> : null}
+                    </View>
+                  );
+                })() : null}
+
+                {/* MATCH */}
+                {previewDetails.type === 'match' ? (() => {
+                  const d = previewDetails as any;
+                  const mDate = d.date ? new Date(d.date) : null;
+                  const winA = d.winner === 'A';
+                  return (
+                    <View>
+                      <View style={s.matchPreviewBlock}>
+                        <View style={s.matchTeamCol}>
+                          <Text style={[s.matchTeamName, winA && { color: '#10B981' }]} numberOfLines={2}>{d.teamANames.join(', ') || 'Team A'}</Text>
+                          {winA ? <MaterialIcons name="emoji-events" size={12} color="#10B981" /> : null}
+                        </View>
+                        <View style={s.matchScoreBlock}>
+                          <Text style={[s.matchScoreNum, winA && { color: '#10B981' }]}>{d.scoreA}</Text>
+                          <Text style={s.matchScoreSep}>-</Text>
+                          <Text style={[s.matchScoreNum, !winA && { color: '#EF4444' }]}>{d.scoreB}</Text>
+                        </View>
+                        <View style={[s.matchTeamCol, { alignItems: 'flex-end' }]}>
+                          <Text style={[s.matchTeamName, !winA && { color: '#10B981' }]} numberOfLines={2}>{d.teamBNames.join(', ') || 'Team B'}</Text>
+                          {!winA ? <MaterialIcons name="emoji-events" size={12} color="#10B981" /> : null}
+                        </View>
+                      </View>
+                      <View style={s.detailPillsRow}>
+                        <View style={[s.detailPill, { backgroundColor: '#3B82F612' }]}><MaterialIcons name="sports" size={11} color="#3B82F6" /><Text style={[s.detailPillText, { color: '#3B82F6' }]}>{d.format}</Text></View>
+                        <View style={[s.detailPill, { backgroundColor: '#6366F112' }]}><MaterialIcons name="category" size={11} color="#6366F1" /><Text style={[s.detailPillText, { color: '#6366F1' }]}>{d.mode}</Text></View>
+                        {d.duration > 0 ? <View style={[s.detailPill, { backgroundColor: '#94A3B812' }]}><MaterialIcons name="timer" size={11} color="#64748B" /><Text style={[s.detailPillText, { color: '#64748B' }]}>{d.duration} min</Text></View> : null}
+                      </View>
+                      {mDate ? <View style={s.detailLocationRow}><MaterialIcons name="event" size={12} color="#94A3B8" /><Text style={s.detailLocationText}>{mDate.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}</Text></View> : null}
+                      {d.terrainType ? <View style={s.detailLocationRow}><MaterialIcons name="landscape" size={12} color="#94A3B8" /><Text style={s.detailLocationText}>{d.terrainType}</Text></View> : null}
+                    </View>
+                  );
+                })() : null}
+
+                {/* CHALLENGE */}
+                {previewDetails.type === 'challenge' ? (() => {
+                  const d = previewDetails as any;
+                  const cDate = d.date ? new Date(d.date) : null;
+                  const typeName = d.challengeType === '10_tirs' ? '10 Tirs' : d.challengeType === '10_tirs_sautee' ? '10 Tirs Sautee' : d.challengeType === 'precision' ? 'Precision' : d.challengeType;
+                  return (
+                    <View>
+                      <View style={s.detailPillsRow}>
+                        <View style={[s.detailPill, { backgroundColor: '#F9731612' }]}><MaterialIcons name="flag" size={11} color="#EA580C" /><Text style={[s.detailPillText, { color: '#EA580C' }]}>{typeName}</Text></View>
+                        <View style={[s.detailPill, { backgroundColor: d.mode === 'duel' ? '#EF444412' : '#3B82F612' }]}><MaterialIcons name={d.mode === 'duel' ? 'people' : 'person'} size={11} color={d.mode === 'duel' ? '#EF4444' : '#3B82F6'} /><Text style={[s.detailPillText, { color: d.mode === 'duel' ? '#EF4444' : '#3B82F6' }]}>{d.mode === 'duel' ? 'Duel' : 'Solo'}</Text></View>
+                      </View>
+                      <View style={s.detailStatsBar}>
+                        <View style={s.detailStatItem}><Text style={s.detailStatValue}>{d.successCount}/{d.totalShots}</Text><Text style={s.detailStatLabel}>{fr ? 'Reussis' : 'Success'}</Text></View>
+                        <View style={s.detailStatDivider} />
+                        <View style={s.detailStatItem}><Text style={[s.detailStatValue, { color: '#10B981' }]}>{d.successRate}%</Text><Text style={s.detailStatLabel}>{fr ? 'Taux' : 'Rate'}</Text></View>
+                        {d.carreauCount > 0 ? <><View style={s.detailStatDivider} /><View style={s.detailStatItem}><Text style={[s.detailStatValue, { color: '#F59E0B' }]}>{d.carreauCount}</Text><Text style={s.detailStatLabel}>Carreaux</Text></View></> : null}
+                        {d.totalPoints > 0 ? <><View style={s.detailStatDivider} /><View style={s.detailStatItem}><Text style={[s.detailStatValue, { color: '#2563EB' }]}>{d.totalPoints}</Text><Text style={s.detailStatLabel}>Points</Text></View></> : null}
+                      </View>
+                      {cDate ? <View style={s.detailLocationRow}><MaterialIcons name="event" size={12} color="#94A3B8" /><Text style={s.detailLocationText}>{cDate.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</Text></View> : null}
+                    </View>
+                  );
+                })() : null}
+
+                {/* Read-only badge */}
+                <View style={s.detailReadOnlyRow}>
+                  <MaterialIcons name="lock" size={12} color="#64748B" />
+                  <Text style={s.detailReadOnlyText}>{fr ? 'Lecture seule - le destinataire ne pourra pas modifier' : 'Read-only - the recipient cannot edit'}</Text>
+                </View>
+              </View>
+            ) : null}
 
             {/* ===== STEP: OPTIONS (share mode selection) ===== */}
             {step === 'options' ? (
@@ -618,13 +908,46 @@ const s = StyleSheet.create({
   scrollContent: { paddingBottom: 48, flexGrow: 1 },
 
   // Preview gradient
-  previewGradient: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, marginHorizontal: 16, marginTop: 16, borderRadius: 16 },
-  previewTitle: { fontSize: 16, fontWeight: '700', color: '#FFF' },
-  previewSub: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
-  previewCodeBadge: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
-  previewCodeText: { fontSize: 13, fontWeight: '900', color: '#FFF', letterSpacing: 1.5 },
-  previewTypeBadge: { backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
-  previewTypeText: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.8)', textTransform: 'uppercase', letterSpacing: 0.5 },
+  previewGradient: { padding: 16, marginHorizontal: 16, marginTop: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16 },
+  previewHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  previewTitle: { fontSize: 20, fontWeight: '800', color: '#FFF', letterSpacing: -0.3 },
+  previewCodeBadge: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
+  previewCodeText: { fontSize: 12, fontWeight: '900', color: '#FFF', letterSpacing: 1.5 },
+  previewTypeBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, alignSelf: 'flex-start' },
+  previewTypeText: { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  // Detail card (rich preview)
+  detailCard: { marginHorizontal: 16, backgroundColor: '#FFF', borderBottomLeftRadius: 16, borderBottomRightRadius: 16, padding: 16, borderWidth: 1, borderTopWidth: 0, borderColor: '#F1F5F9' },
+  detailIdentity: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
+  detailAvatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  detailAvatarImg: { width: 48, height: 48, borderRadius: 24 },
+  detailAvatarText: { fontSize: 18, fontWeight: '700', color: '#FFF' },
+  detailNickname: { fontSize: 12, fontStyle: 'italic', color: '#64748B', marginBottom: 4 },
+  detailPillsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 8 },
+  detailPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
+  detailPillText: { fontSize: 11, fontWeight: '600' },
+  detailInfoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
+  detailInfoPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: '#F8FAFC', borderRadius: 10 },
+  detailInfoPillText: { fontSize: 11, fontWeight: '600' },
+  detailLocationRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 6 },
+  detailLocationText: { fontSize: 12, color: '#64748B', flex: 1 },
+  detailDescText: { fontSize: 12, color: '#64748B', lineHeight: 17, marginBottom: 8 },
+  detailStatsBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 8, marginVertical: 8 },
+  detailStatItem: { alignItems: 'center', flex: 1 },
+  detailStatValue: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
+  detailStatLabel: { fontSize: 9, color: '#94A3B8', marginTop: 2, textTransform: 'uppercase' },
+  detailStatDivider: { width: 1, height: 22, backgroundColor: '#E2E8F0', marginHorizontal: 4 },
+  detailNote: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  detailNoteText: { fontSize: 10, color: '#94A3B8', flex: 1, fontStyle: 'italic' },
+  detailReadOnlyRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  detailReadOnlyText: { fontSize: 11, color: '#64748B', flex: 1 },
+  // Match preview
+  matchPreviewBlock: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, marginBottom: 8 },
+  matchTeamCol: { flex: 1, gap: 4 },
+  matchTeamName: { fontSize: 13, fontWeight: '600', color: '#0F172A', lineHeight: 17 },
+  matchScoreBlock: { flexDirection: 'row', alignItems: 'center', gap: 6, marginHorizontal: 12, backgroundColor: '#F8FAFC', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12 },
+  matchScoreNum: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
+  matchScoreSep: { fontSize: 14, color: '#CBD5E1', fontWeight: '600' },
 
   // Contact toggle
   contactToggleCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginTop: 16, backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#F1F5F9' },
