@@ -99,7 +99,7 @@ function CompactHistory({ recentResults, matches, hasData, language, t }: Props)
                 style={({ pressed }) => [s.row, !isLast && s.rowBorder, pressed && { opacity: 0.75, backgroundColor: theme.backgroundSecondary }]}
                 onPress={() => item.type === 'match'
                   ? router.push({ pathname: '/history', params: { openMatchId: item.id } })
-                  : router.push({ pathname: '/history', params: { openChallengeId: item.id } })}
+                  : router.push(`/challenge/${item.id}` as any)}
               >
                 <View style={[s.dot, { backgroundColor: resultColor(item.result) }]} />
                 <View style={[s.typeIcon, { backgroundColor: (item.type === 'match' ? theme.primary : theme.accent) + '12' }]}>

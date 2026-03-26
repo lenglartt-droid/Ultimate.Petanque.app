@@ -662,16 +662,8 @@ export default function HistoryScreen() {
   useEffect(() => {
     if (initialOpenHandled) return;
     if (params.openChallengeId && challenges.length > 0) {
-      const challenge = challenges.find(c => c.id === params.openChallengeId);
-      if (challenge) {
-        setEditingChallenge(challenge);
-        setIsEditingChallengeFields(false);
-        setEditNotes(challenge.notes || '');
-        setEditDuration(challenge.duration ? String(challenge.duration) : '');
-        setEditSuccessCount(challenge.successCount !== undefined ? String(challenge.successCount) : '');
-        setEditCarreauCount(challenge.carreauCount !== undefined ? String(challenge.carreauCount) : '');
-        setEditTotalPoints(challenge.totalPoints !== undefined ? String(challenge.totalPoints) : '');
-      }
+      // Navigate to dedicated challenge detail page
+      router.push(`/challenge/${params.openChallengeId}` as any);
       setInitialOpenHandled(true);
     } else if (params.openMatchId && matches.length > 0) {
       const match = matches.find(m => m.id === params.openMatchId);
@@ -972,13 +964,7 @@ export default function HistoryScreen() {
 
   const handleChallengePress = useCallback((challenge: Challenge) => {
     Haptics.selectionAsync();
-    setEditingChallenge(challenge);
-    setIsEditingChallengeFields(false);
-    setEditNotes(challenge.notes || '');
-    setEditDuration(challenge.duration ? String(challenge.duration) : '');
-    setEditSuccessCount(challenge.successCount !== undefined ? String(challenge.successCount) : '');
-    setEditCarreauCount(challenge.carreauCount !== undefined ? String(challenge.carreauCount) : '');
-    setEditTotalPoints(challenge.totalPoints !== undefined ? String(challenge.totalPoints) : '');
+    router.push(`/challenge/${challenge.id}` as any);
   }, []);
 
   const handleDeleteChallenge = useCallback(() => {

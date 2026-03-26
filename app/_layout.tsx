@@ -263,6 +263,13 @@ function LayoutInner() {
                 }} 
               />
               <Stack.Screen 
+                name="challenge/[id]" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="sponsored-event/new" 
                 options={{ 
                   presentation: 'modal',
