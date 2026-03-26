@@ -440,7 +440,7 @@ export default function HomeScreen() {
                 <View style={st.weeklyBannerLeft}>
                   <View style={st.weeklyBannerIconBg}><MaterialIcons name="leaderboard" size={20} color="#FFF" /></View>
                   <View style={{ flex: 1 }}>
-                    <Text style={st.weeklyBannerTitle}>{(extraTranslations.weeklyLeaderboard?.weeklyLeaderboard as any)?.[language] || 'Weekly Leaderboard'}</Text>
+                    <Text style={st.weeklyBannerTitle}>{(extraTranslations.weeklyLeaderboard?.title as any)?.[language] || 'Weekly Leaderboard'}</Text>
                     <Text style={st.weeklyBannerSub}>{weeklyRank.matchesThisWeek} {t('leaderboard', 'matches')} {language === 'fr' ? 'cette semaine' : 'this week'}</Text>
                   </View>
                 </View>

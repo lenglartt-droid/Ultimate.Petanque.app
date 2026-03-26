@@ -521,8 +521,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [user?.id, supabase, sharedItemPermissions, players]);
 
   // ===== CRUD wrappers (delegate to extracted services) =====
-  const addMatch = async (match: Omit<Match, 'id'>) =>
-    addMatchOp(match, { supabase, userId: user?.id, isConnected: isConnectedRef.current, matches, setMatches, persistPlayerStats });
+  const addMatch = async (match: Omit<Match, 'id'>) => {
+    const result = await addMatchOp(match, { supabase, userId: user?.id, isConnected: isConnectedRef.current, matches, setMatches, persistPlayerStats });
     // Trigger trust score recomputation + history snapshot in background
     setTimeout(async () => {
       await triggerTrustScoreComputation();
@@ -536,6 +536,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         } catch { /* silent */ }
       }
     }, 3000);
+    return result;
+  };
 
   const addPlayer = async (player: Omit<Player, 'id'>) =>
     addPlayerOp(player, { supabase, userId: user?.id, isConnected: isConnectedRef.current, setPlayers, sharedItemPermissions, players });
