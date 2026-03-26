@@ -162,6 +162,7 @@ export default function OnboardingScreen() {
 
   // Gold sponsor for onboarding
   const [goldSponsor, setGoldSponsor] = useState<Ambassador | null>(null);
+  const [eliteAmbassador, setEliteAmbassador] = useState<Ambassador | null>(null);
   const [sponsorLoaded, setSponsorLoaded] = useState(false);
 
   useEffect(() => {
@@ -172,6 +173,9 @@ export default function OnboardingScreen() {
         const sp = ambassadors.find(a => a.badgeType === 'sponsor' && a.isFeatured);
         if (sp) setGoldSponsor(sp);
       }
+      // Find Elite ambassador for onboarding section
+      const elite = ambassadors.find(a => a.badgeType === 'ambassador' && a.ambassadorLevel === 'elite' && a.isFeatured);
+      if (elite) setEliteAmbassador(elite);
       setSponsorLoaded(true);
     }).catch(() => setSponsorLoaded(true));
   }, []);
@@ -210,7 +214,12 @@ export default function OnboardingScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     // If step 1 (promise) and no gold sponsor, skip sponsor screen (step 2)
     if (step === 1 && !goldSponsor) {
-      setStep(3 as Step);
+      // Check if there's an elite ambassador for step 2.5 equivalent
+      if (eliteAmbassador) {
+        setStep(2 as Step); // Will show elite ambassador screen instead
+      } else {
+        setStep(3 as Step);
+      }
       return;
     }
     setStep(prev => Math.min(9, prev + 1) as Step);
@@ -490,8 +499,88 @@ export default function OnboardingScreen() {
     );
   }
 
-  // --- SCREEN 2: GOLD SPONSOR WELCOME ---
-  if (step === 2 && goldSponsor) {
+  // --- SCREEN 2: GOLD SPONSOR WELCOME / ELITE AMBASSADOR ---
+  if (step === 2 && (goldSponsor || eliteAmbassador)) {
+    // If no gold sponsor but elite ambassador exists, show elite screen
+    if (!goldSponsor && eliteAmbassador) {
+      return (
+        <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
+          <SafeAreaView style={s.fullScreen}>
+            <ScrollView contentContainerStyle={s.sponsorContent} showsVerticalScrollIndicator={false}>
+              <Animated.View entering={FadeInDown.duration(500)} style={s.sponsorLogoWrap}>
+                {eliteAmbassador.photo ? (
+                  <Image source={{ uri: eliteAmbassador.photo }} style={[s.sponsorLogo, { borderColor: '#F59E0B' }]} contentFit="cover" transition={300} />
+                ) : (
+                  <LinearGradient colors={['#7C3AED', '#9333EA']} style={s.sponsorLogoFallback}>
+                    <MaterialIcons name="military-tech" size={48} color="#FFF" />
+                  </LinearGradient>
+                )}
+                <View style={[s.sponsorGoldBadge, { backgroundColor: '#F59E0B' }]}>
+                  <MaterialIcons name="military-tech" size={14} color="#FFF" />
+                </View>
+              </Animated.View>
+
+              <Animated.View entering={FadeInUp.duration(500).delay(200)}>
+                <View style={s.sponsorPresentedRow}>
+                  <View style={[s.sponsorPresentedLine, { backgroundColor: '#7C3AED40' }]} />
+                  <Text style={[s.sponsorPresentedText, { color: '#A78BFA' }]}>
+                    {language === 'fr' ? 'AMBASSADEUR ELITE' : 'ELITE AMBASSADOR'}
+                  </Text>
+                  <View style={[s.sponsorPresentedLine, { backgroundColor: '#7C3AED40' }]} />
+                </View>
+                <Text style={s.sponsorName}>{eliteAmbassador.displayName}</Text>
+                {eliteAmbassador.bio ? <Text style={s.sponsorBio}>{eliteAmbassador.bio}</Text> : null}
+              </Animated.View>
+
+              <Animated.View entering={FadeInUp.duration(500).delay(400)} style={s.sponsorMessageCard}>
+                <LinearGradient colors={['#EDE9FE', '#DDD6FE']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.sponsorMessageGradient}>
+                  <View style={[s.sponsorMessageAccent, { backgroundColor: '#7C3AED' }]} />
+                  <MaterialIcons name="format-quote" size={24} color="#7C3AED" style={{ opacity: 0.4 }} />
+                  <Text style={[s.sponsorMessageText, { color: '#4C1D95' }]}>
+                    {language === 'fr'
+                      ? `${eliteAmbassador.displayName} est un ambassadeur Elite de la communaute petanque. Suivez-le pour des defis, conseils et contenus exclusifs !`
+                      : `${eliteAmbassador.displayName} is an Elite ambassador of the petanque community. Follow for challenges, tips and exclusive content!`}
+                  </Text>
+                </LinearGradient>
+              </Animated.View>
+
+              {(eliteAmbassador.websiteUrl || eliteAmbassador.instagramHandle || eliteAmbassador.youtubeUrl || eliteAmbassador.tiktokUrl) ? (
+                <Animated.View entering={FadeInUp.duration(400).delay(500)} style={s.sponsorSocialRow}>
+                  {eliteAmbassador.youtubeUrl ? (
+                    <Pressable style={({ pressed }) => [s.sponsorSocialChip, pressed && { opacity: 0.8 }]} onPress={() => { trackAmbassadorEvent(eliteAmbassador.id, 'social_click', 'youtube', { sourcePage: 'onboarding' }); Linking.openURL(eliteAmbassador.youtubeUrl!); }}>
+                      <MaterialIcons name="play-circle-filled" size={16} color="#FF0000" />
+                      <Text style={s.sponsorSocialText}>YouTube</Text>
+                    </Pressable>
+                  ) : null}
+                  {eliteAmbassador.instagramHandle ? (
+                    <Pressable style={({ pressed }) => [s.sponsorSocialChip, pressed && { opacity: 0.8 }]} onPress={() => { trackAmbassadorEvent(eliteAmbassador.id, 'social_click', 'instagram', { sourcePage: 'onboarding' }); Linking.openURL(`https://instagram.com/${eliteAmbassador.instagramHandle}`); }}>
+                      <MaterialIcons name="camera-alt" size={16} color="#E4405F" />
+                      <Text style={s.sponsorSocialText}>Instagram</Text>
+                    </Pressable>
+                  ) : null}
+                  {eliteAmbassador.tiktokUrl ? (
+                    <Pressable style={({ pressed }) => [s.sponsorSocialChip, pressed && { opacity: 0.8 }]} onPress={() => { trackAmbassadorEvent(eliteAmbassador.id, 'social_click', 'tiktok', { sourcePage: 'onboarding' }); Linking.openURL(eliteAmbassador.tiktokUrl!); }}>
+                      <MaterialIcons name="music-note" size={16} color="#000" />
+                      <Text style={s.sponsorSocialText}>TikTok</Text>
+                    </Pressable>
+                  ) : null}
+                </Animated.View>
+              ) : null}
+
+              <Animated.View entering={FadeInUp.duration(400).delay(600)} style={{ width: '100%', paddingHorizontal: 24 }}>
+                <Pressable style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]} onPress={() => { trackAmbassadorEvent(eliteAmbassador.id, 'banner_impression', undefined, { sourcePage: 'onboarding' }); goNext(); }}>
+                  <Text style={s.ctaPrimaryText}>{language === 'fr' ? 'Commencer' : 'Get started'}</Text>
+                  <MaterialIcons name="arrow-forward" size={20} color="#0F172A" />
+                </Pressable>
+                <Pressable style={s.ctaSecondary} onPress={goNext}>
+                  <Text style={s.ctaSecondaryText}>{language === 'fr' ? 'Passer' : 'Skip'}</Text>
+                </Pressable>
+              </Animated.View>
+            </ScrollView>
+          </SafeAreaView>
+        </LinearGradient>
+      );
+    }
     return (
       <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
         <SafeAreaView style={s.fullScreen}>

@@ -662,7 +662,7 @@ Deno.serve(async (req: Request) => {
       // Verify caller is the ambassador owner
       const { data: ambRecord } = await supabaseAdmin
         .from('ambassadors')
-        .select('id, user_id, badge_type')
+        .select('id, user_id, badge_type, ambassador_level')
         .eq('id', ambassadorId)
         .single();
 
@@ -688,6 +688,31 @@ Deno.serve(async (req: Request) => {
             status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
+      } else if (ambRecord.badge_type === 'ambassador') {
+        // Ambassador push: Elite = unlimited, Confirmé = 1/month, Découverte = not allowed
+        const ambLevel = ambRecord.ambassador_level || 'decouverte';
+        if (ambLevel === 'decouverte') {
+          return new Response(JSON.stringify({ error: 'Decouverte ambassadors cannot send push notifications. Upgrade to Confirme level.' }), {
+            status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        if (ambLevel === 'confirme') {
+          const startOfMonth = new Date();
+          startOfMonth.setDate(1);
+          startOfMonth.setHours(0, 0, 0, 0);
+          const { data: usageData } = await supabaseAdmin
+            .from('ambassador_analytics')
+            .select('id')
+            .eq('ambassador_id', ambassadorId)
+            .eq('event_type', 'sponsor_push')
+            .gte('created_at', startOfMonth.toISOString());
+          if (usageData && usageData.length >= 1) {
+            return new Response(JSON.stringify({ error: 'Monthly push limit reached for Confirme level. Upgrade to Elite for unlimited.', sent: 0, errors: 0 }), {
+              status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+        }
+        // Elite = unlimited, fall through
       } else if (ambRecord.badge_type !== 'gold_sponsor') {
         return new Response(JSON.stringify({ error: 'Bronze partners cannot send push notifications' }), {
           status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -816,6 +841,39 @@ Deno.serve(async (req: Request) => {
             await supabaseAdmin.from('push_tokens').update({ active: false }).eq('token', invalidToken);
           }
         }
+      }
+    }
+
+    // ============================================================
+    // AMBASSADOR_PROMOTION: Notify ambassador when promoted to next level
+    // ============================================================
+    else if (type === 'ambassador_promotion') {
+      const { targetUserId, ambassadorName, newLevel, newLevelLabel } = payload || {};
+      if (!targetUserId || !newLevel) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId/newLevel' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const levelEmoji = newLevel === 'elite' ? '\u{1F451}' : '\u{1F680}';
+        const levelName = newLevelLabel || (newLevel === 'elite' ? 'Elite' : 'Confirme');
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          `${levelEmoji} Niveau superieur atteint !`,
+          `Felicitations ${ambassadorName || 'Ambassadeur'} ! Vous etes desormais ambassadeur ${levelName}. De nouveaux avantages vous attendent.`,
+          { type: 'ambassador_promotion', newLevel },
+          { channelId: 'tournament-reminders', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
       }
     }
 

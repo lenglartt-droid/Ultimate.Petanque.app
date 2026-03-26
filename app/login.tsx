@@ -21,6 +21,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { isDisposableEmail } from '@/services/emailValidationService';
 import { canCreateAccount, recordAccountCreation } from '@/services/deviceFingerprintService';
 import { clearTempDataExpiry } from '@/services/retentionNotificationService';
+import { trackReferral } from '@/services/ambassadorService';
 
 type AuthMode = 'login' | 'register';
 type RegisterStep = 'email' | 'otp';
@@ -28,7 +29,7 @@ type RegisterStep = 'email' | 'otp';
 export default function LoginScreen() {
   const { sendOTP, verifyOTPAndLogin, signInWithPassword, signInWithGoogle, operationLoading } = useAuth();
   const { showAlert } = useAlert();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const [mode, setMode] = useState<AuthMode>('login');
   const [registerStep, setRegisterStep] = useState<RegisterStep>('email');
@@ -38,6 +39,8 @@ export default function LoginScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [otp, setOtp] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [referralCode, setReferralCode] = useState('');
+  const [showReferralField, setShowReferralField] = useState(false);
 
   const resetForm = () => {
     setEmail('');
@@ -46,6 +49,8 @@ export default function LoginScreen() {
     setOtp('');
     setRegisterStep('email');
     setShowPassword(false);
+    setReferralCode('');
+    setShowReferralField(false);
   };
 
   const handleModeSwitch = (newMode: AuthMode) => {
@@ -126,7 +131,7 @@ export default function LoginScreen() {
       return;
     }
 
-    const { error } = await verifyOTPAndLogin(email.trim(), otp.trim(), { password });
+    const { error, user: newUser } = await verifyOTPAndLogin(email.trim(), otp.trim(), { password });
     if (error) {
       showAlert(t('common', 'error'), error);
     } else {
@@ -134,6 +139,15 @@ export default function LoginScreen() {
       recordAccountCreation(email.trim()).catch(() => {});
       // Clear 7-day temp data expiry since user is now registered
       clearTempDataExpiry().catch(() => {});
+      // Track referral if code was provided
+      if (referralCode.trim() && newUser?.id) {
+        trackReferral(referralCode.trim(), newUser.id).then(({ success }) => {
+          if (success) showAlert(
+            t('login', 'referralSuccess') || (language === 'fr' ? 'Parrainage valide' : 'Referral validated'),
+            t('login', 'referralSuccessMsg') || (language === 'fr' ? 'Merci ! L\'ambassadeur a ete credite.' : 'Thanks! The ambassador has been credited.')
+          );
+        }).catch(() => {});
+      }
     }
   };
 
@@ -299,6 +313,34 @@ export default function LoginScreen() {
                   secureTextEntry={!showPassword}
                 />
               </View>
+
+              {/* Referral Code */}
+              {showReferralField ? (
+                <View style={styles.inputContainer}>
+                  <MaterialIcons name="card-giftcard" size={20} color="#7C3AED" style={styles.inputIcon} />
+                  <TextInput
+                    style={[styles.input, { letterSpacing: 1, fontWeight: '600' }]}
+                    placeholder={language === 'fr' ? 'Code parrainage (optionnel)' : 'Referral code (optional)'}
+                    placeholderTextColor={theme.textMuted}
+                    value={referralCode}
+                    onChangeText={setReferralCode}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                  />
+                  {referralCode.length > 0 ? (
+                    <Pressable onPress={() => setReferralCode('')} style={styles.eyeButton}>
+                      <MaterialIcons name="close" size={18} color={theme.textMuted} />
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : (
+                <Pressable style={styles.referralToggle} onPress={() => setShowReferralField(true)}>
+                  <MaterialIcons name="card-giftcard" size={16} color="#7C3AED" />
+                  <Text style={styles.referralToggleText}>
+                    {language === 'fr' ? 'J\'ai un code parrainage' : 'I have a referral code'}
+                  </Text>
+                </Pressable>
+              )}
 
               <Pressable
                 style={[styles.submitButton, operationLoading && styles.submitButtonDisabled]}
@@ -548,6 +590,18 @@ const styles = StyleSheet.create({
   footerSeparator: {
     fontSize: 12,
     color: theme.textMuted,
+  },
+  referralToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+  },
+  referralToggleText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#7C3AED',
   },
   // Divider styles
   dividerContainer: {

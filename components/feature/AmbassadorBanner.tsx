@@ -5,7 +5,7 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import theme, { blurhash } from '@/constants/theme';
-import { Ambassador } from '@/services/ambassadorService';
+import { Ambassador, AmbassadorLevel } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 
 interface Props {
@@ -25,43 +25,43 @@ function AmbassadorBanner({ ambassadors, language, t, screenWidth, userId }: Pro
 
   // Auto-rotate
   useEffect(() => {
-    if (ambassadors.length <= 1) return;
+    if (filteredAmbassadors.length <= 1) return;
     autoplayRef.current = setInterval(() => {
       setBannerIndex(prev => {
-        const next = (prev + 1) % ambassadors.length;
+        const next = (prev + 1) % filteredAmbassadors.length;
         scrollRef.current?.scrollTo({ x: next * cardWidth, animated: true });
         return next;
       });
     }, 5000);
     return () => { if (autoplayRef.current) clearInterval(autoplayRef.current); };
-  }, [ambassadors.length, cardWidth]);
+  }, [filteredAmbassadors.length, cardWidth]);
 
   // Track impressions
   useEffect(() => {
-    if (ambassadors.length > 0 && bannerIndex >= 0 && bannerIndex < ambassadors.length) {
-      const amb = ambassadors[bannerIndex];
+    if (filteredAmbassadors.length > 0 && bannerIndex >= 0 && bannerIndex < filteredAmbassadors.length) {
+      const amb = filteredAmbassadors[bannerIndex];
       if (amb && !trackedImpressions.current.has(amb.id)) {
         trackedImpressions.current.add(amb.id);
         trackAmbassadorEvent(amb.id, 'banner_impression', undefined, { sourcePage: 'home', viewerId: userId });
       }
     }
-  }, [bannerIndex, ambassadors, userId]);
+  }, [bannerIndex, filteredAmbassadors, userId]);
 
   const handleScroll = useCallback((e: any) => {
     const offset = e.nativeEvent.contentOffset.x;
     const idx = Math.round(offset / cardWidth);
-    if (idx !== bannerIndex && idx >= 0 && idx < ambassadors.length) {
+    if (idx !== bannerIndex && idx >= 0 && idx < filteredAmbassadors.length) {
       setBannerIndex(idx);
       if (autoplayRef.current) clearInterval(autoplayRef.current);
       autoplayRef.current = setInterval(() => {
         setBannerIndex(prev => {
-          const next = (prev + 1) % ambassadors.length;
+          const next = (prev + 1) % filteredAmbassadors.length;
           scrollRef.current?.scrollTo({ x: next * cardWidth, animated: true });
           return next;
         });
       }, 5000);
     }
-  }, [bannerIndex, ambassadors.length, cardWidth]);
+  }, [bannerIndex, filteredAmbassadors.length, cardWidth]);
 
   const goToIndex = useCallback((i: number) => {
     setBannerIndex(i);
@@ -69,14 +69,26 @@ function AmbassadorBanner({ ambassadors, language, t, screenWidth, userId }: Pro
     if (autoplayRef.current) clearInterval(autoplayRef.current);
     autoplayRef.current = setInterval(() => {
       setBannerIndex(prev => {
-        const next = (prev + 1) % ambassadors.length;
+        const next = (prev + 1) % filteredAmbassadors.length;
         scrollRef.current?.scrollTo({ x: next * cardWidth, animated: true });
         return next;
       });
     }, 5000);
-  }, [ambassadors.length, cardWidth]);
+  }, [filteredAmbassadors.length, cardWidth]);
 
-  if (ambassadors.length === 0) return null;
+  // Filter: only show Confirmé and Élite level ambassadors (not Découverte)
+  // Sponsors/partners are always shown regardless of level
+  const filteredAmbassadors = React.useMemo(() => {
+    return ambassadors.filter(amb => {
+      // Sponsors and partners always shown
+      if (amb.badgeType === 'gold_sponsor' || amb.badgeType === 'sponsor' || amb.badgeType === 'partner') return true;
+      // For ambassadors, only show confirme and elite
+      const level = amb.ambassadorLevel || 'decouverte';
+      return level === 'confirme' || level === 'elite';
+    });
+  }, [ambassadors]);
+
+  if (filteredAmbassadors.length === 0) return null;
 
   return (
     <View>
@@ -102,7 +114,7 @@ function AmbassadorBanner({ ambassadors, language, t, screenWidth, userId }: Pro
           snapToInterval={cardWidth}
           snapToAlignment="start"
         >
-          {ambassadors.map((amb) => (
+          {filteredAmbassadors.map((amb) => (
             <Pressable
               key={amb.id}
               style={[s.slide, { width: cardWidth }]}
@@ -144,9 +156,9 @@ function AmbassadorBanner({ ambassadors, language, t, screenWidth, userId }: Pro
             </Pressable>
           ))}
         </ScrollView>
-        {ambassadors.length > 1 ? (
+        {filteredAmbassadors.length > 1 ? (
           <View style={s.dots}>
-            {ambassadors.map((_, i) => (
+            {filteredAmbassadors.map((_, i) => (
               <Pressable key={i} style={[s.dot, i === bannerIndex && s.dotActive]} onPress={() => goToIndex(i)} hitSlop={8} />
             ))}
           </View>

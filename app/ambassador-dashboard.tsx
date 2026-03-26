@@ -23,6 +23,9 @@ import { fetchAmbassadorAnalytics, AmbassadorAnalytics, fetchSponsoredChallengeA
 import { getMySponsoredEvents, SponsoredEvent, getEventParticipants } from '@/services/sponsoredEventService';
 import { getMyEventNotifications, markEventNotificationRead, EventNotification } from '@/services/eventNotificationService';
 import Svg, { Polyline, Circle as SvgCircle, Line, Text as SvgText } from 'react-native-svg';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
+import { triggerServerPush } from '@/services/pushTokenService';
 
 export default function AmbassadorDashboardScreen() {
   const insets = useSafeAreaInsets();
@@ -59,6 +62,14 @@ export default function AmbassadorDashboardScreen() {
   const [bannerAnalytics, setBannerAnalytics] = useState<BannerDetailedAnalytics | null>(null);
   const [visibilityPeriod, setVisibilityPeriod] = useState<7 | 30>(30);
   const [visibilityLoading, setVisibilityLoading] = useState(false);
+
+  // Push composer state
+  const [pushTitle, setPushTitle] = useState('');
+  const [pushBody, setPushBody] = useState('');
+  const [pushCity, setPushCity] = useState('');
+  const [pushRadius, setPushRadius] = useState('200');
+  const [sendingPush, setSendingPush] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
   useEffect(() => {
@@ -531,6 +542,135 @@ export default function AmbassadorDashboardScreen() {
                 </Pressable>
               )}
             </View>
+
+            {/* Push Composer - Confirmé and Élite only */}
+            {ambLevel !== 'decouverte' && ambassador.badge_type === 'ambassador' ? (
+              <View style={s.sectionCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <Text style={s.sectionCardTitle}>{fr ? 'Notification push' : 'Push notification'}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: ambLevel === 'elite' ? '#F59E0B15' : '#7C3AED15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                    <MaterialIcons name={ambLevel === 'elite' ? 'all-inclusive' : 'looks-one'} size={12} color={ambLevel === 'elite' ? '#F59E0B' : '#7C3AED'} />
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: ambLevel === 'elite' ? '#F59E0B' : '#7C3AED' }}>
+                      {ambLevel === 'elite' ? (fr ? 'Illimite' : 'Unlimited') : '1/mois'}
+                    </Text>
+                  </View>
+                </View>
+                <TextInput
+                  style={[s.sectionCard, { backgroundColor: '#F8FAFC', marginBottom: 8, paddingVertical: 12, paddingHorizontal: 14, fontSize: 14, fontWeight: '600', color: '#0F172A' }]}
+                  value={pushTitle}
+                  onChangeText={setPushTitle}
+                  placeholder={fr ? 'Titre de la notification' : 'Notification title'}
+                  placeholderTextColor="#94A3B8"
+                />
+                <TextInput
+                  style={[s.sectionCard, { backgroundColor: '#F8FAFC', marginBottom: 8, paddingVertical: 12, paddingHorizontal: 14, fontSize: 13, color: '#334155', minHeight: 60, textAlignVertical: 'top' }]}
+                  value={pushBody}
+                  onChangeText={setPushBody}
+                  placeholder={fr ? 'Message...' : 'Message...'}
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                />
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                  <View style={{ flex: 2 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '600', color: '#94A3B8', marginBottom: 4 }}>{fr ? 'Ville (optionnel)' : 'City (optional)'}</Text>
+                    <TextInput
+                      style={{ backgroundColor: '#F8FAFC', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, fontSize: 13, color: '#0F172A', borderWidth: 1, borderColor: '#E2E8F0' }}
+                      value={pushCity}
+                      onChangeText={setPushCity}
+                      placeholder={fr ? 'Ville...' : 'City...'}
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '600', color: '#94A3B8', marginBottom: 4 }}>Rayon (km)</Text>
+                    <TextInput
+                      style={{ backgroundColor: '#F8FAFC', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, fontSize: 13, color: '#0F172A', borderWidth: 1, borderColor: '#E2E8F0' }}
+                      value={pushRadius}
+                      onChangeText={setPushRadius}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+                <Pressable
+                  style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: badgeColor, paddingVertical: 14, borderRadius: 14 }, sendingPush && { opacity: 0.6 }]}
+                  onPress={async () => {
+                    if (!pushTitle.trim() || !pushBody.trim()) { showAlert(fr ? 'Remplissez titre et message' : 'Fill title and message'); return; }
+                    setSendingPush(true);
+                    try {
+                      await triggerServerPush('sponsor_push', {
+                        ambassadorId: ambassador.id,
+                        ambassadorName: ambassador.display_name,
+                        title: pushTitle.trim(),
+                        body: pushBody.trim(),
+                        radiusKm: parseInt(pushRadius) || 200,
+                        city: pushCity.trim() || undefined,
+                      });
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                      showAlert(fr ? 'Notification envoyee !' : 'Notification sent!');
+                      setPushTitle(''); setPushBody(''); setPushCity('');
+                    } catch (e: any) {
+                      showAlert(fr ? 'Erreur' : 'Error', e.message || 'Failed');
+                    }
+                    setSendingPush(false);
+                  }}
+                  disabled={sendingPush}
+                >
+                  {sendingPush ? <ActivityIndicator color="#FFF" size="small" /> : (
+                    <>
+                      <MaterialIcons name="send" size={18} color="#FFF" />
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#FFF' }}>{fr ? 'Envoyer' : 'Send'}</Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
+            ) : null}
+
+            {/* Export CSV - Elite only */}
+            {ambLevel === 'elite' ? (
+              <Pressable
+                style={[s.sectionCard, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16 }, exporting && { opacity: 0.6 }]}
+                onPress={async () => {
+                  if (!bannerAnalytics) { showAlert(fr ? 'Aucune donnee' : 'No data'); return; }
+                  setExporting(true);
+                  try {
+                    const ba = bannerAnalytics;
+                    let csv = 'Date,Impressions,Clicks,CTR\n';
+                    ba.dailyDates.forEach((date, i) => {
+                      const imp = ba.dailyImpressions[i] || 0;
+                      const clk = ba.dailyClicks[i] || 0;
+                      const ctr = imp > 0 ? ((clk / imp) * 100).toFixed(1) : '0';
+                      csv += `${date},${imp},${clk},${ctr}%\n`;
+                    });
+                    csv += `\nTotal,${ba.totalImpressions},${ba.totalClicks},${ba.totalImpressions > 0 ? ((ba.totalClicks / ba.totalImpressions) * 100).toFixed(1) : 0}%\n`;
+                    csv += `Unique Viewers,${ba.uniqueViewers}\n\n`;
+                    csv += 'Page,Impressions,Clicks\n';
+                    Object.entries(ba.impressionsByPage).forEach(([page, count]) => {
+                      csv += `${page},${count},${ba.clicksByPage[page] || 0}\n`;
+                    });
+                    const path = `${FileSystem.cacheDirectory}analytics_${ambassador.display_name.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+                    await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
+                    const canShare = await Sharing.isAvailableAsync();
+                    if (canShare) {
+                      await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: fr ? 'Exporter analytics' : 'Export analytics' });
+                    } else {
+                      showAlert(fr ? 'Fichier cree' : 'File created', path);
+                    }
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  } catch (e: any) {
+                    showAlert(fr ? 'Erreur' : 'Error', e.message);
+                  }
+                  setExporting(false);
+                }}
+                disabled={exporting}
+              >
+                {exporting ? <ActivityIndicator size="small" color={badgeColor} /> : (
+                  <>
+                    <MaterialIcons name="download" size={20} color={badgeColor} />
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: badgeColor }}>{fr ? 'Exporter CSV' : 'Export CSV'}</Text>
+                  </>
+                )}
+              </Pressable>
+            ) : null}
 
             {/* Quick Links */}
             <View style={s.quickLinksRow}>
