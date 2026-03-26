@@ -24,7 +24,6 @@ import { getMySponsoredEvents, SponsoredEvent, getEventParticipants } from '@/se
 import { getMyEventNotifications, markEventNotificationRead, EventNotification } from '@/services/eventNotificationService';
 import Svg, { Polyline, Circle as SvgCircle, Line, Text as SvgText } from 'react-native-svg';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
 import { triggerServerPush } from '@/services/pushTokenService';
 
 export default function AmbassadorDashboardScreen() {
