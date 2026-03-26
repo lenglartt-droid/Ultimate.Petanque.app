@@ -91,6 +91,36 @@ export async function getMyAmbassadorRecord(): Promise<{ ambassador: any | null;
   }
 }
 
+/** Check tier-based challenge limit for the current month */
+export async function checkChallengeLimit(ambassadorId: string, badgeType: string): Promise<{ allowed: boolean; used: number; limit: number | null; error: string | null }> {
+  try {
+    // Gold & Silver = unlimited, Bronze = 1/month, Ambassador = unlimited
+    if (badgeType === 'gold_sponsor' || badgeType === 'sponsor' || badgeType === 'ambassador') {
+      return { allowed: true, used: 0, limit: null, error: null };
+    }
+
+    const limit = badgeType === 'partner' ? 1 : 0; // partner = Bronze tier
+    if (limit === 0) return { allowed: false, used: 0, limit: 0, error: null };
+
+    const supabase = getSupabaseClient();
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const { data: events, error } = await supabase
+      .from('sponsored_events')
+      .select('id')
+      .eq('ambassador_id', ambassadorId)
+      .gte('created_at', startOfMonth.toISOString());
+
+    if (error) return { allowed: false, used: 0, limit, error: error.message };
+    const used = events?.length || 0;
+    return { allowed: used < limit, used, limit, error: null };
+  } catch (e: any) {
+    return { allowed: false, used: 0, limit: 1, error: e.message };
+  }
+}
+
 /** Create a sponsored event */
 export async function createSponsoredEvent(data: {
   ambassadorId: string;

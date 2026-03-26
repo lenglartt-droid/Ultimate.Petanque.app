@@ -46,6 +46,30 @@ export default function SponsorAnalyticsScreen() {
     return () => sub?.remove();
   }, []);
 
+  // Determine if current user is a sponsor/partner and their tier
+  const [userTier, setUserTier] = useState<string | null>(null);
+  const [userAmbassadorId, setUserAmbassadorId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const checkAccess = async () => {
+      try {
+        const supabase = getSupabaseClient();
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData?.user?.id) return;
+        const { data } = await supabase.from('ambassadors').select('id, badge_type').eq('user_id', userData.user.id).eq('is_active', true).maybeSingle();
+        if (data) {
+          setUserTier(data.badge_type);
+          setUserAmbassadorId(data.id);
+        }
+      } catch { /* silent */ }
+    };
+    checkAccess();
+  }, []);
+
+  const isSilverAccess = userTier === 'sponsor';
+  const isBronzeAccess = userTier === 'partner';
+  const isGoldOrAdmin = userTier === 'gold_sponsor' || (!userTier && !isSilverAccess && !isBronzeAccess);
+
   const loadData = useCallback(async (p: Period) => {
     setLoading(true);
     try {
@@ -311,12 +335,41 @@ export default function SponsorAnalyticsScreen() {
                 </View>
               ) : null}
 
-              {/* Push Notification Composer */}
-              <SponsorPushComposer
-                ambassador={selectedData.ambassador}
-                language={language}
-                showAlert={showAlert}
-              />
+              {/* Push Notification Composer - Only for Gold and Silver */}
+              {selectedData.ambassador.badgeType !== 'partner' ? (
+                <SponsorPushComposer
+                  ambassador={selectedData.ambassador}
+                  language={language}
+                  showAlert={showAlert}
+                />
+              ) : null}
+
+              {/* Silver basic analytics notice */}
+              {isSilverAccess ? (
+                <View style={styles.reachCard}>
+                  <MaterialIcons name="info-outline" size={18} color="#78909C" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.reachLabel, { color: '#78909C' }]}>{language === 'fr' ? 'Partenaire Argent' : 'Silver Partner'}</Text>
+                    <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 2 }}>
+                      {language === 'fr'
+                        ? 'Vous avez acces aux impressions, clics et 1 notification push/mois. Passez au tier Or pour des analytics avances.'
+                        : 'You have access to impressions, clicks and 1 push notification/month. Upgrade to Gold for advanced analytics.'}
+                    </Text>
+                  </View>
+                </View>
+              ) : isBronzeAccess ? (
+                <View style={styles.reachCard}>
+                  <MaterialIcons name="info-outline" size={18} color="#A1887F" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.reachLabel, { color: '#A1887F' }]}>{language === 'fr' ? 'Partenaire Bronze' : 'Bronze Partner'}</Text>
+                    <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 2 }}>
+                      {language === 'fr'
+                        ? 'Acces limites aux statistiques de base. 1 defi sponsorise/mois. Passez au tier Argent pour plus de visibilite.'
+                        : 'Limited access to basic stats. 1 sponsored challenge/month. Upgrade to Silver for more visibility.'}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
             </Animated.View>
           ) : (
             <View style={styles.emptyCard}>

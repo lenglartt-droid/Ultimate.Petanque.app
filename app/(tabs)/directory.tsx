@@ -29,6 +29,7 @@ import { SharedOverlayBadge } from '@/components/ui/SharedBadge';
 import AdBanner from '@/components/ui/AdBanner';
 import SponsorBanner from '@/components/ui/SponsorBanner';
 import { getSponsoredEvents, SponsoredEvent } from '@/services/sponsoredEventService';
+import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 
 import MergePickerModal from '@/components/ui/MergePickerModal';
 import { saveMergeLog, getMergeLogs, undoMerge, isUndoable, getUndoTimeRemaining, deleteMergeLog, MergeLog, ReassignedRelation } from '@/services/mergeHistoryService';
@@ -137,6 +138,20 @@ export default function DirectoryScreen() {
   // Events state
   const [sponsoredEvents, setSponsoredEvents] = useState<SponsoredEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
+
+  // Partner data for tier badges in directory
+  const [partnerUserIds, setPartnerUserIds] = useState<Map<string, { tier: string; name: string }>>(new Map());
+  useEffect(() => {
+    fetchAmbassadors().then(({ ambassadors }) => {
+      const map = new Map<string, { tier: string; name: string }>();
+      ambassadors.forEach(a => {
+        if (a.badgeType === 'gold_sponsor' || a.badgeType === 'sponsor' || a.badgeType === 'partner') {
+          map.set(a.userId, { tier: a.badgeType, name: a.displayName });
+        }
+      });
+      setPartnerUserIds(map);
+    });
+  }, []);
   const loadSponsoredEvents = useCallback(async () => {
     setEventsLoading(true);
     const [r1, r2, r3] = await Promise.all([getSponsoredEvents(), getSponsoredEvents('completed'), getSponsoredEvents('cancelled')]);
@@ -498,6 +513,8 @@ export default function DirectoryScreen() {
     const isPublicItem = (item as any).isPublic;
     // A public player is a real registered user (their user_id is an actual app user)
     const isRealUser = item.isPublic === true && (!selfPlayer || item.id !== selfPlayer.id);
+    // Partner tier badge
+    const partnerInfo = partnerUserIds.get(item.id);
     return (
       <Pressable
         style={[styles.itemCard, isSelf && styles.selfCard]}
@@ -579,6 +596,14 @@ export default function DirectoryScreen() {
             )}
           </View>
           <View style={styles.itemTags}>
+            {partnerInfo ? (
+              <View style={[styles.tag, { backgroundColor: partnerInfo.tier === 'gold_sponsor' ? '#F59E0B15' : partnerInfo.tier === 'sponsor' ? '#90A4AE15' : '#A1887F15' }]}>
+                <MaterialIcons name={partnerInfo.tier === 'gold_sponsor' ? 'star' : 'workspace-premium'} size={10} color={partnerInfo.tier === 'gold_sponsor' ? '#D4A017' : partnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F'} />
+                <Text style={[styles.tagText, { color: partnerInfo.tier === 'gold_sponsor' ? '#D4A017' : partnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F' }]}>
+                  {partnerInfo.tier === 'gold_sponsor' ? 'Or' : partnerInfo.tier === 'sponsor' ? 'Argent' : 'Bronze'}
+                </Text>
+              </View>
+            ) : null}
             <View style={[styles.tag, { backgroundColor: theme.primary + '15' }]}>
               <Text style={[styles.tagText, { color: theme.primary }]}>{t('roles', item.role)}</Text>
             </View>
@@ -613,6 +638,8 @@ export default function DirectoryScreen() {
     const sharedPerm = getSharedPermission(item.id);
     const isPublicItem = (item as any).isPublic;
     const isFavorite = favoriteClubIds.includes(item.id);
+    // Check if this club is owned by a partner (match by userId)
+    const clubPartnerInfo = partnerUserIds.get((item as any).userId || '');
     return (
       <Pressable
         style={[styles.itemCard, isFavorite && styles.favoriteCard]}
@@ -645,6 +672,14 @@ export default function DirectoryScreen() {
           )}
         </View>
         <View style={styles.itemTags}>
+          {clubPartnerInfo ? (
+            <View style={[styles.tag, { backgroundColor: clubPartnerInfo.tier === 'gold_sponsor' ? '#F59E0B15' : clubPartnerInfo.tier === 'sponsor' ? '#90A4AE15' : '#A1887F15' }]}>
+              <MaterialIcons name={clubPartnerInfo.tier === 'gold_sponsor' ? 'star' : 'workspace-premium'} size={10} color={clubPartnerInfo.tier === 'gold_sponsor' ? '#D4A017' : clubPartnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F'} />
+              <Text style={[styles.tagText, { color: clubPartnerInfo.tier === 'gold_sponsor' ? '#D4A017' : clubPartnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F' }]}>
+                {clubPartnerInfo.tier === 'gold_sponsor' ? 'Or' : clubPartnerInfo.tier === 'sponsor' ? 'Argent' : 'Bronze'}
+              </Text>
+            </View>
+          ) : null}
           <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}>
             <MaterialIcons name="people" size={10} color={theme.textSecondary} />
             <Text style={[styles.tagText, { color: theme.textSecondary }]}>{item.membersCount}</Text>
@@ -666,6 +701,7 @@ export default function DirectoryScreen() {
     const isFavorite = favoriteTerrainIds.includes(item.id);
     const sharedPerm = getSharedPermission(item.id);
     const isPublicItem = (item as any).isPublic;
+    const terrainPartnerInfo = partnerUserIds.get((item as any).userId || '');
     return (
       <Pressable
         style={[styles.itemCard, isFavorite && styles.favoriteCard]}
@@ -712,6 +748,14 @@ export default function DirectoryScreen() {
             )}
           </View>
           <View style={styles.itemTags}>
+            {terrainPartnerInfo ? (
+              <View style={[styles.tag, { backgroundColor: terrainPartnerInfo.tier === 'gold_sponsor' ? '#F59E0B15' : terrainPartnerInfo.tier === 'sponsor' ? '#90A4AE15' : '#A1887F15' }]}>
+                <MaterialIcons name={terrainPartnerInfo.tier === 'gold_sponsor' ? 'star' : 'workspace-premium'} size={10} color={terrainPartnerInfo.tier === 'gold_sponsor' ? '#D4A017' : terrainPartnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F'} />
+                <Text style={[styles.tagText, { color: terrainPartnerInfo.tier === 'gold_sponsor' ? '#D4A017' : terrainPartnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F' }]}>
+                  {terrainPartnerInfo.tier === 'gold_sponsor' ? 'Or' : terrainPartnerInfo.tier === 'sponsor' ? 'Argent' : 'Bronze'}
+                </Text>
+              </View>
+            ) : null}
             <View style={[styles.tag, { backgroundColor: theme.success + '15' }]}>
               <Text style={[styles.tagText, { color: theme.success }]}>{t('terrainTypes', item.type)}</Text>
             </View>

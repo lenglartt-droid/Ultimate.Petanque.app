@@ -9,7 +9,7 @@ import theme, { blurhash } from '@/constants/theme';
 import { useAuth, useAlert } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useApp } from '@/contexts/AppContext';
-import { getMyAmbassadorRecord, createSponsoredEvent } from '@/services/sponsoredEventService';
+import { getMyAmbassadorRecord, createSponsoredEvent, checkChallengeLimit } from '@/services/sponsoredEventService';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 const CHALLENGE_TYPES = [
@@ -30,6 +30,7 @@ export default function NewSponsoredEventScreen() {
   const [loading, setLoading] = useState(true);
   const [ambassador, setAmbassador] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+  const [limitInfo, setLimitInfo] = useState<{ allowed: boolean; used: number; limit: number | null } | null>(null);
 
   // Form state
   const [title, setTitle] = useState('');
@@ -49,8 +50,12 @@ export default function NewSponsoredEventScreen() {
   const [terrainSearchQuery, setTerrainSearchQuery] = useState('');
 
   useEffect(() => {
-    getMyAmbassadorRecord().then(({ ambassador: amb }) => {
+    getMyAmbassadorRecord().then(async ({ ambassador: amb }) => {
       setAmbassador(amb);
+      if (amb) {
+        const { allowed, used, limit } = await checkChallengeLimit(amb.id, amb.badge_type);
+        setLimitInfo({ allowed, used, limit });
+      }
       setLoading(false);
     });
   }, []);
@@ -66,6 +71,16 @@ export default function NewSponsoredEventScreen() {
   const handleCreate = async () => {
     if (!ambassador) return;
     if (!title.trim()) { showAlert(language === 'fr' ? 'Le titre est requis' : 'Title is required'); return; }
+    // Enforce tier-based limit
+    if (limitInfo && !limitInfo.allowed) {
+      showAlert(
+        language === 'fr' ? 'Limite atteinte' : 'Limit reached',
+        language === 'fr'
+          ? `En tant que partenaire Bronze, vous pouvez creer ${limitInfo.limit} defi par mois. Vous en avez deja cree ${limitInfo.used}. Passez au tier Argent pour un acces illimite.`
+          : `As a Bronze partner, you can create ${limitInfo.limit} challenge per month. You have already created ${limitInfo.used}. Upgrade to Silver for unlimited access.`
+      );
+      return;
+    }
 
     setSaving(true);
 
@@ -157,11 +172,23 @@ export default function NewSponsoredEventScreen() {
             )}
             <View style={{ flex: 1 }}>
               <Text style={s.ambassadorName}>{ambassador.display_name}</Text>
-              <Text style={s.ambassadorType}>{ambassador.badge_type === 'sponsor' ? 'Sponsor' : ambassador.badge_type === 'partner' ? (language === 'fr' ? 'Partenaire' : 'Partner') : (language === 'fr' ? 'Ambassadeur' : 'Ambassador')}</Text>
+              <Text style={s.ambassadorType}>{ambassador.badge_type === 'gold_sponsor' ? (language === 'fr' ? 'Sponsor Or' : 'Gold Sponsor') : ambassador.badge_type === 'sponsor' ? (language === 'fr' ? 'Sponsor Argent' : 'Silver Sponsor') : ambassador.badge_type === 'partner' ? (language === 'fr' ? 'Partenaire Bronze' : 'Bronze Partner') : (language === 'fr' ? 'Ambassadeur' : 'Ambassador')}</Text>
             </View>
             <MaterialIcons name="verified" size={24} color="rgba(255,255,255,0.8)" />
           </View>
         </LinearGradient>
+
+        {/* Tier-based challenge limit info */}
+        {limitInfo && limitInfo.limit !== null ? (
+          <View style={[s.infoCard, { backgroundColor: limitInfo.allowed ? '#10B98108' : '#EF444408', borderColor: limitInfo.allowed ? '#10B98115' : '#EF444415' }]}>
+            <MaterialIcons name={limitInfo.allowed ? 'check-circle' : 'warning'} size={18} color={limitInfo.allowed ? '#10B981' : '#EF4444'} />
+            <Text style={[s.infoText, { color: limitInfo.allowed ? '#10B981' : '#EF4444' }]}>
+              {language === 'fr'
+                ? `Partenaire Bronze : ${limitInfo.used}/${limitInfo.limit} defi ce mois. ${limitInfo.allowed ? 'Vous pouvez en creer un.' : 'Limite atteinte. Passez au tier Argent pour un acces illimite.'}`
+                : `Bronze partner: ${limitInfo.used}/${limitInfo.limit} challenge this month. ${limitInfo.allowed ? 'You can create one.' : 'Limit reached. Upgrade to Silver for unlimited access.'}`}
+            </Text>
+          </View>
+        ) : null}
 
         {/* Title */}
         <View style={s.field}>
