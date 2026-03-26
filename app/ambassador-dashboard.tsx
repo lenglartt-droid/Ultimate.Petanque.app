@@ -72,6 +72,10 @@ export default function AmbassadorDashboardScreen() {
   const [exporting, setExporting] = useState(false);
   const [pushQuota, setPushQuota] = useState<PushQuotaInfo | null>(null);
 
+  // Referral code state (must be declared before any early returns)
+  const [generatingCode, setGeneratingCode] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
+
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }) => setScreenWidth(window.width));
@@ -294,8 +298,6 @@ export default function AmbassadorDashboardScreen() {
   const nextConf = nextLevel ? AMBASSADOR_LEVELS[nextLevel] : null;
   const referralCount = ambassador.referral_count || 0;
   const referralCode = ambassador.referral_code || null;
-  const [generatingCode, setGeneratingCode] = React.useState(false);
-  const [copiedCode, setCopiedCode] = React.useState(false);
 
   const handleGenerateCode = async () => {
     if (!ambassador?.id) return;
