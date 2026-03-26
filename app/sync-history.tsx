@@ -69,7 +69,7 @@ export default function SyncHistoryScreen() {
   const [retryingAll, setRetryingAll] = useState(false);
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
 
-  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
+  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
     return () => sub?.remove();

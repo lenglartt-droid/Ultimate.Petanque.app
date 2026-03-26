@@ -622,7 +622,7 @@ export default function HistoryScreen() {
   const [allMeetups, setAllMeetups] = useState<(Meetup & { _source: 'created' | 'invited'; _acceptedCount?: number })[]>([]);
   const [meetupsLoading, setMeetupsLoading] = useState(true);
 
-  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
+  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
     return () => sub?.remove();

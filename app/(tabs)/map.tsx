@@ -842,7 +842,7 @@ export default function MapScreen() {
   }, [MARKER_CONFIG]);
 
   // Responsive
-  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
+  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }) => setScreenWidth(window.width));
     return () => sub?.remove();

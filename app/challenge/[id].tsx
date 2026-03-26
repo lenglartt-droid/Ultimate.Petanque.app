@@ -59,7 +59,7 @@ export default function ChallengeDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [goldSponsor, setGoldSponsor] = useState<Ambassador | null>(null);
-  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
+  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
 
   // Edit state
   const [isEditing, setIsEditing] = useState(false);

@@ -259,7 +259,7 @@ export default function NewMatchScreen() {
   // Dynamic notation card layout based on player count
   const notationCardLayout = useMemo(() => {
     const total = teamAPlayers.length + teamBPlayers.length;
-    const sw = Dimensions.get('window').width;
+    const sw = Dimensions.get('window').width || 375;
     const padding = 24;
     if (total <= 2) {
       const gap = 12;

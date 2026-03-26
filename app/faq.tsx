@@ -424,7 +424,7 @@ export default function FAQScreen() {
   const [selectedCat, setSelectedCat] = useState<string | null>(null);
   const [openQs, setOpenQs] = useState<Set<string>>(new Set());
   const [showAllTips, setShowAllTips] = useState(false);
-  const [screenW, setScreenW] = useState(() => Dimensions.get('window').width);
+  const [screenW, setScreenW] = useState(() => Dimensions.get('window').width || 375);
   React.useEffect(() => { const sub = Dimensions.addEventListener('change', ({ window }) => setScreenW(window.width)); return () => sub?.remove(); }, []);
   const isTablet = screenW >= 600;
 

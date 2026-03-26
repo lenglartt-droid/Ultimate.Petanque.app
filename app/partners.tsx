@@ -83,7 +83,7 @@ export default function PartnersScreen() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
-  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
+  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
 
   // Real partners from ambassadors table
   const [partners, setPartners] = useState<(Ambassador & { analytics?: AmbassadorAnalytics })[]>([]);

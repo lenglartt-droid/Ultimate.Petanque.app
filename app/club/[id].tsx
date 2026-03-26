@@ -21,8 +21,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+// expo-document-picker and expo-file-system loaded dynamically to avoid web bundler issues
 import * as Linking2 from 'expo-linking';
 import { decode } from 'base64-arraybuffer';
 import { getSupabaseClient } from '@/template';
@@ -45,7 +44,7 @@ export default function ClubDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getClubById, players, tournaments, deleteClub, updateClub, getSharedPermission, setItemPublic, isFavoriteClub, toggleFavoriteClub, refreshData, loading: appLoading } = useApp();
   const [refreshing, setRefreshing] = React.useState(false);
-  const [screenWidth, setScreenWidth] = React.useState(() => Dimensions.get('window').width);
+  const [screenWidth, setScreenWidth] = React.useState(() => Dimensions.get('window').width || 375);
   React.useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
     return () => sub?.remove();
@@ -87,7 +86,7 @@ export default function ClubDetailScreen() {
   const [clubCardType, setClubCardType] = React.useState<'image' | 'pdf'>('image');
   const [uploadingCard, setUploadingCard] = React.useState(false);
   const [showCardFullscreen, setShowCardFullscreen] = React.useState(false);
-  const [screenWidth2, setScreenWidth2] = React.useState(() => Dimensions.get('window').width);
+  const [screenWidth2, setScreenWidth2] = React.useState(() => Dimensions.get('window').width || 375);
 
   const isFavorite = id ? isFavoriteClub(id) : false;
 
@@ -176,6 +175,7 @@ export default function ClubDetailScreen() {
           reader.readAsDataURL(blob);
         });
       } else {
+        const FileSystem = require('expo-file-system');
         base64Data = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
       }
       const { error: uploadError } = await supabase.storage.from('club-cards').upload(storagePath, decode(base64Data), { contentType: mimeType, upsert: true });
@@ -219,6 +219,7 @@ export default function ClubDetailScreen() {
         }},
         { text: t('player', 'fromFiles'), onPress: async () => {
           try {
+            const DocumentPicker = require('expo-document-picker');
             const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], copyToCacheDirectory: true });
             if (!result.canceled && result.assets && result.assets[0]) {
               await uploadClubCardFile(result.assets[0].uri, result.assets[0].name || 'club_card.pdf', result.assets[0].mimeType || 'application/pdf');

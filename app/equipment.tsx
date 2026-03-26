@@ -414,7 +414,7 @@ export default function EquipmentScreen() {
         ) : (
           boulesSets.map((set, idx) => {
             const stats = setStats[set.id] || { matches: 0, wins: 0, challenges: 0, totalTirs: 0, tirsSuccess: 0, totalPoints: 0, pointsSuccess: 0, carreaux: 0, winRate: 0, tirRate: 0, pointRate: 0, carreauRate: 0, evolution: [] };
-            const chartWidth = Dimensions.get('window').width - 96;
+            const chartWidth = Math.max(1, (Dimensions.get('window').width || 375) - 96);
             return (
               <Animated.View key={set.id} entering={FadeInDown.duration(400).delay(100 + idx * 60)}>
                 <Pressable

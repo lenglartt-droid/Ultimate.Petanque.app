@@ -37,7 +37,7 @@ export default function AmbassadorsScreen() {
     isUserAmbassador(user.id).then(setIsAmbassador);
   }, [user?.id]);
   const [refreshing, setRefreshing] = useState(false);
-  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
+  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   const [ambassadors, setAmbassadors] = useState<Ambassador[]>([]);
   const [ambassadorsLoading, setAmbassadorsLoading] = useState(true);
   const { scrollTo } = useLocalSearchParams<{ scrollTo?: string }>();
