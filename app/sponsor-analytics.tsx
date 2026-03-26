@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, Platform, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView, Platform, Dimensions, ActivityIndicator, TextInput, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useAlert, getSupabaseClient } from '@/template';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import {
   fetchAmbassadorAnalytics,
@@ -32,6 +33,7 @@ interface SponsorData {
 
 export default function SponsorAnalyticsScreen() {
   const { language } = useLanguage();
+  const { showAlert } = useAlert();
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<Period>('30d');
   const [sponsors, setSponsors] = useState<SponsorData[]>([]);
@@ -308,6 +310,13 @@ export default function SponsorAnalyticsScreen() {
                   </View>
                 </View>
               ) : null}
+
+              {/* Push Notification Composer */}
+              <SponsorPushComposer
+                ambassador={selectedData.ambassador}
+                language={language}
+                showAlert={showAlert}
+              />
             </Animated.View>
           ) : (
             <View style={styles.emptyCard}>
@@ -446,4 +455,241 @@ const styles = StyleSheet.create({
   // Empty
   emptyCard: { alignItems: 'center', paddingVertical: 60 },
   emptyText: { fontSize: 15, color: theme.textMuted, marginTop: 12 },
+});
+
+// ============================================================
+// SPONSOR PUSH NOTIFICATION COMPOSER
+// ============================================================
+interface PushComposerProps {
+  ambassador: Ambassador;
+  language: string;
+  showAlert: (title: string, message?: string, buttons?: any[]) => void;
+}
+
+function SponsorPushComposer({ ambassador, language, showAlert }: PushComposerProps) {
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [radius, setRadius] = useState(200);
+  const [sending, setSending] = useState(false);
+  const [monthlyUsed, setMonthlyUsed] = useState(0);
+  const [expanded, setExpanded] = useState(false);
+
+  const isGold = ambassador.badgeType === 'gold_sponsor';
+  const isSilver = ambassador.badgeType === 'sponsor';
+  const maxPerMonth = isGold ? 999 : isSilver ? 1 : 0;
+  const canSend = maxPerMonth > 0 && (isGold || monthlyUsed < maxPerMonth);
+
+  // Load monthly usage from DB
+  useEffect(() => {
+    const loadUsage = async () => {
+      try {
+        const supabase = getSupabaseClient();
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+        const { data } = await supabase
+          .from('ambassador_analytics')
+          .select('id')
+          .eq('ambassador_id', ambassador.id)
+          .eq('event_type', 'sponsor_push')
+          .gte('created_at', startOfMonth.toISOString());
+        setMonthlyUsed(data?.length || 0);
+      } catch { /* silent */ }
+    };
+    loadUsage();
+  }, [ambassador.id]);
+
+  const handleSend = async () => {
+    if (!title.trim() || !body.trim()) {
+      showAlert(language === 'fr' ? 'Champs requis' : 'Required fields', language === 'fr' ? 'Remplissez le titre et le message' : 'Fill in title and message');
+      return;
+    }
+    if (!canSend) {
+      showAlert(language === 'fr' ? 'Limite atteinte' : 'Limit reached', language === 'fr' ? 'Vous avez atteint votre limite de notifications ce mois-ci' : 'You have reached your notification limit this month');
+      return;
+    }
+    setSending(true);
+    try {
+      const supabase = getSupabaseClient();
+      const { error } = await supabase.functions.invoke('send-push', {
+        body: {
+          type: 'sponsor_push',
+          payload: {
+            ambassadorId: ambassador.id,
+            ambassadorName: ambassador.displayName,
+            title: title.trim(),
+            body: body.trim(),
+            radiusKm: radius,
+            city: ambassador.city || undefined,
+          },
+        },
+      });
+      if (error) throw error;
+      // Track the push event
+      await supabase.from('ambassador_analytics').insert({
+        ambassador_id: ambassador.id,
+        event_type: 'sponsor_push',
+        source_page: 'sponsor-analytics',
+      });
+      setMonthlyUsed(prev => prev + 1);
+      setTitle('');
+      setBody('');
+      showAlert(
+        language === 'fr' ? 'Notification envoyee' : 'Notification sent',
+        language === 'fr' ? 'Les joueurs dans un rayon de ' + radius + 'km recevront votre notification.' : 'Players within ' + radius + 'km will receive your notification.'
+      );
+    } catch (e: any) {
+      showAlert(language === 'fr' ? 'Erreur' : 'Error', e?.message || 'Failed');
+    }
+    setSending(false);
+  };
+
+  if (maxPerMonth === 0) return null;
+
+  return (
+    <Animated.View entering={FadeIn.duration(300)} style={pushStyles.container}>
+      <Pressable style={pushStyles.header} onPress={() => setExpanded(!expanded)}>
+        <View style={pushStyles.headerIcon}>
+          <MaterialIcons name="notifications-active" size={18} color="#7C3AED" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={pushStyles.headerTitle}>{language === 'fr' ? 'Notification Push' : 'Push Notification'}</Text>
+          <Text style={pushStyles.headerSub}>
+            {isGold
+              ? (language === 'fr' ? 'Illimite' : 'Unlimited')
+              : `${monthlyUsed}/${maxPerMonth} ${language === 'fr' ? 'ce mois' : 'this month'}`}
+          </Text>
+        </View>
+        <MaterialIcons name={expanded ? 'expand-less' : 'expand-more'} size={22} color="#7C3AED" />
+      </Pressable>
+
+      {expanded ? (
+        <View style={pushStyles.form}>
+          {/* Title input */}
+          <View style={pushStyles.inputGroup}>
+            <Text style={pushStyles.inputLabel}>{language === 'fr' ? 'TITRE' : 'TITLE'}</Text>
+            <TextInput
+              style={pushStyles.input}
+              value={title}
+              onChangeText={setTitle}
+              placeholder={language === 'fr' ? 'Ex: Nouveau defi ce weekend !' : 'Ex: New challenge this weekend!'}
+              placeholderTextColor="#94A3B8"
+              maxLength={60}
+            />
+            <Text style={pushStyles.charCount}>{title.length}/60</Text>
+          </View>
+
+          {/* Body input */}
+          <View style={pushStyles.inputGroup}>
+            <Text style={pushStyles.inputLabel}>{language === 'fr' ? 'MESSAGE' : 'MESSAGE'}</Text>
+            <TextInput
+              style={[pushStyles.input, { minHeight: 70, textAlignVertical: 'top' }]}
+              value={body}
+              onChangeText={setBody}
+              placeholder={language === 'fr' ? 'Decrivez votre annonce...' : 'Describe your announcement...'}
+              placeholderTextColor="#94A3B8"
+              maxLength={180}
+              multiline
+              numberOfLines={3}
+            />
+            <Text style={pushStyles.charCount}>{body.length}/180</Text>
+          </View>
+
+          {/* Radius selector */}
+          <View style={pushStyles.inputGroup}>
+            <Text style={pushStyles.inputLabel}>{language === 'fr' ? 'RAYON GEOGRAPHIQUE' : 'GEOGRAPHIC RADIUS'}</Text>
+            <View style={pushStyles.radiusRow}>
+              {[50, 100, 200, 500].map(r => (
+                <Pressable key={r} style={[pushStyles.radiusChip, radius === r && pushStyles.radiusChipActive]} onPress={() => setRadius(r)}>
+                  <Text style={[pushStyles.radiusText, radius === r && pushStyles.radiusTextActive]}>{r}km</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          {/* Quota info */}
+          {!isGold ? (
+            <View style={pushStyles.quotaRow}>
+              <MaterialIcons name="info-outline" size={14} color="#94A3B8" />
+              <Text style={pushStyles.quotaText}>
+                {language === 'fr'
+                  ? `Partenaire Argent : 1 notification/mois. ${monthlyUsed >= 1 ? 'Limite atteinte.' : 'Disponible.'}`
+                  : `Silver partner: 1 notification/month. ${monthlyUsed >= 1 ? 'Limit reached.' : 'Available.'}`}
+              </Text>
+            </View>
+          ) : null}
+
+          {/* Send button */}
+          <Pressable
+            style={({ pressed }) => [pushStyles.sendBtn, !canSend && { opacity: 0.5 }, pressed && canSend && { transform: [{ scale: 0.98 }] }]}
+            onPress={handleSend}
+            disabled={!canSend || sending}
+          >
+            {sending ? (
+              <ActivityIndicator size="small" color="#FFF" />
+            ) : (
+              <>
+                <MaterialIcons name="send" size={18} color="#FFF" />
+                <Text style={pushStyles.sendBtnText}>
+                  {language === 'fr' ? 'Envoyer la notification' : 'Send notification'}
+                </Text>
+              </>
+            )}
+          </Pressable>
+        </View>
+      ) : null}
+    </Animated.View>
+  );
+}
+
+const pushStyles = StyleSheet.create({
+  container: {
+    backgroundColor: '#FFF',
+    borderRadius: 18,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#7C3AED20',
+    overflow: 'hidden',
+    ...Platform.select({ ios: { shadowColor: '#7C3AED', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6 }, android: { elevation: 2 }, default: {} }),
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 16,
+  },
+  headerIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#7C3AED12', alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 15, fontWeight: '700', color: theme.textPrimary },
+  headerSub: { fontSize: 11, fontWeight: '600', color: '#7C3AED', marginTop: 1 },
+  form: { paddingHorizontal: 16, paddingBottom: 18 },
+  inputGroup: { marginBottom: 14 },
+  inputLabel: { fontSize: 10, fontWeight: '700', color: theme.textMuted, letterSpacing: 0.5, marginBottom: 6 },
+  input: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: theme.textPrimary,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  charCount: { fontSize: 10, color: theme.textMuted, textAlign: 'right', marginTop: 4 },
+  radiusRow: { flexDirection: 'row', gap: 8 },
+  radiusChip: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 12, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
+  radiusChipActive: { backgroundColor: '#7C3AED', borderColor: '#7C3AED' },
+  radiusText: { fontSize: 13, fontWeight: '700', color: theme.textSecondary },
+  radiusTextActive: { color: '#FFF' },
+  quotaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0' },
+  quotaText: { flex: 1, fontSize: 11, color: theme.textSecondary, lineHeight: 16 },
+  sendBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#7C3AED',
+    paddingVertical: 14,
+    borderRadius: 14,
+  },
+  sendBtnText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
 });
