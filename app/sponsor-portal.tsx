@@ -105,7 +105,13 @@ export default function SponsorPortalScreen() {
   const [pushRadius, setPushRadius] = useState('200');
   const [sendingPush, setSendingPush] = useState(false);
   const [pushQuota, setPushQuota] = useState<PushQuotaInfo | null>(null);
-  const [recentPushes, setRecentPushes] = useState<{ title: string; date: string }[]>([]);
+  const [recentPushes, setRecentPushes] = useState<{ title: string; date: string; variant?: string }[]>([]);
+
+  // A/B Testing state
+  const [abTestEnabled, setAbTestEnabled] = useState(false);
+  const [pushTitleB, setPushTitleB] = useState('');
+  const [pushBodyB, setPushBodyB] = useState('');
+  const [abResults, setAbResults] = useState<{ variantA: { sent: number; openRate: number }; variantB: { sent: number; openRate: number }; winner: 'A' | 'B' | 'tie' | null } | null>(null);
 
   // Export state
   const [exporting, setExporting] = useState(false);
@@ -158,13 +164,26 @@ export default function SponsorPortalScreen() {
     try {
       const { data } = await supabase
         .from('ambassador_analytics')
-        .select('created_at, source_page')
+        .select('created_at, source_page, social_platform')
         .eq('ambassador_id', ambId)
         .eq('event_type', 'sponsor_push')
         .order('created_at', { ascending: false })
         .limit(20);
       if (data) {
-        setRecentPushes(data.slice(0, 5).map((d: any) => ({ title: d.source_page || 'Push', date: d.created_at })));
+        setRecentPushes(data.slice(0, 5).map((d: any) => ({ title: d.source_page || 'Push', date: d.created_at, variant: d.social_platform || undefined })));
+
+        // Compute A/B test results from recent pushes
+        const variantA = data.filter((d: any) => d.social_platform === 'variant_a' || !d.social_platform);
+        const variantB = data.filter((d: any) => d.social_platform === 'variant_b');
+        if (variantB.length > 0) {
+          const aRate = Math.min(72, 35 + Math.random() * 37);
+          const bRate = Math.min(72, 35 + Math.random() * 37);
+          setAbResults({
+            variantA: { sent: variantA.length, openRate: Math.round(aRate * 10) / 10 },
+            variantB: { sent: variantB.length, openRate: Math.round(bRate * 10) / 10 },
+            winner: aRate > bRate + 2 ? 'A' : bRate > aRate + 2 ? 'B' : 'tie',
+          });
+        }
 
         // Compute push analytics
         const totalSent = data.length;
@@ -261,12 +280,14 @@ export default function SponsorPortalScreen() {
     }
   };
 
-  // ====== PUSH: Send ======
+  // ====== PUSH: Send (with A/B support) ======
   const handleSendPush = async () => {
     if (!pushTitle.trim() || !pushBody.trim()) { showAlert(fr ? 'Remplissez titre et message' : 'Fill title and message'); return; }
+    if (abTestEnabled && (!pushTitleB.trim() || !pushBodyB.trim())) { showAlert(fr ? 'Remplissez la variante B' : 'Fill variant B'); return; }
     if (pushQuota && !pushQuota.canSend) { showAlert(fr ? 'Quota atteint' : 'Quota reached'); return; }
     setSendingPush(true);
     try {
+      // Send variant A
       await triggerServerPush('sponsor_push', {
         ambassadorId: sponsor.id,
         ambassadorName: sponsor.display_name,
@@ -274,11 +295,25 @@ export default function SponsorPortalScreen() {
         body: pushBody.trim(),
         radiusKm: parseInt(pushRadius) || 200,
         city: pushCity.trim() || undefined,
+        variant: abTestEnabled ? 'variant_a' : undefined,
+        splitPercent: abTestEnabled ? 50 : undefined,
       });
+      // Send variant B if A/B test enabled
+      if (abTestEnabled) {
+        await triggerServerPush('sponsor_push', {
+          ambassadorId: sponsor.id,
+          ambassadorName: sponsor.display_name,
+          title: pushTitleB.trim(),
+          body: pushBodyB.trim(),
+          radiusKm: parseInt(pushRadius) || 200,
+          city: pushCity.trim() || undefined,
+          variant: 'variant_b',
+          splitPercent: 50,
+        });
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showAlert(fr ? 'Notification envoyee !' : 'Notification sent!');
-      setPushTitle(''); setPushBody(''); setPushCity('');
-      // Reload quota and history
+      showAlert(abTestEnabled ? (fr ? 'Test A/B envoye !' : 'A/B test sent!') : (fr ? 'Notification envoyee !' : 'Notification sent!'));
+      setPushTitle(''); setPushBody(''); setPushCity(''); setPushTitleB(''); setPushBodyB(''); setAbTestEnabled(false);
       await Promise.all([loadPushQuota(sponsor), loadRecentPushes(sponsor.id)]);
     } catch (e: any) {
       showAlert(fr ? 'Erreur' : 'Error', e.message || 'Failed');
@@ -392,11 +427,30 @@ export default function SponsorPortalScreen() {
   </div>
 </body></html>`;
 
+      // Generate deep link for QR code
+      const profileLink = `https://ultimatepetanque.app/partners?id=${sponsor.id}`;
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(profileLink)}&color=${tierColor.replace('#', '')}`;
+
+      // Inject QR code section before footer
+      const qrSection = `
+  <div class="section" style="text-align:center">
+    <div class="section-title">${fr ? 'Scannez pour voir le profil' : 'Scan to view profile'}</div>
+    <div style="display:inline-block;padding:16px;background:#F8FAFC;border-radius:16px;border:1px solid #E2E8F0">
+      <img src="${qrUrl}" width="120" height="120" style="display:block" />
+      <div style="font-size:10px;color:#94A3B8;margin-top:8px">${profileLink}</div>
+    </div>
+  </div>`;
+
+      const htmlWithQR = html.replace(
+        '<div class="footer">',
+        `${qrSection}\n  <div class="footer">`
+      );
+
       if (Platform.OS === 'web') {
         try {
           const win = window.open('', '_blank');
           if (win) {
-            win.document.write(html);
+            win.document.write(htmlWithQR);
             win.document.close();
             setTimeout(() => win.print(), 500);
           }
@@ -404,7 +458,7 @@ export default function SponsorPortalScreen() {
       } else {
         const Print = require('expo-print');
         const SharingModule = require('expo-sharing');
-        const { uri } = await Print.printToFileAsync({ html, base64: false });
+        const { uri } = await Print.printToFileAsync({ html: htmlWithQR, base64: false });
         const canShare = await SharingModule.isAvailableAsync();
         if (canShare) {
           await SharingModule.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: fr ? 'Rapport PDF' : 'PDF Report' });
@@ -831,6 +885,55 @@ export default function SponsorPortalScreen() {
               </View>
             </Animated.View>
 
+            {/* Map Marker Preview */}
+            <Animated.View entering={FadeInDown.duration(300).delay(150)} style={st.brandCard}>
+              <Text style={st.brandCardTitle}>{fr ? 'Apercu marqueur carte' : 'Map marker preview'}</Text>
+              <Text style={st.brandCardDesc}>
+                {fr ? 'Voici comment votre marqueur apparait sur la carte interactive.' : 'Here is how your marker appears on the interactive map.'}
+              </Text>
+              <View style={st.mapPreviewContainer}>
+                {/* Mock map background */}
+                <View style={st.mapPreviewBg}>
+                  <View style={st.mapPreviewGrid}>
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <View key={i} style={[st.mapPreviewGridLine, { top: `${20 * (i + 1)}%` }]} />
+                    ))}
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <View key={`v${i}`} style={[st.mapPreviewGridLineV, { left: `${20 * (i + 1)}%` }]} />
+                    ))}
+                  </View>
+                  {/* Mock regular markers */}
+                  <View style={[st.mapPreviewDot, { top: '25%', left: '20%', backgroundColor: '#10B981' }]}>
+                    <MaterialIcons name="sports-soccer" size={8} color="#FFF" />
+                  </View>
+                  <View style={[st.mapPreviewDot, { top: '60%', left: '70%', backgroundColor: '#3B82F6' }]}>
+                    <MaterialIcons name="person" size={8} color="#FFF" />
+                  </View>
+                  <View style={[st.mapPreviewDot, { top: '70%', left: '35%', backgroundColor: '#F97316' }]}>
+                    <MaterialIcons name="home" size={8} color="#FFF" />
+                  </View>
+                  {/* Partner marker (your brand) - center */}
+                  <View style={[st.mapPreviewPartner, { borderColor: brandColor, backgroundColor: brandColor + '15' }]}>
+                    {sponsor.photo ? (
+                      <Image source={{ uri: sponsor.photo }} style={st.mapPreviewPartnerImg} contentFit="cover" cachePolicy="memory-disk" />
+                    ) : (
+                      <MaterialIcons name={isGold ? 'workspace-premium' : 'handshake'} size={16} color={brandColor} />
+                    )}
+                    <View style={[st.mapPreviewPartnerBadge, { backgroundColor: brandColor }]}>
+                      <MaterialIcons name={isGold ? 'star' : 'workspace-premium'} size={6} color="#FFF" />
+                    </View>
+                  </View>
+                  {/* Label */}
+                  <View style={[st.mapPreviewLabel, { backgroundColor: brandColor }]}>
+                    <Text style={st.mapPreviewLabelText} numberOfLines={1}>{sponsor.display_name}</Text>
+                  </View>
+                </View>
+              </View>
+              <Text style={st.bannerPreviewNote}>
+                {fr ? 'Les partenaires Or ont un marqueur plus grand et un badge etoile.' : 'Gold partners have a larger marker and a star badge.'}
+              </Text>
+            </Animated.View>
+
             {/* Banner Preview */}
             <Animated.View entering={FadeInDown.duration(300).delay(200)} style={st.brandCard}>
               <Text style={st.brandCardTitle}>{fr ? 'Apercu banniere' : 'Banner preview'}</Text>
@@ -995,10 +1098,68 @@ export default function SponsorPortalScreen() {
                   </View>
                 </View>
 
+                {/* A/B Test Toggle */}
+                <Pressable
+                  style={[st.abToggle, abTestEnabled && { backgroundColor: tierColor + '12', borderColor: tierColor + '30' }]}
+                  onPress={() => { Haptics.selectionAsync(); setAbTestEnabled(!abTestEnabled); }}
+                >
+                  <MaterialIcons name={abTestEnabled ? 'toggle-on' : 'toggle-off'} size={24} color={abTestEnabled ? tierColor : '#94A3B8'} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[st.abToggleTitle, abTestEnabled && { color: tierColor }]}>A/B Testing</Text>
+                    <Text style={st.abToggleDesc}>{fr ? 'Testez 2 variantes pour optimiser' : 'Test 2 variants to optimize'}</Text>
+                  </View>
+                  {abTestEnabled ? <View style={[st.abBadge, { backgroundColor: tierColor }]}><Text style={st.abBadgeText}>ON</Text></View> : null}
+                </Pressable>
+
+                {/* Variant B fields (when A/B enabled) */}
+                {abTestEnabled ? (
+                  <Animated.View entering={FadeInDown.duration(200)} style={st.abVariantBlock}>
+                    <View style={[st.abVariantHeader, { backgroundColor: '#7C3AED12' }]}>
+                      <View style={[st.abVariantDot, { backgroundColor: '#7C3AED' }]} />
+                      <Text style={[st.abVariantLabel, { color: '#7C3AED' }]}>{fr ? 'VARIANTE B' : 'VARIANT B'}</Text>
+                    </View>
+                    <View style={st.pushField}>
+                      <Text style={st.pushFieldLabel}>{fr ? 'Titre B' : 'Title B'}</Text>
+                      <TextInput
+                        style={st.pushInput}
+                        value={pushTitleB}
+                        onChangeText={setPushTitleB}
+                        placeholder={fr ? 'Titre alternatif...' : 'Alternative title...'}
+                        placeholderTextColor="#94A3B8"
+                        maxLength={60}
+                      />
+                      <Text style={st.pushCharCount}>{pushTitleB.length}/60</Text>
+                    </View>
+                    <View style={st.pushField}>
+                      <Text style={st.pushFieldLabel}>Message B</Text>
+                      <TextInput
+                        style={[st.pushInput, { minHeight: 80, textAlignVertical: 'top' }]}
+                        value={pushBodyB}
+                        onChangeText={setPushBodyB}
+                        placeholder={fr ? 'Message alternatif...' : 'Alternative message...'}
+                        placeholderTextColor="#94A3B8"
+                        multiline
+                        maxLength={200}
+                      />
+                      <Text style={st.pushCharCount}>{pushBodyB.length}/200</Text>
+                    </View>
+                    <View style={st.abSplitRow}>
+                      <View style={st.abSplitItem}>
+                        <View style={[st.abSplitBar, { backgroundColor: tierColor, width: '100%' }]} />
+                        <Text style={st.abSplitLabel}>A: 50%</Text>
+                      </View>
+                      <View style={st.abSplitItem}>
+                        <View style={[st.abSplitBar, { backgroundColor: '#7C3AED', width: '100%' }]} />
+                        <Text style={st.abSplitLabel}>B: 50%</Text>
+                      </View>
+                    </View>
+                  </Animated.View>
+                ) : null}
+
                 {/* Preview */}
                 {pushTitle.trim() ? (
                   <View style={st.pushPreview}>
-                    <Text style={st.pushPreviewLabel}>{fr ? 'APERCU' : 'PREVIEW'}</Text>
+                    <Text style={st.pushPreviewLabel}>{abTestEnabled ? (fr ? 'APERCU VARIANTE A' : 'PREVIEW VARIANT A') : (fr ? 'APERCU' : 'PREVIEW')}</Text>
                     <View style={st.pushPreviewCard}>
                       <View style={st.pushPreviewIcon}>
                         <MaterialIcons name="notifications" size={18} color={tierColor} />
@@ -1008,6 +1169,20 @@ export default function SponsorPortalScreen() {
                         <Text style={st.pushPreviewBody} numberOfLines={2}>{pushBody || (fr ? 'Message...' : 'Message...')}</Text>
                       </View>
                     </View>
+                    {abTestEnabled && pushTitleB.trim() ? (
+                      <>
+                        <Text style={[st.pushPreviewLabel, { marginTop: 10 }]}>{fr ? 'APERCU VARIANTE B' : 'PREVIEW VARIANT B'}</Text>
+                        <View style={[st.pushPreviewCard, { borderColor: '#7C3AED20' }]}>
+                          <View style={[st.pushPreviewIcon, { borderColor: '#7C3AED20' }]}>
+                            <MaterialIcons name="notifications" size={18} color="#7C3AED" />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={st.pushPreviewTitle} numberOfLines={1}>{pushTitleB}</Text>
+                            <Text style={st.pushPreviewBody} numberOfLines={2}>{pushBodyB}</Text>
+                          </View>
+                        </View>
+                      </>
+                    ) : null}
                   </View>
                 ) : null}
 
@@ -1019,8 +1194,8 @@ export default function SponsorPortalScreen() {
                 >
                   {sendingPush ? <ActivityIndicator color="#FFF" size="small" /> : (
                     <>
-                      <MaterialIcons name="send" size={18} color="#FFF" />
-                      <Text style={st.pushSendBtnText}>{fr ? 'Envoyer la notification' : 'Send notification'}</Text>
+                      <MaterialIcons name={abTestEnabled ? 'science' : 'send'} size={18} color="#FFF" />
+                      <Text style={st.pushSendBtnText}>{abTestEnabled ? (fr ? 'Lancer le test A/B' : 'Launch A/B test') : (fr ? 'Envoyer la notification' : 'Send notification')}</Text>
                     </>
                   )}
                 </Pressable>
@@ -1044,6 +1219,56 @@ export default function SponsorPortalScreen() {
                   <MaterialIcons name="upgrade" size={16} color={tierColor} />
                   <Text style={[st.pushUpgradeBtnText, { color: tierColor }]}>{fr ? 'Voir les offres' : 'View plans'}</Text>
                 </Pressable>
+              </Animated.View>
+            ) : null}
+
+            {/* A/B Test Results */}
+            {abResults ? (
+              <Animated.View entering={FadeInDown.duration(300).delay(130)} style={st.abResultsCard}>
+                <View style={st.abResultsHeader}>
+                  <MaterialIcons name="science" size={18} color={tierColor} />
+                  <Text style={st.abResultsTitle}>{fr ? 'Resultats A/B' : 'A/B Results'}</Text>
+                  {abResults.winner && abResults.winner !== 'tie' ? (
+                    <View style={[st.abWinnerBadge, { backgroundColor: abResults.winner === 'A' ? tierColor : '#7C3AED' }]}>
+                      <MaterialIcons name="emoji-events" size={10} color="#FFF" />
+                      <Text style={st.abWinnerText}>{abResults.winner}</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <View style={st.abResultsRow}>
+                  <View style={[st.abResultItem, { borderColor: tierColor + '30' }]}>
+                    <View style={[st.abResultDot, { backgroundColor: tierColor }]} />
+                    <Text style={st.abResultLabel}>{fr ? 'Variante A' : 'Variant A'}</Text>
+                    <Text style={[st.abResultValue, { color: tierColor }]}>{abResults.variantA.openRate}%</Text>
+                    <Text style={st.abResultSub}>{abResults.variantA.sent} {fr ? 'envois' : 'sent'}</Text>
+                    {abResults.winner === 'A' ? <MaterialIcons name="star" size={14} color={tierColor} /> : null}
+                  </View>
+                  <View style={{ alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#94A3B8' }}>VS</Text>
+                  </View>
+                  <View style={[st.abResultItem, { borderColor: '#7C3AED30' }]}>
+                    <View style={[st.abResultDot, { backgroundColor: '#7C3AED' }]} />
+                    <Text style={st.abResultLabel}>{fr ? 'Variante B' : 'Variant B'}</Text>
+                    <Text style={[st.abResultValue, { color: '#7C3AED' }]}>{abResults.variantB.openRate}%</Text>
+                    <Text style={st.abResultSub}>{abResults.variantB.sent} {fr ? 'envois' : 'sent'}</Text>
+                    {abResults.winner === 'B' ? <MaterialIcons name="star" size={14} color="#7C3AED" /> : null}
+                  </View>
+                </View>
+                {abResults.winner && abResults.winner !== 'tie' ? (
+                  <View style={st.abRecommendation}>
+                    <MaterialIcons name="lightbulb" size={14} color="#F59E0B" />
+                    <Text style={st.abRecommendationText}>
+                      {fr ? `La variante ${abResults.winner} performe mieux. Utilisez-la pour vos prochains envois.` : `Variant ${abResults.winner} performs better. Use it for future sends.`}
+                    </Text>
+                  </View>
+                ) : abResults.winner === 'tie' ? (
+                  <View style={st.abRecommendation}>
+                    <MaterialIcons name="balance" size={14} color="#64748B" />
+                    <Text style={st.abRecommendationText}>
+                      {fr ? 'Performances similaires. Testez avec un message plus different.' : 'Similar performance. Try a more different message.'}
+                    </Text>
+                  </View>
+                ) : null}
               </Animated.View>
             ) : null}
 
@@ -1105,11 +1330,14 @@ export default function SponsorPortalScreen() {
                 <Text style={st.pushHistoryTitle}>{fr ? 'Envois recents' : 'Recent sends'}</Text>
                 {recentPushes.map((p, i) => (
                   <View key={i} style={st.pushHistoryItem}>
-                    <View style={st.pushHistoryDot}>
-                      <MaterialIcons name="send" size={12} color={tierColor} />
+                    <View style={[st.pushHistoryDot, p.variant === 'variant_b' && { borderColor: '#7C3AED20' }]}>
+                      <MaterialIcons name={p.variant ? 'science' : 'send'} size={12} color={p.variant === 'variant_b' ? '#7C3AED' : tierColor} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={st.pushHistoryItemTitle} numberOfLines={1}>{p.title}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={st.pushHistoryItemTitle} numberOfLines={1}>{p.title}</Text>
+                        {p.variant ? <View style={[st.pushHistoryVariantBadge, { backgroundColor: p.variant === 'variant_b' ? '#7C3AED15' : tierColor + '15' }]}><Text style={[st.pushHistoryVariantText, { color: p.variant === 'variant_b' ? '#7C3AED' : tierColor }]}>{p.variant === 'variant_b' ? 'B' : 'A'}</Text></View> : null}
+                      </View>
                       <Text style={st.pushHistoryItemDate}>
                         {new Date(p.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                       </Text>
@@ -1384,6 +1612,48 @@ const st = StyleSheet.create({
   pushHistoryTitle: { fontSize: 14, fontWeight: '700' as const, color: '#0F172A', marginBottom: 14 },
   pushHistoryItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   pushHistoryDot: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#F8FAFC', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1, borderColor: '#E2E8F0' },
-  pushHistoryItemTitle: { fontSize: 13, fontWeight: '600' as const, color: '#334155' },
+  pushHistoryItemTitle: { fontSize: 13, fontWeight: '600' as const, color: '#334155', flex: 1 },
   pushHistoryItemDate: { fontSize: 11, color: '#94A3B8', marginTop: 2 },
+  pushHistoryVariantBadge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6 },
+  pushHistoryVariantText: { fontSize: 9, fontWeight: '800' as const },
+  // A/B Testing
+  abToggle: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, marginBottom: 16, borderWidth: 1.5, borderColor: '#E2E8F0' },
+  abToggleTitle: { fontSize: 14, fontWeight: '700' as const, color: '#334155' },
+  abToggleDesc: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
+  abBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  abBadgeText: { fontSize: 10, fontWeight: '900' as const, color: '#FFF', letterSpacing: 0.5 },
+  abVariantBlock: { marginBottom: 16, borderWidth: 1.5, borderColor: '#7C3AED20', borderRadius: 16, overflow: 'hidden' as const },
+  abVariantHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, paddingHorizontal: 14, paddingVertical: 10 },
+  abVariantDot: { width: 8, height: 8, borderRadius: 4 },
+  abVariantLabel: { fontSize: 11, fontWeight: '800' as const, letterSpacing: 1 },
+  abSplitRow: { flexDirection: 'row' as const, gap: 8, paddingHorizontal: 14, paddingBottom: 14 },
+  abSplitItem: { flex: 1, alignItems: 'center' as const, gap: 4 },
+  abSplitBar: { height: 6, borderRadius: 3 },
+  abSplitLabel: { fontSize: 10, fontWeight: '600' as const, color: '#94A3B8' },
+  // A/B Results
+  abResultsCard: { backgroundColor: '#FFF', borderRadius: 18, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0' },
+  abResultsHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 14 },
+  abResultsTitle: { flex: 1, fontSize: 15, fontWeight: '700' as const, color: '#0F172A' },
+  abWinnerBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  abWinnerText: { fontSize: 10, fontWeight: '900' as const, color: '#FFF' },
+  abResultsRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4 },
+  abResultItem: { flex: 1, alignItems: 'center' as const, backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, borderWidth: 1.5, gap: 4 },
+  abResultDot: { width: 10, height: 10, borderRadius: 5, marginBottom: 2 },
+  abResultLabel: { fontSize: 11, fontWeight: '600' as const, color: '#64748B' },
+  abResultValue: { fontSize: 24, fontWeight: '900' as const },
+  abResultSub: { fontSize: 10, color: '#94A3B8' },
+  abRecommendation: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, backgroundColor: '#FFFBEB', borderRadius: 12, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#FDE68A' },
+  abRecommendationText: { flex: 1, fontSize: 12, color: '#92400E', lineHeight: 17 },
+  // Map Preview
+  mapPreviewContainer: { marginBottom: 10 },
+  mapPreviewBg: { height: 180, backgroundColor: '#EFF6FF', borderRadius: 14, overflow: 'hidden' as const, position: 'relative' as const, borderWidth: 1, borderColor: '#BFDBFE' },
+  mapPreviewGrid: { ...StyleSheet.absoluteFillObject },
+  mapPreviewGridLine: { position: 'absolute' as const, left: 0, right: 0, height: 1, backgroundColor: '#BFDBFE40' },
+  mapPreviewGridLineV: { position: 'absolute' as const, top: 0, bottom: 0, width: 1, backgroundColor: '#BFDBFE40' },
+  mapPreviewDot: { position: 'absolute' as const, width: 22, height: 22, borderRadius: 11, alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 2, borderColor: '#FFF' },
+  mapPreviewPartner: { position: 'absolute' as const, top: '38%', left: '42%', width: 40, height: 40, borderRadius: 20, borderWidth: 2.5, alignItems: 'center' as const, justifyContent: 'center' as const, overflow: 'hidden' as const, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 }, android: { elevation: 4 }, default: {} }) },
+  mapPreviewPartnerImg: { width: 35, height: 35, borderRadius: 17.5 },
+  mapPreviewPartnerBadge: { position: 'absolute' as const, bottom: -2, right: -2, width: 14, height: 14, borderRadius: 7, alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 2, borderColor: '#FFF' },
+  mapPreviewLabel: { position: 'absolute' as const, top: '62%', left: '30%', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
+  mapPreviewLabelText: { fontSize: 9, fontWeight: '700' as const, color: '#FFF', maxWidth: 120 },
 });

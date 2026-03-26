@@ -42,7 +42,7 @@ import { Image } from 'expo-image';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 
-type MarkerType = 'all' | 'terrains' | 'clubs' | 'tournaments' | 'players' | 'events';
+type MarkerType = 'all' | 'terrains' | 'clubs' | 'tournaments' | 'players' | 'events' | 'partners';
 type MapMode = 'all' | 'public';
 
 let MapViewComponent: React.ComponentType<any> | null = null;
@@ -183,7 +183,10 @@ interface PartnerMarkerData extends Ambassador {
 }
 
 const PartnerMarkerView = React.memo(({ partner }: { partner: PartnerMarkerData }) => {
-  const tier = TIER_COLORS[partner._tier] || TIER_COLORS.sponsor;
+  const customColor = partner.brandColor;
+  const tier = customColor
+    ? { primary: customColor, bg: customColor + '15', border: customColor }
+    : (TIER_COLORS[partner._tier] || TIER_COLORS.sponsor);
   const isGold = partner._tier === 'gold_sponsor';
   const size = isGold ? 44 : 38;
   return (
@@ -431,6 +434,7 @@ export default function MapScreen() {
     tournaments: { label: t('map', 'tournaments'), singular: t('map', 'tournamentSingular'), icon: 'emoji-events', color: theme.carreauColor },
     players: { label: t('map', 'players'), singular: t('map', 'playerSingular'), icon: 'person', color: theme.primary },
     events: { label: language === 'fr' ? 'Defis' : 'Challenges', singular: language === 'fr' ? 'Defi' : 'Challenge', icon: 'campaign', color: '#7C3AED' },
+    partners: { label: language === 'fr' ? 'Partenaires' : 'Partners', singular: language === 'fr' ? 'Partenaire' : 'Partner', icon: 'handshake', color: '#D4A017' },
   }), [language]);
 
   // Dynamic gradient based on active filter
@@ -442,6 +446,7 @@ export default function MapScreen() {
       tournaments: ['#451A03', '#78350F', '#B45309'],
       players: ['#0F172A', '#1E3A8A', '#2563EB'],
       events: ['#2E1065', '#5B21B6', '#7C3AED'],
+      partners: ['#451A03', '#78350F', '#D4A017'],
     };
     return gradients[filter];
   }, [filter]);
@@ -454,6 +459,7 @@ export default function MapScreen() {
       tournaments: theme.carreauColor,
       players: theme.primary,
       events: '#7C3AED',
+      partners: '#D4A017',
     };
     return colors[filter];
   }, [filter]);
@@ -625,11 +631,21 @@ export default function MapScreen() {
       if (showPublic) addItems(pubData.players, 'players', true);
     }
     if (filter === 'all' || filter === 'events') {
-      sponsoredEvents.forEach(evt => {
+      // Skip events when partner filter active
+      if (filter !== 'partners') sponsoredEvents.forEach(evt => {
         const terrain = terrains.find(tr => tr.id === evt.terrainId);
         const loc = terrain?.location;
         if (loc && (loc.latitude || loc.longitude)) {
           items.push({ ...evt, name: evt.title, location: loc, itemType: 'events', _isPublic: true });
+        }
+      });
+    }
+
+    // Partner filter: add partner markers as results for list view
+    if (filter === 'partners') {
+      partnerMarkers.forEach(pm => {
+        if (pm.location && (pm.location.latitude || pm.location.longitude)) {
+          items.push({ ...pm, name: pm.displayName, itemType: 'partners', _isPublic: true });
         }
       });
     }
@@ -874,8 +890,8 @@ export default function MapScreen() {
         onPress={() => { setSelected(null); setSelectedPartner(null); }}
         onRegionChangeComplete={handleRegionChange}
       >
-        {/* Partner markers (Gold/Silver) — rendered with higher zIndex */}
-        {partnerMarkers.map((pm, idx) => (
+        {/* Partner markers (Gold/Silver) — rendered with higher zIndex, always visible or when partners filter active */}
+        {(filter === 'all' || filter === 'partners') ? partnerMarkers.map((pm, idx) => (
           <MarkerComponent
             key={`partner-${pm.id}-${pm._itemType}-${pm._itemId}-${idx}`}
             coordinate={{ latitude: pm.location.latitude, longitude: pm.location.longitude }}
@@ -890,8 +906,8 @@ export default function MapScreen() {
           >
             <PartnerMarkerView partner={{ ...pm, _tier: pm._tier }} />
           </MarkerComponent>
-        ))}
-        {clusters.map(cluster => {
+        )) : null}
+        {filter !== 'partners' ? clusters.map(cluster => {
           if (cluster.isCluster) {
             // Cluster marker
             const typeCounts: Record<string, number> = {};
@@ -925,7 +941,7 @@ export default function MapScreen() {
               </MarkerComponent>
             );
           }
-        })}
+        }) : null}
       </MapViewComponent>
     );
   };

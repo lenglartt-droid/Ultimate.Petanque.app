@@ -64,10 +64,13 @@ export default function SponsorBanner({ style, page = 'unknown' }: SponsorBanner
   if (ambassadors.length === 0) return null;
 
   const amb = ambassadors[currentIndex];
+  const brandColor = amb.brandColor || '#F59E0B';
+  const brandBg = brandColor + '12';
+  const brandBorder = brandColor + '40';
 
   return (
     <Animated.View entering={FadeIn.duration(400)} style={[styles.container, style]}>
-      <Pressable style={styles.banner} onPress={handlePress}>
+      <Pressable style={[styles.banner, { backgroundColor: brandBg, borderColor: brandBorder }]} onPress={handlePress}>
         <View style={styles.bannerLeft}>
           {amb.photo ? (
             <Image
@@ -78,26 +81,26 @@ export default function SponsorBanner({ style, page = 'unknown' }: SponsorBanner
               cachePolicy="memory-disk"
             />
           ) : (
-            <View style={[styles.photo, styles.photoPlaceholder]}>
-              <MaterialIcons name="campaign" size={16} color="#F59E0B" />
+            <View style={[styles.photo, styles.photoPlaceholder, { backgroundColor: brandColor + '15' }]}>
+              <MaterialIcons name="campaign" size={16} color={brandColor} />
             </View>
           )}
           <View style={styles.info}>
             <View style={styles.labelRow}>
-              <MaterialIcons name="verified" size={10} color="#F59E0B" />
-              <Text style={styles.label}>PARTENAIRE</Text>
+              <MaterialIcons name="verified" size={10} color={brandColor} />
+              <Text style={[styles.label, { color: brandColor + 'CC' }]}>PARTENAIRE</Text>
             </View>
             <Text style={styles.name} numberOfLines={1}>{amb.displayName}</Text>
           </View>
         </View>
-        <View style={styles.cta}>
-          <MaterialIcons name="chevron-right" size={18} color="#92400E" />
+        <View style={[styles.cta, { backgroundColor: brandColor + '30' }]}>
+          <MaterialIcons name="chevron-right" size={18} color={brandColor + 'CC'} />
         </View>
       </Pressable>
       {ambassadors.length > 1 ? (
         <View style={styles.dots}>
           {ambassadors.map((_, i) => (
-            <View key={i} style={[styles.dot, i === currentIndex && styles.dotActive]} />
+            <View key={i} style={[styles.dot, { backgroundColor: brandColor + '40' }, i === currentIndex && [styles.dotActive, { backgroundColor: brandColor }]]} />
           ))}
         </View>
       ) : null}
