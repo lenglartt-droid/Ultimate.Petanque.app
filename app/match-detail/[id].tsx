@@ -25,6 +25,7 @@ import SharedBadge from '@/components/ui/SharedBadge';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { Match } from '@/services/mockData';
+import Svg, { Circle, Line, G, Polygon, Text as SvgText } from 'react-native-svg';
 import {
   getMatchValidationLevel,
   getValidationColor,
@@ -414,6 +415,137 @@ export default function MatchDetailScreen() {
           </Animated.View>
         ) : null}
 
+        {/* Radar Chart - Team Performance Comparison */}
+        {match.playerActions && match.playerActions.length > 0 ? (() => {
+          const teamAActions = match.playerActions!.filter(pa => pa.team === 'A');
+          const teamBActions = match.playerActions!.filter(pa => pa.team === 'B');
+          const sumActions = (arr: typeof teamAActions) => arr.reduce((acc, pa) => ({
+            tirs: acc.tirs + pa.actions.tirs,
+            tirsSuccess: acc.tirsSuccess + pa.actions.tirsSuccess,
+            points: acc.points + pa.actions.points,
+            pointsSuccess: acc.pointsSuccess + pa.actions.pointsSuccess,
+            carreaux: acc.carreaux + pa.actions.carreaux,
+          }), { tirs: 0, tirsSuccess: 0, points: 0, pointsSuccess: 0, carreaux: 0 });
+          const aSum = sumActions(teamAActions);
+          const bSum = sumActions(teamBActions);
+          const aTirRate = aSum.tirs > 0 ? (aSum.tirsSuccess / aSum.tirs) * 100 : 0;
+          const bTirRate = bSum.tirs > 0 ? (bSum.tirsSuccess / bSum.tirs) * 100 : 0;
+          const aPointRate = aSum.points > 0 ? (aSum.pointsSuccess / aSum.points) * 100 : 0;
+          const bPointRate = bSum.points > 0 ? (bSum.pointsSuccess / bSum.points) * 100 : 0;
+          const maxCarreaux = Math.max(1, aSum.carreaux, bSum.carreaux);
+          const aCarreauxNorm = (aSum.carreaux / maxCarreaux) * 100;
+          const bCarreauxNorm = (bSum.carreaux / maxCarreaux) * 100;
+          const meneCount = match.menes?.length || 1;
+          const aAvgMene = meneTotalA / meneCount;
+          const bAvgMene = meneTotalB / meneCount;
+          const maxAvgMene = Math.max(1, aAvgMene, bAvgMene);
+          const aAvgMeneNorm = (aAvgMene / maxAvgMene) * 100;
+          const bAvgMeneNorm = (bAvgMene / maxAvgMene) * 100;
+
+          const labels = [
+            fr ? 'Taux Tir' : 'Shot Rate',
+            fr ? 'Taux Point' : 'Point Rate',
+            'Carreaux',
+            fr ? 'Score/Mene' : 'Score/End',
+          ];
+          const aValues = [aTirRate, aPointRate, aCarreauxNorm, aAvgMeneNorm];
+          const bValues = [bTirRate, bPointRate, bCarreauxNorm, bAvgMeneNorm];
+          const aRaw = [
+            aSum.tirs > 0 ? `${Math.round(aTirRate)}%` : '-',
+            aSum.points > 0 ? `${Math.round(aPointRate)}%` : '-',
+            `${aSum.carreaux}`,
+            `${aAvgMene.toFixed(1)}`,
+          ];
+          const bRaw = [
+            bSum.tirs > 0 ? `${Math.round(bTirRate)}%` : '-',
+            bSum.points > 0 ? `${Math.round(bPointRate)}%` : '-',
+            `${bSum.carreaux}`,
+            `${bAvgMene.toFixed(1)}`,
+          ];
+
+          const radarSize = 220;
+          const cx = radarSize / 2;
+          const cy = radarSize / 2;
+          const maxR = radarSize / 2 - 32;
+          const numAxes = labels.length;
+          const angleStep = (2 * Math.PI) / numAxes;
+          const getPoint = (value: number, index: number) => {
+            const angle = index * angleStep - Math.PI / 2;
+            const r = (Math.min(value, 100) / 100) * maxR;
+            return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+          };
+          const aPoints = aValues.map((v, i) => getPoint(v, i));
+          const bPoints = bValues.map((v, i) => getPoint(v, i));
+          const aPolygon = aPoints.map(p => `${p.x},${p.y}`).join(' ');
+          const bPolygon = bPoints.map(p => `${p.x},${p.y}`).join(' ');
+
+          const hasData = aSum.tirs > 0 || aSum.points > 0 || bSum.tirs > 0 || bSum.points > 0;
+          if (!hasData) return null;
+
+          return (
+            <Animated.View entering={FadeInDown.duration(300).delay(215)} style={s.card}>
+              <View style={s.cardHeaderRow}>
+                <MaterialIcons name="radar" size={16} color={theme.primary} />
+                <Text style={s.cardTitle}>{fr ? 'Comparaison des equipes' : 'Team comparison'}</Text>
+              </View>
+
+              <View style={s.radarCenter}>
+                <Svg width={radarSize} height={radarSize}>
+                  {[0.25, 0.5, 0.75, 1].map((level, i) => (
+                    <Circle key={i} cx={cx} cy={cy} r={maxR * level} fill="none" stroke={theme.border} strokeWidth="0.8" strokeDasharray={i < 3 ? '3,3' : undefined} />
+                  ))}
+                  {labels.map((label, i) => {
+                    const angle = i * angleStep - Math.PI / 2;
+                    const endX = cx + maxR * Math.cos(angle);
+                    const endY = cy + maxR * Math.sin(angle);
+                    const labelX = cx + (maxR + 20) * Math.cos(angle);
+                    const labelY = cy + (maxR + 20) * Math.sin(angle);
+                    return (
+                      <G key={i}>
+                        <Line x1={cx} y1={cy} x2={endX} y2={endY} stroke={theme.border} strokeWidth="0.8" />
+                        <SvgText x={labelX} y={labelY + 4} fontSize="9" fill={theme.textSecondary} textAnchor="middle" fontWeight="600">{label}</SvgText>
+                      </G>
+                    );
+                  })}
+                  <Polygon points={bPolygon} fill={theme.error + '18'} stroke={theme.error} strokeWidth="2" />
+                  <Polygon points={aPolygon} fill={theme.success + '18'} stroke={theme.success} strokeWidth="2" />
+                  {aPoints.map((p, i) => <Circle key={`a${i}`} cx={p.x} cy={p.y} r={4} fill={theme.success} />)}
+                  {bPoints.map((p, i) => <Circle key={`b${i}`} cx={p.x} cy={p.y} r={4} fill={theme.error} />)}
+                </Svg>
+              </View>
+
+              <View style={s.radarLegend}>
+                <View style={s.radarLegendItem}>
+                  <View style={[s.radarLegendDot, { backgroundColor: theme.success }]} />
+                  <Text style={s.radarLegendText}>{fr ? 'Mon equipe' : 'My team'}</Text>
+                </View>
+                <View style={s.radarLegendItem}>
+                  <View style={[s.radarLegendDot, { backgroundColor: theme.error }]} />
+                  <Text style={s.radarLegendText}>{fr ? 'Adversaire' : 'Opponent'}</Text>
+                </View>
+              </View>
+
+              <View style={s.radarTable}>
+                <View style={s.radarTableHeader}>
+                  <Text style={[s.radarTableCell, { flex: 2 }]} />
+                  <Text style={[s.radarTableHeaderCell, { color: theme.success }]}>{fr ? 'Nous' : 'Us'}</Text>
+                  <Text style={[s.radarTableHeaderCell, { color: theme.error }]}>{fr ? 'Eux' : 'Them'}</Text>
+                </View>
+                {labels.map((label, i) => {
+                  const aWins = aValues[i] >= bValues[i];
+                  return (
+                    <View key={i} style={s.radarTableRow}>
+                      <Text style={[s.radarTableLabel, { flex: 2 }]}>{label}</Text>
+                      <Text style={[s.radarTableValue, aWins && { color: theme.success, fontWeight: '800' }]}>{aRaw[i]}</Text>
+                      <Text style={[s.radarTableValue, !aWins && { color: theme.error, fontWeight: '800' }]}>{bRaw[i]}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </Animated.View>
+          );
+        })() : null}
+
         {/* Player Actions */}
         {match.playerActions && match.playerActions.length > 0 ? (
           <Animated.View entering={FadeInDown.duration(300).delay(220)} style={s.card}>
@@ -651,6 +783,20 @@ const s = StyleSheet.create({
   witnessRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.backgroundSecondary, borderRadius: 10, padding: 10, marginBottom: 6 },
   witnessId: { flex: 1, fontSize: 13, color: theme.textPrimary, fontWeight: '500' },
   witnessStatus: { fontSize: 11, fontWeight: '700' },
+
+  // Radar chart
+  radarCenter: { alignItems: 'center', marginVertical: 8 },
+  radarLegend: { flexDirection: 'row', justifyContent: 'center', gap: 24, marginTop: 10, marginBottom: 14 },
+  radarLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  radarLegendDot: { width: 10, height: 10, borderRadius: 5 },
+  radarLegendText: { fontSize: 12, fontWeight: '600', color: theme.textPrimary },
+  radarTable: { borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 10 },
+  radarTableHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  radarTableHeaderCell: { flex: 1, fontSize: 11, fontWeight: '700', textAlign: 'center', textTransform: 'uppercase', letterSpacing: 0.5 },
+  radarTableRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: theme.border + '40' },
+  radarTableCell: { flex: 1 },
+  radarTableLabel: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  radarTableValue: { flex: 1, fontSize: 14, fontWeight: '600', color: theme.textSecondary, textAlign: 'center' },
 
   // Actions
   actionsColumn: { gap: 10, marginBottom: 8 },
