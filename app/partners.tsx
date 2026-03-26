@@ -20,7 +20,9 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import theme, { blurhash } from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
-import { fetchDetailedBannerAnalytics, BannerDetailedAnalytics } from '@/services/ambassadorAnalyticsService';
+import { fetchDetailedBannerAnalytics, BannerDetailedAnalytics, fetchAmbassadorAnalytics, AmbassadorAnalytics } from '@/services/ambassadorAnalyticsService';
+import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
+import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { useAuth } from '@/template';
 import { getSupabaseClient } from '@/template';
 import Svg, { Polyline, Circle as SvgCircle } from 'react-native-svg';
@@ -36,17 +38,8 @@ interface PartnerSlot {
   isAvailable: boolean;
 }
 
-const PARTNER_SLOTS: PartnerSlot[] = [
-  { id: 'gold-1', name: '', description: '', category: 'gold', isAvailable: true },
-  { id: 'gold-2', name: '', description: '', category: 'gold', isAvailable: true },
-  { id: 'silver-1', name: '', description: '', category: 'silver', isAvailable: true },
-  { id: 'silver-2', name: '', description: '', category: 'silver', isAvailable: true },
-  { id: 'silver-3', name: '', description: '', category: 'silver', isAvailable: true },
-  { id: 'bronze-1', name: '', description: '', category: 'bronze', isAvailable: true },
-  { id: 'bronze-2', name: '', description: '', category: 'bronze', isAvailable: true },
-  { id: 'bronze-3', name: '', description: '', category: 'bronze', isAvailable: true },
-  { id: 'bronze-4', name: '', description: '', category: 'bronze', isAvailable: true },
-];
+// Max slots per tier (available positions)
+const SLOT_LIMITS = { gold: 2, silver: 3, bronze: 4 };
 
 const CATEGORY_CONFIG = {
   gold: { icon: 'emoji-events' as const, color: '#D4A017', bg: '#FFF8E1', gradient: ['#F9E547', '#D4A017'] as [string, string], label: { fr: 'Or', en: 'Gold' } },
@@ -92,6 +85,10 @@ export default function PartnersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
 
+  // Real partners from ambassadors table
+  const [partners, setPartners] = useState<(Ambassador & { analytics?: AmbassadorAnalytics })[]>([]);
+  const [partnersLoading, setPartnersLoading] = useState(true);
+
   // ROI view state for sponsors/partners
   const [myAmbassadorRecord, setMyAmbassadorRecord] = useState<any | null>(null);
   const [roiData, setRoiData] = useState<BannerDetailedAnalytics | null>(null);
@@ -99,12 +96,34 @@ export default function PartnersScreen() {
   const [roiLoading, setRoiLoading] = useState(false);
   const [showRoi, setShowRoi] = useState(false);
 
+  // Load real partners and their analytics
+  const loadPartners = useCallback(async () => {
+    setPartnersLoading(true);
+    try {
+      const [{ ambassadors }, { stats }] = await Promise.all([
+        fetchAmbassadors(),
+        fetchAmbassadorAnalytics('30d'),
+      ]);
+      const sponsorPartners = ambassadors.filter(a =>
+        a.badgeType === 'gold_sponsor' || a.badgeType === 'sponsor' || a.badgeType === 'partner'
+      );
+      const withAnalytics = sponsorPartners.map(p => ({
+        ...p,
+        analytics: stats.get(p.id) || { profileViews: 0, socialClicks: 0, bannerImpressions: 0, socialBreakdown: {} },
+      }));
+      setPartners(withAnalytics);
+    } catch { /* silent */ }
+    setPartnersLoading(false);
+  }, []);
+
+  useEffect(() => { loadPartners(); }, [loadPartners]);
+
   // Load ambassador record for current user (only sponsors/partners get ROI view)
   useEffect(() => {
     if (!user?.id) return;
     const supabase = getSupabaseClient();
     supabase.from('ambassadors').select('*').eq('user_id', user.id).eq('is_active', true).maybeSingle().then(({ data }) => {
-      if (data && (data.badge_type === 'sponsor' || data.badge_type === 'partner')) {
+      if (data && (data.badge_type === 'sponsor' || data.badge_type === 'partner' || data.badge_type === 'gold_sponsor')) {
         setMyAmbassadorRecord(data);
         setShowRoi(true);
       }
@@ -130,20 +149,35 @@ export default function PartnersScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
+    await loadPartners();
+    if (myAmbassadorRecord?.id) {
+      const { data } = await fetchDetailedBannerAnalytics(myAmbassadorRecord.id, roiPeriod);
+      setRoiData(data);
+    }
     setRefreshing(false);
   };
 
-  const goldSlots = PARTNER_SLOTS.filter(s => s.category === 'gold');
-  const silverSlots = PARTNER_SLOTS.filter(s => s.category === 'silver');
-  const bronzeSlots = PARTNER_SLOTS.filter(s => s.category === 'bronze');
+  // Categorize real partners
+  const getTierForBadge = (badgeType: string): 'gold' | 'silver' | 'bronze' => {
+    if (badgeType === 'gold_sponsor') return 'gold';
+    if (badgeType === 'sponsor') return 'silver';
+    return 'bronze';
+  };
+
+  const goldPartners = partners.filter(p => getTierForBadge(p.badgeType) === 'gold');
+  const silverPartners = partners.filter(p => getTierForBadge(p.badgeType) === 'silver');
+  const bronzePartners = partners.filter(p => getTierForBadge(p.badgeType) === 'bronze');
 
   const renderPartnerCategory = (
-    slots: PartnerSlot[],
+    filledPartners: (Ambassador & { analytics?: AmbassadorAnalytics })[],
     category: 'gold' | 'silver' | 'bronze',
     sectionDelay: number
   ) => {
     const cfg = CATEGORY_CONFIG[category];
     const isGold = category === 'gold';
+    const maxSlots = SLOT_LIMITS[category];
+    const emptyCount = Math.max(0, maxSlots - filledPartners.length);
+
     return (
       <Animated.View key={category} entering={FadeInDown.duration(400).delay(sectionDelay)} style={styles.partnerCategoryBlock}>
         {/* Category header */}
@@ -155,16 +189,72 @@ export default function PartnersScreen() {
             {cfg.label[language]}
           </Text>
           <View style={[styles.partnerCatCountBadge, { backgroundColor: cfg.bg }]}>
-            <Text style={[styles.partnerCatCountText, { color: cfg.color }]}>{slots.length} {language === 'fr' ? 'empl.' : 'slots'}</Text>
+            <Text style={[styles.partnerCatCountText, { color: cfg.color }]}>{filledPartners.length}/{maxSlots}</Text>
           </View>
         </View>
 
-        {/* Grid of slots */}
+        {/* Grid: real partners + empty slots */}
         <View style={[styles.partnerSlotsGrid, isGold && styles.partnerSlotsGridGold]}>
-          {slots.map((slot, idx) => (
+          {filledPartners.map((partner, idx) => (
             <Animated.View
-              key={slot.id}
+              key={partner.id}
               entering={FadeIn.duration(300).delay(sectionDelay + 100 + idx * 60)}
+              style={[styles.partnerSlotCard, isGold && styles.partnerSlotCardGold, { borderColor: cfg.color + '30', borderStyle: 'solid' as any }]}
+            >
+              <Pressable
+                style={({ pressed }) => [{ alignItems: 'center' as const, width: '100%' }, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  trackAmbassadorEvent(partner.id, 'profile_view', undefined, { sourcePage: 'partners' });
+                  if (partner.websiteUrl) Linking.openURL(partner.websiteUrl);
+                }}
+              >
+                {/* Logo/Photo */}
+                {partner.photo ? (
+                  <Image source={{ uri: partner.photo }} style={[styles.partnerLogo, isGold && styles.partnerLogoGold]} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                ) : (
+                  <LinearGradient colors={cfg.gradient} style={[styles.partnerLogoFallback, isGold && styles.partnerLogoGold]}>
+                    <MaterialIcons name={cfg.icon} size={isGold ? 28 : 22} color="#FFF" />
+                  </LinearGradient>
+                )}
+                <Text style={[styles.partnerSlotTitle, { color: theme.textPrimary, fontWeight: '700' }]} numberOfLines={1}>
+                  {partner.displayName}
+                </Text>
+                {/* Tier badge */}
+                <View style={[styles.partnerTierBadge, { backgroundColor: cfg.color }]}>
+                  <MaterialIcons name={cfg.icon} size={8} color="#FFF" />
+                  <Text style={styles.partnerTierBadgeText}>{cfg.label[language].toUpperCase()}</Text>
+                </View>
+                {/* Impressions counter */}
+                {partner.analytics ? (
+                  <View style={styles.partnerStatsRow}>
+                    <View style={styles.partnerStatChip}>
+                      <MaterialIcons name="visibility" size={10} color="#3B82F6" />
+                      <Text style={styles.partnerStatText}>{partner.analytics.bannerImpressions}</Text>
+                    </View>
+                    <View style={styles.partnerStatChip}>
+                      <MaterialIcons name="touch-app" size={10} color="#10B981" />
+                      <Text style={styles.partnerStatText}>{partner.analytics.profileViews + partner.analytics.socialClicks}</Text>
+                    </View>
+                  </View>
+                ) : null}
+                {/* Website link */}
+                {partner.websiteUrl ? (
+                  <View style={[styles.partnerSlotBtn, { borderColor: cfg.color + '40' }]}>
+                    <MaterialIcons name="open-in-new" size={12} color={cfg.color} />
+                    <Text style={[styles.partnerSlotBtnText, { color: cfg.color }]}>
+                      {language === 'fr' ? 'Visiter' : 'Visit'}
+                    </Text>
+                  </View>
+                ) : null}
+              </Pressable>
+            </Animated.View>
+          ))}
+          {/* Empty slots */}
+          {Array.from({ length: emptyCount }).map((_, idx) => (
+            <Animated.View
+              key={`empty-${category}-${idx}`}
+              entering={FadeIn.duration(300).delay(sectionDelay + 100 + (filledPartners.length + idx) * 60)}
               style={[styles.partnerSlotCard, isGold && styles.partnerSlotCardGold, { borderColor: cfg.color + '20' }]}
             >
               <View style={[styles.partnerSlotIconBg, { backgroundColor: cfg.bg }]}>
@@ -355,9 +445,17 @@ export default function PartnersScreen() {
             </View>
           </Animated.View>
 
-          {renderPartnerCategory(goldSlots, 'gold', 350)}
-          {renderPartnerCategory(silverSlots, 'silver', 500)}
-          {renderPartnerCategory(bronzeSlots, 'bronze', 650)}
+          {partnersLoading ? (
+            <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+              <ActivityIndicator size="small" color={theme.primary} />
+            </View>
+          ) : (
+            <>
+              {renderPartnerCategory(goldPartners, 'gold', 350)}
+              {renderPartnerCategory(silverPartners, 'silver', 500)}
+              {renderPartnerCategory(bronzePartners, 'bronze', 650)}
+            </>
+          )}
         </View>
 
         {/* ====== CTA SECTION ====== */}
@@ -665,6 +763,14 @@ const styles = StyleSheet.create({
   },
   partnerSlotTitle: { fontSize: 13, fontWeight: '600', color: theme.textSecondary, marginBottom: 2 },
   partnerSlotCategory: { fontSize: 11, color: theme.textMuted, marginBottom: 12 },
+  partnerLogo: { width: 56, height: 56, borderRadius: 16, overflow: 'hidden' as const, marginBottom: 10 },
+  partnerLogoGold: { width: 64, height: 64, borderRadius: 18 },
+  partnerLogoFallback: { width: 56, height: 56, borderRadius: 16, alignItems: 'center' as const, justifyContent: 'center' as const, marginBottom: 10 },
+  partnerTierBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginTop: 4, marginBottom: 6 },
+  partnerTierBadgeText: { fontSize: 8, fontWeight: '900' as const, color: '#FFF', letterSpacing: 0.5 },
+  partnerStatsRow: { flexDirection: 'row' as const, gap: 8, marginBottom: 8 },
+  partnerStatChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  partnerStatText: { fontSize: 11, fontWeight: '700' as const, color: theme.textPrimary },
   partnerSlotBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20,

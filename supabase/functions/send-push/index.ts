@@ -647,6 +647,178 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // ============================================================
+    // SPONSOR_PUSH: Sponsor/partner sends push to nearby players
+    // Gold: unlimited, Silver: 1/month (enforced client-side + DB tracking)
+    // ============================================================
+    else if (type === 'sponsor_push') {
+      const { ambassadorId, ambassadorName, title: pushTitle, body: pushBody, radiusKm, city: sponsorCity } = payload || {};
+      if (!ambassadorId || !pushTitle || !pushBody) {
+        return new Response(JSON.stringify({ error: 'Missing ambassadorId/title/body' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Verify caller is the ambassador owner
+      const { data: ambRecord } = await supabaseAdmin
+        .from('ambassadors')
+        .select('id, user_id, badge_type')
+        .eq('id', ambassadorId)
+        .single();
+
+      if (!ambRecord || ambRecord.user_id !== user.id) {
+        return new Response(JSON.stringify({ error: 'Unauthorized: not ambassador owner' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Check monthly limit for Silver (sponsor badge)
+      if (ambRecord.badge_type === 'sponsor') {
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+        const { data: usageData } = await supabaseAdmin
+          .from('ambassador_analytics')
+          .select('id')
+          .eq('ambassador_id', ambassadorId)
+          .eq('event_type', 'sponsor_push')
+          .gte('created_at', startOfMonth.toISOString());
+        if (usageData && usageData.length >= 1) {
+          return new Response(JSON.stringify({ error: 'Monthly push limit reached', sent: 0, errors: 0 }), {
+            status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      } else if (ambRecord.badge_type !== 'gold_sponsor') {
+        return new Response(JSON.stringify({ error: 'Bronze partners cannot send push notifications' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const targetRadius = radiusKm || 200;
+
+      // Get all active push tokens (exclude sender)
+      const { data: allTokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('user_id, token')
+        .eq('active', true)
+        .neq('user_id', user.id);
+
+      if (!allTokens || allTokens.length === 0) {
+        return new Response(JSON.stringify({ sent: 0, errors: 0, reason: 'no_tokens' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const allUserIds = [...new Set(allTokens.map(t => t.user_id))];
+
+      // Get player locations for geo-filtering
+      const { data: playerLocations } = await supabaseAdmin
+        .from('players')
+        .select('user_id, location')
+        .in('user_id', allUserIds);
+
+      const playerLocMap = new Map<string, any>();
+      (playerLocations || []).forEach(p => {
+        if (!playerLocMap.has(p.user_id) && p.location) playerLocMap.set(p.user_id, p.location);
+      });
+
+      // Also check terrains/clubs for users without direct location
+      const usersWithoutLoc = allUserIds.filter(uid => !playerLocMap.has(uid));
+      if (usersWithoutLoc.length > 0 && sponsorCity) {
+        const { data: terrainCities } = await supabaseAdmin
+          .from('terrains').select('user_id, city').in('user_id', usersWithoutLoc);
+        const { data: clubCities } = await supabaseAdmin
+          .from('clubs').select('user_id, city').in('user_id', usersWithoutLoc);
+        const cityMap = new Map<string, Set<string>>();
+        [...(terrainCities || []), ...(clubCities || [])].forEach((r: any) => {
+          if (!cityMap.has(r.user_id)) cityMap.set(r.user_id, new Set());
+          if (r.city) cityMap.get(r.user_id)!.add(r.city.toLowerCase());
+        });
+        // Mark city-matched users
+        cityMap.forEach((cities, uid) => {
+          if (cities.has(sponsorCity.toLowerCase())) {
+            playerLocMap.set(uid, { city: sponsorCity });
+          }
+        });
+      }
+
+      // Get ambassador location for distance calc
+      let ambLat: number | null = null;
+      let ambLng: number | null = null;
+      if (ambRecord) {
+        const { data: ambPlayer } = await supabaseAdmin
+          .from('players')
+          .select('location')
+          .eq('user_id', ambRecord.user_id)
+          .limit(1)
+          .maybeSingle();
+        if (ambPlayer?.location?.latitude) {
+          ambLat = ambPlayer.location.latitude;
+          ambLng = ambPlayer.location.longitude;
+        }
+      }
+
+      // Filter by geographic proximity
+      const matchedUserIds = new Set<string>();
+      for (const uid of allUserIds) {
+        const loc = playerLocMap.get(uid);
+        if (!loc) continue;
+
+        // City match
+        if (sponsorCity && loc.city?.toLowerCase() === sponsorCity.toLowerCase()) {
+          matchedUserIds.add(uid);
+          continue;
+        }
+
+        // Distance match
+        if (ambLat && ambLng && loc.latitude && loc.longitude) {
+          const dist = haversineDistance(ambLat, ambLng, loc.latitude, loc.longitude);
+          if (dist <= targetRadius) {
+            matchedUserIds.add(uid);
+          }
+        }
+      }
+
+      // Filter by notification preference
+      const enabledUserIds = await filterByNotifPref(matchedUserIds, 'event_created');
+      console.log(`[send-push] sponsor_push: ${enabledUserIds.size} recipients (${matchedUserIds.size} matched)`);
+
+      // Build and send messages
+      const { data: recipientTokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('user_id, token')
+        .in('user_id', [...enabledUserIds])
+        .eq('active', true);
+
+      if (!recipientTokens || recipientTokens.length === 0) {
+        return new Response(JSON.stringify({ sent: 0, errors: 0, reason: 'no_matching_tokens' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const messages = recipientTokens.map(t => buildPushMessage(
+        t.token,
+        pushTitle,
+        pushBody,
+        { type: 'sponsor_push', ambassadorId },
+        { channelId: 'tournament-reminders', priority: 'high' }
+      ));
+
+      const tickets = await sendPushNotifications(messages);
+      sent = tickets.filter(t => t.status === 'ok').length;
+      errors = tickets.filter(t => t.status === 'error').length;
+
+      // Deactivate invalid tokens
+      for (let i = 0; i < tickets.length; i++) {
+        if (tickets[i].details?.error === 'DeviceNotRegistered') {
+          const invalidToken = messages[i]?.to;
+          if (invalidToken) {
+            await supabaseAdmin.from('push_tokens').update({ active: false }).eq('token', invalidToken);
+          }
+        }
+      }
+    }
+
     else {
       return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
