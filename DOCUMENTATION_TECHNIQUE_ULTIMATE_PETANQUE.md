@@ -1,7 +1,7 @@
 # ULTIMATE PETANQUE — Document Technique de Reprise
 
-**Version :** 1.0.0  
-**Date :** 23 mars 2026  
+**Version :** 1.1.0  
+**Date :** 26 mars 2026  
 **Destinataire :** Développeur externe en charge de la finalisation et publication  
 
 ---
@@ -34,10 +34,12 @@ Fournir un outil complet aux joueurs de pétanque pour enregistrer leurs parties
 - **Suivi de scores en temps réel** avec notation détaillée (type de tir, qualité, résultat)
 - **Statistiques avancées** : performance, progression, analyse d'erreurs, statistiques croisées par terrain/boules/adversaire
 - **Carte interactive** avec géolocalisation des terrains, clubs, joueurs et tournois
-- **Partage cross-joueurs** : matchs et défis partagés entre comptes avec permissions et édition collaborative
+- **Partage cross-joueurs** : matchs et défis partagés entre comptes avec permissions, édition collaborative et mise à jour automatique des statistiques
 - **Programme ambassadeur** avec analytiques de visibilité et défis sponsorisés
-- **Classements communautaires** : joueurs, clubs, marques de boules
-- **Système de rendez-vous** entre joueurs via codes de partage
+- **Classements communautaires** : joueurs, clubs, marques de boules, avec filtres géographiques
+- **Système de rendez-vous** entre joueurs via codes de partage et QR codes
+- **Bilan hebdomadaire** avec sparkline d'activité quotidienne bicolore (matchs/défis)
+- **FAQ contextuelle** structurée par situations réelles du joueur (entraînement, tournoi, déplacement)
 
 ### 1.5 Fonctionnement global
 
@@ -52,43 +54,43 @@ L'utilisateur s'inscrit via OTP email + mot de passe, crée son profil joueur au
 | # | Fonctionnalité | Description | Complexité |
 |---|---|---|---|
 | 1 | **Authentification OTP + Mot de passe** | Inscription/connexion via email OTP (4 chiffres) + mot de passe, session persistante | Moyenne |
-| 2 | **Enregistrement de matchs** | Création avec format (Tête-à-tête/Doublette/Triplette), mode (Entraînement/Tournoi), scoring mène par mène, actions joueurs détaillées | Élevée |
+| 2 | **Enregistrement de matchs** | Création avec format (Tête-à-tête/Doublette/Triplette), mode (Entraînement/Tournoi), scoring mène par mène, actions joueurs détaillées, séries Best of 3 | Élevée |
 | 3 | **Notation avancée des tirs** | Types (au fer, au plomb, en rafle, court ramassé, carreau), résultats d'échec (court droite/gauche, long, tir bouchon), qualité d'impact (gain point, décisif, sans effet, négatif) | Élevée |
 | 4 | **Notation avancée des points** | Types (roulé, plombé, demi-portée, portée), qualité (excellent, bon, moyen, au bouchon, devant boule, raté, crocheté, sorti) | Élevée |
-| 5 | **Défis (Challenges)** | 3 types : 10 Tirs, 10 Tirs Sautés, Précision (5 ateliers). Modes solo et 1v1 | Élevée |
+| 5 | **Défis (Challenges)** | 3 types : 10 Tirs, 10 Tirs Sautés, Précision (5 ateliers). Modes solo et 1v1 avec comparaison graphique | Élevée |
 | 6 | **Statistiques complètes** | 4 catégories (Performance, Tir, Point, Erreurs) avec filtres temporels (jour→all), filtres par item (match, tournoi, adversaire, partenaire, terrain, boules), graphiques de progression | Très élevée |
 | 7 | **Statistiques croisées** | Tableaux Type×Impact (tir), Type×Qualité (point), stats par type de terrain, stats par jeu de boules avec comparaison graphique | Élevée |
 | 8 | **Analyse d'erreurs** | Taux d'erreur par durée/format/contexte, types d'erreurs détaillés avec conseils coaching, séries d'erreurs consécutives | Élevée |
-| 9 | **Gestion de tournois** | Création avec phases (poules, élimination, finale), brackets, résultats, palmarès, notifications de rappel | Élevée |
+| 9 | **Gestion de tournois** | Création avec phases (poules, élimination, finale), brackets, résultats, palmarès, notifications de rappel, bilan financier (frais/gains) | Élevée |
 | 10 | **Annuaire (Directory)** | 5 onglets (Joueurs, Clubs, Terrains, Tournois, Défis ambassadeurs) avec filtres avancés, recherche, détection de doublons, fusion avec historique et annulation | Très élevée |
-| 11 | **Carte interactive** | Géolocalisation terrains/clubs/joueurs/tournois, clustering dynamique, items publics/privés, mode batch pour géolocaliser, légende | Élevée |
-| 12 | **Partage cross-joueurs** | Détection auto des joueurs liés, demandes de partage (lecture/écriture), acceptation/refus, polling 30s, notifications push locales | Très élevée |
-| 13 | **Édition collaborative** | Détection de conflits via timestamps, diff visuel champ par champ, résolution (garder le mien / garder la version serveur / annuler) | Élevée |
+| 11 | **Carte interactive** | Géolocalisation terrains/clubs/joueurs/tournois, clustering dynamique, items publics/privés, classement par zone géographique visible, mode batch pour géolocaliser | Élevée |
+| 12 | **Partage cross-joueurs** | Détection auto des joueurs liés, demandes de partage (lecture/écriture), acceptation avec mise à jour automatique des statistiques du destinataire, polling 30s, notifications push | Très élevée |
+| 13 | **Édition collaborative** | Détection de conflits via timestamps, diff visuel champ par champ, résolution (garder le mien / garder la version serveur / annuler), historique des modifications traçable | Élevée |
 | 14 | **Historique des modifications** | Logs champ par champ avec diff coloré (rouge→vert), annulation par champ et en bloc, nettoyage automatique des logs | Élevée |
 | 15 | **Programme ambassadeur** | Profils ambassadeurs avec bio/réseaux sociaux, bannière rotative sur l'accueil, analytics (impressions, clics, CTR, sparklines 7j/30j) | Élevée |
 | 16 | **Défis sponsorisés** | Création d'événements par ambassadeurs, inscription participants, attestation par témoins, classement | Élevée |
 | 17 | **Notifications push serveur** | Edge Function `send-push` via Expo Push API avec 5 types de déclencheurs (événements ambassadeurs avec proximité 200km, invitations meetup, changements de classement, demandes de partage, rappels), table `push_tokens`, enregistrement automatique, préférences par type | Élevée |
 | 17b | **Notifications locales** | Push locales (rappels tournois, demandes de partage, attestations), canaux Android dédiés, navigation par tap | Moyenne |
-| 18 | **Système de rendez-vous (Meetups)** | Création de meetups, invitations par code, réponses, compteur de participants confirmés | Moyenne |
-| 19 | **Classements communautaires** | Classement joueurs (min 5 matchs), classement clubs, classement marques de boules, taux "devant boule" | Moyenne |
+| 18 | **Système de rendez-vous (Meetups)** | Création de meetups, invitations par code/QR, réponses, compteur de participants confirmés, bouton "Rejoindre RDV" proéminent | Moyenne |
+| 19 | **Classements communautaires** | Classement joueurs (min 5 matchs) avec filtres géographiques (monde/continent/pays/ville), classement clubs, classement marques de boules, classement hebdomadaire avec reset lundi | Moyenne |
 | 20 | **Équipement (Boules)** | CRUD jeux de boules avec photo, marque, diamètre, poids, dureté, prix, jeu principal synchronisé au profil | Moyenne |
-| 21 | **Profil utilisateur** | Sections accordéon (Compte, Notifications, Données, Communauté, Mentions légales), avatar, carte fédération | Moyenne |
+| 21 | **Profil utilisateur** | Sections accordéon (Compte, Notifications, Données, Communauté, Mentions légales), avatar, carte fédération, XP et badges | Moyenne |
 | 22 | **Gestion des partages** | Section statut de partage dans les modals match/défi, révocation, historique des logs de modification | Moyenne |
 | 23 | **Achats in-app** | Suppression des publicités (€5.99), codes promo avec validation serveur, receipts stockés en DB | Moyenne |
-| 24 | **Anti-fraude** | Fingerprinting appareil, blocage emails jetables, détection multi-comptes, scores de confiance | Moyenne |
+| 24 | **Anti-fraude** | Fingerprinting appareil, blocage emails jetables, détection multi-comptes, scores de confiance (0-100) avec 10 facteurs | Moyenne |
 | 25 | **Offline & Sync** | Cache local AsyncStorage, queue offline avec replay, delta sync avec soft deletes, résolution de conflits, mode économie batterie | Élevée |
 | 26 | **i18n FR/EN** | 700+ clés de traduction, détection langue système, persistance du choix utilisateur | Moyenne |
-| 27 | **Publicités AdMob** | Bannières inline et interstitiels, suppression via achat premium | Faible |
+| 27 | **Publicités AdMob** | Bannières inline stratégiquement positionnées (12 placements optimisés, 1 par viewport max), suppression via achat premium | Faible |
 | 28 | **Deep Linking** | Scheme `ultimatepetanque://`, intent filters Android, associated domains iOS, navigation depuis notifications | Moyenne |
 | 29 | **Système de partage** | Codes de partage uniques, liens publics, items partagés avec permissions, notifications de partage | Moyenne |
-| 30 | **Export de données** | Export CSV/PDF avec assistant 3 étapes, 7 préréglages (standard, par match, défi, joueur, tournoi, saison, comparatif), **sélecteur de colonnes CSV**, aperçu des données, graphiques SVG en PDF | Moyenne |
+| 30 | **Export de données** | Export CSV/PDF avec assistant 3 étapes, 7 préréglages, sélecteur de colonnes CSV, aperçu des données, graphiques SVG en PDF | Moyenne |
 | 31 | **Détection changement de classement** | Snapshot des rangs avant sauvegarde de match, comparaison après, notification push serveur aux joueurs dont le rang a changé | Moyenne |
 | 32 | **Préférences de notifications** | Toggles par type dans le profil (événements, meetups, classement, partages, rappels), JSONB dans `user_preferences`, respectées côté serveur | Moyenne |
-| 33 | **Monitoring Sentry** | Service `sentryService.ts` intégré au lancement de l'app, capture des exceptions/messages, breadcrumbs de navigation, contexte utilisateur anonymisé (IP supprimée) | Moyenne |
+| 33 | **Monitoring Sentry** | Service `sentryService.ts` intégré au lancement de l'app, capture des exceptions/messages, breadcrumbs de navigation, contexte utilisateur anonymisé | Moyenne |
 | 34 | **Rate Limiting Edge Functions** | Protection anti-abus sur `validate-promo-code` (5 req/min) et `record-purchase` (3 req/min) avec réponses 429, détection de transactions dupliquées | Moyenne |
-| 35 | **Page préférences notifications** | Page dédiée extraite du profil avec descriptions détaillées, compteur d'actifs, toggle par type de notification push | Faible |
-| 36 | **i18n extraction (pages légales)** | 30+ chaînes hardcodées extraites de faq.tsx, terms.tsx et privacy-policy.tsx vers i18nExtra.ts (section pushNotifs), nouvelles catégories FAQ (Ambassadeurs, Partage cross-joueur) | Faible |
-| 37 | **Export CSV avancé** | Sélecteur de colonnes dans l'assistant d'export CSV, choix tout/défaut, compteur de colonnes sélectionnées, colonnes par défaut vs optionnelles | Faible |
+| 35 | **Bilan hebdomadaire (WeeklyStatsCard)** | Résumé hebdomadaire sur l'accueil : taux de victoire vs semaine précédente, meilleure performance, sparkline quotidienne bicolore (matchs bleu/défis jaune), série active, lien vers stats complètes avec filtre semaine | Moyenne |
+| 36 | **FAQ contextuelle** | 10 catégories adaptées aux situations réelles (entraînement, tournoi, déplacement, stats, social, équipement, événements, classement, annuaire, paramètres), 40+ questions, actions rapides avec étapes numérotées, astuces de joueur, recherche intégrée | Moyenne |
+| 37 | **Design system harmonisé** | En-têtes solides #0F172A uniformes sur toutes les pages, cartes glassmorphiques (bordures #E8EDF2), stat chips compacts, filtres en pastilles, couleurs dynamiques par onglet dans l'annuaire | Moyenne |
 
 ### 2.2 Fonctionnalités partiellement implémentées
 
@@ -109,11 +111,11 @@ L'utilisateur s'inscrit via OTP email + mot de passe, crée son profil joueur au
 | **Langage** | TypeScript |
 | **Navigation** | Expo Router (file-based routing) |
 | **Backend** | OnSpace Cloud (compatible Supabase) |
-| **Base de données** | PostgreSQL (via OnSpace Cloud) |
+| **Base de données** | PostgreSQL (via OnSpace Cloud) — 24 tables, 90+ politiques RLS |
 | **Auth** | Supabase Auth (OTP email + mot de passe) |
 | **Storage** | Supabase Storage (5 buckets : avatars, boules-photos, club-cards, federation-cards, terrain-photos) |
 | **Edge Functions** | Deno (6 fonctions : delete-account, detect-suspicious, record-purchase, send-push, validate-promo-code, validate-receipt) |
-| **State Management** | React Context API (AppContext) |
+| **State Management** | React Context API (AppContext + LanguageContext) |
 | **Cache** | AsyncStorage |
 | **Images** | expo-image |
 | **Cartes** | react-native-maps (mobile), react-leaflet (web) |
@@ -122,31 +124,36 @@ L'utilisateur s'inscrit via OTP email + mot de passe, crée son profil joueur au
 | **Animations** | react-native-reanimated |
 | **Charts** | react-native-svg (custom) |
 
-### 3.2 Structure des données (24 tables)
+### 3.2 Structure des données (24+ tables)
 
 ```
-user_profiles          → Profil utilisateur (id FK→auth.users, is_premium, is_admin)
+user_profiles          → Profil utilisateur (id FK→auth.users, is_premium, is_admin, xp)
 players                → Joueurs (user_id FK→user_profiles, stats JSONB, is_public)
 clubs                  → Clubs (user_id, terrain_id, is_public)
 terrains               → Terrains (user_id, club_id, location JSONB, public_access)
-tournaments            → Tournois (user_id, phases/teams JSONB, is_public)
-matches                → Matchs (user_id, team_a/team_b JSONB, menes JSONB, player_actions JSONB, participant_user_ids uuid[])
-challenges             → Défis (user_id, shots JSONB, precision_shots JSONB, detailed_shots JSONB, participant_user_ids uuid[])
-boules_sets            → Jeux de boules (user_id, is_primary)
+tournaments            → Tournois (user_id, phases/teams JSONB, is_public, registration_cost, prize_won)
+matches                → Matchs (user_id, team_a/team_b JSONB, menes JSONB, player_actions JSONB, participant_user_ids uuid[], series_info JSONB)
+challenges             → Défis (user_id, shots JSONB, precision_shots JSONB, detailed_shots JSONB, participant_user_ids uuid[], sponsor_id)
+boules_sets            → Jeux de boules (user_id, is_primary, purchase_price)
 ambassadors            → Ambassadeurs (user_id, player_id, badge_type, is_featured)
 ambassador_analytics   → Analytics ambassadeurs (event_type, social_platform, source_page)
 sponsored_events       → Événements sponsorisés (ambassador_id, share_code unique)
 sponsored_event_participants → Participants événements
 sponsored_event_witnesses    → Témoins/attestations
 match_share_requests   → Demandes de partage cross-joueurs (sender/recipient, permission, status)
-shared_items           → Items partagés (share_code unique, permission)
+match_witness_requests → Demandes d'attestation de témoins
+shared_items           → Items partagés (share_code unique, permission, view_count)
 share_notifications    → Notifications de partage
+share_access_logs      → Logs d'accès aux partages
 modification_logs      → Logs de modifications (changes JSONB avec field/oldValue/newValue)
 soft_deletes           → Suppressions douces (pour delta sync)
 merge_logs             → Historique des fusions
 terrain_meetups        → Rendez-vous sur terrains (share_code unique)
 terrain_meetup_responses → Réponses aux rendez-vous
-user_preferences       → Préférences (favoris terrains/clubs JSONB, notification_preferences JSONB)
+user_preferences       → Préférences (favoris JSONB, notification_preferences JSONB)
+user_badges            → Badges débloqués (badge_id, unlocked_at)
+weekly_leaderboard_snapshots → Snapshots classement hebdomadaire
+trust_score_history    → Historique scores de confiance
 push_tokens            → Jetons push Expo (user_id, token, platform, active)
 device_registrations   → Enregistrements d'appareils (anti-fraude)
 promo_codes / promo_code_redemptions → Codes promo
@@ -160,14 +167,14 @@ event_notifications / tournament_notifications → Notifications
 ```
 app/
 ├── (tabs)/               ← Navigation principale (4 onglets)
-│   ├── index.tsx         ← Accueil (hero, actions rapides, tournoi/meetups, historique, classement, ambassadeurs)
+│   ├── index.tsx         ← Accueil (hero, actions rapides, bilan hebdo, timeline, classement, ambassadeurs, historique)
 │   ├── stats.tsx         ← Statistiques (4 catégories, filtres, progression, charts SVG)
 │   ├── directory.tsx     ← Annuaire (5 onglets, filtres avancés, doublons, fusion)
-│   └── map.tsx           ← Carte (clusters, items publics, gestion visibilité)
-├── match/new.tsx         ← Création de match
-├── match/[id].tsx        ← Édition de match (avec conflit, read-only, modification logging)
-├── challenge/new.tsx     ← Création de défi
-├── history.tsx           ← Historique matchs/défis (filtres, partages reçus, modals détail)
+│   └── map.tsx           ← Carte (clusters, items publics, classement par zone géographique)
+├── match/new.tsx         ← Création de match (Best of 3, association boules/terrain)
+├── match/[id].tsx        ← Édition de match (conflit, read-only, modification logging)
+├── challenge/new.tsx     ← Création de défi (solo/1v1, 3 types, sponsorisé)
+├── history.tsx           ← Historique matchs/défis (filtres, partages reçus)
 ├── player/[id|me|new|compare|edit/[id]].tsx
 ├── club/[id|new|edit/[id]].tsx
 ├── terrain/[id|new|edit/[id]].tsx
@@ -175,15 +182,22 @@ app/
 ├── sponsored-event/[id|new|list].tsx
 ├── meetup/[id|new|invitations].tsx
 ├── ambassadors.tsx       ← Liste ambassadeurs
-├── ambassador-dashboard.tsx ← Dashboard ambassadeur (analytics, events, profil)
-├── match-invitations.tsx ← Demandes de partage reçues
-├── profile.tsx           ← Mon profil (accordéons)
-├── login.tsx             ← Authentification
-├── onboarding.tsx        ← Écrans d'accueil
-└── ... (19 autres pages)
+├── ambassador-dashboard.tsx ← Dashboard ambassadeur (analytics, events)
+├── faq.tsx               ← FAQ contextuelle (10 catégories, 40+ questions)
+├── profile.tsx           ← Mon profil (accordéons, XP, badges)
+├── login.tsx             ← Authentification (OTP + mot de passe)
+├── onboarding.tsx        ← Écrans d'accueil (3 étapes)
+├── badges.tsx            ← Collection de badges
+├── trust-score.tsx       ← Score de confiance détaillé
+├── leaderboard.tsx       ← Classement communautaire complet
+├── financial.tsx         ← Bilan financier (tournois)
+├── palmares.tsx          ← Palmarès (résultats tournois)
+├── equipment.tsx         ← Gestion des boules
+├── scanner.tsx           ← Scanner QR code
+└── ... (15+ autres pages)
 ```
 
-### 3.4 Architecture des services (Data-Logic-UI)
+### 3.4 Architecture des services (50+ services)
 
 ```
 services/
@@ -195,32 +209,35 @@ services/
 ├── terrainCrudService.ts       ← add/update/delete terrains
 ├── challengeCrudService.ts     ← add/update/delete défis
 ├── boulesSetCrudService.ts     ← add/update/delete/setPrimary boules
-├── matchShareService.ts        ← Partage cross-joueurs, polling, détection
+├── matchShareService.ts        ← Partage cross-joueurs, polling, détection, mise à jour stats
 ├── collaborativeEditService.ts ← Détection conflits, calcul diffs
 ├── modificationLogService.ts   ← Logs modifications, revert par champ/bloc
 ├── shareService.ts             ← Partage par code, items partagés
-├── sentryService.ts             ← Crash reporting Sentry (init, capture, breadcrumbs, user context)
-├── rankingChangeService.ts     ← Détection changement de classement, snapshot/comparaison
-├── notificationPreferencesService.ts ← Préférences notifications push par type
-├── pushTokenService.ts         ← Enregistrement tokens push, déclenchement push serveur
+├── streakService.ts            ← Séries consécutives, activité quotidienne (FR/EN)
+├── weeklyLeaderboardService.ts ← Classement hebdomadaire, snapshots, reset
+├── trustScoreService.ts        ← Score de confiance (10 facteurs, historique)
+├── badgeService.ts             ← 10 badges, XP, progression
+├── leaderboardService.ts       ← Classements communautaires (joueurs, clubs, boules)
+├── rankingChangeService.ts     ← Détection changement de classement
+├── sentryService.ts            ← Crash reporting Sentry
+├── notificationPreferencesService.ts ← Préférences notifications par type
+├── pushTokenService.ts         ← Enregistrement tokens push
 ├── offlineQueueService.ts      ← Queue offline, replay, conflits
 ├── cacheService.ts             ← Cache AsyncStorage
-├── syncConfigService.ts        ← Configuration sync, mode batterie
 ├── ambassadorService.ts        ← CRUD ambassadeurs
 ├── ambassadorAnalyticsService.ts ← Analytics ambassadeurs
 ├── sponsoredEventService.ts    ← Événements sponsorisés
-├── notificationService.ts      ← Notifications push locales
-├── leaderboardService.ts       ← Classements communautaires
 ├── meetupService.ts            ← Rendez-vous
 ├── publicItemsService.ts       ← Items publics (carte)
+├── exportService.ts            ← Export CSV/PDF
 ├── iapService.native.ts        ← In-App Purchase (natif)
 ├── adService.native.ts         ← AdMob (natif)
-└── ... (15 autres services)
+└── ... (20+ autres services spécialisés)
 ```
 
 ### 3.5 Sécurité (RLS)
 
-- **90+ politiques RLS** actives sur toutes les 24 tables
+- **90+ politiques RLS** actives sur toutes les tables
 - Patterns : `authenticated_*_own_*` (CRUD propre), `admin_*` (admin), `public_select_*` (lecture publique), `participant_*_shared_*` (items partagés), `shared_select_*` (items partagés via code)
 - **9 triggers** DB : auto-création profil, sync metadata, soft deletes sur 7 tables
 - **5 fonctions DB** : handle_new_user, sync_user_metadata, is_meetup_creator, log_soft_delete, get_premium_user_ids
@@ -235,24 +252,27 @@ services/
 - Authentification complète (OTP + mot de passe)
 - CRUD complet pour toutes les entités (7 services extraits et testés)
 - Statistiques avancées avec toutes les catégories et filtres
-- Carte interactive avec clustering et items publics
-- Partage cross-joueurs avec permissions et notifications
-- Édition collaborative avec résolution de conflits
+- Bilan hebdomadaire avec sparkline bicolore et lien vers stats filtrées
+- Carte interactive avec clustering, items publics et classement par zone
+- Partage cross-joueurs avec permissions, notifications et mise à jour automatique des stats
+- Édition collaborative avec résolution de conflits et historique traçable
 - Programme ambassadeur avec analytics
 - Défis sponsorisés avec attestation par témoins
-- Système de rendez-vous (meetups)
+- Système de rendez-vous (meetups) avec QR codes
 - Offline mode avec queue, replay et delta sync
 - i18n FR/EN complet (700+ clés)
-- Tests unitaires (7 services CRUD) et intégration (flux complet cross-player sharing)
+- FAQ contextuelle (10 catégories, 40+ questions adaptées aux situations réelles)
+- Design system harmonisé (en-têtes #0F172A, cartes glassmorphiques, 12 AdBanners optimisés)
+- Tests unitaires et d'intégration
 - Publicités AdMob (IDs de test)
 - Deep linking fonctionnel
-- Anti-fraude (fingerprinting, détection multi-comptes)
+- Anti-fraude (fingerprinting, scores de confiance, détection multi-comptes)
+- Données de démonstration optimisées (8 joueurs, 4 clubs, 5 terrains, 3 tournois, 12 matchs, 6 défis couvrant 100% des fonctionnalités)
 
 ### 4.2 Ce qui est partiellement implémenté
 
 - **Google OAuth** : code client prêt mais provider non activé côté serveur
 - **AdMob** : fonctionne en mode test, nécessite IDs de production
-- **Export CSV** : fonctionnel avec sélecteur de colonnes, 7 préréglages, graphiques PDF
 
 ### 4.3 Ce qui est manquant
 
@@ -261,6 +281,7 @@ services/
 - Configuration Google Maps API Key pour la carte (Android)
 - Assets App Store / Play Store (screenshots, descriptions)
 - IDs AdMob de production
+- Configuration Sentry DSN
 
 ---
 
@@ -268,32 +289,20 @@ services/
 
 ### 5.1 Étapes de configuration
 
-| # | Étape | Description | Action OnSpace | Action externe | Priorité | Temps (h) |
-|---|---|---|---|---|---|---|
-| 1 | **Google OAuth** | Activer l'authentification Google | Dashboard OnSpace Cloud → User → Auth Settings → Enable Google Provider, renseigner Client ID & Secret | Google Cloud Console : créer projet, configurer OAuth consent screen, créer credentials (Web + iOS + Android) | Haute | 4-6h |
-| 2 | **AdMob Production** | Remplacer IDs de test | Modifier `app.json` (androidAppId, iosAppId) avec IDs réels | Google AdMob Console : créer app iOS + Android, créer ad units (banner + interstitial), configurer médiation | Haute | 2-3h |
-| 3 | **EAS Build** | Configurer les builds de production | — | Installer EAS CLI (`npm install -g eas-cli`), `eas build:configure`, créer `eas.json` avec profils dev/preview/production | Haute | 3-4h |
-| 4 | **Certificats iOS** | Provisioning profiles et certificats | — | Apple Developer : créer App ID, Distribution Certificate, Provisioning Profile (ou laisser EAS gérer automatiquement) | Haute | 2-3h |
-| 5 | **Keystore Android** | Générer le keystore de signature | — | EAS gère automatiquement ou générer manuellement via `keytool` | Haute | 1h |
-| 6 | **Notifications Push** | Configurer les credentials push | Dashboard OnSpace → Cloud → Secrets (si APNs key nécessaire) | Apple Developer : créer APNs Key (.p8), Google : Firebase Cloud Messaging (optionnel avec Expo) | Moyenne | 2-3h |
-| 7 | **Deep Linking prod** | Configurer les associated domains | — | Apple Developer : configurer Associated Domains, héberger `apple-app-site-association` ; Google : Digital Asset Links | Moyenne | 2-3h |
-| 8 | **Google Maps API (Carte)** | Configurer la clé API Google Maps pour la carte interactive Android | Ajouter la clé dans `app.json` sous `android.config.googleMaps.apiKey` | Google Cloud Console : activer "Maps SDK for Android" et "Maps SDK for iOS", créer une clé API restreinte par plateforme, ajouter restrictions de bundle/package | Haute | 2-3h |
-| 9 | **Tests réels IAP** | Tester les achats in-app | — | App Store Connect : créer In-App Purchase (€5.99), configurer sandbox testers ; Google Play Console : créer produit, licence testing | Haute | 4-6h |
-| 10 | **QR Code & liens de téléchargement** | Configurer les liens QR Code pour télécharger et installer l'application | Générer QR codes pointant vers App Store / Play Store, intégrer dans matériaux marketing, site web, réseaux sociaux | Créer une page de redirection (smart link) qui détecte iOS/Android et redirige vers le bon store | Moyenne | 1-2h |
-| 11 | **Tests appareils** | Tester sur iOS et Android physiques | Télécharger APK via bouton Download d'OnSpace, utiliser QR code OnSpace App pour iOS | — | Haute | 8-12h |
-| 11 | **Performance** | Profiler et optimiser | — | React DevTools, Flipper, analyser bundle size | Basse | 4-6h |
-| 12 | **Monitoring** | Configurer Sentry/Crashlytics | Ajouter clé API dans Secrets si nécessaire | Sentry : créer projet, installer `@sentry/react-native` | Moyenne | 3-4h |
-
-### 5.2 Estimation résumée
-
-| Phase | Heures estimées |
-|---|---|
-| Configuration (OAuth, AdMob, EAS, certificats, carte) | 14-20h |
-| Tests sur appareils réels | 8-12h |
-| Préparation publication (assets, descriptions, screenshots) | 8-12h |
-| Publication App Store + Play Store | 4-8h |
-| Bug fixes et polish post-tests | 4-8h |
-| **TOTAL** | **38-60h** |
+| # | Étape | Description | Action OnSpace | Action externe | Priorité |
+|---|---|---|---|---|---|
+| 1 | **Google OAuth** | Activer l'authentification Google | Dashboard OnSpace Cloud → User → Auth Settings → Enable Google Provider, renseigner Client ID & Secret | Google Cloud Console : créer projet, configurer OAuth consent screen, créer credentials (Web + iOS + Android) | Haute |
+| 2 | **AdMob Production** | Remplacer IDs de test | Modifier `app.json` (androidAppId, iosAppId) avec IDs réels | Google AdMob Console : créer app iOS + Android, créer ad units (banner + interstitial) | Haute |
+| 3 | **EAS Build** | Configurer les builds de production | — | Installer EAS CLI, `eas build:configure`, créer `eas.json` avec profils dev/preview/production | Haute |
+| 4 | **Certificats iOS** | Provisioning profiles et certificats | — | Apple Developer : créer App ID, Distribution Certificate, Provisioning Profile (ou laisser EAS gérer) | Haute |
+| 5 | **Keystore Android** | Générer le keystore de signature | — | EAS gère automatiquement ou générer manuellement via `keytool` | Haute |
+| 6 | **Notifications Push** | Configurer les credentials push | Dashboard OnSpace → Cloud → Secrets (si APNs key nécessaire) | Apple Developer : créer APNs Key (.p8) | Moyenne |
+| 7 | **Deep Linking prod** | Configurer les associated domains | — | Apple Developer : Associated Domains + `apple-app-site-association` ; Google : Digital Asset Links | Moyenne |
+| 8 | **Google Maps API** | Configurer la clé API Google Maps pour Android | Ajouter la clé dans `app.json` sous `android.config.googleMaps.apiKey` | Google Cloud Console : activer Maps SDK for Android/iOS, créer clé API restreinte | Haute |
+| 9 | **Tests réels IAP** | Tester les achats in-app | — | App Store Connect : créer IAP (€5.99), sandbox testers ; Google Play Console : créer produit, licence testing | Haute |
+| 10 | **Sentry DSN** | Configurer le monitoring de crashs | — | Sentry.io : créer projet, récupérer DSN, configurer dans `sentryService.ts` | Moyenne |
+| 11 | **Tests appareils** | Tester sur iOS et Android physiques | Télécharger APK via OnSpace, utiliser QR code OnSpace App pour iOS | — | Haute |
+| 12 | **Assets Stores** | Screenshots, descriptions, icônes | — | Capturer screenshots sur simulateurs, rédiger descriptions FR/EN | Haute |
 
 ---
 
@@ -319,7 +328,7 @@ services/
 2. **Configurer les métadonnées**
    - Description (FR + EN, max 4000 caractères)
    - Mots-clés (max 100 caractères)
-   - URL de support : `https://ultimatepetanque.app/support`
+   - URL de support
    - URL de politique de confidentialité (obligatoire)
    - Screenshots (6.7" iPhone 15 Pro Max, 6.1" iPhone 15, 12.9" iPad Pro)
    - App Preview vidéo (optionnel mais recommandé)
@@ -339,13 +348,9 @@ services/
    ```
 
 6. **Review Apple** (délai : 1-3 jours ouvrés)
-   - Points de vigilance :
-     - L'app doit fonctionner sans connexion (✅ mode offline implémenté)
-     - Les IAP doivent utiliser le système Apple (✅ `expo-in-app-purchases`)
-     - Le tracking ATT doit être implémenté (✅ `expo-tracking-transparency`)
-     - Les liens vers des systèmes de paiement externes sont interdits
-
-#### Estimation : 4-6h (hors délai de review)
+   - L'app doit fonctionner sans connexion (✅ mode offline)
+   - Les IAP doivent utiliser le système Apple (✅)
+   - Le tracking ATT doit être implémenté (✅)
 
 ### 6.2 Publication sur Google Play Store
 
@@ -371,7 +376,6 @@ services/
    - Politique de confidentialité URL
 
 3. **Configurer les produits in-app**
-   - Google Play Console → Monetize → Products → In-app products
    - Produit : `remove_ads` — €5.99
 
 4. **Data Safety**
@@ -384,220 +388,135 @@ services/
    eas submit --platform android
    ```
 
-6. **Review Google** (délai : heures à 7 jours)
-   - Points de vigilance :
-     - Target API level doit être récent (≥34)
-     - Permissions sensibles (localisation, caméra) doivent être justifiées
-     - Les edge-to-edge adaptations Android 15+ (✅ `edgeToEdgeEnabled: true`)
-
-#### Estimation : 3-5h (hors délai de review)
-
 ---
 
-## 7. ESTIMATION GLOBALE
+## 7. RECOMMANDATIONS TECHNIQUES
 
-### 7.1 Répartition par type de tâche
+### 7.1 Améliorations prioritaires
 
-| Catégorie | Heures |
-|---|---|
-| Configuration infrastructure (OAuth, AdMob, EAS, certificats, push, carte) | 14-20h |
-| Tests complets sur appareils | 8-12h |
-| Préparation assets stores (screenshots, descriptions, vidéo) | 8-12h |
-| Publication et soumission (iOS + Android) | 4-8h |
-| Bug fixes et polish post-tests | 4-8h |
-| **TOTAL ESTIMÉ** | **38-60h** |
+1. **Monitoring en production** : Sentry est intégré via `services/sentryService.ts`. **Action restante** : configurer le DSN Sentry et installer `@sentry/react-native`.
 
-### 7.2 Calendrier suggéré
+2. **Rate limiting** : Les Edge Functions `validate-promo-code` (5 req/60s) et `record-purchase` (3 req/60s) disposent d'un rate limiter avec réponses 429. Pour un rate limiting persistant, envisager une table `rate_limits` en DB.
 
-| Semaine | Activité |
-|---|---|
-| S1 | Configuration EAS, certificats, OAuth Google, AdMob production, Google Maps API |
-| S2 | Tests IAP sandbox, tests appareils (iOS + Android) |
-| S3 | Bug fixes, préparation assets stores, screenshots |
-| S4 | Soumission iOS + Android, monitoring post-launch |
+3. **Validation des données** : Ajouter une validation côté serveur pour les données critiques (scores, statistiques).
 
-### 7.3 Niveau de difficulté global
+4. **Tests E2E automatisés** : Compléter la suite de tests avec Detox ou Maestro.
 
-**Moyen** — L'application est fonctionnellement très complète (30+ features majeures). Le code est bien structuré (services extraits, tests en place, i18n complet). Le travail restant est principalement de la **configuration d'infrastructure** et du **polish pour production**. Aucun développement de fonctionnalité majeure n'est requis.
+### 7.2 Bonnes pratiques déjà en place
 
----
+- Architecture Data-Logic-UI (services → hooks → components)
+- RLS activé sur toutes les tables avec politiques séparées
+- Delta sync avec soft deletes
+- Cache local avec fallback offline
+- i18n complet (700+ clés FR/EN)
+- Tests unitaires et d'intégration
+- Données de démonstration optimisées couvrant 100% des fonctionnalités
+- Design system unifié et harmonisé
 
-## 8. RECOMMANDATIONS TECHNIQUES
-
-### 8.1 Améliorations prioritaires
-
-1. **Monitoring en production** : Sentry est intégré via `services/sentryService.ts` avec initialisation au lancement, capture d'exceptions, breadcrumbs et contexte utilisateur. **Action restante** : configurer le DSN Sentry dans `sentryService.ts` et installer `@sentry/react-native` (`npx expo install @sentry/react-native`).
-
-2. **Rate limiting** : Les Edge Functions `validate-promo-code` (5 req/60s) et `record-purchase` (3 req/60s) disposent maintenant d'un rate limiter en mémoire avec réponses 429 et header `Retry-After`. `record-purchase` détecte aussi les transactions dupliquées (409 Conflict). Pour un rate limiting persistant cross-invocations, envisager une table `rate_limits` en DB.
-
-3. **Validation des données** : Ajouter une validation côté serveur (Edge Functions) pour les données critiques (scores, statistiques). Actuellement, la validation est principalement côté client.
-
-4. **Tests E2E automatisés** : Compléter la suite de tests avec Detox ou Maestro pour des tests E2E sur simulateurs.
-
-### 8.2 Bonnes pratiques déjà en place
-
-- Architecture Data-Logic-UI bien respectée (services → hooks → components)
-- RLS activé sur toutes les tables avec politiques séparées par opération/rôle
-- Delta sync avec soft deletes pour la synchronisation efficace
-- Cache local avec fallback en mode offline
-- i18n complet avec 700+ clés FR/EN
-- Tests unitaires et d'intégration pour les services critiques
-
-### 8.3 Risques à anticiper
+### 7.3 Risques à anticiper
 
 | Risque | Impact | Mitigation |
 |---|---|---|
-| **Rejet App Store** pour raison de paiement externe | Bloquant | S'assurer que tous les achats passent par Apple IAP ; aucun lien vers des paiements web |
-| **Performance sur appareils bas de gamme** | Moyen | Le composant Stats utilise beaucoup de `useMemo` — tester sur Android d'entrée de gamme ; le clustering de la carte est déjà optimisé (MAX_VISIBLE_MARKERS = 200) |
-| **Taille du bundle** | Moyen | Le fichier `mockData.ts` contient des données de démonstration volumineuses (50 matchs, 20 joueurs) — s'assurer qu'elles ne sont chargées qu'en fallback (c'est le cas) |
-| **Délai de review Apple** | Planification | Prévoir 1-7 jours ouvrés ; soumettre tôt dans la semaine ; préparer les réponses aux questions potentielles de la review team |
-| **Google OAuth rejeté** | Fonctionnel | Le système fonctionne déjà sans OAuth (OTP + mot de passe). L'OAuth est un "nice to have" pour la V1 |
-| **Coût AdMob faible au lancement** | Business | Le système premium (€5.99) est indépendant des revenus pub. Diversifier les revenus via ambassadeurs/sponsors |
+| **Rejet App Store** pour raison de paiement externe | Bloquant | S'assurer que tous les achats passent par Apple IAP |
+| **Performance sur appareils bas de gamme** | Moyen | `useMemo` utilisé partout, FlatList pour les listes, clustering carte optimisé |
+| **Délai de review Apple** | Planification | Prévoir 1-7 jours ouvrés, soumettre tôt dans la semaine |
+| **Google OAuth rejeté** | Fonctionnel | Le système fonctionne déjà sans OAuth (OTP + mot de passe) |
 
-### 8.4 Points d'attention spécifiques
+### 7.4 Points d'attention spécifiques
 
-- Les **IDs AdMob dans `app.json`** sont actuellement des IDs de test Google. **Ne pas publier avec ces IDs** — ils ne génèreront aucun revenu.
-- Le **scheme de deep linking** (`ultimatepetanque://`) fonctionne mais les **Universal Links iOS** nécessitent un serveur hébergeant `apple-app-site-association`.
-- Le **système de notifications push** combine notifications locales (rappels tournois) et notifications serveur via l'Edge Function `send-push` (5 types : événements ambassadeur avec proximité 200km, invitations meetup, changements de classement, partages, rappels). Les préférences utilisateur par type sont respectées côté serveur via `user_preferences.notification_preferences`.
-- La **politique de confidentialité** et les **conditions d'utilisation** ont été mises à jour avec les sections sur les notifications push, le monitoring Sentry et la protection rate limiting.
-- La **FAQ** inclut désormais 4 nouvelles catégories : "Notifications Push" (4 questions), "Sécurité & Confidentialité" (2 questions), "Ambassadeurs & Partenaires" (3 questions), "Partage cross-joueur" (3 questions).
-- L'**export CSV** offre un sélecteur de colonnes permettant aux utilisateurs de choisir les champs à exporter (colonnes par défaut vs optionnelles comme Mènes, Terrain, Points, Durée).
-- La page **Préférences de notifications** est une page dédiée extraite du profil avec descriptions détaillées et compteur d'actifs.
-- Les **6 Edge Functions** existantes sont déployées avec rate limiting sur les fonctions sensibles (validate-promo-code : 5 req/min, record-purchase : 3 req/min avec détection de transactions dupliquées). Le fichier `validate-receipt` n'est pas référencé dans le projet — vérifier qu'il est fonctionnel ou le retirer.
+- Les **IDs AdMob dans `app.json`** sont des IDs de test. **Ne pas publier avec ces IDs**.
+- Le **scheme de deep linking** fonctionne mais les **Universal Links iOS** nécessitent `apple-app-site-association`.
+- Le **système de notifications push** combine locales et serveur (5 types). Les préférences par type sont respectées côté serveur.
+- La **carte interactive** nécessite une **Google Maps API Key** pour Android.
+- Le **partage cross-joueurs** met à jour automatiquement les statistiques du destinataire à l'acceptation (matchs, défis 1v1, Best of 3, tournois).
+- Les **données de démonstration** (`mockData.ts`) sont optimisées : 8 joueurs, 4 clubs, 5 terrains, 3 tournois, 12 matchs, 6 défis couvrant tous les cas d'usage.
 
 ---
 
-## ANNEXE A — COMMANDES UTILES
+## 8. SUIVI POST-PUBLICATION ET ROADMAP V2
+
+### 8.1 Actions post-publication immédiates
+
+| # | Action | Priorité |
+|---|---|---|
+| 1 | Monitoring crashs Sentry quotidien, correctifs critiques sous 24h | Critique |
+| 2 | Surveillance avis stores, réponses sous 48h | Haute |
+| 3 | Suivi métriques : téléchargements, rétention J1/J7/J30, taux de crash | Haute |
+| 4 | Vérification performances API Supabase | Haute |
+| 5 | Processus hotfix EAS préparé | Moyenne |
+
+### 8.2 Roadmap fonctionnelle V2
+
+| # | Fonctionnalité | Complexité | Impact |
+|---|---|---|---|
+| 1 | **Mode sombre** | Moyenne | Élevé |
+| 2 | **Chat entre joueurs** | Très élevée | Élevé |
+| 3 | **Widget iOS/Android** | Moyenne | Moyen |
+| 4 | **Intelligence artificielle** (analyse prédictive via OnSpace AI) | Élevée | Élevé |
+| 5 | **Vidéo replay** des tirs marquants | Élevée | Moyen |
+| 6 | **Marketplace sponsors** | Élevée | Business |
+| 7 | **Système d'abonnement** premium mensuel/annuel | Moyenne | Business |
+| 8 | **Localisation étendue** (espagnol, italien, portugais) | Moyenne | Moyen |
+
+### 8.3 Processus de mise à jour
 
 ```bash
-# Développement local
-npx expo start
+# Build preview pour tests
+eas build --profile preview
 
-# Build iOS production
+# Build production
 eas build --platform ios --profile production
+eas build --platform android --profile production
 
-# Build Android APK
-eas build --platform android --profile preview
-
-# Soumission stores
+# Soumission
 eas submit --platform ios
 eas submit --platform android
 
-# Lancer les tests
-npx jest
-
-# Vérifier les dépendances
-npx depcheck
+# OTA pour correctifs JS urgents
+eas update --branch production --message "Fix: description"
 ```
 
-## ANNEXE B — VARIABLES D'ENVIRONNEMENT
+### 8.4 KPIs à surveiller
+
+| KPI | Objectif V1 (3 mois) |
+|---|---|
+| Téléchargements | 1000+ |
+| Rétention J7 | > 30% |
+| Rétention J30 | > 15% |
+| Taux de crash | < 1% |
+| Note moyenne store | > 4.0/5 |
+| Matchs créés/jour | 50+ |
+| Taux conversion premium | > 3% |
+
+---
+
+## ANNEXES
+
+### Annexe A — Commandes utiles
+
+```bash
+npx expo start              # Développement local
+eas build --platform ios --profile production    # Build iOS
+eas build --platform android --profile preview   # Build Android APK
+eas submit --platform ios   # Soumission iOS
+eas submit --platform android   # Soumission Android
+npx jest                    # Tests
+npx depcheck                # Vérifier dépendances
+```
+
+### Annexe B — Variables d'environnement
 
 | Variable | Description | Localisation |
 |---|---|---|
 | `EXPO_PUBLIC_SUPABASE_URL` | URL du backend OnSpace Cloud | `.env` (auto-généré) |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Clé anonyme Supabase | `.env` (auto-généré) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Clé service role (Edge Functions) | OnSpace Cloud Secrets |
-| `SUPABASE_DB_URL` | URL directe PostgreSQL (Edge Functions) | OnSpace Cloud Secrets |
+| `SUPABASE_DB_URL` | URL directe PostgreSQL | OnSpace Cloud Secrets |
 
-## ANNEXE C — COMPTES DE TEST
+### Annexe C — Comptes de test
 
-Pour tester l'application en développement, créer un compte via l'écran de login avec n'importe quel email valide. Le système OTP enverra un code à 4 chiffres. Mot de passe minimum : 6 caractères.
-
----
-
-## 9. SUIVI POST-PUBLICATION ET ROADMAP V2
-
-### 9.1 Actions post-publication immédiates (Semaine 1-2)
-
-| # | Action | Description | Priorité |
-|---|---|---|---|
-| 1 | **Monitoring crashs** | Vérifier quotidiennement Sentry/Crashlytics, corriger les crashs critiques dans les 24h | Critique |
-| 2 | **Feedback utilisateurs** | Surveiller les avis App Store/Play Store, répondre sous 48h, identifier les patterns récurrents | Haute |
-| 3 | **Métriques de lancement** | Suivre : téléchargements, rétention J1/J7/J30, taux de crash, temps de session moyen | Haute |
-| 4 | **Performance API** | Vérifier les temps de réponse Supabase, identifier les requêtes lentes via les logs | Haute |
-| 5 | **Hotfix process** | Préparer un profil EAS `hotfix` pour déployer des correctifs urgents rapidement | Moyenne |
-
-### 9.2 Actions post-publication à moyen terme (Mois 1-3)
-
-| # | Action | Description | Priorité |
-|---|---|---|---|
-| 1 | **ASO (App Store Optimization)** | Optimiser titre, mots-clés, screenshots basé sur les données réelles de recherche | Haute |
-| 2 | **Analyse de rétention** | Identifier les points de décrochage (onboarding, première partie, etc.) et optimiser | Haute |
-| 3 | **A/B testing store** | Tester différentes icônes, screenshots, descriptions pour améliorer le taux de conversion | Moyenne |
-| 4 | **Backup DB** | Mettre en place un export régulier des données critiques (hebdomadaire minimum) | Haute |
-| 5 | **Localisation étendue** | Analyser la demande pour d'autres langues (espagnol, italien, portugais — pays de pétanque) | Basse |
-
-### 9.3 Roadmap fonctionnelle V2 (suggestions)
-
-Basé sur l'architecture actuelle et les tendances du marché :
-
-| # | Fonctionnalité V2 | Description | Complexité | Impact utilisateur |
-|---|---|---|---|---|
-| 1 | **Mode sombre** | Détection système + toggle manuel, palettes complètes light/dark dans un ThemeContext | Moyenne | Élevé (demande fréquente) |
-| 2 | **Calendrier événements** | Vue mensuel dans l'onglet Défis de l'annuaire avec pastilles couleur par type d'événement | Moyenne | Moyen |
-| 3 | **Export CSV avancé** | Sélection des colonnes à exporter, formatage dates FR/EN, partage via Share API natif | Faible | Moyen |
-| 4 | ~~**Notifications push serveur**~~ | **IMPLÉMENTÉ** : Edge Function `send-push` avec 5 triggers, détection de classement, préférences par type | — | — |
-| 5 | **Chat entre joueurs** | Messagerie intégrée entre joueurs connectés, canaux par meetup/tournoi | Très élevée | Élevé |
-| 6 | **Vidéo replay** | Enregistrement court (15s) des tirs marquants, stockage Supabase Storage | Élevée | Moyen |
-| 7 | **Widget iOS/Android** | Widget affichant les prochains matchs/meetups et le classement actuel | Moyenne | Moyen |
-| 8 | **Système d'abonnement** | Plan premium mensuel/annuel (au lieu du one-time) avec fonctionnalités exclusives | Moyenne | Business |
-| 9 | **Intelligence artificielle** | Analyse prédictive des performances, suggestions d'entraînement personnalisées via OnSpace AI | Élevée | Élevé |
-| 10 | **Marketplace sponsors** | Espace pour les marques de boules avec offres spéciales, codes promo, et tracking des conversions | Élevée | Business |
-
-### 9.4 Processus de mise à jour (V1.x → V2)
-
-#### Workflow de release
-
-1. **Brancher** : Créer une branche `release/vX.Y.Z` depuis `main`
-2. **Versionner** : Mettre à jour `app.json` (`version` et `buildNumber`/`versionCode`)
-3. **Tester** : Build de preview (`eas build --profile preview`), tester sur appareils réels
-4. **Builder** : Build de production (`eas build --profile production`)
-5. **Soumettre** : `eas submit --platform ios` et `eas submit --platform android`
-6. **Documenter** : Rédiger les release notes (changelog) pour chaque store
-
-#### Versioning recommandé
-
-| Type | Format | Exemple | Quand |
-|---|---|---|---|
-| Patch | `1.0.X` | 1.0.1 → 1.0.2 | Bug fixes, correctifs mineurs |
-| Mineur | `1.X.0` | 1.1.0 → 1.2.0 | Nouvelles fonctionnalités, améliorations UX |
-| Majeur | `X.0.0` | 1.x → 2.0.0 | Refonte majeure, breaking changes |
-
-#### Over-The-Air Updates (OTA)
-
-Pour les correctifs urgents qui ne modifient pas le code natif :
-```bash
-# Mise à jour JS sans passer par les stores
-eas update --branch production --message "Fix: correction du calcul de stats"
-```
-⚠️ Les OTA ne peuvent pas modifier `app.json`, les plugins natifs, ou les assets binaires.
-
-#### Checklist avant chaque release
-
-- [ ] Tests unitaires passent (`npx jest`)
-- [ ] Test manuel sur iOS (simulateur + appareil réel)
-- [ ] Test manuel sur Android (émulateur + appareil réel)
-- [ ] Vérifier la taille du bundle (< 50MB recommandé)
-- [ ] Mettre à jour les screenshots store si l'UI a changé
-- [ ] Rédiger les release notes en FR et EN
-- [ ] Incrémenter `buildNumber` (iOS) et `versionCode` (Android)
-- [ ] Vérifier que les IDs AdMob sont ceux de production
-- [ ] Vérifier que les Edge Functions sont à jour
-- [ ] Tester le flux complet : inscription → match → stats → partage
-
-### 9.5 KPIs à surveiller
-
-| KPI | Objectif V1 (3 mois) | Outil de mesure |
-|---|---|---|
-| Téléchargements | 1000+ | App Store Connect / Google Play Console |
-| Rétention J7 | > 30% | Analytics intégrées |
-| Rétention J30 | > 15% | Analytics intégrées |
-| Taux de crash | < 1% | Sentry |
-| Note moyenne store | > 4.0/5 | App Store / Play Store |
-| Matchs créés/jour | 50+ | Requête SQL sur table `matches` |
-| Taux conversion premium | > 3% | Supabase `user_profiles.is_premium` |
-| Ambassadeurs actifs | 5+ | Table `ambassadors` |
+Créer un compte via l'écran de login avec n'importe quel email valide. Le système OTP enverra un code à 4 chiffres. Mot de passe minimum : 6 caractères.
 
 ---
 
-*Document généré le 23 mars 2026 — Ultimate Petanque v1.0.0*
+*Document mis à jour le 26 mars 2026 — Ultimate Petanque v1.1.0*
