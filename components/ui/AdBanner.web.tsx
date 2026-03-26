@@ -1,15 +1,96 @@
 // ============================================
-// AdBanner - Web stub (returns nothing)
+// AdBanner - Web: Gold sponsor replacement or null
 // ============================================
-import React from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { Image } from 'expo-image';
+import { MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
+import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
+import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 
 interface AdBannerProps {
   position?: 'inline' | 'sticky';
   bottomOffset?: number;
 }
 
+let cachedGoldSponsor: Ambassador | null | undefined = undefined;
+let goldLoadPromise: Promise<void> | null = null;
+
+function loadGoldSponsor(): Promise<void> {
+  if (cachedGoldSponsor !== undefined) return Promise.resolve();
+  if (goldLoadPromise) return goldLoadPromise;
+  goldLoadPromise = fetchAmbassadors().then(({ ambassadors }) => {
+    cachedGoldSponsor = ambassadors.find(a => a.badgeType === 'gold_sponsor') || null;
+  }).catch(() => { cachedGoldSponsor = null; });
+  return goldLoadPromise;
+}
+
 const AdBanner = React.memo((_props: AdBannerProps) => {
-  return null;
+  const [sponsor, setSponsor] = useState<Ambassador | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const impressionTracked = useRef(false);
+
+  useEffect(() => {
+    loadGoldSponsor().then(() => {
+      setSponsor(cachedGoldSponsor || null);
+      setLoaded(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!sponsor || impressionTracked.current) return;
+    impressionTracked.current = true;
+    trackAmbassadorEvent(sponsor.id, 'banner_impression', undefined, { sourcePage: 'ad_replacement_web' });
+  }, [sponsor]);
+
+  if (!loaded || !sponsor) return null;
+
+  return (
+    <Pressable
+      style={({ pressed }) => [webStyles.container, pressed && { opacity: 0.92 }]}
+      onPress={() => {
+        trackAmbassadorEvent(sponsor.id, 'profile_view', undefined, { sourcePage: 'ad_replacement_web' });
+        router.push('/partners');
+      }}
+    >
+      <LinearGradient colors={['#FFFBEB', '#FEF3C7']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={webStyles.gradient}>
+        <View style={webStyles.goldAccent} />
+        <View style={webStyles.content}>
+          {sponsor.photo ? (
+            <Image source={{ uri: sponsor.photo }} style={webStyles.logo} contentFit="cover" transition={200} />
+          ) : (
+            <LinearGradient colors={['#B45309', '#F59E0B']} style={webStyles.logoFallback}>
+              <MaterialIcons name="workspace-premium" size={16} color="#FFF" />
+            </LinearGradient>
+          )}
+          <View style={{ flex: 1 }}>
+            <View style={webStyles.labelRow}>
+              <LinearGradient colors={['#B45309', '#D97706']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={webStyles.goldLabel}>
+                <Text style={webStyles.goldLabelText}>SPONSOR OR</Text>
+              </LinearGradient>
+            </View>
+            <Text style={webStyles.name} numberOfLines={1}>{sponsor.displayName}</Text>
+          </View>
+          <MaterialIcons name="open-in-new" size={14} color="#B45309" />
+        </View>
+      </LinearGradient>
+    </Pressable>
+  );
 });
 
 export default AdBanner;
+
+const webStyles = StyleSheet.create({
+  container: { marginVertical: 12, borderRadius: 14, overflow: 'hidden', borderWidth: 1.5, borderColor: '#F59E0B' },
+  gradient: { borderRadius: 12, position: 'relative' as const },
+  goldAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 2.5, backgroundColor: '#F59E0B' },
+  content: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingVertical: 10, paddingHorizontal: 12, gap: 10 },
+  logo: { width: 36, height: 36, borderRadius: 10 },
+  logoFallback: { width: 36, height: 36, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
+  labelRow: { flexDirection: 'row' as const, marginBottom: 2 },
+  goldLabel: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
+  goldLabelText: { fontSize: 7, fontWeight: '900' as const, color: '#FFF', letterSpacing: 0.6 },
+  name: { fontSize: 13, fontWeight: '700' as const, color: '#78350F' },
+});

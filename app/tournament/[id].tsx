@@ -34,6 +34,10 @@ import { toggleItemPublic } from '@/services/publicItemsService';
 import { useAlert } from '@/template';
 import { useAuth } from '@/template';
 import { showInterstitial } from '@/services/adService';
+import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
+import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   requestNotificationPermissions,
   areNotificationsEnabled,
@@ -228,6 +232,15 @@ export default function TournamentDetailScreen() {
   const isSharedItem = sharedPermission !== null;
   const isReadOnly = sharedPermission === 'read';
   const canEdit = !isReadOnly;
+
+  // Gold sponsor for "Sponsored by" badge
+  const [goldSponsor, setGoldSponsor] = useState<Ambassador | null>(null);
+  useEffect(() => {
+    fetchAmbassadors().then(({ ambassadors }) => {
+      const gold = ambassadors.find(a => a.badgeType === 'gold_sponsor');
+      if (gold) setGoldSponsor(gold);
+    });
+  }, []);
 
   useEffect(() => {
     if (id) {
@@ -703,6 +716,38 @@ export default function TournamentDetailScreen() {
                   </View>
                 ) : null}
               </View>
+            ) : null}
+
+            {/* Gold Sponsor Badge */}
+            {goldSponsor ? (
+              <Pressable
+                style={({ pressed }) => [styles.sponsorBadgeRow, pressed && { opacity: 0.9 }]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  trackAmbassadorEvent(goldSponsor.id, 'profile_view', undefined, { sourcePage: 'tournament_detail' });
+                  router.push('/partners' as any);
+                }}
+              >
+                <LinearGradient colors={['#FFFBEB', '#FEF3C7']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.sponsorBadgeGradient}>
+                  <View style={styles.sponsorBadgeAccent} />
+                  <View style={styles.sponsorBadgeContent}>
+                    {goldSponsor.photo ? (
+                      <Image source={{ uri: goldSponsor.photo }} style={styles.sponsorBadgeLogo} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                    ) : (
+                      <LinearGradient colors={['#B45309', '#F59E0B']} style={styles.sponsorBadgeLogoFallback}>
+                        <MaterialIcons name="workspace-premium" size={12} color="#FFF" />
+                      </LinearGradient>
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.sponsorBadgeLabel}>{language === 'fr' ? 'Sponsorise par' : 'Sponsored by'}</Text>
+                      <Text style={styles.sponsorBadgeName} numberOfLines={1}>{goldSponsor.displayName}</Text>
+                    </View>
+                    <LinearGradient colors={['#B45309', '#D97706']} style={styles.sponsorBadgeTier}>
+                      <MaterialIcons name="star" size={8} color="#FFF" />
+                    </LinearGradient>
+                  </View>
+                </LinearGradient>
+              </Pressable>
             ) : null}
 
             {/* Terrain Info */}
@@ -1959,6 +2004,68 @@ const styles = StyleSheet.create({
   heroTerrainType: {
     fontSize: 12,
     color: theme.textMuted,
+  },
+  // Gold Sponsor Badge
+  sponsorBadgeRow: {
+    marginBottom: 14,
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+  },
+  sponsorBadgeGradient: {
+    borderRadius: 12,
+    position: 'relative' as const,
+  },
+  sponsorBadgeAccent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2.5,
+    backgroundColor: '#F59E0B',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  sponsorBadgeContent: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  sponsorBadgeLogo: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    overflow: 'hidden' as const,
+  },
+  sponsorBadgeLogoFallback: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  sponsorBadgeLabel: {
+    fontSize: 9,
+    fontWeight: '600' as const,
+    color: '#92400E',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+  },
+  sponsorBadgeName: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: '#78350F',
+    marginTop: 1,
+  },
+  sponsorBadgeTier: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   tournamentCard: {
     backgroundColor: theme.surface,

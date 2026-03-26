@@ -23,6 +23,8 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useApp } from '@/contexts/AppContext';
 import QRCode from 'react-native-qrcode-svg';
 import { config } from '@/constants/config';
+import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
+import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 
 const TYPE_CONFIG: Record<ShareItemType, { labelKey: string; icon: string; color: string; gradient: [string, string, string] }> = {
   player: { labelKey: 'playerLabelUpper', icon: 'person', color: '#2563EB', gradient: ['#1D4ED8', '#2563EB', '#3B82F6'] },
@@ -118,6 +120,15 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
   }, [itemType, itemId, getPlayerById, getClubById, selfPlayer]);
 
   const scrollRef = useRef<ScrollView>(null);
+
+  // Gold sponsor branding
+  const [goldSponsor, setGoldSponsor] = useState<Ambassador | null>(null);
+  useEffect(() => {
+    fetchAmbassadors().then(({ ambassadors }) => {
+      const gold = ambassadors.find(a => a.badgeType === 'gold_sponsor');
+      if (gold) setGoldSponsor(gold);
+    });
+  }, []);
 
   const typeConfig = TYPE_CONFIG[itemType];
   const typeLabelLower = t('shareModal', TYPE_LOWER_KEY[itemType]);
@@ -920,6 +931,40 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                   </Pressable>
                 </Animated.View>
 
+                {/* Gold sponsor branding on share result */}
+                {goldSponsor ? (
+                  <Pressable
+                    style={({ pressed }) => [s.sponsorShareBanner, pressed && { opacity: 0.9 }]}
+                    onPress={() => {
+                      trackAmbassadorEvent(goldSponsor.id, 'profile_view', undefined, { sourcePage: 'share_modal' });
+                      router.push('/partners');
+                    }}
+                  >
+                    <LinearGradient colors={['#FFFBEB', '#FEF3C7']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.sponsorShareGradient}>
+                      <View style={s.sponsorShareAccent} />
+                      <View style={s.sponsorShareContent}>
+                        {goldSponsor.photo ? (
+                          <Image source={{ uri: goldSponsor.photo }} style={s.sponsorShareLogo} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                        ) : (
+                          <LinearGradient colors={['#B45309', '#F59E0B']} style={s.sponsorShareLogoFallback}>
+                            <MaterialIcons name="workspace-premium" size={14} color="#FFF" />
+                          </LinearGradient>
+                        )}
+                        <View style={{ flex: 1 }}>
+                          <View style={s.sponsorShareLabelRow}>
+                            <LinearGradient colors={['#B45309', '#D97706']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.sponsorShareLabel}>
+                              <MaterialIcons name="star" size={6} color="#FFF" />
+                              <Text style={s.sponsorShareLabelText}>{fr ? 'PARTENAIRE OR' : 'GOLD PARTNER'}</Text>
+                            </LinearGradient>
+                          </View>
+                          <Text style={s.sponsorShareName} numberOfLines={1}>{goldSponsor.displayName}</Text>
+                        </View>
+                        <MaterialIcons name="open-in-new" size={12} color="#B45309" />
+                      </View>
+                    </LinearGradient>
+                  </Pressable>
+                ) : null}
+
                 {/* Tip */}
                 <View style={s.tipRow}>
                   <MaterialIcons name="lightbulb" size={14} color="#F59E0B" />
@@ -1072,4 +1117,16 @@ const s = StyleSheet.create({
   // Tip
   tipRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginHorizontal: 16, marginTop: 16, padding: 12, backgroundColor: '#FFFBEB', borderRadius: 12, borderWidth: 1, borderColor: '#FDE68A' },
   tipText: { flex: 1, fontSize: 11, color: '#92400E', lineHeight: 16 },
+
+  // Gold sponsor branding on share
+  sponsorShareBanner: { marginHorizontal: 16, marginTop: 16, borderRadius: 14, overflow: 'hidden', borderWidth: 1.5, borderColor: '#F59E0B' },
+  sponsorShareGradient: { borderRadius: 12, position: 'relative' as const },
+  sponsorShareAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 2.5, backgroundColor: '#F59E0B', borderTopLeftRadius: 12, borderTopRightRadius: 12 },
+  sponsorShareContent: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingVertical: 10, paddingHorizontal: 12, gap: 10 },
+  sponsorShareLogo: { width: 32, height: 32, borderRadius: 10, overflow: 'hidden' as const },
+  sponsorShareLogoFallback: { width: 32, height: 32, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
+  sponsorShareLabelRow: { flexDirection: 'row' as const, marginBottom: 2 },
+  sponsorShareLabel: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
+  sponsorShareLabelText: { fontSize: 7, fontWeight: '900' as const, color: '#FFF', letterSpacing: 0.6 },
+  sponsorShareName: { fontSize: 12, fontWeight: '700' as const, color: '#78350F' },
 });
