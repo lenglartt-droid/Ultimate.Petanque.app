@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, Dimensions, ActivityIndicator, TextInput, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,6 +16,7 @@ import {
   fetchDetailedBannerAnalytics,
   BannerDetailedAnalytics,
 } from '@/services/ambassadorAnalyticsService';
+import { fetchPushQuota, PushQuotaInfo, getDaysUntilReset } from '@/services/pushQuotaService';
 
 type Period = 'today' | '7d' | '30d' | 'all';
 
@@ -98,7 +100,7 @@ export default function SponsorAnalyticsScreen() {
     setLoading(false);
   }, [selectedSponsor]);
 
-  useEffect(() => { loadData(period); }, [period]);
+  useEffect(() => { loadData(period); }, [period, loadData]); // Added loadData to dependencies
 
   // Load detailed analytics for selected sponsor
   useEffect(() => {
@@ -115,15 +117,16 @@ export default function SponsorAnalyticsScreen() {
 
   // Totals
   const totals = useMemo(() => {
-    let impressions = 0, clicks = 0, unique = 0;
+    let impressions = 0, clicks = 0;
+    // unique is computed from selectedData.detailed, not across all sponsors
     sponsors.forEach(s => {
       impressions += s.analytics.bannerImpressions;
       clicks += s.analytics.profileViews + s.analytics.socialClicks;
-      unique += s.detailed?.uniqueViewers || 0;
     });
+    const unique = selectedData?.detailed?.uniqueViewers || 0; // Moved unique calculation here
     const ctr = impressions > 0 ? Math.round((clicks / impressions) * 1000) / 10 : 0;
     return { impressions, clicks, ctr, unique };
-  }, [sponsors]);
+  }, [sponsors, selectedData]); // Added selectedData to dependencies for unique
 
   // Sparkline renderer
   const renderSparkline = (data: number[], color: string, maxH: number = 40) => {
@@ -208,7 +211,7 @@ export default function SponsorAnalyticsScreen() {
               <View style={styles.detailCard}>
                 <View style={styles.detailHeader}>
                   <Text style={styles.detailTitle}>{selectedData.ambassador.displayName}</Text>
-                  <View style={[styles.tierBadge, { backgroundColor: selectedData.ambassador.badgeType === 'gold_sponsor' ? '#F59E0B' : '#94A3B8' }]}>
+                  <View style={[styles.tierBadge, { backgroundColor: selectedData.ambassador.badgeType === 'gold_sponsor' ? '#F59E0B' : selectedData.ambassador.badgeType === 'sponsor' ? '#94A3B8' : '#D97706' }]}>
                     <Text style={styles.tierBadgeText}>
                       {selectedData.ambassador.badgeType === 'gold_sponsor' ? 'OR' : selectedData.ambassador.badgeType === 'sponsor' ? 'ARGENT' : 'BRONZE'}
                     </Text>
@@ -532,25 +535,15 @@ function SponsorPushComposer({ ambassador, language, showAlert }: PushComposerPr
   const maxPerMonth = isGold ? 999 : isSilver ? 1 : 0;
   const canSend = maxPerMonth > 0 && (isGold || monthlyUsed < maxPerMonth);
 
-  // Load monthly usage from DB
+  const [quota, setQuota] = useState<PushQuotaInfo | null>(null);
+
+  // Load monthly usage from push quota service
   useEffect(() => {
-    const loadUsage = async () => {
-      try {
-        const supabase = getSupabaseClient();
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        startOfMonth.setHours(0, 0, 0, 0);
-        const { data } = await supabase
-          .from('ambassador_analytics')
-          .select('id')
-          .eq('ambassador_id', ambassador.id)
-          .eq('event_type', 'sponsor_push')
-          .gte('created_at', startOfMonth.toISOString());
-        setMonthlyUsed(data?.length || 0);
-      } catch { /* silent */ }
-    };
-    loadUsage();
-  }, [ambassador.id]);
+    fetchPushQuota(ambassador.id, ambassador.badgeType, undefined, language).then(q => {
+      setQuota(q);
+      setMonthlyUsed(q.used);
+    }).catch(() => {});
+  }, [ambassador.id, ambassador.badgeType, language]);
 
   const handleSend = async () => {
     if (!title.trim() || !body.trim()) {
@@ -618,6 +611,39 @@ function SponsorPushComposer({ ambassador, language, showAlert }: PushComposerPr
 
       {expanded ? (
         <View style={pushStyles.form}>
+          {/* Quota Visual Display */}
+          {quota ? (
+            <View style={pushStyles.quotaCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={[pushStyles.quotaIconBg, { backgroundColor: quota.canSend ? '#10B98115' : '#EF444415' }]}>
+                  <MaterialIcons name={quota.isUnlimited ? 'all-inclusive' : 'notifications-active'} size={20} color={quota.canSend ? '#10B981' : '#EF4444'} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  {quota.isUnlimited ? (
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: '#10B981' }}>{language === 'fr' ? 'Illimite' : 'Unlimited'}</Text>
+                  ) : (
+                    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+                      <Text style={{ fontSize: 22, fontWeight: '900', color: quota.canSend ? '#10B981' : '#EF4444' }}>{quota.remaining}</Text>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#94A3B8' }}>/ {quota.limit}</Text>
+                    </View>
+                  )}
+                  <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
+                    {quota.used} {language === 'fr' ? 'envoyee(s)' : 'sent'} • Reset {quota.resetLabel}
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: '#64748B' }}>{getDaysUntilReset()}</Text>
+                  <Text style={{ fontSize: 8, fontWeight: '600', color: '#94A3B8', textTransform: 'uppercase' }}>{language === 'fr' ? 'jours' : 'days'}</Text>
+                </View>
+              </View>
+              {!quota.isUnlimited ? (
+                <View style={{ height: 6, backgroundColor: '#F1F5F9', borderRadius: 3, overflow: 'hidden', marginTop: 10 }}>
+                  <View style={{ height: '100%', width: `${quota.percentage}%`, backgroundColor: quota.canSend ? '#10B981' : '#EF4444', borderRadius: 3 }} />
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
           {/* Title input */}
           <View style={pushStyles.inputGroup}>
             <Text style={pushStyles.inputLabel}>{language === 'fr' ? 'TITRE' : 'TITLE'}</Text>
@@ -745,4 +771,19 @@ const pushStyles = StyleSheet.create({
     borderRadius: 14,
   },
   sendBtnText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
+  quotaCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  quotaIconBg: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
 });

@@ -25,6 +25,7 @@ import { getMyEventNotifications, markEventNotificationRead, EventNotification }
 import Svg, { Polyline, Circle as SvgCircle, Line, Text as SvgText } from 'react-native-svg';
 import * as Sharing from 'expo-sharing';
 import { triggerServerPush } from '@/services/pushTokenService';
+import { fetchPushQuota, PushQuotaInfo, getDaysUntilReset } from '@/services/pushQuotaService';
 
 export default function AmbassadorDashboardScreen() {
   const insets = useSafeAreaInsets();
@@ -69,6 +70,7 @@ export default function AmbassadorDashboardScreen() {
   const [pushRadius, setPushRadius] = useState('200');
   const [sendingPush, setSendingPush] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [pushQuota, setPushQuota] = useState<PushQuotaInfo | null>(null);
 
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
   useEffect(() => {
@@ -140,15 +142,21 @@ export default function AmbassadorDashboardScreen() {
     } catch { /* silent */ }
   }, [loadAmbassador]);
 
+  const loadPushQuota = useCallback(async (amb: any) => {
+    if (!amb) return;
+    const quota = await fetchPushQuota(amb.id, amb.badge_type, amb.ambassador_level, fr ? 'fr' : 'en');
+    setPushQuota(quota);
+  }, [fr]);
+
   const loadAll = useCallback(async () => {
     const amb = await loadAmbassador();
     if (amb) {
-      await Promise.all([loadAnalytics(amb.id), loadEvents(), loadNotifications(), loadBannerAnalytics(amb.id)]);
+      await Promise.all([loadAnalytics(amb.id), loadEvents(), loadNotifications(), loadBannerAnalytics(amb.id), loadPushQuota(amb)]);
       // Check promotion after all data is loaded
       await checkPromotion(amb.id);
     }
     setLoading(false);
-  }, [loadAmbassador, loadAnalytics, loadEvents, loadNotifications, loadBannerAnalytics, checkPromotion]);
+  }, [loadAmbassador, loadAnalytics, loadEvents, loadNotifications, loadBannerAnalytics, loadPushQuota, checkPromotion]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
@@ -541,6 +549,74 @@ export default function AmbassadorDashboardScreen() {
                 </Pressable>
               )}
             </View>
+
+            {/* Push Quota Display */}
+            {pushQuota && pushQuota.limit !== 0 ? (
+              <View style={s.sectionCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <Text style={s.sectionCardTitle}>{fr ? 'Quota notifications push' : 'Push notification quota'}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <MaterialIcons name="schedule" size={12} color={theme.textMuted} />
+                    <Text style={{ fontSize: 10, fontWeight: '600', color: theme.textMuted }}>
+                      {fr ? `Reset ${pushQuota.resetLabel}` : `Resets ${pushQuota.resetLabel}`}
+                    </Text>
+                  </View>
+                </View>
+                {/* Quota visual */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 12 }}>
+                  <View style={[s.statIconBg, { backgroundColor: pushQuota.canSend ? '#10B98115' : '#EF444415', width: 48, height: 48, borderRadius: 16 }]}>
+                    <MaterialIcons name={pushQuota.isUnlimited ? 'all-inclusive' : 'notifications-active'} size={24} color={pushQuota.canSend ? '#10B981' : '#EF4444'} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    {pushQuota.isUnlimited ? (
+                      <>
+                        <Text style={{ fontSize: 22, fontWeight: '900', color: '#10B981' }}>{fr ? 'Illimite' : 'Unlimited'}</Text>
+                        <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 2 }}>
+                          {pushQuota.used} {fr ? 'envoyee(s) ce mois' : 'sent this month'}
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+                          <Text style={{ fontSize: 28, fontWeight: '900', color: pushQuota.canSend ? '#10B981' : '#EF4444' }}>{pushQuota.remaining}</Text>
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textSecondary }}>/ {pushQuota.limit}</Text>
+                        </View>
+                        <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 2 }}>
+                          {fr ? 'notification(s) restante(s)' : 'notification(s) remaining'}
+                        </Text>
+                      </>
+                    )}
+                  </View>
+                </View>
+                {/* Progress bar (non-unlimited only) */}
+                {!pushQuota.isUnlimited ? (
+                  <View style={{ marginBottom: 10 }}>
+                    <View style={{ height: 8, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' }}>
+                      <View style={{ height: '100%', width: `${pushQuota.percentage}%`, backgroundColor: pushQuota.canSend ? '#10B981' : '#EF4444', borderRadius: 4 }} />
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '600', color: theme.textMuted }}>
+                        {pushQuota.used}/{pushQuota.limit} {fr ? 'utilise(s)' : 'used'}
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <MaterialIcons name="timer" size={10} color={theme.textMuted} />
+                        <Text style={{ fontSize: 10, fontWeight: '600', color: theme.textMuted }}>
+                          {getDaysUntilReset()}j
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                ) : null}
+                {!pushQuota.canSend ? (
+                  <View style={{ backgroundColor: '#FEF2F2', borderRadius: 10, padding: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <MaterialIcons name="block" size={16} color="#EF4444" />
+                    <Text style={{ flex: 1, fontSize: 12, fontWeight: '600', color: '#991B1B' }}>
+                      {fr ? `Limite atteinte. Reset le ${pushQuota.resetLabel}.` : `Limit reached. Resets ${pushQuota.resetLabel}.`}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
 
             {/* Push Composer - Confirmé and Élite only */}
             {ambLevel !== 'decouverte' && ambassador.badge_type === 'ambassador' ? (

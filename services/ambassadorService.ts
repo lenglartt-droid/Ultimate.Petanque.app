@@ -221,6 +221,9 @@ export async function trackReferral(referralCode: string, referredUserId: string
     // Check for auto-promotion after referral
     checkAndPromoteAmbassador(amb.id).catch(() => {});
 
+    // Send referral notification to ambassador (fire-and-forget)
+    notifyReferralUsed(referralCode, referredUserId).catch(() => {});
+
     invalidateAmbassadorCache();
     return { success: true, error: null };
   } catch (e: any) {
@@ -371,6 +374,19 @@ async function sendPromotionPush(userId: string, ambassadorId: string, newLevel:
           newLevel,
           newLevelLabel: levelLabels[newLevel],
         },
+      },
+    });
+  } catch { /* silent */ }
+}
+
+/** Notify ambassador when their referral code is used by a new player */
+async function notifyReferralUsed(referralCode: string, referredUserId: string): Promise<void> {
+  try {
+    const supabase = getSupabaseClient();
+    await supabase.functions.invoke('notify-referral', {
+      body: {
+        referralCode,
+        referredUserId,
       },
     });
   } catch { /* silent */ }
