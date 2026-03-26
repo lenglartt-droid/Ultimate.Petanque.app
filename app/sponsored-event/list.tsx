@@ -11,7 +11,7 @@ import theme, { blurhash } from '@/constants/theme';
 import { useAuth, useAlert } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getSponsoredEvents, registerForEvent, findEventByCode, SponsoredEvent } from '@/services/sponsoredEventService';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions } from '@/services/camera';
 
 type StatusFilter = 'all' | 'upcoming' | 'active' | 'completed';
 type TypeFilter = 'all' | '10_tirs' | '10_tirs_sautee' | 'precision';

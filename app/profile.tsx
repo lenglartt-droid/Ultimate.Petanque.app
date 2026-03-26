@@ -18,8 +18,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import * as ImagePicker from 'expo-image-picker';
-import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+// expo-document-picker and expo-file-system loaded dynamically to avoid web bundler issues
 import * as Linking from 'expo-linking';
 import { decode } from 'base64-arraybuffer';
 import { FunctionsHttpError } from '@supabase/supabase-js';
@@ -603,6 +602,7 @@ export default function ProfileScreen() {
           reader.readAsDataURL(blob);
         });
       } else {
+        const FileSystem = require('expo-file-system');
         base64Data = await FileSystem.readAsStringAsync(fileUri, {
           encoding: FileSystem.EncodingType.Base64,
         });
@@ -675,6 +675,7 @@ export default function ProfileScreen() {
 
   const handlePickFedDocument = async () => {
     try {
+      const DocumentPicker = require('expo-document-picker');
       const result = await DocumentPicker.getDocumentAsync({
         type: ['application/pdf', 'image/*'],
         copyToCacheDirectory: true,

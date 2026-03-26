@@ -3,7 +3,7 @@ import { View, Text, Pressable, StyleSheet, ActivityIndicator, Platform, TextInp
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions } from '@/services/camera';
 import * as Haptics from '@/services/haptics';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import theme from '@/constants/theme';

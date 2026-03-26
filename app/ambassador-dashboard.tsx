@@ -11,7 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+// expo-file-system loaded dynamically to avoid web bundler issues
 import { decode } from 'base64-arraybuffer';
 import theme, { blurhash } from '@/constants/theme';
 import { useAuth, useAlert } from '@/template';
@@ -23,7 +23,7 @@ import { fetchAmbassadorAnalytics, AmbassadorAnalytics, fetchSponsoredChallengeA
 import { getMySponsoredEvents, SponsoredEvent, getEventParticipants } from '@/services/sponsoredEventService';
 import { getMyEventNotifications, markEventNotificationRead, EventNotification } from '@/services/eventNotificationService';
 import Svg, { Polyline, Circle as SvgCircle, Line, Text as SvgText } from 'react-native-svg';
-import * as Sharing from 'expo-sharing';
+// expo-sharing loaded dynamically to avoid web bundler issues
 import { triggerServerPush } from '@/services/pushTokenService';
 import { fetchPushQuota, PushQuotaInfo, getDaysUntilReset } from '@/services/pushQuotaService';
 
@@ -239,6 +239,7 @@ export default function AmbassadorDashboardScreen() {
           reader.readAsDataURL(blob);
         });
       } else {
+        const FileSystem = require('expo-file-system');
         base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 });
       }
 
@@ -738,11 +739,13 @@ export default function AmbassadorDashboardScreen() {
                         showAlert(fr ? 'Erreur' : 'Error', fr ? 'Export non disponible sur web' : 'Export not available on web');
                       }
                     } else {
-                      const path = `${FileSystem.cacheDirectory}analytics_${ambassador.display_name.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
-                      await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
-                      const canShare = await Sharing.isAvailableAsync();
+                      const FS = require('expo-file-system');
+                      const SharingModule = require('expo-sharing');
+                      const path = `${FS.cacheDirectory}analytics_${ambassador.display_name.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+                      await FS.writeAsStringAsync(path, csv, { encoding: FS.EncodingType.UTF8 });
+                      const canShare = await SharingModule.isAvailableAsync();
                       if (canShare) {
-                        await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: fr ? 'Exporter analytics' : 'Export analytics' });
+                        await SharingModule.shareAsync(path, { mimeType: 'text/csv', dialogTitle: fr ? 'Exporter analytics' : 'Export analytics' });
                       } else {
                         showAlert(fr ? 'Fichier cree' : 'File created', path);
                       }
