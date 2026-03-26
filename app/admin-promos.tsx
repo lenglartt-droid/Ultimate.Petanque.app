@@ -16,8 +16,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
+// expo-file-system and expo-sharing loaded dynamically to avoid web bundler issues
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { getSupabaseClient } from '@/template';
@@ -529,12 +528,14 @@ export default function AdminPromosScreen() {
         return;
       }
 
-      const fileUri = `${FileSystem.cacheDirectory}promo_codes_${Date.now()}.csv`;
-      await FileSystem.writeAsStringAsync(fileUri, csvContent, { encoding: FileSystem.EncodingType.UTF8 });
+      const FS = require('expo-file-system');
+      const SharingModule = require('expo-sharing');
+      const fileUri = `${FS.cacheDirectory}promo_codes_${Date.now()}.csv`;
+      await FS.writeAsStringAsync(fileUri, csvContent, { encoding: FS.EncodingType.UTF8 });
 
-      const canShare = await Sharing.isAvailableAsync();
+      const canShare = await SharingModule.isAvailableAsync();
       if (canShare) {
-        await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: fr ? 'Exporter codes promo' : 'Export promo codes' });
+        await SharingModule.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: fr ? 'Exporter codes promo' : 'Export promo codes' });
       } else {
         showAlert(fr ? 'Erreur' : 'Error', fr ? 'Partage non disponible' : 'Sharing not available');
       }

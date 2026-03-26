@@ -22,8 +22,7 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+// expo-document-picker and expo-file-system loaded dynamically to avoid web bundler issues
 import { decode } from 'base64-arraybuffer';
 import { getSupabaseClient } from '@/template';
 import { useAuth } from '@/template';
@@ -150,7 +149,7 @@ export default function EditClubScreen() {
   const [clubCardType, setClubCardType] = useState<'image' | 'pdf'>('image');
   const [uploadingCard, setUploadingCard] = useState(false);
   const [showCardFullscreen, setShowCardFullscreen] = useState(false);
-  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width);
+  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
 
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
@@ -206,6 +205,7 @@ export default function EditClubScreen() {
           reader.readAsDataURL(blob);
         });
       } else {
+        const FileSystem = require('expo-file-system');
         base64Data = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
       }
       const { error: uploadError } = await supabase.storage.from('club-cards').upload(storagePath, decode(base64Data), { contentType: mimeType, upsert: true });
@@ -237,7 +237,7 @@ export default function EditClubScreen() {
         if (!result.canceled && result.assets[0]) { const ext = result.assets[0].uri.split('.').pop()?.toLowerCase() || 'jpg'; await uploadClubCardFile(result.assets[0].uri, `club_card.${ext}`, `image/${ext === 'jpg' ? 'jpeg' : ext}`); }
       }},
       { text: t('player', 'fromFiles'), onPress: async () => {
-        try { const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], copyToCacheDirectory: true }); if (!result.canceled && result.assets?.[0]) { await uploadClubCardFile(result.assets[0].uri, result.assets[0].name || 'club_card.pdf', result.assets[0].mimeType || 'application/pdf'); } } catch (e) { console.log('Error picking document:', e); }
+        try { const DocumentPicker = require('expo-document-picker'); const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], copyToCacheDirectory: true }); if (!result.canceled && result.assets?.[0]) { await uploadClubCardFile(result.assets[0].uri, result.assets[0].name || 'club_card.pdf', result.assets[0].mimeType || 'application/pdf'); } } catch (e) { console.log('Error picking document:', e); }
       }},
       { text: t('common', 'cancel'), style: 'cancel' },
     ]);

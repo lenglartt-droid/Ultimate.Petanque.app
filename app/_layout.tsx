@@ -1,5 +1,5 @@
 import React from 'react';
-import { View } from 'react-native';
+import { View, Text, ScrollView, StyleSheet as RNStyleSheet, Platform, Pressable } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -12,31 +12,91 @@ import ConflictResolutionModal from '@/components/ui/ConflictResolutionModal';
 import { useApp } from '@/contexts/AppContext';
 import TrackingConsentModal from '@/components/ui/TrackingConsentModal';
 import { isATTPromptNeeded } from '@/services/trackingService';
-import { initSentry, setUser as setSentryUser, setRoute as setSentryRoute } from '@/services/sentryService';
+import { initSentry } from '@/services/sentryService';
 import { addNotificationResponseListener } from '@/services/notificationService';
 import { registerPushToken } from '@/services/pushTokenService';
 import { router } from 'expo-router';
 import { checkTempDataExpiry } from '@/services/retentionNotificationService';
-import { updateRetentionForRegisteredUser } from '@/services/retentionNotificationService';
-import { checkAndTriggerWeeklyReset } from '@/services/weeklyLeaderboardService';
 import * as Linking from 'expo-linking';
 import { findEventByCode } from '@/services/sponsoredEventService';
 
+// ============================================
+// Error Boundary — catches JS crashes on web
+// ============================================
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, ErrorBoundaryState> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[ErrorBoundary] Caught error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={errorStyles.container}>
+          <ScrollView contentContainerStyle={errorStyles.scroll}>
+            <Text style={errorStyles.icon}>⚠️</Text>
+            <Text style={errorStyles.title}>Application Error</Text>
+            <Text style={errorStyles.message}>
+              {this.state.error?.message || 'An unexpected error occurred'}
+            </Text>
+            <Text style={errorStyles.stack}>
+              {this.state.error?.stack?.substring(0, 800) || ''}
+            </Text>
+            <Pressable
+              style={errorStyles.button}
+              onPress={() => this.setState({ hasError: false, error: null })}
+            >
+              <Text style={errorStyles.buttonText}>Retry</Text>
+            </Pressable>
+          </ScrollView>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const errorStyles = RNStyleSheet.create({
+  container: { flex: 1, backgroundColor: '#0F172A', justifyContent: 'center' },
+  scroll: { padding: 24, alignItems: 'center' },
+  icon: { fontSize: 48, marginBottom: 16 },
+  title: { fontSize: 22, fontWeight: '700', color: '#F8FAFC', marginBottom: 12, textAlign: 'center' },
+  message: { fontSize: 16, color: '#94A3B8', marginBottom: 16, textAlign: 'center', lineHeight: 24 },
+  stack: { fontSize: 12, color: '#64748B', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', marginBottom: 24, textAlign: 'left', width: '100%' },
+  button: { backgroundColor: '#3B82F6', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12 },
+  buttonText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
+});
+
 export default function RootLayout() {
   return (
-    <AlertProvider>
-      <AuthProvider>
-        <SafeAreaProvider>
-          <LanguageProvider>
-          <ToastProvider>
-          <AppProvider>
-            <LayoutInner />
-          </AppProvider>
-          </ToastProvider>
-          </LanguageProvider>
-        </SafeAreaProvider>
-      </AuthProvider>
-    </AlertProvider>
+    <AppErrorBoundary>
+      <AlertProvider>
+        <AuthProvider>
+          <SafeAreaProvider>
+            <LanguageProvider>
+            <ToastProvider>
+            <AppProvider>
+              <LayoutInner />
+            </AppProvider>
+            </ToastProvider>
+            </LanguageProvider>
+          </SafeAreaProvider>
+        </AuthProvider>
+      </AlertProvider>
+    </AppErrorBoundary>
   );
 }
 
