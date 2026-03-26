@@ -251,6 +251,7 @@ export interface Match {
   menes: Mene[];
   playerActions?: PlayerAction[];
   seriesInfo?: SeriesInfo;
+  notes?: string;
 }
 
 export interface Mene {

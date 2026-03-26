@@ -62,6 +62,7 @@ export async function addMatchOp(
       menes: match.menes,
       player_actions: match.playerActions,
       series_info: match.seriesInfo,
+      notes: match.notes || null,
     }).select().single();
 
     if (error) throw error;
@@ -137,6 +138,7 @@ export async function updateMatchOp(
     if (updates.playerActions !== undefined) dbUpdates.player_actions = updates.playerActions;
     if (updates.terrainId !== undefined) dbUpdates.terrain_id = updates.terrainId;
     if (updates.terrainType !== undefined) dbUpdates.terrain_type = updates.terrainType;
+    if (updates.notes !== undefined) dbUpdates.notes = updates.notes || null;
     dbUpdates.updated_at = new Date().toISOString();
 
     await supabase.from('matches').update(dbUpdates).eq('id', id);

@@ -92,6 +92,7 @@ export function mapMatchFromDb(m: any): Match {
     teamA: m.team_a, teamB: m.team_b, winner: m.winner,
     duration: m.duration || 0, menes: m.menes || [],
     playerActions: m.player_actions, seriesInfo: m.series_info,
+    notes: m.notes || undefined,
   };
 }
 
